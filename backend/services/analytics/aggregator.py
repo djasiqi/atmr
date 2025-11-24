@@ -5,7 +5,7 @@ Agrège les métriques quotidiennes et génère des statistiques par période.
 
 import logging
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict
+from typing import Any, Dict, cast
 
 from sqlalchemy import and_
 
@@ -95,9 +95,10 @@ class MetricsAggregator:
                 delay_trend = 0.0
 
             # Créer ou mettre à jour
-            daily_stats = DailyStats.query.filter_by(
+            daily_stats_raw = DailyStats.query.filter_by(
                 company_id=company_id, date=day
             ).first()
+            daily_stats: DailyStats | None = cast(DailyStats | None, daily_stats_raw)
 
             if daily_stats:
                 # Mettre à jour

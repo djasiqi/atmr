@@ -4,7 +4,7 @@
 import logging
 import os
 import time
-from typing import Optional
+from typing import Optional, cast
 
 from ext import redis_client
 
@@ -43,7 +43,13 @@ def can_send_message(user_id: int) -> tuple[bool, Optional[str]]:
         last_time_str = redis_client.get(key)
         if last_time_str:
             try:
-                last_time = float(last_time_str.decode("utf-8"))
+                # Gérer les types bytes ou str retournés par Redis
+                # Cast pour indiquer que ce n'est pas un Awaitable
+                value: bytes | str = cast(bytes | str, last_time_str)
+                if isinstance(value, bytes):
+                    last_time = float(value.decode("utf-8"))
+                else:
+                    last_time = float(value)
                 elapsed = now - last_time
 
                 if elapsed < SPAM_RATE_LIMIT_SECONDS:

@@ -302,12 +302,14 @@ class DemandPredictor:
             logger.warning("[DemandPrediction] Erreur chargement historique: %s", e)
             return None
 
-    def _get_holiday_multiplier(self, date: datetime) -> float:
+    def _get_holiday_multiplier(self, dt: datetime) -> float:
         """Retourne le multiplicateur pour vacances/jours fériés."""
         try:
-            from services.holidays_service import is_holiday
+            from services.holidays_service import is_holiday_in_geneva
 
-            if is_holiday(date):
+            # Convertir datetime en date pour la fonction
+            check_date = dt.date()
+            if is_holiday_in_geneva(check_date):
                 return HOLIDAY_MULTIPLIER
         except Exception:
             pass

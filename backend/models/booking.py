@@ -88,7 +88,7 @@ class Booking(db.Model):
     )
 
     amount: Mapped[float] = mapped_column(Float, nullable=False)
-    status = Column(
+    status: Mapped[BookingStatus] = Column(
         SAEnum(BookingStatus, name="booking_status"),
         index=True,
         nullable=False,
@@ -110,7 +110,7 @@ class Booking(db.Model):
     company_id = Column(
         Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=True, index=True
     )
-    driver_id = Column(
+    driver_id: Mapped[Optional[int]] = Column(
         Integer, ForeignKey("driver.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
@@ -148,7 +148,7 @@ class Booking(db.Model):
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = Column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -156,7 +156,7 @@ class Booking(db.Model):
     )
 
     billed_to_type = Column(String(50), nullable=False, server_default="patient")
-    billed_to_company_id = Column(
+    billed_to_company_id: Mapped[Optional[int]] = Column(
         Integer, ForeignKey("company.id", ondelete="SET NULL"), nullable=True
     )
     billed_to_contact = Column(String(120))
@@ -205,12 +205,12 @@ class Booking(db.Model):
     def customer_full_name(self) -> str:
         cust = _as_str(self.customer_name)
         if cust:
-            return cust
+            return str(cust)
         if self.client and self.client.user:
             u = self.client.user
             if u.first_name or u.last_name:
                 return f"{u.first_name or ''} {u.last_name or ''}".strip()
-            return u.username
+            return str(u.username)
         return "Non spécifié"
 
     def get_effective_payer(self) -> dict[str, Any]:

@@ -126,6 +126,10 @@ def revoke_token() -> bool:
     Returns:
         True si révoqué avec succès, False sinon
     """
+    if not redis_client:
+        logger.warning("[Token Blacklist] Redis non disponible, blacklist désactivée")
+        return False
+
     try:
         jwt_data = get_jwt()
         jti = jwt_data.get("jti")

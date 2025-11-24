@@ -58,17 +58,15 @@ def record_rotation(
         raise ValueError(msg)
 
     try:
-        # Calme le type checker sur kwargs SQLAlchemy (métaclasses)
-        SecretRotationType = cast("Any", SecretRotation)
-        rotation = SecretRotationType(
-            secret_type=secret_type,
-            status=status,
-            rotated_at=datetime.now(UTC),
-            environment=environment,
-            rotation_metadata=metadata,
-            error_message=error_message,
-            task_id=task_id,
-        )
+        # Créer l'instance avec setattr pour éviter les problèmes de type checker
+        rotation = SecretRotation()
+        rotation.secret_type = secret_type
+        rotation.status = status
+        rotation.rotated_at = datetime.now(UTC)
+        rotation.environment = environment
+        rotation.rotation_metadata = metadata
+        rotation.error_message = error_message
+        rotation.task_id = task_id
 
         db.session.add(rotation)
         db.session.commit()
@@ -222,7 +220,8 @@ def get_last_rotation(
         if environment:
             query = query.filter(SecretRotation.environment == environment)
 
-        return query.order_by(SecretRotation.rotated_at.desc()).first()
+        result = query.order_by(SecretRotation.rotated_at.desc()).first()
+        return cast(SecretRotation | None, result)
 
     except Exception as e:
         logger.exception(
@@ -258,6 +257,7 @@ def get_days_since_last_rotation(
             return None
 
         delta = datetime.now(UTC) - last.rotated_at
+        # delta.days est toujours un int, pas None
         return delta.days
 
     except Exception as e:

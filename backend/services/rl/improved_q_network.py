@@ -2,19 +2,31 @@
 # pyright: reportMissingImports=false
 """Q-Network amélioré pour l'agent DQN avec architecture plus sophistiquée."""
 
-from typing import Tuple
+from typing import Any, Tuple
 
 import torch
 import torch.nn.functional as F
 from torch import nn
 
 # Import des Noisy Networks
+_NOISY_NETWORKS_AVAILABLE = False
+
+# Variables temporaires pour stocker les types importés
+_NoisyQNetworkType: Any = None
+_NoisyDuelingQNetworkType: Any = None
+
 try:
     from .noisy_networks import NoisyDuelingQNetwork, NoisyQNetwork
+
+    _NoisyQNetworkType = NoisyQNetwork
+    _NoisyDuelingQNetworkType = NoisyDuelingQNetwork
+    _NOISY_NETWORKS_AVAILABLE = True
 except ImportError:
-    # Fallback si le module n'est pas disponible
-    NoisyQNetwork = None
-    NoisyDuelingQNetwork = None
+    pass
+
+# Exposer les types avec des noms publics (type Any pour éviter les conflits)
+NoisyQNetwork: Any = _NoisyQNetworkType
+NoisyDuelingQNetwork: Any = _NoisyDuelingQNetworkType
 
 
 class ImprovedQNetwork(nn.Module):
@@ -316,10 +328,10 @@ class NoisyImprovedQNetwork(nn.Module):
 
         self.state_dim = state_dim
         self.action_dim = action_dim
-        self.use_noisy = use_noisy and NoisyQNetwork is not None
+        self.use_noisy = use_noisy and _NOISY_NETWORKS_AVAILABLE
         self.device = device or torch.device("cpu")
 
-        if self.use_noisy and NoisyQNetwork is not None:
+        if self.use_noisy and _NOISY_NETWORKS_AVAILABLE:
             # Utiliser les Noisy Networks
             self.network = NoisyQNetwork(
                 state_size=state_dim,
@@ -399,10 +411,10 @@ class NoisyDuelingImprovedQNetwork(nn.Module):
 
         self.state_dim = state_dim
         self.action_dim = action_dim
-        self.use_noisy = use_noisy and NoisyDuelingQNetwork is not None
+        self.use_noisy = use_noisy and _NOISY_NETWORKS_AVAILABLE
         self.device = device or torch.device("cpu")
 
-        if self.use_noisy and NoisyDuelingQNetwork is not None:
+        if self.use_noisy and _NOISY_NETWORKS_AVAILABLE:
             # Utiliser les Noisy Dueling Networks
             self.network = NoisyDuelingQNetwork(
                 state_size=state_dim,

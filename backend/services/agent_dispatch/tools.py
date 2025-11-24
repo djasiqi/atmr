@@ -406,9 +406,10 @@ class AgentTools:
                     # utiliser decision_explanation si nécessaire
                 else:
                     existing = Assignment()
-                    existing.booking_id = job_id
-                    existing.driver_id = driver_id
-                    existing.status = AssignmentStatus.SCHEDULED
+                    existing_any: Any = existing
+                    existing_any.booking_id = job_id
+                    existing_any.driver_id = driver_id
+                    existing_any.status = AssignmentStatus.SCHEDULED
                     db.session.add(existing)
 
                 db.session.commit()

@@ -81,7 +81,7 @@ class Company(db.Model):
         nullable=False,
         index=True,
     )
-    is_approved = Column(Boolean, nullable=False, server_default="false")
+    is_approved: Mapped[bool] = Column(Boolean, nullable=False, server_default="false")
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -92,12 +92,14 @@ class Company(db.Model):
     accepted_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    dispatch_enabled = Column(Boolean, nullable=False, server_default="false")
+    dispatch_enabled: Mapped[bool] = Column(
+        Boolean, nullable=False, server_default="false"
+    )
     is_partner = Column(Boolean, nullable=False, server_default="false")
     logo_url: Mapped[str] = mapped_column(String(255), nullable=True)
 
     # 🆕 Configuration du système de dispatch autonome
-    dispatch_mode = Column(
+    dispatch_mode: Mapped[DispatchMode] = Column(
         Enum(DispatchMode),
         default=DispatchMode.SEMI_AUTO,
         nullable=False,
@@ -105,7 +107,7 @@ class Company(db.Model):
         index=True,
         comment="Mode de fonctionnement du dispatch: manual, semi_auto, fully_auto",
     )
-    autonomous_config = Column(
+    autonomous_config: Mapped[Optional[str]] = Column(
         Text, nullable=True, comment="Configuration JSON pour le dispatch autonome"
     )
 
@@ -283,10 +285,10 @@ class Company(db.Model):
 
     def toggle_approval(self) -> bool:
         self.is_approved = not _as_bool(self.is_approved)
-        return _as_bool(self.is_approved)
+        return bool(self.is_approved)
 
     def can_dispatch(self) -> bool:
-        return _as_bool(self.is_approved) and _as_bool(self.dispatch_enabled)
+        return bool(_as_bool(self.is_approved) and _as_bool(self.dispatch_enabled))
 
     def approve(self):
         self.is_approved = True

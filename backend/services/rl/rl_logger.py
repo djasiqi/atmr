@@ -15,7 +15,7 @@ import json
 import logging
 import time
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Union, cast
 
 import numpy as np
 
@@ -26,20 +26,29 @@ MAX_Q_VALUES_LOG = 64
 
 # Import conditionnel pour éviter les erreurs si les modules ne sont pas
 # disponibles
+db: Any = None
 try:
-    from services.db_context import db
-except ImportError:
-    db = None
+    from services.db_context import db as _db
 
-try:
-    from ext import redis_client
+    db = _db
 except ImportError:
-    redis_client = None
+    pass
 
+redis_client: Any = None
 try:
-    from models.rl_suggestion_metric import RLSuggestionMetric
+    from ext import redis_client as _redis_client
+
+    redis_client = _redis_client
 except ImportError:
-    RLSuggestionMetric = None
+    pass
+
+RLSuggestionMetric: Any = None
+try:
+    from models.rl_suggestion_metric import RLSuggestionMetric as _RLSuggestionMetric
+
+    RLSuggestionMetric = _RLSuggestionMetric
+except ImportError:
+    pass
 
 # Import conditionnel de torch pour éviter NameError
 try:
@@ -85,7 +94,7 @@ class RLLogger:
         self.enable_redis_logging = enable_redis_logging
 
         # Statistiques
-        self.stats = {
+        self.stats: Dict[str, Any] = {
             "total_logs": 0,
             "redis_logs": 0,
             "db_logs": 0,
@@ -218,11 +227,11 @@ class RLLogger:
             db_success = self._log_to_db(record)
 
             # Mettre à jour les statistiques
-            self.stats["total_logs"] += 1
+            self.stats["total_logs"] = int(self.stats["total_logs"]) + 1
             if redis_success:
-                self.stats["redis_logs"] += 1
+                self.stats["redis_logs"] = int(self.stats["redis_logs"]) + 1
             if db_success:
-                self.stats["db_logs"] += 1
+                self.stats["db_logs"] = int(self.stats["db_logs"]) + 1
 
             # Log de debug
             if logger.isEnabledFor(logging.DEBUG):
@@ -241,7 +250,7 @@ class RLLogger:
 
         except Exception as e:
             logger.error("[RLLogger] Erreur lors du logging de la décision: %s", e)
-            self.stats["errors"] += 1
+            self.stats["errors"] = int(self.stats["errors"]) + 1
             return False
 
     def _log_to_redis(self, record: Dict[str, Any]) -> bool:
@@ -292,29 +301,34 @@ class RLLogger:
         try:
             # Créer l'objet RLSuggestionMetric avec les champs disponibles
             rl_metric = RLSuggestionMetric()
-            rl_metric.suggestion_id = (
+            rl_metric_any: Any = rl_metric
+            rl_metric_any.suggestion_id = (
                 f"log_{record['state_hash'][:8]}_{int(time.time())}"
             )
-            rl_metric.company_id = (
+            rl_metric_any.company_id = (
                 1  # Valeur par défaut, devrait être passé en paramètre
             )
-            rl_metric.booking_id = record["metadata"].get("booking_id", 0)
-            rl_metric.assignment_id = record["metadata"].get("assignment_id", 0)
-            rl_metric.current_driver_id = record["metadata"].get("current_driver_id", 0)
-            rl_metric.suggested_driver_id = record["metadata"].get(
+            rl_metric_any.booking_id = record["metadata"].get("booking_id", 0)
+            rl_metric_any.assignment_id = record["metadata"].get("assignment_id", 0)
+            rl_metric_any.current_driver_id = record["metadata"].get(
+                "current_driver_id", 0
+            )
+            rl_metric_any.suggested_driver_id = record["metadata"].get(
                 "suggested_driver_id", 0
             )
-            rl_metric.confidence = record["constraints"].get("confidence", 0.0)
-            rl_metric.expected_gain_minutes = record["constraints"].get(
+            rl_metric_any.confidence = float(
+                record["constraints"].get("confidence", 0.0)
+            )
+            rl_metric_any.expected_gain_minutes = record["constraints"].get(
                 "improvement", 0
             )
-            rl_metric.q_value = (
+            rl_metric_any.q_value = (
                 record["q_values"][record["action"]]
                 if record["q_values"] and len(record["q_values"]) > record["action"]
                 else None
             )
-            rl_metric.source = "dqn_model"
-            rl_metric.additional_data = {
+            rl_metric_any.source = "dqn_model"
+            rl_metric_any.additional_data = {
                 "state_hash": record["state_hash"],
                 "action": record["action"],
                 "q_values": record["q_values"],
@@ -343,18 +357,19 @@ class RLLogger:
             Dictionnaire avec les statistiques
 
         """
-        uptime = datetime.now(UTC) - self.stats["start_time"]
+        start_time = cast(datetime, self.stats["start_time"])
+        uptime = datetime.now(UTC) - start_time
+        total_logs = int(self.stats["total_logs"])
+        errors = int(self.stats["errors"])
 
         return {
-            "total_logs": self.stats["total_logs"],
+            "total_logs": total_logs,
             "redis_logs": self.stats["redis_logs"],
             "db_logs": self.stats["db_logs"],
-            "errors": self.stats["errors"],
+            "errors": errors,
             "uptime_seconds": uptime.total_seconds(),
-            "logs_per_second": self.stats["total_logs"]
-            / max(uptime.total_seconds(), 1),
-            "success_rate": (self.stats["total_logs"] - self.stats["errors"])
-            / max(self.stats["total_logs"], 1),
+            "logs_per_second": total_logs / max(uptime.total_seconds(), 1),
+            "success_rate": (total_logs - errors) / max(total_logs, 1),
         }
 
     def get_recent_logs(self, count: int = 100) -> List[Dict[str, Any]]:

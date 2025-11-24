@@ -216,7 +216,7 @@ def get_bookings_for_dispatch(company_id: int, horizon_minutes: int) -> List[Boo
     bookings = (
         Booking.query
         # évite les soucis de typage Pylance sur RelationshipProperty
-        .options(joinedload("driver"))
+        .options(joinedload(Booking.driver))
         .filter(
             Booking.company_id == company_id,
             # caster la colonne pour éviter les bool Python
@@ -468,7 +468,7 @@ def get_available_drivers(company_id: int) -> List[Driver]:
             d_any.latitude = None
             d_any.longitude = None
 
-    return drivers
+    return cast(List[Driver], drivers)
 
 
 @safe_execute(default_return=([], []), log_error=True)
@@ -767,7 +767,8 @@ def enrich_driver_coords(drivers: List[Driver], company: Company) -> None:
         if ts is not None:
             try:
                 ts_local = parse_local_naive(ts)
-                fresh = bool(ts_local) and (now - ts_local) <= _POS_TTL
+                if ts_local is not None:
+                    fresh = (now - ts_local) <= _POS_TTL
             except Exception:
                 fresh = False
 
@@ -994,12 +995,12 @@ def build_time_matrix(
                 row_min.append(minutes)
         time_matrix_min.append(row_min)
 
-    max_entry = 0
-    min_entry = math.inf
+    max_entry: float = 0.0
+    min_entry: float = math.inf
     for row in time_matrix_min:
         for val in row:
-            max_entry = max(max_entry, val)
-            min_entry = min(min_entry, val)
+            max_entry = max(max_entry, float(val))
+            min_entry = min(min_entry, float(val))
     if min_entry == math.inf:
         min_entry = 0
 
@@ -1882,7 +1883,7 @@ def acquire_dispatch_lock(company_id: int, day_str: str, ttl_sec: int = 60) -> b
     if lock is None:
         lock = threading.Lock()
         _dispatch_locks[key] = lock
-    return lock.acquire(blocking=False)
+    return bool(lock.acquire(blocking=False))
 
 
 def release_dispatch_lock(company_id: int, day_str: str) -> None:

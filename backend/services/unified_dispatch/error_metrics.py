@@ -13,13 +13,21 @@ import logging
 from typing import Any
 
 # Import optionnel prometheus_client (peut ne pas être installé en dev)
+PROMETHEUS_AVAILABLE = False
+
+# Variable temporaire pour stocker le type importé
+_CounterType: Any = None
+
 try:
     from prometheus_client import Counter
 
+    _CounterType = Counter
     PROMETHEUS_AVAILABLE = True
 except ImportError:
-    PROMETHEUS_AVAILABLE = False
-    Counter = None
+    pass
+
+# Exposer le type avec un nom public (type Any pour éviter les conflits)
+Counter: Any = _CounterType
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +78,12 @@ if PROMETHEUS_AVAILABLE and Counter is not None:
     # ✅ FIX: Initialiser les métriques avec 0.0 pour qu'elles apparaissent
     # même si jamais incrémentées
     try:
+        # Assertions pour aider le type checker
+        assert DISPATCH_ERRORS_TOTAL is not None
+        assert DISPATCH_COMPANY_NOT_FOUND_TOTAL is not None
+        assert DISPATCH_FK_VIOLATION_TOTAL is not None
+        assert DISPATCH_INTEGRITY_ERROR_TOTAL is not None
+
         DISPATCH_ERRORS_TOTAL.labels(
             error_type="company_not_found", company_id="0"
         ).inc(0)

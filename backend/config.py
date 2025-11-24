@@ -10,14 +10,16 @@ from urllib.parse import quote_plus
 # load_dotenv()
 
 # ✅ 4.1: Import Vault client (optionnel)
-try:
-    from shared.vault_client import VaultClient
-    from shared.vault_client import get_vault_client as _get_vault_client
+_get_vault_client: Callable[[], "VaultClient"] | None = None
+VAULT_AVAILABLE = False
 
+try:
+    from shared.vault_client import VaultClient, get_vault_client
+
+    _get_vault_client = get_vault_client
     VAULT_AVAILABLE = True
 except ImportError:
-    VAULT_AVAILABLE = False
-    _get_vault_client: Callable[[], "VaultClient"] | None = None
+    pass
 
 base_dir = Path(__file__).resolve().parent
 
@@ -131,7 +133,7 @@ class Config:
     RATELIMIT_ENABLED = True
 
     # ✅ URLs dynamiques pour PDFs/uploads
-    PDF_BASE_URL = os.getenv("PDF_BASE_URL", "http://localhost:5000")
+    PDF_BASE_URL: str = os.getenv("PDF_BASE_URL", "http://localhost:5000")
     UPLOADS_PUBLIC_BASE = os.getenv("UPLOADS_PUBLIC_BASE", "/uploads")
 
     # Logique d'initialisation commune (optionnel)
@@ -253,9 +255,8 @@ class ProductionConfig(Config):
     REMEMBER_COOKIE_SAMESITE = os.getenv("REMEMBER_COOKIE_SAMESITE", "Lax")
 
     # ✅ Prod: URL backend publique (depuis env)
-    PDF_BASE_URL: str | None = os.getenv("PDF_BASE_URL")
-    if not PDF_BASE_URL:
-        pass  # PDF_BASE_URL sera validé au runtime si nécessaire
+    # Utiliser une valeur par défaut pour respecter le type str de la classe de base
+    PDF_BASE_URL = os.getenv("PDF_BASE_URL") or "http://localhost:5000"
 
 
 class TestingConfig(Config):

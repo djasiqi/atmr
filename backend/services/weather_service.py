@@ -162,7 +162,7 @@ class WeatherService:
         Returns:
             Float entre 0 et 1.
         """
-        factor = 0
+        factor: float = 0.0
 
         # 1. Précipitations (40% du facteur)
         rain = weather_data.get("rain_1h", 0)

@@ -214,7 +214,7 @@ class Assignment(db.Model):
         Integer, ForeignKey("driver.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
-    status = Column(
+    status: Mapped[AssignmentStatus] = Column(
         SAEnum(AssignmentStatus, name="assignment_status"),
         nullable=False,
         default=AssignmentStatus.SCHEDULED,
@@ -259,7 +259,7 @@ class Assignment(db.Model):
     driver = relationship("Driver", backref="assignments", passive_deletes=True)
 
     @property
-    def serialize(self):
+    def serialize(self) -> dict[str, Any]:
         status_val = getattr(self.status, "value", self.status)
         delay: int = _as_int(getattr(self, "delay_seconds", 0))
         return {
@@ -324,7 +324,7 @@ class Assignment(db.Model):
 
     @validates("delay_seconds")
     def _v_delay(self, _k: str, v: Any) -> int:
-        val = _as_int(v)
+        val: int = int(_as_int(v))
         if val < VAL_ZERO:
             msg = "delay_seconds ne peut pas être négatif."
             raise ValueError(msg)
@@ -374,7 +374,7 @@ class DriverStatus(db.Model):
         index=True,
     )
 
-    state = Column(
+    state: Mapped[DriverState] = Column(
         SAEnum(DriverState, name="driver_state"),
         nullable=False,
         default=DriverState.AVAILABLE,
@@ -393,7 +393,7 @@ class DriverStatus(db.Model):
         Integer, ForeignKey("assignment.id", ondelete="SET NULL"), nullable=True
     )
 
-    last_update = Column(
+    last_update: Mapped[datetime] = Column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
 
@@ -556,10 +556,10 @@ class RealtimeEvent(db.Model):
         index=True,
     )
 
-    event_type = Column(
+    event_type: Mapped[RealtimeEventType] = Column(
         SAEnum(RealtimeEventType, name="realtime_event_type"), nullable=False
     )
-    entity_type = Column(
+    entity_type: Mapped[RealtimeEntityType] = Column(
         SAEnum(RealtimeEntityType, name="realtime_entity_type"), nullable=False
     )
 

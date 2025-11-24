@@ -45,11 +45,11 @@ class Payment(db.Model):
         onupdate=func.now(),
     )
 
-    method = Column(
+    method: Mapped[str] = Column(
         SAEnum("credit_card", "paypal", "bank_transfer", "cash", name="payment_method"),
         nullable=False,
     )
-    status = Column(
+    status: Mapped[PaymentStatus] = Column(
         SAEnum(PaymentStatus, name="payment_status"),
         nullable=False,
         default=PaymentStatus.PENDING,

@@ -664,19 +664,20 @@ def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
             params_hash = hashlib.sha256(params_str.encode()).hexdigest()
             dedup_key = f"dispatch:enqueued:{company_id}:{params_hash}"
 
-            if not redis_client.setnx(dedup_key, 1):
-                logger.info(
-                    "[Queue] Duplicate run ignored for company=%s (same params)",
-                    company_id,
-                )
-                st.running = False
-                st.last_start = None
-                _RUNNING[company_id] = False
-                _PROGRESS[company_id] = 0
-                return
+            if redis_client:
+                if not redis_client.setnx(dedup_key, 1):
+                    logger.info(
+                        "[Queue] Duplicate run ignored for company=%s (same params)",
+                        company_id,
+                    )
+                    st.running = False
+                    st.last_start = None
+                    _RUNNING[company_id] = False
+                    _PROGRESS[company_id] = 0
+                    return
 
-            # TTL 5 minutes pour éviter les blocages
-            redis_client.expire(dedup_key, 300)
+                # TTL 5 minutes pour éviter les blocages
+                redis_client.expire(dedup_key, 300)
 
             # Log the parameters being used for the run
             logger.info(

@@ -219,10 +219,13 @@ def solve(
     # Base: travel (min) + service(from_node) ; si véhicule d'urgence:
     #   travel *= emergency_distance_multiplier
     #   + emergency_per_stop_penalty (si to_node est une tâche)
+    DriverType: Any = None
     try:
-        from models import DriverType  # si dispo
+        from models import DriverType as _DriverType
+
+        DriverType = _DriverType
     except Exception:
-        DriverType = None
+        pass
 
     emergency_mult = float(
         getattr(

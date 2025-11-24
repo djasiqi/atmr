@@ -194,7 +194,7 @@ class DelayMLPredictor(object):
 
         """
         try:
-            from datetime import datetime, timedelta
+            from datetime import datetime, timedelta, timezone
 
             from sqlalchemy import and_
 
@@ -205,7 +205,7 @@ class DelayMLPredictor(object):
                 return 0.75  # Valeur par défaut si driver inconnu
 
             # Récupérer les 50 dernières courses terminées dans les 90 derniers jours
-            cutoff_date = datetime.now(datetime.timezone.utc) - timedelta(days=90)
+            cutoff_date = datetime.now(timezone.utc) - timedelta(days=90)
             recent_bookings = (
                 Booking.query.filter(
                     and_(

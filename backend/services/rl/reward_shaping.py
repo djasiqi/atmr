@@ -197,7 +197,8 @@ class AdvancedRewardShaping:
             # Bonus pour distance courte
             return 20.0 + (self.short_distance_threshold - distance) * 4.0
         # Log penalty pour distances longues
-        return max(-self.max_distance_penalty, -np.log(distance) * 10.0)
+        log_value: float = float(np.log(distance))
+        return max(-self.max_distance_penalty, -log_value * 10.0)
 
     def _calculate_equity_reward(self, info: Dict[str, Any]) -> float:
         """Calcule la récompense basée sur l'équité de charge.

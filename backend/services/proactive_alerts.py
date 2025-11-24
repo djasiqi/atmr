@@ -12,7 +12,7 @@ Date: 21 octobre 2025
 
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 
 import numpy as np
 
@@ -33,15 +33,11 @@ DRIVER_LOAD_WARNING = 2
 CURRENT_DISTANCE_THRESHOLD = 10
 
 # Imports conditionnels pour éviter les erreurs
-try:
-    from services.notification_service import NotificationService
-except ImportError:
-    NotificationService = None
+# Note: notification_service n'a pas de classe NotificationService, ce sont des fonctions
+NotificationService: Any = None
 
-try:
-    from services.unified_dispatch.ml_predictor import MLPredictor
-except ImportError:
-    MLPredictor = None
+# Note: ml_predictor a DelayMLPredictor, pas MLPredictor
+MLPredictor: Any = None
 
 logger = logging.getLogger(__name__)
 
@@ -67,10 +63,11 @@ class ProactiveAlertsService:
                 (pour injection de dépendances dans les tests)
         """
         super().__init__()
-        self.notification_service = notification_service or (
-            NotificationService() if NotificationService else None
-        )
-        self.ml_predictor = MLPredictor() if MLPredictor else None
+        # Note: NotificationService n'existe pas dans notification_service
+        # Le service de notification utilise des fonctions, pas une classe
+        self.notification_service = notification_service
+        # Note: MLPredictor n'existe pas, utiliser DelayMLPredictor à la place
+        self.ml_predictor = None
 
         # Seuils configurables
         self.delay_risk_thresholds = {
@@ -292,7 +289,7 @@ class ProactiveAlertsService:
                 risk_factors.append(0)
 
             # Calcul probabilité combinée
-            base_prob = float(np.mean(risk_factors))
+            base_prob: float = float(cast(float, np.mean(risk_factors)))
 
             # Ajustement selon priorité
             priority = booking.get("priority", 3)
@@ -370,11 +367,12 @@ class ProactiveAlertsService:
             pickup_lon = booking.get("pickup_lon", 6.1432)
 
             # Distance euclidienne simple (approximation)
-            lat_diff = abs(driver_lat - pickup_lat)
-            lon_diff = abs(driver_lon - pickup_lon)
+            lat_diff = abs(float(driver_lat) - float(pickup_lat))
+            lon_diff = abs(float(driver_lon) - float(pickup_lon))
 
             # Conversion approximative en km
-            return ((lat_diff**2 + lon_diff**2) ** 0.5) * 111.32
+            distance: float = float(((lat_diff**2 + lon_diff**2) ** 0.5) * 111.32)
+            return distance
 
         except Exception as e:
             logger.error("[ProactiveAlerts] Erreur calcul distance: %s", e)
@@ -710,11 +708,12 @@ class ProactiveAlertsService:
 
             # Utiliser le service de notification existant
             if self.notification_service:
-                success = self.notification_service.send_notification(
+                success_raw = self.notification_service.send_notification(
                     company_id=company_id,
                     notification_type="delay_risk",
                     data=notification_data,
                 )
+                success: bool = bool(success_raw)
             else:
                 logger.warning("[ProactiveAlerts] NotificationService non disponible")
                 success = False

@@ -3,7 +3,7 @@
 # Constantes pour éviter les valeurs magiques
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List
 
 import optuna
 from optuna.trial import Trial
@@ -122,7 +122,7 @@ class HyperparameterTuner:
         episode_rewards = []
         for episode in range(self.n_training_episodes):
             state, _ = env.reset()
-            episode_reward = 0
+            episode_reward: float = 0.0
             done = False
             steps = 0
 
@@ -158,7 +158,7 @@ class HyperparameterTuner:
         eval_rewards = []
         for _ in range(self.n_eval_episodes):
             state, _ = env.reset()
-            episode_reward = 0
+            episode_reward = 0.0
             done = False
             steps = 0
 
@@ -398,7 +398,7 @@ class HyperparameterTuner:
         print("📊 Métriques détaillées sauvegardées: {metrics_path}")
 
         # 2. Sauvegarder résultats de comparaison
-        comparison_data = {
+        comparison_data: Dict[str, Any] = {
             "timestamp": timestamp,
             "study_name": self.study_name,
             "comparison_summary": {
@@ -515,7 +515,7 @@ class HyperparameterTuner:
         self, sorted_trials: list[optuna.trial.Trial]
     ) -> dict[str, Any]:
         """Analyse l'importance des features."""
-        feature_scores = {
+        feature_scores: Dict[str, Dict[str, List[Any]]] = {
             "double_dqn": {"enabled": [], "disabled": []},
             "prioritized_replay": {"enabled": [], "disabled": []},
             "n_step": {"enabled": [], "disabled": []},

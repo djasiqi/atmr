@@ -7,6 +7,7 @@ refusées aux endpoints protégés par IP whitelist.
 import logging
 import os
 from datetime import UTC, datetime, timedelta
+from typing import Any, Dict
 
 import sentry_sdk
 from flask import request
@@ -158,7 +159,7 @@ def send_ip_whitelist_alert(
             }
 
             # Context additionnel
-            context = {
+            context: Dict[str, Any] = {
                 "ip_address": client_ip,
                 "endpoint": endpoint,
                 "method": method,

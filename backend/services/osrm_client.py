@@ -82,7 +82,7 @@ try:
     # que Pylance ne connaît pas toujours
     from redis.exceptions import ConnectionError as _RedisConnError  # type: ignore
 except Exception:  # redis absent ou API inattendue
-
+    # Définir une classe de fallback
     class _RedisConnError(Exception):
         pass
 
@@ -793,7 +793,7 @@ def route_info(
                     # (rétrocompatibilité)
                     if "fallback" not in cached:
                         cached["fallback"] = False
-                    return cached
+                    return cast(Dict[str, Any], cached)
         except _RedisConnError:
             logger.warning("[OSRM] Redis connection failed - continuing without cache")
             increment_cache_bypass()
@@ -1069,7 +1069,7 @@ try:
 except ImportError:
     PROMETHEUS_METRICS_AVAILABLE = False
 
-    def record_circuit_breaker_state(*args, **kwargs):
+    def record_circuit_breaker_state(state: str, company_id: int) -> None:
         pass
 
 
@@ -1098,7 +1098,7 @@ def build_distance_matrix_osrm_with_cb(
             len(result),
             len(result[0]) if result else 0,
         )
-        return result
+        return cast(List[List[float]], result)
     except Exception as e:
         logger.warning(
             (
@@ -1258,6 +1258,9 @@ def get_distance_time(
     """
     # Résolution de l'URL de base
     osrm_base = base_url or os.getenv("OSRM_BASE_URL", "http://localhost:5000")
+    # Garantir que osrm_base est toujours un str (os.getenv peut retourner None)
+    if not osrm_base:
+        osrm_base = "http://localhost:5000"
     info = route_info(
         origin, dest, base_url=osrm_base, profile=profile, redis_client=redis_client
     )
@@ -1341,6 +1344,8 @@ def get_distance_time_cached(origin, dest, date_str=None):
     try:
         from ext import redis_client as rc
 
+        if rc is None:
+            raise Exception("Redis client not available")
         raw_any = rc.get(cache_key)
         if raw_any:
             raw = raw_any
@@ -1358,6 +1363,8 @@ def get_distance_time_cached(origin, dest, date_str=None):
     try:
         from ext import redis_client as rc
 
+        if rc is None:
+            raise Exception("Redis client not available")
         rc.setex(cache_key, CACHE_TTL_SECONDS, json.dumps(result))
     except Exception as e:
         logger.warning("[OSRM] Cache write error: %s", e)
@@ -1392,6 +1399,8 @@ def get_matrix_cached(origins, destinations, date_str=None):
     try:
         from ext import redis_client as rc
 
+        if rc is None:
+            raise Exception("Redis client not available")
         raw_any = rc.get(cache_key)
         if raw_any:
             logger.info(
@@ -1414,6 +1423,8 @@ def get_matrix_cached(origins, destinations, date_str=None):
     try:
         from ext import redis_client as rc
 
+        if rc is None:
+            raise Exception("Redis client not available")
         rc.setex(cache_key, CACHE_TTL_SECONDS, json.dumps(result))
         logger.info(
             "[OSRM] Matrix cached for %sx%s points", len(origins), len(destinations)

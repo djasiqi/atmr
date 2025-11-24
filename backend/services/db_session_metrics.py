@@ -16,15 +16,24 @@ from contextlib import contextmanager
 from typing import Any
 
 # Import optionnel prometheus_client (peut ne pas être installé en dev)
+PROMETHEUS_AVAILABLE = False
+
+# Variables temporaires pour stocker les types importés
+_CounterType: Any = None
+_HistogramType: Any = None
+
 try:
     from prometheus_client import Counter, Histogram
 
+    _CounterType = Counter
+    _HistogramType = Histogram
     PROMETHEUS_AVAILABLE = True
 except ImportError:
-    PROMETHEUS_AVAILABLE = False
-    # Définir Counter et Histogram comme None si non disponible
-    Counter = None
-    Histogram = None
+    pass
+
+# Exposer les types avec des noms publics (type Any pour éviter les conflits)
+Counter: Any = _CounterType
+Histogram: Any = _HistogramType
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +85,11 @@ if PROMETHEUS_AVAILABLE and Counter is not None and Histogram is not None:
     # ✅ FIX: Initialiser les métriques avec 0.0 pour qu'elles apparaissent
     # même si jamais incrémentées
     try:
+        # Assertions pour aider le type checker
+        assert DB_TRANSACTION_TOTAL is not None
+        assert DB_CONTEXT_MANAGER_USAGE is not None
+        assert DB_DIRECT_SESSION_USAGE is not None
+
         DB_TRANSACTION_TOTAL.labels(operation="commit").inc(0)
         DB_TRANSACTION_TOTAL.labels(operation="rollback").inc(0)
         DB_TRANSACTION_TOTAL.labels(operation="begin").inc(0)

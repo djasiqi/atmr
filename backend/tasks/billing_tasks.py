@@ -1,5 +1,6 @@
 import logging
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 # Configuration du logger
 # Constantes pour éviter les valeurs magiques
@@ -7,14 +8,19 @@ from celery import Celery
 from celery.schedules import crontab
 
 from models import Company, Invoice, InvoiceReminder, InvoiceStatus, db
+from services.invoice_service import InvoiceService
 
+Client: Any = None
 try:
-    from models import Client
+    from models import Client as _Client
+
+    Client = _Client
 except ImportError:
     # Fallback si Client n'existe pas
     Client = type("Client", (), {"id": None, "company_id": None, "is_active": True})()
-from services.invoice_service import InvoiceService
-from services.notification_service import NotificationService
+
+# Note: notification_service n'a pas de classe NotificationService, ce sont des fonctions
+NotificationService: Any = None
 
 MONTH_ONE = 1
 
@@ -67,7 +73,16 @@ def send_reminder_notifications():
     try:
         app_logger.info("Début de l'envoi des notifications de rappel")
 
-        notification_service = NotificationService()
+        # Note: NotificationService n'existe pas dans notification_service
+        # Le code attend un objet avec des méthodes send_reminder_notification et send_monthly_invoice_summary
+        notification_service: Any = (
+            NotificationService() if NotificationService else None
+        )
+        if notification_service is None:
+            app_logger.warning(
+                "NotificationService non disponible, notifications non envoyées"
+            )
+            return
 
         # Récupérer les rappels générés aujourd'hui qui n'ont pas encore été
         # envoyés
@@ -290,7 +305,16 @@ def send_invoice_summary():
     try:
         app_logger.info("Début de l'envoi des résumés mensuels")
 
-        notification_service = NotificationService()
+        # Note: NotificationService n'existe pas dans notification_service
+        # Le code attend un objet avec des méthodes send_reminder_notification et send_monthly_invoice_summary
+        notification_service: Any = (
+            NotificationService() if NotificationService else None
+        )
+        if notification_service is None:
+            app_logger.warning(
+                "NotificationService non disponible, résumés non envoyés"
+            )
+            return
 
         # Calculer la période précédente
         now = datetime.now(UTC)

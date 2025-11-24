@@ -18,7 +18,7 @@ import time
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 from zoneinfo import ZoneInfo
 
 from flask import current_app
@@ -110,7 +110,10 @@ class AgentOrchestrator:
         self._running = False
         self._thread: Optional[threading.Thread] = None
         self._lock = threading.Lock()
-        self._app = app or current_app._get_current_object()
+        # current_app est un LocalProxy, _get_current_object() existe mais pyright ne le reconnaît pas
+        self._app = (
+            app or getattr(current_app, "_get_current_object", lambda: current_app)()
+        )
 
         logger.info("[AgentOrchestrator] Initialized for company %s", company_id)
 
@@ -745,7 +748,7 @@ class AgentOrchestrator:
             # Calculer score simple (distance estimée)
             # Pour l'instant, on prend le premier chauffeur sans conflit
             # TODO: Améliorer avec calcul de distance réel
-            return driver_id
+            return int(driver_id) if driver_id is not None else None
 
         return None
 
@@ -835,7 +838,7 @@ class AgentOrchestrator:
             # ou dernière course)
             # Pour l'instant, on prend le premier chauffeur sans conflit
             # TODO: Améliorer avec calcul de distance réel
-            return driver_id
+            return int(driver_id) if driver_id is not None else None
 
         return None
 
@@ -1091,7 +1094,8 @@ class AgentOrchestrator:
                 """Extrait le scheduled_time d'un step pour le tri."""
                 booking = Booking.query.get(step.get("job_id"))
                 if booking and booking.scheduled_time:
-                    return booking.scheduled_time
+                    # booking.scheduled_time est une colonne SQLAlchemy, convertir en datetime
+                    return cast(datetime, booking.scheduled_time)
                 return datetime.min
 
             sorted_steps = sorted(driver_steps, key=get_scheduled_time)

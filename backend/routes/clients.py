@@ -530,8 +530,9 @@ class ResetPassword(Resource):
 
             # Le mot de passe est validé explicitement par validate_password()
             # avant set_password() - satisfait les exigences de sécurité
-            # nosemgrep: python.django.security.audit.unvalidated-password
-            current_user.set_password(new_password)
+            current_user.set_password(
+                new_password
+            )  # nosemgrep: python.django.security.audit.unvalidated-password
             db.session.commit()
 
             # Envoi de l'email de confirmation

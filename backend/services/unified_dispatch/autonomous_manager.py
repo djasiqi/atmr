@@ -5,7 +5,7 @@ Gère les 3 modes et orchestre les actions automatiques.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 
 from models import Company, DispatchMode
 from services.unified_dispatch.reactive_suggestions import Suggestion, apply_suggestion
@@ -60,10 +60,10 @@ class AutonomousDispatchManager:
 
         if self.mode == DispatchMode.SEMI_AUTO:
             # En semi-auto : seulement si explicitement activé dans la config
-            return self.config["auto_dispatch"]["enabled"]
+            return bool(self.config["auto_dispatch"]["enabled"])
 
         # En fully auto : toujours actif
-        return self.mode == DispatchMode.FULLY_AUTO
+        return bool(self.mode == DispatchMode.FULLY_AUTO)
 
     def should_run_realtime_optimizer(self) -> bool:
         """Détermine si le RealtimeOptimizer doit tourner en continu.
@@ -77,7 +77,7 @@ class AutonomousDispatchManager:
             return False
 
         # En semi-auto et fully-auto : selon la configuration
-        return self.config["realtime_optimizer"]["enabled"]
+        return bool(self.config["realtime_optimizer"]["enabled"])
 
     def can_auto_apply_suggestion(self, suggestion: Suggestion) -> bool:
         """Détermine si une suggestion peut être appliquée automatiquement.
@@ -150,18 +150,20 @@ class AutonomousDispatchManager:
 
         if trigger_type == "delay":
             # Retard détecté : comparer au seuil
-            delay_minutes = context.get("delay_minutes", 0)
-            threshold = triggers_config.get("delay_threshold_minutes", 15)
+            delay_minutes = int(context.get("delay_minutes", 0))
+            threshold = int(triggers_config.get("delay_threshold_minutes", 15))
             return delay_minutes >= threshold
 
         if trigger_type == "driver_unavailable":
             # Chauffeur devient indisponible : selon config
-            return triggers_config.get("driver_became_unavailable", True)
+            return bool(triggers_config.get("driver_became_unavailable", True))
 
         if trigger_type == "better_driver_available":
             # Meilleur chauffeur disponible : vérifier le gain minimal
-            gain_minutes = context.get("gain_minutes", 0)
-            threshold = triggers_config.get("better_driver_available_gain_minutes", 10)
+            gain_minutes = int(context.get("gain_minutes", 0))
+            threshold = int(
+                triggers_config.get("better_driver_available_gain_minutes", 10)
+            )
             return gain_minutes >= threshold
 
         return False
@@ -251,7 +253,7 @@ class AutonomousDispatchManager:
             Statistiques des actions effectuées
 
         """
-        stats = {
+        stats: Dict[str, Any] = {
             "total_opportunities": len(opportunities),
             "auto_applied": 0,
             "manual_required": 0,
@@ -264,7 +266,7 @@ class AutonomousDispatchManager:
             for suggestion in opp.suggestions:
                 # Vérifier si auto-applicable
                 if not self.can_auto_apply_suggestion(suggestion):
-                    stats["manual_required"] += 1
+                    stats["manual_required"] = int(stats["manual_required"]) + 1
                     logger.info(
                         (
                             "[AutonomousManager] Suggestion requires manual "
@@ -279,7 +281,7 @@ class AutonomousDispatchManager:
                 # Vérifier les limites de sécurité
                 can_proceed, reason = self.check_safety_limits(suggestion.action)
                 if not can_proceed:
-                    stats["blocked_by_limits"] += 1
+                    stats["blocked_by_limits"] = int(stats["blocked_by_limits"]) + 1
                     logger.warning(
                         (
                             "[AutonomousManager] Action blocked by safety limit: "
@@ -306,8 +308,9 @@ class AutonomousDispatchManager:
                         execution_time_ms = (time.time() - start_time) * 1000
 
                         if result.get("success"):
-                            stats["auto_applied"] += 1
-                            stats["actions"].append(
+                            stats["auto_applied"] = int(stats["auto_applied"]) + 1
+                            actions_list = cast(List[Any], stats["actions"])
+                            actions_list.append(
                                 {
                                     "action": suggestion.action,
                                     "booking_id": suggestion.booking_id,
@@ -379,7 +382,7 @@ class AutonomousDispatchManager:
                                 database.session.rollback()
 
                         else:
-                            stats["errors"] += 1
+                            stats["errors"] = int(stats["errors"]) + 1
                             logger.error(
                                 "[AutonomousManager] ❌ Failed to apply: %s (error=%s)",
                                 suggestion.action,
@@ -430,7 +433,7 @@ class AutonomousDispatchManager:
                                 )
                                 database.session.rollback()
                     else:
-                        stats["auto_applied"] += 1
+                        stats["auto_applied"] = int(stats["auto_applied"]) + 1
                         logger.info(
                             (
                                 "[AutonomousManager] [DRY RUN] Would auto-apply: "
@@ -441,7 +444,7 @@ class AutonomousDispatchManager:
                         )
 
                 except Exception:
-                    stats["errors"] += 1
+                    stats["errors"] = int(stats["errors"]) + 1
                     logger.exception(
                         (
                             "[AutonomousManager] Exception while applying "
