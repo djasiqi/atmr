@@ -404,7 +404,7 @@ def get_bookings_for_day(company_id, day_str, Booking=None, BookingStatus=None):
         filtered_result = []
         excluded_count = 0
 
-        logger.error(
+        logger.info(
             "[DATA] 🔍 FILTRAGE de %s courses pour retours non confirmés...",
             len(result),
         )
@@ -417,7 +417,7 @@ def get_bookings_for_day(company_id, day_str, Booking=None, BookingStatus=None):
 
             if is_return and not time_confirmed:
                 excluded_count += 1
-                logger.error(
+                logger.debug(
                     "⏸️ Course #%s (%s) EXCLUE : retour avec time_confirmed=False",
                     b.id,
                     getattr(b, "customer_name", "N/A"),
@@ -426,7 +426,7 @@ def get_bookings_for_day(company_id, day_str, Booking=None, BookingStatus=None):
 
             filtered_result.append(b)
 
-        logger.error(
+        logger.info(
             (
                 "[DATA] ✅ %s courses après filtrage (%s retours exclus avec "
                 "heure à confirmer)"

@@ -79,7 +79,7 @@ class TrafficControlManager:
         """
         # Défense en profondeur : vérifier le type même si annoté
         # (runtime validation)
-        return 0 <= jitter_ms <= MAX_JITTER_MS
+        return isinstance(jitter_ms, int) and 0 <= jitter_ms <= MAX_JITTER_MS  # pyright: ignore
 
     @staticmethod
     def _validate_percent(percent: float) -> bool:

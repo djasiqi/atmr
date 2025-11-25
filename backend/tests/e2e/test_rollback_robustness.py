@@ -133,9 +133,13 @@ class TestRollbackRobustness:
         booking = BookingFactory(company=company, driver_id=None)
         db.session.add(booking)
         db.session.flush()  # Flush pour obtenir l'ID
+        # Commiter pour que l'objet existe en DB après le rollback
+        db.session.commit()
 
-        # Capturer les valeurs originales après flush
+        # Capturer les valeurs originales après commit
         original_values = capture_original_values(booking, ["driver_id"])
+        # Capturer l'ID avant modifications pour éviter les problèmes d'expiration
+        booking_id = booking.id
 
         # Modifier le booking
         driver = DriverFactory(company=company)
@@ -151,7 +155,7 @@ class TestRollbackRobustness:
         verify_rollback_restores_values(
             db.session,
             Booking,
-            booking.id,
+            booking_id,
             original_values,
         )
 
@@ -192,7 +196,7 @@ class TestRollbackRobustness:
         )
 
         # Vérifier que booking1 n'est PAS restauré (déjà commité)
-        booking1_reloaded = db.session.query(Booking).get(booking1.id)
+        booking1_reloaded = db.session.get(Booking, booking1.id)
         assert booking1_reloaded.driver_id == driver.id, (
             "booking1 should NOT be restored (already committed)"
         )

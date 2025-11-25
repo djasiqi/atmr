@@ -73,7 +73,8 @@ def verify_rollback_restores_values(
     if reload_strategy == "query":
         reloaded = db_session.query(model_class).filter_by(id=object_id).first()
     elif reload_strategy == "get":
-        reloaded = db_session.query(model_class).get(object_id)
+        # Utiliser db_session.get() pour SQLAlchemy 2.0+
+        reloaded = db_session.get(model_class, object_id)
     else:
         raise ValueError(
             f"Invalid reload_strategy: {reload_strategy}. Use 'query' or 'get'"
