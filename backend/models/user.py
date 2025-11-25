@@ -232,8 +232,8 @@ class User(db.Model):
         except ImportError:
             return getattr(self, "phone", None)
 
-    @phone_secure.setter
-    def phone_secure(self, value: Optional[str]):  # type: ignore[no-redef]
+    @phone_secure.setter  # type: ignore[no-redef]
+    def phone_secure(self, value: Optional[str]):
         """Chiffre et stocke le téléphone."""
         try:
             from security.crypto import get_encryption_service
@@ -267,8 +267,8 @@ class User(db.Model):
         except ImportError:
             return cast(Optional[str], getattr(self, "email", None))
 
-    @email_secure.setter
-    def email_secure(self, value: Optional[str]):  # type: ignore[no-redef]
+    @email_secure.setter  # type: ignore[no-redef]
+    def email_secure(self, value: Optional[str]):
         """Chiffre et stocke l'email."""
         try:
             from security.crypto import get_encryption_service
@@ -300,8 +300,8 @@ class User(db.Model):
         except ImportError:
             return cast(Optional[str], getattr(self, "first_name", None))
 
-    @first_name_secure.setter
-    def first_name_secure(self, value: Optional[str]):  # type: ignore[no-redef]
+    @first_name_secure.setter  # type: ignore[no-redef]
+    def first_name_secure(self, value: Optional[str]):
         """Chiffre et stocke le prénom."""
         try:
             from security.crypto import get_encryption_service
@@ -333,8 +333,8 @@ class User(db.Model):
         except ImportError:
             return cast(Optional[str], getattr(self, "last_name", None))
 
-    @last_name_secure.setter
-    def last_name_secure(self, value: Optional[str]):  # type: ignore[no-redef]
+    @last_name_secure.setter  # type: ignore[no-redef]
+    def last_name_secure(self, value: Optional[str]):
         """Chiffre et stocke le nom."""
         try:
             from security.crypto import get_encryption_service
@@ -364,8 +364,8 @@ class User(db.Model):
         except ImportError:
             return cast(Optional[str], getattr(self, "address", None))
 
-    @address_secure.setter
-    def address_secure(self, value: Optional[str]):  # type: ignore[no-redef]
+    @address_secure.setter  # type: ignore[no-redef]
+    def address_secure(self, value: Optional[str]):
         """Chiffre et stocke l'adresse."""
         try:
             from security.crypto import get_encryption_service
