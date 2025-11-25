@@ -332,7 +332,8 @@ class InvoiceService:
             invoice.period_month = period_month
             invoice.period_year = period_year
             invoice.invoice_number = invoice_number
-            # Utiliser des variables temporaires Any pour éviter les problèmes de type checker
+            # Utiliser des variables temporaires Any pour éviter les problèmes
+            # de type checker
             currency_any: Any = "CHF"
             invoice.currency = currency_any
             issued_at_any: Any = datetime.now(UTC)
