@@ -102,7 +102,7 @@ class TestSimpleCoverage:
 
         logger = RLLogger(
             redis_key_prefix="custom",
-            max_redis_logs=0.500,
+            max_redis_logs=500,
             enable_db_logging=False,
             enable_redis_logging=False,
         )

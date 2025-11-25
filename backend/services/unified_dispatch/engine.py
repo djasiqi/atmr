@@ -312,16 +312,33 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
 
     try:
         # ✅ FIX RC3: Améliorer la recherche de Company pour gérer les objets flushés
-        company: Company | None = Company.query.get(company_id)
+        # Essayer d'abord avec db.session.get() (SQLAlchemy 2.0+) qui est plus robuste
+        company: Company | None = None
+        try:
+            company = db.session.get(Company, company_id)
+        except AttributeError:
+            # Fallback pour SQLAlchemy < 2.0
+            company = Company.query.get(company_id)
 
         # ✅ FIX RC3: Si pas trouvé, flush et réessayer
         if not company:
             db.session.flush()
-            company = Company.query.get(company_id)
+            try:
+                company = db.session.get(Company, company_id)
+            except AttributeError:
+                company = Company.query.get(company_id)
 
         # ✅ FIX RC3: Si toujours pas trouvé, essayer avec filter_by (plus robuste)
         if not company:
             company = Company.query.filter_by(id=company_id).first()
+
+        # ✅ FIX: Si toujours pas trouvé, essayer avec expire_all() pour forcer le rechargement
+        if not company:
+            db.session.expire_all()
+            try:
+                company = db.session.get(Company, company_id)
+            except AttributeError:
+                company = Company.query.get(company_id)
 
         if not company:
             # ✅ FIX P1.2: Améliorer la gestion d'erreurs - Company introuvable

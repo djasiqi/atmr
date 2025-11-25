@@ -31,13 +31,8 @@ class TestGiniFairness:
         # Distribution parfaitement équitable: [5, 5, 5, 5]
         values = [5, 5, 5, 5]
 
-        collector = DispatchMetricsCollector(
-            dispatch_run_id=1,
-            company_id=test_company.id,
-            date="2025-01-27",
-            all_bookings=[],
-            run_metadata={},
-        )
+        # ✅ FIX: DispatchMetricsCollector n'accepte que company_id dans __init__
+        collector = DispatchMetricsCollector(company_id=test_company.id)
 
         gini = collector._calculate_gini_index(values)
 
@@ -53,13 +48,8 @@ class TestGiniFairness:
         # Distribution parfaitement inéquitable: [10, 0, 0, 0] (un seul driver)
         values = [10, 0, 0, 0]
 
-        collector = DispatchMetricsCollector(
-            dispatch_run_id=1,
-            company_id=test_company.id,
-            date="2025-01-27",
-            all_bookings=[],
-            run_metadata={},
-        )
+        # ✅ FIX: DispatchMetricsCollector n'accepte que company_id dans __init__
+        collector = DispatchMetricsCollector(company_id=test_company.id)
 
         gini = collector._calculate_gini_index(values)
 
@@ -71,13 +61,8 @@ class TestGiniFairness:
     def test_gini_bounds(self, db, test_company):
         """Test: Gini toujours dans [0, 1]."""
 
-        collector = DispatchMetricsCollector(
-            dispatch_run_id=1,
-            company_id=test_company.id,
-            date="2025-01-27",
-            all_bookings=[],
-            run_metadata={},
-        )
+        # ✅ FIX: DispatchMetricsCollector n'accepte que company_id dans __init__
+        collector = DispatchMetricsCollector(company_id=test_company.id)
 
         # Tester différentes distributions
         test_cases = [

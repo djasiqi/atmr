@@ -153,9 +153,10 @@ class TestModelRegistry:
         assert len(versions) == 3
 
         # Vérifier que les versions sont triées par date (plus récent en premier)
-        assert versions[0]["version"] == "v1.20"
-        assert versions[1]["version"] == "v1.10"
-        assert versions[2]["version"] == "v1.00"
+        # ✅ FIX: Les versions sont créées avec f"v1.{i}.0", donc le format est "v1.X.0"
+        assert versions[0]["version"] == "v1.2.0"
+        assert versions[1]["version"] == "v1.1.0"
+        assert versions[2]["version"] == "v1.0.0"
 
     def test_model_promotion(self, registry, sample_model, sample_metadata):
         """Teste la promotion d'un modèle."""
@@ -219,19 +220,19 @@ class TestModelRegistry:
             )
             registry.register_model(sample_model, metadata)
 
-        # Promouvoir la version v1.20
+        # Promouvoir la version v1.2.0 (la plus récente)
         kpi_thresholds = {"accuracy": 0.8}
         registry.promote_model(
-            "test_model", "dueling_dqn", "v1.20", kpi_thresholds, force=True
+            "test_model", "dueling_dqn", "v1.2.0", kpi_thresholds, force=True
         )
 
-        # Rollback vers v1.10
-        success = registry.rollback_model("test_model", "dueling_dqn", "v1.10")
+        # Rollback vers v1.1.0
+        success = registry.rollback_model("test_model", "dueling_dqn", "v1.1.0")
         assert success
 
-        # Vérifier que la version actuelle est v1.10
+        # Vérifier que la version actuelle est v1.1.0
         current_model = registry.get_current_model("test_model", "dueling_dqn")
-        assert current_model["version"] == "v1.10"
+        assert current_model["version"] == "v1.1.0"
 
     def test_model_cleanup(self, registry, sample_model):
         """Teste le nettoyage des anciennes versions."""
@@ -454,8 +455,12 @@ class TestIntegration:
         assert current_model is not None
         assert current_model["version"] == "v1.00"
 
-        # 7. Vérifier le lien symbolique
-        final_model_path = temp_registry_path / "dqn_final.pth"
+        # 7. Vérifier le fichier du modèle promu
+        # ✅ FIX: Le registre crée le fichier dans current_path avec le nom
+        # {model_name}_{model_arch}.pth, pas dqn_final.pth à la racine
+        final_model_path = (
+            temp_registry_path / "current" / "integration_test_dueling_dqn.pth"
+        )
         assert final_model_path.exists()
 
         # 8. Vérifier l'historique de promotion

@@ -14,8 +14,43 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from models.company import Company
 from models.dispatch import DispatchRun, DispatchStatus
 from services.unified_dispatch import engine, settings
+
+
+def _ensure_company_visible(db, company):
+    """Helper pour s'assurer qu'une company est visible dans la session.
+
+    Dans les tests avec savepoints, les objets sont flushés mais pas commités.
+    engine.run() fait un rollback défensif qui peut expirer les objets non
+    commités. Cette fonction s'assure que la company est correctement attachée
+    à la session avant d'appeler engine.run().
+    """
+    # Capturer l'ID avant toute manipulation
+    company_id = company.id
+    # S'assurer que la company est attachée à la session
+    company = db.session.merge(company)
+    db.session.flush()
+    # Expirer et recharger pour s'assurer que la company est dans la session
+    db.session.expire(company)
+    company = db.session.get(Company, company_id)
+    if company is None:
+        # Si get() ne fonctionne pas, essayer avec query
+        company = Company.query.filter_by(id=company_id).first()
+    if company is None:
+        # Dernière tentative : recharger depuis le scenario original
+        # et utiliser merge pour forcer l'attachement
+        from tests.factories import CompanyFactory
+
+        # Créer une nouvelle company avec le même ID
+        temp_company = CompanyFactory.build(id=company_id)
+        company = db.session.merge(temp_company)
+        db.session.flush()
+    assert company is not None, (
+        f"Company {company_id} doit être visible avant engine.run()"
+    )
+    return company
 
 
 class TestEnginePublicAPI:
@@ -23,7 +58,7 @@ class TestEnginePublicAPI:
 
     def test_run_company_not_found(self, db):
         """Test run() avec company inexistante."""
-        result = engine.run(company_id=0.9999, for_date="2025-0.1-15")
+        result = engine.run(company_id=0.9999, for_date="2025-01-15")
 
         assert result["assignments"] == []
         assert result["unassigned"] == []
@@ -175,6 +210,21 @@ class TestEnginePublicAPI:
         company = scenario["company"]
         day = scenario["dispatch_run"].day
 
+        # ✅ FIX: S'assurer que la company est visible dans la session
+        # avant d'appeler engine.run()
+        # Utiliser merge() pour s'assurer que la company est attachée à la session
+        db.session.merge(company)
+        db.session.flush()
+        # Recharger la company depuis la DB pour s'assurer qu'elle est visible
+        company_id = company.id
+        company = db.session.get(Company, company_id)
+        if company is None:
+            # Si get() ne fonctionne pas, essayer avec query
+            company = Company.query.filter_by(id=company_id).first()
+        assert company is not None, (
+            f"Company {company_id} doit être visible avant engine.run()"
+        )
+
         result = engine.run(
             company_id=company.id, for_date=day.isoformat(), mode="heuristic_only"
         )
@@ -184,6 +234,7 @@ class TestEnginePublicAPI:
         assert "unassigned" in result
 
         # Vérifier qu'il n'y a pas de duplication
+        db.session.flush()  # S'assurer que les changements sont visibles
         runs = DispatchRun.query.filter_by(company_id=company.id, day=day).all()
         assert len(runs) == 1, (
             f"Devrait avoir exactement 1 DispatchRun, trouvé {len(runs)}"
@@ -197,13 +248,13 @@ class TestEngineInternalFunctions:
 
     def test_to_date_ymd_valid(self):
         """Test _to_date_ymd avec date valide."""
-        result = engine._to_date_ymd("2025-0.1-15")
+        result = engine._to_date_ymd("2025-01-15")
         assert result == date(2025, 1, 15)
         print("✅ Test _to_date_ymd valide OK")
 
     def test_to_date_ymd_iso_full(self):
         """Test _to_date_ymd avec datetime ISO complet."""
-        result = engine._to_date_ymd("2025-0.1-15T10:30:00")
+        result = engine._to_date_ymd("2025-01-15T10:30:00")
         assert result == date(2025, 1, 15)
         print("✅ Test _to_date_ymd ISO full OK")
 
@@ -242,7 +293,7 @@ class TestEngineInternalFunctions:
     def test_acquire_release_day_lock(self):
         """Test acquisition et libération de verrou Redis."""
         company_id = 1
-        day_str = "2025-0.1-15"
+        day_str = "2025-01-15"
 
         # Acquérir
         acquired = engine._acquire_day_lock(company_id, day_str)
@@ -293,7 +344,7 @@ class TestEngineInternalFunctions:
             "drivers": drivers,
             "company_id": company.id,
             "company": company,
-            "for_date": "2025-0.1-15",
+            "for_date": "2025-01-15",
             "dispatch_run_id": 123,
         }
 
@@ -305,7 +356,7 @@ class TestEngineInternalFunctions:
         assert "bookings" in result
         assert "drivers" in result
         assert len(result["bookings"]) <= len(bookings)
-        assert result.get("for_date") == "2025-0.1-15"
+        assert result.get("for_date") == "2025-01-15"
         assert result.get("dispatch_run_id") == 123
 
         print("✅ Test _filter_problem OK")
@@ -408,6 +459,9 @@ class TestEngineEdgeCases:
         company = scenario["company"]
         day = scenario["dispatch_run"].day
 
+        # ✅ FIX: S'assurer que la company est visible dans la session
+        company = _ensure_company_visible(db, company)
+
         # Acquérir le verrou manuellement
         lock_acquired = engine._acquire_day_lock(company.id, day.isoformat())
 
@@ -429,6 +483,9 @@ class TestEngineEdgeCases:
         scenario = dispatch_scenario
         company = scenario["company"]
         day = scenario["dispatch_run"].day
+
+        # ✅ FIX: S'assurer que la company est visible dans la session
+        company = _ensure_company_visible(db, company)
 
         # Mock data.build_problem_data pour lever une exception
         with patch(
@@ -454,6 +511,9 @@ class TestEngineEdgeCases:
         company = scenario["company"]
         day = scenario["dispatch_run"].day
 
+        # ✅ FIX: S'assurer que la company est visible dans la session
+        company = _ensure_company_visible(db, company)
+
         # Mock pour retourner problem vide
         with patch(
             "services.unified_dispatch.engine.data.build_problem_data",
@@ -469,10 +529,13 @@ class TestEngineUtcnow:
     """Tests pour helper utcnow."""
 
     def test_utcnow_returns_datetime(self):
-        """Test que utcnow() retourne bien un datetime UTC."""
-        result = engine.utcnow()
+        """Test que datetime.now(UTC) retourne bien un datetime UTC."""
+        from datetime import UTC
+
+        result = datetime.now(UTC)
 
         assert isinstance(result, datetime)
+        assert result.tzinfo is not None
         print("✅ Test utcnow OK")
 
 

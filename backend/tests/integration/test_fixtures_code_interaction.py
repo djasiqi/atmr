@@ -106,17 +106,26 @@ class TestFixturesCodeInteraction:
         # Créer une company via persisted_fixture (dans le savepoint du test)
         company = persisted_fixture(db, CompanyFactory(), Company)
 
+        # ✅ FIX: Utiliser des dates différentes pour forcer la création
+        # de DispatchRun distincts (engine.run() réutilise les DispatchRun
+        # existants pour la même company et la même date)
+        from datetime import timedelta
+
+        today = date.today()
+        date1 = today.isoformat()
+        date2 = (today + timedelta(days=1)).isoformat()
+
         # Appeler engine.run() qui crée sa propre transaction
         result1 = engine.run(
             company_id=company.id,
-            for_date=date.today().isoformat(),
+            for_date=date1,
             mode="auto",
         )
 
-        # Appeler engine.run() une deuxième fois
+        # Appeler engine.run() une deuxième fois avec une date différente
         result2 = engine.run(
             company_id=company.id,
-            for_date=date.today().isoformat(),
+            for_date=date2,
             mode="auto",
         )
 

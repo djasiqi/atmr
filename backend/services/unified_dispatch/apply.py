@@ -268,6 +268,8 @@ def _apply_assignments_inner(
     # 3) Prépare updates
     applied_ids: List[int] = []
     skipped: Dict[int, str] = {}
+    # ✅ FIX: Capturer les métadonnées des bookings skipped avant que la transaction soit fermée
+    skipped_metadata: Dict[int, Dict[str, Any]] = {}
     conflicts: List[int] = []
     driver_load: Dict[int, int] = defaultdict(int)
 
@@ -304,6 +306,12 @@ def _apply_assignments_inner(
                 len(booking_map),
             )
             skipped[b_id] = "booking_not_found_or_wrong_company"
+            # ✅ FIX: Pas de métadonnées disponibles si le booking n'existe pas
+            skipped_metadata[b_id] = {
+                "scheduled_time": None,
+                "time_confirmed": None,
+                "is_return": None,
+            }
             continue
 
         if b.status not in (
@@ -312,18 +320,36 @@ def _apply_assignments_inner(
             BookingStatus.ASSIGNED,
         ):
             skipped[b_id] = f"status_is_{b.status}"
+            # ✅ FIX: Capturer les métadonnées avant que la transaction soit fermée
+            skipped_metadata[b_id] = {
+                "scheduled_time": getattr(b, "scheduled_time", None),
+                "time_confirmed": getattr(b, "time_confirmed", None),
+                "is_return": getattr(b, "is_return", None),
+            }
             continue
 
         d_id = int(_aget(a, "driver_id"))
         d = driver_map.get(d_id)
         if d is None:
             skipped[b_id] = "driver_not_found_or_wrong_company"
+            # ✅ FIX: Capturer les métadonnées avant que la transaction soit fermée
+            skipped_metadata[b_id] = {
+                "scheduled_time": getattr(b, "scheduled_time", None),
+                "time_confirmed": getattr(b, "time_confirmed", None),
+                "is_return": getattr(b, "is_return", None),
+            }
             continue
         d_any = cast("Any", d)
         is_active = bool(getattr(d_any, "is_active", False))
         is_available = bool(getattr(d_any, "is_available", False))
         if enforce_driver_checks and (not is_active or not is_available):
             skipped[b_id] = "driver_not_available"
+            # ✅ FIX: Capturer les métadonnées avant que la transaction soit fermée
+            skipped_metadata[b_id] = {
+                "scheduled_time": getattr(b, "scheduled_time", None),
+                "time_confirmed": getattr(b, "time_confirmed", None),
+                "is_return": getattr(b, "is_return", None),
+            }
             continue
 
         # Enregistrer la cible d'Assignment (ETA incluse si fournie)
@@ -355,6 +381,12 @@ def _apply_assignments_inner(
 
         if respect_existing and is_assigned and same_driver:
             skipped[b_id] = "already_assigned_same_driver"
+            # ✅ FIX: Capturer les métadonnées avant que la transaction soit fermée
+            skipped_metadata[b_id] = {
+                "scheduled_time": getattr(b, "scheduled_time", None),
+                "time_confirmed": getattr(b, "time_confirmed", None),
+                "is_return": getattr(b, "is_return", None),
+            }
             continue
 
         if (
@@ -365,6 +397,12 @@ def _apply_assignments_inner(
         ):
             conflicts.append(b_id)
             skipped[b_id] = "reassign_blocked"
+            # ✅ FIX: Capturer les métadonnées avant que la transaction soit fermée
+            skipped_metadata[b_id] = {
+                "scheduled_time": getattr(b, "scheduled_time", None),
+                "time_confirmed": getattr(b, "time_confirmed", None),
+                "is_return": getattr(b, "is_return", None),
+            }
             continue
 
         payload = {
@@ -585,14 +623,11 @@ def _apply_assignments_inner(
 
     if skipped:
         for skipped_id, reason in skipped.items():
-            booking_obj = booking_map.get(skipped_id)
-            scheduled_time = (
-                getattr(booking_obj, "scheduled_time", None) if booking_obj else None
-            )
-            time_confirmed = (
-                getattr(booking_obj, "time_confirmed", None) if booking_obj else None
-            )
-            is_return = getattr(booking_obj, "is_return", None) if booking_obj else None
+            # ✅ FIX: Utiliser les métadonnées capturées avant que la transaction soit fermée
+            metadata = skipped_metadata.get(skipped_id, {})
+            scheduled_time = metadata.get("scheduled_time")
+            time_confirmed = metadata.get("time_confirmed")
+            is_return = metadata.get("is_return")
             logger.warning(
                 (
                     "[Apply] Skipped booking_id=%s reason=%s scheduled_time=%s "

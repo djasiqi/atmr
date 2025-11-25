@@ -224,22 +224,33 @@ def create_app(config_name: str | None = None):
 
         # Instrumenter SQLAlchemy (requêtes DB)
         # Flask-SQLAlchemy expose get_engine() ou .engine selon la version
+        # L'engine peut ne pas être disponible immédiatement (lazy creation)
         try:
-            # Essayer d'obtenir l'engine
-            # Flask-SQLAlchemy 3+ utilise .engine directement
-            if hasattr(db, "engine"):
-                engine = db.engine
-            elif hasattr(db, "get_engine"):
-                # Flask-SQLAlchemy <3 utilise get_engine() avec app context
+            engine = None
+            # Essayer d'obtenir l'engine dans un contexte d'application
+            with app.app_context():
+                try:
+                    if hasattr(db, "engine") and db.engine is not None:
+                        # Flask-SQLAlchemy 3+ utilise .engine directement
+                        engine = db.engine
+                    elif hasattr(db, "get_engine"):
+                        # Flask-SQLAlchemy <3 utilise get_engine() avec app context
+                        engine = db.get_engine()
+                except Exception:
+                    # Engine pas encore créé, on utilisera l'instrumentation différée
+                    engine = None
+
+            if engine:
+                # Instrumenter immédiatement si l'engine est disponible
                 with app.app_context():
-                    engine = db.get_engine()
+                    instrument_sqlalchemy(engine)
             else:
                 # Délayer l'instrumentation après que l'engine soit créé
                 @app.before_first_request
                 def _instrument_db_after_init():  # pyright: ignore
                     try:
                         with app.app_context():
-                            if hasattr(db, "engine"):
+                            if hasattr(db, "engine") and db.engine is not None:
                                 db_engine = db.engine
                             elif hasattr(db, "get_engine"):
                                 db_engine = db.get_engine()
@@ -250,13 +261,10 @@ def create_app(config_name: str | None = None):
                         app.logger.warning(
                             "[2.9] Échec instrumentation DB différée: %s", e
                         )
-
-                engine = None
-
-            if engine:
-                instrument_sqlalchemy(engine)
         except Exception as e:
-            app.logger.warning("[2.9] Échec instrumentation SQLAlchemy: %s", e)
+            # Ne pas logger comme warning si c'est juste que l'engine n'est pas encore créé
+            if "application context" not in str(e).lower():
+                app.logger.warning("[2.9] Échec instrumentation SQLAlchemy: %s", e)
     except ImportError as e:
         app.logger.warning("[2.9] OpenTelemetry non disponible (optionnel): %s", e)
     except Exception as e:

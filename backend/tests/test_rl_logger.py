@@ -31,6 +31,19 @@ except ImportError:
     log_rl_decision = None
 
 
+# Fixtures partagées pour tous les tests
+@pytest.fixture
+def sample_state():
+    """État d'exemple pour les tests."""
+    return np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+
+
+@pytest.fixture
+def sample_q_values():
+    """Q-values d'exemple pour les tests."""
+    return np.array([0.1, 0.8, 0.3, 0.5, 0.2])
+
+
 class TestRLLogger:
     """Tests pour RLLogger."""
 
@@ -42,16 +55,6 @@ class TestRLLogger:
 
         # Logger avec DB et Redis désactivés pour les tests
         return RLLogger(enable_db_logging=False, enable_redis_logging=False)
-
-    @pytest.fixture
-    def sample_state(self):
-        """État d'exemple pour les tests."""
-        return np.array([1.0, 2.0, 3.0, 4.0, 5.0])
-
-    @pytest.fixture
-    def sample_q_values(self):
-        """Q-values d'exemple pour les tests."""
-        return np.array([0.1, 0.8, 0.3, 0.5, 0.2])
 
     def test_rl_logger_initialization(self):
         """Test l'initialisation du RLLogger."""

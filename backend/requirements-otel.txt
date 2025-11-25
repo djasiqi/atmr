@@ -1,0 +1,14 @@
+# OpenTelemetry dependencies for distributed tracing
+# Install with: pip install -r requirements-otel.txt
+
+# Core OpenTelemetry packages
+opentelemetry-api>=1.24.0
+opentelemetry-sdk>=1.24.0
+opentelemetry-exporter-otlp-proto-grpc>=1.24.0
+
+# Instrumentation packages
+opentelemetry-instrumentation-flask>=0.45b0
+opentelemetry-instrumentation-sqlalchemy>=0.45b0
+opentelemetry-instrumentation-celery>=0.45b0
+opentelemetry-instrumentation-requests>=0.45b0
+

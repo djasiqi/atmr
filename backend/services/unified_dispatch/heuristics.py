@@ -1370,7 +1370,7 @@ def assign(
         tuple[int, int], tuple[float, Dict[str, float], int, int]
     ] = {}  # Initialiser pour éviter "unbound"
 
-    logger.warning(
+    logger.debug(
         (
             "[HEURISTIC] 🔍 Début scoring de %s courses régulières avec %s "
             "chauffeurs (parallel=%s)..."
@@ -1996,7 +1996,9 @@ def assign(
             )
         else:
             unassigned.append(int(cast("Any", b.id)))
-            logger.warning(
+            # ✅ FIX: Réduire la verbosité de ce log (WARNING → DEBUG)
+            # car il peut être très verbeux avec de nombreux drivers
+            logger.debug(
                 "[HEURISTIC] ❌ Course #%s REJETÉE par tous les chauffeurs: %s",
                 b_id,
                 ", ".join(rejected_reasons) if rejected_reasons else "aucune raison",

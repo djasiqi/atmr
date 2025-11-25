@@ -341,7 +341,8 @@ class DispatchMetricsCollector:
                 continue
 
             # Calculer le retard
-            eta_pickup = assignment.eta_pickup_at
+            # ✅ FIX: Utiliser getattr() pour gérer HeuristicAssignment qui n'a pas eta_pickup_at
+            eta_pickup = getattr(assignment, "eta_pickup_at", None)
             if eta_pickup is not None and scheduled_time is not None:
                 delay_minutes = int((eta_pickup - scheduled_time).total_seconds() / 60)
 
