@@ -1,4 +1,5 @@
 # models/user.py
+# pyright: reportUnnecessaryTypeIgnoreComment=false
 """Model User - Gestion des utilisateurs (tous rôles).
 Extrait depuis models.py (lignes 249-418).
 """
@@ -232,7 +233,7 @@ class User(db.Model):
             return getattr(self, "phone", None)
 
     @phone_secure.setter
-    def phone_secure(self, value: Optional[str]):
+    def phone_secure(self, value: Optional[str]):  # type: ignore[no-redef]
         """Chiffre et stocke le téléphone."""
         try:
             from security.crypto import get_encryption_service
@@ -267,7 +268,7 @@ class User(db.Model):
             return cast(Optional[str], getattr(self, "email", None))
 
     @email_secure.setter
-    def email_secure(self, value: Optional[str]):
+    def email_secure(self, value: Optional[str]):  # type: ignore[no-redef]
         """Chiffre et stocke l'email."""
         try:
             from security.crypto import get_encryption_service
@@ -300,7 +301,7 @@ class User(db.Model):
             return cast(Optional[str], getattr(self, "first_name", None))
 
     @first_name_secure.setter
-    def first_name_secure(self, value: Optional[str]):
+    def first_name_secure(self, value: Optional[str]):  # type: ignore[no-redef]
         """Chiffre et stocke le prénom."""
         try:
             from security.crypto import get_encryption_service
@@ -333,7 +334,7 @@ class User(db.Model):
             return cast(Optional[str], getattr(self, "last_name", None))
 
     @last_name_secure.setter
-    def last_name_secure(self, value: Optional[str]):
+    def last_name_secure(self, value: Optional[str]):  # type: ignore[no-redef]
         """Chiffre et stocke le nom."""
         try:
             from security.crypto import get_encryption_service
@@ -364,7 +365,7 @@ class User(db.Model):
             return cast(Optional[str], getattr(self, "address", None))
 
     @address_secure.setter
-    def address_secure(self, value: Optional[str]):
+    def address_secure(self, value: Optional[str]):  # type: ignore[no-redef]
         """Chiffre et stocke l'adresse."""
         try:
             from security.crypto import get_encryption_service

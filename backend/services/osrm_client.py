@@ -273,7 +273,14 @@ def _table(
     )
 
 
-def _table_single_request(base_url, profile, coords, sources, destinations, timeout):
+def _table_single_request(
+    base_url: str,
+    profile: str,
+    coords: List[Tuple[float, float]],
+    sources: List[int] | None,
+    destinations: List[int] | None,
+    timeout: int | None,
+) -> Dict[str, Any]:
     """Exécute une seule requête OSRM table (appelé par _table avec retry).
 
     ⚠️ D3: Si chaos injector est activé, peut simuler panne OSRM ou injecter latence.
