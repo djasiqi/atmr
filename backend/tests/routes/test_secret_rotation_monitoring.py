@@ -1,5 +1,8 @@
 """Tests unitaires pour les endpoints de monitoring des rotations de secrets."""
 
+import time
+import uuid
+
 import pytest
 
 from ext import db
@@ -9,11 +12,17 @@ from services.secret_rotation_monitor import record_rotation
 
 @pytest.fixture
 def admin_user(app, db_session):
-    """Créer un utilisateur admin pour les tests."""
+    """Créer un utilisateur admin pour les tests.
+
+    Utilise un username unique (UUID + timestamp) pour éviter les conflits
+    entre tests, même en cas d'exécution parallèle.
+    """
     with app.app_context():
+        # Générer un username unique avec UUID et timestamp pour garantir l'unicité
+        unique_id = f"{uuid.uuid4().hex[:8]}_{int(time.time() * 1000000)}"
         admin = User(
-            username="admin_test",
-            email="admin@test.com",
+            username=f"admin_test_{unique_id}",
+            email=f"admin_{unique_id}@test.com",
             role=UserRole.admin,
         )
         admin.set_password("password123")
