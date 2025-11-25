@@ -83,7 +83,6 @@ jobs:
             --exclude venv,__pycache__,migrations,htmlcov,.pytest_cache,temp_*,instance,uploads,static/qrcodes,scripts/profiling,data/ml,data/rl
 
   test:
-    if: false # ⏸️ Suspendu temporairement - focus sur lint
     name: Tests (pytest)
     runs-on: ubuntu-latest
 
