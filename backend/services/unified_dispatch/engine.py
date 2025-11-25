@@ -1172,7 +1172,7 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
         if not clustering_used:
             # Réinitialiser seulement si le clustering n'a pas été utilisé
             if "final_assignments" not in locals():
-                final_assignments: List[Any] = []
+                final_assignments = []
             else:
                 final_assignments.clear()  # Réinitialiser la variable existante
             assigned_set = set()

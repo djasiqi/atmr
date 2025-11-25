@@ -441,7 +441,7 @@ class DispatchMetricsCollector:
         self, assignments: List[Assignment], all_bookings: List[Booking]
     ) -> Dict[str, Any]:
         """Calcule les métriques de distance."""
-        total_distance = 0
+        total_distance = 0.0
         emergency_drivers = set()
         emergency_bookings_count = 0
 

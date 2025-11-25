@@ -1,4 +1,5 @@
 # models/client.py
+# pyright: reportUnnecessaryTypeIgnoreComment=false
 
 # Constantes pour éviter les valeurs magiques
 from __future__ import annotations
@@ -236,7 +237,7 @@ class Client(db.Model):
             return cast(Optional[str], getattr(self, "contact_phone", None))
 
     @contact_phone_secure.setter
-    def contact_phone_secure(self, value: Optional[str]):
+    def contact_phone_secure(self, value: Optional[str]):  # type: ignore[no-redef]
         """Chiffre le téléphone de contact."""
         try:
             from security.crypto import get_encryption_service
@@ -271,7 +272,7 @@ class Client(db.Model):
             return cast(Optional[str], getattr(self, "gp_name", None))
 
     @gp_name_secure.setter
-    def gp_name_secure(self, value: Optional[str]):
+    def gp_name_secure(self, value: Optional[str]):  # type: ignore[no-redef]
         """Chiffre le nom du médecin traitant."""
         try:
             from security.crypto import get_encryption_service
@@ -302,7 +303,7 @@ class Client(db.Model):
             return cast(Optional[str], getattr(self, "gp_phone", None))
 
     @gp_phone_secure.setter
-    def gp_phone_secure(self, value: Optional[str]):
+    def gp_phone_secure(self, value: Optional[str]):  # type: ignore[no-redef]
         """Chiffre le téléphone du médecin traitant."""
         try:
             from security.crypto import get_encryption_service
@@ -335,7 +336,7 @@ class Client(db.Model):
             return cast(Optional[str], getattr(self, "billing_address", None))
 
     @billing_address_secure.setter
-    def billing_address_secure(self, value: Optional[str]):
+    def billing_address_secure(self, value: Optional[str]):  # type: ignore[no-redef]
         """Chiffre l'adresse de facturation."""
         try:
             from security.crypto import get_encryption_service

@@ -2,7 +2,7 @@
 # pyright: reportMissingImports=false
 """Q-Network amélioré pour l'agent DQN avec architecture plus sophistiquée."""
 
-from typing import Any, Tuple
+from typing import Any, Tuple, cast
 
 import torch
 import torch.nn.functional as F
@@ -379,7 +379,7 @@ class NoisyImprovedQNetwork(nn.Module):
 
         """
         if self.use_noisy and hasattr(self.network, "get_noise_stats"):
-            return self.network.get_noise_stats()
+            return cast(dict[str, float], self.network.get_noise_stats())
         return {}
 
 
@@ -464,7 +464,7 @@ class NoisyDuelingImprovedQNetwork(nn.Module):
 
         """
         if self.use_noisy and hasattr(self.network, "get_noise_stats"):
-            return self.network.get_noise_stats()
+            return cast(dict[str, float], self.network.get_noise_stats())
         return {}
 
 
