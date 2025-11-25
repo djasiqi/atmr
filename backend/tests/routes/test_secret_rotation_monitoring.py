@@ -23,7 +23,7 @@ def admin_user(app, db_session):
 
 
 @pytest.fixture
-def sample_rotations(app, db_session):
+def _sample_rotations(app, db_session):
     """Créer quelques rotations de test."""
     with app.app_context():
         record_rotation("jwt", "success", "prod", metadata={"next_rotation_days": 30})
@@ -41,7 +41,8 @@ class TestRotationHistoryEndpoint:
         response = client.get("/api/v1/admin/secret-rotations/history")
         assert response.status_code == 401
 
-    def test_get_history_success(self, app, client, admin_user, sample_rotations):
+    @pytest.mark.usefixtures("_sample_rotations")
+    def test_get_history_success(self, app, client, admin_user):
         """Test récupération historique avec admin."""
         with app.app_context():
             from flask_jwt_extended import create_access_token
@@ -61,9 +62,8 @@ class TestRotationHistoryEndpoint:
             assert "per_page" in data
             assert len(data["rotations"]) > 0
 
-    def test_get_history_filter_by_type(
-        self, app, client, admin_user, sample_rotations
-    ):
+    @pytest.mark.usefixtures("_sample_rotations")
+    def test_get_history_filter_by_type(self, app, client, admin_user):
         """Test filtrage par type de secret."""
         with app.app_context():
             from flask_jwt_extended import create_access_token
@@ -108,7 +108,8 @@ class TestRotationStatsEndpoint:
         response = client.get("/api/v1/admin/secret-rotations/stats")
         assert response.status_code == 401
 
-    def test_get_stats_success(self, app, client, admin_user, sample_rotations):
+    @pytest.mark.usefixtures("_sample_rotations")
+    def test_get_stats_success(self, app, client, admin_user):
         """Test récupération statistiques avec admin."""
         with app.app_context():
             from flask_jwt_extended import create_access_token
@@ -154,7 +155,8 @@ class TestLastRotationEndpoint:
         response = client.get("/api/v1/admin/secret-rotations/last")
         assert response.status_code == 401
 
-    def test_get_last_all_types(self, app, client, admin_user, sample_rotations):
+    @pytest.mark.usefixtures("_sample_rotations")
+    def test_get_last_all_types(self, app, client, admin_user):
         """Test récupération dernière rotation pour tous les types."""
         with app.app_context():
             from flask_jwt_extended import create_access_token
@@ -174,7 +176,8 @@ class TestLastRotationEndpoint:
             assert all("rotation" in item for item in data)
             assert all("days_since_last" in item for item in data)
 
-    def test_get_last_specific_type(self, app, client, admin_user, sample_rotations):
+    @pytest.mark.usefixtures("_sample_rotations")
+    def test_get_last_specific_type(self, app, client, admin_user):
         """Test récupération dernière rotation pour un type spécifique."""
         with app.app_context():
             from flask_jwt_extended import create_access_token
