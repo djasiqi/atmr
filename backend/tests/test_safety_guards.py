@@ -23,6 +23,61 @@ except ImportError:
     get_safety_guards = None
 
 
+# Fixtures partagées pour tous les tests
+@pytest.fixture
+def safe_dispatch_result():
+    """Résultat de dispatch sûr."""
+    return {
+        "max_delay_minutes": 15.0,
+        "avg_delay_minutes": 8.0,
+        "completion_rate": 0.95,
+        "invalid_action_rate": 0.01,
+        "driver_loads": [3, 4, 5, 2, 6],
+        "avg_distance_km": 12.0,
+        "max_distance_km": 20.0,
+        "total_distance_km": 60.0,
+    }
+
+
+@pytest.fixture
+def unsafe_dispatch_result():
+    """Résultat de dispatch dangereux."""
+    return {
+        "max_delay_minutes": 45.0,  # Dangereux: > 30 min
+        "avg_delay_minutes": 25.0,
+        "completion_rate": 0.80,  # Dangereux: < 0.90
+        "invalid_action_rate": 0.05,  # Dangereux: > 0.03
+        "driver_loads": [15, 2, 1],  # Dangereux: max > 12
+        "avg_distance_km": 30.0,  # Dangereux: > 25 km
+        "max_distance_km": 60.0,  # Dangereux: > 50 km
+        "total_distance_km": 150.0,
+    }
+
+
+@pytest.fixture
+def rl_metadata_safe():
+    """Métadonnées RL sûres."""
+    return {
+        "confidence": 0.85,
+        "uncertainty": 0.15,
+        "decision_time_ms": 35,
+        "q_value_variance": 0.1,
+        "episode_length": 100,
+    }
+
+
+@pytest.fixture
+def rl_metadata_unsafe():
+    """Métadonnées RL dangereuses."""
+    return {
+        "confidence": 0.60,  # Dangereux: < 0.70
+        "uncertainty": 0.40,  # Dangereux: > 0.25
+        "decision_time_ms": 150,  # Dangereux: > 100 ms
+        "q_value_variance": 0.30,  # Dangereux: > 0.20
+        "episode_length": 30,  # Dangereux: < 50
+    }
+
+
 class TestSafetyThresholds:
     """Tests pour SafetyThresholds."""
 
@@ -65,56 +120,6 @@ class TestSafetyGuards:
             pytest.skip("SafetyGuards non disponible")
 
         return SafetyGuards()
-
-    @pytest.fixture
-    def safe_dispatch_result(self):
-        """Résultat de dispatch sûr."""
-        return {
-            "max_delay_minutes": 15.0,
-            "avg_delay_minutes": 8.0,
-            "completion_rate": 0.95,
-            "invalid_action_rate": 0.01,
-            "driver_loads": [3, 4, 5, 2, 6],
-            "avg_distance_km": 12.0,
-            "max_distance_km": 20.0,
-            "total_distance_km": 60.0,
-        }
-
-    @pytest.fixture
-    def unsafe_dispatch_result(self):
-        """Résultat de dispatch dangereux."""
-        return {
-            "max_delay_minutes": 45.0,  # Dangereux: > 30 min
-            "avg_delay_minutes": 25.0,
-            "completion_rate": 0.80,  # Dangereux: < 0.90
-            "invalid_action_rate": 0.05,  # Dangereux: > 0.03
-            "driver_loads": [15, 2, 1],  # Dangereux: max > 12
-            "avg_distance_km": 30.0,  # Dangereux: > 25 km
-            "max_distance_km": 60.0,  # Dangereux: > 50 km
-            "total_distance_km": 150.0,
-        }
-
-    @pytest.fixture
-    def rl_metadata_safe(self):
-        """Métadonnées RL sûres."""
-        return {
-            "confidence": 0.85,
-            "uncertainty": 0.15,
-            "decision_time_ms": 35,
-            "q_value_variance": 0.1,
-            "episode_length": 100,
-        }
-
-    @pytest.fixture
-    def rl_metadata_unsafe(self):
-        """Métadonnées RL dangereuses."""
-        return {
-            "confidence": 0.60,  # Dangereux: < 0.70
-            "uncertainty": 0.40,  # Dangereux: > 0.25
-            "decision_time_ms": 150,  # Dangereux: > 100 ms
-            "q_value_variance": 0.30,  # Dangereux: > 0.20
-            "episode_length": 30,  # Dangereux: < 50
-        }
 
     def test_check_safe_dispatch(
         self, safety_guards, safe_dispatch_result, rl_metadata_safe

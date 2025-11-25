@@ -679,19 +679,26 @@ def mock_external_services(monkeypatch):
             matrix.append(row)
         return matrix
 
-    def mock_route_info(origin, dest, **kwargs):
+    def mock_route_info(origin, dest=None, destination=None, **kwargs):
         """Retourne des données de route simulées basées sur haversine."""
         from services.osrm_client import _fallback_eta_seconds, _haversine_km
 
-        km = _haversine_km(origin, dest)
-        duration_s = _fallback_eta_seconds(origin, dest)
+        # ✅ FIX: Accepter 'destination' (nom réel) ou 'dest' (nom du mock)
+        dest_coord = destination if destination is not None else dest
+        if dest_coord is None:
+            raise TypeError(
+                "mock_route_info() missing 1 required positional argument: 'dest' or 'destination'"
+            )
+
+        km = _haversine_km(origin, dest_coord)
+        duration_s = _fallback_eta_seconds(origin, dest_coord)
 
         return {
             "duration": float(duration_s),
             "distance": int(km * 1000),  # mètres
             "geometry": {
                 "type": "LineString",
-                "coordinates": [[origin[1], origin[0]], [dest[1], dest[0]]],
+                "coordinates": [[origin[1], origin[0]], [dest_coord[1], dest_coord[0]]],
             },
             "legs": [{"distance": int(km * 1000), "duration": float(duration_s)}],
             "fallback": False,  # Simuler un appel OSRM réussi
@@ -822,19 +829,26 @@ def mock_osrm_client(monkeypatch):
             matrix.append(row)
         return matrix
 
-    def mock_route_info(origin, dest, **kwargs):
+    def mock_route_info(origin, dest=None, destination=None, **kwargs):
         """Retourne des données de route simulées basées sur haversine."""
         from services.osrm_client import _fallback_eta_seconds, _haversine_km
 
-        km = _haversine_km(origin, dest)
-        duration_s = _fallback_eta_seconds(origin, dest)
+        # ✅ FIX: Accepter 'destination' (nom réel) ou 'dest' (nom du mock)
+        dest_coord = destination if destination is not None else dest
+        if dest_coord is None:
+            raise TypeError(
+                "mock_route_info() missing 1 required positional argument: 'dest' or 'destination'"
+            )
+
+        km = _haversine_km(origin, dest_coord)
+        duration_s = _fallback_eta_seconds(origin, dest_coord)
 
         return {
             "duration": float(duration_s),
             "distance": int(km * 1000),  # mètres
             "geometry": {
                 "type": "LineString",
-                "coordinates": [[origin[1], origin[0]], [dest[1], dest[0]]],
+                "coordinates": [[origin[1], origin[0]], [dest_coord[1], dest_coord[0]]],
             },
             "legs": [{"distance": int(km * 1000), "duration": float(duration_s)}],
         }

@@ -1091,7 +1091,7 @@ def build_distance_matrix_osrm_with_cb(
     n = len(coords)
     base_url = kwargs.get("base_url", "http://osrm:5000")
     timeout = kwargs.get("timeout")
-    logger.info(
+    logger.debug(
         "[OSRM] build_distance_matrix_osrm_with_cb entry: n=%d base_url=%s timeout=%s",
         n,
         base_url,
@@ -1102,7 +1102,7 @@ def build_distance_matrix_osrm_with_cb(
         result = _osrm_circuit_breaker.call(
             build_distance_matrix_osrm, coords, **kwargs
         )
-        logger.info(
+        logger.debug(
             "[OSRM] build_distance_matrix_osrm_with_cb success: shape=%dx%d",
             len(result),
             len(result[0]) if result else 0,

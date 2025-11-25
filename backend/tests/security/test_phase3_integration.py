@@ -48,13 +48,18 @@ def sample_user_token(app, db, sample_user):
 @pytest.fixture
 def admin_user_token(app, db):
     """Créer un token JWT pour un admin."""
+    import time
+    import uuid
+
     with app.app_context():
         from models import User, UserRole
 
+        # Générer un username unique pour éviter les conflits entre tests
+        unique_id = f"{uuid.uuid4().hex[:8]}_{int(time.time() * 1000000)}"
         # Créer un utilisateur admin
         admin = User(
-            username="admin_test",
-            email="admin@test.com",
+            username=f"admin_test_{unique_id}",
+            email=f"admin_{unique_id}@test.com",
             role=UserRole.admin,
         )
         admin.set_password("password123")

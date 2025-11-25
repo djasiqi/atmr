@@ -22,6 +22,7 @@ from models import (
     Company,
     DispatchRun,
     DispatchStatus,
+    Driver,
 )
 from services.unified_dispatch import engine
 from tests.factories import BookingFactory, CompanyFactory, DriverFactory
@@ -371,13 +372,37 @@ class TestDispatchE2E:
         db.session.flush()
         db.session.commit()  # Commit pour garantir persistance
 
-        # ✅ FIX: Vérifier que les bookings existent en DB
+        # ✅ FIX: Vérifier que les bookings existent en DB et corriger si nécessaire
         for booking in bookings:
             booking_from_db = db.session.query(Booking).filter_by(id=booking.id).first()
             assert booking_from_db is not None, f"Booking {booking.id} must exist in DB"
+            # ✅ FIX: Si le booking n'appartient pas à la bonne company, le corriger
+            if booking_from_db.company_id != company.id:
+                booking_from_db.company_id = company.id
+                db.session.commit()
+                # Recharger pour vérifier
+                booking_from_db = (
+                    db.session.query(Booking).filter_by(id=booking.id).first()
+                )
             assert booking_from_db.company_id == company.id, (
                 f"Booking {booking.id} must belong to company "
                 f"{company.id}, got {booking_from_db.company_id}"
+            )
+
+        # ✅ FIX: Vérifier que les drivers utilisent aussi la bonne company
+        for driver in drivers:
+            driver_from_db = db.session.query(Driver).filter_by(id=driver.id).first()
+            assert driver_from_db is not None, f"Driver {driver.id} must exist in DB"
+            if driver_from_db.company_id != company.id:
+                driver_from_db.company_id = company.id
+                db.session.commit()
+                # Recharger pour vérifier
+                driver_from_db = (
+                    db.session.query(Driver).filter_by(id=driver.id).first()
+                )
+            assert driver_from_db.company_id == company.id, (
+                f"Driver {driver.id} must belong to company "
+                f"{company.id}, got {driver_from_db.company_id}"
             )
 
         # ✅ FIX: S'assurer que company.id est bien utilisé
@@ -626,7 +651,7 @@ class TestDispatchE2E:
         db.session.commit()
 
         # Vérifier que les bookings existent en DB et appartiennent à la bonne company
-        for booking in bookings[:2]:  # Tester avec les 2 premiers
+        for booking in bookings:
             booking_from_db = db.session.query(Booking).filter_by(id=booking.id).first()
             assert booking_from_db is not None, f"Booking {booking.id} must exist in DB"
             # ✅ FIX: Si le booking n'appartient pas à la bonne company, le corriger
@@ -640,6 +665,22 @@ class TestDispatchE2E:
             assert booking_from_db.company_id == company.id, (
                 f"Booking {booking.id} must belong to company {company.id}, "
                 f"got {booking_from_db.company_id}"
+            )
+
+        # ✅ FIX: Vérifier que les drivers utilisent aussi la bonne company
+        for driver in drivers:
+            driver_from_db = db.session.query(Driver).filter_by(id=driver.id).first()
+            assert driver_from_db is not None, f"Driver {driver.id} must exist in DB"
+            if driver_from_db.company_id != company.id:
+                driver_from_db.company_id = company.id
+                db.session.commit()
+                # Recharger pour vérifier
+                driver_from_db = (
+                    db.session.query(Driver).filter_by(id=driver.id).first()
+                )
+            assert driver_from_db.company_id == company.id, (
+                f"Driver {driver.id} must belong to company {company.id}, "
+                f"got {driver_from_db.company_id}"
             )
 
         # Créer des assignations

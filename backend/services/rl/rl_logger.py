@@ -10,6 +10,7 @@ Date: 21 octobre 2025
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import logging
@@ -298,6 +299,20 @@ class RLLogger:
         if not self.enable_db_logging or db is None or RLSuggestionMetric is None:
             return False
 
+        # ✅ FIX: Vérifier si on est dans un contexte d'application Flask
+        try:
+            from flask import has_app_context
+
+            if not has_app_context():
+                logger.debug(
+                    "[RLLogger] Pas de contexte Flask, skip DB logging (normal en tâches Celery ou threads)"
+                )
+                return False
+        except ImportError:
+            # Flask n'est pas disponible, on ne peut pas logger en DB
+            logger.debug("[RLLogger] Flask non disponible, skip DB logging")
+            return False
+
         try:
             # Créer l'objet RLSuggestionMetric avec les champs disponibles
             rl_metric = RLSuggestionMetric()
@@ -347,7 +362,9 @@ class RLLogger:
         except Exception as e:
             logger.warning("[RLLogger] Erreur DB: %s", e)
             if db:
-                db.session.rollback()
+                # Ignorer les erreurs de rollback si on n'est pas dans un contexte
+                with contextlib.suppress(Exception):
+                    db.session.rollback()
             return False
 
     def get_stats(self) -> Dict[str, Any]:
@@ -426,6 +443,21 @@ class RLLogger:
                 logger.info("[RLLogger] Logs Redis effacés")
 
             if clear_db and db is not None and RLSuggestionMetric is not None:
+                # ✅ FIX: Vérifier si on est dans un contexte d'application Flask
+                try:
+                    from flask import has_app_context
+
+                    if not has_app_context():
+                        logger.warning(
+                            "[RLLogger] Pas de contexte Flask, impossible d'effacer les logs DB"
+                        )
+                        return False
+                except ImportError:
+                    logger.warning(
+                        "[RLLogger] Flask non disponible, impossible d'effacer les logs DB"
+                    )
+                    return False
+
                 # ATTENTION: Cette opération est destructive
                 db.session.query(RLSuggestionMetric).delete()
                 db.session.commit()
@@ -435,6 +467,10 @@ class RLLogger:
 
         except Exception as e:
             logger.error("[RLLogger] Erreur lors de l'effacement des logs: %s", e)
+            if db:
+                # Ignorer les erreurs de rollback si on n'est pas dans un contexte
+                with contextlib.suppress(Exception):
+                    db.session.rollback()
             return False
 
 

@@ -702,7 +702,7 @@ class TestRLLoggerUltraFinal:
         """Test initialisation avec paramètres personnalisés"""
         logger = RLLogger(
             redis_key_prefix="test:rl",
-            max_redis_logs=0.500,
+            max_redis_logs=500,
             enable_db_logging=False,
             enable_redis_logging=False,
         )
