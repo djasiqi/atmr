@@ -452,6 +452,45 @@ def factory_assignment(db):
 
 
 @pytest.fixture
+def company(db):
+    """Créer une entreprise pour les tests.
+
+    ⚠️ COUPLAGE IMPORTANT :
+    - Cette fixture DOIT être commitée avant utilisation
+      car `engine.run()` fait un rollback défensif
+    - Les fixtures `drivers` et `bookings` dépendent de cette fixture
+      (ordre d'exécution garanti par pytest)
+    - L'objet est rechargé depuis la DB pour garantir qu'il est bien persisté
+
+    🔄 ISOLATION :
+    - Chaque test utilise un savepoint (nested transaction) via la fixture `db`
+    - Le rollback automatique en fin de test garantit l'isolation entre les tests
+    - Les objets commités dans cette fixture sont visibles dans le savepoint du test
+
+    📝 UTILISATION :
+    - Utiliser cette fixture comme dépendance pour `drivers` et `bookings`
+    - Ne pas modifier l'objet retourné sans recharger depuis la DB après `engine.run()`
+    """
+    from models import Company
+    from tests.factories import CompanyFactory
+
+    company = CompanyFactory()
+    db.session.add(company)
+    db.session.flush()  # Force l'assignation de l'ID
+    # ✅ FIX: Commit pour garantir persistance avant engine.run()
+    # engine.run() fait un rollback défensif qui peut expirer la Company
+    # si elle n'est pas commitée
+    db.session.commit()
+    # ✅ FIX: Expirer et recharger pour s'assurer que l'objet est bien en DB
+    db.session.expire(company)
+    company_id = company.id
+    # Utiliser db.session.get() pour SQLAlchemy 2.0+ (comme dans test_dispatch_e2e.py)
+    company = db.session.get(Company, company_id)
+    assert company is not None, "Company must be persisted before use"
+    return company
+
+
+@pytest.fixture
 def factory_client(db):
     """Factory pour créer des clients de test."""
     from tests.factories import ClientFactory
