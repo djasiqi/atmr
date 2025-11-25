@@ -491,6 +491,57 @@ def company(db):
 
 
 @pytest.fixture
+def drivers(db, company=None):
+    """Créer plusieurs chauffeurs pour les tests.
+
+    ✅ DÉCOUPLAGE P2.4 :
+    - Le paramètre `company` est optionnel pour réduire les couplages
+    - Si `company` n'est pas fournie, une company est créée automatiquement
+    - Permet d'utiliser cette fixture indépendamment ou avec une company existante
+
+    🔄 ISOLATION :
+    - Les drivers sont commités dans le savepoint du test
+    - Le rollback automatique en fin de test garantit l'isolation
+
+    📝 UTILISATION :
+    - `def test_example(drivers):` - Company créée automatiquement
+    - `def test_example(company, drivers):` - Company passée explicitement
+    """
+    from models import Company
+    from tests.conftest import persisted_fixture
+    from tests.factories import CompanyFactory, DriverFactory
+
+    # ✅ P2.4: Créer company si non fournie (découplage)
+    # ✅ FIX: Vérifier explicitement que company est None (pas juste falsy)
+    if company is None:
+        company = CompanyFactory()
+        company = persisted_fixture(db, company, Company)
+    else:
+        # ✅ FIX: S'assurer que la company passée est bien commitée
+        # et rechargée pour éviter les problèmes d'isolation
+        db.session.flush()
+        db.session.commit()
+        # Recharger pour garantir que l'objet est bien en DB
+        company_id = company.id
+        db.session.expire(company)
+        company = db.session.get(Company, company_id)
+        assert company is not None, "Company must be persisted"
+
+    # ✅ FIX: Vérifier que company.id est bien défini avant de créer les drivers
+    assert company.id is not None, "Company ID must be set before creating drivers"
+
+    drivers_list = [
+        DriverFactory(company=company, is_active=True, is_available=True),
+        DriverFactory(company=company, is_active=True, is_available=True),
+        DriverFactory(company=company, is_active=True, is_available=True),
+    ]
+    db.session.flush()  # Force l'assignation des IDs
+    # ✅ FIX: Commit pour garantir persistance
+    db.session.commit()
+    return drivers_list
+
+
+@pytest.fixture
 def factory_client(db):
     """Factory pour créer des clients de test."""
     from tests.factories import ClientFactory
