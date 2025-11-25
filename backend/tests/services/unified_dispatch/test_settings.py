@@ -87,11 +87,11 @@ class TestValidationOverrides:
         base = ud_settings.Settings()
         overrides = {
             "heuristic": {
-                "driver_load_balance": 0.7,
+                "driver_load_balance": 0.6,  # Différent de la valeur par défaut (0.70)
                 "proximity": 0.2,
             },
             "fairness": {
-                "fairness_weight": 0.9,
+                "fairness_weight": 0.9,  # Différent de la valeur par défaut (0.3)
             },
         }
 
@@ -102,12 +102,12 @@ class TestValidationOverrides:
         result = ud_settings.merge_overrides(base, overrides)
 
         # Vérifier que les valeurs ont changé
-        assert result.heuristic.driver_load_balance == 0.7
+        assert result.heuristic.driver_load_balance == 0.6
         assert result.heuristic.proximity == 0.2
         assert result.fairness.fairness_weight == 0.9
 
         # Vérifier que les valeurs avant étaient différentes
-        assert driver_load_before != 0.7
+        assert driver_load_before != 0.6
         assert fairness_before != 0.9
 
     def test_merge_nested_settings(self):

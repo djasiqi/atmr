@@ -7,19 +7,16 @@ Valide la protection CSRF si activée, et vérifie la configuration CORS.
 class TestCSRFConfiguration:
     """Tests pour vérifier la configuration CSRF."""
 
-    def test_csrf_disabled_in_config(self, app_context):
+    def test_csrf_disabled_in_config(self, app):
         """Test que CSRF est désactivé en configuration
         (API REST stateless avec JWT)."""
-        from flask import current_app
-
-        with app_context:
-            # WTF_CSRF_ENABLED doit être False pour une API REST stateless
-            csrf_enabled = current_app.config.get("WTF_CSRF_ENABLED", False)
-            # Pour une API REST avec JWT, CSRF n'est généralement pas nécessaire
-            # car les tokens JWT sont dans les headers, pas dans les cookies
-            assert csrf_enabled is False, (
-                "CSRF devrait être désactivé pour une API REST avec JWT"
-            )
+        # WTF_CSRF_ENABLED doit être False pour une API REST stateless
+        csrf_enabled = app.config.get("WTF_CSRF_ENABLED", False)
+        # Pour une API REST avec JWT, CSRF n'est généralement pas nécessaire
+        # car les tokens JWT sont dans les headers, pas dans les cookies
+        assert csrf_enabled is False, (
+            "CSRF devrait être désactivé pour une API REST avec JWT"
+        )
 
     def test_csrf_not_required_for_api(self):
         """Test que CSRF n'est pas requis pour les endpoints API

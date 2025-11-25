@@ -70,13 +70,13 @@ class TestIdempotence:
         """
         # Créer une company d'abord (requis pour FK)
         company = CompanyFactory()
-        db_session.add(company)
-        db_session.flush()
+        db_session.session.add(company)
+        db_session.session.flush()
 
         # Créer un dispatch run avec la company
         dispatch_run = DispatchRunFactory(company=company, day=datetime.now(UTC).date())
-        db_session.add(dispatch_run)
-        db_session.flush()
+        db_session.session.add(dispatch_run)
+        db_session.session.flush()
 
         # Créer un booking avec la company
         booking = BookingFactory(
@@ -89,7 +89,7 @@ class TestIdempotence:
             customer_name="Test Client",
             status=BookingStatus.ACCEPTED,
         )
-        db_session.add(booking)
+        db_session.session.add(booking)
 
         # Créer un driver avec la company
         driver = DriverFactory(
@@ -99,13 +99,13 @@ class TestIdempotence:
             driver_type=DriverType.REGULAR,
             is_active=True,
         )
-        db_session.add(driver)
+        db_session.session.add(driver)
 
         # Créer DriverStatus
         driver_status = DriverStatus(driver_id=driver.id, state=DriverState.AVAILABLE)
-        db_session.add(driver_status)
+        db_session.session.add(driver_status)
 
-        db_session.commit()  # Commit nécessaire pour tester l'idempotence réelle
+        db_session.session.commit()  # Commit nécessaire pour tester l'idempotence réelle
 
         # Créer une assignation
         assignment_data = {
@@ -128,7 +128,7 @@ class TestIdempotence:
 
         # Vérifier qu'une assignation a été créée
         assignments_count_1 = (
-            db_session.query(Assignment)
+            db_session.session.query(Assignment)
             .filter(
                 Assignment.booking_id == booking.id,
                 Assignment.dispatch_run_id == dispatch_run.id,
@@ -151,7 +151,7 @@ class TestIdempotence:
 
         # Vérifier qu'il n'y a TOUJOURS qu'une seule assignation
         assignments_count_2 = (
-            db_session.query(Assignment)
+            db_session.session.query(Assignment)
             .filter(
                 Assignment.booking_id == booking.id,
                 Assignment.dispatch_run_id == dispatch_run.id,
@@ -171,13 +171,13 @@ class TestIdempotence:
 
         # Créer une company d'abord (requis pour FK)
         company = CompanyFactory()
-        db_session.add(company)
-        db_session.flush()
+        db_session.session.add(company)
+        db_session.session.flush()
 
         # Créer un dispatch run avec la company
         dispatch_run = DispatchRunFactory(company=company, day=datetime.now(UTC).date())
-        db_session.add(dispatch_run)
-        db_session.flush()
+        db_session.session.add(dispatch_run)
+        db_session.session.flush()
 
         # Créer un booking avec la company
         booking = BookingFactory(
@@ -190,7 +190,7 @@ class TestIdempotence:
             customer_name="Test Client 2",
             status=BookingStatus.ACCEPTED,
         )
-        db_session.add(booking)
+        db_session.session.add(booking)
 
         # Créer un driver avec la company
         driver = DriverFactory(
@@ -200,13 +200,13 @@ class TestIdempotence:
             driver_type=DriverType.REGULAR,
             is_active=True,
         )
-        db_session.add(driver)
+        db_session.session.add(driver)
 
         # Créer DriverStatus
         driver_status = DriverStatus(driver_id=driver.id, state=DriverState.AVAILABLE)
-        db_session.add(driver_status)
+        db_session.session.add(driver_status)
 
-        db_session.commit()  # Commit nécessaire pour tester la contrainte unique
+        db_session.session.commit()  # Commit nécessaire pour tester la contrainte unique
 
         # Créer une première assignation
         assignment1 = Assignment(
@@ -215,8 +215,8 @@ class TestIdempotence:
             dispatch_run_id=dispatch_run.id,
             status="SCHEDULED",
         )
-        db_session.add(assignment1)
-        db_session.commit()
+        db_session.session.add(assignment1)
+        db_session.session.commit()
 
         # Essayer de créer une seconde assignation avec le même
         # (booking_id, dispatch_run_id)
@@ -226,11 +226,11 @@ class TestIdempotence:
             dispatch_run_id=dispatch_run.id,
             status="SCHEDULED",
         )
-        db_session.add(assignment2)
+        db_session.session.add(assignment2)
 
         # Vérifier qu'une erreur d'intégrité est levée
         with pytest.raises(IntegrityError) as exc_info:
-            db_session.commit()
+            db_session.session.commit()
 
         assert (
             "uq_assignment_run_booking" in str(exc_info.value)
@@ -244,13 +244,13 @@ class TestIdempotence:
 
         # Créer une company d'abord (requis pour FK)
         company = CompanyFactory()
-        db_session.add(company)
-        db_session.flush()
+        db_session.session.add(company)
+        db_session.session.flush()
 
         # Créer un dispatch run avec la company
         dispatch_run = DispatchRunFactory(company=company, day=datetime.now(UTC).date())
-        db_session.add(dispatch_run)
-        db_session.flush()
+        db_session.session.add(dispatch_run)
+        db_session.session.flush()
 
         # Créer un booking avec la company
         booking = BookingFactory(
@@ -263,8 +263,8 @@ class TestIdempotence:
             customer_name="Test Client 3",
             status=BookingStatus.ACCEPTED,
         )
-        db_session.add(booking)
-        db_session.commit()
+        db_session.session.add(booking)
+        db_session.session.commit()
 
         # Appeler avec un driver_id inexistant
         assignment_data = {
@@ -283,7 +283,7 @@ class TestIdempotence:
 
         # Vérifier que la transaction a été rollbackée (pas d'assignation créée)
         assignments_count = (
-            db_session.query(Assignment)
+            db_session.session.query(Assignment)
             .filter(Assignment.booking_id == booking.id)
             .count()
         )
@@ -303,13 +303,13 @@ class TestIdempotence:
 
         # Créer une company d'abord (requis pour FK)
         company = CompanyFactory()
-        db_session.add(company)
-        db_session.flush()
+        db_session.session.add(company)
+        db_session.session.flush()
 
         # Créer un dispatch run avec la company
         dispatch_run = DispatchRunFactory(company=company, day=datetime.now(UTC).date())
-        db_session.add(dispatch_run)
-        db_session.flush()
+        db_session.session.add(dispatch_run)
+        db_session.session.flush()
 
         # Créer un booking avec la company
         booking = BookingFactory(
@@ -322,7 +322,7 @@ class TestIdempotence:
             customer_name="Test Client 4",
             status=BookingStatus.ACCEPTED,
         )
-        db_session.add(booking)
+        db_session.session.add(booking)
 
         # Créer un driver avec la company
         driver = DriverFactory(
@@ -332,12 +332,12 @@ class TestIdempotence:
             driver_type=DriverType.REGULAR,
             is_active=True,
         )
-        db_session.add(driver)
+        db_session.session.add(driver)
 
         driver_status = DriverStatus(driver_id=driver.id, state=DriverState.AVAILABLE)
-        db_session.add(driver_status)
+        db_session.session.add(driver_status)
 
-        db_session.commit()
+        db_session.session.commit()
 
         # Appeler apply_assignments
         assignment_data = {

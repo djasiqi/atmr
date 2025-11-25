@@ -42,12 +42,19 @@ class TestEncryptionService:
             # Chiffrer
             ciphertext = service.encrypt_field(plaintext)
 
-            assert ciphertext != plaintext, (
-                "Ciphertext doit être différent du plaintext"
-            )
-            assert len(ciphertext) > 0 if plaintext else True, (
-                "Ciphertext doit être non vide"
-            )
+            # Pour les chaînes vides, encrypt_field retourne "" par design
+            if plaintext:
+                assert ciphertext != plaintext, (
+                    "Ciphertext doit être différent du plaintext"
+                )
+                assert len(ciphertext) > 0, (
+                    "Ciphertext doit être non vide pour plaintext non vide"
+                )
+            else:
+                # Pour plaintext vide, ciphertext est aussi vide
+                assert ciphertext == "", (
+                    "Ciphertext doit être vide pour plaintext vide"
+                )
 
             # Déchiffrer
             decrypted = service.decrypt_field(ciphertext)

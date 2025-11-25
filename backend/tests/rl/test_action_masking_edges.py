@@ -52,14 +52,19 @@ class TestActionMaskingEdges:
         return DispatchEnv(num_drivers=3, max_bookings=5, simulation_hours=1)
 
     @pytest.fixture
-    def mock_agent(self):
+    def mock_agent(self, mock_env):
         """Créer un agent mock pour les tests."""
         if ImprovedDQNAgent is None:
             pytest.skip("ImprovedDQNAgent non disponible")
 
+        # ✅ FIX: Utiliser la taille réelle de l'observation space de l'environnement
+        # au lieu d'une valeur fixe (100) qui ne correspond pas
+        state_dim = mock_env.observation_space.shape[0]
+        action_dim = mock_env.action_space.n
+
         return ImprovedDQNAgent(
-            state_dim=100,
-            action_dim=16,  # 3 drivers * 5 bookings + 1 wait
+            state_dim=state_dim,
+            action_dim=action_dim,
             learning_rate=0.0001,
             epsilon_start=0.1,
         )

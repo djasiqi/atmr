@@ -163,9 +163,19 @@ class TestAnonymizeOldUserData:
 
     def test_anonymize_skips_admin(self, db, sample_user):
         """Test que les admins ne sont pas anonymisés."""
-        from models import UserRole
+        from models import User, UserRole
 
+        # ✅ FIX: Nettoyer les utilisateurs existants qui pourraient être anonymisés
+        # Sauf sample_user et les admins
         old_date = datetime.now(UTC) - timedelta(days=DEFAULT_RETENTION_DAYS + 10)
+        User.query.filter(
+            User.id != sample_user.id,
+            User.role != UserRole.admin,
+            User.created_at < old_date,
+        ).delete()
+        db.session.commit()
+
+        # Configurer sample_user comme admin ancien
         sample_user.created_at = old_date
         sample_user.role = UserRole.admin
         sample_user.email = "admin@example.com"

@@ -7,7 +7,7 @@ correctement les valeurs en DB dans différents scénarios.
 
 from datetime import date
 
-from models import Assignment, Booking, BookingStatus
+from models import Assignment, AssignmentStatus, Booking, BookingStatus
 from services.unified_dispatch import engine
 from tests.factories import BookingFactory, DriverFactory
 from tests.helpers.rollback_verification import (
@@ -298,7 +298,7 @@ class TestRollbackRobustness:
         assignment = Assignment()
         assignment.booking_id = booking.id
         assignment.driver_id = drivers[0].id
-        assignment.status = BookingStatus.ASSIGNED
+        assignment.status = AssignmentStatus.SCHEDULED
         db.session.add(assignment)
         db.session.flush()
 

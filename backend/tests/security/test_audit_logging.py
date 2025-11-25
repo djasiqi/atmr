@@ -15,9 +15,9 @@ from security.audit_log import AuditLogger
 class TestAuditLoggingAuth:
     """Tests pour l'audit logging des actions d'authentification."""
 
-    def test_login_success_logged(self, app_context, db, sample_user):
+    def test_login_success_logged(self, app, db, sample_user):
         """Vérifie que le login réussi est loggé dans AuditLog."""
-        with app_context:
+        with app.app_context():
             # Simuler un login réussi
             from flask import request
 
@@ -54,9 +54,9 @@ class TestAuditLoggingAuth:
                 assert audit_log.ip_address == "127.0.0.1"
                 assert audit_log.user_agent == "test-agent"
 
-    def test_login_failed_logged(self, app_context, db):
+    def test_login_failed_logged(self, app, db):
         """Vérifie que le login échoué est loggé dans AuditLog."""
-        with app_context:
+        with app.app_context():
             from flask import request
 
             with current_app.test_request_context(
@@ -91,9 +91,9 @@ class TestAuditLoggingAuth:
                 assert audit_log.user_id is None  # Pas d'utilisateur pour un échec
                 assert audit_log.ip_address == "127.0.0.1"
 
-    def test_logout_logged(self, app_context, db, sample_user):
+    def test_logout_logged(self, app, db, sample_user):
         """Vérifie que le logout est loggé dans AuditLog."""
-        with app_context:
+        with app.app_context():
             from flask import request
 
             with current_app.test_request_context(
@@ -125,9 +125,9 @@ class TestAuditLoggingAuth:
 class TestAuditLoggingSensitiveActions:
     """Tests pour l'audit logging des actions sensibles."""
 
-    def test_user_created_logged(self, app_context, db, sample_user, sample_company):
+    def test_user_created_logged(self, app, db, sample_user, sample_company):
         """Vérifie que la création d'utilisateur est loggée."""
-        with app_context:
+        with app.app_context():
             from flask import request
 
             with current_app.test_request_context(
@@ -172,9 +172,9 @@ class TestAuditLoggingSensitiveActions:
                     else None
                 )
 
-    def test_permission_changed_logged(self, app_context, db, sample_user):
+    def test_permission_changed_logged(self, app, db, sample_user):
         """Vérifie que le changement de permission est loggé."""
-        with app_context:
+        with app.app_context():
             from flask import request
 
             with current_app.test_request_context(

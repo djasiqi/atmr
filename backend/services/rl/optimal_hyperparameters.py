@@ -251,7 +251,7 @@ class OptimalHyperparameters:
 
         output_path = output_dir / filename
 
-        with Path(output_path, "w", encoding="utf-8").open() as f:
+        with output_path.open("w", encoding="utf-8") as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
 
     @classmethod
@@ -267,7 +267,7 @@ class OptimalHyperparameters:
         """
         config_path = Path("backend/data/rl/configs") / filename
 
-        with Path(config_path, encoding="utf-8").open() as f:
+        with config_path.open(encoding="utf-8") as f:
             return cast(Dict[str, Any], json.load(f))
 
     @classmethod

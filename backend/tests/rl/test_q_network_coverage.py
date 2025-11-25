@@ -33,17 +33,19 @@ class TestImprovedQNetworkCoverage:
 
     def test_forward_with_dropout(self):
         """Test forward avec dropout"""
-        network = ImprovedQNetwork(state_dim=62, action_dim=51, dropout_rate=0.5)
+        network = ImprovedQNetwork(
+            state_dim=62, action_dim=51, dropout_rates=(0.5, 0.5, 0.3)
+        )
         network.train()  # Activer le mode training pour le dropout
 
-        state = torch.randn(62)
+        state = torch.randn(1, 62)  # Ajouter dimension batch
         output = network(state)
-        assert output.shape == (51,)
+        assert output.shape == (1, 51)
 
     def test_forward_with_gradient(self):
         """Test forward avec gradient"""
         network = ImprovedQNetwork(state_dim=62, action_dim=51)
-        state = torch.randn(62, requires_grad=True)
+        state = torch.randn(1, 62, requires_grad=True)  # Ajouter dimension batch
 
         output = network(state)
         loss = output.sum()
@@ -56,28 +58,31 @@ class TestImprovedQNetworkCoverage:
         network = ImprovedQNetwork(state_dim=62, action_dim=51)
         network.train()
 
-        state = torch.randn(62)
+        state = torch.randn(1, 62)  # Ajouter dimension batch
         output = network(state)
-        assert output.shape == (51,)
+        assert output.shape == (1, 51)
 
     def test_forward_with_eval_mode(self):
         """Test forward en mode eval"""
         network = ImprovedQNetwork(state_dim=62, action_dim=51)
         network.eval()
 
-        state = torch.randn(62)
+        state = torch.randn(1, 62)  # Ajouter dimension batch
         output = network(state)
-        assert output.shape == (51,)
+        assert output.shape == (1, 51)
 
     def test_forward_with_different_parameters(self):
         """Test forward avec différents paramètres"""
         network = ImprovedQNetwork(
-            state_dim=0.100, action_dim=20, hidden_sizes=[128, 64], dropout_rate=0.3
+            state_dim=100,
+            action_dim=20,
+            hidden_sizes=(128, 64, 32, 16),
+            dropout_rates=(0.3, 0.3, 0.2),
         )
 
-        state = torch.randn(100)
+        state = torch.randn(1, 100)  # Ajouter dimension batch
         output = network(state)
-        assert output.shape == (20,)
+        assert output.shape == (1, 20)
 
     def test_forward_with_different_seeds(self):
         """Test forward avec différentes graines"""
@@ -87,7 +92,7 @@ class TestImprovedQNetworkCoverage:
         torch.manual_seed(123)
         network2 = ImprovedQNetwork(state_dim=62, action_dim=51)
 
-        state = torch.randn(62)
+        state = torch.randn(1, 62)  # Ajouter dimension batch
         output1 = network1(state)
         output2 = network2(state)
 
@@ -97,52 +102,54 @@ class TestImprovedQNetworkCoverage:
     def test_forward_with_different_architectures(self):
         """Test forward avec différentes architectures"""
         # Architecture simple
-        network1 = ImprovedQNetwork(state_dim=62, action_dim=51, hidden_sizes=[64])
+        network1 = ImprovedQNetwork(
+            state_dim=62, action_dim=51, hidden_sizes=(64, 32, 16, 8)
+        )
 
         # Architecture complexe
         network2 = ImprovedQNetwork(
-            state_dim=62, action_dim=51, hidden_sizes=[128, 64, 32]
+            state_dim=62, action_dim=51, hidden_sizes=(128, 64, 32, 16)
         )
 
-        state = torch.randn(62)
+        state = torch.randn(1, 62)  # Ajouter dimension batch
         output1 = network1(state)
         output2 = network2(state)
 
-        assert output1.shape == (51,)
-        assert output2.shape == (51,)
+        assert output1.shape == (1, 51)
+        assert output2.shape == (1, 51)
 
     def test_forward_with_error_cases(self):
         """Test forward avec cas d'erreur"""
         network = ImprovedQNetwork(state_dim=62, action_dim=51)
 
         # Test avec état de taille incorrecte
-        wrong_state = torch.randn(50)  # Mauvaise taille
+        wrong_state = torch.randn(1, 50)  # Mauvaise taille (ajouter dimension batch)
         with pytest.raises(RuntimeError):
             network(wrong_state)
 
     def test_forward_with_zero_input(self):
         """Test forward avec entrée zéro"""
         network = ImprovedQNetwork(state_dim=62, action_dim=51)
-        state = torch.zeros(62)
+        state = torch.zeros(1, 62)  # Ajouter dimension batch
 
         output = network(state)
-        assert output.shape == (51,)
+        assert output.shape == (1, 51)
 
     def test_forward_with_large_input(self):
         """Test forward avec grande entrée"""
         network = ImprovedQNetwork(state_dim=62, action_dim=51)
-        state = torch.randn(62) * 100  # Valeurs grandes
+        state = torch.randn(1, 62) * 100  # Valeurs grandes (ajouter dimension batch)
 
         output = network(state)
-        assert output.shape == (51,)
+        assert output.shape == (1, 51)
 
     def test_forward_with_negative_input(self):
         """Test forward avec entrée négative"""
         network = ImprovedQNetwork(state_dim=62, action_dim=51)
-        state = torch.randn(62) * -10  # Valeurs négatives
+        state = torch.randn(1, 62) * -10  # Valeurs négatives (ajouter dimension batch)
 
         output = network(state)
-        assert output.shape == (51,)
+        assert output.shape == (1, 51)
 
     def test_forward_with_mixed_batch(self):
         """Test forward avec batch mixte"""
@@ -172,9 +179,9 @@ class TestDuelingQNetworkCoverage:
         network = DuelingQNetwork(state_dim=62, action_dim=51)
 
         # Test avec un seul état
-        state = torch.randn(62)
+        state = torch.randn(1, 62)  # Ajouter dimension batch
         output = network(state)
-        assert output.shape == (51,)
+        assert output.shape == (1, 51)
 
         # Test avec un batch
         batch_state = torch.randn(5, 62)
@@ -194,38 +201,38 @@ class TestDuelingQNetworkCoverage:
         network = DuelingQNetwork(state_dim=62, action_dim=51)
         network.train()
 
-        state = torch.randn(62)
+        state = torch.randn(1, 62)  # Ajouter dimension batch
         output = network(state)
-        assert output.shape == (51,)
+        assert output.shape == (1, 51)
 
     def test_forward_with_eval_mode(self):
         """Test forward en mode eval"""
         network = DuelingQNetwork(state_dim=62, action_dim=51)
         network.eval()
 
-        state = torch.randn(62)
+        state = torch.randn(1, 62)  # Ajouter dimension batch
         output = network(state)
-        assert output.shape == (51,)
+        assert output.shape == (1, 51)
 
     def test_forward_with_different_parameters(self):
         """Test forward avec différents paramètres"""
         network = DuelingQNetwork(
-            state_dim=0.100,
+            state_dim=100,
             action_dim=20,
-            shared_hidden_sizes=[128, 64],
+            shared_hidden_sizes=(128, 64),
             value_hidden_size=32,
             advantage_hidden_size=16,
             dropout_rate=0.3,
         )
 
-        state = torch.randn(100)
+        state = torch.randn(1, 100)  # Ajouter dimension batch
         output = network(state)
-        assert output.shape == (20,)
+        assert output.shape == (1, 20)
 
     def test_forward_with_gradient(self):
         """Test forward avec gradient"""
         network = DuelingQNetwork(state_dim=62, action_dim=51)
-        state = torch.randn(62, requires_grad=True)
+        state = torch.randn(1, 62, requires_grad=True)  # Ajouter dimension batch
 
         output = network(state)
         loss = output.sum()
@@ -241,7 +248,7 @@ class TestDuelingQNetworkCoverage:
         torch.manual_seed(123)
         network2 = DuelingQNetwork(state_dim=62, action_dim=51)
 
-        state = torch.randn(62)
+        state = torch.randn(1, 62)  # Ajouter dimension batch
         output1 = network1(state)
         output2 = network2(state)
 
@@ -254,7 +261,7 @@ class TestDuelingQNetworkCoverage:
         network1 = DuelingQNetwork(
             state_dim=62,
             action_dim=51,
-            shared_hidden_sizes=[64],
+            shared_hidden_sizes=(64, 32),
             value_hidden_size=32,
             advantage_hidden_size=16,
         )
@@ -263,50 +270,50 @@ class TestDuelingQNetworkCoverage:
         network2 = DuelingQNetwork(
             state_dim=62,
             action_dim=51,
-            shared_hidden_sizes=[128, 64],
+            shared_hidden_sizes=(128, 64),
             value_hidden_size=64,
             advantage_hidden_size=32,
         )
 
-        state = torch.randn(62)
+        state = torch.randn(1, 62)  # Ajouter dimension batch
         output1 = network1(state)
         output2 = network2(state)
 
-        assert output1.shape == (51,)
-        assert output2.shape == (51,)
+        assert output1.shape == (1, 51)
+        assert output2.shape == (1, 51)
 
     def test_forward_with_error_cases(self):
         """Test forward avec cas d'erreur"""
         network = DuelingQNetwork(state_dim=62, action_dim=51)
 
         # Test avec état de taille incorrecte
-        wrong_state = torch.randn(50)  # Mauvaise taille
+        wrong_state = torch.randn(1, 50)  # Mauvaise taille (ajouter dimension batch)
         with pytest.raises(RuntimeError):
             network(wrong_state)
 
     def test_forward_with_zero_input(self):
         """Test forward avec entrée zéro"""
         network = DuelingQNetwork(state_dim=62, action_dim=51)
-        state = torch.zeros(62)
+        state = torch.zeros(1, 62)  # Ajouter dimension batch
 
         output = network(state)
-        assert output.shape == (51,)
+        assert output.shape == (1, 51)
 
     def test_forward_with_large_input(self):
         """Test forward avec grande entrée"""
         network = DuelingQNetwork(state_dim=62, action_dim=51)
-        state = torch.randn(62) * 100  # Valeurs grandes
+        state = torch.randn(1, 62) * 100  # Valeurs grandes (ajouter dimension batch)
 
         output = network(state)
-        assert output.shape == (51,)
+        assert output.shape == (1, 51)
 
     def test_forward_with_negative_input(self):
         """Test forward avec entrée négative"""
         network = DuelingQNetwork(state_dim=62, action_dim=51)
-        state = torch.randn(62) * -10  # Valeurs négatives
+        state = torch.randn(1, 62) * -10  # Valeurs négatives (ajouter dimension batch)
 
         output = network(state)
-        assert output.shape == (51,)
+        assert output.shape == (1, 51)
 
     def test_forward_with_mixed_batch(self):
         """Test forward avec batch mixte"""

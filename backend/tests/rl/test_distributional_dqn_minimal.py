@@ -21,7 +21,8 @@ class TestDistributionalDQNMinimal:
 
         assert network.state_size == 10
         assert network.action_size == 5
-        assert network.n_atoms == 51
+        # ✅ FIX: L'attribut est num_atoms, pas n_atoms
+        assert network.num_atoms == 51
         assert network.v_min == -10.0
         assert network.v_max == 10.0
 
@@ -40,8 +41,9 @@ class TestDistributionalDQNMinimal:
 
         assert network.state_size == 10
         assert network.action_size == 5
-        assert network.n_quantiles == 200
-        assert network.kappa == 1.0
+        # ✅ FIX: L'attribut est num_quantiles, pas n_quantiles
+        assert network.num_quantiles == 200
+        # ✅ FIX: QRNetwork n'a pas d'attribut kappa
 
     def test_qr_network_forward(self):
         """Test forward QRNetwork"""
@@ -54,29 +56,30 @@ class TestDistributionalDQNMinimal:
 
     def test_distributional_loss_init(self):
         """Test initialisation DistributionalLoss"""
-        loss_fn = DistributionalLoss()
-
-        assert loss_fn is not None
+        # ✅ FIX: DistributionalLoss est une classe avec des méthodes statiques, pas instanciable
+        # On teste juste que la classe existe et a les méthodes statiques
+        assert hasattr(DistributionalLoss, "c51_loss")
+        assert hasattr(DistributionalLoss, "quantile_loss")
 
     def test_distributional_loss_compute(self):
         """Test calcul DistributionalLoss"""
-        loss_fn = DistributionalLoss()
+        # ✅ FIX: DistributionalLoss a des méthodes statiques c51_loss et quantile_loss
+        # Testons c51_loss
+        batch_size = 2
+        action_size = 5
+        num_atoms = 51
 
-        # Créer des distributions factices
-        distributions = torch.randn(2, 5, 51)  # (batch, actions, atoms)
-        target_distributions = torch.randn(2, 5, 51)
+        logits = torch.randn(batch_size, action_size, num_atoms, requires_grad=True)
+        target_logits = torch.randn(batch_size, action_size, num_atoms)
         actions = torch.tensor([0, 1])
         rewards = torch.tensor([1.0, -1.0])
         dones = torch.tensor([False, True])
-        next_distributions = torch.randn(2, 5, 51)
+        gamma = 0.99
+        z = torch.linspace(-10.0, 10.0, num_atoms)
+        delta_z = (10.0 - (-10.0)) / (num_atoms - 1)
 
-        loss = loss_fn.compute_loss(
-            distributions,
-            target_distributions,
-            actions,
-            rewards,
-            dones,
-            next_distributions,
+        loss = DistributionalLoss.c51_loss(
+            logits, target_logits, actions, rewards, dones, gamma, z, delta_z
         )
 
         assert isinstance(loss, torch.Tensor)
@@ -86,19 +89,24 @@ class TestDistributionalDQNMinimal:
         """Test initialisation UncertaintyCapture"""
         uncertainty = UncertaintyCapture()
 
-        assert uncertainty is not None
+        assert uncertainty.method == "c51"
+        assert hasattr(uncertainty, "uncertainty_history")
 
     def test_uncertainty_capture_compute(self):
         """Test calcul UncertaintyCapture"""
+        # ✅ FIX: La méthode s'appelle calculate_uncertainty et prend seulement distribution
+        # La distribution doit être normalisée (probabilités)
         uncertainty = UncertaintyCapture()
 
-        # Créer des distributions factices
-        distributions = torch.randn(2, 5, 51)  # (batch, actions, atoms)
+        # Créer des distributions normalisées (probabilités)
+        distributions = torch.rand(2, 5, 51)  # (batch, actions, atoms)
+        distributions = distributions / distributions.sum(dim=-1, keepdim=True)
 
-        uncertainty_value = uncertainty.compute_uncertainty(distributions)
+        uncertainty_value = uncertainty.calculate_uncertainty(distributions)
 
-        assert isinstance(uncertainty_value, torch.Tensor)
-        assert uncertainty_value.shape == (2, 5)  # (batch, actions)
+        # ✅ FIX: calculate_uncertainty retourne un dict, pas un Tensor
+        assert isinstance(uncertainty_value, dict)
+        assert "entropy" in uncertainty_value or "variance" in uncertainty_value
 
     def test_c51_network_with_different_sizes(self):
         """Test C51Network avec différentes tailles"""
@@ -120,22 +128,22 @@ class TestDistributionalDQNMinimal:
 
     def test_distributional_loss_with_zero_rewards(self):
         """Test DistributionalLoss avec récompenses nulles"""
-        loss_fn = DistributionalLoss()
+        # ✅ FIX: DistributionalLoss a des méthodes statiques
+        batch_size = 1
+        action_size = 3
+        num_atoms = 51
 
-        distributions = torch.randn(1, 3, 51)
-        target_distributions = torch.randn(1, 3, 51)
+        logits = torch.randn(batch_size, action_size, num_atoms, requires_grad=True)
+        target_logits = torch.randn(batch_size, action_size, num_atoms)
         actions = torch.tensor([0])
         rewards = torch.tensor([0.0])
         dones = torch.tensor([False])
-        next_distributions = torch.randn(1, 3, 51)
+        gamma = 0.99
+        z = torch.linspace(-10.0, 10.0, num_atoms)
+        delta_z = (10.0 - (-10.0)) / (num_atoms - 1)
 
-        loss = loss_fn.compute_loss(
-            distributions,
-            target_distributions,
-            actions,
-            rewards,
-            dones,
-            next_distributions,
+        loss = DistributionalLoss.c51_loss(
+            logits, target_logits, actions, rewards, dones, gamma, z, delta_z
         )
 
         assert isinstance(loss, torch.Tensor)
@@ -143,16 +151,19 @@ class TestDistributionalDQNMinimal:
 
     def test_uncertainty_capture_with_same_distributions(self):
         """Test UncertaintyCapture avec distributions identiques"""
+        # ✅ FIX: La méthode s'appelle calculate_uncertainty et prend seulement distribution
         uncertainty = UncertaintyCapture()
 
-        # Créer des distributions identiques
-        base_dist = torch.randn(1, 3, 51)
+        # Créer des distributions identiques normalisées (probabilités)
+        base_dist = torch.rand(1, 3, 51)
+        base_dist = base_dist / base_dist.sum(dim=-1, keepdim=True)
         distributions = torch.cat([base_dist, base_dist], dim=0)
 
-        uncertainty_value = uncertainty.compute_uncertainty(distributions)
+        uncertainty_value = uncertainty.calculate_uncertainty(distributions)
 
-        assert isinstance(uncertainty_value, torch.Tensor)
-        assert uncertainty_value.shape == (2, 3)
+        # ✅ FIX: calculate_uncertainty retourne un dict, pas un Tensor
+        assert isinstance(uncertainty_value, dict)
+        assert "entropy" in uncertainty_value or "variance" in uncertainty_value
 
     def test_c51_network_gradient_flow(self):
         """Test flux de gradient C51Network"""

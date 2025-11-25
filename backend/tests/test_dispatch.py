@@ -66,15 +66,15 @@ def sample_vehicle(db, sample_company, sample_driver):
 
 
 def test_dispatch_endpoint_exists(client, auth_headers):
-    """GET /api/company_dispatch/ retourne une réponse."""
-    response = client.get("/api/company_dispatch/", headers=auth_headers)
+    """GET /api/v1/company_dispatch/ retourne une réponse."""
+    response = client.get("/api/v1/company_dispatch/", headers=auth_headers)
     # Peut être 200 (données) ou 404 (route non trouvée selon config)
     assert response.status_code in [200, 404, 405]
 
 
 def test_dispatch_requires_auth(client):
-    """GET /api/company_dispatch/ sans auth renvoie 401."""
-    response = client.get("/api/company_dispatch/")
+    """GET /api/v1/company_dispatch/ sans auth renvoie 401."""
+    response = client.get("/api/v1/company_dispatch/")
     assert response.status_code == 401
 
 

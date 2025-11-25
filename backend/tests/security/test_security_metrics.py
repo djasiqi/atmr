@@ -11,9 +11,9 @@ from prometheus_client import generate_latest
 class TestSecurityMetricsAuth:
     """Tests pour les métriques d'authentification."""
 
-    def test_login_attempts_metrics(self, app_context):
+    def test_login_attempts_metrics(self, app):
         """Vérifie que les métriques de login sont correctement incrémentées."""
-        with app_context:
+        with app.app_context():
             from security.security_metrics import (
                 security_login_attempts_total,
                 security_login_failures_total,
@@ -35,9 +35,9 @@ class TestSecurityMetricsAuth:
             )
             assert b"security_login_failures_total" in metrics_output
 
-    def test_logout_metrics(self, app_context):
+    def test_logout_metrics(self, app):
         """Vérifie que les métriques de logout sont correctement incrémentées."""
-        with app_context:
+        with app.app_context():
             from security.security_metrics import security_logout_total
 
             # Simuler un logout
@@ -47,9 +47,9 @@ class TestSecurityMetricsAuth:
             metrics_output = generate_latest()
             assert b"security_logout_total" in metrics_output
 
-    def test_token_refresh_metrics(self, app_context):
+    def test_token_refresh_metrics(self, app):
         """Vérifie que les métriques de token refresh sont correctement incrémentées."""
-        with app_context:
+        with app.app_context():
             from security.security_metrics import security_token_refreshes_total
 
             # Simuler un token refresh
@@ -63,10 +63,10 @@ class TestSecurityMetricsAuth:
 class TestSecurityMetricsSensitiveActions:
     """Tests pour les métriques d'actions sensibles."""
 
-    def test_sensitive_actions_metrics(self, app_context):
+    def test_sensitive_actions_metrics(self, app):
         """Vérifie que les métriques d'actions sensibles
         sont correctement incrémentées."""
-        with app_context:
+        with app.app_context():
             from security.security_metrics import security_sensitive_actions_total
 
             # Simuler une création d'utilisateur
@@ -85,10 +85,10 @@ class TestSecurityMetricsSensitiveActions:
                 or b'action_type="user_created"' in metrics_output
             )
 
-    def test_permission_changes_metrics(self, app_context):
+    def test_permission_changes_metrics(self, app):
         """Vérifie que les métriques de changement de permissions
         sont correctement incrémentées."""
-        with app_context:
+        with app.app_context():
             from security.security_metrics import security_permission_changes_total
 
             # Simuler un changement de permissions

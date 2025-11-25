@@ -119,8 +119,9 @@ class TestClusteringStitching:
         ]
 
         clustering = GeographicClustering()
+        # La méthode prend _assignments (avec préfixe _) et _zone_results (avec préfixe _)
         improvements = clustering._stitch_boundary_bookings(
-            assignments=[], unassigned=bookings, zones=zones, zone_results={}
+            _assignments=[], unassigned=bookings, zones=zones, _zone_results={}
         )
 
         assert improvements >= 0
@@ -226,20 +227,32 @@ class TestClusteringStitching:
         """Test: Validateur de contraintes globales."""
 
         class MockBooking:
-            def __init__(self, bid):
+            def __init__(self, bid, lat, lon):
                 self.id = bid
+                self.pickup_lat = lat
+                self.pickup_lon = lon
 
-        bookings = [MockBooking(i) for i in range(100)]
+        # Créer des bookings avec coordonnées pour que create_zones fonctionne
+        bookings = [
+            MockBooking(i, 45.0 + (i % 50) * 0.1, -73.0 + (i // 50) * 0.1)
+            for i in range(100)
+        ]
         drivers = []
 
         clustering = GeographicClustering(max_bookings_per_zone=50)
         zones = clustering.create_zones(bookings, drivers)
 
-        # Simuler résultats
-        zone_results = {
-            z.zone_id: {"assignments": list(range(len(z.bookings))), "unassigned": []}
-            for z in zones
-        }
+        # Vérifier que des zones ont été créées
+        assert len(zones) > 0, "Des zones doivent être créées"
+
+        # Simuler résultats en utilisant les bookings réels des zones
+        zone_results = {}
+        for z in zones:
+            # Utiliser les bookings réels de la zone comme assignments
+            zone_results[z.zone_id] = {
+                "assignments": z.bookings,  # Utiliser les bookings réels
+                "unassigned": [],
+            }
 
         result = clustering.stitch_zones(zone_results, zones)
 

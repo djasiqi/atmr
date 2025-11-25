@@ -445,10 +445,9 @@ class TestDispatchE2E:
 
         # Vérifier que les assignations sont appliquées
         assert len(result["applied"]) == 2, (
-            f"Expected 2 applied assignments, got {len(result['applied'])}. "(
-                f"Skipped: {result.get('skipped', {})}, "
-                f"Conflicts: {result.get('conflicts', [])}"
-            )
+            f"Expected 2 applied assignments, got {len(result['applied'])}. "
+            f"Skipped: {result.get('skipped', {})}, "
+            f"Conflicts: {result.get('conflicts', [])}"
         )
 
         # Vérifier que les bookings sont assignés en DB

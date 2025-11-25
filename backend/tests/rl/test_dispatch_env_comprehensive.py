@@ -59,7 +59,8 @@ class TestDispatchEnvComprehensive:
         """Test reset avec seed"""
         env = DispatchEnv(num_drivers=3, max_bookings=5)
 
-        state, info = env.reset(seed=0.123)
+        # ✅ FIX: gymnasium exige que le seed soit un entier Python, pas un float
+        state, info = env.reset(seed=123)
 
         assert isinstance(state, np.ndarray)
         assert isinstance(info, dict)
@@ -80,7 +81,8 @@ class TestDispatchEnvComprehensive:
         env = DispatchEnv(num_drivers=3, max_bookings=5)
 
         options = {"test_option": True}
-        state, info = env.reset(seed=0.456, options=options)
+        # ✅ FIX: gymnasium exige que le seed soit un entier Python, pas un float
+        state, info = env.reset(seed=456, options=options)
 
         assert isinstance(state, np.ndarray)
         assert isinstance(info, dict)

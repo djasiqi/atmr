@@ -200,7 +200,7 @@ class NStepBuffer:
 
         except Exception as e:
             self.logger.error("[NStepBuffer] Erreur calcul retour N-step: %s", e)
-            return 0
+            return 0.0
 
     def _get_final_next_state(
         self, start_idx: int

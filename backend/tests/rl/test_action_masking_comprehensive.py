@@ -34,12 +34,23 @@ class TestActionMasking:
         if DispatchEnv is None:
             pytest.skip("DispatchEnv non disponible")
 
-        # ✅ FIX: Utiliser spec_set=False pour permettre l'ajout d'attributs
-        # qui ne sont pas dans la spec (comme _get_invalid_action_penalty)
-        env = Mock(spec=DispatchEnv, spec_set=False)
+        # ✅ FIX: Utiliser Mock() sans spec pour permettre l'accès libre aux attributs
+        # et éviter AttributeError: Mock object has no attribute 'num_drivers'
+        env = Mock()
+        # Définir les attributs comme des valeurs réelles, pas des Mocks
         env.num_drivers = 5
         env.num_bookings = 10
+        env.max_bookings = (
+            10  # ✅ FIX: Ajouter max_bookings qui est utilisé dans le code
+        )
         env.action_space_size = 50  # 5 drivers * 10 bookings
+        env.action_space = Mock()
+        env.action_space.n = 50  # Taille de l'espace d'actions
+        # ✅ FIX: Ajouter les attributs utilisés dans _get_valid_actions_mask
+        env.active_driver_count = 5
+        env.active_booking_count = 10
+        env.drivers = [{"available": True} for _ in range(5)]
+        env.bookings = [{"assigned": False} for _ in range(10)]
 
         return env
 
@@ -488,7 +499,7 @@ class TestActionMaskingPerformance:
         # Créer plusieurs masques
         masks = []
         for _ in range(1000):
-            mask = np.random.choice([True, False], size=0.100)
+            mask = np.random.choice([True, False], size=100)
             masks.append(mask)
 
         # Calculer la taille mémoire

@@ -114,12 +114,13 @@ class TestFinalCoverage:
         """Test ajout de transition NStepBuffer"""
         from services.rl.n_step_buffer import NStepBuffer
 
-        buffer = NStepBuffer(capacity=0.100, n_step=3)
+        # ✅ FIX: capacity doit être un int, pas un float
+        buffer = NStepBuffer(capacity=100, n_step=3)
 
-        state = np.random.rand(10)
+        state = np.random.rand(10).astype(np.float32)
         action = 1
         reward = 10.0
-        next_state = np.random.rand(10)
+        next_state = np.random.rand(10).astype(np.float32)
         done = False
 
         # Vérifier que la méthode fonctionne sans erreur
@@ -129,23 +130,27 @@ class TestFinalCoverage:
     def test_n_step_buffer_sample_empty(self):
         """Test échantillonnage buffer vide"""
 
-        buffer = NStepBuffer(capacity=0.100, n_step=3)
+        # ✅ FIX: capacity doit être un int
+        buffer = NStepBuffer(capacity=100, n_step=3)
 
-        batch = buffer.sample(10)
+        # ✅ FIX: sample() retourne un tuple (batch, weights)
+        batch, weights = buffer.sample(10)
 
         # Le buffer vide retourne un tuple de listes vides
-        assert batch == ([], [])
+        assert batch == []
+        assert weights == []
 
     def test_n_step_prioritized_buffer_add_transition(self):
         """Test ajout de transition NStepPrioritizedBuffer"""
         from services.rl.n_step_buffer import NStepPrioritizedBuffer
 
-        buffer = NStepPrioritizedBuffer(capacity=0.100, n_step=3)
+        # ✅ FIX: capacity doit être un int
+        buffer = NStepPrioritizedBuffer(capacity=100, n_step=3)
 
-        state = np.random.rand(10)
+        state = np.random.rand(10).astype(np.float32)
         action = 1
         reward = 10.0
-        next_state = np.random.rand(10)
+        next_state = np.random.rand(10).astype(np.float32)
         done = False
 
         # Vérifier que la méthode fonctionne sans erreur
@@ -155,7 +160,8 @@ class TestFinalCoverage:
     def test_n_step_prioritized_buffer_sample_empty(self):
         """Test échantillonnage buffer priorisé vide"""
 
-        buffer = NStepPrioritizedBuffer(capacity=0.100, n_step=3)
+        # ✅ FIX: capacity doit être un int
+        buffer = NStepPrioritizedBuffer(capacity=100, n_step=3)
 
         batch, weights, indices = buffer.sample(10)
 
@@ -167,12 +173,13 @@ class TestFinalCoverage:
         """Test ajout PrioritizedReplayBuffer"""
         from services.rl.replay_buffer import PrioritizedReplayBuffer
 
-        buffer = PrioritizedReplayBuffer(capacity=0.100)
+        # ✅ FIX: capacity doit être un int, pas un float
+        buffer = PrioritizedReplayBuffer(capacity=100)
 
-        state = np.random.rand(10)
+        state = np.random.rand(10).astype(np.float32)
         action = 1
         reward = 10.0
-        next_state = np.random.rand(10)
+        next_state = np.random.rand(10).astype(np.float32)
         done = False
 
         buffer.add(state, action, reward, next_state, done)
@@ -181,17 +188,14 @@ class TestFinalCoverage:
 
     def test_replay_buffer_sample_empty(self):
         """Test échantillonnage buffer vide"""
+        import pytest
 
-        buffer = PrioritizedReplayBuffer(capacity=0.100)
+        # ✅ FIX: capacity doit être un int
+        buffer = PrioritizedReplayBuffer(capacity=100)
 
-        try:
-            batch, weights, indices = buffer.sample(10)
-            assert batch == []
-            assert weights == []
-            assert indices == []
-        except ValueError:
-            # Buffer trop petit - comportement attendu
-            assert True
+        # ✅ FIX: sample() lève une ValueError quand le buffer est trop petit
+        with pytest.raises(ValueError, match=r"trop petit|too small"):
+            buffer.sample(10)
 
     def test_reward_shaping_calculate_reward(self):
         """Test calcul de récompense"""

@@ -18,7 +18,7 @@ class TestSimpleCoverage:
 
             generator = RLSuggestionGenerator()
 
-            assert generator.model_path == "data/ml/dqn_agent_best_v3_3.pth"
+            assert generator.model_path == "data/ml/dqn_agent_best_v33.pth"
             assert generator.agent is None
             assert generator.env is None
 
@@ -269,7 +269,7 @@ class TestSimpleCoverage:
         """Test initialisation NStepBuffer"""
         from services.rl.n_step_buffer import NStepBuffer
 
-        buffer = NStepBuffer(capacity=0.1000, n_step=3)
+        buffer = NStepBuffer(capacity=1000, n_step=3)
 
         assert buffer.capacity == 1000
         assert buffer.n_step == 3
@@ -278,7 +278,7 @@ class TestSimpleCoverage:
         """Test initialisation NStepPrioritizedBuffer"""
         from services.rl.n_step_buffer import NStepPrioritizedBuffer
 
-        buffer = NStepPrioritizedBuffer(capacity=0.1000, n_step=3)
+        buffer = NStepPrioritizedBuffer(capacity=1000, n_step=3)
 
         assert buffer.capacity == 1000
         assert buffer.n_step == 3
@@ -287,7 +287,7 @@ class TestSimpleCoverage:
         """Test initialisation PrioritizedReplayBuffer"""
         from services.rl.replay_buffer import PrioritizedReplayBuffer
 
-        buffer = PrioritizedReplayBuffer(capacity=0.1000)
+        buffer = PrioritizedReplayBuffer(capacity=1000)
 
         assert buffer.capacity == 1000
 

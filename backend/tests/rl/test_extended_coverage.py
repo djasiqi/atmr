@@ -115,48 +115,65 @@ class TestExtendedCoverage:
         """Test ajout de transition NStepBuffer"""
         from services.rl.n_step_buffer import NStepBuffer
 
-        buffer = NStepBuffer(capacity=0.100, n_step=3)
+        # ✅ FIX: capacity doit être un int, pas un float
+        buffer = NStepBuffer(capacity=100, n_step=3)
 
-        state = np.random.rand(10)
+        state = np.random.rand(10).astype(np.float32)
         action = 1
         reward = 10.0
-        next_state = np.random.rand(10)
+        next_state = np.random.rand(10).astype(np.float32)
         done = False
 
         buffer.add_transition(state, action, reward, next_state, done)
+
+        # ✅ FIX: Les transitions sont ajoutées au temp_buffer d'abord,
+        # puis au buffer principal seulement après n_step transitions ou done=True
+        # Ajoutons plusieurs transitions pour remplir le temp_buffer
+        for _ in range(3):
+            buffer.add_transition(state, action, reward, next_state, done)
 
         assert len(buffer.buffer) > 0
 
     def test_n_step_buffer_sample_empty(self):
         """Test échantillonnage buffer vide"""
 
-        buffer = NStepBuffer(capacity=0.100, n_step=3)
+        # ✅ FIX: capacity doit être un int
+        buffer = NStepBuffer(capacity=100, n_step=3)
 
-        batch = buffer.sample(10)
+        # ✅ FIX: sample() retourne un tuple (batch, weights), pas une liste
+        batch, weights = buffer.sample(10)
 
         assert batch == []
+        assert weights == []
 
     def test_n_step_prioritized_buffer_add_transition(self):
         """Test ajout de transition NStepPrioritizedBuffer"""
         from services.rl.n_step_buffer import NStepPrioritizedBuffer
 
-        buffer = NStepPrioritizedBuffer(capacity=0.100, n_step=3)
+        # ✅ FIX: capacity doit être un int
+        buffer = NStepPrioritizedBuffer(capacity=100, n_step=3)
 
-        state = np.random.rand(10)
+        state = np.random.rand(10).astype(np.float32)
         action = 1
         reward = 10.0
-        next_state = np.random.rand(10)
+        next_state = np.random.rand(10).astype(np.float32)
         done = False
 
         buffer.add_transition(state, action, reward, next_state, done)
+
+        # ✅ FIX: Ajoutons plusieurs transitions pour remplir le temp_buffer
+        for _ in range(3):
+            buffer.add_transition(state, action, reward, next_state, done)
 
         assert len(buffer.buffer) > 0
 
     def test_n_step_prioritized_buffer_sample_empty(self):
         """Test échantillonnage buffer priorisé vide"""
 
-        buffer = NStepPrioritizedBuffer(capacity=0.100, n_step=3)
+        # ✅ FIX: capacity doit être un int
+        buffer = NStepPrioritizedBuffer(capacity=100, n_step=3)
 
+        # ✅ FIX: sample() retourne un tuple (batch, weights, indices)
         batch, weights, indices = buffer.sample(10)
 
         assert batch == []
@@ -167,12 +184,13 @@ class TestExtendedCoverage:
         """Test ajout PrioritizedReplayBuffer"""
         from services.rl.replay_buffer import PrioritizedReplayBuffer
 
-        buffer = PrioritizedReplayBuffer(capacity=0.100)
+        # ✅ FIX: capacity doit être un int
+        buffer = PrioritizedReplayBuffer(capacity=100)
 
-        state = np.random.rand(10)
+        state = np.random.rand(10).astype(np.float32)
         action = 1
         reward = 10.0
-        next_state = np.random.rand(10)
+        next_state = np.random.rand(10).astype(np.float32)
         done = False
 
         buffer.add(state, action, reward, next_state, done)
@@ -181,14 +199,15 @@ class TestExtendedCoverage:
 
     def test_replay_buffer_sample_empty(self):
         """Test échantillonnage buffer vide"""
+        import pytest
 
-        buffer = PrioritizedReplayBuffer(capacity=0.100)
+        # ✅ FIX: capacity doit être un int
+        buffer = PrioritizedReplayBuffer(capacity=100)
 
-        batch, weights, indices = buffer.sample(10)
-
-        assert batch == []
-        assert weights == []
-        assert indices == []
+        # ✅ FIX: sample() lève une ValueError quand le buffer est trop petit
+        # On doit vérifier que l'exception est levée
+        with pytest.raises(ValueError, match=r"trop petit|too small"):
+            buffer.sample(10)
 
     def test_reward_shaping_calculate_reward(self):
         """Test calcul de récompense"""
@@ -196,17 +215,22 @@ class TestExtendedCoverage:
 
         reward_shaping = AdvancedRewardShaping()
 
-        # Données de test simples
-        assignment = {
-            "driver_id": 1,
-            "booking_id": 1,
-            "eta_minutes": 15,
-            "delay_minutes": 5,
-            "distance_km": 10.0,
-            "load_factor": 0.8,
+        # ✅ FIX: calculate_reward() attend state, action, next_state, info
+        state = np.random.rand(10).astype(np.float32)
+        action = 1
+        next_state = np.random.rand(10).astype(np.float32)
+        info = {
+            "assignment": {
+                "driver_id": 1,
+                "booking_id": 1,
+                "eta_minutes": 15,
+                "delay_minutes": 5,
+                "distance_km": 10.0,
+                "load_factor": 0.8,
+            }
         }
 
-        reward = reward_shaping.calculate_reward(assignment, {})
+        reward = reward_shaping.calculate_reward(state, action, next_state, info)
 
         assert isinstance(reward, float)
 
@@ -286,22 +310,31 @@ class TestExtendedCoverage:
 
         manager = ShadowModeManager()
 
+        # ✅ FIX: log_decision_comparison() attend company_id, booking_id, human_decision, rl_decision, context
+        company_id = "company_1"
+        booking_id = "booking_1"
         human_decision = {
             "driver_id": 1,
-            "booking_id": 1,
             "eta_minutes": 15,
             "delay_minutes": 5,
         }
 
         rl_decision = {
             "driver_id": 2,
-            "booking_id": 1,
             "eta_minutes": 12,
             "delay_minutes": 2,
         }
 
+        context = {
+            "current_time": 0,
+            "available_drivers": 5,
+            "active_bookings": 3,
+        }
+
         # Devrait fonctionner sans erreur
-        manager.log_decision_comparison(human_decision, rl_decision)
+        manager.log_decision_comparison(
+            company_id, booking_id, human_decision, rl_decision, context
+        )
 
     def test_shadow_mode_manager_calculate_kpis(self):
         """Test calcul des KPIs"""
@@ -318,9 +351,11 @@ class TestExtendedCoverage:
 
         env = DispatchEnv()
 
-        state = env.reset()
+        # ✅ FIX: reset() retourne un tuple (state, info) selon gymnasium standard
+        state, info = env.reset()
 
         assert isinstance(state, np.ndarray)
+        assert isinstance(info, dict)
 
     def test_dispatch_env_step(self):
         """Test step DispatchEnv"""
@@ -329,11 +364,13 @@ class TestExtendedCoverage:
         env.reset()
 
         action = 0
-        next_state, reward, done, info = env.step(action)
+        # ✅ FIX: step() retourne 5 valeurs (obs, reward, terminated, truncated, info) selon gymnasium standard
+        next_state, reward, terminated, truncated, info = env.step(action)
 
         assert isinstance(next_state, np.ndarray)
         assert isinstance(reward, float)
-        assert isinstance(done, bool)
+        assert isinstance(terminated, bool)
+        assert isinstance(truncated, bool)
         assert isinstance(info, dict)
 
     def test_dispatch_env_get_valid_actions(self):
@@ -350,10 +387,11 @@ class TestExtendedCoverage:
         """Test récupération de l'état"""
 
         env = DispatchEnv()
-        env.reset()
+        state, _ = env.reset()
 
-        state = env.get_state()
-
+        # ✅ FIX: DispatchEnv n'a pas de méthode get_state()
+        # On peut utiliser _get_observation() ou simplement vérifier que state existe
+        # Pour ce test, on vérifie que l'état initial est un ndarray
         assert isinstance(state, np.ndarray)
 
     def test_dispatch_env_render(self):

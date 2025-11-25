@@ -210,17 +210,20 @@ class TestParallelScoring:
         _ = assign(problem, Settings())
         elapsed = time.time() - start_time
 
-        # ✅ C2: Speedup >= 1.5x attendu avec parallélisation
-        # (Comparé à une version séquentielle hypothétique)
-        expected_speedup = 1.5
-        sequential_time_estimate = elapsed * 1.5  # Estimation
-
-        assert elapsed < sequential_time_estimate / expected_speedup
+        # ✅ C2: Vérifier que le temps est raisonnable pour 250 bookings
+        # Le test vérifie que le traitement parallèle est efficace
+        # (pas de calcul de speedup hypothétique qui serait toujours faux)
+        # Pour 250 bookings avec parallélisation, on s'attend à < 5 secondes
+        max_acceptable_time = 5.0
+        assert elapsed < max_acceptable_time, (
+            f"Temps trop élevé: {elapsed:.2f}s > {max_acceptable_time}s "
+            f"pour {n_bookings} bookings"
+        )
 
         logger.info(
-            "✅ Test: Speedup mesuré (%.2fs pour 250 bookings, ~%.1fx)",
+            "✅ Test: Speedup mesuré (%.2fs pour 250 bookings, acceptable: <%.1fs)",
             elapsed,
-            expected_speedup,
+            max_acceptable_time,
         )
 
 

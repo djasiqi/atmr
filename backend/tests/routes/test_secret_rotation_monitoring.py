@@ -28,6 +28,13 @@ def admin_user(app, db_session):
         admin.set_password("password123")
         db.session.add(admin)
         db.session.commit()
+        # ✅ FIX: Stocker public_id avant de quitter le contexte pour éviter DetachedInstanceError
+        public_id = admin.public_id
+        # Expirer et recharger pour garantir que l'objet est bien en DB
+        db.session.expire(admin)
+        admin = db.session.query(User).filter_by(public_id=public_id).first()
+        # Attacher public_id comme attribut pour utilisation ultérieure
+        admin._cached_public_id = public_id
         return admin
 
 
@@ -56,7 +63,11 @@ class TestRotationHistoryEndpoint:
         with app.app_context():
             from flask_jwt_extended import create_access_token
 
-            token = create_access_token(identity=str(admin_user.public_id))
+            # ✅ FIX: Utiliser _cached_public_id ou recharger l'objet dans le contexte
+            public_id = (
+                getattr(admin_user, "_cached_public_id", None) or admin_user.public_id
+            )
+            token = create_access_token(identity=str(public_id))
 
             response = client.get(
                 "/api/v1/admin/secret-rotations/history",
@@ -77,7 +88,11 @@ class TestRotationHistoryEndpoint:
         with app.app_context():
             from flask_jwt_extended import create_access_token
 
-            token = create_access_token(identity=str(admin_user.public_id))
+            # ✅ FIX: Utiliser _cached_public_id ou recharger l'objet dans le contexte
+            public_id = (
+                getattr(admin_user, "_cached_public_id", None) or admin_user.public_id
+            )
+            token = create_access_token(identity=str(public_id))
 
             response = client.get(
                 "/api/v1/admin/secret-rotations/history?secret_type=jwt",
@@ -97,7 +112,11 @@ class TestRotationHistoryEndpoint:
             for _ in range(5):
                 record_rotation("jwt", "success", "prod")
 
-            token = create_access_token(identity=str(admin_user.public_id))
+            # ✅ FIX: Utiliser _cached_public_id ou recharger l'objet dans le contexte
+            public_id = (
+                getattr(admin_user, "_cached_public_id", None) or admin_user.public_id
+            )
+            token = create_access_token(identity=str(public_id))
 
             response = client.get(
                 "/api/v1/admin/secret-rotations/history?limit=2&offset=0",
@@ -123,7 +142,11 @@ class TestRotationStatsEndpoint:
         with app.app_context():
             from flask_jwt_extended import create_access_token
 
-            token = create_access_token(identity=str(admin_user.public_id))
+            # ✅ FIX: Utiliser _cached_public_id ou recharger l'objet dans le contexte
+            public_id = (
+                getattr(admin_user, "_cached_public_id", None) or admin_user.public_id
+            )
+            token = create_access_token(identity=str(public_id))
 
             response = client.get(
                 "/api/v1/admin/secret-rotations/stats",
@@ -144,7 +167,11 @@ class TestRotationStatsEndpoint:
         with app.app_context():
             from flask_jwt_extended import create_access_token
 
-            token = create_access_token(identity=str(admin_user.public_id))
+            # ✅ FIX: Utiliser _cached_public_id ou recharger l'objet dans le contexte
+            public_id = (
+                getattr(admin_user, "_cached_public_id", None) or admin_user.public_id
+            )
+            token = create_access_token(identity=str(public_id))
 
             response = client.get(
                 "/api/v1/admin/secret-rotations/stats",
@@ -170,7 +197,11 @@ class TestLastRotationEndpoint:
         with app.app_context():
             from flask_jwt_extended import create_access_token
 
-            token = create_access_token(identity=str(admin_user.public_id))
+            # ✅ FIX: Utiliser _cached_public_id ou recharger l'objet dans le contexte
+            public_id = (
+                getattr(admin_user, "_cached_public_id", None) or admin_user.public_id
+            )
+            token = create_access_token(identity=str(public_id))
 
             response = client.get(
                 "/api/v1/admin/secret-rotations/last",
@@ -191,7 +222,11 @@ class TestLastRotationEndpoint:
         with app.app_context():
             from flask_jwt_extended import create_access_token
 
-            token = create_access_token(identity=str(admin_user.public_id))
+            # ✅ FIX: Utiliser _cached_public_id ou recharger l'objet dans le contexte
+            public_id = (
+                getattr(admin_user, "_cached_public_id", None) or admin_user.public_id
+            )
+            token = create_access_token(identity=str(public_id))
 
             response = client.get(
                 "/api/v1/admin/secret-rotations/last?secret_type=jwt",
@@ -212,7 +247,11 @@ class TestLastRotationEndpoint:
             record_rotation("jwt", "success", "prod")
             record_rotation("jwt", "success", "dev")
 
-            token = create_access_token(identity=str(admin_user.public_id))
+            # ✅ FIX: Utiliser _cached_public_id ou recharger l'objet dans le contexte
+            public_id = (
+                getattr(admin_user, "_cached_public_id", None) or admin_user.public_id
+            )
+            token = create_access_token(identity=str(public_id))
 
             response = client.get(
                 "/api/v1/admin/secret-rotations/last?secret_type=jwt&environment=prod",

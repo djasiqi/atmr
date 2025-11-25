@@ -25,9 +25,11 @@ class TestHyperparameterTuner:
 
     def test_init_with_custom_params(self):
         """Test initialisation avec paramètres personnalisés."""
+        # ✅ FIX: n_trials et n_training_episodes doivent être des int, pas des float
+        # Le code ne fait pas de conversion automatique de float vers int
         tuner = HyperparameterTuner(
-            n_trials=0.100,
-            n_training_episodes=0.300,
+            n_trials=100,
+            n_training_episodes=300,
             n_eval_episodes=30,
             study_name="custom_study",
             storage="sqlite:///test.db",

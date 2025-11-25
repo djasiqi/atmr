@@ -32,15 +32,33 @@ class TestNStepEndEpisodeEdgeCases:
         if NStepBuffer is None:
             pytest.skip("NStepBuffer non disponible")
 
-        return NStepBuffer(capacity=0.100, n_step=3, gamma=0.99)
+        return NStepBuffer(capacity=100, n_step=3, gamma=0.99)
 
     def test_n_step_end_episode_exact_length(self, n_step_buffer):
         """Test N-step avec épisode de longueur exacte n."""
         # Créer un épisode de longueur exacte n=3
         transitions = [
-            (np.array([1, 2, 3]), 0, 0.1, np.array([2, 3, 4]), False),
-            (np.array([2, 3, 4]), 1, 0.2, np.array([3, 4, 5]), False),
-            (np.array([3, 4, 5]), 2, 0.3, np.array([4, 5, 6]), True),  # Fin d'épisode
+            (
+                np.array([1, 2, 3], dtype=np.float32),
+                0,
+                0.1,
+                np.array([2, 3, 4], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([2, 3, 4], dtype=np.float32),
+                1,
+                0.2,
+                np.array([3, 4, 5], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([3, 4, 5], dtype=np.float32),
+                2,
+                0.3,
+                np.array([4, 5, 6], dtype=np.float32),
+                True,
+            ),  # Fin d'épisode
         ]
 
         # Ajouter les transitions
@@ -59,8 +77,20 @@ class TestNStepEndEpisodeEdgeCases:
         """Test N-step avec épisode plus court que n."""
         # Créer un épisode de longueur 2 (plus court que n=3)
         transitions = [
-            (np.array([1, 2, 3]), 0, 0.1, np.array([2, 3, 4]), False),
-            (np.array([2, 3, 4]), 1, 0.2, np.array([3, 4, 5]), True),  # Fin d'épisode
+            (
+                np.array([1, 2, 3], dtype=np.float32),
+                0,
+                0.1,
+                np.array([2, 3, 4], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([2, 3, 4], dtype=np.float32),
+                1,
+                0.2,
+                np.array([3, 4, 5], dtype=np.float32),
+                True,
+            ),  # Fin d'épisode
         ]
 
         # Ajouter les transitions
@@ -77,11 +107,41 @@ class TestNStepEndEpisodeEdgeCases:
         """Test N-step avec épisode plus long que n."""
         # Créer un épisode de longueur 5 (plus long que n=3)
         transitions = [
-            (np.array([1, 2, 3]), 0, 0.1, np.array([2, 3, 4]), False),
-            (np.array([2, 3, 4]), 1, 0.2, np.array([3, 4, 5]), False),
-            (np.array([3, 4, 5]), 2, 0.3, np.array([4, 5, 6]), False),
-            (np.array([4, 5, 6]), 3, 0.4, np.array([5, 6, 7]), False),
-            (np.array([5, 6, 7]), 4, 0.5, np.array([6, 7, 8]), True),  # Fin d'épisode
+            (
+                np.array([1, 2, 3], dtype=np.float32),
+                0,
+                0.1,
+                np.array([2, 3, 4], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([2, 3, 4], dtype=np.float32),
+                1,
+                0.2,
+                np.array([3, 4, 5], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([3, 4, 5], dtype=np.float32),
+                2,
+                0.3,
+                np.array([4, 5, 6], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([4, 5, 6], dtype=np.float32),
+                3,
+                0.4,
+                np.array([5, 6, 7], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([5, 6, 7], dtype=np.float32),
+                4,
+                0.5,
+                np.array([6, 7, 8], dtype=np.float32),
+                True,
+            ),  # Fin d'épisode
         ]
 
         # Ajouter les transitions
@@ -99,20 +159,50 @@ class TestNStepEndEpisodeEdgeCases:
         """Test N-step avec plusieurs épisodes."""
         # Premier épisode (longueur 2)
         transitions_1 = [
-            (np.array([1, 2, 3]), 0, 0.1, np.array([2, 3, 4]), False),
-            (np.array([2, 3, 4]), 1, 0.2, np.array([3, 4, 5]), True),  # Fin épisode 1
+            (
+                np.array([1, 2, 3], dtype=np.float32),
+                0,
+                0.1,
+                np.array([2, 3, 4], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([2, 3, 4], dtype=np.float32),
+                1,
+                0.2,
+                np.array([3, 4, 5], dtype=np.float32),
+                True,
+            ),  # Fin épisode 1
         ]
 
         # Deuxième épisode (longueur 4)
         transitions_2 = [
-            (np.array([10, 11, 12]), 0, 0.3, np.array([11, 12, 13]), False),
-            (np.array([11, 12, 13]), 1, 0.4, np.array([12, 13, 14]), False),
-            (np.array([12, 13, 14]), 2, 0.5, np.array([13, 14, 15]), False),
             (
-                np.array([13, 14, 15]),
+                np.array([10, 11, 12], dtype=np.float32),
+                0,
+                0.3,
+                np.array([11, 12, 13], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([11, 12, 13], dtype=np.float32),
+                1,
+                0.4,
+                np.array([12, 13, 14], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([12, 13, 14], dtype=np.float32),
+                2,
+                0.5,
+                np.array([13, 14, 15], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([13, 14, 15], dtype=np.float32),
                 3,
                 0.6,
-                np.array([14, 15, 16]),
+                np.array([14, 15, 16], dtype=np.float32),
                 True,
             ),  # Fin épisode 2
         ]
@@ -131,13 +221,25 @@ class TestNStepEndEpisodeEdgeCases:
         """Test N-step avec récompenses zéro à la fin d'épisode."""
         # Créer un épisode avec récompenses zéro
         transitions = [
-            (np.array([1, 2, 3]), 0, 0.1, np.array([2, 3, 4]), False),
-            (np.array([2, 3, 4]), 1, 0.2, np.array([3, 4, 5]), False),
             (
-                np.array([3, 4, 5]),
+                np.array([1, 2, 3], dtype=np.float32),
+                0,
+                0.1,
+                np.array([2, 3, 4], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([2, 3, 4], dtype=np.float32),
+                1,
+                0.2,
+                np.array([3, 4, 5], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([3, 4, 5], dtype=np.float32),
                 2,
                 0.0,
-                np.array([4, 5, 6]),
+                np.array([4, 5, 6], dtype=np.float32),
                 True,
             ),  # Récompense zéro + fin
         ]
@@ -153,13 +255,25 @@ class TestNStepEndEpisodeEdgeCases:
         """Test N-step avec récompenses négatives à la fin d'épisode."""
         # Créer un épisode avec récompenses négatives
         transitions = [
-            (np.array([1, 2, 3]), 0, 0.1, np.array([2, 3, 4]), False),
-            (np.array([2, 3, 4]), 1, 0.2, np.array([3, 4, 5]), False),
             (
-                np.array([3, 4, 5]),
+                np.array([1, 2, 3], dtype=np.float32),
+                0,
+                0.1,
+                np.array([2, 3, 4], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([2, 3, 4], dtype=np.float32),
+                1,
+                0.2,
+                np.array([3, 4, 5], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([3, 4, 5], dtype=np.float32),
                 2,
                 -0.5,
-                np.array([4, 5, 6]),
+                np.array([4, 5, 6], dtype=np.float32),
                 True,
             ),  # Récompense négative + fin
         ]
@@ -175,13 +289,25 @@ class TestNStepEndEpisodeEdgeCases:
         """Test N-step avec récompenses importantes à la fin d'épisode."""
         # Créer un épisode avec récompenses importantes
         transitions = [
-            (np.array([1, 2, 3]), 0, 0.1, np.array([2, 3, 4]), False),
-            (np.array([2, 3, 4]), 1, 0.2, np.array([3, 4, 5]), False),
             (
-                np.array([3, 4, 5]),
+                np.array([1, 2, 3], dtype=np.float32),
+                0,
+                0.1,
+                np.array([2, 3, 4], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([2, 3, 4], dtype=np.float32),
+                1,
+                0.2,
+                np.array([3, 4, 5], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([3, 4, 5], dtype=np.float32),
                 2,
                 10.0,
-                np.array([4, 5, 6]),
+                np.array([4, 5, 6], dtype=np.float32),
                 True,
             ),  # Grande récompense + fin
         ]
@@ -197,22 +323,28 @@ class TestNStepEndEpisodeEdgeCases:
         """Test N-step avec débordement du buffer à la fin d'épisode."""
         # Remplir le buffer presque complètement
         for i in range(98):
-            state = np.array([i, i + 1, i + 2])
+            state = np.array([i, i + 1, i + 2], dtype=np.float32)
             action = i % 3
             reward = i * 0.01
-            next_state = np.array([i + 1, i + 2, i + 3])
-            done = False
+            next_state = np.array([i + 1, i + 2, i + 3], dtype=np.float32)
+            done = i % 3 == 2  # Terminer périodiquement pour forcer le traitement
 
             n_step_buffer.add(state, action, reward, next_state, done)
 
         # Ajouter un épisode qui se termine
         transitions = [
-            (np.array([98, 99, 100]), 0, 0.1, np.array([99, 100, 101]), False),
             (
-                np.array([99, 100, 101]),
+                np.array([98, 99, 100], dtype=np.float32),
+                0,
+                0.1,
+                np.array([99, 100, 101], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([99, 100, 101], dtype=np.float32),
                 1,
                 0.2,
-                np.array([100, 101, 102]),
+                np.array([100, 101, 102], dtype=np.float32),
                 True,
             ),  # Fin d'épisode
         ]
@@ -233,18 +365,42 @@ class TestNStepReturnCalculationEdgeCases:
         if NStepBuffer is None:
             pytest.skip("NStepBuffer non disponible")
 
-        return NStepBuffer(capacity=0.100, n_step=3, gamma=0.99)
+        return NStepBuffer(capacity=100, n_step=3, gamma=0.99)
 
     def test_n_step_return_calculation_with_gamma_one(self):
         """Test calcul retour N-step avec gamma=1.0."""
-        buffer = NStepBuffer(capacity=0.100, n_step=3, gamma=1.0)
+        buffer = NStepBuffer(capacity=100, n_step=3, gamma=1.0)
 
         # Créer un épisode
         transitions = [
-            (np.array([1, 2, 3]), 0, 0.1, np.array([2, 3, 4]), False),
-            (np.array([2, 3, 4]), 1, 0.2, np.array([3, 4, 5]), False),
-            (np.array([3, 4, 5]), 2, 0.3, np.array([4, 5, 6]), False),
-            (np.array([4, 5, 6]), 3, 0.4, np.array([5, 6, 7]), True),  # Fin d'épisode
+            (
+                np.array([1, 2, 3], dtype=np.float32),
+                0,
+                0.1,
+                np.array([2, 3, 4], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([2, 3, 4], dtype=np.float32),
+                1,
+                0.2,
+                np.array([3, 4, 5], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([3, 4, 5], dtype=np.float32),
+                2,
+                0.3,
+                np.array([4, 5, 6], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([4, 5, 6], dtype=np.float32),
+                3,
+                0.4,
+                np.array([5, 6, 7], dtype=np.float32),
+                True,
+            ),  # Fin d'épisode
         ]
 
         # Ajouter les transitions
@@ -256,14 +412,38 @@ class TestNStepReturnCalculationEdgeCases:
 
     def test_n_step_return_calculation_with_gamma_zero(self):
         """Test calcul retour N-step avec gamma=0.0."""
-        buffer = NStepBuffer(capacity=0.100, n_step=3, gamma=0.0)
+        buffer = NStepBuffer(capacity=100, n_step=3, gamma=0.0)
 
         # Créer un épisode
         transitions = [
-            (np.array([1, 2, 3]), 0, 0.1, np.array([2, 3, 4]), False),
-            (np.array([2, 3, 4]), 1, 0.2, np.array([3, 4, 5]), False),
-            (np.array([3, 4, 5]), 2, 0.3, np.array([4, 5, 6]), False),
-            (np.array([4, 5, 6]), 3, 0.4, np.array([5, 6, 7]), True),  # Fin d'épisode
+            (
+                np.array([1, 2, 3], dtype=np.float32),
+                0,
+                0.1,
+                np.array([2, 3, 4], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([2, 3, 4], dtype=np.float32),
+                1,
+                0.2,
+                np.array([3, 4, 5], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([3, 4, 5], dtype=np.float32),
+                2,
+                0.3,
+                np.array([4, 5, 6], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([4, 5, 6], dtype=np.float32),
+                3,
+                0.4,
+                np.array([5, 6, 7], dtype=np.float32),
+                True,
+            ),  # Fin d'épisode
         ]
 
         # Ajouter les transitions
@@ -275,14 +455,38 @@ class TestNStepReturnCalculationEdgeCases:
 
     def test_n_step_return_calculation_with_small_gamma(self):
         """Test calcul retour N-step avec gamma très petit."""
-        buffer = NStepBuffer(capacity=0.100, n_step=3, gamma=0.01)
+        buffer = NStepBuffer(capacity=100, n_step=3, gamma=0.01)
 
         # Créer un épisode
         transitions = [
-            (np.array([1, 2, 3]), 0, 0.1, np.array([2, 3, 4]), False),
-            (np.array([2, 3, 4]), 1, 0.2, np.array([3, 4, 5]), False),
-            (np.array([3, 4, 5]), 2, 0.3, np.array([4, 5, 6]), False),
-            (np.array([4, 5, 6]), 3, 0.4, np.array([5, 6, 7]), True),  # Fin d'épisode
+            (
+                np.array([1, 2, 3], dtype=np.float32),
+                0,
+                0.1,
+                np.array([2, 3, 4], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([2, 3, 4], dtype=np.float32),
+                1,
+                0.2,
+                np.array([3, 4, 5], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([3, 4, 5], dtype=np.float32),
+                2,
+                0.3,
+                np.array([4, 5, 6], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([4, 5, 6], dtype=np.float32),
+                3,
+                0.4,
+                np.array([5, 6, 7], dtype=np.float32),
+                True,
+            ),  # Fin d'épisode
         ]
 
         # Ajouter les transitions
@@ -295,15 +499,27 @@ class TestNStepReturnCalculationEdgeCases:
     def test_n_step_return_calculation_with_large_n(self):
         """Test calcul retour N-step avec n très grand."""
         buffer = NStepBuffer(
-            capacity=0.100,
+            capacity=100,
             n_step=10,  # n très grand
             gamma=0.99,
         )
 
         # Créer un épisode court
         transitions = [
-            (np.array([1, 2, 3]), 0, 0.1, np.array([2, 3, 4]), False),
-            (np.array([2, 3, 4]), 1, 0.2, np.array([3, 4, 5]), True),  # Fin d'épisode
+            (
+                np.array([1, 2, 3], dtype=np.float32),
+                0,
+                0.1,
+                np.array([2, 3, 4], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([2, 3, 4], dtype=np.float32),
+                1,
+                0.2,
+                np.array([3, 4, 5], dtype=np.float32),
+                True,
+            ),  # Fin d'épisode
         ]
 
         # Ajouter les transitions
@@ -316,16 +532,34 @@ class TestNStepReturnCalculationEdgeCases:
     def test_n_step_return_calculation_with_n_one(self):
         """Test calcul retour N-step avec n=1 (pas de N-step)."""
         buffer = NStepBuffer(
-            capacity=0.100,
+            capacity=100,
             n_step=1,  # Pas de N-step
             gamma=0.99,
         )
 
         # Créer un épisode
         transitions = [
-            (np.array([1, 2, 3]), 0, 0.1, np.array([2, 3, 4]), False),
-            (np.array([2, 3, 4]), 1, 0.2, np.array([3, 4, 5]), False),
-            (np.array([3, 4, 5]), 2, 0.3, np.array([4, 5, 6]), True),  # Fin d'épisode
+            (
+                np.array([1, 2, 3], dtype=np.float32),
+                0,
+                0.1,
+                np.array([2, 3, 4], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([2, 3, 4], dtype=np.float32),
+                1,
+                0.2,
+                np.array([3, 4, 5], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([3, 4, 5], dtype=np.float32),
+                2,
+                0.3,
+                np.array([4, 5, 6], dtype=np.float32),
+                True,
+            ),  # Fin d'épisode
         ]
 
         # Ajouter les transitions
@@ -346,7 +580,7 @@ class TestNStepPrioritizedEdgeCases:
             pytest.skip("NStepPrioritizedBuffer non disponible")
 
         return NStepPrioritizedBuffer(
-            capacity=0.100,
+            capacity=100,
             n_step=3,
             gamma=0.99,
             alpha=0.6,
@@ -358,9 +592,27 @@ class TestNStepPrioritizedEdgeCases:
         """Test buffer N-step priorisé avec fin d'épisode."""
         # Créer un épisode
         transitions = [
-            (np.array([1, 2, 3]), 0, 0.1, np.array([2, 3, 4]), False),
-            (np.array([2, 3, 4]), 1, 0.2, np.array([3, 4, 5]), False),
-            (np.array([3, 4, 5]), 2, 0.3, np.array([4, 5, 6]), True),  # Fin d'épisode
+            (
+                np.array([1, 2, 3], dtype=np.float32),
+                0,
+                0.1,
+                np.array([2, 3, 4], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([2, 3, 4], dtype=np.float32),
+                1,
+                0.2,
+                np.array([3, 4, 5], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([3, 4, 5], dtype=np.float32),
+                2,
+                0.3,
+                np.array([4, 5, 6], dtype=np.float32),
+                True,
+            ),  # Fin d'épisode
         ]
 
         # Ajouter les transitions
@@ -381,9 +633,27 @@ class TestNStepPrioritizedEdgeCases:
         """Test échantillonnage avec fin d'épisode."""
         # Créer un épisode
         transitions = [
-            (np.array([1, 2, 3]), 0, 0.1, np.array([2, 3, 4]), False),
-            (np.array([2, 3, 4]), 1, 0.2, np.array([3, 4, 5]), False),
-            (np.array([3, 4, 5]), 2, 0.3, np.array([4, 5, 6]), True),  # Fin d'épisode
+            (
+                np.array([1, 2, 3], dtype=np.float32),
+                0,
+                0.1,
+                np.array([2, 3, 4], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([2, 3, 4], dtype=np.float32),
+                1,
+                0.2,
+                np.array([3, 4, 5], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([3, 4, 5], dtype=np.float32),
+                2,
+                0.3,
+                np.array([4, 5, 6], dtype=np.float32),
+                True,
+            ),  # Fin d'épisode
         ]
 
         # Ajouter les transitions
@@ -411,9 +681,27 @@ class TestNStepPrioritizedEdgeCases:
         """Test mise à jour priorité avec fin d'épisode."""
         # Créer un épisode
         transitions = [
-            (np.array([1, 2, 3]), 0, 0.1, np.array([2, 3, 4]), False),
-            (np.array([2, 3, 4]), 1, 0.2, np.array([3, 4, 5]), False),
-            (np.array([3, 4, 5]), 2, 0.3, np.array([4, 5, 6]), True),  # Fin d'épisode
+            (
+                np.array([1, 2, 3], dtype=np.float32),
+                0,
+                0.1,
+                np.array([2, 3, 4], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([2, 3, 4], dtype=np.float32),
+                1,
+                0.2,
+                np.array([3, 4, 5], dtype=np.float32),
+                False,
+            ),
+            (
+                np.array([3, 4, 5], dtype=np.float32),
+                2,
+                0.3,
+                np.array([4, 5, 6], dtype=np.float32),
+                True,
+            ),  # Fin d'épisode
         ]
 
         # Ajouter les transitions

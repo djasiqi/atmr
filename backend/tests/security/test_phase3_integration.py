@@ -89,9 +89,8 @@ class TestLogoutEndpointIntegration:
     ):
         """Test endpoint logout complet."""
         # Mock Redis
-        mock_redis_client = MagicMock()
-        mock_redis_client.setex = MagicMock()
-        mock_redis.return_value = mock_redis_client
+        # @patch remplace directement redis_client, donc mock_redis EST le redis_client
+        mock_redis.setex = MagicMock()
 
         # Mock JWT data
         future_exp = int((datetime.now(UTC) + timedelta(hours=1)).timestamp())
@@ -100,9 +99,9 @@ class TestLogoutEndpointIntegration:
             "exp": future_exp,
         }
 
-        # Appeler l'endpoint logout
+        # Appeler l'endpoint logout (route sous /api/v1/auth/logout)
         response = client.post(
-            "/api/auth/logout",
+            "/api/v1/auth/logout",
             headers={"Authorization": f"Bearer {sample_user_token}"},
         )
 
@@ -112,16 +111,15 @@ class TestLogoutEndpointIntegration:
         assert data["message"] == "Déconnexion réussie"
 
         # Vérifier que le token a été ajouté à la blacklist
-        mock_redis_client.setex.assert_called_once()
+        mock_redis.setex.assert_called_once()
 
     @patch("security.token_blacklist.redis_client")
     def test_token_blacklist_after_logout(self, mock_redis, client, sample_user_token):
         """Test token blacklisté après logout."""
         # Mock Redis
-        mock_redis_client = MagicMock()
-        mock_redis_client.setex = MagicMock()
-        mock_redis_client.exists = MagicMock(return_value=1)  # Token blacklisté
-        mock_redis.return_value = mock_redis_client
+        # @patch remplace directement redis_client, donc mock_redis EST le redis_client
+        mock_redis.setex = MagicMock()
+        mock_redis.exists = MagicMock(return_value=1)  # Token blacklisté
 
         # Simuler un logout (ajouter à la blacklist)
         from security.token_blacklist import add_to_blacklist
@@ -216,13 +214,12 @@ class TestRotationSecretsCeleryTask:
             "environment": "dev",
         }
 
-        # Mock task
-        mock_task = Mock()
-
         # Exécuter la rotation globale
+        # rotate_all_secrets est une tâche Celery avec bind=True, donc self est automatique
         from tasks.vault_rotation_tasks import rotate_all_secrets
 
-        result = rotate_all_secrets(mock_task)
+        # Appeler directement la fonction (pas comme méthode, self est automatique)
+        result = rotate_all_secrets()
 
         # Vérifier que toutes les rotations ont été appelées
         assert result["status"] == "completed"
@@ -247,13 +244,12 @@ class TestRotationSecretsCeleryTask:
             "error": "Network error",
         }
 
-        # Mock task
-        mock_task = Mock()
-
         # Exécuter la rotation globale
+        # rotate_all_secrets est une tâche Celery avec bind=True, donc self est automatique
         from tasks.vault_rotation_tasks import rotate_all_secrets
 
-        result = rotate_all_secrets(mock_task)
+        # Appeler directement la fonction (pas comme méthode, self est automatique)
+        result = rotate_all_secrets()
 
         # Vérifier que la notification a été appelée
         assert result["success_count"] == 1
@@ -267,11 +263,8 @@ class TestTokenBlacklistWithJWT:
     def test_token_blacklist_jwt_callback(self, mock_redis, app):
         """Test callback JWT vérifie la blacklist."""
         # Mock Redis avec token blacklisté
-        mock_redis_client = MagicMock()
-        mock_redis_client.exists = MagicMock(
-            return_value=1
-        )  # Token existe (blacklisté)
-        mock_redis.return_value = mock_redis_client
+        # @patch remplace directement redis_client, donc mock_redis EST le redis_client
+        mock_redis.exists = MagicMock(return_value=1)  # Token existe (blacklisté)
 
         # Vérifier que le callback est configuré
         from ext import jwt
@@ -291,14 +284,20 @@ class TestTokenBlacklistWithJWT:
     def test_token_blacklist_jwt_callback_not_revoked(self, mock_redis, app):
         """Test callback JWT avec token non blacklisté."""
         # Mock Redis sans token
-        mock_redis_client = MagicMock()
-        mock_redis_client.exists = MagicMock(return_value=0)  # Token n'existe pas
-        mock_redis.return_value = mock_redis_client
+        # @patch remplace directement redis_client, donc mock_redis EST le redis_client
+        mock_redis.exists = MagicMock(return_value=0)  # Token n'existe pas
+        # bool(0) = False, donc is_token_blacklisted retournera False
 
         # Tester le callback
+        # Note: check_if_token_revoked appelle is_token_blacklisted qui utilise redis_client.exists(key)
         from ext import check_if_token_revoked
 
         jwt_payload = {"jti": "test-jti-not-revoked"}
-        is_revoked = check_if_token_revoked({}, jwt_payload)
 
+        # S'assurer que le mock est bien appliqué avant l'appel
+        with app.app_context():
+            is_revoked = check_if_token_revoked({}, jwt_payload)
+
+        # Si redis_client.exists retourne 0, is_token_blacklisted retourne False
+        # donc check_if_token_revoked retourne False
         assert is_revoked is False

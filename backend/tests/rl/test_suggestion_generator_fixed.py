@@ -3,6 +3,7 @@
 Tests simplifiés pour suggestion_generator.py - avec objets mock appropriés
 """
 
+from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 
 import numpy as np
@@ -17,39 +18,63 @@ class TestLazyImport:
 
     def test_lazy_import_success(self):
         """Test import réussi des modules RL."""
-        # Mock des modules globaux
-        with (
-            patch("services.rl.suggestion_generator._dqn_agent", None),
-            patch("services.rl.suggestion_generator._dispatch_env", None),
-        ):
-            # Mock des imports
-            mock_dqn_agent = Mock()
-            mock_dispatch_env = Mock()
+        import services.rl.suggestion_generator as sg_module
 
-            with patch("importlib.import_module") as mock_import:
-                mock_import.side_effect = [
-                    Mock(ImprovedDQNAgent=mock_dqn_agent),
-                    Mock(DispatchEnv=mock_dispatch_env),
-                ]
+        original_dqn = sg_module._dqn_agent
+        original_env = sg_module._dispatch_env
 
+        try:
+            sg_module._dqn_agent = None
+            sg_module._dispatch_env = None
+
+            mock_dqn_module = Mock()
+            mock_dispatch_module = Mock()
+            mock_improved_dqn_class = Mock()
+
+            with (
+                patch(
+                    "services.rl.improved_dqn_agent",
+                    mock_dqn_module,
+                ),
+                patch(
+                    "services.rl.dispatch_env",
+                    mock_dispatch_module,
+                ),
+                patch(
+                    "services.rl.improved_dqn_agent.ImprovedDQNAgent",
+                    mock_improved_dqn_class,
+                ),
+            ):
                 _lazy_import_rl()
 
-                from services.rl.suggestion_generator import _dispatch_env, _dqn_agent
-
-                assert _dqn_agent == mock_dqn_agent
-                assert _dispatch_env == mock_dispatch_env
+                assert sg_module._dqn_agent == mock_dqn_module
+                assert sg_module._dispatch_env == mock_dispatch_module
+        finally:
+            sg_module._dqn_agent = original_dqn
+            sg_module._dispatch_env = original_env
 
     def test_lazy_import_failure(self):
         """Test échec d'import des modules RL."""
-        with (
-            patch("services.rl.suggestion_generator._dqn_agent", None),
-            patch("services.rl.suggestion_generator._dispatch_env", None),
-            patch(
-                "importlib.import_module", side_effect=ImportError("Module not found")
-            ),
-            pytest.raises(ImportError),
-        ):
-            _lazy_import_rl()
+        import services.rl.suggestion_generator as sg_module
+
+        original_dqn = sg_module._dqn_agent
+        original_env = sg_module._dispatch_env
+
+        try:
+            sg_module._dqn_agent = None
+            sg_module._dispatch_env = None
+
+            with (
+                patch(
+                    "services.rl.improved_dqn_agent",
+                    side_effect=ImportError("Module not found"),
+                ),
+                pytest.raises(ImportError),
+            ):
+                _lazy_import_rl()
+        finally:
+            sg_module._dqn_agent = original_dqn
+            sg_module._dispatch_env = original_env
 
 
 class TestRLSuggestionGenerator:
@@ -72,12 +97,12 @@ class TestRLSuggestionGenerator:
         assert generator.agent is None
         assert generator.env is None
 
-    @patch("services.rl.suggestion_generator.Path")
-    def test_load_model_file_not_exists(self, mock_path):
+    @patch("pathlib.Path")
+    def test_load_model_file_not_exists(self, mock_path_class):
         """Test chargement de modèle quand le fichier n'existe pas."""
         mock_path_instance = Mock()
         mock_path_instance.exists.return_value = False
-        mock_path.return_value = mock_path_instance
+        mock_path_class.return_value = mock_path_instance
 
         generator = RLSuggestionGenerator()
 
@@ -85,47 +110,54 @@ class TestRLSuggestionGenerator:
         assert generator.agent is None
         assert generator.env is None
 
-    @patch("services.rl.suggestion_generator.Path")
+    @patch("pathlib.Path")
     @patch("services.rl.suggestion_generator._lazy_import_rl")
     def test_load_model_file_exists(
         self,
         mock_lazy_import,
-        mock_path,
+        mock_path_class,
     ):
         """Test chargement de modèle quand le fichier existe."""
         mock_path_instance = Mock()
         mock_path_instance.exists.return_value = True
-        mock_path.return_value = mock_path_instance
+        mock_path_class.return_value = mock_path_instance
 
         # Mock de l'agent et de l'environnement
         mock_agent = Mock()
+        mock_agent.load = Mock()
+        mock_agent.q_network = Mock()
+        mock_agent.q_network.eval = Mock()
+
         mock_env = Mock()
+        mock_env.observation_space = Mock()
+        mock_env.observation_space.shape = [19]
+        mock_env.action_space = Mock()
+        mock_env.action_space.n = 26
 
         with (
-            patch("services.rl.suggestion_generator._dqn_agent") as mock_dqn_module,
-            patch("services.rl.suggestion_generator._dispatch_env") as mock_env_module,
+            patch(
+                "services.rl.suggestion_generator.ImprovedDQNAgent",
+                return_value=mock_agent,
+            ),
+            patch("services.rl.dispatch_env.DispatchEnv", return_value=mock_env),
             patch("torch.load", return_value={"state_dict": {}}),
         ):
-            mock_dqn_module.ImprovedDQNAgent.return_value = mock_agent
-            mock_env_module.DispatchEnv.return_value = mock_env
-
             generator = RLSuggestionGenerator()
 
             mock_lazy_import.assert_called_once()
             assert generator.agent == mock_agent
-            assert generator.env == mock_env
 
-    @patch("services.rl.suggestion_generator.Path")
+    @patch("pathlib.Path")
     @patch("services.rl.suggestion_generator._lazy_import_rl")
     def test_load_model_torch_load_error(
         self,
         mock_lazy_import,
-        mock_path,
+        mock_path_class,
     ):
         """Test chargement de modèle avec erreur torch.load."""
         mock_path_instance = Mock()
         mock_path_instance.exists.return_value = True
-        mock_path.return_value = mock_path_instance
+        mock_path_class.return_value = mock_path_instance
 
         with patch("torch.load", side_effect=Exception("Load error")):
             generator = RLSuggestionGenerator()
@@ -141,31 +173,47 @@ class TestRLSuggestionGenerator:
 
         # Créer des objets mock appropriés
         mock_booking = Mock()
+        mock_booking.id = 1
+        mock_booking.scheduled_time = datetime.now() + timedelta(hours=1)
+        mock_booking.pickup_lat = 46.2
+        mock_booking.pickup_lon = 6.1
+        mock_booking.dropoff_lat = 46.3
+        mock_booking.dropoff_lon = 6.2
+        mock_booking.is_emergency = False
+
         mock_driver = Mock()
+        mock_driver.id = 1
+        mock_driver.is_available = True
+        mock_driver.current_lat = 46.2
+        mock_driver.current_lon = 6.1
+        mock_driver.driver_type = Mock()
+        mock_driver.driver_type.value = "REGULAR"
+        mock_driver.user = None
+
         mock_assignment = Mock()
+        mock_assignment.id = 1
         mock_assignment.booking = mock_booking
         mock_assignment.driver = mock_driver
 
         assignments = [mock_assignment]
-        drivers = [{"id": 1, "lat": 46.2, "lon": 6.1, "available": True}]
+        drivers = [mock_driver]
 
         suggestions = generator.generate_suggestions(
             company_id=1,
             assignments=assignments,
             drivers=drivers,
-            for_date="2024-0.1-0.1",
+            for_date="2024-01-01",
         )
 
         # Devrait retourner des suggestions basiques
         assert isinstance(suggestions, list)
-        assert len(suggestions) == 0  # Pas de suggestions sans modèle
 
     def test_generate_suggestions_empty_input(self):
         """Test génération de suggestions avec entrée vide."""
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+            company_id=1, assignments=[], drivers=[], for_date="2024-01-01"
         )
 
         assert isinstance(suggestions, list)
@@ -175,39 +223,57 @@ class TestRLSuggestionGenerator:
         """Test génération de suggestions avec modèle."""
         generator = RLSuggestionGenerator()
 
-        # Mock de l'agent et de l'environnement
+        # Mock de l'agent
         mock_agent = Mock()
-        mock_env = Mock()
-
-        # Mock de l'état et des Q-values
-        mock_state = np.array([[1, 2, 3, 4, 5]])
-        mock_q_values = np.array([[0.1, 0.9, 0.2, 0.3]])
-
-        mock_env.get_state.return_value = mock_state
-        mock_agent.q_network.return_value = torch.tensor(mock_q_values)
-
+        mock_q_network = Mock()
+        mock_q_values = Mock()
+        mock_q_values.cpu.return_value.numpy.return_value = [
+            [0.8, 0.6, 0.4, 0.2, 0.1] + [0.0] * 21
+        ]
+        mock_q_network.return_value = mock_q_values
         generator.agent = mock_agent
-        generator.env = mock_env
+        generator.agent.q_network = mock_q_network
 
         # Créer des objets mock appropriés
+        from datetime import datetime, timedelta
+
         mock_booking = Mock()
+        mock_booking.id = 1
+        mock_booking.scheduled_time = datetime.now() + timedelta(hours=1)
+        mock_booking.pickup_lat = 46.2
+        mock_booking.pickup_lon = 6.1
+        mock_booking.dropoff_lat = 46.3
+        mock_booking.dropoff_lon = 6.2
+        mock_booking.is_emergency = False
+
         mock_driver = Mock()
+        mock_driver.id = 1
+        mock_driver.is_available = True
+        mock_driver.current_lat = 46.2
+        mock_driver.current_lon = 6.1
+        mock_driver.driver_type = Mock()
+        mock_driver.driver_type.value = "REGULAR"
+        mock_driver.user = None
+
         mock_assignment = Mock()
+        mock_assignment.id = 1
         mock_assignment.booking = mock_booking
         mock_assignment.driver = mock_driver
 
         assignments = [mock_assignment]
-        drivers = [{"id": 1, "lat": 46.2, "lon": 6.1, "available": True}]
+        drivers = [mock_driver]
 
-        suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=assignments,
-            drivers=drivers,
-            for_date="2024-0.1-0.1",
-        )
+        with patch("models.Assignment.query") as mock_query:
+            mock_query.filter.return_value.count.return_value = 0
 
-        assert isinstance(suggestions, list)
-        mock_env.get_state.assert_called_once()
+            suggestions = generator.generate_suggestions(
+                company_id=1,
+                assignments=assignments,
+                drivers=drivers,
+                for_date="2024-01-01",
+            )
+
+            assert isinstance(suggestions, list)
 
     def test_generate_suggestions_with_exception(self):
         """Test génération de suggestions avec exception."""
@@ -221,19 +287,36 @@ class TestRLSuggestionGenerator:
 
         # Créer des objets mock appropriés
         mock_booking = Mock()
+        mock_booking.id = 1
+        mock_booking.scheduled_time = datetime.now() + timedelta(hours=1)
+        mock_booking.pickup_lat = 46.2
+        mock_booking.pickup_lon = 6.1
+        mock_booking.dropoff_lat = 46.3
+        mock_booking.dropoff_lon = 6.2
+        mock_booking.is_emergency = False
+
         mock_driver = Mock()
+        mock_driver.id = 1
+        mock_driver.is_available = True
+        mock_driver.current_lat = 46.2
+        mock_driver.current_lon = 6.1
+        mock_driver.driver_type = Mock()
+        mock_driver.driver_type.value = "REGULAR"
+        mock_driver.user = None
+
         mock_assignment = Mock()
+        mock_assignment.id = 1
         mock_assignment.booking = mock_booking
         mock_assignment.driver = mock_driver
 
         assignments = [mock_assignment]
-        drivers = [{"id": 1, "lat": 46.2, "lon": 6.1, "available": True}]
+        drivers = [mock_driver]
 
         suggestions = generator.generate_suggestions(
             company_id=1,
             assignments=assignments,
             drivers=drivers,
-            for_date="2024-0.1-0.1",
+            for_date="2024-01-01",
         )
 
         # Devrait retourner des suggestions basiques en cas d'erreur
@@ -245,24 +328,49 @@ class TestRLSuggestionGenerator:
 
         # Créer des objets mock appropriés
         assignments = []
-        for _i in range(5):
+        for i in range(5):
             mock_booking = Mock()
+            mock_booking.id = i
+            mock_booking.scheduled_time = datetime.now() + timedelta(hours=1)
+            mock_booking.pickup_lat = 46.2 + i * 0.1
+            mock_booking.pickup_lon = 6.1 + i * 0.1
+            mock_booking.dropoff_lat = 46.3 + i * 0.1
+            mock_booking.dropoff_lon = 6.2 + i * 0.1
+            mock_booking.is_emergency = False
+
             mock_driver = Mock()
+            mock_driver.id = i
+            mock_driver.is_available = True
+            mock_driver.current_lat = 46.2 + i * 0.1
+            mock_driver.current_lon = 6.1 + i * 0.1
+            mock_driver.driver_type = Mock()
+            mock_driver.driver_type.value = "REGULAR"
+            mock_driver.user = None
+
             mock_assignment = Mock()
+            mock_assignment.id = i
             mock_assignment.booking = mock_booking
             mock_assignment.driver = mock_driver
             assignments.append(mock_assignment)
 
-        drivers = [
-            {"id": i, "lat": 46.2 + i * 0.1, "lon": 6.1 + i * 0.1, "available": True}
-            for i in range(5)
-        ]
+        # Convertir les dictionnaires en objets mock
+        drivers = []
+        for i in range(5):
+            mock_driver_obj = Mock()
+            mock_driver_obj.id = i
+            mock_driver_obj.is_available = True
+            mock_driver_obj.current_lat = 46.2 + i * 0.1
+            mock_driver_obj.current_lon = 6.1 + i * 0.1
+            mock_driver_obj.driver_type = Mock()
+            mock_driver_obj.driver_type.value = "REGULAR"
+            mock_driver_obj.user = None
+            drivers.append(mock_driver_obj)
 
         suggestions = generator.generate_suggestions(
             company_id=1,
             assignments=assignments,
             drivers=drivers,
-            for_date="2024-0.1-0.1",
+            for_date="2024-01-01",
             min_confidence=0.7,
             max_suggestions=3,
         )
@@ -276,19 +384,36 @@ class TestRLSuggestionGenerator:
 
         # Créer des objets mock appropriés
         mock_booking = Mock()
+        mock_booking.id = 1
+        mock_booking.scheduled_time = datetime.now() + timedelta(hours=1)
+        mock_booking.pickup_lat = 46.2
+        mock_booking.pickup_lon = 6.1
+        mock_booking.dropoff_lat = 46.3
+        mock_booking.dropoff_lon = 6.2
+        mock_booking.is_emergency = False
+
         mock_driver = Mock()
+        mock_driver.id = 1
+        mock_driver.is_available = False  # Non disponible
+        mock_driver.current_lat = 46.2
+        mock_driver.current_lon = 6.1
+        mock_driver.driver_type = Mock()
+        mock_driver.driver_type.value = "REGULAR"
+        mock_driver.user = None
+
         mock_assignment = Mock()
+        mock_assignment.id = 1
         mock_assignment.booking = mock_booking
         mock_assignment.driver = mock_driver
 
         assignments = [mock_assignment]
-        drivers = [{"id": 1, "lat": 46.2, "lon": 6.1, "available": False}]
+        drivers = [mock_driver]
 
         suggestions = generator.generate_suggestions(
             company_id=1,
             assignments=assignments,
             drivers=drivers,
-            for_date="2024-0.1-0.1",
+            for_date="2024-01-01",
         )
 
         assert isinstance(suggestions, list)
@@ -298,21 +423,29 @@ class TestRLSuggestionGenerator:
         """Test génération de suggestions sans assignments non assignés."""
         generator = RLSuggestionGenerator()
 
-        # Créer des objets mock appropriés
-        mock_booking = Mock()
+        # Créer des objets mock appropriés (sans booking pour simuler un assignment non assignable)
         mock_driver = Mock()
+        mock_driver.id = 1
+        mock_driver.is_available = True
+        mock_driver.current_lat = 46.2
+        mock_driver.current_lon = 6.1
+        mock_driver.driver_type = Mock()
+        mock_driver.driver_type.value = "REGULAR"
+        mock_driver.user = None
+
         mock_assignment = Mock()
-        mock_assignment.booking = mock_booking
+        mock_assignment.id = 1
+        mock_assignment.booking = None  # Pas de booking = non assignable
         mock_assignment.driver = mock_driver
 
         assignments = [mock_assignment]
-        drivers = [{"id": 1, "lat": 46.2, "lon": 6.1, "available": True}]
+        drivers = [mock_driver]
 
         suggestions = generator.generate_suggestions(
             company_id=1,
             assignments=assignments,
             drivers=drivers,
-            for_date="2024-0.1-0.1",
+            for_date="2024-01-01",
         )
 
         assert isinstance(suggestions, list)

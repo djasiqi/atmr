@@ -63,13 +63,13 @@ class TestQualityScoreVersioning:
             username="testuser_quality", email="test@quality.com", role=UserRole.COMPANY
         )
         user.set_password("password123", force_change=False)
-        db_session.add(user)
-        db_session.flush()
+        db_session.session.add(user)
+        db_session.session.flush()
 
         # Créer un DispatchRun minimal
         company = Company(name="Test Company", user_id=user.id)
-        db_session.add(company)
-        db_session.flush()
+        db_session.session.add(company)
+        db_session.session.flush()
 
         run = DispatchRun(
             company_id=company.id,
@@ -77,8 +77,8 @@ class TestQualityScoreVersioning:
             status=DispatchStatus.COMPLETED,
             config={},
         )
-        db_session.add(run)
-        db_session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
+        db_session.session.add(run)
+        db_session.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
 
         collector = DispatchMetricsCollector(company.id)
 
@@ -116,12 +116,12 @@ class TestQualityScoreVersioning:
             role=UserRole.COMPANY,
         )
         user.set_password("password123", force_change=False)
-        db_session.add(user)
-        db_session.flush()
+        db_session.session.add(user)
+        db_session.session.flush()
 
         company = Company(name="Test Company", user_id=user.id)
-        db_session.add(company)
-        db_session.flush()
+        db_session.session.add(company)
+        db_session.session.flush()
 
         run = DispatchRun(
             company_id=company.id,
@@ -129,8 +129,8 @@ class TestQualityScoreVersioning:
             status=DispatchStatus.COMPLETED,
             config={},
         )
-        db_session.add(run)
-        db_session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
+        db_session.session.add(run)
+        db_session.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
 
         collector = DispatchMetricsCollector(company.id)
 

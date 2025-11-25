@@ -9,6 +9,7 @@ MIN_DRIVERS_FOR_EQUITY = 2
 HIGH_PRIORITY_THRESHOLD = 4
 LATENESS_ZERO = 0
 ASSIGNMENT_TIME_THRESHOLD = 5
+ASSIGNMENT_TIME_MEDIUM_THRESHOLD = 10
 
 """Module de reward shaping avancé pour l'environnement de dispatch.
 
@@ -239,9 +240,9 @@ class AdvancedRewardShaping:
             # Bonus pour assignation rapide
             assignment_time = info.get("assignment_time_minutes", 0)
             if assignment_time < ASSIGNMENT_TIME_THRESHOLD:
-                base_reward += 20
-            elif assignment_time < ASSIGNMENT_TIME_THRESHOLD:
-                base_reward += 10
+                base_reward += 20  # Rapide (< 5 min)
+            elif assignment_time < ASSIGNMENT_TIME_MEDIUM_THRESHOLD:
+                base_reward += 10  # Moyen (5-10 min)
 
             return base_reward
 

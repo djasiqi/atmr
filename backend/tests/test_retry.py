@@ -42,7 +42,10 @@ class TestBackoffCalculation(unittest.TestCase):
 
     def test_jitter_range(self):
         """Test que le jitter est dans une plage raisonnable."""
-        delay = calculate_backoff_delay(attempt=1, base_delay_ms=1000, use_jitter=True)
+        # ✅ FIX: Utiliser attempt=0 pour avoir un délai de base de 1000ms
+        # Avec attempt=1, le délai de base serait 2000ms, donc avec jitter [0.5, 1.5)
+        # le délai serait dans [1000ms, 3000ms) = [1.0s, 3.0s), ce qui dépasse 1.5s
+        delay = calculate_backoff_delay(attempt=0, base_delay_ms=1000, use_jitter=True)
         # Avec jitter [0.5, 1.5): entre 500ms et 1500ms
         self.assertGreaterEqual(delay, 0.5)
         self.assertLess(delay, 1.5)

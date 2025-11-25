@@ -41,10 +41,9 @@ class TestRotateFlaskSecretKey:
         mock_vault.clear_cache = MagicMock()
         mock_get_vault.return_value = mock_vault
 
-        # Mock task
-        mock_task = Mock()
-
-        result = rotate_flask_secret_key(mock_task)
+        # Les fonctions sont des tâches Celery avec bind=True, donc self est automatique
+        # On appelle directement sans argument
+        result = rotate_flask_secret_key()
 
         assert result["status"] == "success"
         assert result["environment"] == "dev"
@@ -61,10 +60,9 @@ class TestRotateFlaskSecretKey:
         # Mock Vault indisponible
         mock_get_vault.return_value = None
 
-        # Mock task
-        mock_task = Mock()
-
-        result = rotate_flask_secret_key(mock_task)
+        # Les fonctions sont des tâches Celery avec bind=True, donc self est automatique
+        # On appelle directement sans argument
+        result = rotate_flask_secret_key()
 
         assert result["status"] == "skipped"
         assert result["reason"] == "vault_not_available"
@@ -72,10 +70,9 @@ class TestRotateFlaskSecretKey:
     @patch("tasks.vault_rotation_tasks.HVAC_AVAILABLE", False)
     def test_rotate_flask_secret_key_hvac_unavailable(self):
         """Test skip si hvac non installé."""
-        # Mock task
-        mock_task = Mock()
-
-        result = rotate_flask_secret_key(mock_task)
+        # Les fonctions sont des tâches Celery avec bind=True, donc self est automatique
+        # On appelle directement sans argument
+        result = rotate_flask_secret_key()
 
         assert result["status"] == "skipped"
         assert result["reason"] == "hvac_not_available"
@@ -98,10 +95,9 @@ class TestRotateFlaskSecretKey:
         mock_vault.clear_cache = MagicMock()
         mock_get_vault.return_value = mock_vault
 
-        # Mock task
-        mock_task = Mock()
-
-        result = rotate_flask_secret_key(mock_task)
+        # Les fonctions sont des tâches Celery avec bind=True, donc self est automatique
+        # On appelle directement sans argument
+        result = rotate_flask_secret_key()
 
         assert result["status"] == "success"
         assert result["environment"] == "prod"
@@ -129,10 +125,9 @@ class TestRotateJWTSecret:
         mock_vault.clear_cache = MagicMock()
         mock_get_vault.return_value = mock_vault
 
-        # Mock task
-        mock_task = Mock()
-
-        result = rotate_jwt_secret(mock_task)
+        # Les fonctions sont des tâches Celery avec bind=True, donc self est automatique
+        # On appelle directement sans argument
+        result = rotate_jwt_secret()
 
         assert result["status"] == "success"
         assert result["environment"] == "dev"
@@ -148,10 +143,9 @@ class TestRotateJWTSecret:
         # Mock Vault indisponible
         mock_get_vault.return_value = None
 
-        # Mock task
-        mock_task = Mock()
-
-        result = rotate_jwt_secret(mock_task)
+        # Les fonctions sont des tâches Celery avec bind=True, donc self est automatique
+        # On appelle directement sans argument
+        result = rotate_jwt_secret()
 
         assert result["status"] == "skipped"
         assert result["reason"] == "vault_not_available"
@@ -178,10 +172,9 @@ class TestRotateEncryptionKey:
         mock_vault.clear_cache = MagicMock()
         mock_get_vault.return_value = mock_vault
 
-        # Mock task
-        mock_task = Mock()
-
-        result = rotate_encryption_key(mock_task)
+        # Les fonctions sont des tâches Celery avec bind=True, donc self est automatique
+        # On appelle directement sans argument
+        result = rotate_encryption_key()
 
         assert result["status"] == "success"
         assert result["environment"] == "dev"
@@ -213,10 +206,9 @@ class TestRotateEncryptionKey:
         mock_vault.clear_cache = MagicMock()
         mock_get_vault.return_value = mock_vault
 
-        # Mock task
-        mock_task = Mock()
-
-        result = rotate_encryption_key(mock_task)
+        # Les fonctions sont des tâches Celery avec bind=True, donc self est automatique
+        # On appelle directement sans argument
+        result = rotate_encryption_key()
 
         assert result["status"] == "success"
         assert (
@@ -242,10 +234,9 @@ class TestRotateAllSecrets:
         mock_rotate_jwt.return_value = {"status": "success"}
         mock_rotate_encryption.return_value = {"status": "success"}
 
-        # Mock task
-        mock_task = Mock()
-
-        result = rotate_all_secrets(mock_task)
+        # Les fonctions sont des tâches Celery avec bind=True, donc self est automatique
+        # On appelle directement sans argument
+        result = rotate_all_secrets()
 
         assert result["status"] == "completed"
         assert result["success_count"] == 3
@@ -265,10 +256,9 @@ class TestRotateAllSecrets:
         mock_rotate_jwt.return_value = {"status": "error", "error": "Vault unavailable"}
         mock_rotate_encryption.return_value = {"status": "success"}
 
-        # Mock task
-        mock_task = Mock()
-
-        result = rotate_all_secrets(mock_task)
+        # Les fonctions sont des tâches Celery avec bind=True, donc self est automatique
+        # On appelle directement sans argument
+        result = rotate_all_secrets()
 
         assert result["status"] == "completed"
         assert result["success_count"] == 2
@@ -290,10 +280,9 @@ class TestRotateAllSecrets:
             "error": "Network error",
         }
 
-        # Mock task
-        mock_task = Mock()
-
-        result = rotate_all_secrets(mock_task)
+        # Les fonctions sont des tâches Celery avec bind=True, donc self est automatique
+        # On appelle directement sans argument
+        result = rotate_all_secrets()
 
         assert result["status"] == "completed"
         assert result["success_count"] == 1
@@ -310,11 +299,10 @@ class TestRotateAllSecrets:
         # Mock exception
         mock_rotate_flask.side_effect = Exception("Unexpected error")
 
-        # Mock task
-        mock_task = Mock()
-
+        # Les fonctions sont des tâches Celery avec bind=True, donc self est automatique
+        # On appelle directement sans argument
         with pytest.raises(Exception, match="Unexpected error"):
-            rotate_all_secrets(mock_task)
+            rotate_all_secrets()
 
 
 class TestRotateSecretCacheClear:
@@ -338,10 +326,9 @@ class TestRotateSecretCacheClear:
         mock_vault.clear_cache = MagicMock()
         mock_get_vault.return_value = mock_vault
 
-        # Mock task
-        mock_task = Mock()
-
-        rotate_flask_secret_key(mock_task)
+        # Les fonctions sont des tâches Celery avec bind=True, donc self est automatique
+        # On appelle directement sans argument
+        rotate_flask_secret_key()
 
         # Vérifier que clear_cache a été appelé
         mock_vault.clear_cache.assert_called_once()

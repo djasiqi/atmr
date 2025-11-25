@@ -2,6 +2,8 @@
 
 from datetime import datetime
 
+import pytest
+
 from services.rl.shadow_mode_manager import ShadowModeManager
 
 
@@ -12,16 +14,16 @@ class TestShadowModeManagerComprehensive:
         """Test initialisation basique."""
         manager = ShadowModeManager()
 
-        assert manager.company_id is None
-        assert manager.decision_logs == []
-        assert manager.kpis == {}
-        assert manager.start_time is not None
+        assert manager.data_dir is not None
+        assert manager.decision_metadata is not None
+        assert manager.kpi_metrics is not None
+        assert manager.logger is not None
 
-    def test_init_with_company_id(self):
-        """Test initialisation avec company_id."""
-        manager = ShadowModeManager(company_id=0.123)
+    def test_init_with_custom_data_dir(self):
+        """Test initialisation avec data_dir personnalisé."""
+        manager = ShadowModeManager(data_dir="custom/path")
 
-        assert manager.company_id == 123
+        assert str(manager.data_dir) == "custom/path"
 
     def test_setup_logging(self):
         """Test configuration logging."""
@@ -41,19 +43,18 @@ class TestShadowModeManagerComprehensive:
         context = {"booking_id": 1, "pickup_time": datetime.now(), "distance_km": 5.0}
 
         manager.log_decision_comparison(
-            company_id=1,
-            booking_id=1,
+            company_id="1",
+            booking_id="1",
             human_decision=human_decision,
             rl_decision=rl_decision,
             context=context,
         )
 
-        assert len(manager.decision_logs) == 1
-        log_entry = manager.decision_logs[0]
-        assert log_entry["company_id"] == 1
-        assert log_entry["booking_id"] == 1
-        assert log_entry["human_driver_id"] == 1
-        assert log_entry["rl_driver_id"] == 2
+        assert len(manager.decision_metadata["company_id"]) == 1
+        assert manager.decision_metadata["company_id"][0] == "1"
+        assert manager.decision_metadata["booking_id"][0] == "1"
+        assert manager.decision_metadata["human_decision"][0]["driver_id"] == 1
+        assert manager.decision_metadata["rl_decision"][0]["driver_id"] == 2
 
     def test_log_decision_comparison_with_none_values(self):
         """Test logging avec valeurs None."""
@@ -66,14 +67,14 @@ class TestShadowModeManagerComprehensive:
         context = {"booking_id": 1, "pickup_time": datetime.now(), "distance_km": 5.0}
 
         manager.log_decision_comparison(
-            company_id=1,
-            booking_id=1,
+            company_id="1",
+            booking_id="1",
             human_decision=human_decision,
             rl_decision=rl_decision,
             context=context,
         )
 
-        assert len(manager.decision_logs) == 1
+        assert len(manager.decision_metadata["company_id"]) == 1
 
     def test_calculate_kpis_basic(self):
         """Test calcul KPIs basique."""
@@ -786,8 +787,8 @@ class TestShadowModeManagerComprehensive:
         assert kpis["total_decisions"] == 3
         assert kpis["rl_wins"] == 1
         assert kpis["human_wins"] == 1
-        assert kpis["rl_win_rate"] == 1 / 3
-        assert kpis["avg_human_eta"] == 17.67  # (20+15+18)/3
-        assert kpis["avg_rl_eta"] == 17.67  # (15+20+18)/3
-        assert kpis["avg_human_delay"] == 3.33  # (5+2+3)/3
-        assert kpis["avg_rl_delay"] == 3.33  # (2+5+3)/3
+        assert kpis["rl_win_rate"] == pytest.approx(1 / 3)
+        assert kpis["avg_human_eta"] == pytest.approx(17.67, abs=0.01)  # (20+15+18)/3
+        assert kpis["avg_rl_eta"] == pytest.approx(17.67, abs=0.01)  # (15+20+18)/3
+        assert kpis["avg_human_delay"] == pytest.approx(3.33, abs=0.01)  # (5+2+3)/3
+        assert kpis["avg_rl_delay"] == pytest.approx(3.33, abs=0.01)  # (2+5+3)/3

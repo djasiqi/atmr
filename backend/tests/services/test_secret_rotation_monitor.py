@@ -148,6 +148,10 @@ class TestGetRotationStats:
     def test_get_rotation_stats_empty(self, app):
         """Test statistiques avec base vide."""
         with app.app_context():
+            # Nettoyer toutes les rotations existantes pour ce test
+            SecretRotation.query.delete()
+            db.session.commit()
+
             stats = get_rotation_stats()
 
             assert stats["total_rotations"] == 0
@@ -214,11 +218,18 @@ class TestGetDaysSinceLastRotation:
     def test_get_days_since_last_rotation_exists(self, app):
         """Test calcul jours depuis dernière rotation."""
         with app.app_context():
+            # Nettoyer les rotations existantes pour ce test
+            SecretRotation.query.filter(
+                SecretRotation.secret_type == "jwt",
+                SecretRotation.environment == "prod",
+            ).delete()
+            db.session.commit()
+
             # Créer une rotation il y a 5 jours
             rotation = SecretRotation(
                 secret_type="jwt",
                 status="success",
-                rotated_at=datetime.now(UTC) - timedelta(days=5),
+                rotated_at=datetime.now(UTC) - timedelta(days=5, hours=12),
                 environment="prod",
             )
             db.session.add(rotation)
@@ -227,7 +238,10 @@ class TestGetDaysSinceLastRotation:
             days = get_days_since_last_rotation("jwt", environment="prod")
 
             assert days is not None
-            assert days >= 4  # Peut être 4 ou 5 selon timing
+            # delta.days peut être 4 ou 5 selon le timing exact
+            # On accepte 4 ou 5 pour être sûr
+            assert days >= 4
+            assert days <= 5
 
     def test_get_days_since_last_rotation_not_exists(self, app):
         """Test calcul jours sans rotation existante."""
@@ -239,13 +253,20 @@ class TestGetDaysSinceLastRotation:
     def test_get_days_since_last_rotation_only_success(self, app):
         """Test que seules les rotations réussies sont comptées."""
         with app.app_context():
+            # Nettoyer les rotations existantes pour ce test
+            SecretRotation.query.filter(
+                SecretRotation.secret_type == "jwt",
+                SecretRotation.environment == "prod",
+            ).delete()
+            db.session.commit()
+
             # Créer une rotation en erreur récente
             record_rotation("jwt", "error", "prod")
             # Créer une rotation réussie il y a 10 jours
             rotation = SecretRotation(
                 secret_type="jwt",
                 status="success",
-                rotated_at=datetime.now(UTC) - timedelta(days=10),
+                rotated_at=datetime.now(UTC) - timedelta(days=10, hours=12),
                 environment="prod",
             )
             db.session.add(rotation)
@@ -254,4 +275,7 @@ class TestGetDaysSinceLastRotation:
             days = get_days_since_last_rotation("jwt", environment="prod")
 
             assert days is not None
-            assert days >= 9  # Doit ignorer l'erreur et prendre le succès
+            # delta.days peut être 9 ou 10 selon le timing exact
+            # Doit ignorer l'erreur et prendre le succès
+            assert days >= 9
+            assert days <= 10
