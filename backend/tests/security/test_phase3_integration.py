@@ -147,9 +147,8 @@ class TestAdminIPWhitelistIntegration:
 
     @patch("security.ip_whitelist.request")
     @patch("security.ip_whitelist.os.getenv")
-    def test_admin_ip_whitelist_integration(
-        self, mock_getenv, mock_request, client, admin_user_token
-    ):
+    @pytest.mark.usefixtures("admin_user_token")
+    def test_admin_ip_whitelist_integration(self, mock_getenv, mock_request, client):
         """Test IP whitelist sur endpoint admin."""
         # Mock request avec IP autorisée
         mock_request.environ = {"REMOTE_ADDR": "192.168.1.100"}
@@ -168,9 +167,8 @@ class TestAdminIPWhitelistIntegration:
 
     @patch("security.ip_whitelist.request")
     @patch("security.ip_whitelist.os.getenv")
-    def test_admin_ip_whitelist_blocked(
-        self, mock_getenv, mock_request, client, admin_user_token
-    ):
+    @pytest.mark.usefixtures("admin_user_token")
+    def test_admin_ip_whitelist_blocked(self, mock_getenv, mock_request, client):
         """Test IP whitelist bloque accès non autorisé."""
         # Mock request avec IP non autorisée
         mock_request.environ = {"REMOTE_ADDR": "10.0.0.1"}
