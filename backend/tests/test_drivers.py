@@ -6,14 +6,14 @@ from models import Driver, UserRole
 
 
 def test_list_drivers_unauthenticated(client):
-    """GET /drivers sans authentification renvoie 401."""
-    response = client.get("/api/drivers/")
+    """GET /api/v1/driver sans authentification renvoie 401."""
+    response = client.get("/api/v1/driver/")
     assert response.status_code == 401
 
 
 def test_list_drivers_authenticated(client, auth_headers):
-    """GET /drivers avec authentification renvoie liste."""
-    response = client.get("/api/drivers/", headers=auth_headers)
+    """GET /api/v1/driver avec authentification renvoie liste."""
+    response = client.get("/api/v1/driver/", headers=auth_headers)
     # Peut être 200 ou 404 selon si route existe
     assert response.status_code in [200, 404, 405]
 
@@ -26,12 +26,13 @@ def test_driver_has_user_relationship(db, sample_driver):
     assert driver.user.role == UserRole.driver
 
 
-def test_driver_has_company_relationship(db, sample_driver, sample_company):
+def test_driver_has_company_relationship(db, sample_driver):
     """Driver a une relation avec Company."""
     driver = Driver.query.get(sample_driver.id)
     assert driver is not None
-    assert driver.company_id == sample_company.id
+    assert driver.company_id is not None
     assert driver.company is not None
+    assert driver.company_id == driver.company.id
 
 
 def test_driver_availability_flag(db, sample_driver):
@@ -65,8 +66,14 @@ def test_available_drivers_query(db, sample_driver):
     assert sample_driver in available
 
 
-def test_drivers_by_company(db, sample_driver, sample_company):
+def test_drivers_by_company(db, sample_driver):
     """Requête chauffeurs par entreprise."""
-    drivers = Driver.query.filter_by(company_id=sample_company.id).all()
+    # Utiliser la company du driver au lieu de sample_company
+    # car DriverFactory crée sa propre company
+    driver = Driver.query.get(sample_driver.id)
+    assert driver is not None
+    assert driver.company_id is not None
+
+    drivers = Driver.query.filter_by(company_id=driver.company_id).all()
     assert len(drivers) > 0
     assert sample_driver in drivers

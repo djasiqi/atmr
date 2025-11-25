@@ -53,6 +53,17 @@ def _ensure_company_visible(db, company):
     return company
 
 
+def _prepare_company_for_engine_run(db, company):
+    """Helper pour préparer une company avant d'appeler engine.run().
+
+    S'assure que la company est commitée pour éviter qu'elle soit expirée
+    par le rollback défensif de engine.run().
+    """
+    company = _ensure_company_visible(db, company)
+    db.session.commit()
+    return company
+
+
 class TestEnginePublicAPI:
     """Tests pour l'API publique de l'engine (fonction run)."""
 
@@ -91,6 +102,9 @@ class TestEnginePublicAPI:
         company = scenario["company"]
         day = scenario["dispatch_run"].day
 
+        # ✅ FIX: S'assurer que la company est commitée avant engine.run()
+        company = _prepare_company_for_engine_run(db, company)
+
         result = engine.run(
             company_id=company.id, for_date=day.isoformat(), mode="heuristic_only"
         )
@@ -108,6 +122,9 @@ class TestEnginePublicAPI:
         scenario = dispatch_scenario
         company = scenario["company"]
         day = scenario["dispatch_run"].day
+
+        # ✅ FIX: S'assurer que la company est commitée avant engine.run()
+        company = _prepare_company_for_engine_run(db, company)
 
         result = engine.run(
             company_id=company.id,
@@ -128,6 +145,9 @@ class TestEnginePublicAPI:
         company = scenario["company"]
         day = scenario["dispatch_run"].day
 
+        # ✅ FIX: S'assurer que la company est commitée avant engine.run()
+        company = _prepare_company_for_engine_run(db, company)
+
         overrides = {"features": {"enable_heuristics": True, "enable_solver": False}}
 
         result = engine.run(
@@ -146,6 +166,9 @@ class TestEnginePublicAPI:
         company = scenario["company"]
         day = scenario["dispatch_run"].day
 
+        # ✅ FIX: S'assurer que la company est commitée avant engine.run()
+        company = _prepare_company_for_engine_run(db, company)
+
         result = engine.run(
             company_id=company.id, for_date=day.isoformat(), mode="heuristic_only"
         )
@@ -159,6 +182,9 @@ class TestEnginePublicAPI:
         scenario = dispatch_scenario
         company = scenario["company"]
         day = scenario["dispatch_run"].day
+
+        # ✅ FIX: S'assurer que la company est commitée avant engine.run()
+        company = _prepare_company_for_engine_run(db, company)
 
         # Mock solver pour éviter calcul lourd
         with patch("services.unified_dispatch.engine.solver") as mock_solver:
@@ -180,6 +206,9 @@ class TestEnginePublicAPI:
         scenario = dispatch_scenario
         company = scenario["company"]
         day = date.today()
+
+        # ✅ FIX: S'assurer que la company est commitée avant engine.run()
+        company = _prepare_company_for_engine_run(db, company)
 
         # Supprimer le dispatch_run existant
         DispatchRun.query.filter_by(company_id=company.id, day=day).delete()
@@ -210,20 +239,8 @@ class TestEnginePublicAPI:
         company = scenario["company"]
         day = scenario["dispatch_run"].day
 
-        # ✅ FIX: S'assurer que la company est visible dans la session
-        # avant d'appeler engine.run()
-        # Utiliser merge() pour s'assurer que la company est attachée à la session
-        db.session.merge(company)
-        db.session.flush()
-        # Recharger la company depuis la DB pour s'assurer qu'elle est visible
-        company_id = company.id
-        company = db.session.get(Company, company_id)
-        if company is None:
-            # Si get() ne fonctionne pas, essayer avec query
-            company = Company.query.filter_by(id=company_id).first()
-        assert company is not None, (
-            f"Company {company_id} doit être visible avant engine.run()"
-        )
+        # ✅ FIX: S'assurer que la company est commitée avant engine.run()
+        company = _prepare_company_for_engine_run(db, company)
 
         result = engine.run(
             company_id=company.id, for_date=day.isoformat(), mode="heuristic_only"
@@ -278,13 +295,15 @@ class TestEngineInternalFunctions:
 
     def test_in_tx(self, db):
         """Test _in_tx détecte transaction active."""
+        from services.unified_dispatch.transaction_helpers import _in_tx
+
         # Hors transaction
-        result = engine._in_tx()
+        result = _in_tx()
         assert isinstance(result, bool)
 
         # Dans transaction
         db.session.begin_nested()
-        result = engine._in_tx()
+        result = _in_tx()
         assert isinstance(result, bool)
         db.session.rollback()
 
@@ -403,6 +422,10 @@ class TestEngineApplyAndEmit:
         driver = scenario["drivers"][0]
         dispatch_run = scenario["dispatch_run"]
 
+        # ✅ FIX: S'assurer que les objets sont commités avant d'appeler _apply_and_emit
+        company = _ensure_company_visible(db, company)
+        db.session.commit()
+
         # Créer un mock assignment
         from services.unified_dispatch.solver import SolverAssignment
 
@@ -445,6 +468,9 @@ class TestEngineEdgeCases:
         scenario = dispatch_scenario
         company = scenario["company"]
 
+        # ✅ FIX: S'assurer que la company est commitée avant engine.run()
+        company = _prepare_company_for_engine_run(db, company)
+
         result = engine.run(
             company_id=company.id, for_date="invalid-date", mode="heuristic_only"
         )
@@ -459,8 +485,8 @@ class TestEngineEdgeCases:
         company = scenario["company"]
         day = scenario["dispatch_run"].day
 
-        # ✅ FIX: S'assurer que la company est visible dans la session
-        company = _ensure_company_visible(db, company)
+        # ✅ FIX: S'assurer que la company est commitée avant engine.run()
+        company = _prepare_company_for_engine_run(db, company)
 
         # Acquérir le verrou manuellement
         lock_acquired = engine._acquire_day_lock(company.id, day.isoformat())
@@ -484,8 +510,8 @@ class TestEngineEdgeCases:
         company = scenario["company"]
         day = scenario["dispatch_run"].day
 
-        # ✅ FIX: S'assurer que la company est visible dans la session
-        company = _ensure_company_visible(db, company)
+        # ✅ FIX: S'assurer que la company est commitée avant engine.run()
+        company = _prepare_company_for_engine_run(db, company)
 
         # Mock data.build_problem_data pour lever une exception
         with patch(
@@ -511,8 +537,8 @@ class TestEngineEdgeCases:
         company = scenario["company"]
         day = scenario["dispatch_run"].day
 
-        # ✅ FIX: S'assurer que la company est visible dans la session
-        company = _ensure_company_visible(db, company)
+        # ✅ FIX: S'assurer que la company est commitée avant engine.run()
+        company = _prepare_company_for_engine_run(db, company)
 
         # Mock pour retourner problem vide
         with patch(
@@ -548,6 +574,9 @@ class TestEngineAdditionalCoverage:
         company = scenario["company"]
         day = scenario["dispatch_run"].day
 
+        # ✅ FIX: S'assurer que la company est commitée avant engine.run()
+        company = _prepare_company_for_engine_run(db, company)
+
         # Test chaque mode
         for mode in ["heuristic_only", "solver_only", "hybrid"]:
             result = engine.run(
@@ -566,6 +595,9 @@ class TestEngineAdditionalCoverage:
         scenario = dispatch_scenario
         company = scenario["company"]
         day = scenario["dispatch_run"].day
+
+        # ✅ FIX: S'assurer que la company est commitée avant engine.run()
+        company = _prepare_company_for_engine_run(db, company)
 
         overrides = {
             "features": {"enable_heuristics": True},
@@ -588,6 +620,9 @@ class TestEngineAdditionalCoverage:
         company = scenario["company"]
         day = scenario["dispatch_run"].day
 
+        # ✅ FIX: S'assurer que la company est commitée avant engine.run()
+        company = _prepare_company_for_engine_run(db, company)
+
         result = engine.run(
             company_id=company.id,
             for_date=day.isoformat(),
@@ -599,13 +634,13 @@ class TestEngineAdditionalCoverage:
         print("✅ Test allow_emergency OK")
 
     def test_begin_tx(self):
-        """Test _begin_tx detection."""
-        # En dehors de transaction
-        result1 = engine._begin_tx()
-        # Devrait retourner quelque chose (True/False ou None)
-        assert (
-            result1 is not None or result1 is None
-        )  # Juste tester que ça ne crash pas
+        """Test _begin_tx comme context manager."""
+        from services.unified_dispatch.transaction_helpers import _begin_tx
+
+        # Tester que _begin_tx peut être utilisé comme context manager
+        with _begin_tx():
+            # Dans transaction
+            pass
 
         print("✅ Test _begin_tx OK")
 
@@ -635,6 +670,9 @@ class TestEngineAdditionalCoverage:
         scenario = dispatch_scenario
         company = scenario["company"]
         day = scenario["dispatch_run"].day
+
+        # ✅ FIX: S'assurer que la company est commitée avant engine.run()
+        company = _prepare_company_for_engine_run(db, company)
 
         result = engine.run(
             company_id=company.id,

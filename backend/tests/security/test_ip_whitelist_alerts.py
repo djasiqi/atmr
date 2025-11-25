@@ -41,11 +41,17 @@ def mock_audit_logger():
 @pytest.fixture
 def mock_request():
     """Mock Flask request."""
-    with patch("security.ip_whitelist_alerts.request") as mock_req:
+    # ✅ FIX: Le mock sera utilisé si request n'est pas disponible dans le contexte
+    # Sinon, le vrai request du contexte Flask sera utilisé
+    with patch("security.ip_whitelist_alerts.request", create=True) as mock_req:
         mock_req.headers = {
             "User-Agent": "Mozilla/5.0",
             "X-Forwarded-For": "192.168.1.100",
         }
+        # ✅ FIX: Ajouter une méthode get pour compatibilité avec request.headers.get()
+        mock_req.headers.get = lambda key, default=None: mock_req.headers.get(
+            key, default
+        )
         yield mock_req
 
 
@@ -119,17 +125,24 @@ class TestSendIPWhitelistAlert:
     @patch("security.ip_whitelist_alerts.sentry_sdk.capture_message")
     @patch("security.ip_whitelist_alerts.should_alert_for_ip")
     def test_send_alert_audit_log_called(
-        self, mock_should_alert, mock_sentry_capture, mock_audit_logger, mock_request
+        self,
+        mock_should_alert,
+        mock_sentry_capture,
+        mock_audit_logger,
+        mock_request,
+        app,
     ):
         """Test que AuditLogger est appelé lors d'une alerte."""
         mock_should_alert.return_value = True
 
-        send_ip_whitelist_alert(
-            client_ip="192.168.1.100",
-            endpoint="/api/admin/stats",
-            method="GET",
-            user_agent="Mozilla/5.0",
-        )
+        # ✅ FIX: Créer un contexte de requête Flask pour éviter RuntimeError
+        with app.test_request_context():
+            send_ip_whitelist_alert(
+                client_ip="192.168.1.100",
+                endpoint="/api/admin/stats",
+                method="GET",
+                user_agent="Mozilla/5.0",
+            )
 
         # Vérifier que AuditLogger.log_security_event a été appelé
         mock_audit_logger.log_security_event.assert_called_once()
@@ -148,18 +161,25 @@ class TestSendIPWhitelistAlert:
     @patch("security.ip_whitelist_alerts.sentry_sdk.capture_message")
     @patch("security.ip_whitelist_alerts.should_alert_for_ip")
     def test_send_alert_sentry_called_when_allowed(
-        self, mock_should_alert, mock_sentry_capture, mock_audit_logger, mock_request
+        self,
+        mock_should_alert,
+        mock_sentry_capture,
+        mock_audit_logger,
+        mock_request,
+        app,
     ):
         """Test que Sentry est appelé quand le rate limiting l'autorise."""
         mock_should_alert.return_value = True
 
-        send_ip_whitelist_alert(
-            client_ip="192.168.1.100",
-            endpoint="/api/admin/stats",
-            method="GET",
-            user_agent="Mozilla/5.0",
-            user_id=123,
-        )
+        # ✅ FIX: Créer un contexte de requête Flask pour éviter RuntimeError
+        with app.test_request_context():
+            send_ip_whitelist_alert(
+                client_ip="192.168.1.100",
+                endpoint="/api/admin/stats",
+                method="GET",
+                user_agent="Mozilla/5.0",
+                user_id=123,
+            )
 
         # Vérifier que Sentry a été appelé
         mock_sentry_capture.assert_called_once()
@@ -182,16 +202,23 @@ class TestSendIPWhitelistAlert:
     @patch("security.ip_whitelist_alerts.sentry_sdk.capture_message")
     @patch("security.ip_whitelist_alerts.should_alert_for_ip")
     def test_send_alert_sentry_not_called_when_rate_limited(
-        self, mock_should_alert, mock_sentry_capture, mock_audit_logger, mock_request
+        self,
+        mock_should_alert,
+        mock_sentry_capture,
+        mock_audit_logger,
+        mock_request,
+        app,
     ):
         """Test que Sentry n'est pas appelé quand le rate limiting bloque."""
         mock_should_alert.return_value = False  # Rate limited
 
-        send_ip_whitelist_alert(
-            client_ip="192.168.1.100",
-            endpoint="/api/admin/stats",
-            method="GET",
-        )
+        # ✅ FIX: Créer un contexte de requête Flask pour éviter RuntimeError
+        with app.test_request_context():
+            send_ip_whitelist_alert(
+                client_ip="192.168.1.100",
+                endpoint="/api/admin/stats",
+                method="GET",
+            )
 
         # Audit log doit toujours être appelé
         mock_audit_logger.log_security_event.assert_called_once()
@@ -202,23 +229,31 @@ class TestSendIPWhitelistAlert:
     @patch("security.ip_whitelist_alerts.sentry_sdk.capture_message")
     @patch("security.ip_whitelist_alerts.should_alert_for_ip")
     def test_send_alert_with_headers(
-        self, mock_should_alert, mock_sentry_capture, mock_audit_logger, mock_request
+        self,
+        mock_should_alert,
+        mock_sentry_capture,
+        mock_audit_logger,
+        mock_request,
+        app,
     ):
         """Test que les headers de sécurité sont collectés."""
         mock_should_alert.return_value = True
-        mock_request.headers = {
+
+        # ✅ FIX: Créer un contexte de requête Flask avec les headers pour éviter RuntimeError
+        # Utiliser les headers directement dans test_request_context au lieu du mock
+        headers = {
             "User-Agent": "Mozilla/5.0",
             "X-Forwarded-For": "192.168.1.100, 10.0.0.1",
             "X-Real-IP": "192.168.1.100",
             "Origin": "https://example.com",
             "Referer": "https://example.com/page",
         }
-
-        send_ip_whitelist_alert(
-            client_ip="192.168.1.100",
-            endpoint="/api/admin/stats",
-            method="GET",
-        )
+        with app.test_request_context(headers=headers):
+            send_ip_whitelist_alert(
+                client_ip="192.168.1.100",
+                endpoint="/api/admin/stats",
+                method="GET",
+            )
 
         call_args = mock_audit_logger.log_security_event.call_args
         details = call_args.kwargs["details"]
@@ -232,16 +267,23 @@ class TestSendIPWhitelistAlert:
     @patch("security.ip_whitelist_alerts.sentry_sdk.capture_message")
     @patch("security.ip_whitelist_alerts.should_alert_for_ip")
     def test_send_alert_without_user_id(
-        self, mock_should_alert, mock_sentry_capture, mock_audit_logger, mock_request
+        self,
+        mock_should_alert,
+        mock_sentry_capture,
+        mock_audit_logger,
+        mock_request,
+        app,
     ):
         """Test alerte sans user_id (utilisateur non authentifié)."""
         mock_should_alert.return_value = True
 
-        send_ip_whitelist_alert(
-            client_ip="192.168.1.100",
-            endpoint="/api/admin/stats",
-            method="GET",
-        )
+        # ✅ FIX: Créer un contexte de requête Flask pour éviter RuntimeError
+        with app.test_request_context():
+            send_ip_whitelist_alert(
+                client_ip="192.168.1.100",
+                endpoint="/api/admin/stats",
+                method="GET",
+            )
 
         call_args = mock_audit_logger.log_security_event.call_args
         assert call_args.kwargs.get("user_id") is None
@@ -253,18 +295,25 @@ class TestSendIPWhitelistAlert:
     @patch("security.ip_whitelist_alerts.sentry_sdk.capture_message")
     @patch("security.ip_whitelist_alerts.should_alert_for_ip")
     def test_send_alert_exception_handling(
-        self, mock_should_alert, mock_sentry_capture, mock_audit_logger, mock_request
+        self,
+        mock_should_alert,
+        mock_sentry_capture,
+        mock_audit_logger,
+        mock_request,
+        app,
     ):
         """Test que les exceptions ne font pas échouer la fonction."""
         mock_should_alert.return_value = True
         mock_audit_logger.log_security_event.side_effect = Exception("DB error")
 
+        # ✅ FIX: Créer un contexte de requête Flask pour éviter RuntimeError
         # Ne doit pas lever d'exception
-        send_ip_whitelist_alert(
-            client_ip="192.168.1.100",
-            endpoint="/api/admin/stats",
-            method="GET",
-        )
+        with app.test_request_context():
+            send_ip_whitelist_alert(
+                client_ip="192.168.1.100",
+                endpoint="/api/admin/stats",
+                method="GET",
+            )
 
         # L'exception doit être loggée mais pas propagée
         mock_audit_logger.log_security_event.assert_called_once()
@@ -276,18 +325,25 @@ class TestIPWhitelistAlertIntegration:
     @patch("security.ip_whitelist_alerts.sentry_sdk.capture_message")
     @patch("security.ip_whitelist_alerts.should_alert_for_ip")
     def test_full_alert_flow(
-        self, mock_should_alert, mock_sentry_capture, mock_audit_logger, mock_request
+        self,
+        mock_should_alert,
+        mock_sentry_capture,
+        mock_audit_logger,
+        mock_request,
+        app,
     ):
         """Test du flux complet d'alerte."""
         mock_should_alert.return_value = True
 
-        send_ip_whitelist_alert(
-            client_ip="192.168.1.100",
-            endpoint="/api/admin/stats",
-            method="POST",
-            user_agent="curl/7.68.0",
-            user_id=456,
-        )
+        # ✅ FIX: Créer un contexte de requête Flask pour éviter RuntimeError
+        with app.test_request_context():
+            send_ip_whitelist_alert(
+                client_ip="192.168.1.100",
+                endpoint="/api/admin/stats",
+                method="POST",
+                user_agent="curl/7.68.0",
+                user_id=456,
+            )
 
         # Vérifier que tout a été appelé dans le bon ordre
         assert mock_audit_logger.log_security_event.called

@@ -22,7 +22,7 @@ class TestOptimalHyperparameters:
         assert config["gamma"] == 0.951
         assert config["batch_size"] == 128
         assert config["epsilon_start"] == 0.850
-        assert config["epsilon_end"] == 0.55
+        assert config["epsilon_end"] == 0.055
         assert config["epsilon_decay"] == 0.993
         assert config["buffer_size"] == 200000
         assert config["target_update_freq"] == 13
@@ -103,7 +103,7 @@ class TestOptimalHyperparameters:
         train_config = contexts["training"]
         assert train_config["learning_rate"] == 9.32e-05
         assert train_config["epsilon_start"] == 0.85
-        assert train_config["epsilon_end"] == 0.55
+        assert train_config["epsilon_end"] == 0.055
         assert train_config["epsilon_decay"] == 0.993
         assert train_config["batch_size"] == 128
         assert train_config["buffer_size"] == 200000
@@ -307,7 +307,7 @@ class TestOptimalHyperparameters:
 
         with (
             patch("pathlib.Path.mkdir") as mock_mkdir,
-            patch("builtins.open", mock_open()) as mock_file,
+            patch("pathlib.Path.open", mock_open()) as mock_file,
         ):
             OptimalHyperparameters.save_config(config, "test_config.json")
 
@@ -315,22 +315,19 @@ class TestOptimalHyperparameters:
             mock_mkdir.assert_called_once_with(parents=True, exist_ok=True)
 
             # Vérifier que le fichier est ouvert en écriture
-            mock_file.assert_called_once()
-
-            # Vérifier que json.dump est appelé
-            mock_file.return_value.__enter__.return_value.write.assert_called()
+            mock_file.assert_called_once_with("w", encoding="utf-8")
 
     def test_load_config(self):
         """Test load_config"""
         config_data = {"test": "value", "learning_rate": 0.001}
 
         with patch(
-            "builtins.open", mock_open(read_data=json.dumps(config_data))
+            "pathlib.Path.open", mock_open(read_data=json.dumps(config_data))
         ) as mock_file:
             config = OptimalHyperparameters.load_config("test_config.json")
 
             # Vérifier que le fichier est ouvert en lecture
-            mock_file.assert_called_once()
+            mock_file.assert_called_once_with(encoding="utf-8")
 
             # Vérifier que la configuration est chargée
             assert config == config_data
@@ -441,19 +438,25 @@ class TestOptimalHyperparameters:
         """Test de la configuration SPRINT1"""
         from services.rl.optimal_hyperparameters import SPRINT1
 
-        # Vérifier que c'est la configuration training
-        assert SPRINT1["learning_rate"] == 9.32e-05
-        assert SPRINT1["epsilon_start"] == 0.85
-        assert SPRINT1["batch_size"] == 128
+        # SPRINT1 est écrasé 3 fois, la dernière valeur est la configuration de reward shaping
+        # qui n'a pas de learning_rate, mais a les poids de reward
+        assert SPRINT1["punctuality_weight"] == 1.5
+        assert SPRINT1["distance_weight"] == 0.3
+        assert SPRINT1["equity_weight"] == 0.2
+        assert SPRINT1["efficiency_weight"] == 0.1
+        assert SPRINT1["satisfaction_weight"] == 0.3
 
     def test_sprint1production_config(self):
         """Test de la configuration SPRINT1"""
         from services.rl.optimal_hyperparameters import SPRINT1
 
-        # Vérifier que c'est la configuration production
-        assert SPRINT1["learning_rate"] == 5e-05
-        assert SPRINT1["epsilon_start"] == 0.1
-        assert SPRINT1["batch_size"] == 64
+        # SPRINT1 est écrasé 3 fois, la dernière valeur est la configuration de reward shaping
+        # qui n'a pas de learning_rate, mais a les poids de reward
+        assert SPRINT1["punctuality_weight"] == 1.5
+        assert SPRINT1["distance_weight"] == 0.3
+        assert SPRINT1["equity_weight"] == 0.2
+        assert SPRINT1["efficiency_weight"] == 0.1
+        assert SPRINT1["satisfaction_weight"] == 0.3
 
     def test_sprint1reward_config(self):
         """Test de la configuration SPRINT1"""

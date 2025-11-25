@@ -148,8 +148,11 @@ class TestGiniFairness:
         settings_fairness.multi_objective.fairness_weight = 0.8
 
         # Vérifier que les poids sont cohérents
-        assert settings_efficiency.multi_objective.efficiency_weight == 0.8
-        assert settings_fairness.multi_objective.efficiency_weight == 0.2
+        # Utiliser pytest.approx pour gérer la précision des nombres flottants
+        assert settings_efficiency.multi_objective.efficiency_weight == pytest.approx(
+            0.8
+        )
+        assert settings_fairness.multi_objective.efficiency_weight == pytest.approx(0.2)
 
         logger.info("✅ Test: Tradeoff équité vs efficacité fonctionnel")
 
@@ -219,8 +222,9 @@ class TestGiniFairness:
 
         # Vérifier changements sans redéploiement
         assert old_fairness != settings.multi_objective.fairness_weight
-        assert settings.multi_objective.fairness_weight == 0.7
-        assert settings.multi_objective.efficiency_weight == 0.3
+        assert settings.multi_objective.fairness_weight == pytest.approx(0.7)
+        # Utiliser pytest.approx pour gérer la précision des nombres flottants
+        assert settings.multi_objective.efficiency_weight == pytest.approx(0.3)
 
         logger.info(
             "✅ Test: Opérateur ajuste slider sans redéploiement (%.1f%% équité)",

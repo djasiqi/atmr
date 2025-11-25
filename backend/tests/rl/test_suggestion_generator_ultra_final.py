@@ -22,7 +22,7 @@ class TestRLSuggestionGeneratorUltraFinal:
     def test_init_default(self):
         """Test initialisation avec paramètres par défaut"""
         generator = RLSuggestionGenerator()
-        assert generator.model_path == "data/ml/dqn_agent_best_v3_3.pth"
+        assert generator.model_path == "data/ml/dqn_agent_best_v33.pth"
         assert generator.agent is None
         assert generator.env is None
 
@@ -37,7 +37,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         generator.agent = None
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+            company_id=1, assignments=[], drivers=[], for_date="2024-01-01"
         )
 
         assert isinstance(suggestions, list)
@@ -47,7 +47,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+            company_id=1, assignments=[], drivers=[], for_date="2024-01-01"
         )
 
         assert isinstance(suggestions, list)
@@ -57,7 +57,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+            company_id=1, assignments=[], drivers=[], for_date="2024-01-01"
         )
 
         assert isinstance(suggestions, list)
@@ -67,7 +67,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+            company_id=1, assignments=[], drivers=[], for_date="2024-01-01"
         )
 
         assert isinstance(suggestions, list)
@@ -77,7 +77,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+            company_id=1, assignments=[], drivers=[], for_date="2024-01-01"
         )
 
         assert isinstance(suggestions, list)
@@ -87,7 +87,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+            company_id=1, assignments=[], drivers=[], for_date="2024-01-01"
         )
 
         assert isinstance(suggestions, list)
@@ -97,7 +97,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+            company_id=1, assignments=[], drivers=[], for_date="2024-01-01"
         )
 
         assert isinstance(suggestions, list)
@@ -107,7 +107,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+            company_id=1, assignments=[], drivers=[], for_date="2024-01-01"
         )
 
         assert isinstance(suggestions, list)
@@ -120,7 +120,7 @@ class TestRLSuggestionGeneratorUltraFinal:
             company_id=1,
             assignments=[],
             drivers=[],
-            for_date="2024-0.1-0.1",
+            for_date="2024-01-01",
             min_confidence=1.5,  # Invalid confidence > 1
         )
 
@@ -134,7 +134,7 @@ class TestRLSuggestionGeneratorUltraFinal:
             company_id=1,
             assignments=[],
             drivers=[],
-            for_date="2024-0.1-0.1",
+            for_date="2024-01-01",
             max_suggestions=-1,  # Invalid negative value
         )
 
@@ -145,7 +145,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+            company_id=1, assignments=[], drivers=[], for_date="2024-01-01"
         )
 
         assert isinstance(suggestions, list)
@@ -155,7 +155,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+            company_id=1, assignments=[], drivers=[], for_date="2024-01-01"
         )
 
         assert isinstance(suggestions, list)
@@ -165,7 +165,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+            company_id=1, assignments=[], drivers=[], for_date="2024-01-01"
         )
 
         assert isinstance(suggestions, list)
@@ -175,7 +175,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+            company_id=1, assignments=[], drivers=[], for_date="2024-01-01"
         )
 
         assert isinstance(suggestions, list)
@@ -185,7 +185,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+            company_id=1, assignments=[], drivers=[], for_date="2024-01-01"
         )
 
         assert isinstance(suggestions, list)
@@ -195,7 +195,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+            company_id=1, assignments=[], drivers=[], for_date="2024-01-01"
         )
 
         assert isinstance(suggestions, list)
@@ -205,7 +205,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+            company_id=1, assignments=[], drivers=[], for_date="2024-01-01"
         )
 
         assert isinstance(suggestions, list)
@@ -215,7 +215,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+            company_id=1, assignments=[], drivers=[], for_date="2024-01-01"
         )
 
         assert isinstance(suggestions, list)
@@ -225,7 +225,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+            company_id=1, assignments=[], drivers=[], for_date="2024-01-01"
         )
 
         assert isinstance(suggestions, list)
@@ -235,7 +235,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+            company_id=1, assignments=[], drivers=[], for_date="2024-01-01"
         )
 
         assert isinstance(suggestions, list)
@@ -245,7 +245,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+            company_id=1, assignments=[], drivers=[], for_date="2024-01-01"
         )
 
         assert isinstance(suggestions, list)
@@ -255,7 +255,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+            company_id=1, assignments=[], drivers=[], for_date="2024-01-01"
         )
 
         assert isinstance(suggestions, list)
@@ -265,7 +265,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+            company_id=1, assignments=[], drivers=[], for_date="2024-01-01"
         )
 
         assert isinstance(suggestions, list)
@@ -275,7 +275,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+            company_id=1, assignments=[], drivers=[], for_date="2024-01-01"
         )
 
         assert isinstance(suggestions, list)
@@ -285,7 +285,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+            company_id=1, assignments=[], drivers=[], for_date="2024-01-01"
         )
 
         assert isinstance(suggestions, list)
@@ -295,7 +295,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+            company_id=1, assignments=[], drivers=[], for_date="2024-01-01"
         )
 
         assert isinstance(suggestions, list)
@@ -376,7 +376,7 @@ class TestDuelingQNetworkUltraFinal:
     def test_forward_with_different_parameters(self):
         """Test forward avec différents paramètres"""
         network = DuelingQNetwork(
-            state_dim=0.100,
+            state_dim=100,
             action_dim=20,
             shared_hidden_sizes=(128, 64),
             value_hidden_size=32,
@@ -650,7 +650,7 @@ class TestNoisyDuelingQNetworkUltraFinal:
 
     def test_forward_with_different_parameters(self):
         """Test forward avec différents paramètres"""
-        network = NoisyDuelingQNetwork(state_size=0.100, action_size=20)
+        network = NoisyDuelingQNetwork(state_size=100, action_size=20)
         state = torch.randn(1, 100)
         output = network(state)
         assert output.shape == (1, 20)
@@ -980,15 +980,52 @@ class TestOptimalHyperparametersUltraFinal:
 
     def test_save_config(self):
         """Test sauvegarde de configuration"""
+        import tempfile
+        from pathlib import Path
+
         config = {"test": "value"}
-        result = OptimalHyperparameters.save_config(config, "test_config.json")
-        # La méthode peut retourner None
-        assert result is None or result is True
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            patch("services.rl.optimal_hyperparameters.Path") as mock_path,
+        ):
+            # Patcher le chemin pour utiliser un répertoire temporaire
+            def path_side_effect(*args):
+                if len(args) == 1 and args[0] == "backend/data/rl/configs":
+                    return Path(tmpdir)
+                return Path(*args)
+
+            mock_path.side_effect = path_side_effect
+            OptimalHyperparameters.save_config(config, "test_config.json")
+            # Vérifier que le fichier a été créé
+            assert (Path(tmpdir) / "test_config.json").exists()
 
     def test_load_config(self):
         """Test chargement de configuration"""
-        config = OptimalHyperparameters.load_config("test_config.json")
-        assert isinstance(config, dict)
+        import json
+        import tempfile
+        from pathlib import Path
+
+        config = {"test": "value"}
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Créer un fichier de test
+            test_file = Path(tmpdir) / "test_config.json"
+            with test_file.open("w", encoding="utf-8") as f:
+                json.dump(config, f)
+
+            # Patcher le chemin pour utiliser le fichier temporaire
+            with patch("services.rl.optimal_hyperparameters.Path") as mock_path:
+
+                def path_side_effect(*args):
+                    if len(args) == 1 and args[0] == "backend/data/rl/configs":
+                        return Path(tmpdir)
+                    if len(args) == 2 and args[0] == "backend/data/rl/configs":
+                        return Path(tmpdir) / args[1]
+                    return Path(*args)
+
+                mock_path.side_effect = path_side_effect
+                loaded_config = OptimalHyperparameters.load_config("test_config.json")
+                assert isinstance(loaded_config, dict)
+                assert loaded_config == config
 
     def test_validate_config(self):
         """Test validation de configuration"""
@@ -1055,7 +1092,7 @@ class TestOptimalHyperparametersUltraFinal:
     def test_config_types(self):
         """Test types des configurations"""
         config = OptimalHyperparameters.get_optimal_config()
-        assert isinstance(config["learning_rate"], float)
+        assert isinstance(config["learning_rate"], (int, float))
         assert isinstance(config["batch_size"], int)
         assert isinstance(config["gamma"], float)
         assert isinstance(config["epsilon_start"], float)
@@ -1179,11 +1216,11 @@ class TestHyperparameterTunerUltraFinal:
 
         return MockTrial()
 
-    def _create_mock_env(self):
+    def _create_mock_env(self, num_drivers=5, max_bookings=10, **kwargs):
         """Créer un mock environnement pour les tests"""
 
         class MockEnv:
-            def __init__(self, **kwargs):
+            def __init__(self, num_drivers=5, max_bookings=10, **kwargs):
                 self.observation_space = type("obj", (object,), {"shape": [62]})()
                 self.action_space = type("obj", (object,), {"n": 51})()
 
@@ -1196,7 +1233,7 @@ class TestHyperparameterTunerUltraFinal:
             def close(self):
                 pass
 
-        return MockEnv()
+        return MockEnv(num_drivers=num_drivers, max_bookings=max_bookings, **kwargs)
 
     def _create_mock_agent(self):
         """Créer un mock agent pour les tests"""
@@ -1260,20 +1297,34 @@ class TestHyperparameterTunerUltraFinal:
 
     def test_save_best_params(self):
         """Test sauvegarde des meilleurs paramètres"""
+        import tempfile
+        from pathlib import Path
+
         tuner = HyperparameterTuner()
 
         # Mock study
+        class MockTrial:
+            def __init__(self, number):
+                self.number = number
+                self.value = 100.0
+                self.params = {"learning_rate": 0.0001, "batch_size": 32}
+                self.state = type("obj", (object,), {"name": "COMPLETE"})()
+
         class MockStudy:
             def __init__(self):
                 self.best_params = {"learning_rate": 0.0001, "batch_size": 32}
                 self.best_value = 100.0
                 self.n_trials = 10
-                self.best_trial = type("obj", (object,), {"number": 1})()
-                self.trials = []
+                self.best_trial = MockTrial(1)
+                self.trials = [MockTrial(i) for i in range(10)]
 
         study = MockStudy()
-        result = tuner.save_best_params(study, "test_params.json")
-        assert result is None  # La méthode retourne None
+        with tempfile.TemporaryDirectory() as tmpdir:
+            test_path = Path(tmpdir) / "test_params.json"
+            result = tuner.save_best_params(study, str(test_path))
+            assert result is None  # La méthode retourne None
+            # Vérifier que le fichier a été créé
+            assert test_path.exists()
 
 
 class TestShadowModeManagerUltraFinal:

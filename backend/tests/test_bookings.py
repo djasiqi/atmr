@@ -45,13 +45,13 @@ def sample_client(db, sample_company):
 
 def test_list_bookings_unauthenticated(client):
     """GET /bookings sans authentification renvoie 401."""
-    response = client.get("/api/bookings/")
+    response = client.get("/api/v1/bookings/")
     assert response.status_code == 401
 
 
 def test_list_bookings_authenticated(client, auth_headers, sample_user):
     """GET /bookings avec authentification renvoie liste de bookings."""
-    response = client.get("/api/bookings/", headers=auth_headers)
+    response = client.get("/api/v1/bookings/", headers=auth_headers)
     assert response.status_code == 200
     data = response.get_json()
     assert "bookings" in data
@@ -81,7 +81,7 @@ def test_list_bookings_pagination(
         db.session.add(booking)
     db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
-    response = client.get("/api/bookings/?page=1&per_page=10", headers=auth_headers)
+    response = client.get("/api/v1/bookings/?page=1&per_page=10", headers=auth_headers)
     assert response.status_code == 200
     data = response.get_json()
     assert "bookings" in data
@@ -113,7 +113,7 @@ def test_get_booking_details(
     db.session.add(booking)
     db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
-    response = client.get(f"/api/bookings/{booking.id}", headers=auth_headers)
+    response = client.get(f"/api/v1/bookings/{booking.id}", headers=auth_headers)
     assert response.status_code == 200
     data = response.get_json()
     assert data["customer_name"] == "Jean Dupont"

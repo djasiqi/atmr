@@ -14,8 +14,8 @@ class TestRLLoggerMinimal:
         """Test initialisation basique"""
         logger = RLLogger()
 
-        assert logger.redis_key_prefix == "rl_logs"
-        assert logger.max_redis_logs == 1000
+        assert logger.redis_key_prefix == "rl:decisions"
+        assert logger.max_redis_logs == 5000
         assert logger.enable_db_logging is True
         assert logger.enable_redis_logging is True
 

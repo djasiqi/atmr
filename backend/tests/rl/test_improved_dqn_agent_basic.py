@@ -27,8 +27,9 @@ class TestImprovedDQNAgent:
 
     def test_init_with_custom_params(self):
         """Test initialisation avec paramètres personnalisés"""
+        # ✅ FIX: state_dim doit être un int, pas un float
         agent = ImprovedDQNAgent(
-            state_dim=0.100,
+            state_dim=100,
             action_dim=20,
             learning_rate=0.0001,
             gamma=0.95,
@@ -272,7 +273,8 @@ class TestImprovedDQNAgent:
         action1 = agent1.select_action(state1)
 
         # Test avec grande dimension d'action
-        agent2 = ImprovedDQNAgent(state_dim=62, action_dim=0.100)
+        # ✅ FIX: action_dim doit être un int, pas un float
+        agent2 = ImprovedDQNAgent(state_dim=62, action_dim=100)
         state2 = np.random.rand(agent2.state_dim)
         action2 = agent2.select_action(state2)
 
@@ -289,7 +291,8 @@ class TestImprovedDQNAgent:
         action1 = agent1.select_action(state1)
 
         # Test avec grande dimension d'état
-        agent2 = ImprovedDQNAgent(state_dim=0.200, action_dim=51)
+        # ✅ FIX: state_dim doit être un int, pas un float
+        agent2 = ImprovedDQNAgent(state_dim=200, action_dim=51)
         state2 = np.random.rand(200)
         action2 = agent2.select_action(state2)
 

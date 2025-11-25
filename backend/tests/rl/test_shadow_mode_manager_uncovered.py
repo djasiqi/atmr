@@ -246,7 +246,12 @@ class TestShadowModeManagerUncovered:
             human_decision, rl_decision, context
         )
 
-        assert isinstance(impact, float)
+        assert isinstance(impact, dict)
+        assert "eta_improvement" in impact
+        assert "distance_improvement" in impact
+        assert "load_balance" in impact
+        assert "global_score" in impact
+        assert isinstance(impact["global_score"], float)
 
     def test_calculate_performance_impact_no_context(self):
         """Test calcul impact performance sans contexte."""
@@ -260,7 +265,12 @@ class TestShadowModeManagerUncovered:
             human_decision, rl_decision, context
         )
 
-        assert isinstance(impact, float)
+        assert isinstance(impact, dict)
+        assert "eta_improvement" in impact
+        assert "distance_improvement" in impact
+        assert "load_balance" in impact
+        assert "global_score" in impact
+        assert isinstance(impact["global_score"], float)
 
     def test_calculate_performance_impact_missing_values(self):
         """Test calcul impact performance avec valeurs manquantes."""
@@ -274,7 +284,12 @@ class TestShadowModeManagerUncovered:
             human_decision, rl_decision, context
         )
 
-        assert isinstance(impact, float)
+        assert isinstance(impact, dict)
+        assert "eta_improvement" in impact
+        assert "distance_improvement" in impact
+        assert "load_balance" in impact
+        assert "global_score" in impact
+        assert isinstance(impact["global_score"], float)
 
     def test_calculate_performance_impact_negative_values(self):
         """Test calcul impact performance avec valeurs négatives."""
@@ -288,7 +303,12 @@ class TestShadowModeManagerUncovered:
             human_decision, rl_decision, context
         )
 
-        assert isinstance(impact, float)
+        assert isinstance(impact, dict)
+        assert "eta_improvement" in impact
+        assert "distance_improvement" in impact
+        assert "load_balance" in impact
+        assert "global_score" in impact
+        assert isinstance(impact["global_score"], float)
 
     def test_calculate_performance_impact_large_values(self):
         """Test calcul impact performance avec valeurs importantes."""
@@ -302,7 +322,12 @@ class TestShadowModeManagerUncovered:
             human_decision, rl_decision, context
         )
 
-        assert isinstance(impact, float)
+        assert isinstance(impact, dict)
+        assert "eta_improvement" in impact
+        assert "distance_improvement" in impact
+        assert "load_balance" in impact
+        assert "global_score" in impact
+        assert isinstance(impact["global_score"], float)
 
     def test_calculate_performance_impact_zero_values(self):
         """Test calcul impact performance avec valeurs zéro."""
@@ -316,7 +341,12 @@ class TestShadowModeManagerUncovered:
             human_decision, rl_decision, context
         )
 
-        assert isinstance(impact, float)
+        assert isinstance(impact, dict)
+        assert "eta_improvement" in impact
+        assert "distance_improvement" in impact
+        assert "load_balance" in impact
+        assert "global_score" in impact
+        assert isinstance(impact["global_score"], float)
 
     def test_calculate_performance_impact_float_values(self):
         """Test calcul impact performance avec valeurs float."""
@@ -330,7 +360,12 @@ class TestShadowModeManagerUncovered:
             human_decision, rl_decision, context
         )
 
-        assert isinstance(impact, float)
+        assert isinstance(impact, dict)
+        assert "eta_improvement" in impact
+        assert "distance_improvement" in impact
+        assert "load_balance" in impact
+        assert "global_score" in impact
+        assert isinstance(impact["global_score"], float)
 
     def test_calculate_performance_impact_string_values(self):
         """Test calcul impact performance avec valeurs string."""
@@ -344,7 +379,12 @@ class TestShadowModeManagerUncovered:
             human_decision, rl_decision, context
         )
 
-        assert isinstance(impact, float)
+        assert isinstance(impact, dict)
+        assert "eta_improvement" in impact
+        assert "distance_improvement" in impact
+        assert "load_balance" in impact
+        assert "global_score" in impact
+        assert isinstance(impact["global_score"], float)
 
     def test_calculate_performance_impact_mixed_types(self):
         """Test calcul impact performance avec types mixtes."""
@@ -358,7 +398,12 @@ class TestShadowModeManagerUncovered:
             human_decision, rl_decision, context
         )
 
-        assert isinstance(impact, float)
+        assert isinstance(impact, dict)
+        assert "eta_improvement" in impact
+        assert "distance_improvement" in impact
+        assert "load_balance" in impact
+        assert "global_score" in impact
+        assert isinstance(impact["global_score"], float)
 
     def test_calculate_performance_impact_with_none_values(self):
         """Test calcul impact performance avec valeurs None."""
@@ -372,7 +417,12 @@ class TestShadowModeManagerUncovered:
             human_decision, rl_decision, context
         )
 
-        assert isinstance(impact, float)
+        assert isinstance(impact, dict)
+        assert "eta_improvement" in impact
+        assert "distance_improvement" in impact
+        assert "load_balance" in impact
+        assert "global_score" in impact
+        assert isinstance(impact["global_score"], float)
 
     def test_calculate_performance_impact_with_invalid_types(self):
         """Test calcul impact performance avec types invalides."""
@@ -386,7 +436,12 @@ class TestShadowModeManagerUncovered:
             human_decision, rl_decision, context
         )
 
-        assert isinstance(impact, float)
+        assert isinstance(impact, dict)
+        assert "eta_improvement" in impact
+        assert "distance_improvement" in impact
+        assert "load_balance" in impact
+        assert "global_score" in impact
+        assert isinstance(impact["global_score"], float)
 
     def test_calculate_performance_impact_with_boolean_values(self):
         """Test calcul impact performance avec valeurs booléennes."""
@@ -400,7 +455,12 @@ class TestShadowModeManagerUncovered:
             human_decision, rl_decision, context
         )
 
-        assert isinstance(impact, float)
+        assert isinstance(impact, dict)
+        assert "eta_improvement" in impact
+        assert "distance_improvement" in impact
+        assert "load_balance" in impact
+        assert "global_score" in impact
+        assert isinstance(impact["global_score"], float)
 
     def test_calculate_performance_impact_with_empty_strings(self):
         """Test calcul impact performance avec chaînes vides."""
@@ -414,7 +474,12 @@ class TestShadowModeManagerUncovered:
             human_decision, rl_decision, context
         )
 
-        assert isinstance(impact, float)
+        assert isinstance(impact, dict)
+        assert "eta_improvement" in impact
+        assert "distance_improvement" in impact
+        assert "load_balance" in impact
+        assert "global_score" in impact
+        assert isinstance(impact["global_score"], float)
 
     def test_calculate_performance_impact_with_whitespace_strings(self):
         """Test calcul impact performance avec chaînes avec espaces."""
@@ -428,7 +493,12 @@ class TestShadowModeManagerUncovered:
             human_decision, rl_decision, context
         )
 
-        assert isinstance(impact, float)
+        assert isinstance(impact, dict)
+        assert "eta_improvement" in impact
+        assert "distance_improvement" in impact
+        assert "load_balance" in impact
+        assert "global_score" in impact
+        assert isinstance(impact["global_score"], float)
 
     def test_calculate_performance_impact_with_scientific_notation(self):
         """Test calcul impact performance avec notation scientifique."""
@@ -442,7 +512,12 @@ class TestShadowModeManagerUncovered:
             human_decision, rl_decision, context
         )
 
-        assert isinstance(impact, float)
+        assert isinstance(impact, dict)
+        assert "eta_improvement" in impact
+        assert "distance_improvement" in impact
+        assert "load_balance" in impact
+        assert "global_score" in impact
+        assert isinstance(impact["global_score"], float)
 
     def test_calculate_performance_impact_with_infinity_values(self):
         """Test calcul impact performance avec valeurs infinies."""
@@ -462,7 +537,12 @@ class TestShadowModeManagerUncovered:
             human_decision, rl_decision, context
         )
 
-        assert isinstance(impact, float)
+        assert isinstance(impact, dict)
+        assert "eta_improvement" in impact
+        assert "distance_improvement" in impact
+        assert "load_balance" in impact
+        assert "global_score" in impact
+        assert isinstance(impact["global_score"], float)
 
     def test_calculate_performance_impact_with_nan_values(self):
         """Test calcul impact performance avec valeurs NaN."""
@@ -481,7 +561,12 @@ class TestShadowModeManagerUncovered:
             human_decision, rl_decision, context
         )
 
-        assert isinstance(impact, float)
+        assert isinstance(impact, dict)
+        assert "eta_improvement" in impact
+        assert "distance_improvement" in impact
+        assert "load_balance" in impact
+        assert "global_score" in impact
+        assert isinstance(impact["global_score"], float)
 
     def test_calculate_performance_impact_with_extreme_values(self):
         """Test calcul impact performance avec valeurs extrêmes."""
@@ -495,7 +580,12 @@ class TestShadowModeManagerUncovered:
             human_decision, rl_decision, context
         )
 
-        assert isinstance(impact, float)
+        assert isinstance(impact, dict)
+        assert "eta_improvement" in impact
+        assert "distance_improvement" in impact
+        assert "load_balance" in impact
+        assert "global_score" in impact
+        assert isinstance(impact["global_score"], float)
 
     def test_calculate_performance_impact_with_very_small_values(self):
         """Test calcul impact performance avec valeurs très petites."""
@@ -509,7 +599,12 @@ class TestShadowModeManagerUncovered:
             human_decision, rl_decision, context
         )
 
-        assert isinstance(impact, float)
+        assert isinstance(impact, dict)
+        assert "eta_improvement" in impact
+        assert "distance_improvement" in impact
+        assert "load_balance" in impact
+        assert "global_score" in impact
+        assert isinstance(impact["global_score"], float)
 
     def test_calculate_performance_impact_with_very_large_values(self):
         """Test calcul impact performance avec valeurs très importantes."""
@@ -523,7 +618,12 @@ class TestShadowModeManagerUncovered:
             human_decision, rl_decision, context
         )
 
-        assert isinstance(impact, float)
+        assert isinstance(impact, dict)
+        assert "eta_improvement" in impact
+        assert "distance_improvement" in impact
+        assert "load_balance" in impact
+        assert "global_score" in impact
+        assert isinstance(impact["global_score"], float)
 
     def test_calculate_performance_impact_with_mixed_precision(self):
         """Test calcul impact performance avec précision mixte."""
@@ -541,7 +641,12 @@ class TestShadowModeManagerUncovered:
             human_decision, rl_decision, context
         )
 
-        assert isinstance(impact, float)
+        assert isinstance(impact, dict)
+        assert "eta_improvement" in impact
+        assert "distance_improvement" in impact
+        assert "load_balance" in impact
+        assert "global_score" in impact
+        assert isinstance(impact["global_score"], float)
 
     def test_calculate_performance_impact_with_complex_scenario(self):
         """Test calcul impact performance avec scénario complexe."""
@@ -585,4 +690,9 @@ class TestShadowModeManagerUncovered:
             human_decision, rl_decision, context
         )
 
-        assert isinstance(impact, float)
+        assert isinstance(impact, dict)
+        assert "eta_improvement" in impact
+        assert "distance_improvement" in impact
+        assert "load_balance" in impact
+        assert "global_score" in impact
+        assert isinstance(impact["global_score"], float)

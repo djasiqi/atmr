@@ -201,7 +201,8 @@ def purge_old_messages(
                 retention,
             )
 
-            old_messages = Message.query.filter(Message.created_at < cutoff_date).all()
+            # ✅ FIX: Message utilise 'timestamp' au lieu de 'created_at'
+            old_messages = Message.query.filter(Message.timestamp < cutoff_date).all()
 
             deleted_count = 0
             errors: list[dict[str, Any]] = []
@@ -609,9 +610,12 @@ def anonymize_old_user_data(
             )
 
             # Utilisateurs inactifs depuis > retention
+            # ✅ FIX: Utiliser l'enum UserRole.admin au lieu de la chaîne "admin"
+            from models import UserRole
+
             old_inactive_users = User.query.filter(
                 User.created_at < cutoff_date,
-                User.role != "admin",  # Ne pas anonymiser les admins
+                User.role != UserRole.admin,  # Ne pas anonymiser les admins
             ).all()
 
             anonymized_count = 0

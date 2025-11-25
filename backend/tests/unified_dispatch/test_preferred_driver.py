@@ -42,11 +42,16 @@ def mock_drivers():
         driver.is_active = True
         driver.is_available = True
         driver.driver_type = "REGULAR"
-        driver.latitude = 46.2044 + i * 0.001
-        driver.longitude = 6.1432 + i * 0.001
+        # ✅ FIX: S'assurer que les coordonnées sont des nombres réels, pas des Mock
+        lat = float(46.2044 + i * 0.001)
+        lon = float(6.1432 + i * 0.001)
+        driver.latitude = lat
+        driver.longitude = lon
         # Attributs nécessaires pour _driver_current_coord
-        driver.current_lat = 46.2044 + i * 0.001
-        driver.current_lon = 6.1432 + i * 0.001
+        driver.current_lat = lat
+        driver.current_lon = lon
+        # Attribut pour coord_quality_factor
+        driver._coord_quality_factor = 1.0
         drivers.append(driver)
     return drivers
 
@@ -59,16 +64,19 @@ def mock_bookings():
     for i in range(3):
         booking = Mock()
         booking.id = i + 1
-        booking.pickup_lat = 46.2044 + i * 0.01
-        booking.pickup_lon = 6.1432 + i * 0.01
-        booking.dropoff_lat = 46.2080 + i * 0.01
-        booking.dropoff_lon = 6.1600 + i * 0.01
+        # ✅ FIX: S'assurer que les coordonnées sont des nombres réels, pas des Mock
+        booking.pickup_lat = float(46.2044 + i * 0.01)
+        booking.pickup_lon = float(6.1432 + i * 0.01)
+        booking.dropoff_lat = float(46.2080 + i * 0.01)
+        booking.dropoff_lon = float(6.1600 + i * 0.01)
         booking.scheduled_time = base_time + timedelta(minutes=30 + i * 30)
         booking.customer_name = f"Client {i + 1}"
         booking.status = "ACCEPTED"
         booking.is_return = False
         booking.medical_facility = False
         booking.hospital_service = False
+        # Attribut pour coord_quality_factor
+        booking._coord_quality_factor = 1.0
         bookings.append(booking)
     return bookings
 
@@ -103,9 +111,12 @@ class TestPreferredDriverPropagation:
         mock_company_query.__get__ = lambda self, obj, _objtype: mock_query
 
         # Mock de la matrice de temps
+        # ✅ FIX: build_time_matrix retourne (time_matrix, coords, matrix_meta)
         n = len(mock_bookings) + len(mock_drivers)
         mock_matrix = [[0 if i == j else 10 for j in range(n)] for i in range(n)]
-        mock_build_matrix.return_value = (mock_matrix, [])
+        mock_coords = [(46.2044 + i * 0.001, 6.1432 + i * 0.001) for i in range(n)]
+        mock_meta = {"node_count": n, "provider": "haversine"}
+        mock_build_matrix.return_value = (mock_matrix, mock_coords, mock_meta)
 
         # Overrides avec preferred_driver_id
         overrides = {"preferred_driver_id": 2, "driver_load_multipliers": {"2": 1.5}}
@@ -152,9 +163,12 @@ class TestPreferredDriverPropagation:
         mock_query.get.return_value = mock_company
         mock_company_query.__get__ = lambda self, obj, _objtype: mock_query
 
+        # ✅ FIX: build_time_matrix retourne (time_matrix, coords, matrix_meta)
         n = len(mock_bookings) + len(mock_drivers)
         mock_matrix = [[0 if i == j else 10 for j in range(n)] for i in range(n)]
-        mock_build_matrix.return_value = (mock_matrix, [])
+        mock_coords = [(46.2044 + i * 0.001, 6.1432 + i * 0.001) for i in range(n)]
+        mock_meta = {"node_count": n, "provider": "haversine"}
+        mock_build_matrix.return_value = (mock_matrix, mock_coords, mock_meta)
 
         # Overrides sans preferred_driver_id
         overrides = {"driver_load_multipliers": {"1": 1.2}}
@@ -197,9 +211,12 @@ class TestPreferredDriverPropagation:
         mock_query.get.return_value = mock_company
         mock_company_query.__get__ = lambda self, obj, _objtype: mock_query
 
+        # ✅ FIX: build_time_matrix retourne (time_matrix, coords, matrix_meta)
         n = len(mock_bookings) + len(mock_drivers)
         mock_matrix = [[0 if i == j else 10 for j in range(n)] for i in range(n)]
-        mock_build_matrix.return_value = (mock_matrix, [])
+        mock_coords = [(46.2044 + i * 0.001, 6.1432 + i * 0.001) for i in range(n)]
+        mock_meta = {"node_count": n, "provider": "haversine"}
+        mock_build_matrix.return_value = (mock_matrix, mock_coords, mock_meta)
 
         # Test avec valeur 0
         overrides = {"preferred_driver_id": 0}
@@ -250,9 +267,12 @@ class TestPreferredDriverPropagation:
         mock_query.get.return_value = mock_company
         mock_company_query.__get__ = lambda self, obj, _objtype: mock_query
 
+        # ✅ FIX: build_time_matrix retourne (time_matrix, coords, matrix_meta)
         n = len(mock_bookings) + len(mock_drivers)
         mock_matrix = [[0 if i == j else 10 for j in range(n)] for i in range(n)]
-        mock_build_matrix.return_value = (mock_matrix, [])
+        mock_coords = [(46.2044 + i * 0.001, 6.1432 + i * 0.001) for i in range(n)]
+        mock_meta = {"node_count": n, "provider": "haversine"}
+        mock_build_matrix.return_value = (mock_matrix, mock_coords, mock_meta)
 
         # Overrides avec preferred_driver_id qui n'existe pas dans la liste des drivers
         # Les drivers mockés ont les IDs 1, 2, 3, donc on utilise 999

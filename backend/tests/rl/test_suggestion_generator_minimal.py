@@ -41,7 +41,7 @@ class TestRLSuggestionGeneratorMinimal:
         generator = RLSuggestionGenerator()
 
         # Vérifier que les attributs de base sont définis
-        assert generator.model_path == "data/ml/dqn_agent_best_v3_3.pth"
+        assert generator.model_path == "data/ml/dqn_agent_best_v33.pth"
         # max_suggestions et min_confidence ne sont pas des attributs directs
         # mais des paramètres par défaut dans generate_suggestions
 

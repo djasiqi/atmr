@@ -71,7 +71,8 @@ class C51Network(nn.Module):
 
         # Calculer les valeurs supportées
         self.delta_z = (v_max - v_min) / (num_atoms - 1)
-        self.z = torch.linspace(v_min, v_max, num_atoms, device=self.device)
+        # ✅ FIX: device doit être un argument nommé, pas positionnel
+        self.z = torch.linspace(v_min, v_max, int(num_atoms), device=self.device)
 
         # Construire le réseau
         layers = []
@@ -180,7 +181,8 @@ class QRNetwork(nn.Module):
             hidden_sizes = [512, 256]
 
         # Calculer les quantiles (τ)
-        self.tau = torch.linspace(0.0, 1.0, num_quantiles, device=self.device)
+        # ✅ FIX: device doit être un argument nommé, pas positionnel
+        self.tau = torch.linspace(0.0, 1.0, int(num_quantiles), device=self.device)
 
         # Construire le réseau
         layers = []

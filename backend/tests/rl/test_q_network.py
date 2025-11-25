@@ -21,7 +21,7 @@ class TestQNetworkBasics:
 
     def test_q_network_creation(self):
         """Test création du réseau."""
-        net = QNetwork(state_dim=0.122, action_dim=0.201)
+        net = QNetwork(state_dim=122, action_dim=201)
 
         assert net is not None
         assert net.state_dim == 122
@@ -32,7 +32,7 @@ class TestQNetworkBasics:
         """Test création avec tailles custom."""
         net = QNetwork(
             state_dim=50,
-            action_dim=0.100,
+            action_dim=100,
             hidden_sizes=(256, 128, 64, 32),
             dropout_rates=(0.3, 0.3, 0.2),
         )
@@ -41,7 +41,7 @@ class TestQNetworkBasics:
 
     def test_q_network_forward_single(self):
         """Test forward pass avec un seul état."""
-        net = QNetwork(state_dim=0.122, action_dim=0.201)
+        net = QNetwork(state_dim=122, action_dim=201)
         state = torch.randn(1, 122)
 
         q_values = net(state)
@@ -52,7 +52,7 @@ class TestQNetworkBasics:
 
     def test_q_network_forward_batch(self):
         """Test forward pass avec batch."""
-        net = QNetwork(state_dim=0.122, action_dim=0.201)
+        net = QNetwork(state_dim=122, action_dim=201)
         states = torch.randn(64, 122)  # Batch de 64
 
         q_values = net(states)
@@ -62,7 +62,7 @@ class TestQNetworkBasics:
 
     def test_q_network_get_action(self):
         """Test sélection d'action via forward()."""
-        net = QNetwork(state_dim=0.122, action_dim=0.201)
+        net = QNetwork(state_dim=122, action_dim=201)
         state = torch.randn(1, 122)
 
         q_values = net(state)
@@ -73,7 +73,7 @@ class TestQNetworkBasics:
 
     def test_q_network_deterministic(self):
         """Test que le réseau est déterministe."""
-        net = QNetwork(state_dim=0.122, action_dim=0.201)
+        net = QNetwork(state_dim=122, action_dim=201)
         net.eval()  # Mode évaluation (pas de dropout)
 
         state = torch.randn(1, 122)
@@ -86,7 +86,7 @@ class TestQNetworkBasics:
 
     def test_q_network_count_parameters(self):
         """Test comptage des paramètres."""
-        net = QNetwork(state_dim=0.122, action_dim=0.201)
+        net = QNetwork(state_dim=122, action_dim=201)
 
         num_params = sum(p.numel() for p in net.parameters())
 
@@ -100,7 +100,7 @@ class TestQNetworkTraining:
 
     def test_q_network_gradients(self):
         """Test que les gradients sont calculés."""
-        net = QNetwork(state_dim=0.122, action_dim=0.201)
+        net = QNetwork(state_dim=122, action_dim=201)
         state = torch.randn(1, 122, requires_grad=True)
 
         q_values = net(state)
@@ -113,7 +113,7 @@ class TestQNetworkTraining:
 
     def test_q_network_different_inputs_different_outputs(self):
         """Test que des états différents donnent des Q-values différentes."""
-        net = QNetwork(state_dim=0.122, action_dim=0.201)
+        net = QNetwork(state_dim=122, action_dim=201)
 
         state1 = torch.randn(1, 122)
         state2 = torch.randn(1, 122)
@@ -126,7 +126,7 @@ class TestQNetworkTraining:
 
     def test_q_network_updates_with_optimizer(self):
         """Test que le réseau peut être entraîné."""
-        net = QNetwork(state_dim=0.122, action_dim=0.201)
+        net = QNetwork(state_dim=122, action_dim=201)
         optimizer = torch.optim.Adam(net.parameters(), lr=0.0001)
 
         # Sauvegarder les poids initiaux
@@ -153,7 +153,7 @@ class TestQNetworkDevices:
 
     def test_q_network_cpu(self):
         """Test que le réseau fonctionne sur CPU."""
-        net = QNetwork(state_dim=0.122, action_dim=0.201)
+        net = QNetwork(state_dim=122, action_dim=201)
         net = net.to("cpu")
 
         state = torch.randn(1, 122).to("cpu")
@@ -164,7 +164,7 @@ class TestQNetworkDevices:
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     def test_q_network_cuda(self):
         """Test que le réseau fonctionne sur GPU (si disponible)."""
-        net = QNetwork(state_dim=0.122, action_dim=0.201)
+        net = QNetwork(state_dim=122, action_dim=201)
         net = net.to("cuda")
 
         state = torch.randn(1, 122).to("cuda")

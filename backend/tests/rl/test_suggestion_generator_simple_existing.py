@@ -33,7 +33,7 @@ class TestRLSuggestionGeneratorSimple:
             company_id=1,
             assignments=[],
             drivers=[],
-            for_date="2024-0.1-0.1",
+            for_date="2024-01-01",
             min_confidence=0.5,
             max_suggestions=5,
         )
@@ -61,7 +61,7 @@ class TestRLSuggestionGeneratorSimple:
             company_id=1,
             assignments=[mock_assignment],
             drivers=[mock_driver],
-            for_date="2024-0.1-0.1",
+            for_date="2024-01-01",
             min_confidence=0.5,
             max_suggestions=5,
         )
@@ -74,10 +74,10 @@ class TestRLSuggestionGeneratorSimple:
         generator.agent = None
 
         suggestions = generator._generate_rl_suggestions(
-            company_id=1,
+            _company_id=1,
             assignments=[],
             drivers=[],
-            for_date="2024-0.1-0.1",
+            _for_date="2024-01-01",
             min_confidence=0.5,
             max_suggestions=5,
         )
@@ -86,38 +86,68 @@ class TestRLSuggestionGeneratorSimple:
 
     def test_generate_rl_suggestions_with_agent(self):
         """Test génération RL suggestions avec agent."""
+        from datetime import timedelta
+
         generator = RLSuggestionGenerator()
 
-        # Mock agent
+        # Mock agent avec q_network qui retourne un tensor
         mock_agent = Mock()
-        mock_q_values = torch.tensor([[0.1, 0.2, 0.3, 0.4, 0.5]])
-        mock_agent.q_network.return_value = mock_q_values
+        # Créer un tensor avec 26 valeurs (nombre d'actions)
+        mock_q_values = torch.tensor([[0.1 + i * 0.01 for i in range(26)]])
+        # q_network est appelé comme une fonction, donc on utilise side_effect ou return_value
+        mock_agent.q_network = Mock(return_value=mock_q_values)
         generator.agent = mock_agent
 
-        # Mock assignment
+        # Mock assignment avec tous les attributs nécessaires
         mock_assignment = Mock()
-        mock_assignment.booking = Mock()
-        mock_assignment.driver = Mock()
-        mock_assignment.booking.id = 1
-        mock_assignment.driver.id = 1
+        mock_assignment.id = 1
+        mock_booking = Mock()
+        mock_booking.id = 1
+        mock_booking.scheduled_time = datetime.now() + timedelta(hours=1)
+        mock_booking.pickup_lat = 48.8566
+        mock_booking.pickup_lon = 2.3522
+        mock_booking.dropoff_lat = 48.8606
+        mock_booking.dropoff_lon = 2.3376
+        mock_booking.is_emergency = False
+        mock_assignment.booking = mock_booking
 
-        # Mock driver
+        # Mock driver actuel
+        mock_current_driver = Mock()
+        mock_current_driver.id = 1
+        mock_current_driver.current_lat = 48.8566
+        mock_current_driver.current_lon = 2.3522
+        mock_current_driver.is_available = True
+        mock_current_driver.driver_type = Mock()
+        mock_current_driver.driver_type.value = "REGULAR"
+        mock_current_driver.user = Mock()
+        mock_current_driver.user.first_name = "John"
+        mock_current_driver.user.last_name = "Doe"
+        mock_assignment.driver = mock_current_driver
+
+        # Mock driver alternatif
         mock_driver = Mock()
-        mock_driver.id = 1
+        mock_driver.id = 2
+        mock_driver.current_lat = 48.8606
+        mock_driver.current_lon = 2.3376
+        mock_driver.is_available = True
+        mock_driver.driver_type = Mock()
+        mock_driver.driver_type.value = "REGULAR"
         mock_driver.user = Mock()
-        mock_driver.user.first_name = "John"
-        mock_driver.user.last_name = "Doe"
+        mock_driver.user.first_name = "Jane"
+        mock_driver.user.last_name = "Smith"
 
-        suggestions = generator._generate_rl_suggestions(
-            company_id=1,
-            assignments=[mock_assignment],
-            drivers=[mock_driver],
-            for_date="2024-0.1-0.1",
-            min_confidence=0.5,
-            max_suggestions=5,
-        )
+        # Mock haversine_distance
+        with patch("shared.geo_utils.haversine_distance", return_value=1.0):
+            suggestions = generator._generate_rl_suggestions(
+                _company_id=1,
+                assignments=[mock_assignment],
+                drivers=[mock_driver, mock_current_driver],
+                _for_date="2024-01-01",
+                min_confidence=0.5,
+                max_suggestions=5,
+            )
 
-        assert isinstance(suggestions, list)
+            assert isinstance(suggestions, list)
 
     def test_build_state_basic(self):
         """Test construction état basique."""
@@ -235,10 +265,10 @@ class TestRLSuggestionGeneratorSimple:
         mock_assignment.driver.id = 1
 
         suggestions = generator._generate_rl_suggestions(
-            company_id=1,
+            _company_id=1,
             assignments=[mock_assignment],
             drivers=[],
-            for_date="2024-0.1-0.1",
+            _for_date="2024-01-01",
             min_confidence=0.5,
             max_suggestions=5,
         )

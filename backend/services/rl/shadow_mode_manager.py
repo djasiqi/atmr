@@ -3,6 +3,7 @@
 # Constantes pour éviter les valeurs magiques
 import json
 import logging
+import math
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List
@@ -174,14 +175,41 @@ class ShadowModeManager:
 
         kpis = {}
 
+        # Fonction helper pour convertir en float de manière sécurisée
+        def safe_float(value, default=0.0):
+            """Convertit une valeur en float de manière sécurisée."""
+            result = default
+            if value is None:
+                result = default
+            elif isinstance(value, (list, dict)):
+                result = default  # Types non convertibles
+            elif isinstance(value, bool):
+                result = float(value)  # True = 1.0, False = 0.0
+            elif isinstance(value, str):
+                # Essayer de convertir la string en float
+                value_stripped = value.strip()  # Enlever les espaces
+                if value_stripped == "":
+                    result = default
+                else:
+                    try:
+                        result = float(value_stripped)
+                    except (ValueError, TypeError):
+                        result = default
+            else:
+                try:
+                    result = float(value)
+                except (ValueError, TypeError):
+                    result = default
+            return result
+
         # 1. Delta ETA (minutes)
-        human_eta = human_decision.get("eta_minutes", 0) or 0
-        rl_eta = rl_decision.get("eta_minutes", 0) or 0
+        human_eta = safe_float(human_decision.get("eta_minutes", 0))
+        rl_eta = safe_float(rl_decision.get("eta_minutes", 0))
         kpis["eta_delta"] = rl_eta - human_eta
 
         # 2. Delta retard (minutes)
-        human_delay = human_decision.get("delay_minutes", 0) or 0
-        rl_delay = rl_decision.get("delay_minutes", 0) or 0
+        human_delay = safe_float(human_decision.get("delay_minutes", 0))
+        rl_delay = safe_float(rl_decision.get("delay_minutes", 0))
         kpis["delay_delta"] = rl_delay - human_delay
 
         # 3. Second best driver
@@ -281,10 +309,37 @@ class ShadowModeManager:
         delay_reductions = 0
 
         for log in logs:
-            human_eta = float(log.get("human_eta_minutes", 0) or 0)
-            rl_eta = float(log.get("rl_eta_minutes", 0) or 0)
-            human_delay = float(log.get("human_delay_minutes", 0) or 0)
-            rl_delay = float(log.get("rl_delay_minutes", 0) or 0)
+            # Convertir en float de manière sécurisée
+            def safe_float(value, default=0.0):
+                """Convertit une valeur en float de manière sécurisée."""
+                result = default
+                if value is None:
+                    result = default
+                elif isinstance(value, (list, dict)):
+                    result = default  # Types non convertibles
+                elif isinstance(value, bool):
+                    result = float(value)  # True = 1.0, False = 0.0
+                elif isinstance(value, str):
+                    # Essayer de convertir la string en float
+                    value_stripped = value.strip()  # Enlever les espaces
+                    if value_stripped == "":
+                        result = default
+                    else:
+                        try:
+                            result = float(value_stripped)
+                        except (ValueError, TypeError):
+                            result = default
+                else:
+                    try:
+                        result = float(value)
+                    except (ValueError, TypeError):
+                        result = default
+                return result
+
+            human_eta = safe_float(log.get("human_eta_minutes", 0))
+            rl_eta = safe_float(log.get("rl_eta_minutes", 0))
+            human_delay = safe_float(log.get("human_delay_minutes", 0))
+            rl_delay = safe_float(log.get("rl_delay_minutes", 0))
 
             total_human_eta += human_eta
             total_rl_eta += rl_eta
@@ -293,15 +348,34 @@ class ShadowModeManager:
 
             # Déterminer qui gagne (RL gagne si ETA ou delay est meilleur,
             # ou si les deux sont égaux et RL a un meilleur delay)
-            if rl_eta < human_eta or (rl_eta == human_eta and rl_delay < human_delay):
-                rl_wins += 1
-            elif human_eta < rl_eta or (human_eta == rl_eta and human_delay < rl_delay):
-                human_wins += 1
+            # Vérifier que les valeurs sont valides (pas NaN ou inf)
+            if (
+                not (math.isnan(rl_eta) or math.isnan(human_eta))
+                and not (math.isnan(rl_delay) or math.isnan(human_delay))
+                and not (math.isinf(rl_eta) or math.isinf(human_eta))
+                and not (math.isinf(rl_delay) or math.isinf(human_delay))
+            ):
+                if rl_eta < human_eta or (
+                    rl_eta == human_eta and rl_delay < human_delay
+                ):
+                    rl_wins += 1
+                elif human_eta < rl_eta or (
+                    human_eta == rl_eta and human_delay < rl_delay
+                ):
+                    human_wins += 1
 
-            # Compter les améliorations
-            if rl_eta < human_eta:
+            # Compter les améliorations (vérifier que les valeurs sont valides)
+            if (
+                not (math.isnan(rl_eta) or math.isnan(human_eta))
+                and not (math.isinf(rl_eta) or math.isinf(human_eta))
+                and rl_eta < human_eta
+            ):
                 eta_improvements += 1
-            if rl_delay < human_delay:
+            if (
+                not (math.isnan(rl_delay) or math.isnan(human_delay))
+                and not (math.isinf(rl_delay) or math.isinf(human_delay))
+                and rl_delay < human_delay
+            ):
                 delay_reductions += 1
 
         avg_human_eta = (
@@ -400,30 +474,65 @@ class ShadowModeManager:
         context: Dict[str, Any],
     ) -> Dict[str, float]:
         """Calcule l'impact sur la performance globale."""
+
+        # Fonction helper pour convertir en float de manière sécurisée
+        def safe_float(value, default=0.0):
+            """Convertit une valeur en float de manière sécurisée."""
+            result = default
+            if value is None:
+                result = default
+            elif isinstance(value, (list, dict)):
+                result = default  # Types non convertibles
+            elif isinstance(value, bool):
+                result = float(value)  # True = 1.0, False = 0.0
+            elif isinstance(value, str):
+                # Essayer de convertir la string en float
+                value_stripped = value.strip()  # Enlever les espaces
+                if value_stripped == "":
+                    result = default
+                else:
+                    try:
+                        result = float(value_stripped)
+                    except (ValueError, TypeError):
+                        result = default
+            else:
+                try:
+                    result = float(value)
+                except (ValueError, TypeError):
+                    result = default
+            return result
+
         impact = {}
 
         # Impact sur ETA
-        eta_improvement = human_decision.get("eta_minutes", 0) - rl_decision.get(
-            "eta_minutes", 0
-        )
+        human_eta = safe_float(human_decision.get("eta_minutes", 0))
+        rl_eta = safe_float(rl_decision.get("eta_minutes", 0))
+        eta_improvement = human_eta - rl_eta
         impact["eta_improvement"] = eta_improvement
 
         # Impact sur distance
-        distance_improvement = human_decision.get("distance_km", 0) - rl_decision.get(
-            "distance_km", 0
-        )
+        human_distance = safe_float(human_decision.get("distance_km", 0))
+        rl_distance = safe_float(rl_decision.get("distance_km", 0))
+        distance_improvement = human_distance - rl_distance
         impact["distance_improvement"] = distance_improvement
 
         # Impact sur charge chauffeur
-        load_balance = abs(
-            rl_decision.get("driver_load", 0) - context.get("avg_load", 0)
-        ) - abs(human_decision.get("driver_load", 0) - context.get("avg_load", 0))
+        rl_load = safe_float(rl_decision.get("driver_load", 0))
+        human_load = safe_float(human_decision.get("driver_load", 0))
+        avg_load = safe_float(context.get("avg_load", 0))
+        load_balance = abs(rl_load - avg_load) - abs(human_load - avg_load)
         impact["load_balance"] = -load_balance  # Négatif = meilleur équilibre
 
-        # Score global
-        impact["global_score"] = (
-            eta_improvement * 0.4 + distance_improvement * 0.3 + load_balance * 0.3
+        # Score global (gérer NaN et inf)
+        # Utiliser impact["load_balance"] qui est déjà -load_balance
+        global_score = (
+            eta_improvement * 0.4
+            + distance_improvement * 0.3
+            + impact["load_balance"] * 0.3
         )
+        if math.isnan(global_score) or math.isinf(global_score):
+            global_score = 0.0
+        impact["global_score"] = global_score
 
         return impact
 

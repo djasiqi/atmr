@@ -165,7 +165,7 @@ class TestFixturesCodeInteraction:
         company = persisted_fixture(db, CompanyFactory(), Company)
 
         # Créer un savepoint imbriqué
-        with nested_savepoint(db):
+        with nested_savepoint(db.session):
             # Appeler engine.run() dans le savepoint imbriqué
             result = engine.run(
                 company_id=company.id,
@@ -217,7 +217,7 @@ class TestFixturesCodeInteraction:
         db.session.flush()
 
         # Utiliser ensure_committed() pour garantir le commit
-        with ensure_committed(db):
+        with ensure_committed(db.session):
             # Vérifier que la company est commitée
             company_reloaded = db.session.query(Company).get(company.id)
             assert company_reloaded is not None, (

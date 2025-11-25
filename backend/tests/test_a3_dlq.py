@@ -40,8 +40,8 @@ class TestDLQ:
         """Test: stocker une tâche échouée en DB."""
 
         # Ajouter la tâche échouée
-        db_session.add(sample_task_failure)
-        db_session.commit()
+        db_session.session.add(sample_task_failure)
+        db_session.session.commit()
 
         # Vérifier qu'elle existe
         stored = TaskFailure.query.filter_by(task_id="test-task-123").first()
@@ -64,8 +64,8 @@ class TestDLQ:
             last_seen=datetime.now(UTC),
             failure_count=1,
         )
-        db_session.add(failure)
-        db_session.commit()
+        db_session.session.add(failure)
+        db_session.session.commit()
 
         initial_count = failure.failure_count
 
@@ -73,7 +73,7 @@ class TestDLQ:
         existing = TaskFailure.query.filter_by(task_id="test-task-456").first()
         existing.failure_count += 1
         existing.last_seen = datetime.now(UTC)
-        db_session.commit()
+        db_session.session.commit()
 
         # Vérifier que le compteur a été incrémenté
         updated = TaskFailure.query.filter_by(task_id="test-task-456").first()
@@ -94,9 +94,9 @@ class TestDLQ:
                 last_seen=datetime.now(UTC) - timedelta(minutes=i),
                 failure_count=1,
             )
-            db_session.add(failure)
+            db_session.session.add(failure)
 
-        db_session.commit()
+        db_session.session.commit()
 
         # Requête backlog
         backlog = TaskFailure.query.count()
@@ -166,9 +166,9 @@ class TestDLQ:
                     last_seen=datetime.now(UTC),
                     failure_count=1,
                 )
-                db_session.add(failure)
+                db_session.session.add(failure)
 
-            db_session.commit()
+            db_session.session.commit()
 
         # Vérifier que la tâche est en DLQ avec failure_count = 3
         final = TaskFailure.query.filter_by(task_id=task_id).first()
@@ -187,7 +187,7 @@ class TestDLQ:
 
         logger.info("✅ Test DLQ flow: Tâche échouée 3x visible en DLQ avec alertes")
 
-    def test_dlq_endpoint_response(self, app_context, client):
+    def test_dlq_endpoint_response(self, app_context, client, auth_headers):
         """Test: endpoint GET /api/dispatch-health/dlq retourne les bonnes métriques."""
 
         # Créer quelques tâches échouées
@@ -206,8 +206,8 @@ class TestDLQ:
 
         db.session.commit()
 
-        # Appeler l'endpoint
-        with client.get("/api/dispatch-health/dlq") as response:
+        # Appeler l'endpoint avec authentification
+        with client.get("/api/v1/company_dispatch_health/dlq", headers=auth_headers) as response:
             assert response.status_code == 200
             data = response.get_json()
 
@@ -238,7 +238,7 @@ class TestDLQ:
         # Nettoyer les tâches > 7 jours
         cutoff = datetime.now(UTC) - timedelta(days=7)
         TaskFailure.query.filter(TaskFailure.last_seen < cutoff).delete()
-        db_session.commit()
+        db_session.session.commit()
 
         # Vérifier que la tâche ancienne a été supprimée
         remaining = TaskFailure.query.filter_by(task_id="old-cleanup-test").first()

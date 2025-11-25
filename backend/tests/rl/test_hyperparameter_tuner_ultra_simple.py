@@ -25,9 +25,10 @@ class TestHyperparameterTuner:
 
     def test_init_custom(self):
         """Test initialisation avec paramètres personnalisés"""
+        # ✅ FIX: n_trials et n_training_episodes doivent être des int, pas des float
         tuner = HyperparameterTuner(
-            n_trials=0.100,
-            n_training_episodes=0.500,
+            n_trials=100,
+            n_training_episodes=500,
             n_eval_episodes=50,
             study_name="custom_study",
             storage="sqlite:///test.db",
@@ -75,30 +76,35 @@ class TestHyperparameterTuner:
         """Test _suggest_hyperparameters avec valeurs spécifiques"""
         tuner = HyperparameterTuner()
 
-        # Mock trial avec valeurs spécifiques - assez pour tous les appels
+        # Mock trial avec valeurs spécifiques
+        # ✅ FIX: _suggest_hyperparameters appelle suggest_float 10 fois, suggest_categorical 6 fois, suggest_int 4 fois
         mock_trial = Mock()
         mock_trial.suggest_float.side_effect = [
-            0.001,
-            0.95,
-            0.9,
-            0.1,
-            0.995,
-            0.6,
-            0.4,
-            0.8,
-            0.005,
-            3,
-            0.99,
-        ] * 10
+            0.001,  # learning_rate
+            0.95,  # gamma
+            0.9,  # epsilon_start
+            0.1,  # epsilon_end
+            0.995,  # epsilon_decay
+            0.6,  # alpha
+            0.4,  # beta_start
+            0.9,  # beta_end
+            0.99,  # n_step_gamma
+            0.005,  # tau
+        ]
         mock_trial.suggest_categorical.side_effect = [
-            128,
-            100000,
-            True,
-            True,
-            True,
-            True,
-        ] * 10
-        mock_trial.suggest_int.side_effect = [5, 15, 3] * 10
+            128,  # batch_size
+            100000,  # buffer_size
+            True,  # use_double_dqn
+            True,  # use_prioritized_replay
+            True,  # use_n_step
+            True,  # use_dueling
+        ]
+        mock_trial.suggest_int.side_effect = [
+            10,  # target_update_freq
+            3,  # n_step
+            5,  # num_drivers
+            15,  # max_bookings
+        ]
 
         config = tuner._suggest_hyperparameters(mock_trial)
 
@@ -118,6 +124,7 @@ class TestHyperparameterTuner:
         tuner = HyperparameterTuner(n_training_episodes=5, n_eval_episodes=2)
 
         # Mock trial
+        # ✅ FIX: Fournir assez de valeurs pour tous les appels
         mock_trial = Mock()
         mock_trial.suggest_float.side_effect = [
             0.001,
@@ -127,11 +134,10 @@ class TestHyperparameterTuner:
             0.995,
             0.6,
             0.4,
-            0.8,
-            0.005,
-            3,
+            0.9,
             0.99,
-        ] * 10
+            0.005,
+        ]
         mock_trial.suggest_categorical.side_effect = [
             128,
             100000,
@@ -139,8 +145,11 @@ class TestHyperparameterTuner:
             True,
             True,
             True,
-        ] * 10
-        mock_trial.suggest_int.side_effect = [3, 10, 3] * 10
+        ]
+        mock_trial.suggest_int.side_effect = [10, 3, 3, 10]
+        # ✅ FIX: Mock report et should_prune pour objective
+        mock_trial.report = Mock()
+        mock_trial.should_prune.return_value = False
 
         with (
             patch("services.rl.hyperparameter_tuner.DispatchEnv") as mock_env_class,
@@ -159,6 +168,10 @@ class TestHyperparameterTuner:
             # Mock agent
             mock_agent = Mock()
             mock_agent.select_action.return_value = 0
+            # ✅ FIX: mock_agent.memory doit avoir une longueur pour que learn() soit appelé
+            mock_agent.memory = Mock()
+            mock_agent.memory.__len__ = Mock(return_value=128)  # >= batch_size
+            mock_agent.batch_size = 128
             mock_agent_class.return_value = mock_agent
 
             # Exécuter objective
@@ -176,6 +189,7 @@ class TestHyperparameterTuner:
         tuner = HyperparameterTuner(n_training_episodes=5, n_eval_episodes=2)
 
         # Mock trial avec pruning
+        # ✅ FIX: Fournir assez de valeurs pour tous les appels
         mock_trial = Mock()
         mock_trial.suggest_float.side_effect = [
             0.001,
@@ -185,11 +199,10 @@ class TestHyperparameterTuner:
             0.995,
             0.6,
             0.4,
-            0.8,
-            0.005,
-            3,
+            0.9,
             0.99,
-        ] * 10
+            0.005,
+        ]
         mock_trial.suggest_categorical.side_effect = [
             128,
             100000,
@@ -197,8 +210,10 @@ class TestHyperparameterTuner:
             True,
             True,
             True,
-        ] * 10
-        mock_trial.suggest_int.side_effect = [3, 10, 3] * 10
+        ]
+        mock_trial.suggest_int.side_effect = [10, 3, 3, 10]
+        # ✅ FIX: Mock report et should_prune pour objective
+        mock_trial.report = Mock()
         mock_trial.should_prune.return_value = True
 
         with (
@@ -218,6 +233,10 @@ class TestHyperparameterTuner:
             # Mock agent
             mock_agent = Mock()
             mock_agent.select_action.return_value = 0
+            # ✅ FIX: mock_agent.memory doit avoir une longueur pour que learn() soit appelé
+            mock_agent.memory = Mock()
+            mock_agent.memory.__len__ = Mock(return_value=128)  # >= batch_size
+            mock_agent.batch_size = 128
             mock_agent_class.return_value = mock_agent
 
             # Exécuter objective avec pruning
@@ -300,15 +319,19 @@ class TestHyperparameterTuner:
 
         with (
             patch("pathlib.Path.mkdir") as mock_mkdir,
-            patch("builtins.open", create=True) as mock_file,
+            patch("pathlib.Path.open") as mock_open,
         ):
+            # ✅ FIX: Path.open() retourne un context manager
+            mock_file_handle = Mock()
+            mock_file_handle.write = Mock()
+            mock_open.return_value.__enter__.return_value = mock_file_handle
             tuner.save_best_params(mock_study, "test_params.json")
 
             # Vérifier que le répertoire est créé
             mock_mkdir.assert_called_once_with(parents=True, exist_ok=True)
 
             # Vérifier que le fichier est ouvert en écriture
-            mock_file.assert_called_once()
+            mock_open.assert_called_once()
 
     def test_log_metrics_and_comparisons(self):
         """Test _log_metrics_and_comparisons method"""
@@ -335,15 +358,19 @@ class TestHyperparameterTuner:
 
         with (
             patch("pathlib.Path.mkdir") as mock_mkdir,
-            patch("builtins.open", create=True) as mock_file,
+            patch("pathlib.Path.open") as mock_open,
         ):
+            # ✅ FIX: Path.open() retourne un context manager
+            mock_file_handle = Mock()
+            mock_file_handle.write = Mock()
+            mock_open.return_value.__enter__.return_value = mock_file_handle
             tuner._log_metrics_and_comparisons(mock_study, sorted_trials)
 
             # Vérifier que le répertoire est créé
             mock_mkdir.assert_called_once_with(parents=True, exist_ok=True)
 
             # Vérifier que le fichier est ouvert en écriture
-            mock_file.assert_called_once()
+            mock_open.assert_called_once()
 
     def test_analyze_triplet_gagnant(self):
         """Test _analyze_triplet_gagnant method"""
@@ -423,12 +450,16 @@ class TestHyperparameterTuner:
 
         with (
             patch("pathlib.Path.mkdir"),
-            patch("builtins.open", create=True) as mock_file,
+            patch("pathlib.Path.open") as mock_open,
         ):
+            # ✅ FIX: Path.open() retourne un context manager
+            mock_file_handle = Mock()
+            mock_file_handle.write = Mock()
+            mock_open.return_value.__enter__.return_value = mock_file_handle
             tuner.save_best_params(mock_study, "empty_trials.json")
 
             # Vérifier que le fichier est ouvert
-            mock_file.assert_called_once()
+            mock_open.assert_called_once()
 
     def test_edge_case_none_study(self):
         """Test avec study None"""
