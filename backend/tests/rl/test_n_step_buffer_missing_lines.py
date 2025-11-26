@@ -1,6 +1,6 @@
 """Tests supplémentaires pour n_step_buffer.py - lignes manquantes."""
 
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import numpy as np
 

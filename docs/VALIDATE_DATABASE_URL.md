@@ -9,13 +9,14 @@ postgresql://[user]:[password]@[host]:[port]/[database]
 ```
 
 ### Exemple
+
 ```
 postgresql://atmr_user:mon_mot_de_passe@postgres:5432/atmr_db
 ```
 
 ## Comment vérifier si DATABASE_URL est correct
 
-### Méthode 1 : Construction depuis les variables POSTGRES_*
+### Méthode 1 : Construction depuis les variables POSTGRES\_\*
 
 Si vous avez déjà les secrets `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, vous pouvez construire `DATABASE_URL` ainsi :
 
@@ -135,16 +136,17 @@ export DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres
 Si votre mot de passe PostgreSQL contient des caractères spéciaux, ils doivent être échappés :
 
 | Caractère | Échappement URL |
-|-----------|----------------|
-| `@` | `%40` |
-| `#` | `%23` |
-| `!` | `%21` |
-| `%` | `%25` |
-| `&` | `%26` |
-| `+` | `%2B` |
-| `=` | `%3D` |
+| --------- | --------------- |
+| `@`       | `%40`           |
+| `#`       | `%23`           |
+| `!`       | `%21`           |
+| `%`       | `%25`           |
+| `&`       | `%26`           |
+| `+`       | `%2B`           |
+| `=`       | `%3D`           |
 
 **Exemple** :
+
 - Mot de passe : `P@ssw0rd!#`
 - Échappé : `P%40ssw0rd%21%23`
 - DATABASE_URL : `postgresql://user:P%40ssw0rd%21%23@postgres:5432/db`
@@ -154,6 +156,7 @@ Le code Python fait cet échappement automatiquement via `urllib.parse.quote_plu
 ## Recommandation
 
 **Pour votre cas** : Vous n'avez **pas besoin** de définir `DATABASE_URL` dans GitHub Secrets si vous avez déjà :
+
 - ✅ `POSTGRES_USER`
 - ✅ `POSTGRES_PASSWORD`
 - ✅ `POSTGRES_DB`
@@ -161,4 +164,3 @@ Le code Python fait cet échappement automatiquement via `urllib.parse.quote_plu
 Le workflow construit automatiquement `DATABASE_URL` depuis ces variables (ligne 301 du workflow).
 
 Cependant, si vous voulez un contrôle explicite, vous pouvez définir `DATABASE_URL` avec la valeur construite manuellement.
-

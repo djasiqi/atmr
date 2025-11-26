@@ -104,7 +104,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-atmr_db}
       # SQLALCHEMY_DATABASE_URI explicite pour les migrations Flask
       SQLALCHEMY_DATABASE_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      # DATABASE_URL sera construit par config.py avec échappement URL automatique
+      # DATABASE_URL (utilisé en priorité par Flask config.py)
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
 
       # Redis/Celery avec authentification
       REDIS_PASSWORD: ${REDIS_PASSWORD}
