@@ -79,7 +79,8 @@ class TestHyperparameterTuner:
         tuner = HyperparameterTuner()
 
         # Mock trial avec valeurs spécifiques
-        # ✅ FIX: _suggest_hyperparameters appelle suggest_float 10 fois, suggest_categorical 6 fois, suggest_int 4 fois
+        # ✅ FIX: _suggest_hyperparameters appelle suggest_float 10 fois,
+        # suggest_categorical 6 fois, suggest_int 4 fois
         mock_trial = Mock()
         mock_trial.suggest_float.side_effect = [
             0.001,  # learning_rate
@@ -170,7 +171,8 @@ class TestHyperparameterTuner:
             # Mock agent
             mock_agent = Mock()
             mock_agent.select_action.return_value = 0
-            # ✅ FIX: mock_agent.memory doit avoir une longueur pour que learn() soit appelé
+            # ✅ FIX: mock_agent.memory doit avoir une longueur pour que
+            # learn() soit appelé
             mock_agent.memory = Mock()
             mock_agent.memory.__len__ = Mock(return_value=128)  # >= batch_size
             mock_agent.batch_size = 128
@@ -245,7 +247,8 @@ class TestHyperparameterTuner:
             # Mock agent
             mock_agent = Mock()
             mock_agent.select_action.return_value = 0
-            # ✅ FIX: mock_agent.memory doit avoir une longueur pour que learn() soit appelé
+            # ✅ FIX: mock_agent.memory doit avoir une longueur pour que
+            # learn() soit appelé
             mock_agent.memory = Mock()
             mock_agent.memory.__len__ = Mock(return_value=128)  # >= batch_size
             mock_agent.batch_size = 128
@@ -404,7 +407,8 @@ class TestHyperparameterTuner:
             mock_open.return_value.__enter__.return_value = mock_file_handle
             tuner._log_metrics_and_comparisons(mock_study, sorted_trials)
 
-            # Vérifier que le répertoire est créé (peut être appelé plusieurs fois pour différents fichiers)
+            # Vérifier que le répertoire est créé (peut être appelé plusieurs
+            # fois pour différents fichiers)
             assert mock_mkdir.call_count >= 1
 
             # Vérifier que les fichiers sont ouverts en écriture
@@ -591,7 +595,8 @@ class TestHyperparameterTuner:
         # Mock trial states avec valeurs None (mais on les gère dans le code)
         for i, trial in enumerate(mock_study.trials):
             trial.state = optuna.trial.TrialState.COMPLETE
-            # ✅ FIX: trial.value peut être None, mais le code gère cela avec float(t.value) if t.value else None
+            # ✅ FIX: trial.value peut être None, mais le code gère cela avec
+            # float(t.value) if t.value else None
             trial.value = None if i == 0 else 100 - i * 10
             trial.number = i
             trial.params = {"learning_rate": 0.001}

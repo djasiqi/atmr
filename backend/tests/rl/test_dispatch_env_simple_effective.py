@@ -95,7 +95,8 @@ class TestDispatchEnvSimpleEffective:
 
             # Vérifier les lignes exactes 277-281
             assert reward == -100.0  # Ligne 277
-            # ✅ FIX: Le code ajoute ces clés dans info seulement si l'action est invalide
+            # ✅ FIX: Le code ajoute ces clés dans info seulement si
+            # l'action est invalide
             assert info.get("invalid_action", False) is True  # Ligne 279
             assert info.get("booking_already_assigned", False) is True  # Ligne 280
             mock_logging.warning.assert_called()  # Ligne 281

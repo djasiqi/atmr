@@ -421,8 +421,9 @@ class DispatchEnv(gym.Env):
                             # Assigner le booking
                             reward = self._assign_booking(driver, booking)
 
-            # ✅ FIX: Si info a déjà été créé pour une action invalide, retourner immédiatement
-            # pour éviter d'exécuter le reste du code qui pourrait écraser info
+            # ✅ FIX: Si info a déjà été créé pour une action invalide,
+            # retourner immédiatement pour éviter d'exécuter le reste du code
+            # qui pourrait écraser info
             if info_created and info is not None:
                 # Avancer le temps (5 minutes par step)
                 self.current_time += 5
@@ -431,7 +432,8 @@ class DispatchEnv(gym.Env):
                 try:
                     observation = self._get_observation()
                 except Exception:
-                    # Si _get_observation() lève une exception, utiliser une observation vide
+                    # Si _get_observation() lève une exception,
+                    # utiliser une observation vide
                     observation = np.zeros(
                         self.num_drivers * 4 + self.max_bookings * 4 + 2,
                         dtype=np.float32,
@@ -482,7 +484,8 @@ class DispatchEnv(gym.Env):
             self.episode_stats["total_reward"] = (
                 float(self.episode_stats.get("total_reward", 0.0)) + reward
             )
-            # ✅ FIX: Ne pas écraser info si elle a déjà été créée (pour les actions invalides)
+            # ✅ FIX: Ne pas écraser info si elle a déjà été créée
+            # (pour les actions invalides)
             if not info_created:
                 info = self._get_info()
 
@@ -581,17 +584,21 @@ class DispatchEnv(gym.Env):
             # Calculer temps de trajet
             # ✅ FIX: Vérifier que les coordonnées sont valides avant de calculer
             try:
-                # Tenter de convertir les coordonnées en float pour vérifier leur validité
+                # Tenter de convertir les coordonnées en float
+                # pour vérifier leur validité
                 # Utiliser get() avec une valeur par défaut pour éviter KeyError
                 lat1 = driver.get("lat")
                 lon1 = driver.get("lon")
                 lat2 = booking.get("pickup_lat")
                 lon2 = booking.get("pickup_lon")
-                # Si une coordonnée est None ou ne peut pas être convertie, c'est invalide
+                # Si une coordonnée est None ou ne peut pas être convertie,
+                # c'est invalide
                 if lat1 is None or lon1 is None or lat2 is None or lon2 is None:
-                    logging.warning(
-                        "[DispatchEnv] Coordonnées manquantes pour vérification contraintes"
+                    msg = (
+                        "[DispatchEnv] Coordonnées manquantes "
+                        "pour vérification contraintes"
                     )
+                    logging.warning(msg)
                     return False
                 # Tenter de convertir en float pour vérifier la validité
                 float(lat1)
@@ -605,15 +612,19 @@ class DispatchEnv(gym.Env):
                 )
                 return False
 
-            # ✅ FIX: Calculer le temps de trajet seulement si les coordonnées sont valides
-            # Si _calculate_travel_time() lève une exception, retourner False
+            # ✅ FIX: Calculer le temps de trajet seulement si les coordonnées
+            # sont valides. Si _calculate_travel_time() lève une exception,
+            # retourner False
             try:
                 travel_time = self._calculate_travel_time(driver, booking)
             except Exception:
-                # Si le calcul du temps de trajet échoue, les contraintes ne sont pas respectées
-                logging.warning(
-                    "[DispatchEnv] Erreur calcul temps trajet pour vérification contraintes"
+                # Si le calcul du temps de trajet échoue,
+                # les contraintes ne sont pas respectées
+                msg = (
+                    "[DispatchEnv] Erreur calcul temps trajet "
+                    "pour vérification contraintes"
                 )
+                logging.warning(msg)
                 return False
             pickup_time = (
                 self.current_time + travel_time

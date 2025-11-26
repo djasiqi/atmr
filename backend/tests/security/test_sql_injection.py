@@ -56,7 +56,8 @@ class TestSQLInjectionQueryParams:
                 f"/api/v1/companies/me/clients?search={payload}",
                 headers=auth_headers,
             )
-            # Ne doit pas retourner d'erreur SQL (404 acceptable si route nécessite auth)
+            # Ne doit pas retourner d'erreur SQL (404 acceptable si route
+            # nécessite auth)
             assert response.status_code in (200, 400, 401, 403, 404)
             response_text = response.get_data(as_text=True).lower()
             assert "sql" not in response_text
@@ -65,7 +66,8 @@ class TestSQLInjectionQueryParams:
         """Test que l'injection SQL dans recherche médicale est bloquée."""
         for payload in SQL_INJECTION_PAYLOADS[:5]:
             response = client.get(f"/api/v1/medical/establishments?q={payload}")
-            # Endpoint public, mais doit protéger contre injection SQL (404 si route n'existe pas)
+            # Endpoint public, mais doit protéger contre injection SQL
+            # (404 si route n'existe pas)
             assert response.status_code in (200, 400, 404)
             response_text = response.get_data(as_text=True).lower()
             assert "sql" not in response_text

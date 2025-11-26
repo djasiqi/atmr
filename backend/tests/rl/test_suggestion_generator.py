@@ -5,7 +5,6 @@ Tests complets pour suggestion_generator.py
 
 from unittest.mock import Mock, patch
 
-import numpy as np
 import pytest
 import torch
 
@@ -579,7 +578,8 @@ class TestRLSuggestionGenerator:
         assignments = [mock_assignment]
         drivers = [mock_driver]
 
-        # Test avec seuil de confiance élevé (min_confidence au lieu de confidence_threshold)
+        # Test avec seuil de confiance élevé (min_confidence au lieu de
+        # confidence_threshold)
         with patch("models.Assignment.query") as mock_query:
             mock_query.filter.return_value.count.return_value = 0
 

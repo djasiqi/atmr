@@ -223,8 +223,10 @@ class TestSendIPWhitelistAlert:
         """Test que les headers de sécurité sont collectés."""
         mock_should_alert.return_value = True
 
-        # ✅ FIX: Créer un contexte de requête Flask avec les headers pour éviter RuntimeError
-        # Utiliser les headers directement dans test_request_context au lieu du mock
+        # ✅ FIX: Créer un contexte de requête Flask avec les headers pour
+        # éviter RuntimeError
+        # Utiliser les headers directement dans test_request_context au lieu
+        # du mock
         headers = {
             "User-Agent": "Mozilla/5.0",
             "X-Forwarded-For": "192.168.1.100, 10.0.0.1",

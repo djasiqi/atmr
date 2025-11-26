@@ -2,8 +2,6 @@
 
 from unittest.mock import Mock, patch
 
-import numpy as np
-
 from services.rl.suggestion_generator import RLSuggestionGenerator
 
 

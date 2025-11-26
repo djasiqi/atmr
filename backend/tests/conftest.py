@@ -686,9 +686,11 @@ def mock_external_services(monkeypatch):
         # ✅ FIX: Accepter 'destination' (nom réel) ou 'dest' (nom du mock)
         dest_coord = destination if destination is not None else dest
         if dest_coord is None:
-            raise TypeError(
-                "mock_route_info() missing 1 required positional argument: 'dest' or 'destination'"
+            msg = (
+                "mock_route_info() missing 1 required positional argument: "
+                "'dest' or 'destination'"
             )
+            raise TypeError(msg)
 
         km = _haversine_km(origin, dest_coord)
         duration_s = _fallback_eta_seconds(origin, dest_coord)
@@ -836,9 +838,11 @@ def mock_osrm_client(monkeypatch):
         # ✅ FIX: Accepter 'destination' (nom réel) ou 'dest' (nom du mock)
         dest_coord = destination if destination is not None else dest
         if dest_coord is None:
-            raise TypeError(
-                "mock_route_info() missing 1 required positional argument: 'dest' or 'destination'"
+            msg = (
+                "mock_route_info() missing 1 required positional argument: "
+                "'dest' or 'destination'"
             )
+            raise TypeError(msg)
 
         km = _haversine_km(origin, dest_coord)
         duration_s = _fallback_eta_seconds(origin, dest_coord)
@@ -1316,7 +1320,8 @@ def nested_savepoint(db_session: Any) -> Iterator[None]:
     except Exception:
         # Rollback le savepoint en cas d'exception
         # ✅ FIX: Vérifier si le savepoint est encore actif avant de rollback
-        # (engine.run() peut fermer la transaction principale, ce qui ferme aussi les savepoints)
+        # (engine.run() peut fermer la transaction principale,
+        # ce qui ferme aussi les savepoints)
         if savepoint.is_active:
             with suppress(Exception):
                 savepoint.rollback()
@@ -1324,7 +1329,8 @@ def nested_savepoint(db_session: Any) -> Iterator[None]:
     finally:
         # Rollback automatique du savepoint à la fin
         # ✅ FIX: Vérifier si le savepoint est encore actif avant de rollback
-        # (engine.run() peut fermer la transaction principale, ce qui ferme aussi les savepoints)
+        # (engine.run() peut fermer la transaction principale,
+        # ce qui ferme aussi les savepoints)
         if savepoint.is_active:
             with suppress(Exception):
                 savepoint.rollback()

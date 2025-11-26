@@ -70,7 +70,8 @@ class TestAPIVersioning:
             )
         else:
             # Si la route n'existe pas (404), le header peut ne pas être ajouté
-            # C'est acceptable car le test vérifie que les routes v1 existantes ont le header
+            # C'est acceptable car le test vérifie que les routes v1 existantes
+            # ont le header
             pass
 
     def test_v2_endpoint_available(self, client):
@@ -117,7 +118,8 @@ class TestAPIVersioning:
             # car elle est définie directement dans app.py comme route de compatibilité
             # (ligne 988), donc elle peut retourner 200, 404, ou 403
             assert response.status_code in (200, 404, 403), (
-                "Route de compatibilité peut être accessible même si API legacy désactivée"
+                "Route de compatibilité peut être accessible même si "
+                "API legacy désactivée"
             )
 
     def test_versioning_swagger_docs(self, client):

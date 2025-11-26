@@ -371,7 +371,8 @@ class AutonomousDispatchManager:
                             database.session.add(action_record)
                             try:
                                 database.session.flush()
-                                # ✅ FIX: Commit pour que l'action soit visible dans les tests
+                                # ✅ FIX: Commit pour que l'action soit visible
+                                # dans les tests
                                 database.session.commit()
                             except Exception as e:
                                 logger.warning(
@@ -425,7 +426,8 @@ class AutonomousDispatchManager:
                             database.session.add(action_record)
                             try:
                                 database.session.flush()
-                                # ✅ FIX: Commit pour que l'action soit visible dans les tests
+                                # ✅ FIX: Commit pour que l'action soit visible
+                                # dans les tests
                                 database.session.commit()
                             except Exception as e:
                                 logger.warning(

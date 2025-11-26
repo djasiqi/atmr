@@ -452,7 +452,8 @@ class HyperparameterTuner:
 
         # Ajouter détails de chaque trial
         for trial in sorted_trials:
-            # ✅ FIX: Sérialiser tous les champs pour éviter les erreurs avec les objets Mock
+            # ✅ FIX: Sérialiser tous les champs pour éviter les erreurs
+            # avec les objets Mock
             # Convertir trial.number en int (peut être un Mock)
             try:
                 trial_number = (

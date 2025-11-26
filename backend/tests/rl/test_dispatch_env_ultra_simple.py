@@ -51,7 +51,8 @@ class TestDispatchEnvUltraSimple:
 
             # Vérifier les lignes exactes 266-270
             assert reward == -100.0  # Ligne 266
-            # ✅ FIX: Le code ajoute ces clés dans info seulement si l'action est invalide
+            # ✅ FIX: Le code ajoute ces clés dans info seulement si
+            # l'action est invalide
             assert info.get("invalid_action", False) is True  # Ligne 268
             assert info.get("index_out_of_range", False) is True  # Ligne 269
             mock_logging.warning.assert_called()  # Ligne 270
@@ -96,7 +97,8 @@ class TestDispatchEnvUltraSimple:
 
             # Vérifier les lignes exactes 277-281
             assert reward == -100.0  # Ligne 277
-            # ✅ FIX: Le code ajoute ces clés dans info seulement si l'action est invalide
+            # ✅ FIX: Le code ajoute ces clés dans info seulement si
+            # l'action est invalide
             assert info.get("invalid_action", False) is True  # Ligne 279
             assert info.get("booking_already_assigned", False) is True  # Ligne 280
             mock_logging.warning.assert_called()  # Ligne 281
@@ -583,7 +585,8 @@ class TestDispatchEnvUltraSimple:
         with patch("services.rl.dispatch_env.logging") as mock_logging:
             obs, reward, _terminated, _truncated, info = env.step(10)
             assert reward == -100.0
-            # ✅ FIX: Le code ajoute ces clés dans info seulement si l'action est invalide
+            # ✅ FIX: Le code ajoute ces clés dans info seulement si
+            # l'action est invalide
             assert info.get("invalid_action", False) is True
             assert info.get("index_out_of_range", False) is True
             mock_logging.warning.assert_called()
@@ -619,7 +622,8 @@ class TestDispatchEnvUltraSimple:
         with patch("services.rl.dispatch_env.logging") as mock_logging:
             obs, reward, _terminated, _truncated, info = env.step(1)
             assert reward == -100.0
-            # ✅ FIX: Le code ajoute ces clés dans info seulement si l'action est invalide
+            # ✅ FIX: Le code ajoute ces clés dans info seulement si
+            # l'action est invalide
             assert info.get("invalid_action", False) is True
             assert info.get("booking_already_assigned", False) is True
             mock_logging.warning.assert_called()

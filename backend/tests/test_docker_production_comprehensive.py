@@ -84,7 +84,8 @@ class TestDockerProduction:
             assert "redis:" in content
             # Le service backend peut s'appeler "backend:" ou "api:"
             assert "backend:" in content or "api:" in content
-            # Les services Celery peuvent être séparés (celery-worker, celery-beat, flower)
+            # Les services Celery peuvent être séparés
+            # (celery-worker, celery-beat, flower)
             assert (
                 "celery:" in content
                 or "celery-worker:" in content
@@ -183,7 +184,8 @@ class TestDockerProduction:
                     content = f.read()
 
                 # Vérifier les bonnes pratiques dans entrypoint
-                # Accepter les deux formats : direct (/bin/bash) ou via env (/usr/bin/env bash)
+                # Accepter les deux formats : direct (/bin/bash) ou via env
+                # (/usr/bin/env bash)
                 assert (
                     "#!/bin/bash" in content
                     or "#!/bin/sh" in content
@@ -261,7 +263,8 @@ class TestDockerProduction:
             assert "POSTGRES_DB" in content
             assert "POSTGRES_USER" in content
             assert "POSTGRES_PASSWORD" in content
-            # Redis peut être configuré via REDIS_URL, CELERY_BROKER_URL, ou CELERY_RESULT_BACKEND
+            # Redis peut être configuré via REDIS_URL, CELERY_BROKER_URL,
+            # ou CELERY_RESULT_BACKEND
             assert (
                 "REDIS_URL" in content
                 or "CELERY_BROKER_URL" in content
@@ -286,7 +289,8 @@ class TestDockerProduction:
             with Path(compose_path, encoding="utf-8").open() as f:
                 content = f.read()
 
-            # Vérifier la configuration réseau (peut être implicite avec default network)
+            # Vérifier la configuration réseau (peut être implicite avec
+            # default network)
             # networks: peut être présent ou utiliser le réseau par défaut
             assert "networks:" in content or "depends_on:" in content
         else:
@@ -310,7 +314,8 @@ class TestDockerProduction:
 
             # Vérifier la configuration des volumes
             assert "volumes:" in content
-            # Les volumes peuvent avoir différents noms (postgres_data, pg_data, redis_data, etc.)
+            # Les volumes peuvent avoir différents noms
+            # (postgres_data, pg_data, redis_data, etc.)
             assert (
                 "postgres_data:" in content
                 or "pg_data:" in content

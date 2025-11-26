@@ -29,7 +29,8 @@ class TestC51Network:
 
     def test_init_with_custom_params(self):
         """Test initialisation avec paramètres personnalisés."""
-        # ✅ FIX: Utiliser state_size, action_size, num_atoms (pas state_dim, action_dim, n_atoms)
+        # ✅ FIX: Utiliser state_size, action_size, num_atoms
+        # (pas state_dim, action_dim, n_atoms)
         # ✅ FIX: Pas de dropout_rate configurable
         network = C51Network(
             state_size=100,
@@ -207,7 +208,8 @@ class TestQRNetwork:
 
     def test_init_with_custom_params(self):
         """Test initialisation avec paramètres personnalisés."""
-        # ✅ FIX: Utiliser state_size, action_size, num_quantiles (pas state_dim, action_dim, n_quantiles)
+        # ✅ FIX: Utiliser state_size, action_size, num_quantiles
+        # (pas state_dim, action_dim, n_quantiles)
         # ✅ FIX: Pas de dropout_rate configurable
         network = QRNetwork(
             state_size=100,
@@ -375,14 +377,16 @@ class TestDistributionalLoss:
 
     def test_init_with_default_params(self):
         """Test initialisation avec paramètres par défaut."""
-        # ✅ FIX: DistributionalLoss est une classe avec des méthodes statiques, pas instanciable
+        # ✅ FIX: DistributionalLoss est une classe avec des méthodes statiques,
+        # pas instanciable
         # On teste juste que la classe existe et a les méthodes statiques
         assert hasattr(DistributionalLoss, "c51_loss")
         assert hasattr(DistributionalLoss, "quantile_loss")
 
     def test_init_with_custom_params(self):
         """Test initialisation avec paramètres personnalisés."""
-        # ✅ FIX: DistributionalLoss est une classe avec des méthodes statiques, pas instanciable
+        # ✅ FIX: DistributionalLoss est une classe avec des méthodes statiques,
+        # pas instanciable
         # On teste juste que la classe existe
         assert DistributionalLoss is not None
 
@@ -552,7 +556,8 @@ class TestUncertaintyCapture:
 
     def test_compute_uncertainty(self):
         """Test compute_uncertainty."""
-        # ✅ FIX: La méthode s'appelle calculate_uncertainty et prend seulement distribution
+        # ✅ FIX: La méthode s'appelle calculate_uncertainty et prend
+        # seulement distribution
         uncertainty = UncertaintyCapture()
 
         # Mock des données - distribution doit être normalisée (probabilités)
@@ -571,7 +576,8 @@ class TestUncertaintyCapture:
 
     def test_compute_uncertainty_with_different_actions(self):
         """Test compute_uncertainty avec différentes actions."""
-        # ✅ FIX: La méthode s'appelle calculate_uncertainty et prend seulement distribution
+        # ✅ FIX: La méthode s'appelle calculate_uncertainty et prend
+        # seulement distribution
         uncertainty = UncertaintyCapture()
 
         # Mock des données - distribution doit être normalisée (probabilités)
@@ -589,7 +595,8 @@ class TestUncertaintyCapture:
 
     def test_compute_uncertainty_with_same_actions(self):
         """Test compute_uncertainty avec mêmes actions."""
-        # ✅ FIX: La méthode s'appelle calculate_uncertainty et prend seulement distribution
+        # ✅ FIX: La méthode s'appelle calculate_uncertainty et prend
+        # seulement distribution
         uncertainty = UncertaintyCapture()
 
         # Mock des données - distribution doit être normalisée (probabilités)
@@ -607,10 +614,12 @@ class TestUncertaintyCapture:
 
     def test_compute_uncertainty_with_zero_distributions(self):
         """Test compute_uncertainty avec distributions zéro."""
-        # ✅ FIX: La méthode s'appelle calculate_uncertainty et prend seulement distribution
+        # ✅ FIX: La méthode s'appelle calculate_uncertainty et prend
+        # seulement distribution
         uncertainty = UncertaintyCapture()
 
-        # Mock des données - distribution uniforme pour éviter les problèmes avec zéro
+        # Mock des données - distribution uniforme pour éviter les problèmes
+        # avec zéro
         batch_size = 5
         action_dim = 10
         n_atoms = 21
@@ -624,7 +633,8 @@ class TestUncertaintyCapture:
 
     def test_compute_uncertainty_with_large_distributions(self):
         """Test compute_uncertainty avec distributions importantes."""
-        # ✅ FIX: La méthode s'appelle calculate_uncertainty et prend seulement distribution
+        # ✅ FIX: La méthode s'appelle calculate_uncertainty et prend
+        # seulement distribution
         uncertainty = UncertaintyCapture()
 
         # Mock des données - distribution doit être normalisée (probabilités)
@@ -642,7 +652,8 @@ class TestUncertaintyCapture:
 
     def test_compute_uncertainty_with_negative_distributions(self):
         """Test compute_uncertainty avec distributions négatives."""
-        # ✅ FIX: La méthode s'appelle calculate_uncertainty et prend seulement distribution
+        # ✅ FIX: La méthode s'appelle calculate_uncertainty et prend
+        # seulement distribution
         # Les distributions doivent être des probabilités (positives, normalisées)
         uncertainty = UncertaintyCapture()
 
@@ -661,7 +672,8 @@ class TestUncertaintyCapture:
 
     def test_compute_uncertainty_with_mixed_distributions(self):
         """Test compute_uncertainty avec distributions mixtes."""
-        # ✅ FIX: La méthode s'appelle calculate_uncertainty et prend seulement distribution
+        # ✅ FIX: La méthode s'appelle calculate_uncertainty et prend
+        # seulement distribution
         uncertainty = UncertaintyCapture()
 
         # Mock des données - distribution doit être normalisée (probabilités)

@@ -268,7 +268,8 @@ class TestA07AuthenticationFailures:
             )
             if i < 5:
                 # Les 5 premières doivent passer (ou échouer avec 401/400)
-                # 400 peut être retourné pour validation échouée avant l'authentification
+                # 400 peut être retourné pour validation échouée avant
+                # l'authentification
                 assert response.status_code in (400, 401, 404)
             else:
                 # La 6ème doit retourner 429 (Too Many Requests) ou continuer à échouer

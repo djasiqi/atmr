@@ -6,9 +6,7 @@ Tests simplifiés pour suggestion_generator.py - avec objets mock appropriés
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 
-import numpy as np
 import pytest
-import torch
 
 from services.rl.suggestion_generator import RLSuggestionGenerator, _lazy_import_rl
 
@@ -423,7 +421,8 @@ class TestRLSuggestionGenerator:
         """Test génération de suggestions sans assignments non assignés."""
         generator = RLSuggestionGenerator()
 
-        # Créer des objets mock appropriés (sans booking pour simuler un assignment non assignable)
+        # Créer des objets mock appropriés (sans booking pour simuler
+        # un assignment non assignable)
         mock_driver = Mock()
         mock_driver.id = 1
         mock_driver.is_available = True

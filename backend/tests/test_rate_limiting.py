@@ -172,7 +172,8 @@ class TestRateLimitingAuth:
                 # ✅ FIX: Accepter 401 (mauvais mot de passe) ou 404 (route non trouvée)
                 assert response.status_code in (401, 404)  # Pas de 429
             else:
-                # ✅ FIX: Accepter 404 si la route n'existe pas, sinon 429 pour rate limit
+                # ✅ FIX: Accepter 404 si la route n'existe pas, sinon 429
+                # pour rate limit
                 assert response.status_code in (429, 404, 401), (
                     f"Expected 429, 404, or 401, got {response.status_code}"
                 )

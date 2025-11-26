@@ -101,7 +101,8 @@ class TestDispatchSafetyIntegration:
             optimizer.optimize_assignments.assert_called_once()
 
             # Simuler le dispatch avec Safety Guards
-            # Patcher get_safety_guards dans le module où il est utilisé (_simulate_dispatch)
+            # Patcher get_safety_guards dans le module où il est utilisé
+            # (_simulate_dispatch)
             with patch(
                 "tests.test_dispatch_integration.get_safety_guards"
             ) as mock_get_guards:

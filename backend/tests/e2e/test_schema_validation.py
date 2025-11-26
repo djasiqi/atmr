@@ -282,7 +282,8 @@ class TestSchemaValidationE2E:
             )
         client_headers = {"Authorization": f"Bearer {client_token}"}
 
-        # ✅ FIX: Utiliser public_id au lieu de id car la route attend un public_id (string)
+        # ✅ FIX: Utiliser public_id au lieu de id car la route attend
+        # un public_id (string)
         response = client.post(
             f"/api/v1/clients/{client_user.public_id}/bookings",
             json={
@@ -401,7 +402,8 @@ class TestSchemaValidationE2E:
             headers=client_headers,
         )
         # Peut être 200 (succès) ou 400 si géocodage échoue, 404 si booking non trouvé
-        # ✅ FIX: Accepter 404 si le booking n'est pas trouvé ou si l'utilisateur n'a pas accès
+        # ✅ FIX: Accepter 404 si le booking n'est pas trouvé ou si
+        # l'utilisateur n'a pas accès
         assert response.status_code in [200, 400, 404]
         if response.status_code == 200:
             data = response.get_json() or {}
@@ -461,7 +463,8 @@ class TestSchemaValidationE2E:
         )  # ✅ FIX: Définir company_id pour cohérence
         db.session.add(booking)
         db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
-        # ✅ FIX: Commit pour garantir que le booking est visible dans la requête suivante
+        # ✅ FIX: Commit pour garantir que le booking est visible
+        # dans la requête suivante
         db.session.commit()
 
         from flask_jwt_extended import create_access_token
@@ -484,12 +487,14 @@ class TestSchemaValidationE2E:
             json={"scheduled_time": "invalid-date-format"},
             headers=client_headers,
         )
-        # ✅ FIX: Accepter 404 si le booking n'est pas trouvé ou si l'utilisateur n'a pas accès
+        # ✅ FIX: Accepter 404 si le booking n'est pas trouvé ou si
+        # l'utilisateur n'a pas accès
         assert response.status_code in [400, 404, 500]
         data = response.get_json() or {}
         assert ("message" in data) or ("errors" in data) or ("error" in data)
-        # Vérifier que l'erreur mentionne scheduled_time seulement si c'est une erreur de validation (400)
-        # Si c'est 404, c'est que le booking n'a pas été trouvé (problème de test, pas de validation)
+        # Vérifier que l'erreur mentionne scheduled_time seulement si c'est
+        # une erreur de validation (400). Si c'est 404, c'est que le booking
+        # n'a pas été trouvé (problème de test, pas de validation)
         if response.status_code == 400:
             error_str = str(data).lower()
             assert (
@@ -509,13 +514,15 @@ class TestSchemaValidationE2E:
             json={"status": "invalid_status"},
             headers=client_headers,
         )
-        # ✅ FIX: Accepter 404 si le booking n'est pas trouvé ou si l'utilisateur n'a pas accès
+        # ✅ FIX: Accepter 404 si le booking n'est pas trouvé ou si
+        # l'utilisateur n'a pas accès
         assert response.status_code in [400, 404, 500]
         data = response.get_json() or {}
         # Si c'est 404, on ne vérifie pas le message d'erreur
         if response.status_code != 404:
             assert "message" in data or "errors" in data
-            # Vérifier que l'erreur mentionne status seulement si c'est une erreur de validation
+            # Vérifier que l'erreur mentionne status seulement si c'est
+            # une erreur de validation
             if response.status_code == 400:
                 error_str = str(data).lower()
                 assert "status" in error_str or "errors" in error_str
@@ -526,7 +533,8 @@ class TestSchemaValidationE2E:
             json={"amount": -10.0},
             headers=client_headers,
         )
-        # ✅ FIX: Accepter 404 si le booking n'est pas trouvé ou si l'utilisateur n'a pas accès
+        # ✅ FIX: Accepter 404 si le booking n'est pas trouvé ou si
+        # l'utilisateur n'a pas accès
         assert response.status_code in [400, 404, 500]
         data = response.get_json() or {}
         # Si c'est 404, on ne vérifie pas le message d'erreur
@@ -605,8 +613,10 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # Peut être 201 (succès) ou 400 si géocodage échoue, 404 si route/user non trouvé
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si l'utilisateur n'a pas accès
+        # Peut être 201 (succès) ou 400 si géocodage échoue,
+        # 404 si route/user non trouvé
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si
+        # l'utilisateur n'a pas accès
         assert response.status_code in [201, 400, 404, 429, 500]
         if response.status_code == 201:
             data = response.get_json() or {}
@@ -671,14 +681,16 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si l'utilisateur n'a pas accès
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si
+        # l'utilisateur n'a pas accès
         assert response.status_code in [400, 404, 500]
         data = response.get_json() if response.status_code != 429 else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data or "error" in data
-        # Vérifier que l'erreur mentionne client_id seulement si c'est une erreur de validation (400)
-        # Si c'est 404, c'est que la route n'a pas été trouvée (problème de test, pas de validation)
+        # Vérifier que l'erreur mentionne client_id seulement si c'est
+        # une erreur de validation (400). Si c'est 404, c'est que la route
+        # n'a pas été trouvée (problème de test, pas de validation)
         if response.status_code == 400:
             error_str = str(data).lower()
             assert "client_id" in error_str or "errors" in error_str, (
@@ -699,7 +711,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si l'utilisateur n'a pas accès
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si
+        # l'utilisateur n'a pas accès
         assert response.status_code in [400, 404, 500]
         data = response.get_json() if response.status_code not in [429, 404] else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -707,7 +720,8 @@ class TestSchemaValidationE2E:
         # Si c'est 404, on ne vérifie pas le message d'erreur
         if response.status_code != 404:
             assert "message" in data or "errors" in data
-            # Vérifier que l'erreur mentionne scheduled_time seulement si c'est une erreur de validation
+            # Vérifier que l'erreur mentionne scheduled_time seulement si
+            # c'est une erreur de validation
             if response.status_code == 400:
                 error_str = str(data).lower()
                 assert (
@@ -729,7 +743,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si l'utilisateur n'a pas accès
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si
+        # l'utilisateur n'a pas accès
         assert response.status_code in [400, 404, 500]
         data = response.get_json() if response.status_code not in [429, 404] else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -749,7 +764,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si l'utilisateur n'a pas accès
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si
+        # l'utilisateur n'a pas accès
         assert response.status_code in [400, 404, 500]
         data = response.get_json() if response.status_code not in [429, 404] else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -770,7 +786,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si l'utilisateur n'a pas accès
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si
+        # l'utilisateur n'a pas accès
         assert response.status_code in [400, 404, 500]
         data = response.get_json() if response.status_code not in [429, 404] else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -803,7 +820,8 @@ class TestSchemaValidationE2E:
             json={"client_type": "SELF_SERVICE", "email": unique_email},
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si l'utilisateur n'a pas accès
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si
+        # l'utilisateur n'a pas accès
         assert response.status_code in [
             201,
             400,
@@ -850,7 +868,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si l'utilisateur n'a pas accès
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si
+        # l'utilisateur n'a pas accès
         assert response.status_code in [201, 400, 404, 429]
 
     def test_create_client_valid_schema_corporate(self, client, db, sample_company):
@@ -892,7 +911,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si l'utilisateur n'a pas accès
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si
+        # l'utilisateur n'a pas accès
         assert response.status_code in [201, 400, 404, 429]
 
     def test_create_client_invalid_schema(self, client, db, sample_company):
@@ -924,7 +944,8 @@ class TestSchemaValidationE2E:
             json={"first_name": "Jean", "last_name": "Dupont"},
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si l'utilisateur n'a pas accès
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si
+        # l'utilisateur n'a pas accès
         assert response.status_code in [400, 404, 429, 500]
         data = response.get_json() if response.status_code not in [429, 404] else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -932,7 +953,8 @@ class TestSchemaValidationE2E:
         # Si c'est 404, on ne vérifie pas le message d'erreur
         if response.status_code not in [404, 429]:
             assert ("message" in data) or ("errors" in data) or ("error" in data)
-            # Vérifier que l'erreur mentionne client_type seulement si c'est une erreur de validation (400)
+            # Vérifier que l'erreur mentionne client_type seulement si c'est
+            # une erreur de validation (400)
             if response.status_code == 400:
                 error_str = str(data).lower()
                 assert "client_type" in error_str or "errors" in error_str, (
@@ -946,7 +968,8 @@ class TestSchemaValidationE2E:
             json={"client_type": "INVALID_TYPE"},
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si l'utilisateur n'a pas accès
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si
+        # l'utilisateur n'a pas accès
         assert response.status_code in [400, 404, 429, 500]
         data = response.get_json() if response.status_code not in [429, 404] else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -977,7 +1000,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si l'utilisateur n'a pas accès
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si
+        # l'utilisateur n'a pas accès
         assert response.status_code in [400, 404, 429, 500]  # 429 pour rate limiting
         data = response.get_json() if response.status_code not in [429, 404] else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -992,7 +1016,8 @@ class TestSchemaValidationE2E:
             json={"client_type": "SELF_SERVICE", "email": "invalid-email-format"},
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si l'utilisateur n'a pas accès
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si
+        # l'utilisateur n'a pas accès
         assert response.status_code in [400, 404, 500]
         data = response.get_json() if response.status_code != 404 else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -1000,7 +1025,8 @@ class TestSchemaValidationE2E:
         # Si c'est 404, on ne vérifie pas le message d'erreur
         if response.status_code != 404:
             assert "message" in data or "errors" in data
-            # Vérifier que l'erreur mentionne email seulement si c'est une erreur de validation
+            # Vérifier que l'erreur mentionne email seulement si c'est
+            # une erreur de validation
             if response.status_code == 400:
                 error_str = str(data).lower()
                 assert "email" in error_str or "errors" in error_str
@@ -1016,7 +1042,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si l'utilisateur n'a pas accès
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si
+        # l'utilisateur n'a pas accès
         assert response.status_code in [400, 404, 500]
         data = response.get_json() if response.status_code not in [429, 404] else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -1037,7 +1064,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si l'utilisateur n'a pas accès
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si
+        # l'utilisateur n'a pas accès
         assert response.status_code in [400, 404, 500]
         data = response.get_json() if response.status_code not in [429, 404] else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -1227,7 +1255,8 @@ class TestSchemaValidationE2E:
         # Si c'est 404, on ne vérifie pas le message d'erreur
         if response.status_code != 404:
             assert "message" in data or "errors" in data or "error" in data
-            # Vérifier que l'erreur mentionne amount seulement si c'est une erreur de validation (400)
+            # Vérifier que l'erreur mentionne amount seulement si c'est
+            # une erreur de validation (400)
             if response.status_code == 400:
                 error_str = str(data).lower()
                 assert "amount" in error_str or "errors" in error_str, (
@@ -1252,7 +1281,8 @@ class TestSchemaValidationE2E:
         # Si c'est 404, on ne vérifie pas le message d'erreur
         if response.status_code != 404:
             assert "message" in data or "errors" in data
-            # Vérifier que l'erreur mentionne method seulement si c'est une erreur de validation (400)
+            # Vérifier que l'erreur mentionne method seulement si c'est
+            # une erreur de validation (400)
             if response.status_code == 400:
                 error_str = str(data).lower()
                 assert "method" in error_str or "errors" in error_str
@@ -1559,7 +1589,8 @@ class TestSchemaValidationE2E:
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data or "error" in data
-        # Vérifier que l'erreur mentionne status seulement si c'est une erreur de validation (400)
+        # Vérifier que l'erreur mentionne status seulement si c'est
+        # une erreur de validation (400)
         # Si c'est 404, c'est que la route n'a pas été trouvée (problème de test, pas de validation)
         if response.status_code == 400:
             error_str = str(data).lower()
@@ -2192,7 +2223,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company n'est pas trouvée
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company
+        # n'est pas trouvée
         assert response.status_code in [200, 404]
 
         # Test mise à jour partielle (seulement certains champs)
@@ -2244,7 +2276,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company n'est pas trouvée
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company
+        # n'est pas trouvée
         assert response.status_code in [400, 404, 500]
         data = response.get_json() if response.status_code != 404 else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -2261,7 +2294,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company n'est pas trouvée
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company
+        # n'est pas trouvée
         assert response.status_code in [400, 404, 500]
         data = response.get_json() if response.status_code != 404 else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -2278,7 +2312,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company n'est pas trouvée
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company
+        # n'est pas trouvée
         assert response.status_code in [400, 404, 500]
         data = response.get_json() if response.status_code != 404 else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -2295,7 +2330,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company n'est pas trouvée
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company
+        # n'est pas trouvée
         assert response.status_code in [400, 404, 500]
         data = response.get_json() if response.status_code != 404 else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -2312,7 +2348,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company n'est pas trouvée
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company
+        # n'est pas trouvée
         assert response.status_code in [400, 404, 500]
         data = response.get_json() if response.status_code != 404 else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -2329,7 +2366,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company n'est pas trouvée
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company
+        # n'est pas trouvée
         assert response.status_code in [400, 404, 500]
         data = response.get_json() if response.status_code != 404 else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -2346,7 +2384,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company n'est pas trouvée
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company
+        # n'est pas trouvée
         assert response.status_code in [400, 404, 500]
         data = response.get_json() if response.status_code != 404 else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -2363,7 +2402,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company n'est pas trouvée
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company
+        # n'est pas trouvée
         assert response.status_code in [400, 404, 500]
         data = response.get_json() if response.status_code != 404 else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -2380,7 +2420,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company n'est pas trouvée
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company
+        # n'est pas trouvée
         assert response.status_code in [400, 404, 500]
         data = response.get_json() if response.status_code != 404 else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -2397,7 +2438,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company n'est pas trouvée
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company
+        # n'est pas trouvée
         assert response.status_code in [400, 404, 500]
         data = response.get_json() if response.status_code != 404 else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -2414,7 +2456,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company n'est pas trouvée
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company
+        # n'est pas trouvée
         assert response.status_code in [400, 404, 500]
         data = response.get_json() if response.status_code != 404 else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -2431,7 +2474,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company n'est pas trouvée
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company
+        # n'est pas trouvée
         assert response.status_code in [400, 404, 500]
         data = response.get_json() if response.status_code != 404 else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -2448,7 +2492,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company n'est pas trouvée
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company
+        # n'est pas trouvée
         assert response.status_code in [400, 404, 500]
         data = response.get_json() if response.status_code != 404 else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -2618,7 +2663,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company n'est pas trouvée
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company
+        # n'est pas trouvée
         assert response.status_code in [400, 404, 429]  # 429 pour rate limiting
         data = response.get_json() if response.status_code not in [429, 404] else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -2626,7 +2672,8 @@ class TestSchemaValidationE2E:
         # Si c'est 404 ou 429, on ne vérifie pas le message d'erreur
         if response.status_code not in [429, 404]:
             assert "message" in data or "errors" in data or "error" in data
-            # Vérifier que l'erreur mentionne period_year seulement si c'est une erreur de validation (400)
+            # Vérifier que l'erreur mentionne period_year seulement si c'est
+            # une erreur de validation (400)
             error_str = str(data).lower()
             assert "period_year" in error_str or "errors" in error_str, (
                 f"Erreur de validation devrait mentionner period_year ou errors, "
@@ -2643,7 +2690,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company n'est pas trouvée
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company
+        # n'est pas trouvée
         assert response.status_code in [400, 404, 429]  # 429 pour rate limiting
         data = response.get_json() if response.status_code not in [429, 404] else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -2664,7 +2712,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company n'est pas trouvée
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company
+        # n'est pas trouvée
         assert response.status_code in [400, 404, 429]  # 429 pour rate limiting
         data = response.get_json() if response.status_code not in [429, 404] else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -2683,7 +2732,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company n'est pas trouvée
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company
+        # n'est pas trouvée
         assert response.status_code in [400, 404, 429]  # 429 pour rate limiting
         data = response.get_json() if response.status_code not in [429, 404] else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -2702,7 +2752,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company n'est pas trouvée
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company
+        # n'est pas trouvée
         assert response.status_code in [400, 404, 429]  # 429 pour rate limiting
         data = response.get_json() if response.status_code not in [429, 404] else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -2721,7 +2772,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company n'est pas trouvée
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company
+        # n'est pas trouvée
         assert response.status_code in [400, 404, 429]  # 429 pour rate limiting
         data = response.get_json() if response.status_code not in [429, 404] else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -2740,7 +2792,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company n'est pas trouvée
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company
+        # n'est pas trouvée
         assert response.status_code in [400, 404, 429]  # 429 pour rate limiting
         data = response.get_json() if response.status_code not in [429, 404] else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -2759,7 +2812,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company n'est pas trouvée
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company
+        # n'est pas trouvée
         assert response.status_code in [400, 404, 429]  # 429 pour rate limiting
         data = response.get_json() if response.status_code not in [429, 404] else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -2779,7 +2833,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company n'est pas trouvée
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company
+        # n'est pas trouvée
         assert response.status_code in [400, 404, 429]  # 429 pour rate limiting
         data = response.get_json() if response.status_code not in [429, 404] else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -2800,7 +2855,8 @@ class TestSchemaValidationE2E:
         )
         # L'endpoint vérifie cette condition après validation schema,
         # donc 400 (ou 404 si route non trouvée, ou 429 si rate limit atteint)
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company n'est pas trouvée
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si la company
+        # n'est pas trouvée
         assert response.status_code in [400, 404, 429]  # 429 pour rate limiting
 
     # ========== COMPANIES ENDPOINTS ==========
@@ -2856,7 +2912,8 @@ class TestSchemaValidationE2E:
                 # email, password, etc. manquants
             },
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si l'utilisateur n'a pas accès
+        # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si
+        # l'utilisateur n'a pas accès
         assert response.status_code in [400, 404]
         data = response.get_json() or {}
         assert "message" in data or "errors" in data
@@ -2974,7 +3031,8 @@ class TestSchemaValidationE2E:
         response = authenticated_client.get(
             f"/api/v1/analytics/weekly-summary?week_start={week_start.isoformat()}"
         )
-        # Peut être 200 (succès) ou 404 (pas de company) ou 500 (erreur serveur)
+        # Peut être 200 (succès) ou 404 (pas de company) ou 500
+        # (erreur serveur)
         assert response.status_code in [200, 404, 500]
 
         # Test sans week_start (optionnel, utilise la semaine courante par défaut)
@@ -3000,7 +3058,8 @@ class TestSchemaValidationE2E:
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data or "error" in data
-        # Vérifier que l'erreur mentionne week_start ou format date seulement si c'est une erreur de validation (400)
+        # Vérifier que l'erreur mentionne week_start ou format date seulement
+        # si c'est une erreur de validation (400)
         # Si c'est 404, c'est que la route n'a pas été trouvée (problème de test, pas de validation)
         if response.status_code == 400:
             error_str = str(data).lower()
@@ -3099,7 +3158,8 @@ class TestSchemaValidationE2E:
         # Si c'est 404, on ne vérifie pas le message d'erreur
         if response.status_code != 404:
             assert "message" in data or "errors" in data
-            # Vérifier que l'erreur mentionne driver_id seulement si c'est une erreur de validation (400)
+            # Vérifier que l'erreur mentionne driver_id seulement si c'est
+            # une erreur de validation (400)
             error_str = str(data).lower()
             assert "driver_id" in error_str or "errors" in error_str
 
@@ -3165,7 +3225,8 @@ class TestSchemaValidationE2E:
         # Si c'est 404, on ne vérifie pas le message d'erreur
         if response.status_code != 404:
             assert "message" in data or "errors" in data
-            # Vérifier que l'erreur mentionne driver_id seulement si c'est une erreur de validation (400)
+            # Vérifier que l'erreur mentionne driver_id seulement si c'est
+            # une erreur de validation (400)
             error_str = str(data).lower()
             assert "driver_id" in error_str or "errors" in error_str
 

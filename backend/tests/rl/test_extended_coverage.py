@@ -310,7 +310,8 @@ class TestExtendedCoverage:
 
         manager = ShadowModeManager()
 
-        # ✅ FIX: log_decision_comparison() attend company_id, booking_id, human_decision, rl_decision, context
+        # ✅ FIX: log_decision_comparison() attend company_id, booking_id,
+        # human_decision, rl_decision, context
         company_id = "company_1"
         booking_id = "booking_1"
         human_decision = {
@@ -364,7 +365,8 @@ class TestExtendedCoverage:
         env.reset()
 
         action = 0
-        # ✅ FIX: step() retourne 5 valeurs (obs, reward, terminated, truncated, info) selon gymnasium standard
+        # ✅ FIX: step() retourne 5 valeurs (obs, reward, terminated,
+        # truncated, info) selon gymnasium standard
         next_state, reward, terminated, truncated, info = env.step(action)
 
         assert isinstance(next_state, np.ndarray)

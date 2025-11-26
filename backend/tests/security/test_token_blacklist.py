@@ -11,8 +11,6 @@ import hashlib
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from security.token_blacklist import (
     BLACKLIST_PREFIX,
     add_to_blacklist,

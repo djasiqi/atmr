@@ -262,7 +262,8 @@ def create_app(config_name: str | None = None):
                             "[2.9] Échec instrumentation DB différée: %s", e
                         )
         except Exception as e:
-            # Ne pas logger comme warning si c'est juste que l'engine n'est pas encore créé
+            # Ne pas logger comme warning si c'est juste que l'engine
+            # n'est pas encore créé
             if "application context" not in str(e).lower():
                 app.logger.warning("[2.9] Échec instrumentation SQLAlchemy: %s", e)
     except ImportError as e:

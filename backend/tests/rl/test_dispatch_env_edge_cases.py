@@ -467,7 +467,8 @@ class TestDispatchEnvEdgeCases:
 
         _obs, reward, _terminated, _truncated, info = env.step(0)
 
-        # ✅ FIX: Le reward peut être négatif (pénalités), donc total_reward peut diminuer
+        # ✅ FIX: Le reward peut être négatif (pénalités),
+        # donc total_reward peut diminuer
         # On vérifie juste que total_reward = initial_reward + reward
         final_reward = env.episode_stats.get("total_reward", 0.0)
         assert abs(final_reward - (initial_reward + reward)) < 0.01, (

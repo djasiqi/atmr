@@ -237,7 +237,8 @@ class TestDispatchEnvTargeted:
         env = DispatchEnv(num_drivers=3, max_bookings=5)
         env.reset()
 
-        # ✅ FIX: _generate_new_bookings est appelé seulement si la probabilité est atteinte
+        # ✅ FIX: _generate_new_bookings est appelé seulement si
+        # la probabilité est atteinte
         # On force la probabilité à 1.0 pour garantir l'appel
         with (
             patch.object(env, "_get_booking_generation_rate", return_value=1.0),

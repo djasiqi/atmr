@@ -309,9 +309,11 @@ class RLLogger:
             from flask import has_app_context
 
             if not has_app_context():
-                logger.debug(
-                    "[RLLogger] Pas de contexte Flask, skip DB logging (normal en tâches Celery ou threads)"
+                msg = (
+                    "[RLLogger] Pas de contexte Flask, skip DB logging "
+                    "(normal en tâches Celery ou threads)"
                 )
+                logger.debug(msg)
                 return False
         except ImportError:
             # Flask n'est pas disponible, on ne peut pas logger en DB
@@ -453,14 +455,18 @@ class RLLogger:
                     from flask import has_app_context
 
                     if not has_app_context():
-                        logger.warning(
-                            "[RLLogger] Pas de contexte Flask, impossible d'effacer les logs DB"
+                        msg = (
+                            "[RLLogger] Pas de contexte Flask, "
+                            "impossible d'effacer les logs DB"
                         )
+                        logger.warning(msg)
                         return False
                 except ImportError:
-                    logger.warning(
-                        "[RLLogger] Flask non disponible, impossible d'effacer les logs DB"
+                    msg = (
+                        "[RLLogger] Flask non disponible, "
+                        "impossible d'effacer les logs DB"
                     )
+                    logger.warning(msg)
                     return False
 
                 # ATTENTION: Cette opération est destructive

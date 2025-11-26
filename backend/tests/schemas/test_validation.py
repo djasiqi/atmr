@@ -58,7 +58,8 @@ class TestDispatchRunRequestSchema:
         }
         # Le schéma devrait accepter (overrides est un Dict),
         # mais la sanitisation devrait être appliquée ailleurs
-        # Marshmallow 3.x n'accepte plus strict=False, utiliser unknown="include" à la place
+        # Marshmallow 3.x n'accepte plus strict=False, utiliser
+        # unknown="include" à la place
         result = schema.load(data, unknown="include")
         assert "overrides" in result
 

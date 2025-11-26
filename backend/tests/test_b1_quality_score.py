@@ -78,7 +78,8 @@ class TestQualityScoreVersioning:
             config={},
         )
         db_session.session.add(run)
-        db_session.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
+        # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
+        db_session.session.flush()
 
         collector = DispatchMetricsCollector(company.id)
 
@@ -130,7 +131,8 @@ class TestQualityScoreVersioning:
             config={},
         )
         db_session.session.add(run)
-        db_session.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
+        # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
+        db_session.session.flush()
 
         collector = DispatchMetricsCollector(company.id)
 

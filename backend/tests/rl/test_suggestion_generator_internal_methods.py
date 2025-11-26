@@ -2,11 +2,9 @@
 
 from unittest.mock import Mock, patch
 
-import numpy as np
 import pytest
-import torch
 
-from services.rl.suggestion_generator import RLSuggestionGenerator, lazy_import_rl
+from services.rl.suggestion_generator import RLSuggestionGenerator
 
 
 class TestRLSuggestionGeneratorInternalMethods:

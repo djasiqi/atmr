@@ -119,7 +119,8 @@ class TestClusteringStitching:
         ]
 
         clustering = GeographicClustering()
-        # La méthode prend _assignments (avec préfixe _) et _zone_results (avec préfixe _)
+        # La méthode prend _assignments (avec préfixe _) et _zone_results
+        # (avec préfixe _)
         improvements = clustering._stitch_boundary_bookings(
             _assignments=[], unassigned=bookings, zones=zones, _zone_results={}
         )
