@@ -5,6 +5,7 @@ from logging.config import fileConfig
 from alembic import context
 from flask import current_app, has_app_context
 from sqlalchemy import engine_from_config, pool
+from sqlalchemy.engine import URL
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -29,34 +30,93 @@ def get_engine():
     return engine_from_config(section, prefix="sqlalchemy.", poolclass=pool.NullPool)
 
 
-def get_engine_url():
+def get_database_url() -> str:
+    """
+    Source de vérité pour l'URL de base de données.
+
+    Ordre de priorité :
+      1) DATABASE_URL (env)
+      2) SQLALCHEMY_DATABASE_URI (env)
+      3) Reconstruction à partir des variables POSTGRES_* (env)
+
+    ⚠️ IMPORTANT: On utilise directement les variables d'environnement
+    sans les reconstruire pour éviter les problèmes d'échappement.
+    Si reconstruction nécessaire, on utilise URL.create() qui gère correctement
+    les caractères spéciaux dans le mot de passe.
+    """
+    # Priorité 1: DATABASE_URL (utilisé en priorité par Flask config.py)
+    env_url = os.getenv("DATABASE_URL")
+    if env_url:
+        logger.info(
+            "[Alembic] Using DB URL from DATABASE_URL: %s@***", env_url.split("@")[0]
+        )
+        return env_url
+
+    # Priorité 2: SQLALCHEMY_DATABASE_URI
+    env_url = os.getenv("SQLALCHEMY_DATABASE_URI")
+    if env_url:
+        logger.info(
+            "[Alembic] Using DB URL from SQLALCHEMY_DATABASE_URI: %s@***",
+            env_url.split("@")[0],
+        )
+        return env_url
+
+    # Priorité 3: Flask app context (si disponible)
     if has_app_context():
         try:
             engine = current_app.extensions["migrate"].db.get_engine()
         except (TypeError, AttributeError):
             engine = current_app.extensions["migrate"].db.engine
         try:
-            return engine.url.render_as_string(hide_password=False).replace("%", "%%")
+            url_str = engine.url.render_as_string(hide_password=False)
+            logger.info(
+                "[Alembic] Using DB URL from Flask app context: %s@***",
+                url_str.split("@")[0],
+            )
+            return url_str
         except AttributeError:
-            return str(engine.url).replace("%", "%%")
+            url_str = str(engine.url)
+            logger.info(
+                "[Alembic] Using DB URL from Flask app context: %s@***",
+                url_str.split("@")[0],
+            )
+            return url_str
 
-    return (
-        os.getenv("SQLALCHEMY_DATABASE_URI")
-        or os.getenv("DATABASE_URL")
-        or config.get_main_option("sqlalchemy.url")
+    # Priorité 4: Reconstruction propre avec URL.create() pour gérer les caractères spéciaux
+    pg_user = os.getenv("POSTGRES_USER", "postgres")
+    pg_password = os.getenv("POSTGRES_PASSWORD", "")
+    pg_host = os.getenv("POSTGRES_HOST", "postgres")
+    pg_port = int(os.getenv("POSTGRES_PORT", "5432"))
+    pg_db = os.getenv("POSTGRES_DB", pg_user)
+
+    # Utiliser URL.create() qui gère correctement l'échappement des caractères spéciaux
+    url_obj = URL.create(
+        "postgresql+psycopg2",
+        username=pg_user,
+        password=pg_password,
+        host=pg_host,
+        port=pg_port,
+        database=pg_db,
     )
+    url_str = str(url_obj)
+    logger.info(
+        "[Alembic] Using DB URL reconstructed from POSTGRES_*: %s@***",
+        url_str.split("@")[0],
+    )
+    return url_str
+
+
+def get_engine_url():
+    """Alias pour compatibilité avec le code existant."""
+    return get_database_url()
 
 
 # add your model's MetaData object here
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-engine_url = get_engine_url()
-if engine_url:
-    safe_engine_url = engine_url.replace("%", "%%")
-    config.set_main_option("sqlalchemy.url", safe_engine_url)
-else:
-    safe_engine_url = None
+# Note: L'URL sera forcée dans run_migrations_online() via get_database_url()
+# On ne la définit pas ici pour éviter les problèmes d'échappement et de reconstruction
 
 target_db = current_app.extensions["migrate"].db if has_app_context() else None
 
@@ -100,6 +160,12 @@ def run_migrations_online():
     and associate a connection with the context.
 
     """
+    # ⚠️ On force l'URL utilisée par Alembic avant de créer l'engine
+    # Cela garantit que DATABASE_URL/SQLALCHEMY_DATABASE_URI est utilisé tel quel
+    # sans reconstruction qui pourrait casser l'URL (ex: host="37_46!!@postgres")
+    db_url = get_database_url()
+    config.set_main_option("sqlalchemy.url", db_url)
+    logger.info("[Alembic] Database URL forced in config: %s@***", db_url.split("@")[0])
 
     # this callback is used to prevent an auto-migration from being generated
     # when there are no changes to the schema
