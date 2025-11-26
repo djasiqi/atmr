@@ -102,10 +102,12 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-atmr_db}
-      # SQLALCHEMY_DATABASE_URI explicite pour les migrations Flask
-      SQLALCHEMY_DATABASE_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      # DATABASE_URL (utilisé en priorité par Flask config.py)
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      # ⚠️ IMPORTANT: Ne pas construire SQLALCHEMY_DATABASE_URI/DATABASE_URL ici
+      # car Docker Compose n'échappe pas les caractères spéciaux dans POSTGRES_PASSWORD
+      # Flask config.py construira automatiquement l'URL avec échappement correct
+      # via _build_database_url_safe() qui utilise urllib.parse.quote_plus()
+      # SQLALCHEMY_DATABASE_URI et DATABASE_URL seront passés explicitement
+      # via -e dans docker compose exec pour les migrations uniquement
 
       # Redis/Celery avec authentification
       REDIS_PASSWORD: ${REDIS_PASSWORD}
