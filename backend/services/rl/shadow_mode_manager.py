@@ -53,7 +53,37 @@ class ShadowModeManager:
         """
         super().__init__()  # Explicitly call parent constructor
         self.data_dir = Path(data_dir)
-        self.data_dir.mkdir(parents=True, exist_ok=True)
+        # Convertir en chemin absolu si relatif
+        if not self.data_dir.is_absolute():
+            # Si c'est un chemin relatif, le convertir en absolu depuis /app
+            app_root = Path("/app")
+            self.data_dir = app_root / self.data_dir
+
+        # Créer le répertoire avec gestion d'erreur gracieuse
+        # Le répertoire devrait déjà être créé par docker-entrypoint.sh, mais on le crée ici aussi pour être sûr
+        try:
+            self.data_dir.mkdir(parents=True, exist_ok=True)
+            # S'assurer que le répertoire a les bonnes permissions (rwxr-xr-x)
+            from contextlib import suppress
+
+            with suppress(OSError, PermissionError):
+                self.data_dir.chmod(0o755)
+        except PermissionError as e:
+            # Logger l'erreur mais continuer (le répertoire sera créé plus tard)
+            import logging
+            from contextlib import suppress
+
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                "Impossible de créer le répertoire %s: %s. Le répertoire devrait être créé par docker-entrypoint.sh. Vérifiez les permissions du volume Docker.",
+                self.data_dir,
+                e,
+            )
+            # Essayer de créer le répertoire parent au moins
+            with suppress(PermissionError, OSError):
+                self.data_dir.parent.mkdir(parents=True, exist_ok=True)
+                with suppress(OSError, PermissionError):
+                    self.data_dir.parent.chmod(0o755)
 
         # Structure des KPIs
         self.kpi_metrics: Dict[str, List[Any]] = {

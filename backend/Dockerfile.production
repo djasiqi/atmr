@@ -43,6 +43,9 @@ RUN apt-get update && apt-get upgrade -y && \
     && rm -rf /var/lib/apt/lists/*
 
 # Copier et installer les dépendances Python
+# Utiliser un ARG pour invalider le cache si requirements.txt change
+ARG REQUIREMENTS_HASH
+ENV REQUIREMENTS_HASH=${REQUIREMENTS_HASH}
 COPY requirements.txt requirements-rl.txt ./
 RUN --mount=type=cache,target=/root/.cache/pip \
     python -m pip install --upgrade pip setuptools wheel && \

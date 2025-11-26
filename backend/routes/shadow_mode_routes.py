@@ -68,8 +68,18 @@ company_summary_model = api.model(
     },
 )
 
-# Initialiser le gestionnaire shadow mode
-shadow_manager = ShadowModeManager()
+# Initialiser le gestionnaire shadow mode (lazy initialization)
+# Utiliser un dictionnaire pour éviter l'utilisation de `global`
+_shadow_manager_cache: dict[str, ShadowModeManager] = {}
+
+
+def get_shadow_manager() -> ShadowModeManager:
+    """Récupère le gestionnaire shadow mode (lazy initialization)."""
+    if "manager" not in _shadow_manager_cache:
+        # Utiliser un chemin absolu pour éviter les problèmes de permissions
+        data_dir = os.getenv("RL_SHADOW_MODE_DIR", "/app/data/rl/shadow_mode")
+        _shadow_manager_cache["manager"] = ShadowModeManager(data_dir=data_dir)
+    return _shadow_manager_cache["manager"]
 
 
 _STATE_KEY = "shadow_mode:active"
@@ -269,7 +279,7 @@ class DailyReport(Resource):
             )
 
             # Générer le rapport
-            report = shadow_manager.generate_daily_report(company_id, date)
+            report = get_shadow_manager().generate_daily_report(company_id, date)
 
             return report, 200
 
@@ -292,7 +302,7 @@ class DailyReport(Resource):
                     return {"error": f"Champ requis manquant: {field}"}, 400
 
             # Enregistrer la décision
-            kpis = shadow_manager.log_decision_comparison(
+            kpis = get_shadow_manager().log_decision_comparison(
                 company_id=company_id,
                 booking_id=data["booking_id"],
                 human_decision=data["human_decision"],
@@ -323,7 +333,7 @@ class CompanySummary(Resource):
             days = int(request.args.get("days", 7))
 
             # Générer le résumé
-            summary = shadow_manager.get_company_summary(company_id, days)
+            summary = get_shadow_manager().get_company_summary(company_id, days)
 
             return summary, 200
 
@@ -350,7 +360,7 @@ class KPIMetrics(Resource):
             metric = request.args.get("metric")
 
             # Générer le résumé pour obtenir les données
-            summary = shadow_manager.get_company_summary(company_id, days)
+            summary = get_shadow_manager().get_company_summary(company_id, days)
 
             if summary.get("total_decisions", 0) == 0:
                 return {
@@ -367,8 +377,10 @@ class KPIMetrics(Resource):
                 metric_data = []
                 for i in range(days):
                     date = start_date + timedelta(days=i)
-                    company_data = shadow_manager._filter_data_by_company_and_date(
-                        company_id, date
+                    company_data = (
+                        get_shadow_manager()._filter_data_by_company_and_date(
+                            company_id, date
+                        )
                     )
 
                     for kpi in company_data["kpis"]:
@@ -389,7 +401,7 @@ class KPIMetrics(Resource):
                 "company_id": company_id,
                 "period_days": days,
                 "summary": summary,
-                "available_metrics": list(shadow_manager.kpi_metrics.keys()),
+                "available_metrics": list(get_shadow_manager().kpi_metrics.keys()),
             }, 200
 
         except ValueError as e:
@@ -421,7 +433,7 @@ class ExportData(Resource):
             reports = []
             for i in range(days):
                 date = start_date + timedelta(days=i)
-                report = shadow_manager.generate_daily_report(company_id, date)
+                report = get_shadow_manager().generate_daily_report(company_id, date)
                 if report.get("total_decisions", 0) > 0:
                     reports.append(report)
 
@@ -520,8 +532,8 @@ def health_check():
             "status": "healthy",
             "service": "shadow_mode",
             "timestamp": datetime.now(UTC).isoformat(),
-            "data_dir": str(shadow_manager.data_dir),
-            "total_decisions": len(shadow_manager.decision_metadata["timestamp"]),
+            "data_dir": str(get_shadow_manager().data_dir),
+            "total_decisions": len(get_shadow_manager().decision_metadata["timestamp"]),
         }
     )
 
@@ -531,12 +543,12 @@ def list_companies():
     """Liste toutes les entreprises avec des données shadow mode."""
     try:
         # Récupérer toutes les entreprises depuis les métadonnées
-        companies = list(set(shadow_manager.decision_metadata["company_id"]))
+        companies = list(set(get_shadow_manager().decision_metadata["company_id"]))
 
         # Ajouter des statistiques pour chaque entreprise
         company_stats = []
         for company_id in companies:
-            summary = shadow_manager.get_company_summary(company_id, 7)
+            summary = get_shadow_manager().get_company_summary(company_id, 7)
             company_stats.append(
                 {
                     "company_id": company_id,
