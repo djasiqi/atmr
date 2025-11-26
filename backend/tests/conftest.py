@@ -131,21 +131,33 @@ def db_session(db):
 @pytest.fixture
 def db(app):
     """Crée une DB propre pour chaque test en utilisant des savepoints."""
+    import logging
+
+    logger = logging.getLogger(__name__)
+    logger.debug("🔧 [Fixture db] Setup: création savepoint")
+
     with app.app_context():
         # ✅ FIX: Utiliser un savepoint (nested transaction) pour rollback automatique
         # Chaque test démarre avec une DB vide et rollback à la fin
 
         # Commencer une transaction nested (SAVEPOINT)
         _db.session.begin_nested()
+        logger.debug("🔧 [Fixture db] Savepoint créé")
 
         yield _db
 
         # Rollback automatique du savepoint
-        _db.session.rollback()
-        # ✅ AJOUT: Expirer tous les objets pour forcer
-        # le rechargement après rollback
-        _db.session.expire_all()
-        _db.session.remove()
+        logger.debug("🔧 [Fixture db] Teardown: rollback savepoint")
+        try:
+            _db.session.rollback()
+            # ✅ AJOUT: Expirer tous les objets pour forcer
+            # le rechargement après rollback
+            _db.session.expire_all()
+            _db.session.remove()
+            logger.debug("🔧 [Fixture db] Teardown: rollback terminé")
+        except Exception as e:
+            logger.error("❌ [Fixture db] Erreur lors du teardown: %s", e)
+            raise
 
 
 @pytest.fixture
@@ -659,7 +671,11 @@ def mock_external_services(monkeypatch):
     Cette fixture s'applique automatiquement à tous les tests pour éviter
     les appels réseau et améliorer la performance et la fiabilité des tests.
     """
+    import logging
     from unittest.mock import MagicMock
+
+    logger = logging.getLogger(__name__)
+    logger.debug("🔧 [Fixture mock_external_services] Setup: mock services externes")
 
     # Mock OSRM - utiliser les mêmes fonctions que mock_osrm_client
     def mock_build_distance_matrix_osrm(coords, **kwargs):
@@ -791,6 +807,7 @@ def mock_external_services(monkeypatch):
     # car il n'y a pas de teardown nécessaire
     # Les mocks sont déjà appliqués via monkeypatch,
     # donc ils sont actifs pour tous les tests
+    logger.debug("🔧 [Fixture mock_external_services] Setup terminé")
     return {
         "osrm": {
             "build_distance_matrix_osrm": mock_build_distance_matrix_osrm,
