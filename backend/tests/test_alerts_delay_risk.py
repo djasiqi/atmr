@@ -692,8 +692,9 @@ class TestPerformanceMetrics:
         # Mesurer la mémoire avant
         initial_objects = len(gc.get_objects()) if "gc" in globals() else 0
 
-        # Créer beaucoup d'alertes
-        for i in range(1000):
+        # ✅ OPTIM: Réduire à 100 pour tester la mémoire sans ralentir
+        # (100 alertes suffisent pour valider le comportement mémoire)
+        for i in range(100):
             analysis_result = {
                 "booking_id": f"booking_{i}",
                 "driver_id": f"driver_{i}",

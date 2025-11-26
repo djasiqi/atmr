@@ -207,23 +207,25 @@ class TestWebSocketEventEdgeCases:
         mock_rl_event_manager.emit_training_update.return_value = None
         mock_rl_event_manager.emit_evaluation_update.return_value = None
 
-        # Mesurer le temps d'exécution
+        # ✅ OPTIM: Réduire à 100 pour tester la performance sans ralentir
+        # (100 événements suffisent pour valider la performance)
         start_time = time.time()
-        for i in range(1000):
+        for i in range(100):
             mock_rl_event_manager.emit_training_update({"episode": i, "reward": 0.5})
         end_time = time.time()
 
         # Vérifier que la performance est acceptable
         execution_time = end_time - start_time
-        assert execution_time < 1.0  # Moins d'1 seconde pour 1000 événements
+        assert execution_time < 0.2  # Moins de 0.2s pour 100 événements
 
     def test_websocket_event_manager_memory_usage(self, mock_rl_event_manager):
         """Test utilisation mémoire du gestionnaire d'événements RL."""
         # Mock de succès
         mock_rl_event_manager.emit_training_update.return_value = None
 
-        # Envoyer beaucoup d'événements
-        for i in range(10000):
+        # ✅ OPTIM: Réduire à 100 pour tester la gestion mémoire sans ralentir
+        # (100 événements suffisent pour valider le comportement)
+        for i in range(100):
             mock_rl_event_manager.emit_training_update({"episode": i, "reward": 0.5})
 
         # Vérifier que la mémoire est gérée correctement

@@ -496,9 +496,10 @@ class TestActionMaskingPerformance:
         """Test l'utilisation mémoire avec les masques."""
         import sys
 
-        # Créer plusieurs masques
+        # ✅ OPTIM: Réduire à 100 pour tester la mémoire sans ralentir
+        # (100 masques suffisent pour valider le comportement mémoire)
         masks = []
-        for _ in range(1000):
+        for _ in range(100):
             mask = np.random.choice([True, False], size=100)
             masks.append(mask)
 

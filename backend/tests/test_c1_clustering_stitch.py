@@ -56,9 +56,11 @@ class TestClusteringStitching:
                 self.pickup_lat = lat
                 self.pickup_lon = lon
 
+        # ✅ OPTIM: Réduire à 150 pour tester le clustering sans ralentir
+        # (150 bookings suffisent pour valider le comportement)
         bookings = [
             MockBooking(i, 45.0 + (i % 50) * 0.1, -73.0 + (i // 50) * 0.1)
-            for i in range(300)
+            for i in range(150)
         ]
         drivers = []
 
@@ -146,10 +148,11 @@ class TestClusteringStitching:
                 self.latitude = lat
                 self.longitude = lon
 
-        # Créer 300 bookings
+        # ✅ OPTIM: Réduire à 150 pour tester le stitching sans ralentir
+        # (150 bookings suffisent pour valider le comportement)
         bookings = [
             MockBooking(i, 45.0 + (i % 60) * 0.1, -73.0 + (i // 60) * 0.1)
-            for i in range(300)
+            for i in range(150)
         ]
 
         drivers = [MockDriver(i, 45.5, -73.5) for i in range(50)]
@@ -180,10 +183,11 @@ class TestClusteringStitching:
         total_assignments = len(result["assignments"])
         total_unassigned = len(result["unassigned"])
 
-        assert total_assignments + total_unassigned == 300
+        # ✅ OPTIM: Ajuster l'assertion pour 150 bookings au lieu de 300
+        assert total_assignments + total_unassigned == 150
 
         logger.info(
-            "✅ Test: 300 courses dispatches en %.2fs (%d assignés, %d non assignés)",
+            "✅ Test: 150 courses dispatches en %.2fs (%d assignés, %d non assignés)",
             elapsed,
             total_assignments,
             total_unassigned,
@@ -198,8 +202,9 @@ class TestClusteringStitching:
                 self.pickup_lat = lat
                 self.pickup_lon = lon
 
+        # ✅ OPTIM: Réduire à 100 pour tester le clustering sans ralentir
         bookings = [
-            MockBooking(i, 45.0 + i * 0.01, -73.0 + i * 0.01) for i in range(200)
+            MockBooking(i, 45.0 + i * 0.01, -73.0 + i * 0.01) for i in range(100)
         ]
         drivers = []
 

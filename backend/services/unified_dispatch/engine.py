@@ -332,7 +332,8 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
         if not company:
             company = Company.query.filter_by(id=company_id).first()
 
-        # ✅ FIX: Si toujours pas trouvé, essayer avec expire_all() pour forcer le rechargement
+        # ✅ FIX: Si toujours pas trouvé, essayer avec expire_all()
+        # pour forcer le rechargement
         if not company:
             db.session.expire_all()
             try:

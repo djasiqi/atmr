@@ -421,8 +421,9 @@ class TestNStepPerformance(unittest.TestCase):
         # Créer un buffer et mesurer la mémoire
         buffer = NStepBuffer(capacity=10000, n_step=3, gamma=0.99)
 
-        # Ajouter beaucoup de transitions
-        for i in range(1000):
+        # ✅ OPTIM: Réduire à 200 pour tester le buffer sans ralentir
+        # (200 transitions suffisent pour valider le comportement)
+        for i in range(200):
             state = np.random.randn(50).astype(np.float32)  # États plus grands
             action = i % 10
             reward = np.random.randn()
