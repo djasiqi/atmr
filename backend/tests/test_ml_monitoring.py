@@ -15,8 +15,10 @@ class TestMLMonitoringService:
             # ✅ FIX: S'assurer que le booking est commité avant utilisation
             # pour que la contrainte de clé étrangère soit satisfaite
             # Utiliser merge pour s'assurer que l'objet est dans la session actuelle
+            # ✅ FIX: Utiliser flush() au lieu de commit() pour éviter les conflits
+            # avec les savepoints dans les tests
             booking = db.session.merge(sample_booking)
-            db.session.commit()
+            db.session.flush()
             db.session.refresh(booking)
 
             # Log une prédiction avec un booking réel
@@ -38,8 +40,10 @@ class TestMLMonitoringService:
             assert prediction.confidence == 0.85
 
             # Cleanup
+            # ✅ FIX: Utiliser flush() au lieu de commit() pour éviter les conflits
+            # avec les savepoints dans les tests
             db.session.delete(prediction)
-            db.session.commit()
+            db.session.flush()
 
         print("✅ Log prediction OK")
 
@@ -50,8 +54,10 @@ class TestMLMonitoringService:
         with app.app_context():
             # ✅ FIX: S'assurer que le booking est commité avant utilisation
             # Utiliser merge pour s'assurer que l'objet est dans la session actuelle
+            # ✅ FIX: Utiliser flush() au lieu de commit() pour éviter les conflits
+            # avec les savepoints dans les tests
             booking = db.session.merge(sample_booking)
-            db.session.commit()
+            db.session.flush()
             db.session.refresh(booking)
 
             # Log prédiction avec un booking réel
@@ -77,8 +83,10 @@ class TestMLMonitoringService:
             assert prediction.is_accurate is True  # < 3 min
 
             # Cleanup
+            # ✅ FIX: Utiliser flush() au lieu de commit() pour éviter les conflits
+            # avec les savepoints dans les tests
             db.session.delete(prediction)
-            db.session.commit()
+            db.session.flush()
 
         print("✅ Update actual delay OK")
 
@@ -91,8 +99,10 @@ class TestMLMonitoringService:
         with app.app_context():
             # ✅ FIX: S'assurer que sample_booking et ses dépendances sont commités
             # Utiliser merge pour s'assurer que l'objet est dans la session actuelle
+            # ✅ FIX: Utiliser flush() au lieu de commit() pour éviter les conflits
+            # avec les savepoints dans les tests
             booking_ref = db.session.merge(sample_booking)
-            db.session.commit()
+            db.session.flush()
             db.session.refresh(booking_ref)
 
             # Créer plusieurs bookings pour les tests
@@ -117,8 +127,10 @@ class TestMLMonitoringService:
                 db.session.add(booking)
                 bookings.append(booking)
 
-            # ✅ FIX: Commit les bookings avant de créer les prédictions
-            db.session.commit()
+            # ✅ FIX: Flush les bookings avant de créer les prédictions
+            # Utiliser flush() au lieu de commit() pour éviter les conflits
+            # avec les savepoints dans les tests
+            db.session.flush()
             # Rafraîchir les bookings pour obtenir leurs IDs
             for booking in bookings:
                 db.session.refresh(booking)
@@ -141,7 +153,9 @@ class TestMLMonitoringService:
                 p.is_accurate = True
                 predictions.append(p)
 
-            db.session.commit()
+            # ✅ FIX: Utiliser flush() au lieu de commit() pour éviter les conflits
+            # avec les savepoints dans les tests
+            db.session.flush()
 
             # Calculer métriques
             metrics = MLMonitoringService.get_metrics(hours=24)
@@ -151,11 +165,13 @@ class TestMLMonitoringService:
             assert metrics["r2"] is not None
 
             # Cleanup
+            # ✅ FIX: Utiliser flush() au lieu de commit() pour éviter les conflits
+            # avec les savepoints dans les tests
             for p in predictions:
                 db.session.delete(p)
             for booking in bookings:
                 db.session.delete(booking)
-            db.session.commit()
+            db.session.flush()
 
         print(f"✅ Get metrics OK (MAE: {metrics['mae']}, R²: {metrics['r2']})")
 

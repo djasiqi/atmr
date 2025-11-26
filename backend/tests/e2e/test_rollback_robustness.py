@@ -296,9 +296,20 @@ class TestRollbackRobustness:
         original_values = capture_original_values(booking, ["driver_id", "status"])
 
         # Créer un assignment (mais ne pas committer)
+        # ✅ FIX: Créer un DispatchRun pour éviter les problèmes de contrainte unique
+        # si dispatch_run_id est None, plusieurs Assignment avec même booking_id
+        # peuvent exister, mais si dispatch_run_id est défini, la contrainte unique
+        # s'applique
+        from tests.factories import DispatchRunFactory
+
+        dispatch_run = DispatchRunFactory(company=company, day=date.today())
+        db.session.add(dispatch_run)
+        db.session.flush()
+
         assignment = Assignment()
         assignment.booking_id = booking.id
         assignment.driver_id = drivers[0].id
+        assignment.dispatch_run_id = dispatch_run.id  # ✅ FIX: Définir dispatch_run_id
         assignment.status = AssignmentStatus.SCHEDULED
         db.session.add(assignment)
         db.session.flush()

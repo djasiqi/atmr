@@ -137,10 +137,19 @@ class TestAuditLoggingSensitiveActions:
                 environ_base={"REMOTE_ADDR": "127.0.0.1"},
             ):
                 # Simuler la création d'un nouveau client
+                from ext import bcrypt
+
                 new_user = User()
                 new_user.username = "newclient"
                 new_user.email = "newclient@example.com"
                 new_user.role = UserRole.client
+                # ✅ FIX: Définir password avant d'ajouter à la session
+                password_hash = bcrypt.generate_password_hash("password123")
+                new_user.password = (
+                    password_hash.decode("utf-8")
+                    if isinstance(password_hash, bytes)
+                    else password_hash
+                )
                 db.session.add(new_user)
                 db.session.flush()
 
