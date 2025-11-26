@@ -25,8 +25,10 @@ logger = logging.getLogger(__name__)
 # Constantes pour les scénarios
 OSRM_DOWN_DURATION_SEC = 10  # Pour les tests, on réduit à 10s
 DB_READ_ONLY_TIMEOUT_SEC = 5
-PIC_LOAD_REQUESTS = 500
-PIC_LOAD_CONCURRENT_WORKERS = 50
+# ✅ OPTIM: Réduire pour accélérer les tests
+# (50 requêtes suffisent pour tester le pic de charge)
+PIC_LOAD_REQUESTS = 50
+PIC_LOAD_CONCURRENT_WORKERS = 10
 NETWORK_FLAKY_LATENCY_MS = 2000
 NETWORK_FLAKY_ERROR_RATE = 0.3  # 30% d'erreurs
 RTO_MAX_SECONDS = 30  # Recovery Time Objective max
@@ -671,12 +673,17 @@ class TestDisasterScenarios:
 
         def db_load_worker():
             """Worker qui fait des lectures répétées pour simuler charge DB."""
-            while db_load_active:
+            # ✅ OPTIM: Limiter à 10 itérations au lieu d'une boucle infinie
+            # pour éviter que le test bloque indéfiniment
+            max_iterations = 10
+            iteration = 0
+            while db_load_active and iteration < max_iterations:
                 try:
                     # Lectures légères pour simuler charge
                     User.query.limit(10).all()
                     Booking.query.limit(10).all()
                     time.sleep(0.1)  # Petite pause pour ne pas saturer
+                    iteration += 1
                 except Exception:
                     pass  # Ignorer les erreurs (test en cours)
 

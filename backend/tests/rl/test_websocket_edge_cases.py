@@ -260,8 +260,13 @@ class TestWebSocketEventEdgeCases:
         thread1.start()
         thread2.start()
 
-        thread1.join()
-        thread2.join()
+        # ✅ OPTIM: Ajouter timeout pour éviter que le test bloque indéfiniment
+        thread1.join(timeout=5.0)
+        thread2.join(timeout=5.0)
+
+        # Vérifier que les threads se sont terminés
+        if thread1.is_alive() or thread2.is_alive():
+            pytest.fail("Les threads ne se sont pas terminés dans le délai imparti")
 
         # Vérifier que tous les événements sont émis
         assert mock_rl_event_manager.emit_training_update.call_count == 100

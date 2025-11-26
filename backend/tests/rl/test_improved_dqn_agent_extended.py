@@ -277,7 +277,6 @@ class TestImprovedDQNAgentExtended:
 
         # ✅ FIX: Le state_dict doit contenir les clés du réseau
         # ImprovedQNetwork a: batch_norm.*, fc1.*, fc2.*, fc3.*, fc4.*, fc5.*
-        import torch
 
         q_network_state_dict = agent.q_network.state_dict()
         target_network_state_dict = agent.target_network.state_dict()

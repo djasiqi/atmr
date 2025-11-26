@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
@@ -137,8 +137,8 @@ class RLSuggestionGenerator:
     def generate_suggestions(
         self,
         company_id: int,
-        assignments: List[Any],
-        drivers: List[Any],
+        assignments: Optional[List[Any]],
+        drivers: Optional[List[Any]],
         for_date: str,
         min_confidence: float = 0.5,
         max_suggestions: int = 20,
@@ -157,6 +157,12 @@ class RLSuggestionGenerator:
             Liste de suggestions triées par confiance décroissante
 
         """
+        # ✅ FIX: Gérer le cas où assignments ou drivers est None
+        if assignments is None:
+            assignments = []
+        if drivers is None:
+            drivers = []
+
         if self.agent is None:
             # Fallback: suggestions basiques
             return self._generate_basic_suggestions(
@@ -170,14 +176,20 @@ class RLSuggestionGenerator:
     def _generate_rl_suggestions(
         self,
         _company_id: int,
-        assignments: List[Any],
-        drivers: List[Any],
+        assignments: Optional[List[Any]],
+        drivers: Optional[List[Any]],
         _for_date: str,
         min_confidence: float,
         max_suggestions: int,
     ) -> List[Dict[str, Any]]:
         """Génère des suggestions en utilisant le modèle DQN."""
         import torch
+
+        # ✅ FIX: Gérer le cas où assignments est None
+        if assignments is None:
+            return []
+        if drivers is None:
+            drivers = []
 
         suggestions: List[Dict[str, Any]] = []
 
@@ -452,14 +464,20 @@ class RLSuggestionGenerator:
 
     def _generate_basic_suggestions(
         self,
-        assignments: List[Any],
-        drivers: List[Any],
+        assignments: Optional[List[Any]],
+        drivers: Optional[List[Any]],
         min_confidence: float,
         max_suggestions: int,
     ) -> List[Dict[str, Any]]:
         """Génère des suggestions basiques sans modèle RL.
         Utilisé en fallback ou quand le modèle n'est pas disponible.
         """
+        # ✅ FIX: Gérer le cas où assignments est None
+        if assignments is None:
+            return []
+        if drivers is None:
+            drivers = []
+
         suggestions = []
 
         for assignment in assignments[:max_suggestions]:
