@@ -101,6 +101,19 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Calculate requirements hash
+        id: requirements_hash
+        run: |
+          # Calculer un hash des fichiers requirements pour invalider le cache si nécessaire
+          if [ -f backend/requirements.txt ]; then
+            REQUIREMENTS_HASH=$(sha256sum backend/requirements.txt | cut -d' ' -f1)
+            echo "requirements_hash=${REQUIREMENTS_HASH}" >> $GITHUB_OUTPUT
+            echo "📋 Hash de requirements.txt: ${REQUIREMENTS_HASH:0:12}..."
+          else
+            echo "⚠️  requirements.txt non trouvé"
+            echo "requirements_hash=missing" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build & push backend image
         uses: docker/build-push-action@v5
         with:
@@ -108,10 +121,33 @@ jobs:
           file: ./backend/Dockerfile.production
           build-args: |
             WITH_RL=false
+            REQUIREMENTS_HASH=${{ steps.requirements_hash.outputs.requirements_hash }}
           push: true
           tags: ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # Invalider le cache si requirements.txt a changé
+          no-cache: false
+
+      - name: Verify image was pushed
+        run: |
+          echo "🔍 Vérification que l'image a bien été poussée..."
+          IMAGE_TAG="${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}"
+          echo "Image attendue: ${IMAGE_TAG}"
+
+          # Vérifier que l'image existe sur Docker Hub (avec retry)
+          for i in {1..5}; do
+            if docker manifest inspect "${IMAGE_TAG}" > /dev/null 2>&1; then
+              echo "✅ Image ${IMAGE_TAG} trouvée sur Docker Hub"
+              exit 0
+            fi
+            echo "  Tentative $i/5: Image non trouvée, attente 5 secondes..."
+            sleep 5
+          done
+
+          echo "❌ L'image ${IMAGE_TAG} n'a pas été trouvée sur Docker Hub après 5 tentatives"
+          echo "⚠️  Le déploiement va échouer car l'image n'existe pas"
+          exit 1
 
       - name: Scan image with Trivy
         uses: aquasecurity/trivy-action@master
@@ -261,6 +297,12 @@ jobs:
               exit 1
             fi
             echo "✅ Variables POSTGRES_* disponibles pour docker-compose"
+
+            # Créer les répertoires nécessaires pour les données (si volumes locaux)
+            echo "📁 Création des répertoires de données..."
+            mkdir -p data/rl/shadow_mode data/ml data/rl || true
+            chmod -R 755 data 2>/dev/null || true
+            echo "✅ Répertoires de données créés"
 
             echo "🔄 Démarrage des services..."
             docker compose -f docker-compose.production.yml up -d

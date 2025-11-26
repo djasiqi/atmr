@@ -32,12 +32,26 @@ echo "  FLASK_ENV: $FLASK_ENV"
 echo "  OMP_NUM_THREADS: $OMP_NUM_THREADS"
 echo "  MKL_NUM_THREADS: $MKL_NUM_THREADS"
 
+# Créer les répertoires de données nécessaires AVANT le warmup
+echo "📁 Création des répertoires de données..."
+mkdir -p /app/data/ml /app/data/rl /app/data/rl/shadow_mode /app/logs /app/cache
+
+# S'assurer que les répertoires ont les bonnes permissions
+# Utiliser 777 temporairement pour éviter les problèmes de permissions avec les volumes Docker
+# En production, vous devriez utiliser un utilisateur non-root et des permissions plus restrictives
+chmod -R 777 /app/data /app/logs /app/cache 2>/dev/null || true
+
+# Essayer de changer le propriétaire si possible (peut échouer selon la configuration Docker)
+# L'utilisateur par défaut dans l'image est généralement root ou un UID spécifique
+if [ -n "${APP_USER:-}" ]; then
+    chown -R "${APP_USER}" /app/data /app/logs /app/cache 2>/dev/null || true
+fi
+
+echo "✅ Répertoires de données créés avec permissions"
+
 # Fonction de warmup des modèles ML
 warmup_models() {
     echo "🔥 Warmup des modèles ML..."
-    
-    # Créer le répertoire pour les modèles s'il n'existe pas
-    mkdir -p /app/data/ml /app/data/rl
     
     # Warmup du modèle de prédiction de retard
     if [ -f "/app/data/ml/delay_predictor.pkl" ]; then
