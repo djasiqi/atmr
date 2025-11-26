@@ -68,7 +68,7 @@ class TrafficControlManager:
         return isinstance(ms, int) and 0 < ms <= MAX_LATENCY_MS  # pyright: ignore
 
     @staticmethod
-    def _validate_jitter_ms(jitter_ms: int) -> bool:
+    def _validate_jitter_ms(jitter_ms: int | None) -> bool:
         """Valide le jitter en millisecondes.
 
         Args:
@@ -77,6 +77,9 @@ class TrafficControlManager:
         Returns:
             True si valide (0 <= jitter_ms <= MAX_JITTER_MS), False sinon
         """
+        # ✅ FIX: Gérer le cas où jitter_ms est None
+        if jitter_ms is None:
+            return False
         # Validation de la plage de valeurs
         return 0 <= jitter_ms <= MAX_JITTER_MS
 

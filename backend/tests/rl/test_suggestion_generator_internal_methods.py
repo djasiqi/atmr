@@ -257,14 +257,19 @@ class TestRLSuggestionGeneratorInternalMethods:
         assignments = [mock_assignment1]
         drivers = [mock_driver1]
 
-        with patch("models.Assignment.query") as mock_query:
-            mock_query.filter.return_value.count.return_value = 0
+        # ✅ FIX: Patcher models.Assignment avant l'import dans generate_suggestions
+        # pour éviter l'erreur de contexte Flask
+        mock_assignment_model = Mock()
+        mock_query = Mock()
+        mock_query.filter.return_value.count.return_value = 0
+        mock_assignment_model.query = mock_query
 
+        with patch("models.Assignment", mock_assignment_model):
             suggestions = generator._generate_rl_suggestions(
-                company_id=1,
+                _company_id=1,
                 assignments=assignments,
                 drivers=drivers,
-                for_date="2024-01-01",
+                _for_date="2024-01-01",
                 min_confidence=0.3,
                 max_suggestions=5,
             )
@@ -277,10 +282,10 @@ class TestRLSuggestionGeneratorInternalMethods:
         generator.agent = None
 
         suggestions = generator._generate_rl_suggestions(
-            company_id=1,
+            _company_id=1,
             assignments=[],
             drivers=[],
-            for_date="2024-01-01",
+            _for_date="2024-01-01",
             min_confidence=0.5,
             max_suggestions=5,
         )

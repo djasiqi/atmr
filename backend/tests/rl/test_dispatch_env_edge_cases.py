@@ -44,9 +44,14 @@ class TestDispatchEnvEdgeCases:
                 "time_remaining": 30,
             }
         ]
+        # ✅ FIX: Mettre à jour active_driver_count et active_booking_count
+        # pour correspondre au nombre réel de drivers et bookings
+        env.active_driver_count = len(env.drivers)
+        env.active_booking_count = len(env.bookings)
 
         # Action qui pointe vers un driver inexistant (driver_idx >= len(drivers))
-        action = 10  # driver_idx = 10 // 5 = 2, mais seulement 1 driver
+        # action = 10: action_idx=9, driver_idx=1, booking_idx=4 (mais seulement 1 driver)
+        action = 10
 
         with patch("services.rl.dispatch_env.logging") as mock_logging:
             obs, reward, _terminated, _truncated, info = env.step(action)
@@ -89,9 +94,14 @@ class TestDispatchEnvEdgeCases:
                 "time_remaining": 30,
             }
         ]
+        # ✅ FIX: Mettre à jour active_driver_count et active_booking_count
+        # pour correspondre au nombre réel de drivers et bookings
+        env.active_driver_count = len(env.drivers)
+        env.active_booking_count = len(env.bookings)
 
         # Action qui pointe vers un booking inexistant (booking_idx >= len(bookings))
-        action = 3  # driver_idx = 0, booking_idx = 3, mais seulement 1 booking
+        # action = 3: action_idx=2, driver_idx=0, booking_idx=2 (mais seulement 1 booking)
+        action = 3
 
         with patch("services.rl.dispatch_env.logging") as mock_logging:
             obs, reward, _terminated, _truncated, info = env.step(action)
@@ -255,7 +265,13 @@ class TestDispatchEnvEdgeCases:
 
         len(env.bookings)
 
-        with patch.object(env, "_generate_new_bookings") as mock_generate:
+        # ✅ FIX: Forcer la probabilité de génération à 1.0 et np_random.random() à 0.0
+        # pour garantir l'appel de _generate_new_bookings
+        with (
+            patch.object(env, "_generate_new_bookings") as mock_generate,
+            patch.object(env, "_get_booking_generation_rate", return_value=1.0),
+            patch.object(env.np_random, "random", return_value=0.0),
+        ):
             _obs, _reward, _terminated, _truncated, _info = env.step(0)
 
             mock_generate.assert_called()

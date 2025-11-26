@@ -336,8 +336,13 @@ class TestHyperparameterTuner:
             mock_open.return_value.__enter__.return_value = mock_file_handle
             tuner.save_best_params(mock_study, "test_params.json")
 
-            # Vérifier que le répertoire est créé
-            mock_mkdir.assert_called_once_with(parents=True, exist_ok=True)
+            # ✅ FIX: mkdir est appelé deux fois :
+            # 1. Pour créer le répertoire du fichier de configuration
+            # 2. Pour créer le répertoire du fichier de métriques (dans _log_metrics_and_comparisons)
+            assert mock_mkdir.call_count == 2
+            # Vérifier que tous les appels utilisent les bons paramètres
+            for call in mock_mkdir.call_args_list:
+                assert call.kwargs == {"parents": True, "exist_ok": True}
 
             # Vérifier que le fichier est ouvert en écriture
             mock_open.assert_called_once()
@@ -371,8 +376,14 @@ class TestHyperparameterTuner:
             mock_open.return_value.__enter__.return_value = mock_file_handle
             tuner.save_best_params(mock_study, "custom_params.json")
 
-            # Vérifier que le fichier est ouvert avec le bon nom
-            mock_open.assert_called_once()
+            # ✅ FIX: open est appelé 3 fois :
+            # 1. Pour le fichier de configuration (custom_params.json)
+            # 2. Pour le fichier de métriques (dans _log_metrics_and_comparisons)
+            # 3. Pour le fichier de comparaison (dans _log_metrics_and_comparisons)
+            assert mock_open.call_count == 3
+            # Vérifier que le premier appel est pour le fichier de configuration
+            first_call = mock_open.call_args_list[0]
+            assert "custom_params.json" in str(first_call)
 
     def test_log_metrics_and_comparisons(self):
         """Test _log_metrics_and_comparisons method"""

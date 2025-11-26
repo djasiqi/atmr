@@ -286,9 +286,10 @@ class TestHyperparameterTunerSanity:
         importance = tuner._analyze_feature_importance(mock_trials)
 
         assert "double_dqn" in importance
-        assert importance["double_dqn"]["enabled_avg"] == 600.0
-        assert importance["double_dqn"]["disabled_avg"] == 500.0
-        assert importance["double_dqn"]["improvement"] == 100.0
+        # ✅ FIX: Les valeurs sont utilisées telles quelles, pas multipliées par 1000
+        assert importance["double_dqn"]["enabled_avg"] == 0.6
+        assert importance["double_dqn"]["disabled_avg"] == 0.5
+        assert importance["double_dqn"]["improvement"] == 0.1
         assert importance["double_dqn"]["enabled_count"] == 1
         assert importance["double_dqn"]["disabled_count"] == 1
 

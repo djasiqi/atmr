@@ -27,17 +27,19 @@ class TestLazyImport:
             sg_module._dispatch_env = None
 
             # Mock des imports
+            # ✅ FIX: Patcher les modules à la source (services.rl) plutôt que
+            # dans suggestion_generator car les imports sont faits dans _lazy_import_rl()
             mock_dqn_module = Mock()
             mock_dispatch_module = Mock()
             mock_improved_dqn_class = Mock()
 
             with (
                 patch(
-                    "services.rl.suggestion_generator.improved_dqn_agent",
+                    "services.rl.improved_dqn_agent",
                     mock_dqn_module,
                 ),
                 patch(
-                    "services.rl.suggestion_generator.dispatch_env",
+                    "services.rl.dispatch_env",
                     mock_dispatch_module,
                 ),
                 patch(
@@ -66,9 +68,11 @@ class TestLazyImport:
             sg_module._dqn_agent = None
             sg_module._dispatch_env = None
 
+            # ✅ FIX: Patcher les modules à la source (services.rl) plutôt que
+            # dans suggestion_generator car les imports sont faits dans _lazy_import_rl()
             with (
                 patch(
-                    "services.rl.suggestion_generator.improved_dqn_agent",
+                    "services.rl.improved_dqn_agent",
                     side_effect=ImportError("Module not found"),
                 ),
                 pytest.raises(ImportError),
@@ -133,13 +137,26 @@ class TestRLSuggestionGenerator:
         mock_env.action_space = Mock()
         mock_env.action_space.n = 26
 
+        # ✅ FIX: Patcher les classes à la source (services.rl) plutôt que
+        # dans suggestion_generator car les imports sont faits dans _load_model()
         with (
             patch(
-                "services.rl.suggestion_generator.ImprovedDQNAgent",
+                "services.rl.improved_dqn_agent.ImprovedDQNAgent",
                 return_value=mock_agent,
             ),
             patch("services.rl.dispatch_env.DispatchEnv", return_value=mock_env),
-            patch("torch.load", return_value={"state_dict": {}}),
+            patch(
+                "torch.load",
+                return_value={
+                    "q_network_state_dict": {},
+                    "target_network_state_dict": {},
+                    "optimizer_state_dict": {},
+                    "epsilon": 0.1,
+                    "training_step": 0,
+                    "episode_count": 0,
+                    "losses": [],
+                },
+            ),
         ):
             generator = RLSuggestionGenerator()
 
@@ -240,9 +257,14 @@ class TestRLSuggestionGenerator:
         assignments = [mock_assignment]
         drivers = [mock_driver]
 
-        with patch("models.Assignment.query") as mock_query:
-            mock_query.filter.return_value.count.return_value = 0
+        # ✅ FIX: Patcher models.Assignment avant l'import dans generate_suggestions
+        # pour éviter l'erreur de contexte Flask
+        mock_assignment_model = Mock()
+        mock_query = Mock()
+        mock_query.filter.return_value.count.return_value = 0
+        mock_assignment_model.query = mock_query
 
+        with patch("models.Assignment", mock_assignment_model):
             suggestions = generator.generate_suggestions(
                 company_id=1,
                 assignments=assignments,
@@ -578,11 +600,16 @@ class TestRLSuggestionGenerator:
         assignments = [mock_assignment]
         drivers = [mock_driver]
 
+        # ✅ FIX: Patcher models.Assignment avant l'import dans generate_suggestions
+        # pour éviter l'erreur de contexte Flask
+        mock_assignment_model = Mock()
+        mock_query = Mock()
+        mock_query.filter.return_value.count.return_value = 0
+        mock_assignment_model.query = mock_query
+
         # Test avec seuil de confiance élevé (min_confidence au lieu de
         # confidence_threshold)
-        with patch("models.Assignment.query") as mock_query:
-            mock_query.filter.return_value.count.return_value = 0
-
+        with patch("models.Assignment", mock_assignment_model):
             suggestions = generator.generate_suggestions(
                 company_id=1,
                 assignments=assignments,
