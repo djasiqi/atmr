@@ -1,5 +1,6 @@
 """Tests simples et efficaces pour suggestion_generator.py"""
 
+import builtins
 from unittest.mock import Mock, patch
 
 from services.rl.suggestion_generator import RLSuggestionGenerator
@@ -45,61 +46,96 @@ class TestRLSuggestionGeneratorSimple:
         """Test import RL échoué"""
         import services.rl.suggestion_generator as sg_module
 
-        with patch(
-            "services.rl.improved_dqn_agent",
-            side_effect=ImportError("RL not available"),
-        ):
+        original_dqn = sg_module._dqn_agent
+        original_env = sg_module._dispatch_env
+
+        try:
             # Réinitialiser les variables globales
             sg_module._dqn_agent = None
             sg_module._dispatch_env = None
+
+            # ✅ FIX: Utiliser builtins.__import__ pour intercepter l'import
+            # et lever ImportError pour services.rl.improved_dqn_agent
+            real_import = builtins.__import__
+
+            def mock_import(name, *args, **kwargs):
+                if name == "services.rl.improved_dqn_agent":
+                    raise ImportError("RL not available")
+                return real_import(name, *args, **kwargs)
 
             import pytest
 
             from services.rl.suggestion_generator import _lazy_import_rl
 
-            with pytest.raises(ImportError):
+            with (
+                patch("builtins.__import__", side_effect=mock_import),
+                pytest.raises(ImportError, match="RL not available"),
+            ):
                 _lazy_import_rl()
+        finally:
+            sg_module._dqn_agent = original_dqn
+            sg_module._dispatch_env = original_env
 
     def test_load_model_success(self):
         """Test chargement modèle réussi"""
-        with (
-            patch("pathlib.Path") as mock_path_class,
-            patch("services.rl.suggestion_generator._lazy_import_rl"),
-            patch("services.rl.dispatch_env.DispatchEnv") as mock_env_class,
-            patch(
-                "services.rl.suggestion_generator.ImprovedDQNAgent"
-            ) as mock_agent_class,
-        ):
-            mock_path_instance = Mock()
-            mock_path_instance.exists.return_value = True
-            mock_path_class.return_value = mock_path_instance
+        # ✅ FIX: Réinitialiser _model_loaded et créer le générateur dans le bloc with
+        import services.rl.suggestion_generator as sg_module
+
+        original_model_loaded = sg_module._model_loaded
+        try:
+            sg_module._model_loaded = False
+
+            mock_agent = Mock()
+            mock_agent.load = Mock()
+            mock_agent.q_network = Mock()
+            mock_agent.q_network.eval = Mock()
 
             mock_env = Mock()
             mock_env.observation_space = Mock()
             mock_env.observation_space.shape = [19]
             mock_env.action_space = Mock()
             mock_env.action_space.n = 26
-            mock_env_class.return_value = mock_env
 
-            mock_agent = Mock()
-            mock_agent.load = Mock()
-            mock_agent.q_network = Mock()
-            mock_agent.q_network.eval = Mock()
-            mock_agent_class.return_value = mock_agent
+            with (
+                patch("services.rl.suggestion_generator.Path") as mock_path_class,
+                patch("services.rl.suggestion_generator._lazy_import_rl"),
+                patch("services.rl.dispatch_env.DispatchEnv", return_value=mock_env),
+                patch(
+                    "services.rl.improved_dqn_agent.ImprovedDQNAgent",
+                    return_value=mock_agent,
+                ),
+                patch(
+                    "torch.load",
+                    return_value={
+                        "q_network_state_dict": {},
+                        "target_network_state_dict": {},
+                        "optimizer_state_dict": {},
+                        "epsilon": 0.1,
+                        "training_step": 0,
+                        "episode_count": 0,
+                        "losses": [],
+                    },
+                ),
+            ):
+                mock_path_instance = Mock()
+                mock_path_instance.exists.return_value = True
+                mock_path_class.return_value = mock_path_instance
 
-            generator = RLSuggestionGenerator()
+                generator = RLSuggestionGenerator()
 
-            assert generator.agent is not None
-            mock_agent.load.assert_called_once()
+                assert generator.agent is not None
+                mock_agent.load.assert_called_once()
+        finally:
+            sg_module._model_loaded = original_model_loaded
 
     def test_load_model_failure(self):
         """Test chargement modèle échoué"""
         with (
-            patch("pathlib.Path") as mock_path_class,
+            patch("services.rl.suggestion_generator.Path") as mock_path_class,
             patch("services.rl.suggestion_generator._lazy_import_rl"),
             patch("services.rl.dispatch_env.DispatchEnv") as mock_env_class,
             patch(
-                "services.rl.suggestion_generator.ImprovedDQNAgent"
+                "services.rl.improved_dqn_agent.ImprovedDQNAgent"
             ) as mock_agent_class,
             patch("torch.load", side_effect=Exception("Load error")),
         ):
@@ -127,11 +163,16 @@ class TestRLSuggestionGeneratorSimple:
 
     def test_load_model_file_not_found(self):
         """Test fichier modèle non trouvé"""
-        with patch("services.rl.suggestion_generator.Path.exists", return_value=False):
+        with patch("services.rl.suggestion_generator.Path") as mock_path_class:
+            mock_path_instance = Mock()
+            mock_path_instance.exists.return_value = False
+            mock_path_class.return_value = mock_path_instance
+
             generator = RLSuggestionGenerator()
             generator._load_model()
 
             # Should not raise exception, just log error
+            assert generator.agent is None
 
     def test_generate_suggestions_with_model(self):
         """Test génération suggestions avec modèle"""
@@ -199,16 +240,16 @@ class TestRLSuggestionGeneratorSimple:
 
     def test_edge_case_none_drivers(self):
         """Test cas limite: drivers None"""
-        import pytest
-
         generator = RLSuggestionGenerator()
         generator.agent = None  # Pas de modèle
 
-        # None devrait lever une exception car le code itère sur drivers
-        with pytest.raises((TypeError, AttributeError)):
-            generator.generate_suggestions(
-                company_id=1, assignments=[], drivers=None, for_date="2024-01-01"
-            )
+        # ✅ FIX: Le code gère maintenant drivers=None en le remplaçant par []
+        # Donc aucune exception n'est levée, on vérifie juste que ça retourne une liste
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=None, for_date="2024-01-01"
+        )
+
+        assert isinstance(suggestions, list)
 
     def test_edge_case_none_bookings(self):
         """Test cas limite: bookings None"""

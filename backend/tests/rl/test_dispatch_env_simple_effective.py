@@ -439,12 +439,13 @@ class TestDispatchEnvSimpleEffective:
         env = DispatchEnv(num_drivers=3, max_bookings=5)
         env.reset()
 
-        # ✅ FIX: Forcer la probabilité de génération à 1.0 et np_random.random() à 0.0
-        # pour garantir l'appel de _generate_new_bookings
+        # ✅ FIX: Forcer la probabilité de génération à 1.0 pour garantir l'appel
+        # de _generate_new_bookings. On ne peut pas patcher np_random.random car
+        # c'est un attribut en lecture seule, mais si _get_booking_generation_rate
+        # retourne 1.0, la condition sera toujours vraie (random() < 1.0).
         with (
             patch.object(env, "_generate_new_bookings") as mock_generate,
             patch.object(env, "_get_booking_generation_rate", return_value=1.0),
-            patch.object(env.np_random, "random", return_value=0.0),
         ):
             _obs, _reward, _terminated, _truncated, _info = env.step(0)
 

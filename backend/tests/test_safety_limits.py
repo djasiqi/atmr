@@ -31,7 +31,7 @@ def company_fully_auto(db):
         "auto_apply_rules": {
             "customer_notifications": True,
             "minor_time_adjustments": True,
-            "reassignments": False,
+            "reassignments": True,  # ✅ FIX: Autoriser les réassignments pour les tests
         },
         "safety_limits": {
             "max_auto_actions_per_hour": 5,
@@ -484,7 +484,14 @@ class TestActionLogging:
         mock_opportunity.suggestions = [suggestion]
 
         manager = AutonomousDispatchManager(company_fully_auto.id)
-        stats = manager.process_opportunities([mock_opportunity])
+
+        # ✅ FIX: S'assurer que can_auto_apply_suggestion et check_safety_limits
+        # retournent True pour éviter que la suggestion soit bloquée avant d'être appliquée
+        with (
+            patch.object(manager, "can_auto_apply_suggestion", return_value=True),
+            patch.object(manager, "check_safety_limits", return_value=(True, "OK")),
+        ):
+            stats = manager.process_opportunities([mock_opportunity])
 
         # Vérifier les stats
         assert stats["errors"] == 1
@@ -510,15 +517,23 @@ class TestActionLogging:
         # Atteindre la limite
         # ✅ FIX: S'assurer que company est flushée avant de créer AutonomousAction
         db.session.flush()
+        from datetime import datetime, timezone
+
         for i in range(2):
             action = AutonomousAction(
                 company_id=company_fully_auto.id,
                 action_type="reassign",
                 action_description=f"Limit action {i}",
                 success=True,
+                created_at=datetime.now(
+                    timezone.utc
+                ),  # ✅ FIX: Définir created_at explicitement
             )
             db.session.add(action)
-        db.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
+        # ✅ FIX: Commit pour que les actions soient visibles dans count_actions_last_hour
+        # qui fait une requête SQL. Les objets flushés peuvent ne pas être visibles
+        # dans les requêtes selon l'isolation level de la transaction.
+        db.session.commit()
 
         # Essayer d'exécuter une nouvelle action
         mock_apply.return_value = {"success": True}

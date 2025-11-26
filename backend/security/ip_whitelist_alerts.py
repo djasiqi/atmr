@@ -120,16 +120,13 @@ def send_ip_whitelist_alert(
             "headers": headers_to_log,
         }
 
-        # Utiliser log_action directement pour inclure user_agent
-        AuditLogger.log_action(
-            action_type="ip_whitelist_denied",
-            action_category="security",
+        # ✅ FIX: Utiliser log_security_event pour les événements de sécurité
+        AuditLogger.log_security_event(
+            event_type="ip_whitelist_denied",
+            severity="high",
+            details=audit_details,
             user_id=user_id,
-            user_type="system",
-            result_status="high",
-            action_details=audit_details,
             ip_address=client_ip,
-            user_agent=user_agent,
         )
 
         logger.info(

@@ -68,9 +68,9 @@ class HyperparameterTuner:
         self.storage = storage
 
         print("🎯 Hyperparameter Tuner initialisé")
-        print("   Trials: {n_trials}")
-        print("   Episodes training: {n_training_episodes}")
-        print("   Episodes eval: {n_eval_episodes}")
+        print(f"   Trials: {self.n_trials}")
+        print(f"   Episodes training: {self.n_training_episodes}")
+        print(f"   Episodes eval: {self.n_eval_episodes}")
 
     def objective(self, trial: Trial) -> float:
         """Fonction objective pour Optuna.
@@ -247,8 +247,8 @@ class HyperparameterTuner:
 
         """
         print("\n🚀 Démarrage optimisation Optuna...")
-        print("   Study: {self.study_name}")
-        print("   Trials: {self.n_trials}")
+        print(f"   Study: {self.study_name}")
+        print(f"   Trials: {self.n_trials}")
 
         # ✅ FIX: Désactiver tqdm en mode test pour éviter les threads bloquants
         if show_progress_bar is None:
@@ -295,8 +295,8 @@ class HyperparameterTuner:
             t for t in study.trials if t.state == optuna.trial.TrialState.PRUNED
         ]
         print(f"   Trials pruned: {len(pruned_trials)}")
-        print("   Best trial: #{study.best_trial.number}")
-        print("   Best value: {study.best_value")
+        print(f"   Best trial: #{study.best_trial.number}")
+        print(f"   Best value: {study.best_value}")
 
         return study
 
@@ -320,7 +320,12 @@ class HyperparameterTuner:
         completed_trials = [
             t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE
         ]
-        sorted_trials = sorted(completed_trials, key=lambda t: t.value, reverse=True)
+        # ✅ FIX: Gérer les cas où trial.value est None lors du tri
+        sorted_trials = sorted(
+            completed_trials,
+            key=lambda t: t.value if t.value is not None else float("-inf"),
+            reverse=True,
+        )
 
         config = {
             "best_reward": float(best_value),
@@ -582,7 +587,7 @@ class HyperparameterTuner:
         # 3. Afficher résumé
         print("\n🎯 RÉSUMÉ DE L'OPTIMISATION:")
         print("   Score cible: 544.3")
-        print("   Meilleur score: {study.best_value")
+        print(f"   Meilleur score: {study.best_value}")
         best_value = float(study.best_value)
         improvement_abs = best_value - 544.3
         improvement_pct = comparison_data["comparison_summary"][

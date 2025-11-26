@@ -49,11 +49,18 @@ class TestImprovedDQNAgentExtended:
         # ✅ FIX: PrioritizedReplayBuffer est importé directement,
         # donc si None, ça lèvera TypeError, pas ImportError
         # Le code ne vérifie pas si PrioritizedReplayBuffer est None avant de l'utiliser
+        # ✅ FIX: use_n_step=False pour utiliser PrioritizedReplayBuffer au lieu de
+        # NStepPrioritizedBuffer
         with (
             patch("services.rl.improved_dqn_agent.PrioritizedReplayBuffer", None),
             pytest.raises(TypeError, match="'NoneType' object is not callable"),
         ):
-            ImprovedDQNAgent(state_dim=62, action_dim=51, use_prioritized_replay=True)
+            ImprovedDQNAgent(
+                state_dim=62,
+                action_dim=51,
+                use_prioritized_replay=True,
+                use_n_step=False,
+            )
 
     def test_select_action_with_rl_logger_import_error(self):
         """Test select_action avec erreur d'import RLLogger"""
@@ -62,10 +69,15 @@ class TestImprovedDQNAgentExtended:
 
         # ✅ FIX: Le code gère déjà l'ImportError dans select_action, donc on doit juste
         # patcher l'import pour qu'il lève une ImportError
+        # Stocker la vraie fonction __import__ pour éviter la récursion
+        import builtins
+
+        real_import = builtins.__import__
+
         def mock_import(name, *args, **kwargs):
             if name == "services.rl.rl_logger":
                 raise ImportError("RLLogger not available")
-            return __import__(name, *args, **kwargs)
+            return real_import(name, *args, **kwargs)
 
         with patch("builtins.__import__", side_effect=mock_import):
             state = np.random.rand(agent.state_dim)
@@ -80,13 +92,11 @@ class TestImprovedDQNAgentExtended:
         agent.epsilon = 0
 
         # ✅ FIX: Mock RLLogger qui lève une exception lors du logging
-        # Il faut patcher directement le module rl_logger, pas __import__
+        # Il faut patcher directement le module rl_logger, pas improved_dqn_agent
         mock_logger = Mock()
         mock_logger.log_decision.side_effect = Exception("Logging error")
 
-        with patch(
-            "services.rl.improved_dqn_agent.get_rl_logger", return_value=mock_logger
-        ):
+        with patch("services.rl.rl_logger.get_rl_logger", return_value=mock_logger):
             state = np.random.rand(agent.state_dim)
             action = agent.select_action(state)
 

@@ -338,14 +338,21 @@ class TestHyperparameterTuner:
 
             # ✅ FIX: mkdir est appelé deux fois :
             # 1. Pour créer le répertoire du fichier de configuration
-            # 2. Pour créer le répertoire du fichier de métriques (dans _log_metrics_and_comparisons)
+            # 2. Pour créer le répertoire du fichier de métriques
+            #    (dans _log_metrics_and_comparisons)
             assert mock_mkdir.call_count == 2
             # Vérifier que tous les appels utilisent les bons paramètres
             for call in mock_mkdir.call_args_list:
                 assert call.kwargs == {"parents": True, "exist_ok": True}
 
-            # Vérifier que le fichier est ouvert en écriture
-            mock_open.assert_called_once()
+            # ✅ FIX: Path.open() est appelé 3 fois :
+            # 1. Pour le fichier de configuration (save_best_params)
+            # 2. Pour le fichier de métriques (_log_metrics_and_comparisons)
+            # 3. Pour le fichier de comparaison (_log_metrics_and_comparisons)
+            assert mock_open.call_count == 3
+            # Vérifier que tous les appels utilisent les bons paramètres
+            for call in mock_open.call_args_list:
+                assert call == (("w",), {"encoding": "utf-8"})
 
     def test_save_best_params_with_custom_filename(self):
         """Test save_best_params avec nom de fichier personnalisé"""
@@ -381,9 +388,11 @@ class TestHyperparameterTuner:
             # 2. Pour le fichier de métriques (dans _log_metrics_and_comparisons)
             # 3. Pour le fichier de comparaison (dans _log_metrics_and_comparisons)
             assert mock_open.call_count == 3
-            # Vérifier que le premier appel est pour le fichier de configuration
-            first_call = mock_open.call_args_list[0]
-            assert "custom_params.json" in str(first_call)
+            # Vérifier que tous les appels utilisent les bons paramètres
+            for call in mock_open.call_args_list:
+                assert call == (("w",), {"encoding": "utf-8"})
+            # Note: Le nom de fichier est passé à Path(), pas à open(),
+            # donc on vérifie seulement que open() est appelé correctement
 
     def test_log_metrics_and_comparisons(self):
         """Test _log_metrics_and_comparisons method"""
@@ -513,8 +522,14 @@ class TestHyperparameterTuner:
             mock_open.return_value.__enter__.return_value = mock_file_handle
             tuner.save_best_params(mock_study, "empty_trials.json")
 
-            # Vérifier que le fichier est ouvert
-            mock_open.assert_called_once()
+            # ✅ FIX: Path.open() est appelé 3 fois :
+            # 1. Pour le fichier de configuration (save_best_params)
+            # 2. Pour le fichier de métriques (_log_metrics_and_comparisons)
+            # 3. Pour le fichier de comparaison (_log_metrics_and_comparisons)
+            assert mock_open.call_count == 3
+            # Vérifier que tous les appels utilisent les bons paramètres
+            for call in mock_open.call_args_list:
+                assert call == (("w",), {"encoding": "utf-8"})
 
     def test_edge_case_none_study(self):
         """Test avec study None"""
@@ -587,8 +602,14 @@ class TestHyperparameterTuner:
             mock_open.return_value.__enter__.return_value = mock_file_handle
             tuner.save_best_params(mock_study, "pruned_trials.json")
 
-            # Vérifier que le fichier est ouvert
-            mock_open.assert_called_once()
+            # ✅ FIX: Path.open() est appelé 3 fois :
+            # 1. Pour le fichier de configuration (save_best_params)
+            # 2. Pour le fichier de métriques (_log_metrics_and_comparisons)
+            # 3. Pour le fichier de comparaison (_log_metrics_and_comparisons)
+            assert mock_open.call_count == 3
+            # Vérifier que tous les appels utilisent les bons paramètres
+            for call in mock_open.call_args_list:
+                assert call == (("w",), {"encoding": "utf-8"})
 
     def test_edge_case_none_values(self):
         """Test avec valeurs None"""

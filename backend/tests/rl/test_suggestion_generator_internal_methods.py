@@ -1,5 +1,6 @@
 """Tests pour les méthodes internes de RLSuggestionGenerator."""
 
+import builtins
 from unittest.mock import Mock, patch
 
 import pytest
@@ -60,12 +61,18 @@ class TestRLSuggestionGeneratorInternalMethods:
             sg_module._dqn_agent = None
             sg_module._dispatch_env = None
 
+            # ✅ FIX: Utiliser builtins.__import__ pour intercepter l'import
+            # et lever ImportError pour services.rl.improved_dqn_agent
+            real_import = builtins.__import__
+
+            def mock_import(name, *args, **kwargs):
+                if name == "services.rl.improved_dqn_agent":
+                    raise ImportError("Test error")
+                return real_import(name, *args, **kwargs)
+
             with (
-                patch(
-                    "services.rl.improved_dqn_agent",
-                    side_effect=ImportError("Test error"),
-                ),
-                pytest.raises(ImportError),
+                patch("builtins.__import__", side_effect=mock_import),
+                pytest.raises(ImportError, match="Test error"),
             ):
                 _lazy_import_rl()
         finally:
@@ -74,41 +81,61 @@ class TestRLSuggestionGeneratorInternalMethods:
 
     def test_load_model_success(self):
         """Test chargement modèle réussi."""
-        with (
-            patch("pathlib.Path") as mock_path_class,
-            patch("services.rl.dispatch_env.DispatchEnv") as mock_env_class,
-            patch(
-                "services.rl.suggestion_generator.ImprovedDQNAgent"
-            ) as mock_agent_class,
-            patch("services.rl.suggestion_generator._lazy_import_rl"),
-        ):
-            # Mock file exists
-            mock_file = Mock()
-            mock_file.exists.return_value = True
-            mock_path_class.return_value = mock_file
+        # ✅ FIX: Réinitialiser _model_loaded et créer le générateur dans le bloc with
+        import services.rl.suggestion_generator as sg_module
 
-            # Mock environment
-            mock_env = Mock()
-            mock_env.observation_space.shape = [19]
-            mock_env.action_space.n = 26
-            mock_env_class.return_value = mock_env
+        original_model_loaded = sg_module._model_loaded
+        try:
+            sg_module._model_loaded = False
 
-            # Mock agent
             mock_agent = Mock()
             mock_agent.load = Mock()
             mock_agent.q_network = Mock()
             mock_agent.q_network.eval = Mock()
-            mock_agent_class.return_value = mock_agent
 
-            generator = RLSuggestionGenerator()
+            mock_env = Mock()
+            mock_env.observation_space = Mock()
+            mock_env.observation_space.shape = [19]
+            mock_env.action_space = Mock()
+            mock_env.action_space.n = 26
 
-            assert generator.agent is not None
-            mock_agent.load.assert_called_once()
+            with (
+                patch("services.rl.suggestion_generator.Path") as mock_path_class,
+                patch("services.rl.suggestion_generator._lazy_import_rl"),
+                patch(
+                    "services.rl.improved_dqn_agent.ImprovedDQNAgent",
+                    return_value=mock_agent,
+                ),
+                patch("services.rl.dispatch_env.DispatchEnv", return_value=mock_env),
+                patch(
+                    "torch.load",
+                    return_value={
+                        "q_network_state_dict": {},
+                        "target_network_state_dict": {},
+                        "optimizer_state_dict": {},
+                        "epsilon": 0.1,
+                        "training_step": 0,
+                        "episode_count": 0,
+                        "losses": [],
+                    },
+                ),
+            ):
+                # Mock file exists
+                mock_file = Mock()
+                mock_file.exists.return_value = True
+                mock_path_class.return_value = mock_file
+
+                generator = RLSuggestionGenerator()
+
+                assert generator.agent is not None
+                mock_agent.load.assert_called_once()
+        finally:
+            sg_module._model_loaded = original_model_loaded
 
     def test_load_model_file_not_exists(self):
         """Test chargement modèle - fichier n'existe pas."""
         with (
-            patch("pathlib.Path") as mock_path_class,
+            patch("services.rl.suggestion_generator.Path") as mock_path_class,
             patch("services.rl.suggestion_generator._lazy_import_rl"),
         ):
             # Mock file doesn't exist
@@ -123,7 +150,7 @@ class TestRLSuggestionGeneratorInternalMethods:
     def test_load_model_exception(self):
         """Test chargement modèle - exception."""
         with (
-            patch("pathlib.Path") as mock_path_class,
+            patch("services.rl.suggestion_generator.Path") as mock_path_class,
             patch(
                 "services.rl.suggestion_generator._lazy_import_rl",
                 side_effect=Exception("Test error"),

@@ -242,10 +242,15 @@ class TestIPWhitelistBlocked:
         assert response.status_code == 403
 
     @patch("security.ip_whitelist.os.getenv")
-    def test_ip_whitelist_no_client_ip(self, mock_getenv, fresh_app):
+    @patch("security.ip_whitelist._get_client_ip")
+    def test_ip_whitelist_no_client_ip(
+        self, mock_get_client_ip, mock_getenv, fresh_app
+    ):
         """Test impossible de déterminer IP (accès refusé)."""
         # Mock whitelist
         mock_getenv.return_value = None
+        # ✅ FIX: Forcer _get_client_ip à retourner None pour tester ce cas
+        mock_get_client_ip.return_value = None
 
         # Créer une route de test avec le décorateur
         @fresh_app.route("/test-whitelist-no-ip", methods=["GET"])
@@ -255,10 +260,9 @@ class TestIPWhitelistBlocked:
 
         # Utiliser test_client pour faire une vraie requête HTTP
         client = fresh_app.test_client()
-        response = client.get(
-            "/test-whitelist-no-ip",
-            environ_base={},
-        )
+        response = client.get("/test-whitelist-no-ip")
+
+        # ✅ FIX: Devrait retourner 403 car l'IP ne peut pas être déterminée
         assert response.status_code == 403
 
 

@@ -196,14 +196,21 @@ class ImprovedDQNAgent:
 
         # ✅ FIX: Filtrer les actions invalides de valid_actions si fourni
         if valid_actions is not None:
+            # Vérifier si valid_actions était vide avant le filtrage
+            was_empty = len(valid_actions) == 0
             # Filtrer pour ne garder que les actions dans [0, action_dim)
             valid_actions = [a for a in valid_actions if 0 <= a < self.action_dim]
             if not valid_actions:
-                # Si toutes les actions étaient invalides, fallback vers action 0
-                msg = (
-                    "[ImprovedDQNAgent] Toutes les actions dans valid_actions "
-                    "sont invalides, fallback vers action 0"
-                )
+                # Si valid_actions était vide ou toutes les actions étaient invalides
+                if was_empty:
+                    msg = (
+                        "[ImprovedDQNAgent] valid_actions vide, fallback vers action 0"
+                    )
+                else:
+                    msg = (
+                        "[ImprovedDQNAgent] Toutes les actions dans valid_actions "
+                        "sont invalides, fallback vers action 0"
+                    )
                 logging.warning(msg)
                 valid_actions = [0]
 

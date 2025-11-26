@@ -32,9 +32,16 @@ def mock_redis_client():
 @pytest.fixture
 def mock_audit_logger():
     """Mock AuditLogger."""
-    with patch("security.ip_whitelist_alerts.AuditLogger") as mock_logger:
+    # ✅ FIX: Patcher log_security_event directement (méthode statique)
+    # et créer un mock pour AuditLogger pour que les tests puissent y accéder
+    with patch(
+        "security.ip_whitelist_alerts.AuditLogger.log_security_event"
+    ) as mock_log_security_event:
         mock_log_instance = MagicMock()
-        mock_logger.log_security_event.return_value = mock_log_instance
+        mock_log_security_event.return_value = mock_log_instance
+        # Créer un mock pour AuditLogger avec log_security_event pointant vers le patch
+        mock_logger = MagicMock()
+        mock_logger.log_security_event = mock_log_security_event
         yield mock_logger
 
 
@@ -134,16 +141,18 @@ class TestSendIPWhitelistAlert:
         # Vérifier que AuditLogger.log_security_event a été appelé
         mock_audit_logger.log_security_event.assert_called_once()
         call_args = mock_audit_logger.log_security_event.call_args
+        assert call_args is not None, "log_security_event should have been called"
 
+        # ✅ FIX: log_security_event accepte event_type, severity, details, user_id, ip_address
+        # user_agent est dans details, pas dans les kwargs directs
         assert call_args.kwargs["event_type"] == "ip_whitelist_denied"
         assert call_args.kwargs["severity"] == "high"
         assert call_args.kwargs["ip_address"] == "192.168.1.100"
-        assert call_args.kwargs["user_agent"] == "Mozilla/5.0"
 
-        details = call_args.kwargs["details"]
-        assert details["endpoint"] == "/api/admin/stats"
-        assert details["method"] == "GET"
-        assert details["user_agent"] == "Mozilla/5.0"
+        details = call_args.kwargs.get("details", {})
+        assert details.get("endpoint") == "/api/admin/stats"
+        assert details.get("method") == "GET"
+        assert details.get("user_agent") == "Mozilla/5.0"
 
     @patch("security.ip_whitelist_alerts.sentry_sdk.capture_message")
     @patch("security.ip_whitelist_alerts.should_alert_for_ip")
@@ -170,6 +179,7 @@ class TestSendIPWhitelistAlert:
         # Vérifier que Sentry a été appelé
         mock_sentry_capture.assert_called_once()
         call_args = mock_sentry_capture.call_args
+        assert call_args is not None, "sentry_capture should have been called"
 
         assert "Tentative d'accès non autorisée via IP whitelist" in call_args[0][0]
         assert call_args[1]["level"] == "warning"
@@ -241,7 +251,10 @@ class TestSendIPWhitelistAlert:
                 method="GET",
             )
 
+        # ✅ FIX: Vérifier que log_security_event a été appelé avant d'accéder à call_args
+        mock_audit_logger.log_security_event.assert_called_once()
         call_args = mock_audit_logger.log_security_event.call_args
+        assert call_args is not None, "log_security_event should have been called"
         details = call_args.kwargs["details"]
 
         assert "headers" in details
@@ -270,10 +283,16 @@ class TestSendIPWhitelistAlert:
                 method="GET",
             )
 
+        # ✅ FIX: Vérifier que log_security_event a été appelé avant d'accéder à call_args
+        mock_audit_logger.log_security_event.assert_called_once()
         call_args = mock_audit_logger.log_security_event.call_args
+        assert call_args is not None, "log_security_event should have been called"
         assert call_args.kwargs.get("user_id") is None
 
+        # ✅ FIX: Vérifier que Sentry a été appelé avant d'accéder à call_args
+        mock_sentry_capture.assert_called_once()
         sentry_call_args = mock_sentry_capture.call_args
+        assert sentry_call_args is not None, "sentry_capture should have been called"
         context = sentry_call_args[1]["contexts"]["request"]
         assert "user_id" not in context
 
@@ -329,11 +348,13 @@ class TestIPWhitelistAlertIntegration:
             )
 
         # Vérifier que tout a été appelé dans le bon ordre
-        assert mock_audit_logger.log_security_event.called
-        assert mock_sentry_capture.called
+        # ✅ FIX: Utiliser assert_called_once() pour vérifier que la méthode a été appelée
+        mock_audit_logger.log_security_event.assert_called_once()
+        mock_sentry_capture.assert_called_once()
 
         # Vérifier les détails de l'alerte Sentry
         sentry_call = mock_sentry_capture.call_args
+        assert sentry_call is not None, "sentry_capture should have been called"
         assert "192.168.1.100" in sentry_call[0][0]
         assert sentry_call[1]["tags"]["endpoint"] == "/api/admin/stats"
         assert sentry_call[1]["tags"]["method"] == "POST"

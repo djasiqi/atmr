@@ -177,7 +177,7 @@ class NStepBuffer:
 
         """
         try:
-            n_step_return = 0
+            n_step_return = 0.0  # ✅ FIX: Initialiser à 0.0 (float) au lieu de 0 (int)
 
             # Calculer la somme des récompenses avec discount
             for i in range(min(self.n_step, len(self.temp_buffer) - start_idx)):
@@ -215,7 +215,15 @@ class NStepBuffer:
 
         """
         try:
+            # ✅ FIX: Vérifier que le buffer temporaire n'est pas vide
+            if not self.temp_buffer or len(self.temp_buffer) == 0:
+                return None
+
             final_idx = min(start_idx + self.n_step - 1, len(self.temp_buffer) - 1)
+
+            # ✅ FIX: Vérifier que final_idx est valide
+            if final_idx < 0 or final_idx >= len(self.temp_buffer):
+                return None
 
             return cast(
                 np.ndarray[Any, np.dtype[np.float32]],
@@ -479,7 +487,29 @@ class NStepPrioritizedBuffer(NStepBuffer):
         try:
             for idx, td_error in zip(indices, td_errors, strict=False):
                 if 0 <= idx < len(self.buffer):
-                    priority = (abs(td_error) + 1e-6) ** self.alpha
+                    # ✅ FIX: Gérer les cas NaN et inf pour td_error
+                    # Utiliser une variable locale pour éviter de réassigner la variable de boucle
+                    clean_td_error = td_error
+                    if np.isnan(clean_td_error):
+                        clean_td_error = 0.0
+                    elif np.isinf(clean_td_error):
+                        # Pour inf, utiliser une valeur finie mais grande pour éviter inf dans le calcul
+                        clean_td_error = 1000.0 if clean_td_error > 0 else -1000.0
+
+                    priority = (abs(clean_td_error) + 1e-6) ** self.alpha
+
+                    # ✅ FIX: Vérifier que la priorité n'est pas NaN ou inf
+                    # et la corriger si nécessaire
+                    if np.isnan(priority) or np.isinf(priority):
+                        priority = 1.0  # Priorité par défaut
+
+                    # S'assurer que la priorité est un float fini
+                    # Convertir explicitement en float et vérifier à nouveau
+                    priority_float = float(priority)
+                    if np.isnan(priority_float) or np.isinf(priority_float):
+                        priority_float = 1.0
+                    priority = priority_float
+
                     self.priorities[idx] = priority
                     self.max_priority = max(self.max_priority, priority)
 

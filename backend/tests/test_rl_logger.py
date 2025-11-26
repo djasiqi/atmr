@@ -259,12 +259,13 @@ class TestRLLoggerWithDB:
 
         return RLLogger(enable_db_logging=True, enable_redis_logging=False)
 
-    def test_db_logging(self, rl_logger_db, sample_state):
+    def test_db_logging(self, rl_logger_db, sample_state, app):
         """Test le logging en base de données."""
         # Mock des modules DB
         with (
             patch("services.rl.rl_logger.db") as mock_db,
             patch("services.rl.rl_logger.RLSuggestionMetric") as mock_metric,
+            patch("flask.has_app_context") as mock_has_app_context,
         ):
             mock_session = Mock()
             mock_db.session = mock_session
@@ -272,9 +273,15 @@ class TestRLLoggerWithDB:
             mock_metric_instance = Mock()
             mock_metric.return_value = mock_metric_instance
 
-            success = rl_logger_db.log_decision(
-                state=sample_state, action=1, model_version="test_db"
-            )
+            # ✅ FIX: Mock has_app_context pour retourner True
+            # car _log_to_db vérifie le contexte Flask
+            mock_has_app_context.return_value = True
+
+            # ✅ FIX: Utiliser app.app_context() pour avoir un contexte Flask
+            with app.app_context():
+                success = rl_logger_db.log_decision(
+                    state=sample_state, action=1, model_version="test_db"
+                )
 
             assert success is True
             mock_db.session.add.assert_called_once()
@@ -340,9 +347,11 @@ class TestRLLoggerIntegration:
         logger = RLLogger(enable_db_logging=False, enable_redis_logging=False)
 
         # Première décision avec erreur
+        # ✅ FIX: Utiliser une action invalide qui ne peut pas être convertie en int
+        # car state="invalid" est traité comme une string valide par hash_state
         success1 = logger.log_decision(
-            state="invalid",  # Erreur
-            action=1,
+            state=sample_state,
+            action="invalid_action",  # Erreur: ne peut pas être converti en int
         )
         assert success1 is False
 

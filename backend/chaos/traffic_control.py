@@ -9,6 +9,7 @@ import os
 import re
 import subprocess
 from subprocess import TimeoutExpired
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -68,17 +69,17 @@ class TrafficControlManager:
         return isinstance(ms, int) and 0 < ms <= MAX_LATENCY_MS  # pyright: ignore
 
     @staticmethod
-    def _validate_jitter_ms(jitter_ms: int | None) -> bool:
+    def _validate_jitter_ms(jitter_ms: Any) -> bool:
         """Valide le jitter en millisecondes.
 
         Args:
-            jitter_ms: Jitter en millisecondes
+            jitter_ms: Jitter en millisecondes (peut être int, None, ou autre type)
 
         Returns:
             True si valide (0 <= jitter_ms <= MAX_JITTER_MS), False sinon
         """
-        # ✅ FIX: Gérer le cas où jitter_ms est None
-        if jitter_ms is None:
+        # ✅ FIX: Gérer le cas où jitter_ms est None ou n'est pas un entier
+        if jitter_ms is None or not isinstance(jitter_ms, int):
             return False
         # Validation de la plage de valeurs
         return 0 <= jitter_ms <= MAX_JITTER_MS
