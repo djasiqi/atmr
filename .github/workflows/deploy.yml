@@ -253,6 +253,15 @@ jobs:
             fi
             echo "🔄 Arrêt des conteneurs existants..."
             docker compose -f docker-compose.production.yml down --remove-orphans || true
+
+            # Vérifier que les variables sont disponibles pour docker-compose
+            echo "🔍 Vérification des variables pour docker-compose..."
+            if [ -z "${POSTGRES_USER:-}" ] || [ -z "${POSTGRES_PASSWORD:-}" ] || [ -z "${POSTGRES_DB:-}" ]; then
+              echo "❌ Variables POSTGRES_* manquantes pour docker-compose"
+              exit 1
+            fi
+            echo "✅ Variables POSTGRES_* disponibles pour docker-compose"
+
             echo "🔄 Démarrage des services..."
             docker compose -f docker-compose.production.yml up -d
 
