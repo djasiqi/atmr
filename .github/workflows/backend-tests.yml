@@ -152,7 +152,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-cov coverage
+          pip install pytest pytest-cov coverage pytest-timeout
           # Dépendances de test
           pip install factory-boy freezegun
           # Dépendances base de données
@@ -222,9 +222,17 @@ jobs:
           echo "✅ Migrations exécutées avec succès"
 
       - name: Run pytest with coverage
+        timeout-minutes: 30
         run: |
           # Lancer pytest depuis la racine pour que les imports 'backend' fonctionnent
-          pytest backend/tests -v --cov=backend --cov-report=xml:backend/coverage.xml --cov-report=html:backend/htmlcov --cov-report=term-missing
+          # ✅ OPTIM: Ajout timeout pour éviter blocage (120s par test, 30min total)
+          pytest backend/tests -v \
+            --cov=backend \
+            --cov-report=xml:backend/coverage.xml \
+            --cov-report=html:backend/htmlcov \
+            --cov-report=term-missing \
+            --timeout=120 \
+            --timeout-method=thread
 
       # ✅ 3.1: Vérifier couverture globale ≥ 70% (bloquant)
       - name: Check global coverage >= 70%
@@ -246,6 +254,8 @@ jobs:
             --cov=backend/services/unified_dispatch/autonomous_manager.py \
             --cov-report=term-missing \
             --cov-fail-under=80 \
+            --timeout=120 \
+            --timeout-method=thread \
             -v
 
           # Vérifier autres modules critiques via script

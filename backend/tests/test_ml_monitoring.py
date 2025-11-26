@@ -182,7 +182,7 @@ class TestMLMonitoringAPI:
         assert "mae" in data
         assert "r2" in data
 
-        print("✅ GET /metrics OK (count: {data['count']})")
+        print(f"✅ GET /metrics OK (count: {data['count']})")
 
     def test_get_daily_metrics(self, client, auth_headers):
         """Test endpoint GET /api/ml-monitoring/daily."""
@@ -201,7 +201,7 @@ class TestMLMonitoringAPI:
         assert "data" in data
         assert len(data["data"]) <= 7
 
-        print("✅ GET /daily OK ({len(data['data'])} jours)")
+        print(f"✅ GET /daily OK ({len(data['data'])} jours)")
 
     def test_get_summary(self, client, auth_headers):
         """Test endpoint GET /api/ml-monitoring/summary."""
