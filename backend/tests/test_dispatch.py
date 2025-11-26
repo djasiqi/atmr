@@ -80,7 +80,8 @@ def test_dispatch_requires_auth(client):
     skip_routes_init = os.getenv("SKIP_ROUTES_INIT", "false").lower() == "true"
     if skip_routes_init:
         pytest.skip(
-            "SKIP_ROUTES_INIT=1: routes non initialisées, test d'authentification non applicable"
+            "SKIP_ROUTES_INIT=1: routes non initialisées, "
+            "test d'authentification non applicable"
         )
 
     response = client.get("/api/v1/company_dispatch/")

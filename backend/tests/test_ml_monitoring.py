@@ -22,8 +22,11 @@ class TestMLMonitoringService:
             # en le rechargeant depuis la DB pour s'assurer qu'il est visible
             booking_check = db.session.query(Booking).filter_by(id=booking_id).first()
             if booking_check is None:
-                # Si le booking n'est pas trouvé, le recharger depuis sample_booking
-                db.session.refresh(sample_booking)
+                # Si le booking n'est pas trouvé, utiliser merge() pour l'attacher
+                # à la session au lieu de refresh() qui nécessite que l'objet soit
+                # déjà dans la session
+                sample_booking = db.session.merge(sample_booking)
+                db.session.flush()
                 booking_id = sample_booking.id
 
             # Log une prédiction avec un booking réel
@@ -71,8 +74,11 @@ class TestMLMonitoringService:
             # en le rechargeant depuis la DB pour s'assurer qu'il est visible
             booking_check = db.session.query(Booking).filter_by(id=booking_id).first()
             if booking_check is None:
-                # Si le booking n'est pas trouvé, le recharger depuis sample_booking
-                db.session.refresh(sample_booking)
+                # Si le booking n'est pas trouvé, utiliser merge() pour l'attacher
+                # à la session au lieu de refresh() qui nécessite que l'objet soit
+                # déjà dans la session
+                sample_booking = db.session.merge(sample_booking)
+                db.session.flush()
                 booking_id = sample_booking.id
 
             # Log prédiction avec un booking réel
@@ -129,16 +135,20 @@ class TestMLMonitoringService:
                 db.session.query(Client).filter_by(id=booking_ref.client_id).first()
             )
             if client_check is None:
-                # Si le client n'est pas trouvé, recharger sample_booking
-                db.session.refresh(sample_booking)
+                # Si le client n'est pas trouvé, utiliser merge() pour attacher
+                # sample_booking à la session
+                sample_booking = db.session.merge(sample_booking)
+                db.session.flush()
                 booking_ref = sample_booking
 
             company_check = (
                 db.session.query(Company).filter_by(id=booking_ref.company_id).first()
             )
             if company_check is None:
-                # Si la company n'est pas trouvée, recharger sample_booking
-                db.session.refresh(sample_booking)
+                # Si la company n'est pas trouvée, utiliser merge() pour attacher
+                # sample_booking à la session
+                sample_booking = db.session.merge(sample_booking)
+                db.session.flush()
                 booking_ref = sample_booking
 
             # Créer plusieurs bookings pour les tests
@@ -167,15 +177,25 @@ class TestMLMonitoringService:
             # Utiliser flush() au lieu de commit() pour éviter les conflits
             # avec les savepoints dans les tests
             db.session.flush()
-            # Rafraîchir les bookings pour obtenir leurs IDs
-            for booking in bookings:
-                db.session.refresh(booking)
+            # ✅ FIX: Obtenir les IDs des bookings après flush
+            # Utiliser merge() pour s'assurer que les bookings sont attachés
+            # à la session avant d'accéder à leur ID
+            booking_ids = []
+            for b in bookings:
+                # Utiliser merge() pour s'assurer que le booking est dans la session
+                merged_booking = db.session.merge(b)
+                db.session.flush()
+                booking_ids.append(merged_booking.id)
+            # S'assurer que tous les bookings ont un ID
+            assert all(bid is not None for bid in booking_ids), (
+                "Tous les bookings doivent avoir un ID après flush"
+            )
 
             # Créer quelques prédictions avec des bookings réels
             predictions = []
-            for i, booking in enumerate(bookings):
+            for i, booking_id in enumerate(booking_ids):
                 p = MLMonitoringService.log_prediction(
-                    booking_id=booking.id,
+                    booking_id=booking_id,
                     driver_id=0,  # driver_id peut être 0 ou None pour les tests
                     predicted_delay=5.0 + i,
                     confidence=0.8,

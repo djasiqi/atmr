@@ -296,16 +296,21 @@ jobs:
               exit 1
             fi
             echo "🔄 Exécution des migrations de base de données..."
+
+            # S'assurer que l'app Flask voit bien DATABASE_URL (utilisé en priorité dans la config)
+            export DATABASE_URL="${SQLALCHEMY_DATABASE_URI}"
+
             # Passer toutes les variables nécessaires pour que Flask puisse construire SQLALCHEMY_DATABASE_URI
             # Le code Flask essaie d'abord DATABASE_URL, puis SQLALCHEMY_DATABASE_URI, puis construit depuis POSTGRES_*
-            # On passe les deux pour être sûr que ça fonctionne
             docker compose -f docker-compose.production.yml exec -T \
               -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
+              -e DATABASE_URL="${DATABASE_URL}" \
               -e POSTGRES_USER="${POSTGRES_USER}" \
               -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
               -e POSTGRES_DB="${POSTGRES_DB}" \
               -e POSTGRES_HOST="postgres" \
               -e POSTGRES_PORT="5432" \
+              -e MAIL_PASSWORD="${MAIL_PASSWORD}" \
               backend flask db upgrade || {
               echo "❌ Erreur lors de l'exécution des migrations"
               echo "---- Diagnostics (migration failed) ----"
@@ -313,21 +318,26 @@ jobs:
               echo "  POSTGRES_USER=${POSTGRES_USER}"
               echo "  POSTGRES_DB=${POSTGRES_DB}"
               echo "  SQLALCHEMY_DATABASE_URI=${SQLALCHEMY_DATABASE_URI}"
+              echo "  DATABASE_URL=${DATABASE_URL}"
               docker compose -f docker-compose.production.yml exec -T \
                 -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
+                -e DATABASE_URL="${DATABASE_URL}" \
                 -e POSTGRES_USER="${POSTGRES_USER}" \
                 -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
                 -e POSTGRES_DB="${POSTGRES_DB}" \
                 -e POSTGRES_HOST="postgres" \
                 -e POSTGRES_PORT="5432" \
+                -e MAIL_PASSWORD="${MAIL_PASSWORD}" \
                 backend flask db current || true
               docker compose -f docker-compose.production.yml exec -T \
                 -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
+                -e DATABASE_URL="${DATABASE_URL}" \
                 -e POSTGRES_USER="${POSTGRES_USER}" \
                 -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
                 -e POSTGRES_DB="${POSTGRES_DB}" \
                 -e POSTGRES_HOST="postgres" \
                 -e POSTGRES_PORT="5432" \
+                -e MAIL_PASSWORD="${MAIL_PASSWORD}" \
                 backend flask db heads || true
               docker compose -f docker-compose.production.yml logs backend | tail -50 || true
               exit 1

@@ -43,11 +43,13 @@ class TestAPIVersioning:
         import os
 
         # ✅ FIX: Si SKIP_ROUTES_INIT=1, les routes ne sont pas initialisées
-        # et le handler @app.after_request pour le header Deprecation n'est pas enregistré
+        # et le handler @app.after_request pour le header Deprecation
+        # n'est pas enregistré
         skip_routes_init = os.getenv("SKIP_ROUTES_INIT", "false").lower() == "true"
         if skip_routes_init:
             pytest.skip(
-                "SKIP_ROUTES_INIT=1: routes non initialisées, header Deprecation non testé"
+                "SKIP_ROUTES_INIT=1: routes non initialisées, "
+                "header Deprecation non testé"
             )
 
         response = client.get("/api/v1/companies/me", headers=auth_headers)

@@ -105,9 +105,8 @@ class TestNStepBuffer(unittest.TestCase):
 
         # Le retour N-step pour la première transition devrait être:
         # r_t (gamma^0) + r_{t+1} (gamma^1) = 1.0 * 1.0 + 2.0 * 0.9 = 1.0 + 1.8 = 2.8
-        # Mais le calcul actuel ne inclut pas la récompense de la transition actuelle,
-        # seulement les suivantes. Donc le retour devrait être:
-        # r_{t+1} (gamma^0) = 2.0 * 1.0 = 2.0 (si l'épisode se termine)
+        # Le calcul actuel inclut la récompense de la transition actuelle (r_t),
+        # ce qui est correct selon la formule N-step standard.
         batch, _ = buffer.sample(2)
 
         # Vérifier que le batch n'est pas vide
@@ -125,22 +124,20 @@ class TestNStepBuffer(unittest.TestCase):
         if first_transition is None:
             first_transition = batch[0]
 
-        # ✅ FIX: Le calcul actuel ne inclut pas la récompense de la transition actuelle
-        # dans le retour N-step, seulement les récompenses des transitions suivantes.
-        # Donc pour la première transition avec n_step=2 et done=True à la deuxième:
-        # - La récompense de la transition actuelle (1.0) n'est pas incluse
-        # - Seule la récompense de la transition suivante (2.0) est incluse avec gamma^0 = 1.0
-        # - Donc le retour devrait être 2.0, pas 2.8
-        # Cependant, selon la formule N-step standard, on devrait inclure r_t.
-        # Pour l'instant, acceptons le comportement actuel (2.0) jusqu'à correction du calcul
+        # ✅ FIX: Le calcul actuel inclut la récompense de la transition actuelle
+        # dans le retour N-step. Pour la première transition avec n_step=2:
+        # - La récompense de la transition actuelle (1.0) est incluse avec gamma^0 = 1.0
+        # - La récompense de la transition suivante (2.0) est incluse avec gamma^1 = 0.9
+        # - Donc le retour est: 1.0 * 1.0 + 2.0 * 0.9 = 1.0 + 1.8 = 2.8
+        # C'est le comportement correct selon la formule N-step standard.
         actual_return = first_transition["n_step_return"]
         self.assertAlmostEqual(
             actual_return,
-            2.0,
+            2.8,
             places=5,
             msg=(
-                f"Retour N-step obtenu: {actual_return}, attendu: 2.0 "
-                "(ou 2.8 si r_t est inclus dans le calcul)"
+                f"Retour N-step obtenu: {actual_return}, attendu: 2.8 "
+                "(r_t + gamma * r_{t+1} = 1.0 + 0.9 * 2.0)"
             ),
         )
 

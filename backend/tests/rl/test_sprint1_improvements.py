@@ -339,7 +339,7 @@ class TestBaselineMetrics:
 
         start_time = time.time()
         for _ in range(100):
-            agent.select_action(state, training=False)
+            agent.select_action(state)
         end_time = time.time()
 
         avg_latency = (end_time - start_time) / 100 * 1000  # ms

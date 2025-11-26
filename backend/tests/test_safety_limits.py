@@ -486,7 +486,8 @@ class TestActionLogging:
         manager = AutonomousDispatchManager(company_fully_auto.id)
 
         # ✅ FIX: S'assurer que can_auto_apply_suggestion et check_safety_limits
-        # retournent True pour éviter que la suggestion soit bloquée avant d'être appliquée
+        # retournent True pour éviter que la suggestion soit bloquée
+        # avant d'être appliquée
         with (
             patch.object(manager, "can_auto_apply_suggestion", return_value=True),
             patch.object(manager, "check_safety_limits", return_value=(True, "OK")),
@@ -530,8 +531,9 @@ class TestActionLogging:
                 ),  # ✅ FIX: Définir created_at explicitement
             )
             db.session.add(action)
-        # ✅ FIX: Commit pour que les actions soient visibles dans count_actions_last_hour
-        # qui fait une requête SQL. Les objets flushés peuvent ne pas être visibles
+        # ✅ FIX: Commit pour que les actions soient visibles
+        # dans count_actions_last_hour qui fait une requête SQL.
+        # Les objets flushés peuvent ne pas être visibles
         # dans les requêtes selon l'isolation level de la transaction.
         db.session.commit()
 
