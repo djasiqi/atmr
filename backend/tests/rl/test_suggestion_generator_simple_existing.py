@@ -94,7 +94,8 @@ class TestRLSuggestionGeneratorSimple:
         mock_agent = Mock()
         # Créer un tensor avec 26 valeurs (nombre d'actions)
         mock_q_values = torch.tensor([[0.1 + i * 0.01 for i in range(26)]])
-        # q_network est appelé comme une fonction, donc on utilise side_effect ou return_value
+        # q_network est appelé comme une fonction, donc on utilise
+        # side_effect ou return_value
         mock_agent.q_network = Mock(return_value=mock_q_values)
         generator.agent = mock_agent
 

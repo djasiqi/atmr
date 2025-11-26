@@ -394,7 +394,8 @@ class TestDispatchE2E:
                 BookingStatus.ACCEPTED,
                 BookingStatus.ASSIGNED,
             ), (
-                f"Booking {booking.id} must have valid status for assignment, got {booking_from_db.status}"
+                f"Booking {booking.id} must have valid status for assignment, "
+                f"got {booking_from_db.status}"
             )
 
         # ✅ FIX: Vérifier que les drivers utilisent aussi la bonne company
@@ -432,7 +433,8 @@ class TestDispatchE2E:
         )
         db.session.add(dispatch_run)
         db.session.flush()
-        # ✅ FIX: Commit le DispatchRun pour qu'il soit visible après le rollback défensif
+        # ✅ FIX: Commit le DispatchRun pour qu'il soit visible
+        # après le rollback défensif
         db.session.commit()
         # ✅ Vérifier que l'ID est disponible après commit
         assert dispatch_run.id is not None, (

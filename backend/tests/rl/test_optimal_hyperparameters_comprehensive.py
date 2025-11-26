@@ -438,8 +438,9 @@ class TestOptimalHyperparameters:
         """Test de la configuration SPRINT1"""
         from services.rl.optimal_hyperparameters import SPRINT1
 
-        # SPRINT1 est écrasé 3 fois, la dernière valeur est la configuration de reward shaping
-        # qui n'a pas de learning_rate, mais a les poids de reward
+        # SPRINT1 est écrasé 3 fois, la dernière valeur est la configuration
+        # de reward shaping qui n'a pas de learning_rate, mais a les poids
+        # de reward
         assert SPRINT1["punctuality_weight"] == 1.5
         assert SPRINT1["distance_weight"] == 0.3
         assert SPRINT1["equity_weight"] == 0.2
@@ -450,8 +451,9 @@ class TestOptimalHyperparameters:
         """Test de la configuration SPRINT1"""
         from services.rl.optimal_hyperparameters import SPRINT1
 
-        # SPRINT1 est écrasé 3 fois, la dernière valeur est la configuration de reward shaping
-        # qui n'a pas de learning_rate, mais a les poids de reward
+        # SPRINT1 est écrasé 3 fois, la dernière valeur est la configuration
+        # de reward shaping qui n'a pas de learning_rate, mais a les poids
+        # de reward
         assert SPRINT1["punctuality_weight"] == 1.5
         assert SPRINT1["distance_weight"] == 0.3
         assert SPRINT1["equity_weight"] == 0.2

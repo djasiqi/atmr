@@ -286,7 +286,8 @@ def _apply_assignments_inner(
     # 3) Prépare updates
     applied_ids: List[int] = []
     skipped: Dict[int, str] = {}
-    # ✅ FIX: Capturer les métadonnées des bookings skipped avant que la transaction soit fermée
+    # ✅ FIX: Capturer les métadonnées des bookings skipped
+    # avant que la transaction soit fermée
     skipped_metadata: Dict[int, Dict[str, Any]] = {}
     conflicts: List[int] = []
     driver_load: Dict[int, int] = defaultdict(int)
@@ -641,7 +642,8 @@ def _apply_assignments_inner(
 
     if skipped:
         for skipped_id, reason in skipped.items():
-            # ✅ FIX: Utiliser les métadonnées capturées avant que la transaction soit fermée
+            # ✅ FIX: Utiliser les métadonnées capturées
+            # avant que la transaction soit fermée
             metadata = skipped_metadata.get(skipped_id, {})
             scheduled_time = metadata.get("scheduled_time")
             time_confirmed = metadata.get("time_confirmed")

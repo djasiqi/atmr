@@ -77,9 +77,8 @@ class TrafficControlManager:
         Returns:
             True si valide (0 <= jitter_ms <= MAX_JITTER_MS), False sinon
         """
-        # Défense en profondeur : vérifier le type même si annoté
-        # (runtime validation)
-        return isinstance(jitter_ms, int) and 0 <= jitter_ms <= MAX_JITTER_MS  # pyright: ignore
+        # Validation de la plage de valeurs
+        return 0 <= jitter_ms <= MAX_JITTER_MS
 
     @staticmethod
     def _validate_percent(percent: float) -> bool:

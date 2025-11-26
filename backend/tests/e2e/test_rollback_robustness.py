@@ -246,9 +246,10 @@ class TestRollbackRobustness:
         # Si engine.run() assigne le booking, c'est normal (le booking a été restauré
         # puis réassigné). Si le booking n'a pas été assigné, vérifier que le rollback
         # défensif a restauré les valeurs originales.
-        # ✅ FIX: Ne vérifier le rollback que si le booking n'a PAS été assigné par engine.run()
-        # Si le booking a été assigné, c'est normal et on ne vérifie pas le rollback
-        # car engine.run() a modifié le booking après le rollback défensif.
+        # ✅ FIX: Ne vérifier le rollback que si le booking n'a PAS été assigné
+        # par engine.run(). Si le booking a été assigné, c'est normal et on ne
+        # vérifie pas le rollback car engine.run() a modifié le booking après
+        # le rollback défensif.
         if booking_reloaded.driver_id is None:
             # Le booking n'a pas été assigné par engine.run(), vérifier que le rollback
             # défensif a restauré les valeurs originales

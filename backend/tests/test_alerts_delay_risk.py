@@ -599,13 +599,17 @@ class TestErrorHandling:
             booking=invalid_booking or {}, driver={}
         )
 
-        # Note: _heuristic_delay_probability gère les erreurs en retournant 0.5 (ligne 308)
-        # Donc le niveau de risque sera "low" (0.5 >= 0.3 mais < 0.6), pas "unknown"
-        # Le niveau "unknown" n'est retourné que si une exception est levée dans
-        # le bloc try/except principal de check_delay_risk
-        assert result["delay_probability"] == 0.5  # Probabilité neutre en cas d'erreur
+        # Note: _heuristic_delay_probability gère les erreurs en retournant
+        # 0.5 (ligne 308)
+        # Donc le niveau de risque sera "low" (0.5 >= 0.3 mais < 0.6),
+        # pas "unknown"
+        # Le niveau "unknown" n'est retourné que si une exception est levée
+        # dans le bloc try/except principal de check_delay_risk
+        assert result["delay_probability"] == 0.5  # Probabilité neutre
+        # en cas d'erreur
         assert result["risk_level"] == "low"  # 0.5 donne "low", pas "unknown"
-        # L'explication peut ne pas contenir "error" si l'erreur est gérée silencieusement
+        # L'explication peut ne pas contenir "error" si l'erreur est gérée
+        # silencieusement
 
     def test_send_alert_error_handling(self):
         """Test gestion d'erreur dans send_proactive_alert."""

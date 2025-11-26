@@ -91,7 +91,8 @@ class TestRollbackTransactionnel:
             )(),
         ]
 
-        # ✅ FIX: Commit les bookings avant apply_assignments pour s'assurer qu'ils sont persistés
+        # ✅ FIX: Commit les bookings avant apply_assignments pour s'assurer
+        # qu'ils sont persistés
         db.session.commit()
 
         # Tenter l'application
@@ -253,7 +254,8 @@ class TestRollbackTransactionnel:
             for b in bookings
         ]
 
-        # ✅ FIX: Commit les bookings avant apply_assignments pour s'assurer qu'ils sont persistés
+        # ✅ FIX: Commit les bookings avant apply_assignments pour s'assurer
+        # qu'ils sont persistés
         db.session.commit()
         # ✅ FIX: Expirer tous les objets pour forcer le rechargement depuis la DB
         # Cela garantit que les objets sont détachés de la session et seront rechargés

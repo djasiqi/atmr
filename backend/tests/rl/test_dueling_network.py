@@ -165,8 +165,10 @@ class TestDuelingQNetwork:
         dueling_params = sum(p.numel() for p in dueling_net.parameters())
         standard_params = sum(p.numel() for p in standard_net.parameters())
 
-        # ✅ FIX: Dueling peut avoir plus ou moins de paramètres selon la configuration
-        # On vérifie juste qu'ils sont différents (pas nécessairement que dueling > standard)
+        # ✅ FIX: Dueling peut avoir plus ou moins de paramètres selon
+        # la configuration
+        # On vérifie juste qu'ils sont différents (pas nécessairement que
+        # dueling > standard)
         assert dueling_params != standard_params
 
     def test_dueling_network_consistency(self):

@@ -56,7 +56,8 @@ class TestOpenTelemetry:
         # Vérifier que tous les spans sont dans la trace
         current_span = trace.get_current_span()
 
-        # ✅ FIX: Gérer le cas où current_span est un MockSpan qui n'a pas get_span_context()
+        # ✅ FIX: Gérer le cas où current_span est un MockSpan qui n'a pas
+        # get_span_context()
         if current_span is None:
             assert True  # Pas de span actif, c'est OK
         elif hasattr(current_span, "get_span_context"):

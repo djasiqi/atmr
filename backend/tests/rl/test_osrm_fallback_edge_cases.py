@@ -657,10 +657,13 @@ class TestOSRMFallbackExceptionEdgeCases:
                 driver = env.drivers[0]
                 booking = env.bookings[0]
 
-                # Ne pas mocker _calculate_travel_time, mais plutôt tester le comportement réel
-                # avec des positions valides pour vérifier que le fallback haversine fonctionne
-                # Le code réel de _calculate_travel_time gère les exceptions et retourne 30
-                # Testons plutôt avec des valeurs réelles pour vérifier le calcul haversine
+                # Ne pas mocker _calculate_travel_time, mais plutôt tester
+                # le comportement réel avec des positions valides pour
+                # vérifier que le fallback haversine fonctionne
+                # Le code réel de _calculate_travel_time gère les exceptions
+                # et retourne 30
+                # Testons plutôt avec des valeurs réelles pour vérifier
+                # le calcul haversine
                 travel_time = env._calculate_travel_time(driver, booking)
                 # Vérifier que le fallback retourne une valeur raisonnable
                 assert travel_time is not None

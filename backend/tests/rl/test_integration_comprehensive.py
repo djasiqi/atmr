@@ -510,7 +510,8 @@ class TestRLSystemRobustness:
             # Vérifier que les performances restent acceptables
             # (simulation simplifiée)
             performance_score = max(0, 1 - (size * 0.01))
-            # ✅ FIX: Utiliser >= au lieu de > car performance_score peut être exactement 0.5
+            # ✅ FIX: Utiliser >= au lieu de > car performance_score peut être
+            # exactement 0.5
             assert performance_score >= 0.5  # Performance acceptable
 
 

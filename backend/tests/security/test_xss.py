@@ -120,7 +120,8 @@ class TestXSSInQueryParams:
             headers=auth_headers,
         )
         # Doit traiter le payload comme texte, pas l'exécuter
-        # 404 est acceptable car cela signifie que la route n'est pas accessible (protection)
+        # 404 est acceptable car cela signifie que la route n'est pas
+        # accessible (protection)
         assert response.status_code in (200, 400, 401, 403, 404)
         response_text = response.get_data(as_text=True).lower()
         # Ne doit pas exécuter le JavaScript dans la réponse JSON
@@ -132,7 +133,8 @@ class TestXSSInQueryParams:
         payload = "<img src=x onerror=alert('XSS')>"
         response = client.get(f"/api/v1/medical/establishments?q={payload}")
         # Endpoint public, doit traiter comme texte
-        # 404 est acceptable car cela signifie que la route n'est pas accessible (protection)
+        # 404 est acceptable car cela signifie que la route n'est pas
+        # accessible (protection)
         assert response.status_code in (200, 400, 404)
         response_text = response.get_data(as_text=True).lower()
         # Ne doit pas exécuter le JavaScript
@@ -219,7 +221,8 @@ class TestXSSInJSONBody:
             "/api/v1/companies/me/clients", json=data, headers=auth_headers
         )
         # Doit accepter le payload comme texte
-        # 404 est acceptable car cela signifie que la route n'est pas accessible (protection)
+        # 404 est acceptable car cela signifie que la route n'est pas
+        # accessible (protection)
         assert response.status_code in (201, 400, 401, 403, 404)
         response_text = response.get_data(as_text=True).lower()
         # Ne doit pas exécuter le JavaScript
@@ -243,7 +246,8 @@ class TestXSSInJSONBody:
             "/api/v1/companies/me/drivers/create", json=data, headers=auth_headers
         )
         # Doit accepter le payload comme texte ou rejeter par validation
-        # 404 est acceptable car cela signifie que la route n'est pas accessible (protection)
+        # 404 est acceptable car cela signifie que la route n'est pas
+        # accessible (protection)
         assert response.status_code in (201, 400, 401, 403, 404, 409)
         response_text = response.get_data(as_text=True).lower()
         # Ne doit pas exécuter le JavaScript
@@ -287,7 +291,8 @@ class TestXSSResponseSanitization:
             headers={"Authorization": "Bearer invalid"},
         )
         # Doit retourner une erreur 400 ou 401
-        # 404 est acceptable car cela signifie que la route n'est pas accessible (protection)
+        # 404 est acceptable car cela signifie que la route n'est pas
+        # accessible (protection)
         assert response.status_code in (400, 401, 403, 404)
         response_text = response.get_data(as_text=True).lower()
         # Vérifier que le message d'erreur ne contient pas le payload non échappé

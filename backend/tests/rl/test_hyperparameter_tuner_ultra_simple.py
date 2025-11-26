@@ -77,7 +77,8 @@ class TestHyperparameterTuner:
         tuner = HyperparameterTuner()
 
         # Mock trial avec valeurs spécifiques
-        # ✅ FIX: _suggest_hyperparameters appelle suggest_float 10 fois, suggest_categorical 6 fois, suggest_int 4 fois
+        # ✅ FIX: _suggest_hyperparameters appelle suggest_float 10 fois,
+        # suggest_categorical 6 fois, suggest_int 4 fois
         mock_trial = Mock()
         mock_trial.suggest_float.side_effect = [
             0.001,  # learning_rate
@@ -168,7 +169,8 @@ class TestHyperparameterTuner:
             # Mock agent
             mock_agent = Mock()
             mock_agent.select_action.return_value = 0
-            # ✅ FIX: mock_agent.memory doit avoir une longueur pour que learn() soit appelé
+            # ✅ FIX: mock_agent.memory doit avoir une longueur pour que
+            # learn() soit appelé
             mock_agent.memory = Mock()
             mock_agent.memory.__len__ = Mock(return_value=128)  # >= batch_size
             mock_agent.batch_size = 128
@@ -233,7 +235,8 @@ class TestHyperparameterTuner:
             # Mock agent
             mock_agent = Mock()
             mock_agent.select_action.return_value = 0
-            # ✅ FIX: mock_agent.memory doit avoir une longueur pour que learn() soit appelé
+            # ✅ FIX: mock_agent.memory doit avoir une longueur pour que
+            # learn() soit appelé
             mock_agent.memory = Mock()
             mock_agent.memory.__len__ = Mock(return_value=128)  # >= batch_size
             mock_agent.batch_size = 128

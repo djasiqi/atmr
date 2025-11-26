@@ -116,7 +116,8 @@ class TestProactiveAlertsService:
     def test_alert_thresholds(self, alerts_service):
         """Test les seuils d'alerte."""
         # Test avec différentes probabilités
-        # Note: _determine_risk_level ne retourne jamais "critical", seulement "high", "medium", "low", "minimal"
+        # Note: _determine_risk_level ne retourne jamais "critical",
+        # seulement "high", "medium", "low", "minimal"
         test_cases = [(0.3, "low"), (0.6, "medium"), (0.8, "high"), (0.95, "high")]
 
         for probability, expected_level in test_cases:

@@ -28,7 +28,8 @@ def admin_user(app, db_session):
         admin.set_password("password123")
         db.session.add(admin)
         db.session.commit()
-        # ✅ FIX: Stocker public_id avant de quitter le contexte pour éviter DetachedInstanceError
+        # ✅ FIX: Stocker public_id avant de quitter le contexte pour éviter
+        # DetachedInstanceError
         public_id = admin.public_id
         # Expirer et recharger pour garantir que l'objet est bien en DB
         db.session.expire(admin)

@@ -9,7 +9,7 @@ Valide l'intégration complète des fonctionnalités :
 
 import os
 from datetime import UTC, datetime, timedelta
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from flask_jwt_extended import create_access_token
@@ -219,7 +219,8 @@ class TestRotationSecretsCeleryTask:
         }
 
         # Exécuter la rotation globale
-        # rotate_all_secrets est une tâche Celery avec bind=True, donc self est automatique
+        # rotate_all_secrets est une tâche Celery avec bind=True,
+        # donc self est automatique
         from tasks.vault_rotation_tasks import rotate_all_secrets
 
         # Appeler directement la fonction (pas comme méthode, self est automatique)
@@ -249,7 +250,8 @@ class TestRotationSecretsCeleryTask:
         }
 
         # Exécuter la rotation globale
-        # rotate_all_secrets est une tâche Celery avec bind=True, donc self est automatique
+        # rotate_all_secrets est une tâche Celery avec bind=True,
+        # donc self est automatique
         from tasks.vault_rotation_tasks import rotate_all_secrets
 
         # Appeler directement la fonction (pas comme méthode, self est automatique)
@@ -293,7 +295,8 @@ class TestTokenBlacklistWithJWT:
         # bool(0) = False, donc is_token_blacklisted retournera False
 
         # Tester le callback
-        # Note: check_if_token_revoked appelle is_token_blacklisted qui utilise redis_client.exists(key)
+        # Note: check_if_token_revoked appelle is_token_blacklisted qui utilise
+        # redis_client.exists(key)
         from ext import check_if_token_revoked
 
         jwt_payload = {"jti": "test-jti-not-revoked"}

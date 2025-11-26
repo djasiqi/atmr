@@ -230,7 +230,8 @@ class TestDispatchEnvAdditionalEdgeCases:
         observation = env._get_observation()
 
         assert isinstance(observation, np.ndarray)
-        # Avec drivers et bookings vides, on devrait avoir seulement le contexte (2 valeurs)
+        # Avec drivers et bookings vides, on devrait avoir seulement le contexte
+        # (2 valeurs)
         assert len(observation) >= 2
 
     def test_assign_booking_success(self):
@@ -358,8 +359,8 @@ class TestDispatchEnvAdditionalEdgeCases:
         env = DispatchEnv(num_drivers=3, max_bookings=5)
         env.reset()
 
-        # ✅ FIX: Le code accède directement à booking["time_remaining"] et booking["priority"]
-        # Il faut fournir ces clés
+        # ✅ FIX: Le code accède directement à booking["time_remaining"]
+        # et booking["priority"]. Il faut fournir ces clés
         env.bookings = [
             {"id": 1, "time_remaining": -10, "assigned": False, "priority": 3},
             {"id": 2, "time_remaining": 5, "assigned": False, "priority": 1},

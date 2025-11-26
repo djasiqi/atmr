@@ -105,7 +105,8 @@ class TestIdempotence:
         driver_status = DriverStatus(driver_id=driver.id, state=DriverState.AVAILABLE)
         db_session.session.add(driver_status)
 
-        db_session.session.commit()  # Commit nécessaire pour tester l'idempotence réelle
+        # Commit nécessaire pour tester l'idempotence réelle
+        db_session.session.commit()
 
         # Créer une assignation
         assignment_data = {
@@ -206,7 +207,8 @@ class TestIdempotence:
         driver_status = DriverStatus(driver_id=driver.id, state=DriverState.AVAILABLE)
         db_session.session.add(driver_status)
 
-        db_session.session.commit()  # Commit nécessaire pour tester la contrainte unique
+        # Commit nécessaire pour tester la contrainte unique
+        db_session.session.commit()
 
         # Créer une première assignation
         assignment1 = Assignment(

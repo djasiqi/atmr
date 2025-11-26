@@ -76,7 +76,8 @@ class TestOSRMClientSHA256:
 
         # Extraire le hash de la clé
         # Format: "osrm:matrix:{date_str}:{matrix_hash}"
-        # parts[0] = "osrm", parts[1] = "matrix", parts[2] = date_str, parts[3] = matrix_hash
+        # parts[0] = "osrm", parts[1] = "matrix", parts[2] = date_str,
+        # parts[3] = matrix_hash
         parts = cache_key.split(":")
         extracted_hash = parts[3]
 

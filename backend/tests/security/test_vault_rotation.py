@@ -8,9 +8,7 @@ Valide le fonctionnement de la rotation des secrets :
 - Gestion des erreurs et fallbacks
 """
 
-from unittest.mock import MagicMock, Mock, patch
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from tasks.vault_rotation_tasks import (
     rotate_all_secrets,

@@ -288,8 +288,8 @@ class TestSafetyGuards:
 
     def test_error_handling(self, safety_guards):
         """Test la gestion d'erreurs."""
-        # ✅ FIX: Forcer une exception en mockant _extract_metrics pour lever une exception
-        # ou en passant un objet qui cause une exception
+        # ✅ FIX: Forcer une exception en mockant _extract_metrics pour lever
+        # une exception ou en passant un objet qui cause une exception
         with patch.object(
             safety_guards, "_extract_metrics", side_effect=ValueError("Test error")
         ):
@@ -297,7 +297,8 @@ class TestSafetyGuards:
                 {"invalid": "data"}, None
             )
 
-            # ✅ FIX: En cas d'erreur, is_safe doit être False et "error" doit être présent
+            # ✅ FIX: En cas d'erreur, is_safe doit être False et "error" doit
+            # être présent
             assert is_safe is False
             assert "error" in result
 

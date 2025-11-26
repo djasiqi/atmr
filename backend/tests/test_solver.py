@@ -476,7 +476,8 @@ class TestSolverDebugInfo:
         settings = Settings()
         result = solve(problem, settings)
 
-        # ✅ FIX: Le debug contient des métriques mais pas nécessairement "status" ou "reason"
+        # ✅ FIX: Le debug contient des métriques mais pas nécessairement
+        # "status" ou "reason"
         # Vérifier que le debug contient au moins certaines clés attendues
         assert "vehicles" in result.debug or "tasks" in result.debug, (
             "Debug devrait contenir des métriques (vehicles ou tasks)"

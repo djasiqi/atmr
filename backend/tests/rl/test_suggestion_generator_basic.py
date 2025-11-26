@@ -3,11 +3,9 @@
 Tests pour suggestion_generator.py - couverture de base
 """
 
-from datetime import datetime
 from unittest.mock import Mock, patch
 
 import pytest
-import torch
 
 from services.rl.suggestion_generator import RLSuggestionGenerator
 

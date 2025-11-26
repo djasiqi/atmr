@@ -19,7 +19,8 @@ class TestEscapeHtml:
 
     def test_escape_basic_html(self):
         """Test échappement HTML basique."""
-        # html.escape(quote=False) n'échappe que <, >, et &, pas les guillemets/apostrophes
+        # html.escape(quote=False) n'échappe que <, >, et &,
+        # pas les guillemets/apostrophes
         assert (
             escape_html("<script>alert('xss')</script>")
             == "&lt;script&gt;alert('xss')&lt;/script&gt;"
@@ -59,10 +60,12 @@ class TestSanitizeString:
 
     def test_strip_html(self):
         """Test suppression balises HTML."""
-        # strip_html=True supprime les balises, mais escape_html_chars=True par défaut
-        # échappe aussi le reste. Il faut passer escape_html_chars=False pour garder le texte brut
-        # Note: SCRIPT_TAG_PATTERN supprime tout le contenu entre <script> et </script>,
-        # donc on utilise un exemple avec une balise simple qui ne supprime pas le contenu
+        # strip_html=True supprime les balises, mais escape_html_chars=True
+        # par défaut échappe aussi le reste. Il faut passer
+        # escape_html_chars=False pour garder le texte brut
+        # Note: SCRIPT_TAG_PATTERN supprime tout le contenu entre <script>
+        # et </script>, donc on utilise un exemple avec une balise simple
+        # qui ne supprime pas le contenu
         result = sanitize_string(
             "<p>Hello World</p>", strip_html=True, escape_html_chars=False
         )
@@ -78,7 +81,8 @@ class TestSanitizeString:
 
     def test_escape_html_chars(self):
         """Test échappement caractères HTML."""
-        # strip_html=True par défaut, donc il faut le désactiver pour tester l'échappement
+        # strip_html=True par défaut, donc il faut le désactiver pour tester
+        # l'échappement
         result = sanitize_string("<script>", strip_html=False, escape_html_chars=True)
         assert "&lt;script&gt;" in result
 

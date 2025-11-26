@@ -67,7 +67,8 @@ class TestEndToEndRateLimiting:
             for _ in range(10):
                 response = client.get(endpoint, headers=auth_headers)
                 # Toutes les requêtes doivent passer ou retourner 429 si limite atteinte
-                # 404 est acceptable car certaines routes peuvent ne pas être accessibles
+                # 404 est acceptable car certaines routes peuvent ne pas être
+                # accessibles
                 assert response.status_code in (200, 401, 403, 404, 429)
 
     def test_rate_limiting_respects_user_context(self, client, auth_headers):
@@ -117,10 +118,7 @@ class TestEndToEndAuditLogging:
         """Test que les événements de sécurité sont trackés."""
         from prometheus_client import generate_latest
 
-        from security.security_metrics import (
-            security_login_attempts_total,
-            security_login_failures_total,
-        )
+        from security.security_metrics import security_login_failures_total
 
         # Obtenir les valeurs initiales via collect()
         initial_failures_samples = security_login_failures_total.collect()
@@ -143,7 +141,8 @@ class TestEndToEndAuditLogging:
         assert b"security_login_attempts_total" in metrics_output
         assert b"security_login_failures_total" in metrics_output
 
-        # Vérifier que les valeurs ont changé (optionnel, car les métriques peuvent être partagées)
+        # Vérifier que les valeurs ont changé (optionnel, car les métriques
+        # peuvent être partagées)
         final_failures_samples = security_login_failures_total.collect()
         final_failures = (
             final_failures_samples[0].samples[0].value
