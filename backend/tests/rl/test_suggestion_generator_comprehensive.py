@@ -5,9 +5,7 @@ Tests complets pour suggestion_generator.py - Couverture 95%+
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 
-import numpy as np
 import pytest
-import torch
 
 from services.rl.suggestion_generator import RLSuggestionGenerator
 

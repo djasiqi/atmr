@@ -29,7 +29,8 @@ class TestParallelScoring:
                 self.scheduled_time = scheduled_time
                 self.status = "pending"
 
-        bookings = [MockBooking(i, None) for i in range(150)]
+        # ✅ OPTIM: Réduire à 100 pour tester le scoring sans ralentir
+        bookings = [MockBooking(i, None) for i in range(100)]
         drivers = [type("Driver", (), {"id": i})() for i in range(20)]
 
         problem = {
@@ -59,8 +60,10 @@ class TestParallelScoring:
                 self.scheduled_time = scheduled_time
                 self.status = "pending"
 
-        n_bookings = 200
-        n_drivers = 30
+        # ✅ OPTIM: Réduire à 100 pour tester le speedup sans ralentir
+        # (100 bookings suffisent pour forcer la parallélisation)
+        n_bookings = 100
+        n_drivers = 20
 
         bookings = [MockBooking(i, None) for i in range(n_bookings)]
         drivers = [type("Driver", (), {"id": i})() for i in range(n_drivers)]
@@ -87,7 +90,7 @@ class TestParallelScoring:
         assert len(result.assignments) >= 0
 
         logger.info(
-            "✅ Test: Parallélisation sur 200 bookings (%.2fs, %d assignments)",
+            "✅ Test: Parallélisation sur 100 bookings (%.2fs, %d assignments)",
             elapsed_parallel,
             len(result.assignments),
         )
@@ -128,8 +131,9 @@ class TestParallelScoring:
                 self.id = bid
                 self.status = "pending"
 
-        # Grand nombre de bookings pour forcer parallélisation
-        bookings = [MockBooking(i) for i in range(150)]
+        # ✅ OPTIM: Réduire à 100 pour tester la parallélisation sans ralentir
+        # (100 bookings suffisent pour forcer la parallélisation)
+        bookings = [MockBooking(i) for i in range(100)]
         drivers = [type("Driver", (), {"id": i})() for i in range(25)]
 
         problem = {

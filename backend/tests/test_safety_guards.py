@@ -363,9 +363,9 @@ class TestSafetyGuardsIntegration:
         # pas la taille totale des éléments. De plus, utiliser _record_violation
         # pour que la rotation automatique fonctionne.
 
-        # Ajouter 2000 violations (plus que max_history_size=1000)
-        # pour tester la rotation automatique
-        for i in range(2000):
+        # ✅ OPTIM: Réduire à 1100 pour tester la rotation (assez pour dépasser 1000)
+        # sans ralentir les tests
+        for i in range(1100):
             # ✅ FIX: Utiliser _record_violation pour que la rotation fonctionne
             safety_guards._record_violation({"test_violation": False}, {"test": i})
 

@@ -145,14 +145,17 @@ def test_dispatch_increments_metrics(db, test_company, authenticated_client):
             mode="semi_auto",
         )
 
-        # Attendre un peu pour que les métriques se mettent à jour
-        time.sleep(2)
-
-        # Récupérer métriques après
-        response_after = authenticated_client.get("/api/v1/prometheus/metrics")
-        metrics_after = parse_metrics(response_after.get_data(as_text=True))
-
-        runs_after = get_metric_value(metrics_after, "dispatch_runs_total")
+        # ✅ OPTIM: Utiliser un retry au lieu de sleep fixe pour accélérer les tests
+        # Les métriques Prometheus sont synchrones, pas besoin d'attendre 2s
+        max_retries = 5
+        for attempt in range(max_retries):
+            response_after = authenticated_client.get("/api/v1/prometheus/metrics")
+            metrics_after = parse_metrics(response_after.get_data(as_text=True))
+            runs_after = get_metric_value(metrics_after, "dispatch_runs_total")
+            if runs_after >= runs_before:
+                break
+            if attempt < max_retries - 1:
+                time.sleep(0.1)  # Attente courte entre tentatives
 
         # Vérifier que les métriques ont été incrémentées
         assert runs_after >= runs_before, "dispatch_runs_total n'a pas été incrémenté"

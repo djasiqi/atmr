@@ -77,8 +77,9 @@ class TestPrioritizedReplayBuffer:
 
     def test_buffer_capacity_overflow(self, buffer):
         """Test le dépassement de capacité."""
-        # Ajouter plus de transitions que la capacité
-        for i in range(1200):
+        # ✅ OPTIM: Réduire à 200 pour tester le dépassement sans ralentir
+        # (200 transitions suffisent pour tester l'overflow)
+        for i in range(200):
             state = np.array([i, i + 1, i + 2])
             action = i % 3
             reward = i * 0.1

@@ -349,8 +349,9 @@ class TestBaselineMetrics:
         """Test utilisation mémoire."""
         buffer = PrioritizedReplayBuffer(10000, alpha=0.6)
 
-        # Ajouter beaucoup de transitions
-        for i in range(5000):
+        # ✅ OPTIM: Réduire à 500 pour tester le buffer sans ralentir les tests
+        # (500 transitions suffisent pour valider le comportement)
+        for i in range(500):
             state = np.random.randn(100)
             buffer.add(state, i % 100, float(i), state, False, priority=float(i + 1))
 

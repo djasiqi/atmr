@@ -24,7 +24,8 @@ class TestImprovedDQNAgentExtended:
 
     def test_init_with_n_step_import_error(self):
         """Test initialisation avec erreur d'import N-step"""
-        # ✅ FIX: create_n_step_buffer n'existe pas, il faut patcher NStepBuffer ou NStepPrioritizedBuffer
+        # ✅ FIX: create_n_step_buffer n'existe pas,
+        # il faut patcher NStepBuffer ou NStepPrioritizedBuffer
         with (
             patch("services.rl.improved_dqn_agent.NStepBuffer", None),
             patch("services.rl.improved_dqn_agent.NStepPrioritizedBuffer", None),
@@ -34,7 +35,8 @@ class TestImprovedDQNAgentExtended:
 
     def test_init_with_dueling_import_error(self):
         """Test initialisation avec erreur d'import Dueling"""
-        # ✅ FIX: DuelingQNetwork est importé directement, donc si None, ça lèvera TypeError, pas ImportError
+        # ✅ FIX: DuelingQNetwork est importé directement,
+        # donc si None, ça lèvera TypeError, pas ImportError
         # Le code ne vérifie pas si DuelingQNetwork est None avant de l'utiliser
         with (
             patch("services.rl.improved_dqn_agent.DuelingQNetwork", None),
@@ -44,7 +46,8 @@ class TestImprovedDQNAgentExtended:
 
     def test_init_with_per_import_error(self):
         """Test initialisation avec erreur d'import PER"""
-        # ✅ FIX: PrioritizedReplayBuffer est importé directement, donc si None, ça lèvera TypeError, pas ImportError
+        # ✅ FIX: PrioritizedReplayBuffer est importé directement,
+        # donc si None, ça lèvera TypeError, pas ImportError
         # Le code ne vérifie pas si PrioritizedReplayBuffer est None avant de l'utiliser
         with (
             patch("services.rl.improved_dqn_agent.PrioritizedReplayBuffer", None),
@@ -201,8 +204,10 @@ class TestImprovedDQNAgentExtended:
         # Devrait fonctionner sans erreur
         agent.store_transition(state, action, reward, next_state, done)
 
-        # ✅ FIX: PrioritizedReplayBuffer stocke directement, donc len devrait être > 0
-        # Mais si use_n_step=True, alors c'est un NStepPrioritizedBuffer qui nécessite n_step transitions
+        # ✅ FIX: PrioritizedReplayBuffer stocke directement,
+        # donc len devrait être > 0
+        # Mais si use_n_step=True, alors c'est un NStepPrioritizedBuffer
+        # qui nécessite n_step transitions
         assert len(agent.memory) > 0
 
     def test_learn_basic(self):
