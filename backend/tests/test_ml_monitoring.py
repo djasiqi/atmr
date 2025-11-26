@@ -7,20 +7,21 @@ import pytest
 class TestMLMonitoringService:
     """Tests du service de monitoring ML."""
 
-    def test_log_prediction(self, app, sample_booking):
+    def test_log_prediction(self, app, sample_booking, db):
         """Test enregistrement d'une prédiction."""
-        from db import db
         from services.ml_monitoring_service import MLMonitoringService
 
         with app.app_context():
             # ✅ FIX: S'assurer que le booking est commité avant utilisation
             # pour que la contrainte de clé étrangère soit satisfaite
+            # Utiliser merge pour s'assurer que l'objet est dans la session actuelle
+            booking = db.session.merge(sample_booking)
             db.session.commit()
-            db.session.refresh(sample_booking)
+            db.session.refresh(booking)
 
             # Log une prédiction avec un booking réel
             prediction = MLMonitoringService.log_prediction(
-                booking_id=sample_booking.id,
+                booking_id=booking.id,
                 driver_id=0,  # driver_id peut être 0 ou None pour les tests
                 predicted_delay=8.5,
                 confidence=0.85,
@@ -32,7 +33,7 @@ class TestMLMonitoringService:
             )
 
             assert prediction.id is not None
-            assert prediction.booking_id == sample_booking.id
+            assert prediction.booking_id == booking.id
             assert prediction.predicted_delay_minutes == 8.5
             assert prediction.confidence == 0.85
 
@@ -42,19 +43,20 @@ class TestMLMonitoringService:
 
         print("✅ Log prediction OK")
 
-    def test_update_actual_delay(self, app, sample_booking):
+    def test_update_actual_delay(self, app, sample_booking, db):
         """Test mise à jour retard réel."""
-        from db import db
         from services.ml_monitoring_service import MLMonitoringService
 
         with app.app_context():
             # ✅ FIX: S'assurer que le booking est commité avant utilisation
+            # Utiliser merge pour s'assurer que l'objet est dans la session actuelle
+            booking = db.session.merge(sample_booking)
             db.session.commit()
-            db.session.refresh(sample_booking)
+            db.session.refresh(booking)
 
             # Log prédiction avec un booking réel
             prediction = MLMonitoringService.log_prediction(
-                booking_id=sample_booking.id,
+                booking_id=booking.id,
                 driver_id=0,  # driver_id peut être 0 ou None pour les tests
                 predicted_delay=8.5,
                 confidence=0.85,
@@ -65,7 +67,7 @@ class TestMLMonitoringService:
 
             # Mettre à jour retard réel
             MLMonitoringService.update_actual_delay(
-                booking_id=sample_booking.id, actual_delay=9.2
+                booking_id=booking.id, actual_delay=9.2
             )
 
             # Vérifier
@@ -88,8 +90,10 @@ class TestMLMonitoringService:
 
         with app.app_context():
             # ✅ FIX: S'assurer que sample_booking et ses dépendances sont commités
+            # Utiliser merge pour s'assurer que l'objet est dans la session actuelle
+            booking_ref = db.session.merge(sample_booking)
             db.session.commit()
-            db.session.refresh(sample_booking)
+            db.session.refresh(booking_ref)
 
             # Créer plusieurs bookings pour les tests
             bookings = []
@@ -105,9 +109,9 @@ class TestMLMonitoringService:
                 booking.booking_type = "standard"
                 booking.amount = 50.0
                 booking.status = BookingStatus.PENDING
-                booking.user_id = sample_booking.user_id
-                booking.client_id = sample_booking.client_id
-                booking.company_id = sample_booking.company_id
+                booking.user_id = booking_ref.user_id
+                booking.client_id = booking_ref.client_id
+                booking.company_id = booking_ref.company_id
                 booking.duration_seconds = 1800
                 booking.distance_meters = 5000
                 db.session.add(booking)

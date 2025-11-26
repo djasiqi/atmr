@@ -1160,7 +1160,7 @@ def pii_config():
 
 # ✅ FIX 6.2: Helpers pour gérer les transactions dans les tests
 # Réduit les couplages dangereux entre fixtures et engine.run()
-from contextlib import contextmanager  # noqa: E402
+from contextlib import contextmanager, suppress  # noqa: E402
 from typing import Any, Iterator, Type, TypeVar  # noqa: E402
 
 T = TypeVar("T")
@@ -1315,8 +1315,16 @@ def nested_savepoint(db_session: Any) -> Iterator[None]:
         yield
     except Exception:
         # Rollback le savepoint en cas d'exception
-        savepoint.rollback()
+        # ✅ FIX: Vérifier si le savepoint est encore actif avant de rollback
+        # (engine.run() peut fermer la transaction principale, ce qui ferme aussi les savepoints)
+        if savepoint.is_active:
+            with suppress(Exception):
+                savepoint.rollback()
         raise
     finally:
         # Rollback automatique du savepoint à la fin
-        savepoint.rollback()
+        # ✅ FIX: Vérifier si le savepoint est encore actif avant de rollback
+        # (engine.run() peut fermer la transaction principale, ce qui ferme aussi les savepoints)
+        if savepoint.is_active:
+            with suppress(Exception):
+                savepoint.rollback()

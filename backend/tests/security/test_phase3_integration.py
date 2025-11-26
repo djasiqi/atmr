@@ -7,6 +7,7 @@ Valide l'intégration complète des fonctionnalités :
 - Rotation des secrets via Celery
 """
 
+import os
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, Mock, patch
 
@@ -16,19 +17,8 @@ from werkzeug.exceptions import Forbidden
 
 from routes.admin import AdminStats
 
-
-@pytest.fixture
-def app():
-    """Créer une app Flask pour les tests."""
-    from app import create_app
-
-    return create_app("testing")
-
-
-@pytest.fixture
-def client(app):
-    """Client de test Flask."""
-    return app.test_client()
+# ✅ FIX: Utiliser la fixture 'app' du conftest qui initialise correctement les routes
+# Supprimer la fixture locale qui ne charge pas les routes
 
 
 @pytest.fixture
@@ -104,6 +94,20 @@ class TestLogoutEndpointIntegration:
             "/api/v1/auth/logout",
             headers={"Authorization": f"Bearer {sample_user_token}"},
         )
+
+        # ✅ FIX: Si SKIP_ROUTES_INIT est défini, les routes ne sont pas initialisées
+        # Dans ce cas, accepter 404 ou vérifier que la route existe
+        if response.status_code == 404:
+            # Vérifier si c'est dû à SKIP_ROUTES_INIT
+            skip_routes = os.getenv("SKIP_ROUTES_INIT", "false").lower() == "true"
+            if skip_routes:
+                pytest.skip(
+                    "Route /api/v1/auth/logout non disponible (SKIP_ROUTES_INIT=1)"
+                )
+            # Sinon, c'est une vraie erreur
+            pytest.fail(
+                f"Route /api/v1/auth/logout retourne 404: {response.get_json()}"
+            )
 
         # Vérifier la réponse
         assert response.status_code == 200

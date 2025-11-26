@@ -101,7 +101,10 @@ class TestDispatchSafetyIntegration:
             optimizer.optimize_assignments.assert_called_once()
 
             # Simuler le dispatch avec Safety Guards
-            with patch("services.safety_guards.get_safety_guards") as mock_get_guards:
+            # Patcher get_safety_guards dans le module où il est utilisé (_simulate_dispatch)
+            with patch(
+                "tests.test_dispatch_integration.get_safety_guards"
+            ) as mock_get_guards:
                 safety_guards = Mock()
                 safety_guards.check_dispatch_result.return_value = (
                     True,
@@ -113,7 +116,9 @@ class TestDispatchSafetyIntegration:
                     mock_company, mock_drivers, mock_bookings, optimized
                 )
 
-                # Vérifier que les Safety Guards ont été appelés
+                # Vérifier que get_safety_guards a été appelé
+                mock_get_guards.assert_called_once()
+                # Vérifier que check_dispatch_result a été appelé sur le mock retourné
                 safety_guards.check_dispatch_result.assert_called_once()
 
                 # Vérifier que le résultat est sûr
@@ -127,41 +132,48 @@ class TestDispatchSafetyIntegration:
         if SafetyGuards is None or RLDispatchOptimizer is None:
             pytest.skip("Modules non disponibles")
 
-        # Mock des Safety Guards qui détectent un problème
-        with patch("services.safety_guards.get_safety_guards") as mock_get_guards:
-            safety_guards = Mock()
-            safety_guards.check_dispatch_result.return_value = (
-                False,
-                {
-                    "is_safe": False,
-                    "violation_count": 3,
-                    "checks": {
-                        "max_delay_ok": False,
-                        "completion_rate_ok": False,
-                        "driver_load_ok": False,
-                    },
-                },
+        # Mock de l'optimiseur RL
+        with patch(
+            "services.unified_dispatch.rl_optimizer.RLDispatchOptimizer"
+        ) as mock_optimizer_class:
+            optimizer = Mock()
+            optimizer.is_available.return_value = True
+            # L'optimiseur retourne des assignations "dangereuses"
+            dangerous_assignments = mock_assignments.copy()
+            optimizer.optimize_assignments.return_value = dangerous_assignments
+            mock_optimizer_class.return_value = optimizer
+
+            # Appeler directement optimize_assignments pour tester l'intégration
+            optimized = optimizer.optimize_assignments(
+                mock_assignments, mock_bookings, mock_drivers
             )
-            mock_get_guards.return_value = safety_guards
 
-            # Mock de l'optimiseur RL
+            # Vérifier que l'optimisation RL a été appelée
+            optimizer.optimize_assignments.assert_called_once()
+
+            # Mock des Safety Guards qui détectent un problème
             with patch(
-                "services.unified_dispatch.rl_optimizer.RLDispatchOptimizer"
-            ) as mock_optimizer_class:
-                optimizer = Mock()
-                optimizer.is_available.return_value = True
-                # L'optimiseur retourne des assignations "dangereuses"
-                dangerous_assignments = mock_assignments.copy()
-                optimizer.optimize_assignments.return_value = dangerous_assignments
-                mock_optimizer_class.return_value = optimizer
-
-                # Simuler le dispatch
-                result = self._simulate_dispatch(
-                    mock_company, mock_drivers, mock_bookings, mock_assignments
+                "tests.test_dispatch_integration.get_safety_guards"
+            ) as mock_get_guards:
+                safety_guards = Mock()
+                safety_guards.check_dispatch_result.return_value = (
+                    False,
+                    {
+                        "is_safe": False,
+                        "violation_count": 3,
+                        "checks": {
+                            "max_delay_ok": False,
+                            "completion_rate_ok": False,
+                            "driver_load_ok": False,
+                        },
+                    },
                 )
+                mock_get_guards.return_value = safety_guards
 
-                # Vérifier que l'optimisation RL a été appelée
-                optimizer.optimize_assignments.assert_called_once()
+                # Simuler le dispatch avec les assignments optimisées
+                result = self._simulate_dispatch(
+                    mock_company, mock_drivers, mock_bookings, optimized
+                )
 
                 # Vérifier que les Safety Guards ont été appelés
                 safety_guards.check_dispatch_result.assert_called_once()
@@ -210,7 +222,9 @@ class TestDispatchSafetyIntegration:
             pytest.skip("SafetyGuards non disponible")
 
         # Mock des Safety Guards avec violations critiques
-        with patch("services.safety_guards.get_safety_guards") as mock_get_guards:
+        with patch(
+            "tests.test_dispatch_integration.get_safety_guards"
+        ) as mock_get_guards:
             safety_guards = Mock()
             safety_guards.check_dispatch_result.return_value = (
                 False,
@@ -249,7 +263,9 @@ class TestDispatchSafetyIntegration:
             pytest.skip("SafetyGuards non disponible")
 
         # Mock des Safety Guards avec violation
-        with patch("services.safety_guards.get_safety_guards") as mock_get_guards:
+        with patch(
+            "tests.test_dispatch_integration.get_safety_guards"
+        ) as mock_get_guards:
             safety_guards = Mock()
             safety_guards.check_dispatch_result.return_value = (
                 False,
@@ -278,7 +294,9 @@ class TestDispatchSafetyIntegration:
             pytest.skip("SafetyGuards non disponible")
 
         # Mock des Safety Guards qui lèvent une exception
-        with patch("services.safety_guards.get_safety_guards") as mock_get_guards:
+        with patch(
+            "tests.test_dispatch_integration.get_safety_guards"
+        ) as mock_get_guards:
             safety_guards = Mock()
             # SafetyGuards.check_dispatch_result gère les exceptions et retourne
             # un tuple (False, {"error": ...})
@@ -312,7 +330,9 @@ class TestDispatchSafetyIntegration:
         import time
 
         # Mock des Safety Guards
-        with patch("services.safety_guards.get_safety_guards") as mock_get_guards:
+        with patch(
+            "tests.test_dispatch_integration.get_safety_guards"
+        ) as mock_get_guards:
             safety_guards = Mock()
             safety_guards.check_dispatch_result.return_value = (True, {"is_safe": True})
             mock_get_guards.return_value = safety_guards
@@ -335,7 +355,7 @@ class TestDispatchSafetyIntegration:
     def _simulate_dispatch(self, company, drivers, bookings, assignments):
         """Simule un dispatch avec Safety Guards."""
         try:
-            # Mock des Safety Guards
+            # Récupérer les Safety Guards (sera mocké par le test)
             safety_guards = get_safety_guards()
 
             # Préparer les métriques de dispatch

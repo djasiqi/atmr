@@ -299,10 +299,15 @@ class TestRotateAllSecrets:
         # Mock exception
         mock_rotate_flask.side_effect = Exception("Unexpected error")
 
-        # Les fonctions sont des tâches Celery avec bind=True, donc self est automatique
-        # On appelle directement sans argument
-        with pytest.raises(Exception, match="Unexpected error"):
-            rotate_all_secrets()
+        # rotate_all_secrets capture toutes les exceptions et les met dans results
+        # Elle ne lève jamais d'exception, elle retourne un dict avec les erreurs
+        result = rotate_all_secrets()
+
+        # Vérifier que le résultat contient l'erreur
+        assert "flask_secret_key" in result.get("results", {})
+        flask_result = result["results"]["flask_secret_key"]
+        assert flask_result.get("status") == "error"
+        assert "Unexpected error" in flask_result.get("error", "")
 
 
 class TestRotateSecretCacheClear:

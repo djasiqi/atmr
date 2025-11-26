@@ -38,21 +38,9 @@ def mock_audit_logger():
         yield mock_logger
 
 
-@pytest.fixture
-def mock_request():
-    """Mock Flask request."""
-    # ✅ FIX: Le mock sera utilisé si request n'est pas disponible dans le contexte
-    # Sinon, le vrai request du contexte Flask sera utilisé
-    with patch("security.ip_whitelist_alerts.request", create=True) as mock_req:
-        mock_req.headers = {
-            "User-Agent": "Mozilla/5.0",
-            "X-Forwarded-For": "192.168.1.100",
-        }
-        # ✅ FIX: Ajouter une méthode get pour compatibilité avec request.headers.get()
-        mock_req.headers.get = lambda key, default=None: mock_req.headers.get(
-            key, default
-        )
-        yield mock_req
+# ✅ FIX: Supprimé le fixture mock_request car il cause des conflits
+# avec le vrai request Flask dans test_request_context()
+# On utilise directement app.test_request_context() dans les tests
 
 
 class TestShouldAlertForIP:
@@ -129,7 +117,6 @@ class TestSendIPWhitelistAlert:
         mock_should_alert,
         mock_sentry_capture,
         mock_audit_logger,
-        mock_request,
         app,
     ):
         """Test que AuditLogger est appelé lors d'une alerte."""
@@ -165,7 +152,6 @@ class TestSendIPWhitelistAlert:
         mock_should_alert,
         mock_sentry_capture,
         mock_audit_logger,
-        mock_request,
         app,
     ):
         """Test que Sentry est appelé quand le rate limiting l'autorise."""
@@ -206,7 +192,6 @@ class TestSendIPWhitelistAlert:
         mock_should_alert,
         mock_sentry_capture,
         mock_audit_logger,
-        mock_request,
         app,
     ):
         """Test que Sentry n'est pas appelé quand le rate limiting bloque."""
@@ -233,7 +218,6 @@ class TestSendIPWhitelistAlert:
         mock_should_alert,
         mock_sentry_capture,
         mock_audit_logger,
-        mock_request,
         app,
     ):
         """Test que les headers de sécurité sont collectés."""
@@ -271,7 +255,6 @@ class TestSendIPWhitelistAlert:
         mock_should_alert,
         mock_sentry_capture,
         mock_audit_logger,
-        mock_request,
         app,
     ):
         """Test alerte sans user_id (utilisateur non authentifié)."""
@@ -299,7 +282,6 @@ class TestSendIPWhitelistAlert:
         mock_should_alert,
         mock_sentry_capture,
         mock_audit_logger,
-        mock_request,
         app,
     ):
         """Test que les exceptions ne font pas échouer la fonction."""
@@ -329,7 +311,6 @@ class TestIPWhitelistAlertIntegration:
         mock_should_alert,
         mock_sentry_capture,
         mock_audit_logger,
-        mock_request,
         app,
     ):
         """Test du flux complet d'alerte."""

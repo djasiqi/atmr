@@ -190,10 +190,14 @@ class TestHyperparameterTunerSanity:
         # Créer des trials mock avec différentes configurations
         # ✅ FIX: Optuna nécessite distributions pour valider les paramètres
         distributions = {
-            "use_prioritized_replay": optuna.distributions.CategoricalDistribution([True, False]),
+            "use_prioritized_replay": optuna.distributions.CategoricalDistribution(
+                [True, False]
+            ),
             "use_n_step": optuna.distributions.CategoricalDistribution([True, False]),
             "use_dueling": optuna.distributions.CategoricalDistribution([True, False]),
-            "learning_rate": optuna.distributions.FloatDistribution(1e-5, 1e-2, log=True),
+            "learning_rate": optuna.distributions.FloatDistribution(
+                1e-5, 1e-2, log=True
+            ),
         }
 
         mock_trials = []
@@ -252,8 +256,12 @@ class TestHyperparameterTunerSanity:
         # Créer des trials mock avec différentes configurations
         # ✅ FIX: Optuna nécessite distributions pour valider les paramètres
         distributions = {
-            "use_double_dqn": optuna.distributions.CategoricalDistribution([True, False]),
-            "learning_rate": optuna.distributions.FloatDistribution(1e-5, 1e-2, log=True),
+            "use_double_dqn": optuna.distributions.CategoricalDistribution(
+                [True, False]
+            ),
+            "learning_rate": optuna.distributions.FloatDistribution(
+                1e-5, 1e-2, log=True
+            ),
         }
 
         mock_trials = []

@@ -9,6 +9,8 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import Any, Callable
 
+from sqlalchemy import text
+
 from ext import db
 
 __all__ = ["_begin_tx", "_in_tx"]  # Exported functions used by engine.py and apply.py
@@ -41,11 +43,29 @@ def _begin_tx():
       on utilise un savepoint (begin_nested).
     - Sinon, on ouvre une transaction normale (begin).
 
+    ✅ FIX: Gère les transactions PostgreSQL en échec en faisant un rollback
+    avant d'essayer de créer un savepoint.
+
     Usage:
         with _begin_tx():
             # Code exécuté dans une transaction ou savepoint
             pass
     """
+    # ✅ FIX: Si une transaction existe mais est en échec, faire un rollback
+    # avant d'essayer de créer un savepoint
+    if _in_tx():
+        try:
+            # Tester si la transaction est valide en essayant une opération simple
+            # Si elle est en échec, PostgreSQL lèvera une exception
+            db.session.execute(text("SELECT 1"))
+        except Exception:
+            # Transaction en échec, rollback avant de créer un savepoint
+            try:
+                db.session.rollback()
+            except Exception:
+                # Si le rollback échoue aussi, fermer la session
+                db.session.close()
+
     cm = db.session.begin_nested() if _in_tx() else db.session.begin()
     with cm:
         yield
