@@ -525,9 +525,10 @@ class TestHyperparameterTuner:
 
         with (
             patch("pathlib.Path.mkdir"),
-            patch("builtins.open", create=True) as mock_file,
+            patch("pathlib.Path.open") as mock_open,
         ):
-            mock_file.side_effect = OSError("File error")
+            # ✅ FIX: Path().open() est utilisé, pas builtins.open
+            mock_open.side_effect = OSError("File error")
 
             # Vérifier qu'une exception est levée
             with pytest.raises(OSError, match="File error"):

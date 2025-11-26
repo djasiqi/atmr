@@ -183,7 +183,13 @@ class TestDockerProduction:
                     content = f.read()
 
                 # Vérifier les bonnes pratiques dans entrypoint
-                assert "#!/bin/bash" in content or "#!/bin/sh" in content
+                # Accepter les deux formats : direct (/bin/bash) ou via env (/usr/bin/env bash)
+                assert (
+                    "#!/bin/bash" in content
+                    or "#!/bin/sh" in content
+                    or "#!/usr/bin/env bash" in content
+                    or "#!/usr/bin/env sh" in content
+                )
                 break
 
         # Au moins un Dockerfile doit être trouvé

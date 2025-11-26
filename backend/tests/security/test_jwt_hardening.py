@@ -56,6 +56,7 @@ class TestJWTExpirationConfig:
             token = create_refresh_token(
                 identity=str(sample_user.public_id),
                 expires_delta=current_app.config["JWT_REFRESH_TOKEN_EXPIRES"],
+                additional_claims={"aud": "atmr-api"},
             )
 
             # Décoder le token pour vérifier l'expiration
@@ -116,9 +117,9 @@ class TestJWTExpirationConfig:
 class TestJWTAudienceValidation:
     """Tests pour la validation de l'audience JWT."""
 
-    def test_validate_jwt_audience_valid(self, app_context):
+    def test_validate_jwt_audience_valid(self, app):
         """Vérifie que validate_jwt_audience accepte un token avec audience valide."""
-        with app_context:
+        with app.app_context():
             payload = {
                 "aud": "atmr-api",
                 "sub": "test-user",
@@ -204,7 +205,10 @@ class TestJWTAlgorithm:
         # Vérifier que le token peut être décodé avec HS256
         with client.application.app_context():
             secret_key = current_app.config["JWT_SECRET_KEY"]
-            decoded = pyjwt.decode(token, secret_key, algorithms=["HS256"])
+            # ✅ FIX: Ajouter audience pour la validation PyJWT
+            decoded = pyjwt.decode(
+                token, secret_key, algorithms=["HS256"], audience="atmr-api"
+            )
             assert decoded is not None
             assert "sub" in decoded
 

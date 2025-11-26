@@ -40,15 +40,18 @@ class TestPurgeOldBookings:
         booking.created_at = old_date
         db.session.commit()
 
+        # ✅ FIX: Capturer l'ID avant la purge pour éviter ObjectDeletedError
+        booking_id = booking.id
+
         result = purge_old_bookings(None)
 
         assert result["status"] == "success"
         assert result["deleted_count"] == 1
 
-        # Vérifier que le booking a été supprimé
+        # Vérifier que le booking a été supprimé en utilisant l'ID capturé
         from models import Booking
 
-        assert Booking.query.filter_by(id=booking.id).first() is None
+        assert Booking.query.filter_by(id=booking_id).first() is None
 
     def test_purge_old_bookings_keeps_active(self, db, factory_booking, sample_company):
         """Test que les bookings actives ne sont pas purgées."""

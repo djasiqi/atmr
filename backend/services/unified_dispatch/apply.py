@@ -7,6 +7,7 @@ import os
 from collections import defaultdict
 from typing import Any, Dict, List, Tuple, cast
 
+from sqlalchemy import text
 from sqlalchemy.orm import joinedload, scoped_session, sessionmaker
 
 from ext import db
@@ -130,8 +131,25 @@ def apply_assignments(
         return {"applied": [], "skipped": {}, "conflicts": [], "driver_load": {}}
 
     # ✅ ROLLBACK DÉFENSIF AU DÉBUT
+    # ✅ FIX: Gérer correctement les transactions en échec PostgreSQL
+    # Si une transaction est en échec, PostgreSQL refuse toutes les commandes
+    # jusqu'à ce qu'un rollback soit effectué
     with contextlib.suppress(Exception):
+        # Essayer un rollback pour nettoyer l'état de la transaction
         db.session.rollback()
+    # Si le rollback échoue, essayer de fermer la session
+    # (mais on ne peut pas le faire dans un suppress car on veut logger)
+    try:
+        # Tester si la transaction est valide
+        db.session.execute(text("SELECT 1"))
+    except Exception as tx_error:
+        # Transaction en échec, essayer de fermer la session
+        logger.warning(
+            "[Apply] Transaction en échec détectée: %s, tentative de nettoyage",
+            tx_error,
+        )
+        with contextlib.suppress(Exception):
+            db.session.close()
 
     # Log pour tracer la propagation du dispatch_run_id
     if dispatch_run_id:

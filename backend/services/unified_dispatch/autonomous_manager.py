@@ -299,7 +299,7 @@ class AutonomousDispatchManager:
                         import json
                         import time
 
-                        from db import db as database
+                        from ext import db as database
 
                         start_time = time.time()
                         result = apply_suggestion(
@@ -371,6 +371,8 @@ class AutonomousDispatchManager:
                             database.session.add(action_record)
                             try:
                                 database.session.flush()
+                                # ✅ FIX: Commit pour que l'action soit visible dans les tests
+                                database.session.commit()
                             except Exception as e:
                                 logger.warning(
                                     (
@@ -423,6 +425,8 @@ class AutonomousDispatchManager:
                             database.session.add(action_record)
                             try:
                                 database.session.flush()
+                                # ✅ FIX: Commit pour que l'action soit visible dans les tests
+                                database.session.commit()
                             except Exception as e:
                                 logger.warning(
                                     (

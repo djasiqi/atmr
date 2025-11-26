@@ -91,12 +91,18 @@ class TestRollbackTransactionnel:
             )(),
         ]
 
+        # ✅ FIX: Commit les bookings avant apply_assignments pour s'assurer qu'ils sont persistés
+        db.session.commit()
+
         # Tenter l'application
         result = apply_assignments(
             company_id=company.id,
             assignments=assignments,
             enforce_driver_checks=True,
         )
+
+        # ✅ FIX: Expirer tous les objets pour forcer le rechargement depuis la DB
+        db.session.expire_all()
 
         # Vérifier que le résultat indique les skips
         # result["skipped"] est un dict {booking_id: reason}
@@ -247,6 +253,12 @@ class TestRollbackTransactionnel:
             for b in bookings
         ]
 
+        # ✅ FIX: Commit les bookings avant apply_assignments pour s'assurer qu'ils sont persistés
+        db.session.commit()
+        # ✅ FIX: Expirer tous les objets pour forcer le rechargement depuis la DB
+        # Cela garantit que les objets sont détachés de la session et seront rechargés
+        db.session.expire_all()
+
         # Mock une exception pour simuler un crash
         original_bulk_update = db.session.bulk_update_mappings
 
@@ -267,8 +279,9 @@ class TestRollbackTransactionnel:
         finally:
             # Restaurer la méthode originale
             db.session.bulk_update_mappings = original_bulk_update
-            # Rollback explicite pour nettoyer
-            db.session.rollback()
+            # ✅ FIX: apply_assignments gère déjà son propre rollback, donc on expire
+            # les objets pour forcer le rechargement depuis la DB
+            db.session.expire_all()
 
         # Vérifier que l'état est cohérent (aucun booking partiellement assigné)
         # ✅ FIX: Utiliser query au lieu de refresh pour éviter

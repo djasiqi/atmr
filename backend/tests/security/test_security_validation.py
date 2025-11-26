@@ -175,6 +175,7 @@ class TestLogSanitization:
         sanitized = sanitize_log_data(data)
         assert "Authorization: [REDACTED]" in sanitized
         assert "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" not in sanitized
+        # Note: Le résultat peut contenir "***" comme marqueur de masquage, c'est normal
 
     def test_sanitize_nested_dict(self):
         """Test sanitization récursive dans dictionnaires imbriqués."""

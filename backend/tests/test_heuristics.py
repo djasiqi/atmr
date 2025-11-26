@@ -403,16 +403,19 @@ class TestHeuristicsHelpers:
         """Test vérification faisabilité fenêtre chauffeur."""
         from services.unified_dispatch.heuristics import _check_driver_window_feasible
 
-        driver_window = (60, 480)  # 1h-8h
+        driver_window = (60, 480)  # 1h-8h (60 minutes à 480 minutes)
 
-        # Cas faisable (dans la fenêtre)
-        # 0.120 heures = 7.2 minutes, arrondi à 7 minutes
-        feasible = _check_driver_window_feasible(driver_window, est_start_min=7)
+        # Cas faisable (dans la fenêtre) - 120 minutes = 2h, qui est entre 1h et 8h
+        feasible = _check_driver_window_feasible(driver_window, est_start_min=120)
         assert feasible is True, "Devrait être faisable"
 
-        # Cas faisable limit (juste dans la fenêtre)
+        # Cas faisable limit (juste au début de la fenêtre)
         feasible_limit = _check_driver_window_feasible(driver_window, est_start_min=60)
         assert feasible_limit is True, "Devrait être faisable aux limites"
+
+        # Cas non faisable (avant la fenêtre)
+        infeasible = _check_driver_window_feasible(driver_window, est_start_min=30)
+        assert infeasible is False, "Ne devrait pas être faisable avant la fenêtre"
 
     def test_py_int_helper(self):
         """Test helper _py_int."""
@@ -430,12 +433,15 @@ class TestHeuristicsHelpers:
 
         driver = DriverFactory(latitude=46.2044, longitude=6.1432)
 
-        coords = _driver_current_coord(driver)
+        # _driver_current_coord retourne (coords, factor) où coords est (lat, lon)
+        coords, factor = _driver_current_coord(driver)
 
         assert isinstance(coords, tuple)
         assert len(coords) == 2
         assert coords[0] == 46.2044
         assert coords[1] == 6.1432
+        assert isinstance(factor, float)
+        assert 0.2 <= factor <= 1.0
 
     def test_booking_coords(self, db):
         """Test extraction coordonnées booking (pickup + dropoff)."""

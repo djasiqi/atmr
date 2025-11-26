@@ -633,11 +633,12 @@ class TestEngineAdditionalCoverage:
         assert isinstance(result["assignments"], list)
         print("✅ Test allow_emergency OK")
 
-    def test_begin_tx(self):
+    def test_begin_tx(self, db):
         """Test _begin_tx comme context manager."""
         from services.unified_dispatch.transaction_helpers import _begin_tx
 
         # Tester que _begin_tx peut être utilisé comme context manager
+        # La fixture db fournit le contexte d'application Flask nécessaire
         with _begin_tx():
             # Dans transaction
             pass

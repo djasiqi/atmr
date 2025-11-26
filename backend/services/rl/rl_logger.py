@@ -247,6 +247,11 @@ class RLLogger:
                     db_success,
                 )
 
+            # ✅ FIX: Retourner True si au moins un logging a réussi,
+            # ou si les deux sont désactivés (dans ce cas, c'est un succès par défaut)
+            if not self.enable_redis_logging and not self.enable_db_logging:
+                # Les deux sont désactivés, donc c'est un succès (rien à logger)
+                return True
             return redis_success or db_success
 
         except Exception as e:

@@ -447,6 +447,9 @@ class TestActionLogging:
         assert stats["auto_applied"] == 1
         assert stats["errors"] == 0
 
+        # ✅ FIX: Expirer tous les objets pour forcer le rechargement depuis la DB
+        db.session.expire_all()
+
         # Vérifier qu'une action a été loggée
         actions = AutonomousAction.query.filter_by(
             company_id=company_fully_auto.id
@@ -486,6 +489,9 @@ class TestActionLogging:
         # Vérifier les stats
         assert stats["errors"] == 1
         assert stats["auto_applied"] == 0
+
+        # ✅ FIX: Expirer tous les objets pour forcer le rechargement depuis la DB
+        db.session.expire_all()
 
         # Vérifier qu'une action échouée a été loggée
         actions = AutonomousAction.query.filter_by(
@@ -536,6 +542,9 @@ class TestActionLogging:
 
         manager = AutonomousDispatchManager(company_fully_auto.id)
         stats = manager.process_opportunities([mock_opportunity])
+
+        # ✅ FIX: Expirer tous les objets pour forcer le rechargement depuis la DB
+        db.session.expire_all()
 
         # Vérifier qu'aucune nouvelle action n'a été loggée
         new_actions = AutonomousAction.query.filter_by(

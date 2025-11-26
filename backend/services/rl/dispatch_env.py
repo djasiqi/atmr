@@ -309,11 +309,20 @@ class DispatchEnv(gym.Env):
             truncated: True (l'épisode est tronqué)
             info: Informations avec flag error
         """
-        observation = self._get_observation()
+        try:
+            observation = self._get_observation()
+        except Exception:
+            # Si _get_observation() lève une exception, utiliser une observation vide
+            observation = np.zeros(
+                self.num_drivers * 4 + self.max_bookings * 4 + 2, dtype=np.float32
+            )
         reward = -1000.0  # Pénalité élevée
         terminated = True  # Terminé
         truncated = True  # Tronqué
-        info = self._get_info()
+        try:
+            info = self._get_info()
+        except Exception:
+            info = {}
         info["error"] = error_msg
         return observation, reward, terminated, truncated, info
 
@@ -341,6 +350,10 @@ class DispatchEnv(gym.Env):
                 return self._invalid_action_penalty()
 
             reward: float = 0.0
+            info: Dict[str, Any] | None = None  # Sera créé plus tard si nécessaire
+            info_created = (
+                False  # Flag pour savoir si info a été créé pour une action invalide
+            )
 
             # Action 0 = attendre (ne rien faire)
             if action == ACTION_ZERO:
@@ -364,6 +377,7 @@ class DispatchEnv(gym.Env):
                     info = self._get_info()
                     info["invalid_action"] = True
                     info["action_masked"] = True
+                    info_created = True
                     logging.debug("[DispatchEnv] Action invalide %s masquée", action)
                 else:
                     # Action d'assignation valide
@@ -380,6 +394,7 @@ class DispatchEnv(gym.Env):
                         info = self._get_info()
                         info["invalid_action"] = True
                         info["index_out_of_range"] = True
+                        info_created = True
                         logging.warning(
                             (
                                 "[DispatchEnv] Index out of range: "
@@ -398,12 +413,44 @@ class DispatchEnv(gym.Env):
                             info = self._get_info()
                             info["invalid_action"] = True
                             info["booking_already_assigned"] = True
+                            info_created = True
                             logging.warning(
                                 "[DispatchEnv] Booking %s already assigned", booking_idx
                             )
                         else:
                             # Assigner le booking
                             reward = self._assign_booking(driver, booking)
+
+            # ✅ FIX: Si info a déjà été créé pour une action invalide, retourner immédiatement
+            # pour éviter d'exécuter le reste du code qui pourrait écraser info
+            if info_created and info is not None:
+                # Avancer le temps (5 minutes par step)
+                self.current_time += 5
+
+                # Calculer l'observation
+                try:
+                    observation = self._get_observation()
+                except Exception:
+                    # Si _get_observation() lève une exception, utiliser une observation vide
+                    observation = np.zeros(
+                        self.num_drivers * 4 + self.max_bookings * 4 + 2,
+                        dtype=np.float32,
+                    )
+
+                # Vérifier si l'épisode est terminé
+                terminated = self.current_time >= (self.simulation_hours * 60)
+                truncated = False
+
+                # Bonus/pénalité de fin d'épisode
+                if terminated:
+                    reward += self._calculate_episode_bonus()
+
+                self.episode_stats["total_reward"] = (
+                    float(self.episode_stats.get("total_reward", 0.0)) + reward
+                )
+
+                # Retourner immédiatement avec info préservé
+                return observation, reward, terminated, truncated, info
 
             # Avancer le temps (5 minutes par step)
             self.current_time += 5
@@ -435,12 +482,42 @@ class DispatchEnv(gym.Env):
             self.episode_stats["total_reward"] = (
                 float(self.episode_stats.get("total_reward", 0.0)) + reward
             )
-            info = self._get_info()
+            # ✅ FIX: Ne pas écraser info si elle a déjà été créée (pour les actions invalides)
+            if not info_created:
+                info = self._get_info()
+
+            # S'assurer que info n'est jamais None
+            if info is None:
+                info = self._get_info()
 
             return observation, reward, terminated, truncated, info
         except Exception as e:
             # ⚠️ Logger l'erreur
             logging.exception("[DispatchEnv] Erreur dans step: %s", e)
+
+            # ✅ FIX: Si info a déjà été créé pour une action invalide, préserver info
+            # et retourner une réponse d'erreur qui inclut info
+            # Utiliser locals() pour vérifier si les variables existent
+            local_vars = locals()
+            if (
+                "info_created" in local_vars
+                and local_vars.get("info_created", False)
+                and "info" in local_vars
+                and local_vars.get("info") is not None
+            ):
+                saved_info = local_vars["info"]
+                try:
+                    observation = self._get_observation()
+                except Exception:
+                    observation = np.zeros(
+                        self.num_drivers * 4 + self.max_bookings * 4 + 2,
+                        dtype=np.float32,
+                    )
+                reward = -1000.0
+                terminated = True
+                truncated = True
+                saved_info["error"] = str(e)
+                return observation, reward, terminated, truncated, saved_info
 
             # Retourner une réponse d'erreur sécurisée
             return self._error_response(str(e))
@@ -502,7 +579,42 @@ class DispatchEnv(gym.Env):
                 return False
 
             # Calculer temps de trajet
-            travel_time = self._calculate_travel_time(driver, booking)
+            # ✅ FIX: Vérifier que les coordonnées sont valides avant de calculer
+            try:
+                # Tenter de convertir les coordonnées en float pour vérifier leur validité
+                # Utiliser get() avec une valeur par défaut pour éviter KeyError
+                lat1 = driver.get("lat")
+                lon1 = driver.get("lon")
+                lat2 = booking.get("pickup_lat")
+                lon2 = booking.get("pickup_lon")
+                # Si une coordonnée est None ou ne peut pas être convertie, c'est invalide
+                if lat1 is None or lon1 is None or lat2 is None or lon2 is None:
+                    logging.warning(
+                        "[DispatchEnv] Coordonnées manquantes pour vérification contraintes"
+                    )
+                    return False
+                # Tenter de convertir en float pour vérifier la validité
+                float(lat1)
+                float(lon1)
+                float(lat2)
+                float(lon2)
+            except (ValueError, TypeError):
+                # Coordonnées invalides
+                logging.warning(
+                    "[DispatchEnv] Coordonnées invalides pour vérification contraintes"
+                )
+                return False
+
+            # ✅ FIX: Calculer le temps de trajet seulement si les coordonnées sont valides
+            # Si _calculate_travel_time() lève une exception, retourner False
+            try:
+                travel_time = self._calculate_travel_time(driver, booking)
+            except Exception:
+                # Si le calcul du temps de trajet échoue, les contraintes ne sont pas respectées
+                logging.warning(
+                    "[DispatchEnv] Erreur calcul temps trajet pour vérification contraintes"
+                )
+                return False
             pickup_time = (
                 self.current_time + travel_time
             )  # ✅ FIX: Renommer arrival_time en pickup_time pour clarté
@@ -553,7 +665,7 @@ class DispatchEnv(gym.Env):
             return cast(float, travel_time * traffic_factor)
         except Exception as e:
             logging.warning("[DispatchEnv] Erreur calcul temps trajet: %s", e)
-            return 30  # Fallback: 30 minutes par défaut
+            return 30.0  # Fallback: 30 minutes par défaut
 
     def get_valid_actions(self) -> List[int]:
         """Retourne la liste des actions valides.

@@ -388,6 +388,14 @@ class TestDispatchE2E:
                 f"Booking {booking.id} must belong to company "
                 f"{company.id}, got {booking_from_db.company_id}"
             )
+            # ✅ FIX: S'assurer que le booking a un statut valide pour l'assignation
+            assert booking_from_db.status in (
+                BookingStatus.PENDING,
+                BookingStatus.ACCEPTED,
+                BookingStatus.ASSIGNED,
+            ), (
+                f"Booking {booking.id} must have valid status for assignment, got {booking_from_db.status}"
+            )
 
         # ✅ FIX: Vérifier que les drivers utilisent aussi la bonne company
         for driver in drivers:
@@ -404,9 +412,16 @@ class TestDispatchE2E:
                 f"Driver {driver.id} must belong to company "
                 f"{company.id}, got {driver_from_db.company_id}"
             )
+            # ✅ FIX: S'assurer que le driver est actif et disponible
+            assert driver_from_db.is_active, f"Driver {driver.id} must be active"
+            assert driver_from_db.is_available, f"Driver {driver.id} must be available"
 
         # ✅ FIX: S'assurer que company.id est bien utilisé
         assert company.id is not None, "Company ID must be set"
+
+        # ✅ FIX: Commit final pour s'assurer que tous les changements sont persistés
+        # avant le rollback défensif dans apply_assignments
+        db.session.commit()
 
         # ✅ FIX: Créer un DispatchRun avant apply_assignments
         dispatch_run = DispatchRun(
@@ -417,9 +432,41 @@ class TestDispatchE2E:
         )
         db.session.add(dispatch_run)
         db.session.flush()
-        # ✅ Vérifier que l'ID est disponible après flush
+        # ✅ FIX: Commit le DispatchRun pour qu'il soit visible après le rollback défensif
+        db.session.commit()
+        # ✅ Vérifier que l'ID est disponible après commit
         assert dispatch_run.id is not None, (
-            "DispatchRun ID should be available after flush"
+            "DispatchRun ID should be available after commit"
+        )
+
+        # ✅ FIX: S'assurer que les bookings et drivers sont bien commités et visibles
+        # Le rollback défensif dans apply_assignments expire les objets,
+        # donc ils doivent être commités pour être trouvés dans les requêtes
+        db.session.commit()
+
+        # ✅ FIX: Vérifier que les bookings et drivers sont bien visibles dans la DB
+        # avant d'appeler apply_assignments (après le rollback défensif)
+        booking_ids = [bookings[0].id, bookings[1].id]
+        driver_ids = [drivers[0].id, drivers[1].id]
+
+        bookings_found = (
+            db.session.query(Booking)
+            .filter(Booking.id.in_(booking_ids), Booking.company_id == company.id)
+            .all()
+        )
+        drivers_found = (
+            db.session.query(Driver)
+            .filter(Driver.id.in_(driver_ids), Driver.company_id == company.id)
+            .all()
+        )
+
+        assert len(bookings_found) == 2, (
+            f"Expected 2 bookings in DB, found {len(bookings_found)}. "
+            f"IDs searched: {booking_ids}, company_id: {company.id}"
+        )
+        assert len(drivers_found) == 2, (
+            f"Expected 2 drivers in DB, found {len(drivers_found)}. "
+            f"IDs searched: {driver_ids}, company_id: {company.id}"
         )
 
         # Créer des assignations valides

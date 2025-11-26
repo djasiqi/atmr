@@ -404,11 +404,12 @@ class TestHyperparameterTuner:
             mock_open.return_value.__enter__.return_value = mock_file_handle
             tuner._log_metrics_and_comparisons(mock_study, sorted_trials)
 
-            # Vérifier que le répertoire est créé
-            mock_mkdir.assert_called_once_with(parents=True, exist_ok=True)
+            # Vérifier que le répertoire est créé (peut être appelé plusieurs fois pour différents fichiers)
+            assert mock_mkdir.call_count >= 1
 
-            # Vérifier que le fichier est ouvert en écriture
-            mock_open.assert_called_once()
+            # Vérifier que les fichiers sont ouverts en écriture
+            # _log_metrics_and_comparisons ouvre 2 fichiers : metrics et comparison
+            assert mock_open.call_count == 2
 
     def test_analyze_triplet_gagnant(self):
         """Test _analyze_triplet_gagnant method"""

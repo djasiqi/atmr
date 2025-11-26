@@ -52,9 +52,7 @@ class TestEncryptionService:
                 )
             else:
                 # Pour plaintext vide, ciphertext est aussi vide
-                assert ciphertext == "", (
-                    "Ciphertext doit être vide pour plaintext vide"
-                )
+                assert ciphertext == "", "Ciphertext doit être vide pour plaintext vide"
 
             # Déchiffrer
             decrypted = service.decrypt_field(ciphertext)
