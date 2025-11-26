@@ -56,7 +56,8 @@ class TestDistributionalDQNMinimal:
 
     def test_distributional_loss_init(self):
         """Test initialisation DistributionalLoss"""
-        # ✅ FIX: DistributionalLoss est une classe avec des méthodes statiques, pas instanciable
+        # ✅ FIX: DistributionalLoss est une classe avec des méthodes statiques,
+        # pas instanciable
         # On teste juste que la classe existe et a les méthodes statiques
         assert hasattr(DistributionalLoss, "c51_loss")
         assert hasattr(DistributionalLoss, "quantile_loss")
@@ -94,7 +95,8 @@ class TestDistributionalDQNMinimal:
 
     def test_uncertainty_capture_compute(self):
         """Test calcul UncertaintyCapture"""
-        # ✅ FIX: La méthode s'appelle calculate_uncertainty et prend seulement distribution
+        # ✅ FIX: La méthode s'appelle calculate_uncertainty
+        # et prend seulement distribution
         # La distribution doit être normalisée (probabilités)
         uncertainty = UncertaintyCapture()
 
@@ -151,7 +153,8 @@ class TestDistributionalDQNMinimal:
 
     def test_uncertainty_capture_with_same_distributions(self):
         """Test UncertaintyCapture avec distributions identiques"""
-        # ✅ FIX: La méthode s'appelle calculate_uncertainty et prend seulement distribution
+        # ✅ FIX: La méthode s'appelle calculate_uncertainty
+        # et prend seulement distribution
         uncertainty = UncertaintyCapture()
 
         # Créer des distributions identiques normalisées (probabilités)

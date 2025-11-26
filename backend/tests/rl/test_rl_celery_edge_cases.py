@@ -117,7 +117,8 @@ class TestRLCeleryErrorEdgeCases:
 
             result = train_rl_model.delay(episodes=0.1000000, learning_rate=0.0001)
             with pytest.raises(MemoryError, match="Out of memory"):
-                result.get()
+                # ✅ OPTIM: Ajouter timeout pour éviter que le test bloque
+                result.get(timeout=1)
 
     def test_rl_task_network_failure(self):
         """Test échec réseau pour tâche RL."""

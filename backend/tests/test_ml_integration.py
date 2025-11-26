@@ -59,7 +59,7 @@ class TestMLFeatures:
         assert "driver_total_bookings" in features
         assert features["driver_total_bookings"] == 150.0
 
-        print("✅ Base features extracted: {len(features)} features")
+        print(f"✅ Base features extracted: {len(features)} features")
 
     def test_create_interaction_features(self):
         """Test création features d'interaction."""
@@ -84,7 +84,7 @@ class TestMLFeatures:
         assert "traffic_x_weather" in interactions
         assert len(interactions) == 5
 
-        print("✅ Interactions created: {len(interactions)} features")
+        print(f"✅ Interactions created: {len(interactions)} features")
 
     def test_create_temporal_features(self):
         """Test création features temporelles."""
@@ -109,7 +109,7 @@ class TestMLFeatures:
         assert "hour_sin" in temporal
         assert "hour_cos" in temporal
 
-        print("✅ Temporal features created: {len(temporal)} features")
+        print(f"✅ Temporal features created: {len(temporal)} features")
 
     def test_complete_pipeline(self):
         """Test pipeline complet de feature engineering."""
@@ -133,7 +133,7 @@ class TestMLFeatures:
         for feat in critical_features:
             assert feat in all_features, f"Missing critical feature: {feat}"
 
-        print("✅ Complete pipeline: {len(all_features)} features generated")
+        print(f"✅ Complete pipeline: {len(all_features)} features generated")
 
 
 class TestMLPredictor:
@@ -153,9 +153,9 @@ class TestMLPredictor:
             assert predictor.model is not None
             assert len(predictor.feature_names) > 0
 
-            print("✅ Model loaded: {len(predictor.feature_names)} features")
+            print(f"✅ Model loaded: {len(predictor.feature_names)} features")
         else:
-            print("⚠️ Model not found at {model_path}, skipping")
+            print(f"⚠️ Model not found at {model_path}, skipping")
 
     def test_predict_delay_with_mock_data(self):
         """Test prédiction avec données mock."""
@@ -183,10 +183,10 @@ class TestMLPredictor:
         assert -10.0 <= prediction.predicted_delay_minutes <= 60.0
 
         print("✅ Prediction successful:")
-        print("   Delay: {prediction.predicted_delay_minutes")
-        print("   Confidence: {prediction.confidence")
-        print("   Risk: {prediction.risk_level}")
-        print("   Top factors: {list(prediction.contributing_factors.keys())[:3]}")
+        print(f"   Delay: {prediction.predicted_delay_minutes}")
+        print(f"   Confidence: {prediction.confidence}")
+        print(f"   Risk: {prediction.risk_level}")
+        print(f"   Top factors: {list(prediction.contributing_factors.keys())[:3]}")
 
     def test_prediction_performance(self):
         """Test performance temps de prédiction."""
@@ -216,7 +216,7 @@ class TestMLPredictor:
         # Ajuster cible à 200ms (plus réaliste avec feature engineering complet)
         assert elapsed < 200  # Cible réaliste: < 200ms
 
-        print("✅ Performance: {elapsed")
+        print(f"✅ Performance: {elapsed:.2f}ms")
 
 
 if __name__ == "__main__":
@@ -233,8 +233,8 @@ if __name__ == "__main__":
         test.test_create_interaction_features()
         test.test_create_temporal_features()
         test.test_complete_pipeline()
-    except Exception:
-        print("❌ Erreur: {e}")
+    except Exception as e:
+        print(f"❌ Erreur: {e}")
         sys.exit(1)
 
     # Test 2: Prédicteur
@@ -244,8 +244,8 @@ if __name__ == "__main__":
         test_ml.test_model_loads_if_available()
         test_ml.test_predict_delay_with_mock_data()
         test_ml.test_prediction_performance()
-    except Exception:
-        print("❌ Erreur: {e}")
+    except Exception as e:
+        print(f"❌ Erreur: {e}")
         import traceback
 
         traceback.print_exc()
