@@ -186,8 +186,10 @@ class Login(Resource):
 
             # Création du refresh token
             # (durée configurée dans JWT_REFRESH_TOKEN_EXPIRES)
+            # ✅ FIX: Ajouter la claim 'aud' au refresh token aussi
             refresh_token = create_refresh_token(
                 identity=str(user.public_id),
+                additional_claims={"aud": "atmr-api"},  # Audience claim pour sécurité
                 expires_delta=current_app.config["JWT_REFRESH_TOKEN_EXPIRES"],
             )
 

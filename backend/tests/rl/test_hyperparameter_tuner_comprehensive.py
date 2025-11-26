@@ -328,21 +328,29 @@ class TestHyperparameterTuner:
 
         with (
             patch("pathlib.Path.mkdir") as mock_mkdir,
-            patch("builtins.open", create=True) as mock_file,
+            patch("pathlib.Path.open") as mock_file,
         ):
+            # Configurer le mock pour Path.open() qui retourne un context manager
             mock_file.return_value.__enter__.return_value.write = Mock()
             tuner.save_best_params(mock_study, "test_params.json")
 
             # ✅ FIX: mkdir est appelé deux fois :
             # 1. Pour créer le répertoire du fichier de configuration
-            # 2. Pour créer le répertoire du fichier de métriques (dans _log_metrics_and_comparisons)
+            # 2. Pour créer le répertoire du fichier de métriques
+            #    (dans _log_metrics_and_comparisons)
             assert mock_mkdir.call_count == 2
             # Vérifier que tous les appels utilisent les bons paramètres
             for call in mock_mkdir.call_args_list:
                 assert call.kwargs == {"parents": True, "exist_ok": True}
 
-            # Vérifier que le fichier est ouvert en écriture
-            mock_file.assert_called_once()
+            # ✅ FIX: Path.open() est appelé 3 fois :
+            # 1. Pour le fichier de configuration (save_best_params)
+            # 2. Pour le fichier de métriques (_log_metrics_and_comparisons)
+            # 3. Pour le fichier de comparaison (_log_metrics_and_comparisons)
+            assert mock_file.call_count == 3
+            # Vérifier que tous les appels utilisent les bons paramètres
+            for call in mock_file.call_args_list:
+                assert call == (("w",), {"encoding": "utf-8"})
 
     def test_save_best_params_with_custom_filename(self):
         """Test save_best_params avec nom de fichier personnalisé"""
@@ -363,13 +371,20 @@ class TestHyperparameterTuner:
 
         with (
             patch("pathlib.Path.mkdir"),
-            patch("builtins.open", create=True) as mock_file,
+            patch("pathlib.Path.open") as mock_file,
         ):
+            # Configurer le mock pour Path.open() qui retourne un context manager
             mock_file.return_value.__enter__.return_value.write = Mock()
             tuner.save_best_params(mock_study, "custom_params.json")
 
-            # Vérifier que le fichier est ouvert avec le bon nom
-            mock_file.assert_called_once()
+            # ✅ FIX: Path.open() est appelé 3 fois :
+            # 1. Pour le fichier de configuration (save_best_params)
+            # 2. Pour le fichier de métriques (_log_metrics_and_comparisons)
+            # 3. Pour le fichier de comparaison (_log_metrics_and_comparisons)
+            assert mock_file.call_count == 3
+            # Vérifier que tous les appels utilisent les bons paramètres
+            for call in mock_file.call_args_list:
+                assert call == (("w",), {"encoding": "utf-8"})
 
     def test_load_best_params(self):
         """Test load_best_params method"""

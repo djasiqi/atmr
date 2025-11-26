@@ -1237,15 +1237,16 @@ class TestHyperparameterTunerUltraFinal:
 
     def _create_mock_agent(self, *args, **kwargs):
         """Créer un mock agent pour les tests"""
-        # ✅ FIX: Retourner une classe ou une fonction qui accepte les arguments
-        # de ImprovedDQNAgent.__init__
+        # ✅ FIX: Retourner une classe qui peut être instanciée
+        # et qui a la même signature que ImprovedDQNAgent.select_action
 
         class MockAgent:
             def __init__(self, *args, **kwargs):
                 self.memory = []
                 self.batch_size = 32
 
-            def select_action(self, state):
+            def select_action(self, state, valid_actions=None):
+                """Sélectionne une action - signature compatible avec ImprovedDQNAgent"""
                 return 0
 
             def store_transition(self, state, action, reward, next_state, done):

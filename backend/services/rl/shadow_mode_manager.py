@@ -413,14 +413,38 @@ class ShadowModeManager:
         """Extrait les raisons de la décision RL."""
         reasons = []
 
+        # Fonction helper pour convertir en float de manière sécurisée
+        def safe_float(value, default=0.0):
+            """Convertit une valeur en float de manière sécurisée."""
+            if value is None or isinstance(value, (list, dict)):
+                return default
+            if isinstance(value, str):
+                try:
+                    return float(value)
+                except (ValueError, TypeError):
+                    return default
+            if isinstance(value, (int, float)):
+                try:
+                    return float(value)
+                except (ValueError, TypeError):
+                    return default
+            return default
+
         # Raisons basées sur les métriques
-        if rl_decision.get("eta_minutes", 0) < context.get("avg_eta", 0):
+        # ✅ FIX: Utiliser safe_float pour gérer None, string, et autres types
+        eta_minutes = safe_float(rl_decision.get("eta_minutes"), 0.0)
+        avg_eta = safe_float(context.get("avg_eta"), 0.0)
+        if eta_minutes < avg_eta:
             reasons.append("ETA inférieur à la moyenne")
 
-        if rl_decision.get("distance_km", 0) < context.get("avg_distance", 0):
+        distance_km = safe_float(rl_decision.get("distance_km"), 0.0)
+        avg_distance = safe_float(context.get("avg_distance"), 0.0)
+        if distance_km < avg_distance:
             reasons.append("Distance optimisée")
 
-        if rl_decision.get("driver_load", 0) < context.get("avg_load", 0):
+        driver_load = safe_float(rl_decision.get("driver_load"), 0.0)
+        avg_load = safe_float(context.get("avg_load"), 0.0)
+        if driver_load < avg_load:
             reasons.append("Charge chauffeur équilibrée")
 
         # Raisons basées sur les contraintes

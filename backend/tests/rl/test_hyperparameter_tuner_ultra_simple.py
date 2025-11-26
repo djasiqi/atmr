@@ -330,11 +330,23 @@ class TestHyperparameterTuner:
             mock_open.return_value.__enter__.return_value = mock_file_handle
             tuner.save_best_params(mock_study, "test_params.json")
 
-            # Vérifier que le répertoire est créé
-            mock_mkdir.assert_called_once_with(parents=True, exist_ok=True)
+            # ✅ FIX: mkdir est appelé deux fois :
+            # 1. Pour créer le répertoire du fichier de configuration
+            # 2. Pour créer le répertoire du fichier de métriques
+            #    (dans _log_metrics_and_comparisons)
+            assert mock_mkdir.call_count == 2
+            # Vérifier que tous les appels utilisent les bons paramètres
+            for call in mock_mkdir.call_args_list:
+                assert call.kwargs == {"parents": True, "exist_ok": True}
 
-            # Vérifier que le fichier est ouvert en écriture
-            mock_open.assert_called_once()
+            # ✅ FIX: Path.open() est appelé 3 fois :
+            # 1. Pour le fichier de configuration (save_best_params)
+            # 2. Pour le fichier de métriques (_log_metrics_and_comparisons)
+            # 3. Pour le fichier de comparaison (_log_metrics_and_comparisons)
+            assert mock_open.call_count == 3
+            # Vérifier que tous les appels utilisent les bons paramètres
+            for call in mock_open.call_args_list:
+                assert call == (("w",), {"encoding": "utf-8"})
 
     def test_log_metrics_and_comparisons(self):
         """Test _log_metrics_and_comparisons method"""
@@ -372,8 +384,13 @@ class TestHyperparameterTuner:
             # Vérifier que le répertoire est créé
             mock_mkdir.assert_called_once_with(parents=True, exist_ok=True)
 
-            # Vérifier que le fichier est ouvert en écriture
-            mock_open.assert_called_once()
+            # ✅ FIX: Path.open() est appelé 2 fois :
+            # 1. Pour le fichier de métriques
+            # 2. Pour le fichier de comparaison
+            assert mock_open.call_count == 2
+            # Vérifier que tous les appels utilisent les bons paramètres
+            for call in mock_open.call_args_list:
+                assert call == (("w",), {"encoding": "utf-8"})
 
     def test_analyze_triplet_gagnant(self):
         """Test _analyze_triplet_gagnant method"""
@@ -461,8 +478,14 @@ class TestHyperparameterTuner:
             mock_open.return_value.__enter__.return_value = mock_file_handle
             tuner.save_best_params(mock_study, "empty_trials.json")
 
-            # Vérifier que le fichier est ouvert
-            mock_open.assert_called_once()
+            # ✅ FIX: Path.open() est appelé 3 fois :
+            # 1. Pour le fichier de configuration (save_best_params)
+            # 2. Pour le fichier de métriques (_log_metrics_and_comparisons)
+            # 3. Pour le fichier de comparaison (_log_metrics_and_comparisons)
+            assert mock_open.call_count == 3
+            # Vérifier que tous les appels utilisent les bons paramètres
+            for call in mock_open.call_args_list:
+                assert call == (("w",), {"encoding": "utf-8"})
 
     def test_edge_case_none_study(self):
         """Test avec study None"""

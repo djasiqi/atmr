@@ -355,8 +355,9 @@ class TestBaselineMetrics:
             state = np.random.randn(100)
             buffer.add(state, i % 100, float(i), state, False, priority=float(i + 1))
 
-        # Vérifier que le buffer fonctionne correctement
-        assert len(buffer.buffer) == 5000
+        # ✅ FIX: Le buffer devrait contenir 500 transitions (pas 5000)
+        # car on ajoute 500 transitions à un buffer de capacité 10000
+        assert len(buffer.buffer) == 500
         batch, _indices, _weights = buffer.sample(32)
         assert len(batch) == 32
 

@@ -50,7 +50,8 @@ class TestDispatchEnvEdgeCases:
         env.active_booking_count = len(env.bookings)
 
         # Action qui pointe vers un driver inexistant (driver_idx >= len(drivers))
-        # action = 10: action_idx=9, driver_idx=1, booking_idx=4 (mais seulement 1 driver)
+        # action = 10: action_idx=9, driver_idx=1, booking_idx=4
+        # (mais seulement 1 driver)
         action = 10
 
         with patch("services.rl.dispatch_env.logging") as mock_logging:
@@ -99,8 +100,10 @@ class TestDispatchEnvEdgeCases:
         env.active_driver_count = len(env.drivers)
         env.active_booking_count = len(env.bookings)
 
-        # Action qui pointe vers un booking inexistant (booking_idx >= len(bookings))
-        # action = 3: action_idx=2, driver_idx=0, booking_idx=2 (mais seulement 1 booking)
+        # Action qui pointe vers un booking inexistant
+        # (booking_idx >= len(bookings))
+        # action = 3: action_idx=2, driver_idx=0, booking_idx=2
+        # (mais seulement 1 booking)
         action = 3
 
         with patch("services.rl.dispatch_env.logging") as mock_logging:
@@ -265,12 +268,13 @@ class TestDispatchEnvEdgeCases:
 
         len(env.bookings)
 
-        # ✅ FIX: Forcer la probabilité de génération à 1.0 et np_random.random() à 0.0
-        # pour garantir l'appel de _generate_new_bookings
+        # ✅ FIX: Forcer la probabilité de génération à 1.0 pour garantir l'appel
+        # de _generate_new_bookings. On ne peut pas patcher np_random.random car
+        # c'est un attribut en lecture seule, mais si _get_booking_generation_rate
+        # retourne 1.0, la condition sera toujours vraie (random() < 1.0).
         with (
             patch.object(env, "_generate_new_bookings") as mock_generate,
             patch.object(env, "_get_booking_generation_rate", return_value=1.0),
-            patch.object(env.np_random, "random", return_value=0.0),
         ):
             _obs, _reward, _terminated, _truncated, _info = env.step(0)
 

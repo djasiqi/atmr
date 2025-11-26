@@ -9,6 +9,7 @@ Valide que l'espace de recherche n'est pas vide et que les bornes sont correctes
 import sys
 
 import optuna
+import pytest
 
 from services.rl.hyperparameter_tuner import HyperparameterTuner
 
@@ -289,7 +290,8 @@ class TestHyperparameterTunerSanity:
         # ✅ FIX: Les valeurs sont utilisées telles quelles, pas multipliées par 1000
         assert importance["double_dqn"]["enabled_avg"] == 0.6
         assert importance["double_dqn"]["disabled_avg"] == 0.5
-        assert importance["double_dqn"]["improvement"] == 0.1
+        # ✅ FIX: Utiliser pytest.approx() pour gérer les erreurs de précision flottante
+        assert importance["double_dqn"]["improvement"] == pytest.approx(0.1)
         assert importance["double_dqn"]["enabled_count"] == 1
         assert importance["double_dqn"]["disabled_count"] == 1
 

@@ -50,7 +50,7 @@ class TestRLSuggestionGeneratorMinimal:
             sg_module._model_loaded = False
 
             with (
-                patch("pathlib.Path") as mock_path_class,
+                patch("services.rl.suggestion_generator.Path") as mock_path_class,
                 patch("services.rl.suggestion_generator._lazy_import_rl"),
                 patch("services.rl.dispatch_env.DispatchEnv") as mock_env_class,
                 patch(
@@ -96,35 +96,55 @@ class TestRLSuggestionGeneratorMinimal:
 
     def test_lazy_import_rl_success(self):
         """Test import paresseux RL réussi"""
-        with (
-            patch("pathlib.Path") as mock_path_class,
-            patch("services.rl.suggestion_generator._lazy_import_rl"),
-            patch("services.rl.dispatch_env.DispatchEnv") as mock_env_class,
-            patch(
-                "services.rl.suggestion_generator.ImprovedDQNAgent"
-            ) as mock_agent_class,
-        ):
-            mock_path_instance = Mock()
-            mock_path_instance.exists.return_value = True
-            mock_path_class.return_value = mock_path_instance
+        # ✅ FIX: Réinitialiser _model_loaded et créer le générateur dans le bloc with
+        import services.rl.suggestion_generator as sg_module
+
+        original_model_loaded = sg_module._model_loaded
+        try:
+            sg_module._model_loaded = False
+
+            mock_agent = Mock()
+            mock_agent.load = Mock()
+            mock_agent.q_network = Mock()
+            mock_agent.q_network.eval = Mock()
 
             mock_env = Mock()
             mock_env.observation_space = Mock()
             mock_env.observation_space.shape = [19]
             mock_env.action_space = Mock()
             mock_env.action_space.n = 26
-            mock_env_class.return_value = mock_env
 
-            mock_agent = Mock()
-            mock_agent.load = Mock()
-            mock_agent.q_network = Mock()
-            mock_agent.q_network.eval = Mock()
-            mock_agent_class.return_value = mock_agent
+            with (
+                patch("services.rl.suggestion_generator.Path") as mock_path_class,
+                patch("services.rl.suggestion_generator._lazy_import_rl"),
+                patch("services.rl.dispatch_env.DispatchEnv", return_value=mock_env),
+                patch(
+                    "services.rl.improved_dqn_agent.ImprovedDQNAgent",
+                    return_value=mock_agent,
+                ),
+                patch(
+                    "torch.load",
+                    return_value={
+                        "q_network_state_dict": {},
+                        "target_network_state_dict": {},
+                        "optimizer_state_dict": {},
+                        "epsilon": 0.1,
+                        "training_step": 0,
+                        "episode_count": 0,
+                        "losses": [],
+                    },
+                ),
+            ):
+                mock_path_instance = Mock()
+                mock_path_instance.exists.return_value = True
+                mock_path_class.return_value = mock_path_instance
 
-            generator = RLSuggestionGenerator()
+                generator = RLSuggestionGenerator()
 
-            # Vérifier que l'agent est créé
-            assert generator.agent == mock_agent
+                # Vérifier que l'agent est créé
+                assert generator.agent == mock_agent
+        finally:
+            sg_module._model_loaded = original_model_loaded
 
     def test_lazy_import_rl_failure(self):
         """Test import paresseux RL échoué"""
@@ -140,7 +160,7 @@ class TestRLSuggestionGeneratorMinimal:
     def test_load_model_file_not_found(self):
         """Test chargement de modèle - fichier non trouvé"""
         with (
-            patch("pathlib.Path") as mock_path_class,
+            patch("services.rl.suggestion_generator.Path") as mock_path_class,
             patch("services.rl.suggestion_generator._lazy_import_rl"),
         ):
             mock_path_instance = Mock()
@@ -155,7 +175,7 @@ class TestRLSuggestionGeneratorMinimal:
     def test_load_model_with_exception(self):
         """Test chargement de modèle avec exception"""
         with (
-            patch("pathlib.Path") as mock_path_class,
+            patch("services.rl.suggestion_generator.Path") as mock_path_class,
             patch("services.rl.suggestion_generator._lazy_import_rl"),
             patch("services.rl.dispatch_env.DispatchEnv") as mock_env_class,
             patch(

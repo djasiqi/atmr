@@ -678,7 +678,11 @@ class DispatchEnv(gym.Env):
             traffic_density = self._get_traffic_density()
             traffic_factor = 1 + (traffic_density * 0.5)
 
-            return cast(float, travel_time * traffic_factor)
+            travel_time_with_traffic = travel_time * traffic_factor
+
+            # ✅ FIX: Retourner un minimum de 1 minute même si la distance est 0
+            # (par exemple pour se garer, etc.)
+            return cast(float, max(travel_time_with_traffic, 1.0))
         except Exception as e:
             logging.warning("[DispatchEnv] Erreur calcul temps trajet: %s", e)
             return 30.0  # Fallback: 30 minutes par défaut

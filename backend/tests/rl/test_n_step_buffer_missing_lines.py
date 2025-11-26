@@ -1,6 +1,6 @@
 """Tests supplémentaires pour n_step_buffer.py - lignes manquantes."""
 
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import numpy as np
 
@@ -16,21 +16,20 @@ class TestNStepBufferMissingLines:
 
         # Mock logger pour vérifier l'erreur
         with patch.object(buffer.logger, "error") as mock_error:
-            # Créer une transition invalide pour déclencher une exception
-            # En mockant temp_buffer.append pour lever une exception
-            with patch.object(
-                buffer.temp_buffer,
-                "append",
-                side_effect=Exception("Test error"),
-            ):
-                buffer.add_transition(
-                    state=np.array([1, 2, 3], dtype=np.float32),
-                    action=1,
-                    reward=1,
-                    next_state=np.array([4, 5, 6], dtype=np.float32),
-                    done=False,
-                    info=None,
-                )
+            # ✅ FIX: On ne peut pas patcher deque.append directement car c'est en lecture seule.
+            # Au lieu de cela, on crée un mock pour state qui lève une exception lors de copy()
+            # car state.copy() est appelé dans add_transition avant append
+            mock_state = Mock(spec=np.ndarray)
+            mock_state.copy.side_effect = Exception("Test error")
+
+            buffer.add_transition(
+                state=mock_state,
+                action=1,
+                reward=1,
+                next_state=np.array([4, 5, 6], dtype=np.float32),
+                done=False,
+                info=None,
+            )
 
             # Vérifier que l'erreur a été loggée
             mock_error.assert_called_once()
@@ -354,12 +353,17 @@ class TestNStepPrioritizedBufferMissingLines:
 
         # Mettre à jour les priorités avec td_errors (pas priorities)
         indices = [0, 1, 2]
-        td_errors = [5.0, 6.0, 7.0]  # Plus grandes pour que max_priority >= 4
+        # ✅ FIX: Pour obtenir priority >= 4.0 avec alpha=0.6:
+        # priority = (abs(td_error) + 1e-6)^0.6 >= 4.0
+        # (abs(td_error) + 1e-6) >= 4.0^(1/0.6) ≈ 10.079
+        # abs(td_error) >= 10.079 - 1e-6 ≈ 10.079
+        # Donc il faut td_error >= 10.08
+        td_errors = [10.0, 11.0, 12.0]  # Plus grandes pour que max_priority >= 4
 
         buffer.update_priorities(indices, td_errors)
 
         # Vérifier que max_priority a été mis à jour
-        # priority = (abs(7.0) + 1e-6)^0.6 ≈ 4.0
+        # priority = (abs(12.0) + 1e-6)^0.6 ≈ 4.29
         assert buffer.max_priority >= 4.0
 
     def test_clear(self):
@@ -421,9 +425,11 @@ class TestNStepPrioritizedBufferMissingLines:
         """Test get_stats avec exception."""
         buffer = NStepPrioritizedBuffer(capacity=10, n_step=3)
 
-        # Mock len sur buffer.buffer pour lever une exception
+        # ✅ FIX: On ne peut pas patcher deque.__len__ car c'est en lecture seule.
+        # Au lieu de cela, on peut patcher super().get_stats() pour lever une exception
+        # car get_stats appelle super().get_stats() en premier
         with (
-            patch.object(buffer.buffer, "__len__", side_effect=Exception("Test error")),
+            patch.object(NStepBuffer, "get_stats", side_effect=Exception("Test error")),
             patch.object(buffer.logger, "error") as mock_error,
         ):
             stats = buffer.get_stats()
@@ -499,6 +505,7 @@ class TestNStepPrioritizedBufferMissingLines:
 
         # _calculate_n_step_return retourne 0.0 (float) même avec buffer vide
         assert isinstance(result1, float)
+        assert result1 == 0.0
         # _get_final_next_state retourne None en cas d'erreur
         assert result2 is None or isinstance(result2, np.ndarray)
 

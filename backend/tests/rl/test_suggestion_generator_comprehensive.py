@@ -2,6 +2,7 @@
 Tests complets pour suggestion_generator.py - Couverture 95%+
 """
 
+import builtins
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 
@@ -42,7 +43,8 @@ class TestRLSuggestionGenerator:
             sg_module._dispatch_env = None
 
             # ✅ FIX: Patcher les modules à la source (services.rl) plutôt que
-            # dans suggestion_generator car les imports sont faits dans _lazy_import_rl()
+            # dans suggestion_generator car les imports sont faits dans
+            # _lazy_import_rl()
             mock_dqn_module = Mock()
             mock_dispatch_module = Mock()
             mock_improved_dqn_class = Mock()
@@ -81,14 +83,18 @@ class TestRLSuggestionGenerator:
             sg_module._dqn_agent = None
             sg_module._dispatch_env = None
 
-            # ✅ FIX: Patcher les modules à la source (services.rl) plutôt que
-            # dans suggestion_generator car les imports sont faits dans _lazy_import_rl()
+            # ✅ FIX: Utiliser builtins.__import__ pour intercepter l'import
+            # et lever ImportError pour services.rl.improved_dqn_agent
+            real_import = builtins.__import__
+
+            def mock_import(name, *args, **kwargs):
+                if name == "services.rl.improved_dqn_agent":
+                    raise ImportError("Module not found")
+                return real_import(name, *args, **kwargs)
+
             with (
-                patch(
-                    "services.rl.improved_dqn_agent",
-                    side_effect=ImportError("Module not found"),
-                ),
-                pytest.raises(ImportError),
+                patch("builtins.__import__", side_effect=mock_import),
+                pytest.raises(ImportError, match="Module not found"),
             ):
                 _lazy_import_rl()
         finally:

@@ -372,8 +372,10 @@ class TestRLLoggerMinimal:
             metadata,
         )
 
-        # Le résultat devrait être False car les deux loggings sont désactivés
-        assert result is False
+        # ✅ FIX: Le résultat devrait être True car si les deux loggings sont désactivés,
+        # c'est considéré comme un succès (rien à logger)
+        # Voir rl_logger.py ligne 252-254
+        assert result is True
         # Les statistiques total_logs devraient être incrémentées (le logging est tenté)
         assert logger.stats["total_logs"] == initial_total_logs + 1
         # Mais redis_logs et db_logs ne devraient pas être incrémentées

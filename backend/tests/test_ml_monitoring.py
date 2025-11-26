@@ -9,16 +9,21 @@ class TestMLMonitoringService:
 
     def test_log_prediction(self, app, sample_booking, db):
         """Test enregistrement d'une prédiction."""
+        from models.booking import Booking
         from services.ml_monitoring_service import MLMonitoringService
 
         with app.app_context():
-            # ✅ FIX: sample_booking est déjà dans la session du savepoint,
-            # pas besoin de merge() qui peut bloquer. Utiliser directement l'ID.
-            # S'assurer que l'objet est accessible dans le savepoint
+            # ✅ FIX: S'assurer que le booking est bien flushé et visible
+            # dans la transaction avant de créer la prédiction
+            db.session.flush()
             booking_id = sample_booking.id
-            if booking_id is None:
-                # Si l'ID n'est pas encore défini, flush pour l'obtenir
-                db.session.flush()
+
+            # ✅ FIX: Vérifier que le booking existe vraiment dans la DB
+            # en le rechargeant depuis la DB pour s'assurer qu'il est visible
+            booking_check = db.session.query(Booking).filter_by(id=booking_id).first()
+            if booking_check is None:
+                # Si le booking n'est pas trouvé, le recharger depuis sample_booking
+                db.session.refresh(sample_booking)
                 booking_id = sample_booking.id
 
             # Log une prédiction avec un booking réel
@@ -53,14 +58,21 @@ class TestMLMonitoringService:
 
     def test_update_actual_delay(self, app, sample_booking, db):
         """Test mise à jour retard réel."""
+        from models.booking import Booking
         from services.ml_monitoring_service import MLMonitoringService
 
         with app.app_context():
-            # ✅ FIX: sample_booking est déjà dans la session du savepoint,
-            # pas besoin de merge() qui peut bloquer. Utiliser directement l'ID.
+            # ✅ FIX: S'assurer que le booking est bien flushé et visible
+            # dans la transaction avant de créer la prédiction
+            db.session.flush()
             booking_id = sample_booking.id
-            if booking_id is None:
-                db.session.flush()
+
+            # ✅ FIX: Vérifier que le booking existe vraiment dans la DB
+            # en le rechargeant depuis la DB pour s'assurer qu'il est visible
+            booking_check = db.session.query(Booking).filter_by(id=booking_id).first()
+            if booking_check is None:
+                # Si le booking n'est pas trouvé, le recharger depuis sample_booking
+                db.session.refresh(sample_booking)
                 booking_id = sample_booking.id
 
             # Log prédiction avec un booking réel
@@ -103,11 +115,31 @@ class TestMLMonitoringService:
         from services.ml_monitoring_service import MLMonitoringService
 
         with app.app_context():
-            # ✅ FIX: sample_booking est déjà dans la session du savepoint,
-            # pas besoin de merge() qui peut bloquer. Utiliser directement l'objet.
+            # ✅ FIX: S'assurer que sample_booking et ses dépendances sont bien flushés
+            # et visibles dans la transaction avant de créer de nouveaux bookings
+            db.session.flush()
             booking_ref = sample_booking
-            if booking_ref.id is None:
-                db.session.flush()
+
+            # ✅ FIX: Vérifier que le client et la company existent vraiment dans la DB
+            # en les rechargeant depuis la DB pour s'assurer qu'ils sont visibles
+            from models.client import Client
+            from models.company import Company
+
+            client_check = (
+                db.session.query(Client).filter_by(id=booking_ref.client_id).first()
+            )
+            if client_check is None:
+                # Si le client n'est pas trouvé, recharger sample_booking
+                db.session.refresh(sample_booking)
+                booking_ref = sample_booking
+
+            company_check = (
+                db.session.query(Company).filter_by(id=booking_ref.company_id).first()
+            )
+            if company_check is None:
+                # Si la company n'est pas trouvée, recharger sample_booking
+                db.session.refresh(sample_booking)
+                booking_ref = sample_booking
 
             # Créer plusieurs bookings pour les tests
             bookings = []

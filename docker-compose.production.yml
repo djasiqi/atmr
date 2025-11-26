@@ -45,7 +45,17 @@ services:
     # ✅ SÉCURITÉ: Redis avec authentification et non exposé publiquement
     # Le port n'est PAS exposé publiquement (pas de mapping host:container)
     # Redis est uniquement accessible depuis le réseau Docker interne
-    command: redis-server --requirepass $${REDIS_PASSWORD} --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru --bind 0.0.0.0 --protected-mode yes
+    command:
+      - sh
+      - -c
+      - |
+        redis-server \
+          --requirepass "${REDIS_PASSWORD}" \
+          --appendonly yes \
+          --maxmemory 256mb \
+          --maxmemory-policy allkeys-lru \
+          --bind 0.0.0.0 \
+          --protected-mode yes
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:
@@ -57,10 +67,15 @@ services:
     networks:
       - atmr-network
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD} ping | grep PONG"]
+      test:
+        [
+          "CMD-SHELL",
+          'redis-cli -a "${REDIS_PASSWORD}" ping | grep -q PONG || exit 1',
+        ]
       interval: 10s
-      timeout: 3s
-      retries: 3
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     deploy:
       resources:
         limits:
