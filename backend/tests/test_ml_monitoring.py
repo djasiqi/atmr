@@ -12,18 +12,18 @@ class TestMLMonitoringService:
         from services.ml_monitoring_service import MLMonitoringService
 
         with app.app_context():
-            # ✅ FIX: S'assurer que le booking est commité avant utilisation
-            # pour que la contrainte de clé étrangère soit satisfaite
-            # Utiliser merge pour s'assurer que l'objet est dans la session actuelle
-            # ✅ FIX: Utiliser flush() au lieu de commit() pour éviter les conflits
-            # avec les savepoints dans les tests
-            booking = db.session.merge(sample_booking)
-            db.session.flush()
-            db.session.refresh(booking)
+            # ✅ FIX: sample_booking est déjà dans la session du savepoint,
+            # pas besoin de merge() qui peut bloquer. Utiliser directement l'ID.
+            # S'assurer que l'objet est accessible dans le savepoint
+            booking_id = sample_booking.id
+            if booking_id is None:
+                # Si l'ID n'est pas encore défini, flush pour l'obtenir
+                db.session.flush()
+                booking_id = sample_booking.id
 
             # Log une prédiction avec un booking réel
             prediction = MLMonitoringService.log_prediction(
-                booking_id=booking.id,
+                booking_id=booking_id,
                 driver_id=0,  # driver_id peut être 0 ou None pour les tests
                 predicted_delay=8.5,
                 confidence=0.85,
@@ -34,8 +34,12 @@ class TestMLMonitoringService:
                 model_version="v1.0",
             )
 
+            # ✅ FIX: Flush explicitement pour obtenir l'ID de la prédiction
+            # et éviter les blocages dans le service
+            db.session.flush()
+
             assert prediction.id is not None
-            assert prediction.booking_id == booking.id
+            assert prediction.booking_id == booking_id
             assert prediction.predicted_delay_minutes == 8.5
             assert prediction.confidence == 0.85
 
@@ -52,17 +56,16 @@ class TestMLMonitoringService:
         from services.ml_monitoring_service import MLMonitoringService
 
         with app.app_context():
-            # ✅ FIX: S'assurer que le booking est commité avant utilisation
-            # Utiliser merge pour s'assurer que l'objet est dans la session actuelle
-            # ✅ FIX: Utiliser flush() au lieu de commit() pour éviter les conflits
-            # avec les savepoints dans les tests
-            booking = db.session.merge(sample_booking)
-            db.session.flush()
-            db.session.refresh(booking)
+            # ✅ FIX: sample_booking est déjà dans la session du savepoint,
+            # pas besoin de merge() qui peut bloquer. Utiliser directement l'ID.
+            booking_id = sample_booking.id
+            if booking_id is None:
+                db.session.flush()
+                booking_id = sample_booking.id
 
             # Log prédiction avec un booking réel
             prediction = MLMonitoringService.log_prediction(
-                booking_id=booking.id,
+                booking_id=booking_id,
                 driver_id=0,  # driver_id peut être 0 ou None pour les tests
                 predicted_delay=8.5,
                 confidence=0.85,
@@ -71,9 +74,12 @@ class TestMLMonitoringService:
                 prediction_time_ms=0.1325,
             )
 
+            # ✅ FIX: Flush explicitement pour obtenir l'ID de la prédiction
+            db.session.flush()
+
             # Mettre à jour retard réel
             MLMonitoringService.update_actual_delay(
-                booking_id=booking.id, actual_delay=9.2
+                booking_id=booking_id, actual_delay=9.2
             )
 
             # Vérifier
@@ -97,13 +103,11 @@ class TestMLMonitoringService:
         from services.ml_monitoring_service import MLMonitoringService
 
         with app.app_context():
-            # ✅ FIX: S'assurer que sample_booking et ses dépendances sont commités
-            # Utiliser merge pour s'assurer que l'objet est dans la session actuelle
-            # ✅ FIX: Utiliser flush() au lieu de commit() pour éviter les conflits
-            # avec les savepoints dans les tests
-            booking_ref = db.session.merge(sample_booking)
-            db.session.flush()
-            db.session.refresh(booking_ref)
+            # ✅ FIX: sample_booking est déjà dans la session du savepoint,
+            # pas besoin de merge() qui peut bloquer. Utiliser directement l'objet.
+            booking_ref = sample_booking
+            if booking_ref.id is None:
+                db.session.flush()
 
             # Créer plusieurs bookings pour les tests
             bookings = []
@@ -153,8 +157,8 @@ class TestMLMonitoringService:
                 p.is_accurate = True
                 predictions.append(p)
 
-            # ✅ FIX: Utiliser flush() au lieu de commit() pour éviter les conflits
-            # avec les savepoints dans les tests
+            # ✅ FIX: Flush explicitement après avoir créé toutes les prédictions
+            # pour éviter les blocages dans le service
             db.session.flush()
 
             # Calculer métriques
