@@ -488,12 +488,14 @@ class NStepPrioritizedBuffer(NStepBuffer):
             for idx, td_error in zip(indices, td_errors, strict=False):
                 if 0 <= idx < len(self.buffer):
                     # ✅ FIX: Gérer les cas NaN et inf pour td_error
-                    # Utiliser une variable locale pour éviter de réassigner la variable de boucle
+                    # Utiliser une variable locale pour éviter de réassigner
+                    # la variable de boucle
                     clean_td_error = td_error
                     if np.isnan(clean_td_error):
                         clean_td_error = 0.0
                     elif np.isinf(clean_td_error):
-                        # Pour inf, utiliser une valeur finie mais grande pour éviter inf dans le calcul
+                        # Pour inf, utiliser une valeur finie mais grande
+                        # pour éviter inf dans le calcul
                         clean_td_error = 1000.0 if clean_td_error > 0 else -1000.0
 
                     priority = (abs(clean_td_error) + 1e-6) ** self.alpha

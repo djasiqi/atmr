@@ -574,6 +574,8 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                     "dispatch_run_id": None,
                 },
             )
+            # ✅ FIX: Retourner immédiatement si le verrou est pris
+            return result.to_dict()
 
         # 2) Créer / réutiliser le DispatchRun (unique: company_id+day)
         try:

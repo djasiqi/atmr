@@ -1187,9 +1187,18 @@ class TestHyperparameterTunerUltraFinal:
             m.setattr(
                 "services.rl.hyperparameter_tuner.DispatchEnv", self._create_mock_env
             )
+
+            # ✅ FIX: Créer une fonction wrapper qui retourne directement une instance
+            # car _create_mock_agent retourne une classe, pas une instance
+            def create_mock_agent_wrapper(*args, **kwargs):
+                # _create_mock_agent retourne la classe MockAgent
+                MockAgentClass = self._create_mock_agent(*args, **kwargs)
+                # Retourner une instance de MockAgent avec les arguments
+                return MockAgentClass(*args, **kwargs)
+
             m.setattr(
                 "services.rl.hyperparameter_tuner.ImprovedDQNAgent",
-                self._create_mock_agent,
+                create_mock_agent_wrapper,
             )
 
             result = tuner.objective(trial)
@@ -1246,7 +1255,8 @@ class TestHyperparameterTunerUltraFinal:
                 self.batch_size = 32
 
             def select_action(self, state, valid_actions=None):
-                """Sélectionne une action - signature compatible avec ImprovedDQNAgent"""
+                """Sélectionne une action - signature compatible
+                avec ImprovedDQNAgent"""
                 return 0
 
             def store_transition(self, state, action, reward, next_state, done):

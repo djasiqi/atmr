@@ -643,8 +643,14 @@ class TestHyperparameterTuner:
             mock_open.return_value.__enter__.return_value = mock_file_handle
             tuner.save_best_params(mock_study, "none_values.json")
 
-            # Vérifier que le fichier est ouvert
-            mock_open.assert_called_once()
+            # ✅ FIX: Path.open() est appelé 3 fois :
+            # 1. Pour le fichier de configuration (save_best_params)
+            # 2. Pour le fichier de métriques (_log_metrics_and_comparisons)
+            # 3. Pour le fichier de comparaison (_log_metrics_and_comparisons)
+            assert mock_open.call_count == 3
+            # Vérifier que tous les appels utilisent les bons paramètres
+            for call in mock_open.call_args_list:
+                assert call == (("w",), {"encoding": "utf-8"})
 
     def test_edge_case_empty_params(self):
         """Test avec paramètres vides"""

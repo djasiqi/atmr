@@ -1,6 +1,6 @@
 """Tests supplémentaires pour n_step_buffer.py - lignes manquantes."""
 
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import numpy as np
 
@@ -16,9 +16,11 @@ class TestNStepBufferMissingLines:
 
         # Mock logger pour vérifier l'erreur
         with patch.object(buffer.logger, "error") as mock_error:
-            # ✅ FIX: On ne peut pas patcher deque.append directement car c'est en lecture seule.
-            # Au lieu de cela, on crée un mock pour state qui lève une exception lors de copy()
-            # car state.copy() est appelé dans add_transition avant append
+            # ✅ FIX: On ne peut pas patcher deque.append directement
+            # car c'est en lecture seule.
+            # Au lieu de cela, on crée un mock pour state qui lève une exception
+            # lors de copy() car state.copy() est appelé dans add_transition
+            # avant append
             mock_state = Mock(spec=np.ndarray)
             mock_state.copy.side_effect = Exception("Test error")
 
@@ -221,9 +223,19 @@ class TestNStepBufferMissingLines:
         """Test get_stats avec exception."""
         buffer = NStepBuffer(capacity=10, n_step=3)
 
-        # Mock len sur buffer.buffer pour lever une exception
+        # ✅ FIX: On ne peut pas patcher deque.__len__ car c'est en lecture seule.
+        # Au lieu de cela, on patche len() globalement pour qu'il lève une exception
+        # uniquement quand on appelle len() sur buffer.buffer
+        original_len = len
+        target_buffer = buffer.buffer
+
+        def mock_len(obj):
+            if obj is target_buffer:
+                raise Exception("Test error")
+            return original_len(obj)
+
         with (
-            patch.object(buffer.buffer, "__len__", side_effect=Exception("Test error")),
+            patch("builtins.len", side_effect=mock_len),
             patch.object(buffer.logger, "error") as mock_error,
         ):
             stats = buffer.get_stats()

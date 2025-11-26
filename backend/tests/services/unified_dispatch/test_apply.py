@@ -145,10 +145,10 @@ class TestRollbackTransactionnel:
             for b in bookings
         ]
 
-        # ✅ FIX: S'assurer que les bookings sont flushés pour obtenir les IDs
-        # Le rollback défensif dans apply_assignments ne devrait pas affecter
-        # les objets dans le savepoint du test, mais pour être sûr, on flush
-        db.session.flush()
+        # ✅ FIX: Commit les bookings avant apply_assignments pour s'assurer
+        # qu'ils sont persistés. Le rollback défensif dans apply_assignments
+        # peut expirer les objets non commités.
+        db.session.commit()
 
         # ✅ FIX: Stocker les IDs avant apply_assignments car le rollback défensif
         # peut expirer les objets
@@ -164,10 +164,11 @@ class TestRollbackTransactionnel:
         db.session.expire_all()
 
         # Vérifier que tous les bookings sont assignés
-        # ✅ FIX: Utiliser les IDs stockés avant apply_assignments
-        booking0 = db.session.query(Booking).get(booking_ids[0])
-        booking1 = db.session.query(Booking).get(booking_ids[1])
-        booking2 = db.session.query(Booking).get(booking_ids[2])
+        # ✅ FIX: Utiliser filter_by au lieu de get() (déprécié) et s'assurer
+        # que les bookings sont rechargés depuis la DB
+        booking0 = db.session.query(Booking).filter_by(id=booking_ids[0]).first()
+        booking1 = db.session.query(Booking).filter_by(id=booking_ids[1]).first()
+        booking2 = db.session.query(Booking).filter_by(id=booking_ids[2]).first()
 
         # Vérifier que les bookings existent
         assert booking0 is not None

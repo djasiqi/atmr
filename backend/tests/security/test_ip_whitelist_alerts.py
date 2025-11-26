@@ -143,8 +143,9 @@ class TestSendIPWhitelistAlert:
         call_args = mock_audit_logger.log_security_event.call_args
         assert call_args is not None, "log_security_event should have been called"
 
-        # ✅ FIX: log_security_event accepte event_type, severity, details, user_id, ip_address
-        # user_agent est dans details, pas dans les kwargs directs
+        # ✅ FIX: log_security_event accepte event_type, severity, details,
+        # user_id, ip_address. user_agent est dans details,
+        # pas dans les kwargs directs
         assert call_args.kwargs["event_type"] == "ip_whitelist_denied"
         assert call_args.kwargs["severity"] == "high"
         assert call_args.kwargs["ip_address"] == "192.168.1.100"
@@ -251,7 +252,8 @@ class TestSendIPWhitelistAlert:
                 method="GET",
             )
 
-        # ✅ FIX: Vérifier que log_security_event a été appelé avant d'accéder à call_args
+        # ✅ FIX: Vérifier que log_security_event a été appelé
+        # avant d'accéder à call_args
         mock_audit_logger.log_security_event.assert_called_once()
         call_args = mock_audit_logger.log_security_event.call_args
         assert call_args is not None, "log_security_event should have been called"
@@ -283,7 +285,8 @@ class TestSendIPWhitelistAlert:
                 method="GET",
             )
 
-        # ✅ FIX: Vérifier que log_security_event a été appelé avant d'accéder à call_args
+        # ✅ FIX: Vérifier que log_security_event a été appelé
+        # avant d'accéder à call_args
         mock_audit_logger.log_security_event.assert_called_once()
         call_args = mock_audit_logger.log_security_event.call_args
         assert call_args is not None, "log_security_event should have been called"
@@ -348,7 +351,8 @@ class TestIPWhitelistAlertIntegration:
             )
 
         # Vérifier que tout a été appelé dans le bon ordre
-        # ✅ FIX: Utiliser assert_called_once() pour vérifier que la méthode a été appelée
+        # ✅ FIX: Utiliser assert_called_once() pour vérifier
+        # que la méthode a été appelée
         mock_audit_logger.log_security_event.assert_called_once()
         mock_sentry_capture.assert_called_once()
 

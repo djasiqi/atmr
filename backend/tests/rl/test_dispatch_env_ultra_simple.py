@@ -451,10 +451,17 @@ class TestDispatchEnvUltraSimple:
         env = DispatchEnv(num_drivers=3, max_bookings=5)
         env.reset()
 
-        with patch.object(env, "_generate_new_bookings") as mock_generate:
+        # ✅ FIX: Mock _get_booking_generation_rate pour retourner 1.0
+        # et np_random.random() pour retourner 0.0 afin de garantir
+        # que _generate_new_bookings sera appelé (0.0 < 1.0)
+        with (
+            patch.object(env, "_get_booking_generation_rate", return_value=1.0),
+            patch.object(env.np_random, "random", return_value=0.0),
+            patch.object(env, "_generate_new_bookings") as mock_generate,
+        ):
             _obs, _reward, _terminated, _truncated, _info = env.step(0)
 
-            # Vérifier que la ligne 289 est couverte (nouveaux bookings générés)
+            # Vérifier que la ligne 470 est couverte (nouveaux bookings générés)
             mock_generate.assert_called()
 
     def test_step_expired_bookings_ultra_simple(self):

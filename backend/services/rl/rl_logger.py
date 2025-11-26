@@ -256,6 +256,9 @@ class RLLogger:
 
         except Exception as e:
             logger.error("[RLLogger] Erreur lors du logging de la décision: %s", e)
+            # ✅ FIX: Incrémenter total_logs même en cas d'erreur pour compter
+            # toutes les tentatives de logging, qu'elles réussissent ou échouent
+            self.stats["total_logs"] = int(self.stats["total_logs"]) + 1
             self.stats["errors"] = int(self.stats["errors"]) + 1
             return False
 
