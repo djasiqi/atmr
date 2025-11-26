@@ -42,15 +42,22 @@ services:
     image: redis:7-alpine
     container_name: atmr-redis
     restart: unless-stopped
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    # ✅ SÉCURITÉ: Redis avec authentification et non exposé publiquement
+    # Le port n'est PAS exposé publiquement (pas de mapping host:container)
+    # Redis est uniquement accessible depuis le réseau Docker interne
+    command: redis-server --requirepass $${REDIS_PASSWORD} --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru --bind 0.0.0.0 --protected-mode yes
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
-    ports:
-      - "6379:6379"
+    # ⚠️ SÉCURITÉ: Port NON exposé publiquement - uniquement accessible via le réseau Docker
+    # Si vous devez accéder à Redis depuis l'extérieur, utilisez un tunnel SSH ou un VPN
+    expose:
+      - "6379"
     networks:
       - atmr-network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD} ping | grep PONG"]
       interval: 10s
       timeout: 3s
       retries: 3
@@ -84,9 +91,11 @@ services:
       SQLALCHEMY_DATABASE_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       # DATABASE_URL sera construit par config.py avec échappement URL automatique
 
-      # Redis/Celery
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      # Redis/Celery avec authentification
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
 
       # Optimisations PyTorch
       OMP_NUM_THREADS: 2
@@ -169,8 +178,10 @@ services:
       # SQLALCHEMY_DATABASE_URI explicite pour les migrations Flask
       SQLALCHEMY_DATABASE_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       # DATABASE_URL sera construit par config.py avec échappement URL automatique
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      # Redis/Celery avec authentification
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/0
 
       # Optimisations PyTorch pour le worker
       OMP_NUM_THREADS: 1
@@ -226,8 +237,10 @@ services:
       # SQLALCHEMY_DATABASE_URI explicite pour les migrations Flask
       SQLALCHEMY_DATABASE_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       # DATABASE_URL sera construit par config.py avec échappement URL automatique
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      # Redis/Celery avec authentification
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/0
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       APP_ENCRYPTION_KEY_B64: ${APP_ENCRYPTION_KEY_B64}
     volumes:

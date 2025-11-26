@@ -333,8 +333,13 @@ class TestHyperparameterTuner:
             mock_file.return_value.__enter__.return_value.write = Mock()
             tuner.save_best_params(mock_study, "test_params.json")
 
-            # Vérifier que le répertoire est créé
-            mock_mkdir.assert_called_once_with(parents=True, exist_ok=True)
+            # ✅ FIX: mkdir est appelé deux fois :
+            # 1. Pour créer le répertoire du fichier de configuration
+            # 2. Pour créer le répertoire du fichier de métriques (dans _log_metrics_and_comparisons)
+            assert mock_mkdir.call_count == 2
+            # Vérifier que tous les appels utilisent les bons paramètres
+            for call in mock_mkdir.call_args_list:
+                assert call.kwargs == {"parents": True, "exist_ok": True}
 
             # Vérifier que le fichier est ouvert en écriture
             mock_file.assert_called_once()

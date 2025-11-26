@@ -363,59 +363,64 @@ class DispatchEnv(gym.Env):
                     [b for b in self.bookings if not b.get("assigned", False)]
                 )
                 # ⭐ V3: Pénalité proportionnelle aux bookings non assignés
-                reward = -10 * num_unassigned
+                reward = (
+                    -10.0 * num_unassigned
+                )  # ✅ FIX: Retourner un float, pas un int
                 # Incrémenter idle time pour tous les chauffeurs disponibles
                 for driver in self.drivers:
                     if driver["available"]:
                         driver["idle_time"] += 1
             else:
-                # Vérifier validité de l'action avec masquage
-                valid_mask = self._get_valid_actions_mask()
-                if not valid_mask[action]:
-                    # Action invalide - pénalité forte
-                    reward = -100
+                # Action d'assignation - calculer les index d'abord
+                action_idx = action - 1
+                driver_idx = action_idx // self.max_bookings
+                booking_idx = action_idx % self.max_bookings
+
+                # ✅ FIX: Vérifier index out of range AVANT de vérifier le masque
+                # pour pouvoir signaler correctement cette erreur
+                if driver_idx >= len(self.drivers) or booking_idx >= len(self.bookings):
+                    # Action invalide - index out of range
+                    reward = -100.0  # ✅ FIX: Retourner un float, pas un int
                     info = self._get_info()
                     info["invalid_action"] = True
-                    info["action_masked"] = True
+                    info["index_out_of_range"] = True
                     info_created = True
-                    logging.debug("[DispatchEnv] Action invalide %s masquée", action)
+                    logging.warning(
+                        (
+                            "[DispatchEnv] Index out of range: "
+                            "driver_idx=%s, booking_idx=%s"
+                        ),
+                        driver_idx,
+                        booking_idx,
+                    )
                 else:
-                    # Action d'assignation valide
-                    action_idx = action - 1
-                    driver_idx = action_idx // self.max_bookings
-                    booking_idx = action_idx % self.max_bookings
+                    driver = self.drivers[driver_idx]
+                    booking = self.bookings[booking_idx]
 
-                    # Vérifications de sécurité pour éviter les index out of range
-                    if driver_idx >= len(self.drivers) or booking_idx >= len(
-                        self.bookings
-                    ):
-                        # Action invalide - index out of range
-                        reward = -100
+                    # ✅ FIX: Vérifier que le booking n'est pas déjà assigné AVANT
+                    # de vérifier le masque, pour pouvoir signaler cette erreur
+                    # même si le masque filtre déjà les bookings assignés
+                    if booking.get("assigned", False):
+                        reward = -100.0  # ✅ FIX: Retourner un float, pas un int
                         info = self._get_info()
                         info["invalid_action"] = True
-                        info["index_out_of_range"] = True
+                        info["booking_already_assigned"] = True
                         info_created = True
                         logging.warning(
-                            (
-                                "[DispatchEnv] Index out of range: "
-                                "driver_idx=%s, booking_idx=%s"
-                            ),
-                            driver_idx,
-                            booking_idx,
+                            "[DispatchEnv] Booking %s already assigned", booking_idx
                         )
                     else:
-                        driver = self.drivers[driver_idx]
-                        booking = self.bookings[booking_idx]
-
-                        # Vérifier que le booking n'est pas déjà assigné
-                        if booking.get("assigned", False):
-                            reward = -100
+                        # Vérifier validité de l'action avec masquage
+                        valid_mask = self._get_valid_actions_mask()
+                        if not valid_mask[action]:
+                            # Action invalide - pénalité forte
+                            reward = -100.0  # ✅ FIX: Retourner un float, pas un int
                             info = self._get_info()
                             info["invalid_action"] = True
-                            info["booking_already_assigned"] = True
+                            info["action_masked"] = True
                             info_created = True
-                            logging.warning(
-                                "[DispatchEnv] Booking %s already assigned", booking_idx
+                            logging.debug(
+                                "[DispatchEnv] Action invalide %s masquée", action
                             )
                         else:
                             # Assigner le booking

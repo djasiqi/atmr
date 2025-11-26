@@ -173,7 +173,12 @@ class QRNetwork(nn.Module):
 
         self.state_size = state_size
         self.action_size = action_size
-        self.num_quantiles = num_quantiles
+        # ✅ FIX: Convertir num_quantiles en entier pour éviter les erreurs PyTorch
+        # Si c'est un float < 1, le multiplier par 1000 (ex: 0.200 -> 200)
+        if isinstance(num_quantiles, float) and num_quantiles < 1.0:
+            self.num_quantiles = int(num_quantiles * 1000)
+        else:
+            self.num_quantiles = int(num_quantiles)
         self.device = device or torch.device("cpu")
 
         # Gérer la valeur par défaut pour hidden_sizes
@@ -182,20 +187,29 @@ class QRNetwork(nn.Module):
 
         # Calculer les quantiles (τ)
         # ✅ FIX: device doit être un argument nommé, pas positionnel
-        self.tau = torch.linspace(0.0, 1.0, int(num_quantiles), device=self.device)
+        self.tau = torch.linspace(0.0, 1.0, self.num_quantiles, device=self.device)
 
         # Construire le réseau
         layers = []
-        input_dim = state_size
+        # ✅ FIX: S'assurer que state_size est un int
+        input_dim = int(state_size)
 
         for hidden_size in hidden_sizes:
+            # ✅ FIX: S'assurer que hidden_size est un int
             layers.extend(
-                [nn.Linear(input_dim, hidden_size), nn.ReLU(), nn.Dropout(0.2)]
+                [
+                    nn.Linear(input_dim, int(hidden_size)),
+                    nn.ReLU(),
+                    nn.Dropout(0.2),
+                ]
             )
-            input_dim = hidden_size
+            input_dim = int(hidden_size)
 
         # Couche de sortie pour les valeurs de quantiles
-        layers.append(nn.Linear(input_dim, action_size * num_quantiles))
+        # ✅ FIX: Utiliser self.num_quantiles (déjà converti en int)
+        # S'assurer que action_size est aussi un int
+        output_size = int(action_size) * self.num_quantiles
+        layers.append(nn.Linear(input_dim, output_size))
 
         self.network = nn.Sequential(*layers).to(self.device)
 

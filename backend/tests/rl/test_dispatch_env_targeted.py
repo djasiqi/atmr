@@ -44,6 +44,10 @@ class TestDispatchEnvTargeted:
                 "time_remaining": 30,
             }
         ]
+        # ✅ FIX: Mettre à jour active_driver_count et active_booking_count
+        # pour correspondre au nombre réel de drivers et bookings
+        env.active_driver_count = len(env.drivers)
+        env.active_booking_count = len(env.bookings)
 
         # Action qui pointe vers un driver inexistant (driver_idx >= len(drivers))
         action = 10  # driver_idx = 10 // 5 = 2, mais seulement 1 driver
@@ -89,6 +93,10 @@ class TestDispatchEnvTargeted:
                 "time_window_end": 30,
             }
         ]
+        # ✅ FIX: Mettre à jour active_driver_count et active_booking_count
+        # pour correspondre au nombre réel de drivers et bookings
+        env.active_driver_count = len(env.drivers)
+        env.active_booking_count = len(env.bookings)
 
         # Action pour assigner le booking déjà assigné
         action = 1  # driver_idx = 0, booking_idx = 0

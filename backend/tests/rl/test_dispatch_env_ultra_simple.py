@@ -42,9 +42,15 @@ class TestDispatchEnvUltraSimple:
                 "pickup_lon": 2.3376,
             }
         ]
+        # ✅ FIX: Mettre à jour active_driver_count et active_booking_count
+        # pour correspondre au nombre réel de drivers et bookings
+        env.active_driver_count = len(env.drivers)
+        env.active_booking_count = len(env.bookings)
 
-        # Action qui pointe vers un driver inexistant (driver_idx >= len(drivers))
-        action = 10  # driver_idx = 10 // 5 = 2, mais seulement 1 driver
+        # Action qui pointe vers un driver/booking inexistant
+        # action = 10: action_idx=9, driver_idx=1, booking_idx=4
+        # (mais seulement 1 driver et 1 booking)
+        action = 10
 
         with patch("services.rl.dispatch_env.logging") as mock_logging:
             _obs, reward, _terminated, _truncated, info = env.step(action)
@@ -88,6 +94,10 @@ class TestDispatchEnvUltraSimple:
                 "time_window_end": 30,
             }
         ]
+        # ✅ FIX: Mettre à jour active_driver_count et active_booking_count
+        # pour correspondre au nombre réel de drivers et bookings
+        env.active_driver_count = len(env.drivers)
+        env.active_booking_count = len(env.bookings)
 
         # Action pour assigner le booking déjà assigné
         action = 1  # driver_idx = 0, booking_idx = 0
@@ -581,6 +591,10 @@ class TestDispatchEnvUltraSimple:
                 "pickup_lon": 2.3376,
             }
         ]
+        # ✅ FIX: Mettre à jour active_driver_count et active_booking_count
+        # pour correspondre au nombre réel de drivers et bookings
+        env.active_driver_count = len(env.drivers)
+        env.active_booking_count = len(env.bookings)
 
         with patch("services.rl.dispatch_env.logging") as mock_logging:
             obs, reward, _terminated, _truncated, info = env.step(10)

@@ -54,6 +54,7 @@ class TestLazyImport:
     def test_lazy_import_failure(self):
         """Test échec d'import des modules RL."""
         import services.rl.suggestion_generator as sg_module
+        from services.rl.suggestion_generator import _lazy_import_rl
 
         original_dqn = sg_module._dqn_agent
         original_env = sg_module._dispatch_env
@@ -62,14 +63,32 @@ class TestLazyImport:
             sg_module._dqn_agent = None
             sg_module._dispatch_env = None
 
-            with (
-                patch(
-                    "services.rl.improved_dqn_agent",
-                    side_effect=ImportError("Module not found"),
-                ),
-                pytest.raises(ImportError),
-            ):
-                _lazy_import_rl()
+            # ✅ FIX: Supprimer le module du cache et utiliser importlib pour intercepter
+            import importlib
+            import sys
+
+            # Sauvegarder et supprimer le module du cache pour forcer un nouvel import
+            original_module = sys.modules.pop("services.rl.improved_dqn_agent", None)
+            try:
+                # Créer une fonction qui lève ImportError pour ce module spécifique
+                original_import_module = importlib.import_module
+
+                def failing_import_module(name, package=None):
+                    if name == "services.rl.improved_dqn_agent":
+                        raise ImportError("Module not found")
+                    return original_import_module(name, package)
+
+                with (
+                    patch("importlib.import_module", side_effect=failing_import_module),
+                    pytest.raises(ImportError),
+                ):
+                    _lazy_import_rl()
+            finally:
+                # Restaurer le module original
+                if original_module is not None:
+                    sys.modules["services.rl.improved_dqn_agent"] = original_module
+                elif "services.rl.improved_dqn_agent" in sys.modules:
+                    del sys.modules["services.rl.improved_dqn_agent"]
         finally:
             sg_module._dqn_agent = original_dqn
             sg_module._dispatch_env = original_env
@@ -132,18 +151,41 @@ class TestRLSuggestionGenerator:
         mock_env.action_space = Mock()
         mock_env.action_space.n = 26
 
-        with (
-            patch(
-                "services.rl.suggestion_generator.ImprovedDQNAgent",
-                return_value=mock_agent,
-            ),
-            patch("services.rl.dispatch_env.DispatchEnv", return_value=mock_env),
-            patch("torch.load", return_value={"state_dict": {}}),
-        ):
-            generator = RLSuggestionGenerator()
+        # ✅ FIX: Patcher les classes à la source (services.rl) plutôt que
+        # dans suggestion_generator car les imports sont faits dans _load_model()
+        # ✅ FIX: Réinitialiser _model_loaded et créer le générateur dans le bloc with
+        import services.rl.suggestion_generator as sg_module
 
-            mock_lazy_import.assert_called_once()
-            assert generator.agent == mock_agent
+        original_model_loaded = sg_module._model_loaded
+        try:
+            sg_module._model_loaded = False
+
+            with (
+                patch(
+                    "services.rl.improved_dqn_agent.ImprovedDQNAgent",
+                    return_value=mock_agent,
+                ),
+                patch("services.rl.dispatch_env.DispatchEnv", return_value=mock_env),
+                patch(
+                    "torch.load",
+                    return_value={
+                        "q_network_state_dict": {},
+                        "target_network_state_dict": {},
+                        "optimizer_state_dict": {},
+                        "epsilon": 0.1,
+                        "training_step": 0,
+                        "episode_count": 0,
+                        "losses": [],
+                    },
+                ),
+            ):
+                # Créer le générateur après avoir mis en place les patches
+                generator = RLSuggestionGenerator()
+
+                mock_lazy_import.assert_called_once()
+                assert generator.agent == mock_agent
+        finally:
+            sg_module._model_loaded = original_model_loaded
 
     @patch("pathlib.Path")
     @patch("services.rl.suggestion_generator._lazy_import_rl")
@@ -261,9 +303,14 @@ class TestRLSuggestionGenerator:
         assignments = [mock_assignment]
         drivers = [mock_driver]
 
-        with patch("models.Assignment.query") as mock_query:
-            mock_query.filter.return_value.count.return_value = 0
+        # ✅ FIX: Patcher models.Assignment avant l'import dans generate_suggestions
+        # pour éviter l'erreur de contexte Flask
+        mock_assignment_model = Mock()
+        mock_query = Mock()
+        mock_query.filter.return_value.count.return_value = 0
+        mock_assignment_model.query = mock_query
 
+        with patch("models.Assignment", mock_assignment_model):
             suggestions = generator.generate_suggestions(
                 company_id=1,
                 assignments=assignments,

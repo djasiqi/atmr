@@ -40,35 +40,59 @@ class TestRLSuggestionGeneratorMinimal:
 
     def test_init_basic(self):
         """Test initialisation basique"""
-        with (
-            patch("pathlib.Path") as mock_path_class,
-            patch("services.rl.suggestion_generator._lazy_import_rl"),
-            patch("services.rl.dispatch_env.DispatchEnv") as mock_env_class,
-            patch(
-                "services.rl.suggestion_generator.ImprovedDQNAgent"
-            ) as mock_agent_class,
-        ):
-            mock_path_instance = Mock()
-            mock_path_instance.exists.return_value = True
-            mock_path_class.return_value = mock_path_instance
+        # ✅ FIX: Patcher les classes à la source (services.rl) plutôt que
+        # dans suggestion_generator car les imports sont faits dans _load_model()
+        # ✅ FIX: Réinitialiser _model_loaded et créer le générateur dans le bloc with
+        import services.rl.suggestion_generator as sg_module
 
-            mock_env = Mock()
-            mock_env.observation_space = Mock()
-            mock_env.observation_space.shape = [19]
-            mock_env.action_space = Mock()
-            mock_env.action_space.n = 26
-            mock_env_class.return_value = mock_env
+        original_model_loaded = sg_module._model_loaded
+        try:
+            sg_module._model_loaded = False
 
-            mock_agent = Mock()
-            mock_agent.load = Mock()
-            mock_agent.q_network = Mock()
-            mock_agent.q_network.eval = Mock()
-            mock_agent_class.return_value = mock_agent
+            with (
+                patch("pathlib.Path") as mock_path_class,
+                patch("services.rl.suggestion_generator._lazy_import_rl"),
+                patch("services.rl.dispatch_env.DispatchEnv") as mock_env_class,
+                patch(
+                    "services.rl.improved_dqn_agent.ImprovedDQNAgent"
+                ) as mock_agent_class,
+                patch(
+                    "torch.load",
+                    return_value={
+                        "q_network_state_dict": {},
+                        "target_network_state_dict": {},
+                        "optimizer_state_dict": {},
+                        "epsilon": 0.1,
+                        "training_step": 0,
+                        "episode_count": 0,
+                        "losses": [],
+                    },
+                ),
+            ):
+                mock_path_instance = Mock()
+                mock_path_instance.exists.return_value = True
+                mock_path_class.return_value = mock_path_instance
 
-            generator = RLSuggestionGenerator()
+                mock_env = Mock()
+                mock_env.observation_space = Mock()
+                mock_env.observation_space.shape = [19]
+                mock_env.action_space = Mock()
+                mock_env.action_space.n = 26
+                mock_env_class.return_value = mock_env
 
-            assert generator.agent == mock_agent
-            assert generator.model_path == "data/ml/dqn_agent_best_v33.pth"
+                mock_agent = Mock()
+                mock_agent.load = Mock()
+                mock_agent.q_network = Mock()
+                mock_agent.q_network.eval = Mock()
+                mock_agent_class.return_value = mock_agent
+
+                # Créer le générateur après avoir mis en place les patches
+                generator = RLSuggestionGenerator()
+
+                assert generator.agent == mock_agent
+                assert generator.model_path == "data/ml/dqn_agent_best_v33.pth"
+        finally:
+            sg_module._model_loaded = original_model_loaded
 
     def test_lazy_import_rl_success(self):
         """Test import paresseux RL réussi"""

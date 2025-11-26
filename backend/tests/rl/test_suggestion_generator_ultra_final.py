@@ -1235,11 +1235,13 @@ class TestHyperparameterTunerUltraFinal:
 
         return MockEnv(num_drivers=num_drivers, max_bookings=max_bookings, **kwargs)
 
-    def _create_mock_agent(self):
+    def _create_mock_agent(self, *args, **kwargs):
         """Créer un mock agent pour les tests"""
+        # ✅ FIX: Retourner une classe ou une fonction qui accepte les arguments
+        # de ImprovedDQNAgent.__init__
 
         class MockAgent:
-            def __init__(self, **kwargs):
+            def __init__(self, *args, **kwargs):
                 self.memory = []
                 self.batch_size = 32
 
@@ -1252,7 +1254,7 @@ class TestHyperparameterTunerUltraFinal:
             def learn(self):
                 pass
 
-        return MockAgent()
+        return MockAgent
 
     def test_optimize(self):
         """Test optimisation"""

@@ -151,15 +151,62 @@ class TestDispatchEnvComprehensive:
         env.reset()
 
         # Simuler des chauffeurs et bookings disponibles
+        # ✅ FIX: Ajouter toutes les propriétés nécessaires pour les drivers et bookings
         env.drivers = [
-            {"id": 1, "available": True, "load": 2},
-            {"id": 2, "available": True, "load": 1},
-            {"id": 3, "available": False, "load": 5},
+            {
+                "id": 1,
+                "available": True,
+                "load": 2,
+                "lat": 46.2044,
+                "lon": 6.1432,
+                "idle_time": 0,
+            },
+            {
+                "id": 2,
+                "available": True,
+                "load": 1,
+                "lat": 46.2100,
+                "lon": 6.1500,
+                "idle_time": 0,
+            },
+            {
+                "id": 3,
+                "available": False,
+                "load": 5,
+                "lat": 46.2000,
+                "lon": 6.1400,
+                "idle_time": 0,
+            },
         ]
+        # ✅ FIX: Ajouter toutes les propriétés nécessaires pour les bookings
+        # (pickup_lat, pickup_lon, time_window_start, time_window_end, assigned)
+        current_time = env.current_time
         env.bookings = [
-            {"id": 1, "priority": 3, "time_window": 30},
-            {"id": 2, "priority": 1, "time_window": 15},
+            {
+                "id": 1,
+                "priority": 3,
+                "time_window": 30,
+                "pickup_lat": 46.2050,
+                "pickup_lon": 6.1440,
+                "time_window_start": current_time,
+                "time_window_end": current_time + 30,
+                "assigned": False,
+            },
+            {
+                "id": 2,
+                "priority": 1,
+                "time_window": 15,
+                "pickup_lat": 46.2120,
+                "pickup_lon": 6.1520,
+                "time_window_start": current_time,
+                "time_window_end": current_time + 15,
+                "assigned": False,
+            },
         ]
+        # ✅ FIX: Mettre à jour active_driver_count et active_booking_count
+        # pour correspondre au nombre réel de drivers et bookings
+        env.active_driver_count = len(env.drivers)
+        env.active_booking_count = len(env.bookings)
 
         valid_actions = env.get_valid_actions()
 

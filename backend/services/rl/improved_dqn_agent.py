@@ -150,16 +150,16 @@ class ImprovedDQNAgent:
         self.episode_count = 0
         self.losses: List[float] = []
 
-        print("🖥️  Improved DQN Agent using device: {device}")
+        print(f"🖥️  Improved DQN Agent using device: {device}")
         print("✅ Agent DQN amélioré créé:")
-        print("   State dim: {state_dim}")
-        print("   Action dim: {action_dim}")
+        print(f"   State dim: {state_dim}")
+        print(f"   Action dim: {action_dim}")
         total_params = sum(p.numel() for p in self.q_network.parameters())
         print(f"   Paramètres Q-Network: {total_params:,}")
-        print("   Double DQN: {use_double_dqn}")
-        print("   Prioritized Replay: {use_prioritized_replay}")
-        print("   N-step Learning: {use_n_step} (n={n_step})")
-        print("   Dueling DQN: {use_dueling}")
+        print(f"   Double DQN: {use_double_dqn}")
+        print(f"   Prioritized Replay: {use_prioritized_replay}")
+        print(f"   N-step Learning: {use_n_step} (n={n_step})")
+        print(f"   Dueling DQN: {use_dueling}")
 
     def select_action(
         self,
@@ -193,6 +193,19 @@ class ImprovedDQNAgent:
         action = None
         q_values = None
         is_exploration = False
+
+        # ✅ FIX: Filtrer les actions invalides de valid_actions si fourni
+        if valid_actions is not None:
+            # Filtrer pour ne garder que les actions dans [0, action_dim)
+            valid_actions = [a for a in valid_actions if 0 <= a < self.action_dim]
+            if not valid_actions:
+                # Si toutes les actions étaient invalides, fallback vers action 0
+                msg = (
+                    "[ImprovedDQNAgent] Toutes les actions dans valid_actions "
+                    "sont invalides, fallback vers action 0"
+                )
+                logging.warning(msg)
+                valid_actions = [0]
 
         if valid_actions is None:
             # Mode standard sans masquage

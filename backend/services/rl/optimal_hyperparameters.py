@@ -44,7 +44,7 @@ class OptimalHyperparameters:
         # PER parameters (ajoutés pour Sprint 1)
         "alpha": 0.6,  # Priorité exponentielle
         "beta_start": 0.4,  # Importance sampling début
-        "beta_end": 1,  # Importance sampling fin
+        "beta_end": 1.0,  # Importance sampling fin
         # N-step parameters (ajoutés pour Étape 5)
         "use_n_step": True,  # Activer N-step learning
         "n_step": 3,  # Nombre d'étapes pour N-step

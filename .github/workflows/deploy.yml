@@ -37,6 +37,7 @@ jobs:
       POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
       POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
       POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+      REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
       MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
       SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -60,6 +61,7 @@ jobs:
             "POSTGRES_PASSWORD"
             "POSTGRES_USER"
             "POSTGRES_DB"
+            "REDIS_PASSWORD"
             "MAIL_PASSWORD"
             "SENTRY_DSN"
             "DOCKERHUB_USERNAME"
@@ -155,10 +157,10 @@ jobs:
           username: ${{ env.SSH_USER }}
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
-          envs: APP_ENCRYPTION_KEY_B64,SECRET_KEY,JWT_SECRET_KEY,POSTGRES_PASSWORD,POSTGRES_USER,POSTGRES_DB,MAIL_PASSWORD,SENTRY_DSN,DOCKER_IMAGE,DOCKER_TAG
+          envs: APP_ENCRYPTION_KEY_B64,SECRET_KEY,JWT_SECRET_KEY,POSTGRES_PASSWORD,POSTGRES_USER,POSTGRES_DB,REDIS_PASSWORD,MAIL_PASSWORD,SENTRY_DSN,DOCKER_IMAGE,DOCKER_TAG
           script: |
             cd /srv/atmr
-            set -o errexit -o nounset -o pipefail -x
+            set -o errexit -o nounset -o pipefail
 
             # Fonction de rollback en cas d'erreur
             rollback() {
@@ -169,18 +171,86 @@ jobs:
             }
             trap rollback ERR
 
+            # Export des variables d'environnement depuis les secrets GitHub
             export APP_ENCRYPTION_KEY_B64="${{ secrets.APP_ENCRYPTION_KEY_B64 }}"
             export SECRET_KEY="${{ secrets.SECRET_KEY }}"
             export JWT_SECRET_KEY="${{ secrets.JWT_SECRET_KEY }}"
             export POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}"
             export POSTGRES_USER="${{ secrets.POSTGRES_USER }}"
             export POSTGRES_DB="${{ secrets.POSTGRES_DB }}"
+            export REDIS_PASSWORD="${{ secrets.REDIS_PASSWORD }}"
             export MAIL_PASSWORD="${{ secrets.MAIL_PASSWORD }}"
             export SENTRY_DSN="${{ secrets.SENTRY_DSN }}"
             export DOCKER_IMAGE="${{ secrets.DOCKER_IMAGE }}"
             export DOCKER_TAG="${{ secrets.DOCKER_TAG }}"
-            echo "🔄 Pull de l'image Docker..."
-            docker compose -f docker-compose.production.yml pull
+
+            # Validation des secrets critiques après export
+            echo "🔍 Validation des secrets critiques..."
+            MISSING_SECRETS=()
+            if [ -z "${APP_ENCRYPTION_KEY_B64:-}" ]; then MISSING_SECRETS+=("APP_ENCRYPTION_KEY_B64"); fi
+            if [ -z "${SECRET_KEY:-}" ]; then MISSING_SECRETS+=("SECRET_KEY"); fi
+            if [ -z "${JWT_SECRET_KEY:-}" ]; then MISSING_SECRETS+=("JWT_SECRET_KEY"); fi
+            if [ -z "${POSTGRES_PASSWORD:-}" ]; then MISSING_SECRETS+=("POSTGRES_PASSWORD"); fi
+            if [ -z "${POSTGRES_USER:-}" ]; then MISSING_SECRETS+=("POSTGRES_USER"); fi
+            if [ -z "${POSTGRES_DB:-}" ]; then MISSING_SECRETS+=("POSTGRES_DB"); fi
+            if [ -z "${REDIS_PASSWORD:-}" ]; then MISSING_SECRETS+=("REDIS_PASSWORD"); fi
+            if [ -z "${DOCKER_IMAGE:-}" ]; then MISSING_SECRETS+=("DOCKER_IMAGE"); fi
+            if [ -z "${DOCKER_TAG:-}" ]; then MISSING_SECRETS+=("DOCKER_TAG"); fi
+
+            if [ ${#MISSING_SECRETS[@]} -ne 0 ]; then
+              echo "❌ Secrets manquants: ${MISSING_SECRETS[*]}"
+              echo "⚠️  Veuillez configurer ces secrets dans GitHub Actions (Settings → Secrets and variables → Actions)"
+              exit 1
+            fi
+            echo "✅ Tous les secrets critiques sont présents"
+
+            # Construire SQLALCHEMY_DATABASE_URI pour les migrations
+            # Le code Flask peut aussi le construire depuis POSTGRES_*, mais on le passe explicitement pour être sûr
+            export SQLALCHEMY_DATABASE_URI="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+
+            # Note: MAIL_PASSWORD et SENTRY_DSN sont optionnels mais recommandés
+            if [ -z "${MAIL_PASSWORD:-}" ]; then
+              echo "⚠️  MAIL_PASSWORD non défini (optionnel mais recommandé)"
+            fi
+            if [ -z "${SENTRY_DSN:-}" ]; then
+              echo "⚠️  SENTRY_DSN non défini (optionnel mais recommandé)"
+            fi
+
+            # Fonction pour pull avec retry et timeout
+            pull_with_retry() {
+              local max_attempts=3
+              local attempt=1
+              local timeout=600  # 10 minutes
+              
+              while [ $attempt -le $max_attempts ]; do
+                echo "🔄 Pull de l'image Docker (tentative $attempt/$max_attempts)..."
+                if timeout $timeout docker compose -f docker-compose.production.yml pull; then
+                  echo "✅ Pull réussi"
+                  return 0
+                else
+                  local exit_code=$?
+                  if [ $attempt -lt $max_attempts ]; then
+                    echo "⚠️  Pull échoué (code: $exit_code), nouvelle tentative dans 10 secondes..."
+                    sleep 10
+                    attempt=$((attempt + 1))
+                  else
+                    echo "❌ Pull échoué après $max_attempts tentatives"
+                    return $exit_code
+                  fi
+                fi
+              done
+            }
+
+            # Vérifier si timeout est disponible, sinon utiliser une alternative
+            if command -v timeout >/dev/null 2>&1; then
+              pull_with_retry
+            else
+              echo "🔄 Pull de l'image Docker..."
+              docker compose -f docker-compose.production.yml pull || {
+                echo "❌ Échec du pull Docker"
+                exit 1
+              }
+            fi
             echo "🔄 Arrêt des conteneurs existants..."
             docker compose -f docker-compose.production.yml down --remove-orphans || true
             echo "🔄 Démarrage des services..."
@@ -188,6 +258,8 @@ jobs:
 
             echo "⏳ Attente que PostgreSQL soit prêt..."
             echo "📊 Vérification de l'état du conteneur PostgreSQL..."
+            POSTGRES_READY=false
+            HEALTH="none"
             for i in $(seq 1 60); do
               # Vérifier l'état du conteneur
               POSTGRES_STATUS=$(docker compose -f docker-compose.production.yml ps postgres --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
@@ -198,6 +270,7 @@ jobs:
                   # Vérifier avec pg_isready
                   if docker compose -f docker-compose.production.yml exec -T postgres pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" > /dev/null 2>&1; then
                     echo "✅ PostgreSQL est prêt et healthy"
+                    POSTGRES_READY=true
                     break
                   fi
                 elif [ "$HEALTH" = "unhealthy" ]; then
@@ -209,27 +282,53 @@ jobs:
                 docker compose -f docker-compose.production.yml logs postgres | tail -50
                 exit 1
               fi
-              if [ $i -eq 60 ]; then
-                echo "❌ Timeout: PostgreSQL n'est pas prêt après 120 secondes"
-                echo "---- État du conteneur ----"
-                docker compose -f docker-compose.production.yml ps postgres
-                echo "---- Logs PostgreSQL (dernières 100 lignes) ----"
-                docker compose -f docker-compose.production.yml logs postgres | tail -100
-                exit 1
-              fi
               echo "  Tentative $i/60 (État: ${POSTGRES_STATUS:-unknown}, Health: ${HEALTH:-none})..."
               sleep 2
             done
+
+            # Vérifier si PostgreSQL est prêt après la boucle
+            if [ "$POSTGRES_READY" = "false" ]; then
+              echo "❌ Timeout: PostgreSQL n'est pas prêt après 120 secondes"
+              echo "---- État du conteneur ----"
+              docker compose -f docker-compose.production.yml ps postgres
+              echo "---- Logs PostgreSQL (dernières 100 lignes) ----"
+              docker compose -f docker-compose.production.yml logs postgres | tail -100
+              exit 1
+            fi
             echo "🔄 Exécution des migrations de base de données..."
-            # Construire SQLALCHEMY_DATABASE_URI explicitement pour les migrations
-            SQLALCHEMY_DATABASE_URI="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+            # Passer toutes les variables nécessaires pour que Flask puisse construire SQLALCHEMY_DATABASE_URI
+            # Le code Flask essaie d'abord DATABASE_URL, puis SQLALCHEMY_DATABASE_URI, puis construit depuis POSTGRES_*
+            # On passe les deux pour être sûr que ça fonctionne
             docker compose -f docker-compose.production.yml exec -T \
               -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
+              -e POSTGRES_USER="${POSTGRES_USER}" \
+              -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
+              -e POSTGRES_DB="${POSTGRES_DB}" \
+              -e POSTGRES_HOST="postgres" \
+              -e POSTGRES_PORT="5432" \
               backend flask db upgrade || {
               echo "❌ Erreur lors de l'exécution des migrations"
               echo "---- Diagnostics (migration failed) ----"
-              docker compose -f docker-compose.production.yml exec -T backend flask db current || true
-              docker compose -f docker-compose.production.yml exec -T backend flask db heads || true
+              echo "Variables d'environnement utilisées:"
+              echo "  POSTGRES_USER=${POSTGRES_USER}"
+              echo "  POSTGRES_DB=${POSTGRES_DB}"
+              echo "  SQLALCHEMY_DATABASE_URI=${SQLALCHEMY_DATABASE_URI}"
+              docker compose -f docker-compose.production.yml exec -T \
+                -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
+                -e POSTGRES_USER="${POSTGRES_USER}" \
+                -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
+                -e POSTGRES_DB="${POSTGRES_DB}" \
+                -e POSTGRES_HOST="postgres" \
+                -e POSTGRES_PORT="5432" \
+                backend flask db current || true
+              docker compose -f docker-compose.production.yml exec -T \
+                -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
+                -e POSTGRES_USER="${POSTGRES_USER}" \
+                -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
+                -e POSTGRES_DB="${POSTGRES_DB}" \
+                -e POSTGRES_HOST="postgres" \
+                -e POSTGRES_PORT="5432" \
+                backend flask db heads || true
               docker compose -f docker-compose.production.yml logs backend | tail -50 || true
               exit 1
             }

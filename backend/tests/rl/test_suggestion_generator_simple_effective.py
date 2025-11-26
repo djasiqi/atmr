@@ -186,16 +186,16 @@ class TestRLSuggestionGeneratorSimple:
 
     def test_edge_case_none_assignments(self):
         """Test cas limite: assignments None"""
-        import pytest
-
         generator = RLSuggestionGenerator()
         generator.agent = None  # Pas de modèle
 
-        # None devrait lever une exception car le code itère sur assignments
-        with pytest.raises((TypeError, AttributeError)):
-            generator.generate_suggestions(
-                company_id=1, assignments=None, drivers=[], for_date="2024-01-01"
-            )
+        # ✅ FIX: Le code gère maintenant assignments=None en le remplaçant par []
+        # Donc aucune exception n'est levée, on vérifie juste que ça retourne une liste
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=None, drivers=[], for_date="2024-01-01"
+        )
+
+        assert isinstance(suggestions, list)
 
     def test_edge_case_none_drivers(self):
         """Test cas limite: drivers None"""
