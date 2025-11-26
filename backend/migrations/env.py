@@ -164,8 +164,19 @@ def run_migrations_online():
     # Cela garantit que DATABASE_URL/SQLALCHEMY_DATABASE_URI est utilisé tel quel
     # sans reconstruction qui pourrait casser l'URL (ex: host="37_46!!@postgres")
     db_url = get_database_url()
-    config.set_main_option("sqlalchemy.url", db_url)
-    logger.info("[Alembic] Database URL forced in config: %s@***", db_url.split("@")[0])
+
+    # 🔐 Protection contre les '%' pour ConfigParser
+    # ConfigParser utilise % pour l'interpolation (placeholders comme %(foo)s)
+    # Si l'URL contient des % (ex: %21 pour ! échappé), ConfigParser plante
+    # On échappe donc les % en %% pour que ConfigParser les ignore
+    # SQLAlchemy gérera correctement les %% comme des % dans l'URL finale
+    db_url_for_config = db_url.replace("%", "%%")
+
+    config.set_main_option("sqlalchemy.url", db_url_for_config)
+    logger.info(
+        "[Alembic] Database URL forced in config (escaped for ConfigParser): %s@***",
+        db_url.split("@")[0],
+    )
 
     # this callback is used to prevent an auto-migration from being generated
     # when there are no changes to the schema
