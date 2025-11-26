@@ -234,8 +234,13 @@ class HyperparameterTuner:
             "max_bookings": trial.suggest_int("max_bookings", 10, 50),
         }
 
-    def optimize(self) -> optuna.Study:
+    def optimize(self, show_progress_bar: bool | None = None) -> optuna.Study:
         """Lance l'optimisation Optuna.
+
+        Args:
+            show_progress_bar: Afficher la barre de progression tqdm.
+                Si None, détecte automatiquement le mode test et désactive
+                la barre pour éviter les threads bloquants.
 
         Returns:
             Study Optuna avec résultats
@@ -244,6 +249,15 @@ class HyperparameterTuner:
         print("\n🚀 Démarrage optimisation Optuna...")
         print("   Study: {self.study_name}")
         print("   Trials: {self.n_trials}")
+
+        # ✅ FIX: Désactiver tqdm en mode test pour éviter les threads bloquants
+        if show_progress_bar is None:
+            import os
+
+            # Détecter si on est en mode test (pytest, unittest, etc.)
+            show_progress_bar = (
+                os.getenv("PYTEST_CURRENT_TEST") is None and os.getenv("TESTING") != "1"
+            )
 
         # Créer pruner pour arrêter trials non prometteurs
         pruner = optuna.pruners.MedianPruner(
@@ -268,7 +282,7 @@ class HyperparameterTuner:
         study.optimize(
             self.objective,
             n_trials=self.n_trials,
-            show_progress_bar=True,
+            show_progress_bar=show_progress_bar,
             catch=(Exception,),  # Continuer même si un trial échoue
         )
 

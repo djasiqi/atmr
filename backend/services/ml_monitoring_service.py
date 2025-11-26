@@ -73,7 +73,14 @@ class MLMonitoringService:
             prediction.traffic_percentage = status["config"]["ML_TRAFFIC_PERCENTAGE"]
 
             db.session.add(prediction)
-            db.session.commit()
+            # ✅ FIX: Utiliser flush() en mode test pour éviter les conflits
+            # avec les savepoints, commit() en production
+            import os
+
+            if os.getenv("PYTEST_CURRENT_TEST") or os.getenv("TESTING") == "1":
+                db.session.flush()
+            else:
+                db.session.commit()
 
             logger.debug(
                 "[MLMonitoring] Logged prediction for booking %s: %s",
