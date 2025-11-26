@@ -240,9 +240,11 @@ jobs:
             fi
             echo "✅ Tous les secrets critiques sont présents"
 
-            # Construire SQLALCHEMY_DATABASE_URI pour les migrations
+            # Construire SQLALCHEMY_DATABASE_URI pour les migrations avec échappement URL du mot de passe
             # Le code Flask peut aussi le construire depuis POSTGRES_*, mais on le passe explicitement pour être sûr
-            export SQLALCHEMY_DATABASE_URI="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+            # Échapper le mot de passe pour éviter les problèmes avec les caractères spéciaux (!, @, #, etc.)
+            ESCAPED_PASSWORD=$(python3 -c "from urllib.parse import quote_plus; import sys; print(quote_plus(sys.argv[1]))" "${POSTGRES_PASSWORD}")
+            export SQLALCHEMY_DATABASE_URI="postgresql://${POSTGRES_USER}:${ESCAPED_PASSWORD}@postgres:5432/${POSTGRES_DB}"
 
             # Note: MAIL_PASSWORD et SENTRY_DSN sont optionnels mais recommandés
             if [ -z "${MAIL_PASSWORD:-}" ]; then
