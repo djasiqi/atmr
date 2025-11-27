@@ -480,103 +480,39 @@ jobs:
             done
             [ "$POSTGRES_READY" = "false" ] && { docker compose -f docker-compose.production.yml logs postgres | tail -100; exit 1; }
             export DATABASE_URL="${SQLALCHEMY_DATABASE_URI}"
-            echo "📋 État migrations:"
+            echo "📋 État des migrations avant upgrade:"
             docker_exec flask db current || true
             docker_exec flask db heads || true
-
-            echo "🔍 Vérification de l'état des migrations..."
-            HEADS_OUTPUT=$(docker_exec flask db heads 2>&1 || echo "")
-            CURRENT_REV=$(docker_exec flask db current 2>&1 | grep -E "^[a-f0-9]{12}" | head -1 || echo "")
-
-            HEAD_COUNT=$(echo "$HEADS_OUTPUT" | grep -E "^[a-f0-9]{12}" | wc -l | tr -d ' ' || echo "0")
-            HAS_MERGE=$(echo "$HEADS_OUTPUT" | grep -c "merge_" || echo "0")
-            if ! [[ "$HEAD_COUNT" =~ ^[0-9]+$ ]]; then HEAD_COUNT=0; fi
-            echo "📊 Heads: $HEAD_COUNT, Merge: $HAS_MERGE, Current: ${CURRENT_REV:-none}"
-
-            # Pour les merge migrations, TOUJOURS utiliser 'upgrade heads' (pluriel)
-            # Cela applique toutes les branches jusqu'aux heads, résolvant automatiquement le merge
-            if [ "$HAS_MERGE" -gt 0 ]; then
-              UPGRADE_CMD="upgrade heads"
-              echo "ℹ️  Merge migration détectée, utilisation de 'upgrade heads'"
-            elif [ "$HEAD_COUNT" -gt 1 ]; then
-              UPGRADE_CMD="upgrade heads"
-              echo "ℹ️  Plusieurs heads détectés, utilisation de 'upgrade heads'"
-            else
-              UPGRADE_CMD="upgrade"
-              echo "ℹ️  Head unique, utilisation de 'upgrade'"
-            fi
-
-            echo "🔄 Application des migrations avec: flask db $UPGRADE_CMD"
-
-            # Capturer la sortie pour détecter les erreurs "overlaps"
-            MIGRATION_OUTPUT=$(docker_exec flask db $UPGRADE_CMD 2>&1) || {
-              MIGRATION_EXIT_CODE=$?
-              echo "$MIGRATION_OUTPUT"
-              
-              # Si c'est une erreur "overlaps" avec la merge migration, essayer une approche alternative
-              if echo "$MIGRATION_OUTPUT" | grep -q "overlaps" && echo "$HEADS_OUTPUT" | grep -q "merge_68116559b15d_24bbcb82c891"; then
-                echo "⚠️  Erreur 'overlaps' détectée, tentative de résolution..."
-                echo "📋 État actuel de la base de données:"
-                CURRENT_FULL=$(docker_exec flask db current 2>&1 || echo "")
-                echo "$CURRENT_FULL"
-                
-                # Vérifier si les deux révisions parentes sont appliquées
-                REV1_IN_CURRENT=$(echo "$CURRENT_FULL" | grep -c "68116559b15d" || echo "0")
-                REV2_IN_CURRENT=$(echo "$CURRENT_FULL" | grep -c "24bbcb82c891" || echo "0")
-                
-                # Obtenir l'historique complet pour vérifier quelles révisions sont appliquées
-                HISTORY_OUTPUT=$(docker_exec flask db history 2>&1 || echo "")
-                REV2_APPLIED=$(echo "$HISTORY_OUTPUT" | grep -E "^\s*24bbcb82c891" | grep -c "->" || echo "0")
-                
-                echo "📊 Révision 68116559b15d dans current: $REV1_IN_CURRENT"
-                echo "📊 Révision 24bbcb82c891 dans current: $REV2_IN_CURRENT"
-                echo "📊 Révision 24bbcb82c891 dans history: $REV2_APPLIED"
-                
-                # Si la révision 24bbcb82c891 n'est pas appliquée, la marquer comme appliquée puis appliquer la merge
-                if [ "$REV2_IN_CURRENT" -eq 0 ] && [ "$REV1_IN_CURRENT" -gt 0 ]; then
-                  echo "🔄 Marquage de la révision manquante 24bbcb82c891 comme appliquée..."
-                  echo "ℹ️  Cette révision est sur une branche différente, on la marque comme appliquée pour permettre la merge"
-                  docker_exec flask db stamp 24bbcb82c891 || {
-                    echo "❌ Échec du marquage de la révision 24bbcb82c891"
-                    docker_exec flask db current || true
-                    docker_exec flask db heads || true
-                    exit 1
-                  }
-                  echo "✅ Révision 24bbcb82c891 marquée, application de la merge migration..."
-                  docker_exec flask db upgrade merge_68116559b15d_24bbcb82c891 || {
-                    echo "❌ Échec de l'application de la merge migration"
-                    docker_exec flask db current || true
-                    docker_exec flask db heads || true
-                    exit 1
-                  }
-                  echo "✅ Merge migration appliquée avec succès"
-                elif echo "$HEADS_OUTPUT" | grep -q "merge_68116559b15d_24bbcb82c891.*head"; then
-                  echo "🔄 Application directe de la merge migration (head)..."
-                  docker_exec flask db upgrade merge_68116559b15d_24bbcb82c891 || {
-                    echo "❌ Échec de l'application directe de la merge migration"
-                    docker_exec flask db current || true
-                    docker_exec flask db heads || true
-                    docker compose -f docker-compose.production.yml logs backend | tail -50 || true
-                    exit 1
-                  }
-                  echo "✅ Merge migration appliquée avec succès"
-                else
-                  echo "❌ Impossible de résoudre le conflit de merge automatiquement"
-                  echo "📋 Historique des révisions:"
-                  docker_exec flask db history || true
+            echo "🔄 Upgrade des migrations vers le head..."
+            if ! docker_exec flask db upgrade 2>&1; then
+              echo "⚠️  Première tentative échouée, vérification de l'état..."
+              CURRENT_OUTPUT=$(docker_exec flask db current 2>&1 || echo "")
+              echo "$CURRENT_OUTPUT"
+              # Si la base est à 68116559b15d mais pas à 24bbcb82c891, marquer 24bbcb82c891 comme appliquée
+              if echo "$CURRENT_OUTPUT" | grep -q "68116559b15d" && ! echo "$CURRENT_OUTPUT" | grep -q "24bbcb82c891"; then
+                echo "🔄 Marquage de la révision 24bbcb82c891 comme appliquée (nécessaire pour la merge migration)..."
+                docker_exec flask db stamp 24bbcb82c891 || {
+                  echo "❌ Échec du marquage de la révision 24bbcb82c891"
                   docker_exec flask db current || true
                   docker_exec flask db heads || true
-                  docker compose -f docker-compose.production.yml logs backend | tail -50 || true
                   exit 1
-                fi
+                }
+                echo "✅ Révision 24bbcb82c891 marquée, nouvelle tentative d'upgrade..."
+                docker_exec flask db upgrade || {
+                  echo "❌ Erreur lors de l'exécution des migrations après stamp"
+                  docker_exec flask db current || true
+                  docker_exec flask db heads || true
+                  docker compose -f docker-compose.production.yml logs backend | tail -100 || true
+                  exit 1
+                }
               else
-                echo "❌ Erreur migrations (code: $MIGRATION_EXIT_CODE)"
+                echo "❌ Erreur lors de l'exécution des migrations"
                 docker_exec flask db current || true
                 docker_exec flask db heads || true
-                docker compose -f docker-compose.production.yml logs backend | tail -50 || true
+                docker compose -f docker-compose.production.yml logs backend | tail -100 || true
                 exit 1
               fi
-            }
+            fi
             echo "✅ Migrations appliquées avec succès"
             docker compose -f docker-compose.production.yml exec -T --user root backend bash -c "mkdir -p /app/data /app/data/ml /app/data/ml/models && chmod -R 755 /app/data && chown -R 999:999 /app/data 2>/dev/null || true; [ -f /app/data/ml/models/delay_predictor.pkl ] && chmod 644 /app/data/ml/models/delay_predictor.pkl && chown 999:999 /app/data/ml/models/delay_predictor.pkl 2>/dev/null || true" || true
 
