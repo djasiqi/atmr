@@ -549,7 +549,22 @@ jobs:
                     UPGRADE_MISSING_EXIT=$?
                     echo "$UPGRADE_MISSING_OUTPUT"
                     echo "⚠️  L'application directe a échoué (code: $UPGRADE_MISSING_EXIT) - les branches sont probablement indépendantes"
-                    echo "🔄 Marquage de la révision $MISSING_REVISION comme appliquée (stamp)..."
+                    echo "🔄 Marquage des révisions nécessaires pour permettre la migration de merge..."
+                    
+                    # Déterminer l'ancêtre commun de la révision manquante
+                    # Pour 24bbcb82c891, l'ancêtre est 8186648ac54e
+                    # Pour 68116559b15d, l'ancêtre est f7e8d9c0b1a2
+                    if [ "$MISSING_REVISION" = "24bbcb82c891" ]; then
+                      ANCESTOR="8186648ac54e"
+                    else
+                      ANCESTOR="f7e8d9c0b1a2"
+                    fi
+                    
+                    # Stamper d'abord l'ancêtre commun si nécessaire, puis la révision manquante
+                    echo "🔄 Marquage de l'ancêtre commun $ANCESTOR (si nécessaire)..."
+                    docker_exec flask db stamp "$ANCESTOR" 2>&1 || echo "⚠️  Ancêtre peut-être déjà marqué, continuons..."
+                    
+                    echo "🔄 Marquage de la révision $MISSING_REVISION comme appliquée..."
                     # Stamper la révision manquante pour permettre la migration de merge
                     # Note: Cela suppose que les changements de la migration sont déjà dans la base de données
                     # ou seront appliqués par la suite. Si ce n'est pas le cas, il faudra appliquer manuellement.
@@ -564,19 +579,19 @@ jobs:
                     echo "✅ Révision $MISSING_REVISION marquée comme appliquée"
                   fi
                   
-                  # Maintenant, les deux révisions parentes devraient être présentes
-                  echo "🔄 Vérification que les deux révisions parentes sont maintenant présentes..."
-                  CURRENT_AFTER=$(docker_exec flask db current 2>&1 || echo "")
-                  echo "$CURRENT_AFTER"
-                  
-                  # Appliquer la migration de merge
-                  echo "🔄 Application de la migration de merge..."
-                  docker_exec flask db upgrade heads || {
-                    echo "❌ Erreur lors de l'application de la migration de merge"
-                    docker_exec flask db current || true
-                    docker_exec flask db heads || true
-                    docker compose -f docker-compose.production.yml logs backend | tail -100 || true
-                    exit 1
+                  # Maintenant, appliquer la migration de merge directement par son ID
+                  echo "🔄 Application de la migration de merge directement par son ID..."
+                  docker_exec flask db upgrade merge_68116559b15d_24bbcb82c891 || {
+                    echo "❌ Erreur lors de l'application directe de la migration de merge"
+                    echo "💡 Tentative alternative avec heads..."
+                    docker_exec flask db upgrade heads || {
+                      echo "❌ Les deux tentatives ont échoué"
+                      echo "💡 État actuel des migrations:"
+                      docker_exec flask db current || true
+                      docker_exec flask db heads || true
+                      docker compose -f docker-compose.production.yml logs backend | tail -100 || true
+                      exit 1
+                    }
                   }
                   echo "✅ Migration de merge appliquée avec succès"
                 fi
