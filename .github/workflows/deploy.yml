@@ -392,9 +392,8 @@ jobs:
             # S'assurer que l'app Flask voit bien DATABASE_URL (utilisé en priorité dans la config)
             export DATABASE_URL="${SQLALCHEMY_DATABASE_URI}"
 
-            # Passer toutes les variables nécessaires pour que Flask puisse construire SQLALCHEMY_DATABASE_URI
-            # Le code Flask essaie d'abord DATABASE_URL, puis SQLALCHEMY_DATABASE_URI, puis construit depuis POSTGRES_*
-            # REDIS_URL est également nécessaire pour validate_required_env_vars en production
+            # Vérifier l'état des migrations avant upgrade
+            echo "📋 État des migrations avant upgrade:"
             docker compose -f docker-compose.production.yml exec -T \
               -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
               -e DATABASE_URL="${DATABASE_URL}" \
@@ -406,7 +405,36 @@ jobs:
               -e REDIS_URL="${REDIS_URL}" \
               -e REDIS_PASSWORD="${REDIS_PASSWORD}" \
               -e MAIL_PASSWORD="${MAIL_PASSWORD}" \
-              backend flask db upgrade || {
+              backend flask db current || true
+            docker compose -f docker-compose.production.yml exec -T \
+              -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
+              -e DATABASE_URL="${DATABASE_URL}" \
+              -e POSTGRES_USER="${POSTGRES_USER}" \
+              -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
+              -e POSTGRES_DB="${POSTGRES_DB}" \
+              -e POSTGRES_HOST="postgres" \
+              -e POSTGRES_PORT="5432" \
+              -e REDIS_URL="${REDIS_URL}" \
+              -e REDIS_PASSWORD="${REDIS_PASSWORD}" \
+              -e MAIL_PASSWORD="${MAIL_PASSWORD}" \
+              backend flask db heads || true
+
+            # Passer toutes les variables nécessaires pour que Flask puisse construire SQLALCHEMY_DATABASE_URI
+            # Le code Flask essaie d'abord DATABASE_URL, puis SQLALCHEMY_DATABASE_URI, puis construit depuis POSTGRES_*
+            # REDIS_URL est également nécessaire pour validate_required_env_vars en production
+            # Utiliser 'heads' pour gérer les multiples heads jusqu'à ce qu'une migration de fusion soit créée
+            docker compose -f docker-compose.production.yml exec -T \
+              -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
+              -e DATABASE_URL="${DATABASE_URL}" \
+              -e POSTGRES_USER="${POSTGRES_USER}" \
+              -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
+              -e POSTGRES_DB="${POSTGRES_DB}" \
+              -e POSTGRES_HOST="postgres" \
+              -e POSTGRES_PORT="5432" \
+              -e REDIS_URL="${REDIS_URL}" \
+              -e REDIS_PASSWORD="${REDIS_PASSWORD}" \
+              -e MAIL_PASSWORD="${MAIL_PASSWORD}" \
+              backend flask db upgrade heads || {
               echo "❌ Erreur lors de l'exécution des migrations"
               echo "---- Diagnostics (migration failed) ----"
               echo "Variables d'environnement utilisées:"
