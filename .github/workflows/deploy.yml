@@ -193,7 +193,7 @@ jobs:
           username: ${{ env.SSH_USER }}
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
-          envs: APP_ENCRYPTION_KEY_B64,SECRET_KEY,JWT_SECRET_KEY,POSTGRES_PASSWORD,POSTGRES_USER,POSTGRES_DB,REDIS_PASSWORD,MAIL_PASSWORD,SENTRY_DSN,DOCKER_IMAGE,DOCKER_TAG,DATABASE_URL,SQLALCHEMY_DATABASE_URI
+          envs: APP_ENCRYPTION_KEY_B64,SECRET_KEY,JWT_SECRET_KEY,POSTGRES_PASSWORD,POSTGRES_USER,POSTGRES_DB,REDIS_PASSWORD,REDIS_URL,MAIL_PASSWORD,SENTRY_DSN,DOCKER_IMAGE,DOCKER_TAG,DATABASE_URL,SQLALCHEMY_DATABASE_URI
           script: |
             cd /srv/atmr
             set -o errexit -o nounset -o pipefail
@@ -246,6 +246,12 @@ jobs:
             ESCAPED_PASSWORD=$(python3 -c "from urllib.parse import quote_plus; import sys; print(quote_plus(sys.argv[1]))" "${POSTGRES_PASSWORD}")
             export DATABASE_URL="postgresql+psycopg2://${POSTGRES_USER}:${ESCAPED_PASSWORD}@postgres:5432/${POSTGRES_DB}"
             export SQLALCHEMY_DATABASE_URI="${DATABASE_URL}"
+
+            # Construire REDIS_URL avec échappement URL du mot de passe Redis
+            # Le code Python (celery_app.py) peut aussi le construire depuis REDIS_PASSWORD, mais on le passe explicitement
+            # pour que validate_required_env_vars soit satisfait
+            ESCAPED_REDIS_PASSWORD=$(python3 -c "from urllib.parse import quote_plus; import sys; print(quote_plus(sys.argv[1]))" "${REDIS_PASSWORD}")
+            export REDIS_URL="redis://:${ESCAPED_REDIS_PASSWORD}@redis:6379/0"
 
             # Note: MAIL_PASSWORD et SENTRY_DSN sont optionnels mais recommandés
             if [ -z "${MAIL_PASSWORD:-}" ]; then
@@ -310,6 +316,7 @@ jobs:
               echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}"
               echo "POSTGRES_DB=${POSTGRES_DB}"
               echo "REDIS_PASSWORD=${REDIS_PASSWORD}"
+              echo "REDIS_URL=${REDIS_URL}"
               echo "SECRET_KEY=${SECRET_KEY}"
               echo "JWT_SECRET_KEY=${JWT_SECRET_KEY}"
               echo "APP_ENCRYPTION_KEY_B64=${APP_ENCRYPTION_KEY_B64}"
@@ -376,6 +383,7 @@ jobs:
 
             # Passer toutes les variables nécessaires pour que Flask puisse construire SQLALCHEMY_DATABASE_URI
             # Le code Flask essaie d'abord DATABASE_URL, puis SQLALCHEMY_DATABASE_URI, puis construit depuis POSTGRES_*
+            # REDIS_URL est également nécessaire pour validate_required_env_vars en production
             docker compose -f docker-compose.production.yml exec -T \
               -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
               -e DATABASE_URL="${DATABASE_URL}" \
@@ -384,6 +392,8 @@ jobs:
               -e POSTGRES_DB="${POSTGRES_DB}" \
               -e POSTGRES_HOST="postgres" \
               -e POSTGRES_PORT="5432" \
+              -e REDIS_URL="${REDIS_URL}" \
+              -e REDIS_PASSWORD="${REDIS_PASSWORD}" \
               -e MAIL_PASSWORD="${MAIL_PASSWORD}" \
               backend flask db upgrade || {
               echo "❌ Erreur lors de l'exécution des migrations"
@@ -393,26 +403,30 @@ jobs:
               echo "  POSTGRES_DB=${POSTGRES_DB}"
               echo "  SQLALCHEMY_DATABASE_URI=${SQLALCHEMY_DATABASE_URI}"
               echo "  DATABASE_URL=${DATABASE_URL}"
-              docker compose -f docker-compose.production.yml exec -T \
-                -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
-                -e DATABASE_URL="${DATABASE_URL}" \
-                -e POSTGRES_USER="${POSTGRES_USER}" \
-                -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
-                -e POSTGRES_DB="${POSTGRES_DB}" \
-                -e POSTGRES_HOST="postgres" \
-                -e POSTGRES_PORT="5432" \
-                -e MAIL_PASSWORD="${MAIL_PASSWORD}" \
-                backend flask db current || true
-              docker compose -f docker-compose.production.yml exec -T \
-                -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
-                -e DATABASE_URL="${DATABASE_URL}" \
-                -e POSTGRES_USER="${POSTGRES_USER}" \
-                -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
-                -e POSTGRES_DB="${POSTGRES_DB}" \
-                -e POSTGRES_HOST="postgres" \
-                -e POSTGRES_PORT="5432" \
-                -e MAIL_PASSWORD="${MAIL_PASSWORD}" \
-                backend flask db heads || true
+                docker compose -f docker-compose.production.yml exec -T \
+                  -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
+                  -e DATABASE_URL="${DATABASE_URL}" \
+                  -e POSTGRES_USER="${POSTGRES_USER}" \
+                  -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
+                  -e POSTGRES_DB="${POSTGRES_DB}" \
+                  -e POSTGRES_HOST="postgres" \
+                  -e POSTGRES_PORT="5432" \
+                  -e REDIS_URL="${REDIS_URL}" \
+                  -e REDIS_PASSWORD="${REDIS_PASSWORD}" \
+                  -e MAIL_PASSWORD="${MAIL_PASSWORD}" \
+                  backend flask db current || true
+                docker compose -f docker-compose.production.yml exec -T \
+                  -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
+                  -e DATABASE_URL="${DATABASE_URL}" \
+                  -e POSTGRES_USER="${POSTGRES_USER}" \
+                  -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
+                  -e POSTGRES_DB="${POSTGRES_DB}" \
+                  -e POSTGRES_HOST="postgres" \
+                  -e POSTGRES_PORT="5432" \
+                  -e REDIS_URL="${REDIS_URL}" \
+                  -e REDIS_PASSWORD="${REDIS_PASSWORD}" \
+                  -e MAIL_PASSWORD="${MAIL_PASSWORD}" \
+                  backend flask db heads || true
               docker compose -f docker-compose.production.yml logs backend | tail -50 || true
               exit 1
             }

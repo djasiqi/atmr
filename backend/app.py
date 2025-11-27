@@ -69,13 +69,11 @@ def validate_required_env_vars(config_name: str) -> None:
         RuntimeError: Si des variables critiques sont manquantes
     """
     # Variables critiques pour tous les environnements
-    required_vars: set[str] = {
-        "SECRET_KEY",
-        "JWT_SECRET_KEY",
-    }
+    # (on ne les stocke pas toutes dans required_vars, car on a déjà
+    # la logique "au moins une des deux" juste en dessous)
+    required_vars: set[str] = set()
 
-    # Variables optionnelles mais nécessaires si l'une est manquante
-    # Au moins une clé secrète est requise
+    # Au moins une clé secrète est requise (JWT ou Flask)
     if not (os.getenv("JWT_SECRET_KEY") or os.getenv("SECRET_KEY")):
         raise RuntimeError(
             "JWT_SECRET_KEY ou SECRET_KEY manquant(e). "
@@ -85,15 +83,9 @@ def validate_required_env_vars(config_name: str) -> None:
 
     # Variables critiques pour production
     if config_name == "production":
-        production_vars = {
-            "REDIS_URL",
-        }
-        # DATABASE_URL ou SQLALCHEMY_DATABASE_URI ou POSTGRES_* doivent être présents
-        # SENTRY_DSN et PDF_BASE_URL sont optionnels mais recommandés
-        recommended_vars = {
-            "SENTRY_DSN",
-            "PDF_BASE_URL",
-        }
+        # Variables **strictement** requises en prod (hors Redis/DB)
+        production_vars: set[str] = set()
+
         required_vars.update(production_vars)
 
         # Vérifier que la configuration de base de données est disponible
@@ -110,10 +102,25 @@ def validate_required_env_vars(config_name: str) -> None:
             raise RuntimeError(
                 "Configuration de base de données manquante pour production. "
                 + "Fournissez soit DATABASE_URL, soit SQLALCHEMY_DATABASE_URI, "
-                + "soit POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB"
+                + "soit POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB."
             )
 
-        missing = []
+        # ✅ Redis : soit REDIS_URL, soit au moins REDIS_PASSWORD
+        has_redis_config = os.getenv("REDIS_URL") or os.getenv("REDIS_PASSWORD")
+        if not has_redis_config:
+            raise RuntimeError(
+                "Configuration Redis manquante pour production. "
+                + "Fournissez soit REDIS_URL, soit REDIS_PASSWORD."
+            )
+
+        # SENTRY_DSN et PDF_BASE_URL sont optionnels mais recommandés
+        recommended_vars = {
+            "SENTRY_DSN",
+            "PDF_BASE_URL",
+        }
+
+        # Vérifier les variables requises
+        missing: list[str] = []
         for var in required_vars:
             if not os.getenv(var):
                 missing.append(var)

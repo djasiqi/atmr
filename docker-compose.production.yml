@@ -116,11 +116,11 @@ services:
       SQLALCHEMY_DATABASE_URI: ${SQLALCHEMY_DATABASE_URI:-${DATABASE_URL:-}}
 
       # Redis/Celery avec authentification
-      # ⚠️ IMPORTANT: Ne pas construire les URLs Redis ici car Docker Compose
-      # n'échappe pas les caractères spéciaux dans REDIS_PASSWORD
-      # Le code Python (celery_app.py) construira automatiquement les URLs
-      # avec échappement correct depuis REDIS_PASSWORD
+      # ⚠️ IMPORTANT: REDIS_URL est chargée depuis .env.production (créé par le workflow GitHub Actions)
+      # avec le mot de passe correctement échappé
+      # Le code Python (celery_app.py) peut aussi construire les URLs depuis REDIS_PASSWORD si nécessaire
       REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_URL: ${REDIS_URL:-}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: "0"

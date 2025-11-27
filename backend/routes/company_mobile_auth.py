@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import re
 import uuid
 from datetime import timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 import jwt
-from flask import request
+from flask import current_app, request
 from flask_jwt_extended import (
     create_access_token,
     create_refresh_token,
@@ -30,7 +32,25 @@ logger = logging.getLogger(__name__)
 MOBILE_AUDIENCE = "atmr-mobile-enterprise"
 MFA_CHALLENGE_TTL = 300  # 5 minutes
 MFA_CHALLENGE_PREFIX = "company_mobile:mfa:challenge:"
+FAILED_LOGIN_PREFIX = "company_mobile:failed_login:"
+MAX_FAILED_ATTEMPTS = 5
+FAILED_LOGIN_TTL = 900  # 15 minutes
 DEFAULT_SCOPES = ["enterprise.dispatch:read", "enterprise.dispatch:write"]
+
+# Constantes pour sanitization des logs
+TOKEN_MIN_LENGTH_FOR_MASKING = 50
+EMAIL_USERNAME_MIN_LENGTH = 2
+LOG_MAX_LENGTH = 100
+
+# Codes HTTP pour gestion des erreurs
+HTTP_INTERNAL_ERROR = 500
+
+# Whitelist des providers OIDC autorisés (configurable via env)
+ALLOWED_OIDC_PROVIDERS = set(
+    os.getenv("ALLOWED_OIDC_PROVIDERS", "").split(",")
+    if os.getenv("ALLOWED_OIDC_PROVIDERS")
+    else []
+)
 
 
 company_mobile_auth_ns = Namespace(
@@ -135,6 +155,97 @@ def _get_totp_secret(company: Company | None) -> Optional[str]:
     if isinstance(secret, str) and secret.strip():
         return secret.strip()
     return None
+
+
+def _sanitize_log_data(data: Any) -> str:
+    """Sanitise les données pour les logs (évite fuite d'infos sensibles)."""
+    if isinstance(data, str):
+        # Masquer les tokens (longue chaîne alphanumérique)
+        if len(data) > TOKEN_MIN_LENGTH_FOR_MASKING and re.match(
+            r"^[A-Za-z0-9._-]+$", data
+        ):
+            return f"{data[:10]}...{data[-5:]}"
+        # Masquer les emails partiellement
+        if "@" in data:
+            parts = data.split("@")
+            EMAIL_PARTS_COUNT = 2
+            if len(parts) == EMAIL_PARTS_COUNT:
+                username = parts[0]
+                domain = parts[1]
+                if len(username) > EMAIL_USERNAME_MIN_LENGTH:
+                    return f"{username[:EMAIL_USERNAME_MIN_LENGTH]}***@{domain}"
+                return f"***@{domain}"
+    return str(data)[:LOG_MAX_LENGTH]  # Limiter la longueur
+
+
+def _check_failed_login_attempts(email: str) -> Tuple[bool, int]:
+    """Vérifie le nombre de tentatives de connexion échouées.
+
+    Returns:
+        Tuple[bool, int]: (dépassé la limite, nombre de tentatives)
+    """
+    if not redis_client:
+        return False, 0
+    key = f"{FAILED_LOGIN_PREFIX}{email.lower()}"
+    attempts = redis_client.get(key)
+    if attempts:
+        # Convertir bytes en int si nécessaire
+        attempts_str = (
+            attempts.decode("utf-8") if isinstance(attempts, bytes) else str(attempts)
+        )
+        count = int(attempts_str)
+        return count >= MAX_FAILED_ATTEMPTS, count
+    return False, 0
+
+
+def _increment_failed_login(email: str) -> int:
+    """Incrémente le compteur de tentatives échouées.
+
+    Returns:
+        Nombre total de tentatives après incrément
+    """
+    if not redis_client:
+        return 0
+    key = f"{FAILED_LOGIN_PREFIX}{email.lower()}"
+    count_result = redis_client.incr(key)
+    # Convertir en int si nécessaire (Redis peut retourner bytes ou int)
+    if isinstance(count_result, bytes):
+        count = int(count_result.decode("utf-8"))
+    elif isinstance(count_result, (int, str)):
+        count = int(count_result)
+    else:
+        # Fallback pour types inattendus
+        count = int(str(count_result))
+    if count == 1:  # Première tentative, définir TTL
+        redis_client.expire(key, FAILED_LOGIN_TTL)
+    return count
+
+
+def _reset_failed_login(email: str) -> None:
+    """Réinitialise le compteur de tentatives échouées."""
+    if redis_client:
+        key = f"{FAILED_LOGIN_PREFIX}{email.lower()}"
+        redis_client.delete(key)
+
+
+def _validate_device_id(device_id: Optional[str]) -> bool:
+    """Valide le format du device_id (UUID ou format MDM valide).
+
+    Args:
+        device_id: Identifiant de l'appareil
+
+    Returns:
+        True si valide, False sinon
+    """
+    if not device_id:
+        return True  # Optionnel
+    # UUID format ou format MDM (alphanumérique avec tirets)
+    uuid_pattern = re.compile(
+        r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        re.IGNORECASE,
+    )
+    mdm_pattern = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
+    return bool(uuid_pattern.match(device_id) or mdm_pattern.match(device_id))
 
 
 def _verify_totp_code(company: Company | None, code: str) -> bool:
@@ -280,15 +391,65 @@ def _find_company_user_by_email(email: str) -> Tuple[Optional[User], Optional[Co
 def _handle_oidc_login(
     id_token: str, provider: Optional[str]
 ) -> Tuple[Optional[User], Optional[Company]]:
+    """Gère la connexion OIDC avec validation de sécurité renforcée.
+
+    Args:
+        id_token: Token OIDC ID
+        provider: Nom du provider OIDC
+
+    Returns:
+        Tuple[User, Company] si succès
+
+    Raises:
+        ValueError: Si le token est invalide ou non autorisé
+    """
     if not id_token:
         raise ValueError("Token OIDC manquant.")
+
+    # Décoder sans vérification pour extraire les claims
+    # ⚠️ SECURITE: En production, il faudrait vérifier la signature
+    # avec les clés publiques du provider (JWKS)
     try:
         decoded = jwt.decode(
             id_token, options={"verify_signature": False, "verify_aud": False}
         )
-    except jwt.PyJWTError as exc:  # pragma: no cover - dépend du token fourni
-        logger.warning("[AUTH][Enterprise] Echec décodage token OIDC: %s", exc)
+    except jwt.PyJWTError as exc:
+        logger.warning(
+            "[AUTH][Enterprise] Echec décodage token OIDC: %s",
+            _sanitize_log_data(str(exc)),
+        )
         raise ValueError("ID token invalide.") from exc
+
+    # Vérifier l'issuer (provider)
+    issuer = decoded.get("iss")
+    if provider and ALLOWED_OIDC_PROVIDERS:
+        if provider not in ALLOWED_OIDC_PROVIDERS:
+            logger.warning(
+                "[AUTH][Enterprise] Provider OIDC non autorisé: %s",
+                _sanitize_log_data(provider),
+            )
+            raise ValueError("Provider OIDC non autorisé.")
+    elif issuer and ALLOWED_OIDC_PROVIDERS:
+        # Vérifier si l'issuer est dans la whitelist
+        issuer_allowed = any(
+            issuer.startswith(allowed) for allowed in ALLOWED_OIDC_PROVIDERS
+        )
+        if not issuer_allowed:
+            logger.warning(
+                "[AUTH][Enterprise] Issuer OIDC non autorisé: %s",
+                _sanitize_log_data(issuer),
+            )
+            raise ValueError("Issuer OIDC non autorisé.")
+
+    # Vérifier l'audience si présente
+    aud = decoded.get("aud")
+    if aud and aud != MOBILE_AUDIENCE:
+        logger.warning(
+            "[AUTH][Enterprise] Audience OIDC incorrecte: %s (attendu: %s)",
+            _sanitize_log_data(str(aud)),
+            MOBILE_AUDIENCE,
+        )
+        # Ne pas bloquer, juste logger (certains providers n'incluent pas aud)
 
     email = decoded.get("email")
     if not email:
@@ -301,7 +462,7 @@ def _handle_oidc_login(
     logger.info(
         "[AUTH][Enterprise] Connexion OIDC réussie pour user_id=%s provider=%s",
         user.id,
-        provider or decoded.get("iss"),
+        _sanitize_log_data(provider or issuer or "unknown"),
     )
     return user, company
 
@@ -329,48 +490,108 @@ class EnterpriseMobileLogin(Resource):
 
         user: Optional[User] = None
         company: Optional[Company] = None
-        error_response: Optional[Tuple[Dict[str, Any], int]] = None
+        result: Tuple[Dict[str, Any], int] = (
+            {"error": "Erreur interne."},
+            HTTP_INTERNAL_ERROR,
+        )
 
         if method == "password":
             if not email or not password:
-                error_response = ({"error": "Email et mot de passe requis."}, 400)
+                result = ({"error": "Email et mot de passe requis."}, 400)
             else:
-                user, company = _find_company_user_by_email(email)
-                if not user or not company or not user.check_password(password):
-                    error_response = ({"error": "Identifiants invalides."}, 401)
+                # Vérifier les tentatives échouées
+                blocked, attempts = _check_failed_login_attempts(email)
+                if blocked:
+                    logger.warning(
+                        (
+                            "[AUTH][Enterprise] Trop de tentatives échouées pour %s "
+                            "(%d tentatives)"
+                        ),
+                        _sanitize_log_data(email),
+                        attempts,
+                    )
+                    result = (
+                        {
+                            "error": (
+                                "Trop de tentatives de connexion échouées. "
+                                "Réessayez dans 15 minutes."
+                            ),
+                            "retry_after": FAILED_LOGIN_TTL,
+                        },
+                        429,
+                    )
+                else:
+                    user, company = _find_company_user_by_email(email)
+                    if not user or not company or not user.check_password(password):
+                        # Incrémenter le compteur d'échecs
+                        new_count = _increment_failed_login(email)
+                        logger.warning(
+                            (
+                                "[AUTH][Enterprise] Tentative de connexion échouée "
+                                "pour %s (tentative %d/%d)"
+                            ),
+                            _sanitize_log_data(email),
+                            new_count,
+                            MAX_FAILED_ATTEMPTS,
+                        )
+                        result = ({"error": "Identifiants invalides."}, 401)
+                    else:
+                        # Réinitialiser le compteur en cas de succès
+                        _reset_failed_login(email)
         elif method == "oidc":
             if not id_token:
-                error_response = ({"error": "ID token requis pour OIDC."}, 400)
+                result = ({"error": "ID token requis pour OIDC."}, 400)
             else:
                 try:
                     user, company = _handle_oidc_login(id_token, data.get("provider"))
                 except ValueError as exc:
-                    error_response = ({"error": str(exc)}, 401)
+                    result = ({"error": str(exc)}, 401)
 
-        if error_response:
-            return error_response
+        # Vérifier si une erreur s'est produite
+        if result[1] != HTTP_INTERNAL_ERROR:
+            return result
 
         if not user or not company:
-            return {"error": "Accès refusé."}, 403
-
-        requires_mfa = _company_requires_mfa(company)
-        if requires_mfa:
-            if mfa_code:
-                if not _verify_totp_code(company, mfa_code):
-                    return {"error": "Code MFA invalide."}, 401
+            result = ({"error": "Accès refusé."}, 403)
+        elif device_id and not _validate_device_id(device_id):
+            logger.warning(
+                "[AUTH][Enterprise] Device ID invalide pour user_id=%s: %s",
+                user.id if user else "unknown",
+                _sanitize_log_data(device_id),
+            )
+            result = ({"error": "Format device_id invalide."}, 400)
+        else:
+            requires_mfa = _company_requires_mfa(company)
+            if requires_mfa:
+                if mfa_code:
+                    if not _verify_totp_code(company, mfa_code):
+                        result = ({"error": "Code MFA invalide."}, 401)
+                    else:
+                        # MFA vérifié, continuer avec l'émission de tokens
+                        response = _issue_tokens(user, company, device_id)
+                        response["mfa_required"] = False
+                        result = (response, 200)
+                else:
+                    challenge_id = _store_mfa_challenge(
+                        user, company, method, device_id
+                    )
+                    result = (
+                        {
+                            "message": "MFA requis",
+                            "mfa_required": True,
+                            "challenge_id": challenge_id,
+                            "methods": ["totp"],
+                            "ttl": MFA_CHALLENGE_TTL,
+                        },
+                        202,
+                    )
             else:
-                challenge_id = _store_mfa_challenge(user, company, method, device_id)
-                return {
-                    "message": "MFA requis",
-                    "mfa_required": True,
-                    "challenge_id": challenge_id,
-                    "methods": ["totp"],
-                    "ttl": MFA_CHALLENGE_TTL,
-                }, 202
+                # Pas de MFA requis, émettre les tokens directement
+                response = _issue_tokens(user, company, device_id)
+                response["mfa_required"] = False
+                result = (response, 200)
 
-        response = _issue_tokens(user, company, device_id)
-        response["mfa_required"] = False
-        return response, 200
+        return result
 
 
 @company_mobile_auth_ns.route("/mfa/verify")
@@ -422,30 +643,74 @@ class EnterpriseMobileRefresh(Resource):
 
         # Type assertion: load() returns a dict
         assert isinstance(data, dict), "Schema load should return a dict"
+
+        # ✅ SECURITE: Vérifier la signature du refresh token
+        # avec JWT_SECRET_KEY (contrairement à OIDC, nos tokens sont signés)
+        decoded: Optional[Dict[str, Any]] = None
+        result: Tuple[Dict[str, Any], int] = (
+            {"error": "Erreur interne."},
+            HTTP_INTERNAL_ERROR,
+        )
+
         try:
+            secret_key = current_app.config.get("JWT_SECRET_KEY")
+            if not secret_key:
+                logger.error(
+                    "[AUTH][Enterprise] JWT_SECRET_KEY manquant dans la config"
+                )
+                return {"error": "Erreur de configuration serveur."}, 500
+
             decoded = jwt.decode(
                 data["refresh_token"],
-                options={"verify_signature": False, "verify_aud": False},
+                secret_key,
+                algorithms=["HS256"],
+                options={"verify_signature": True, "verify_exp": True},
             )
-        except jwt.PyJWTError as exc:  # pragma: no cover - dépend du token fourni
-            logger.warning("[AUTH][Enterprise] Refresh token invalide: %s", exc)
-            return {"error": "Refresh token invalide."}, 401
 
-        public_id = decoded.get("sub")
-        session_id = decoded.get("session_id")
-        if not public_id:
-            return {"error": "Refresh token invalide."}, 401
+            # Vérifier manuellement l'audience
+            aud = decoded.get("aud") if decoded else None
+            if aud and aud != MOBILE_AUDIENCE:
+                logger.warning(
+                    "[AUTH][Enterprise] Audience refresh token incorrecte: %s",
+                    _sanitize_log_data(str(aud)),
+                )
+                result = ({"error": "Refresh token invalide."}, 401)
 
-        user = User.query.filter_by(public_id=str(public_id)).first()
-        if not user or user.role not in (UserRole.COMPANY, UserRole.ADMIN):
-            return {"error": "Accès refusé."}, 403
-        company = user.company
-        if not company:
-            return {"error": "Entreprise introuvable."}, 403
+        except jwt.ExpiredSignatureError:
+            logger.warning("[AUTH][Enterprise] Refresh token expiré")
+            result = ({"error": "Refresh token expiré."}, 401)
+        except jwt.PyJWTError as exc:
+            logger.warning(
+                "[AUTH][Enterprise] Refresh token invalide: %s",
+                _sanitize_log_data(str(exc)),
+            )
+            result = ({"error": "Refresh token invalide."}, 401)
 
-        response = _issue_tokens(user, company, session_id=session_id)
-        response["mfa_required"] = False
-        return response, 200
+        # Si erreur de décodage, retourner immédiatement
+        if result[1] != HTTP_INTERNAL_ERROR:
+            return result
+
+        if not decoded:
+            result = ({"error": "Refresh token invalide."}, 401)
+        else:
+            public_id = decoded.get("sub")
+            session_id = decoded.get("session_id")
+            if not public_id:
+                result = ({"error": "Refresh token invalide."}, 401)
+            else:
+                user = User.query.filter_by(public_id=str(public_id)).first()
+                if not user or user.role not in (UserRole.COMPANY, UserRole.ADMIN):
+                    result = ({"error": "Accès refusé."}, 403)
+                else:
+                    company = user.company
+                    if not company:
+                        result = ({"error": "Entreprise introuvable."}, 403)
+                    else:
+                        response = _issue_tokens(user, company, session_id=session_id)
+                        response["mfa_required"] = False
+                        result = (response, 200)
+
+        return result
 
 
 @company_mobile_auth_ns.route("/session")

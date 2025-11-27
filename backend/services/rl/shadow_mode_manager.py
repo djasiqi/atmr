@@ -60,7 +60,8 @@ class ShadowModeManager:
             self.data_dir = app_root / self.data_dir
 
         # Créer le répertoire avec gestion d'erreur gracieuse
-        # Le répertoire devrait déjà être créé par docker-entrypoint.sh, mais on le crée ici aussi pour être sûr
+        # Le répertoire devrait déjà être créé par docker-entrypoint.sh,
+        # mais on le crée ici aussi pour être sûr
         try:
             self.data_dir.mkdir(parents=True, exist_ok=True)
             # S'assurer que le répertoire a les bonnes permissions (rwxr-xr-x)
@@ -75,7 +76,11 @@ class ShadowModeManager:
 
             logger = logging.getLogger(__name__)
             logger.warning(
-                "Impossible de créer le répertoire %s: %s. Le répertoire devrait être créé par docker-entrypoint.sh. Vérifiez les permissions du volume Docker.",
+                (
+                    "Impossible de créer le répertoire %s: %s. "
+                    "Le répertoire devrait être créé par docker-entrypoint.sh. "
+                    "Vérifiez les permissions du volume Docker."
+                ),
                 self.data_dir,
                 e,
             )

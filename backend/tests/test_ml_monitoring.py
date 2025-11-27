@@ -9,25 +9,13 @@ class TestMLMonitoringService:
 
     def test_log_prediction(self, app, sample_booking, db):
         """Test enregistrement d'une prédiction."""
-        from models.booking import Booking
         from services.ml_monitoring_service import MLMonitoringService
 
         with app.app_context():
-            # ✅ FIX: S'assurer que le booking est bien flushé et visible
-            # dans la transaction avant de créer la prédiction
-            db.session.flush()
+            # Le booking est déjà persisté par le fixture sample_booking
+            # Utiliser directement son ID sans flush supplémentaire
             booking_id = sample_booking.id
-
-            # ✅ FIX: Vérifier que le booking existe vraiment dans la DB
-            # en le rechargeant depuis la DB pour s'assurer qu'il est visible
-            booking_check = db.session.query(Booking).filter_by(id=booking_id).first()
-            if booking_check is None:
-                # Si le booking n'est pas trouvé, utiliser merge() pour l'attacher
-                # à la session au lieu de refresh() qui nécessite que l'objet soit
-                # déjà dans la session
-                sample_booking = db.session.merge(sample_booking)
-                db.session.flush()
-                booking_id = sample_booking.id
+            assert booking_id is not None, "Le booking doit avoir un ID"
 
             # Log une prédiction avec un booking réel
             prediction = MLMonitoringService.log_prediction(
@@ -42,8 +30,9 @@ class TestMLMonitoringService:
                 model_version="v1.0",
             )
 
-            # ✅ FIX: Flush explicitement pour obtenir l'ID de la prédiction
-            # et éviter les blocages dans le service
+            # Flush pour obtenir l'ID de la prédiction
+            # Utiliser expire_on_commit=False pour éviter les problèmes
+            # avec les savepoints
             db.session.flush()
 
             assert prediction.id is not None
@@ -52,10 +41,9 @@ class TestMLMonitoringService:
             assert prediction.confidence == 0.85
 
             # Cleanup
-            # ✅ FIX: Utiliser flush() au lieu de commit() pour éviter les conflits
-            # avec les savepoints dans les tests
             db.session.delete(prediction)
-            db.session.flush()
+            # Pas besoin de flush pour le cleanup, le rollback du savepoint
+            # s'en occupera
 
         print("✅ Log prediction OK")
 

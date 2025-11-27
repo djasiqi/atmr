@@ -37,11 +37,13 @@ else:
 
 # ⚠️ IMPORTANT: Construire les URLs Redis avec échappement correct du mot de passe
 # Si REDIS_PASSWORD est disponible, toujours construire les URLs avec échappement
-# même si CELERY_BROKER_URL/CELERY_RESULT_BACKEND sont définis (pour éviter les URLs non échappées)
+# même si CELERY_BROKER_URL/CELERY_RESULT_BACKEND sont définis
+# (pour éviter les URLs non échappées)
 _broker_url_env = os.getenv("CELERY_BROKER_URL")
 _result_backend_env = os.getenv("CELERY_RESULT_BACKEND")
 
-# Si REDIS_PASSWORD est disponible et qu'une des URLs n'est pas définie ou contient des caractères non échappés,
+# Si REDIS_PASSWORD est disponible et qu'une des URLs n'est pas définie
+# ou contient des caractères non échappés,
 # reconstruire les URLs avec échappement correct
 if _redis_password:
     # Construire l'URL avec échappement depuis REDIS_PASSWORD
