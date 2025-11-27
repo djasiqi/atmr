@@ -51,16 +51,13 @@ RUN apt-get update && apt-get upgrade -y && \
 # Utiliser un ARG pour invalider le cache si requirements.prod.txt change
 ARG REQUIREMENTS_HASH
 ENV REQUIREMENTS_HASH=${REQUIREMENTS_HASH}
+# ⚠️ Builder PROD : uniquement requirements.prod.txt (+ base inclus dedans)
+# requirements-dev.txt est installé uniquement dans les stages development/test
 COPY requirements.base.txt requirements.prod.txt ./
 RUN --mount=type=cache,target=/root/.cache/pip \
     python -m pip install --upgrade pip setuptools wheel && \
-    echo "📦 Installation des dépendances de production (SANS RL/ML lourd)..." && \
-    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.prod.txt && \
-    (if [ -f requirements-dev.txt ]; then \
-    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements-dev.txt; \
-    else \
-    echo "requirements-dev.txt absent, skip"; \
-    fi)
+    echo "📦 Installation des dépendances de production (SANS RL/ML lourd, SANS dev)..." && \
+    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.prod.txt
 
 # Stage intermédiaire pour les tests de sécurité
 FROM builder AS security-scanner
