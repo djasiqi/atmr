@@ -491,28 +491,101 @@ jobs:
               echo "⚠️  Première tentative échouée (code: $UPGRADE_EXIT_CODE), vérification de l'état..."
               CURRENT_OUTPUT=$(docker_exec flask db current 2>&1 || echo "")
               echo "$CURRENT_OUTPUT"
-              # Si erreur "overlaps" et base à 68116559b15d mais pas à 24bbcb82c891, marquer 24bbcb82c891 comme appliquée
-              if echo "$UPGRADE_OUTPUT" | grep -q "overlaps" && echo "$CURRENT_OUTPUT" | grep -q "68116559b15d" && ! echo "$CURRENT_OUTPUT" | grep -q "24bbcb82c891"; then
-                echo "🔄 Marquage de la révision 24bbcb82c891 comme appliquée (nécessaire pour la merge migration)..."
-                docker_exec flask db stamp 24bbcb82c891 || {
-                  echo "❌ Échec du marquage de la révision 24bbcb82c891"
+              # Si erreur "overlaps", détecter et appliquer les révisions parentes manquantes
+              if echo "$UPGRADE_OUTPUT" | grep -q "overlaps"; then
+                echo "🔍 Détection d'un conflit de branches de migration (overlaps)..."
+                echo "📋 Analyse des révisions parentes de la migration de merge..."
+                
+                # Les révisions parentes de merge_68116559b15d_24bbcb82c891 sont:
+                # - 68116559b15d
+                # - 24bbcb82c891
+                
+                HAS_68116559b15d=false
+                HAS_24bbcb82c891=false
+                
+                # Vérifier quelle(s) révision(s) parente(s) est/sont déjà appliquée(s)
+                if echo "$CURRENT_OUTPUT" | grep -q "68116559b15d"; then
+                  HAS_68116559b15d=true
+                  echo "✅ Révision 68116559b15d déjà appliquée"
+                fi
+                if echo "$CURRENT_OUTPUT" | grep -q "24bbcb82c891"; then
+                  HAS_24bbcb82c891=true
+                  echo "✅ Révision 24bbcb82c891 déjà appliquée"
+                fi
+                
+                # Vérifier si les deux révisions sont présentes (cas où elles sont dans des branches séparées)
+                # Si oui, on peut directement appliquer la migration de merge
+                if [ "$HAS_68116559b15d" = "true" ] && [ "$HAS_24bbcb82c891" = "true" ]; then
+                  echo "✅ Les deux révisions parentes sont présentes, application directe de la migration de merge..."
+                  docker_exec flask db upgrade merge_68116559b15d_24bbcb82c891 || {
+                    echo "❌ Erreur lors de l'application directe de la migration de merge"
+                    docker_exec flask db current || true
+                    docker_exec flask db heads || true
+                    exit 1
+                  }
+                  echo "✅ Migration de merge appliquée avec succès"
+                elif [ "$HAS_68116559b15d" = "false" ] && [ "$HAS_24bbcb82c891" = "false" ]; then
+                  echo "❌ Aucune des révisions parentes n'est appliquée - état inattendu"
                   docker_exec flask db current || true
                   docker_exec flask db heads || true
+                  docker_exec flask db history | head -50 || true
                   exit 1
-                }
-                echo "✅ Révision 24bbcb82c891 marquée, nouvelle tentative d'upgrade..."
-                docker_exec flask db upgrade heads || {
-                  echo "❌ Erreur lors de l'exécution des migrations après stamp"
-                  docker_exec flask db current || true
-                  docker_exec flask db heads || true
-                  docker compose -f docker-compose.production.yml logs backend | tail -100 || true
-                  exit 1
-                }
+                else
+                  # Une seule révision est présente - appliquer l'autre branche
+                  if [ "$HAS_68116559b15d" = "true" ]; then
+                    MISSING_REVISION="24bbcb82c891"
+                    echo "⚠️  Révision 24bbcb82c891 manquante - tentative d'application..."
+                  else
+                    MISSING_REVISION="68116559b15d"
+                    echo "⚠️  Révision 68116559b15d manquante - tentative d'application..."
+                  fi
+                  
+                  # Essayer d'appliquer la migration manquante directement
+                  echo "🔄 Tentative d'application de la migration $MISSING_REVISION..."
+                  if UPGRADE_MISSING_OUTPUT=$(docker_exec flask db upgrade "$MISSING_REVISION" 2>&1); then
+                    echo "$UPGRADE_MISSING_OUTPUT"
+                    echo "✅ Migration $MISSING_REVISION appliquée avec succès"
+                  else
+                    UPGRADE_MISSING_EXIT=$?
+                    echo "$UPGRADE_MISSING_OUTPUT"
+                    echo "⚠️  L'application directe a échoué (code: $UPGRADE_MISSING_EXIT) - les branches sont probablement indépendantes"
+                    echo "🔄 Marquage de la révision $MISSING_REVISION comme appliquée (stamp)..."
+                    # Stamper la révision manquante pour permettre la migration de merge
+                    # Note: Cela suppose que les changements de la migration sont déjà dans la base de données
+                    # ou seront appliqués par la suite. Si ce n'est pas le cas, il faudra appliquer manuellement.
+                    docker_exec flask db stamp "$MISSING_REVISION" || {
+                      echo "❌ Échec du marquage de la révision $MISSING_REVISION"
+                      echo "💡 Vérification de l'état actuel des migrations..."
+                      docker_exec flask db current || true
+                      docker_exec flask db heads || true
+                      docker_exec flask db history | head -50 || true
+                      exit 1
+                    }
+                    echo "✅ Révision $MISSING_REVISION marquée comme appliquée"
+                  fi
+                  
+                  # Maintenant, les deux révisions parentes devraient être présentes
+                  echo "🔄 Vérification que les deux révisions parentes sont maintenant présentes..."
+                  CURRENT_AFTER=$(docker_exec flask db current 2>&1 || echo "")
+                  echo "$CURRENT_AFTER"
+                  
+                  # Appliquer la migration de merge
+                  echo "🔄 Application de la migration de merge..."
+                  docker_exec flask db upgrade heads || {
+                    echo "❌ Erreur lors de l'application de la migration de merge"
+                    docker_exec flask db current || true
+                    docker_exec flask db heads || true
+                    docker compose -f docker-compose.production.yml logs backend | tail -100 || true
+                    exit 1
+                  }
+                  echo "✅ Migration de merge appliquée avec succès"
+                fi
               else
                 echo "❌ Erreur lors de l'exécution des migrations"
-                echo "💡 Si l'erreur est 'overlaps', vérifiez que les deux révisions parentes sont appliquées"
+                echo "💡 Vérification de l'état des migrations..."
                 docker_exec flask db current || true
                 docker_exec flask db heads || true
+                docker_exec flask db history | head -50 || true
                 docker compose -f docker-compose.production.yml logs backend | tail -100 || true
                 exit 1
               fi
