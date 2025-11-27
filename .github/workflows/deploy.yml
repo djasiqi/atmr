@@ -121,7 +121,7 @@ jobs:
           file: ./backend/Dockerfile.production
           target: runtime
           build-args: |
-            WITH_RL=false
+            WITH_RL=true
             REQUIREMENTS_HASH=${{ steps.requirements_hash.outputs.requirements_hash }}
           push: true
           tags: ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
@@ -341,6 +341,9 @@ jobs:
             echo "📁 Création des répertoires de données..."
             mkdir -p data/rl/shadow_mode data/ml data/rl || true
             chmod -R 755 data 2>/dev/null || true
+            # 🔐 S'assurer que le user du container backend a les droits sur les modèles ML
+            # Le backend tourne généralement avec UID 1000 dans l'image Docker
+            chown -R 1000:1000 data 2>/dev/null || true
             echo "✅ Répertoires de données créés"
 
             echo "🔄 Démarrage des services..."
@@ -422,7 +425,8 @@ jobs:
             # Passer toutes les variables nécessaires pour que Flask puisse construire SQLALCHEMY_DATABASE_URI
             # Le code Flask essaie d'abord DATABASE_URL, puis SQLALCHEMY_DATABASE_URI, puis construit depuis POSTGRES_*
             # REDIS_URL est également nécessaire pour validate_required_env_vars en production
-            # Utiliser 'heads' pour gérer les multiples heads jusqu'à ce qu'une migration de fusion soit créée
+            # ✅ CORRECTION: Utiliser 'flask db upgrade' sans 'heads' car une migration de fusion existe maintenant
+            # 'upgrade' sans argument applique toutes les migrations jusqu'au head unique (la migration de fusion)
             docker compose -f docker-compose.production.yml exec -T \
               -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
               -e DATABASE_URL="${DATABASE_URL}" \
@@ -434,7 +438,7 @@ jobs:
               -e REDIS_URL="${REDIS_URL}" \
               -e REDIS_PASSWORD="${REDIS_PASSWORD}" \
               -e MAIL_PASSWORD="${MAIL_PASSWORD}" \
-              backend flask db upgrade heads || {
+              backend flask db upgrade || {
               echo "❌ Erreur lors de l'exécution des migrations"
               echo "---- Diagnostics (migration failed) ----"
               echo "Variables d'environnement utilisées:"
