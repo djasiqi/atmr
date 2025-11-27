@@ -47,24 +47,55 @@ else
 fi
 echo ""
 
-# 2. Vérifier les processus Redis natifs
-echo "2️⃣ Vérification des processus Redis natifs..."
-echo "----------------------------------------------"
+# 2. Vérifier les processus Redis natifs (y compris LXD)
+echo "2️⃣ Vérification des processus Redis natifs (hors Docker)..."
+echo "-----------------------------------------------------------"
 REDIS_NATIVE=$(sudo ps aux | grep redis-server | grep -v grep | grep -v docker || echo "")
 if [ -n "$REDIS_NATIVE" ]; then
     echo "⚠️  Processus Redis natif détecté:"
     echo "$REDIS_NATIVE"
     echo ""
-    echo "Voulez-vous arrêter ce processus ? (y/N)"
-    read -r response
-    if [[ "$response" =~ ^[Yy]$ ]]; then
-        # Essayer d'arrêter via systemd
-        if sudo systemctl stop redis 2>/dev/null || sudo systemctl stop redis-server 2>/dev/null; then
-            echo "✅ Service Redis arrêté via systemd"
-            sudo systemctl disable redis 2>/dev/null || sudo systemctl disable redis-server 2>/dev/null || true
-        else
-            echo "⚠️  Impossible d'arrêter via systemd, arrêt manuel nécessaire"
+    
+    # Identifier les PIDs problématiques (qui écoutent sur *:6379)
+    PROBLEMATIC_PIDS=()
+    while IFS= read -r line; do
+        PID=$(echo "$line" | awk '{print $2}')
+        # Vérifier si ce processus écoute sur *:6379
+        if sudo lsof -p "$PID" 2>/dev/null | grep -q ":6379"; then
+            PROBLEMATIC_PIDS+=("$PID")
         fi
+    done <<< "$REDIS_NATIVE"
+    
+    if [ ${#PROBLEMATIC_PIDS[@]} -gt 0 ]; then
+        echo "❌ Processus Redis problématiques (écoutent sur *:6379):"
+        for pid in "${PROBLEMATIC_PIDS[@]}"; do
+            echo "   PID: $pid"
+            sudo cat /proc/"$pid"/cmdline 2>/dev/null | tr '\0' ' ' || echo "   (impossible de lire la commande)"
+            echo ""
+        done
+        
+        echo "Voulez-vous arrêter ces processus ? (y/N)"
+        read -r response
+        if [[ "$response" =~ ^[Yy]$ ]]; then
+            for pid in "${PROBLEMATIC_PIDS[@]}"; do
+                # Essayer d'identifier la source
+                if systemctl list-units --type=service --all | grep -q redis; then
+                    echo "Arrêt via systemd..."
+                    sudo systemctl stop redis 2>/dev/null || sudo systemctl stop redis-server 2>/dev/null || true
+                    sudo systemctl disable redis 2>/dev/null || sudo systemctl disable redis-server 2>/dev/null || true
+                elif command -v snap >/dev/null 2>&1 && snap list | grep -q redis; then
+                    echo "Arrêt via snap..."
+                    sudo snap stop redis 2>/dev/null || true
+                    sudo snap disable redis 2>/dev/null || true
+                else
+                    echo "Arrêt direct du processus PID $pid..."
+                    sudo kill "$pid" 2>/dev/null || true
+                fi
+            done
+            echo "✅ Processus Redis arrêtés"
+        fi
+    else
+        echo "⚠️  Processus Redis natif détecté mais ne semble pas écouter sur *:6379"
     fi
 else
     echo "✅ Aucun processus Redis natif détecté"
