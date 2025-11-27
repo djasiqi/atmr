@@ -82,7 +82,8 @@ def get_database_url() -> str:
             )
             return url_str
 
-    # Priorité 4: Reconstruction propre avec URL.create() pour gérer les caractères spéciaux
+    # Priorité 4: Reconstruction propre avec URL.create()
+    # pour gérer les caractères spéciaux
     pg_user = os.getenv("POSTGRES_USER", "postgres")
     pg_password = os.getenv("POSTGRES_PASSWORD", "")
     pg_host = os.getenv("POSTGRES_HOST", "postgres")
