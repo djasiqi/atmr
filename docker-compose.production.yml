@@ -152,6 +152,7 @@ services:
       - backend_logs:/app/logs
       - backend_data:/app/data
       - backend_cache:/app/cache
+      - backend_uploads:/app/uploads # Volume pour les logos de compagnie et autres uploads
       # Les modèles ML/RL sont inclus dans l'image Docker
     ports:
       - "5000:5000"
@@ -263,7 +264,7 @@ services:
       - .env.production
     command: celery -A celery_app.celery beat --loglevel=info
     healthcheck:
-      test: ["CMD", "test", "-f", "/app/celerybeat-schedule/db"]
+      test: ["CMD", "celery", "-A", "celery_app.celery", "inspect", "ping"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -316,8 +317,13 @@ services:
     image: ${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}
     container_name: atmr-flower
     restart: unless-stopped
+    # Charger les variables depuis .env.production (créé par le workflow GitHub Actions)
+    env_file:
+      - .env.production
     command: celery -A celery_app.celery flower --port=5555
     environment:
+      FLASK_ENV: production
+      FLASK_CONFIG: production
       # ⚠️ IMPORTANT: Ne pas construire les URLs Redis ici car Docker Compose
       # n'échappe pas les caractères spéciaux dans REDIS_PASSWORD
       # Le code Python (celery_app.py) construira automatiquement les URLs
@@ -326,6 +332,8 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: "0"
+      # Variables requises pour l'initialisation de l'application
+      APP_ENCRYPTION_KEY_B64: ${APP_ENCRYPTION_KEY_B64}
       # CELERY_BROKER_URL et CELERY_RESULT_BACKEND seront construits par celery_app.py
     ports:
       - "5555:5555"
