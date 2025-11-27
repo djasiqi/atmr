@@ -1,0 +1,362 @@
+# Workflow pour construire et déployer l'image Docker RL/ML
+#
+# ⚠️ IMPORTANT: Cette image est lourde (torch, gymnasium, optuna) et ne doit PAS
+# être construite sur les runners GitHub standards (risque de "No space left on device").
+#
+# Ce workflow combine la construction et le déploiement de l'image RL en un seul processus.
+#
+# Options de déploiement:
+# 1. Self-hosted runner (recommandé) : sur votre serveur 8vCPU/16GB
+# 2. Déclenchement manuel uniquement (workflow_dispatch)
+# 3. Build local puis push manuel vers Docker Hub
+
+name: Build & Deploy RL Environment
+
+on:
+    workflow_dispatch: # Déclenchement manuel uniquement
+        inputs:
+            tag:
+                description: "Tag de l'image (ex: rl-latest, rl-v1.0.0)"
+                required: false
+                default: "rl-latest"
+            push:
+                description: "Push vers Docker Hub (recommandé: true pour déploiement)"
+                type: boolean
+                required: false
+                default: true
+            deploy:
+                description: "Déployer l'image après construction (recommandé: true)"
+                type: boolean
+                required: false
+                default: true
+
+permissions:
+    contents: read
+
+jobs:
+    build-rl-image:
+        name: Build & Push RL Image
+        # ⚠️ Utiliser un self-hosted runner si disponible (plus de ressources)
+        # Sinon, ubuntu-latest mais risque de "No space left on device"
+        # Pour utiliser self-hosted, modifiez cette ligne en: runs-on: self-hosted
+        runs-on: ubuntu-latest
+
+        env:
+            DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE || 'djasiqi/atmr-backend' }}
+            DOCKER_TAG: ${{ github.event.inputs.tag || 'rl-latest' }}
+            DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+            DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+        outputs:
+            image_tag: ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
+            image_pushed: ${{ steps.push_flag.outputs.push }}
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Set up QEMU
+              uses: docker/setup-qemu-action@v3
+              continue-on-error: true
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
+
+            - name: Clean up disk space
+              run: |
+                  echo "🧹 Nettoyage de l'espace disque avant le build RL..."
+                  docker system prune -af --volumes || true
+                  rm -rf ~/.cache/pip || true
+                  df -h
+
+            - name: Set push flag
+              id: push_flag
+              run: |
+                  # Convertir l'input push en booléen cohérent
+                  # Si push n'est pas défini ou est 'true' ou true, alors push=true
+                  PUSH_INPUT="${{ github.event.inputs.push }}"
+                  if [ -z "${PUSH_INPUT}" ] || [ "${PUSH_INPUT}" = "true" ] || [ "${PUSH_INPUT}" = "True" ]; then
+                      echo "push=true" >> $GITHUB_OUTPUT
+                      echo "✅ Push activé (push=${PUSH_INPUT})"
+                  else
+                      echo "push=false" >> $GITHUB_OUTPUT
+                      echo "ℹ️  Push désactivé (push=${PUSH_INPUT})"
+                  fi
+
+            - name: Login to Docker Hub
+              if: steps.push_flag.outputs.push == 'true'
+              uses: docker/login-action@v3
+              with:
+                  username: ${{ env.DOCKERHUB_USERNAME }}
+                  password: ${{ env.DOCKERHUB_TOKEN }}
+
+            - name: Calculate requirements hash
+              id: requirements_hash
+              run: |
+                  # Calculer un hash des fichiers requirements RL pour invalider le cache si nécessaire
+                  if [ -f backend/requirements-rl.txt ] && [ -f backend/requirements.base.txt ]; then
+                    REQUIREMENTS_HASH=$(sha256sum backend/requirements-rl.txt backend/requirements.base.txt 2>/dev/null | sha256sum | cut -d' ' -f1)
+                    echo "requirements_hash=${REQUIREMENTS_HASH}" >> $GITHUB_OUTPUT
+                    echo "📋 Hash de requirements-rl.txt + requirements.base.txt: ${REQUIREMENTS_HASH:0:12}..."
+                  else
+                    echo "⚠️  requirements-rl.txt ou requirements.base.txt non trouvés"
+                    echo "requirements_hash=missing" >> $GITHUB_OUTPUT
+                  fi
+
+            - name: Build & push RL image
+              uses: docker/build-push-action@v5
+              with:
+                  context: ./backend
+                  file: ./backend/Dockerfile.rl
+                  target: runtime
+                  build-args: |
+                      WITH_RL=true
+                      RL_ENABLED=true
+                      REQUIREMENTS_HASH=${{ steps.requirements_hash.outputs.requirements_hash }}
+                  push: ${{ steps.push_flag.outputs.push == 'true' }}
+                  load: ${{ steps.push_flag.outputs.push != 'true' }}
+                  tags: ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
+                  cache-from: type=gha
+                  cache-to: type=gha,mode=max
+                  no-cache: false
+
+            - name: Verify image was built
+              if: steps.push_flag.outputs.push != 'true'
+              run: |
+                  echo "🔍 Vérification que l'image a bien été construite..."
+                  IMAGE_TAG="${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}"
+                  if docker images | grep -q "${IMAGE_TAG}"; then
+                    echo "✅ Image ${IMAGE_TAG} construite localement"
+                    docker images | grep "${IMAGE_TAG}"
+                  else
+                    echo "⚠️  Image ${IMAGE_TAG} non trouvée localement"
+                  fi
+
+            - name: Verify image was pushed
+              if: steps.push_flag.outputs.push == 'true'
+              run: |
+                  echo "🔍 Vérification que l'image a bien été poussée..."
+                  IMAGE_TAG="${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}"
+                  echo "Image attendue: ${IMAGE_TAG}"
+
+                  # Vérifier que l'image existe sur Docker Hub (avec retry)
+                  for i in {1..5}; do
+                    if docker manifest inspect "${IMAGE_TAG}" > /dev/null 2>&1; then
+                      echo "✅ Image ${IMAGE_TAG} trouvée sur Docker Hub"
+                      exit 0
+                    fi
+                    echo "  Tentative $i/5: Image non trouvée, attente 5 secondes..."
+                    sleep 5
+                  done
+
+                  echo "❌ Image ${IMAGE_TAG} non trouvée sur Docker Hub après 5 tentatives"
+                  exit 1
+
+            - name: Show image size
+              run: |
+                  IMAGE_TAG="${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}"
+                  echo "📦 Taille de l'image RL:"
+                  docker images "${IMAGE_TAG}" --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}" || true
+
+    deploy-rl:
+        name: Deploy RL Environment
+        needs: build-rl-image
+        # Ne déployer que si deploy=true ET que l'image a été poussée
+        if: |
+            (github.event.inputs.deploy == 'true' || github.event.inputs.deploy == '') &&
+            needs.build-rl-image.outputs.image_pushed == 'true'
+        runs-on: ubuntu-latest
+        env:
+            DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE || 'djasiqi/atmr-backend' }}
+            DOCKER_TAG: ${{ github.event.inputs.tag || 'rl-latest' }}
+            SSH_HOST: ${{ secrets.SSH_HOST }}
+            SSH_USER: ${{ secrets.SSH_USER }}
+            SSH_PORT: ${{ secrets.SSH_PORT }}
+            SSH_KEY: ${{ secrets.SSH_KEY }}
+            # Secrets pour l'environnement RL (peuvent être différents de la prod)
+            RL_POSTGRES_PASSWORD: ${{ secrets.RL_POSTGRES_PASSWORD || secrets.POSTGRES_PASSWORD }}
+            RL_POSTGRES_USER: ${{ secrets.RL_POSTGRES_USER || secrets.POSTGRES_USER }}
+            RL_POSTGRES_DB: ${{ secrets.RL_POSTGRES_DB || 'atmr_rl_db' }}
+            RL_REDIS_PASSWORD: ${{ secrets.RL_REDIS_PASSWORD || secrets.REDIS_PASSWORD }}
+            APP_ENCRYPTION_KEY_B64: ${{ secrets.APP_ENCRYPTION_KEY_B64 }}
+            SECRET_KEY: ${{ secrets.SECRET_KEY }}
+            JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Validate required secrets
+              run: |
+                  REQUIRED_SECRETS=(
+                      "SSH_HOST"
+                      "SSH_USER"
+                      "SSH_KEY"
+                      "SSH_PORT"
+                      "APP_ENCRYPTION_KEY_B64"
+                      "SECRET_KEY"
+                      "JWT_SECRET_KEY"
+                  )
+                  MISSING_SECRETS=()
+                  for secret in "${REQUIRED_SECRETS[@]}"; do
+                      if [ -z "${!secret:-}" ]; then
+                          MISSING_SECRETS+=("$secret")
+                      fi
+                  done
+                  if [ ${#MISSING_SECRETS[@]} -ne 0 ]; then
+                      echo "❌ Secrets manquants: ${MISSING_SECRETS[*]}"
+                      exit 1
+                  fi
+                  echo "✅ Tous les secrets requis sont présents"
+
+            - name: Verify RL image exists on Docker Hub
+              run: |
+                  echo "🔍 Vérification que l'image RL existe sur Docker Hub..."
+                  IMAGE_TAG="${{ needs.build-rl-image.outputs.image_tag }}"
+                  echo "Image attendue: ${IMAGE_TAG}"
+
+                  # Vérifier que l'image existe sur Docker Hub (avec retry)
+                  for i in {1..5}; do
+                      if docker manifest inspect "${IMAGE_TAG}" > /dev/null 2>&1; then
+                          echo "✅ Image ${IMAGE_TAG} trouvée sur Docker Hub"
+                          exit 0
+                      fi
+                      echo "  Tentative $i/5: Image non trouvée, attente 5 secondes..."
+                      sleep 5
+                  done
+
+                  echo "❌ L'image ${IMAGE_TAG} n'a pas été trouvée sur Docker Hub"
+                  exit 1
+
+            - name: Copy docker-compose.rl.yml to server
+              uses: appleboy/scp-action@master
+              with:
+                  host: ${{ env.SSH_HOST }}
+                  username: ${{ env.SSH_USER }}
+                  key: ${{ env.SSH_KEY }}
+                  port: ${{ env.SSH_PORT }}
+                  source: "docker-compose.rl.yml"
+                  target: "/srv/atmr-rl"
+
+            - name: Deploy RL environment via SSH
+              uses: appleboy/ssh-action@master
+              with:
+                  host: ${{ env.SSH_HOST }}
+                  username: ${{ env.SSH_USER }}
+                  key: ${{ env.SSH_KEY }}
+                  port: ${{ env.SSH_PORT }}
+                  envs: APP_ENCRYPTION_KEY_B64,SECRET_KEY,JWT_SECRET_KEY,RL_POSTGRES_PASSWORD,RL_POSTGRES_USER,RL_POSTGRES_DB,RL_REDIS_PASSWORD,DOCKER_IMAGE,DOCKER_TAG
+                  script: |
+                      cd /srv/atmr-rl
+                      set -o errexit -o nounset -o pipefail
+
+                      # Fonction de rollback en cas d'erreur
+                      rollback() {
+                          echo "🔄 Rollback en cours..."
+                          docker compose -f docker-compose.rl.yml down --remove-orphans || true
+                          echo "❌ Déploiement RL échoué, rollback effectué"
+                          exit 1
+                      }
+                      trap rollback ERR
+
+                      # Export des variables d'environnement
+                      export APP_ENCRYPTION_KEY_B64="${{ secrets.APP_ENCRYPTION_KEY_B64 }}"
+                      export SECRET_KEY="${{ secrets.SECRET_KEY }}"
+                      export JWT_SECRET_KEY="${{ secrets.JWT_SECRET_KEY }}"
+                      export RL_POSTGRES_PASSWORD="${{ env.RL_POSTGRES_PASSWORD }}"
+                      export RL_POSTGRES_USER="${{ env.RL_POSTGRES_USER }}"
+                      export RL_POSTGRES_DB="${{ env.RL_POSTGRES_DB }}"
+                      export RL_REDIS_PASSWORD="${{ env.RL_REDIS_PASSWORD }}"
+                      export DOCKER_IMAGE="${{ env.DOCKER_IMAGE }}"
+                      export DOCKER_TAG="${{ env.DOCKER_TAG }}"
+
+                      # Validation des secrets critiques
+                      echo "🔍 Validation des secrets critiques..."
+                      MISSING_SECRETS=()
+                      if [ -z "${APP_ENCRYPTION_KEY_B64:-}" ]; then MISSING_SECRETS+=("APP_ENCRYPTION_KEY_B64"); fi
+                      if [ -z "${SECRET_KEY:-}" ]; then MISSING_SECRETS+=("SECRET_KEY"); fi
+                      if [ -z "${JWT_SECRET_KEY:-}" ]; then MISSING_SECRETS+=("JWT_SECRET_KEY"); fi
+                      if [ -z "${RL_POSTGRES_PASSWORD:-}" ]; then MISSING_SECRETS+=("RL_POSTGRES_PASSWORD"); fi
+                      if [ -z "${RL_POSTGRES_USER:-}" ]; then MISSING_SECRETS+=("RL_POSTGRES_USER"); fi
+                      if [ -z "${RL_POSTGRES_DB:-}" ]; then MISSING_SECRETS+=("RL_POSTGRES_DB"); fi
+                      if [ -z "${DOCKER_IMAGE:-}" ]; then MISSING_SECRETS+=("DOCKER_IMAGE"); fi
+                      if [ -z "${DOCKER_TAG:-}" ]; then MISSING_SECRETS+=("DOCKER_TAG"); fi
+
+                      if [ ${#MISSING_SECRETS[@]} -ne 0 ]; then
+                          echo "❌ Secrets manquants: ${MISSING_SECRETS[*]}"
+                          exit 1
+                      fi
+                      echo "✅ Tous les secrets critiques sont présents"
+
+                      # Créer le fichier .env.rl pour docker-compose
+                      echo "📝 Création du fichier .env.rl..."
+                      {
+                          echo "RL_POSTGRES_USER=${RL_POSTGRES_USER}"
+                          echo "RL_POSTGRES_PASSWORD=${RL_POSTGRES_PASSWORD}"
+                          echo "RL_POSTGRES_DB=${RL_POSTGRES_DB}"
+                          echo "RL_REDIS_PASSWORD=${RL_REDIS_PASSWORD}"
+                          echo "SECRET_KEY=${SECRET_KEY}"
+                          echo "JWT_SECRET_KEY=${JWT_SECRET_KEY}"
+                          echo "APP_ENCRYPTION_KEY_B64=${APP_ENCRYPTION_KEY_B64}"
+                          echo "DOCKER_IMAGE=${DOCKER_IMAGE}"
+                          echo "DOCKER_TAG=${DOCKER_TAG}"
+                      } > .env.rl
+                      chmod 600 .env.rl
+                      echo "✅ Fichier .env.rl créé"
+
+                      # Créer les répertoires nécessaires pour les données RL
+                      echo "📁 Création des répertoires de données RL..."
+                      mkdir -p data/rl/shadow_mode data/ml data/rl || true
+                      chmod -R 755 data 2>/dev/null || true
+                      chown -R 1000:1000 data 2>/dev/null || true
+                      echo "✅ Répertoires de données RL créés"
+
+                      # Pull de l'image RL depuis Docker Hub
+                      echo "🔄 Pull de l'image RL depuis Docker Hub..."
+                      IMAGE_TAG="${DOCKER_IMAGE}:${DOCKER_TAG}"
+                      docker pull "${IMAGE_TAG}" || {
+                          echo "❌ Échec du pull de l'image RL ${IMAGE_TAG}"
+                          exit 1
+                      }
+                      echo "✅ Image RL pullée avec succès"
+
+                      # Arrêter les conteneurs existants
+                      echo "🔄 Arrêt des conteneurs RL existants..."
+                      docker compose -f docker-compose.rl.yml down --remove-orphans || true
+
+                      # Mettre à jour l'image dans docker-compose.rl.yml si nécessaire
+                      # (l'image est déjà définie dans le fichier, mais on s'assure qu'elle utilise le bon tag)
+                      echo "🔄 Démarrage de l'environnement RL..."
+                      docker compose -f docker-compose.rl.yml up -d
+
+                      # Attendre que PostgreSQL RL soit prêt
+                      echo "⏳ Attente que PostgreSQL RL soit prêt..."
+                      POSTGRES_READY=false
+                      for i in $(seq 1 60); do
+                          POSTGRES_STATUS=$(docker compose -f docker-compose.rl.yml ps rl-postgres --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
+                          if [ "$POSTGRES_STATUS" = "running" ]; then
+                              HEALTH=$(docker inspect --format='{{.State.Health.Status}}' atmr-rl-postgres 2>/dev/null || echo "none")
+                              if [ "$HEALTH" = "healthy" ]; then
+                                  if docker compose -f docker-compose.rl.yml exec -T rl-postgres pg_isready -U "${RL_POSTGRES_USER}" -d "${RL_POSTGRES_DB}" > /dev/null 2>&1; then
+                                      echo "✅ PostgreSQL RL est prêt et healthy"
+                                      POSTGRES_READY=true
+                                      break
+                                  fi
+                              fi
+                          fi
+                          echo "  Tentative $i/60 (État: ${POSTGRES_STATUS:-unknown}, Health: ${HEALTH:-none})..."
+                          sleep 2
+                      done
+
+                      if [ "$POSTGRES_READY" = "false" ]; then
+                          echo "❌ Timeout: PostgreSQL RL n'est pas prêt après 120 secondes"
+                          docker compose -f docker-compose.rl.yml logs rl-postgres | tail -50
+                          exit 1
+                      fi
+
+                      # Désactiver le trap de rollback après succès
+                      trap - ERR
+
+                      echo "✅ Déploiement de l'environnement RL terminé avec succès"
+                      echo "📊 État des conteneurs RL:"
+                      docker compose -f docker-compose.rl.yml ps

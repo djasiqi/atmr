@@ -442,8 +442,52 @@ jobs:
             # Passer toutes les variables nécessaires pour que Flask puisse construire SQLALCHEMY_DATABASE_URI
             # Le code Flask essaie d'abord DATABASE_URL, puis SQLALCHEMY_DATABASE_URI, puis construit depuis POSTGRES_*
             # REDIS_URL est également nécessaire pour validate_required_env_vars en production
-            # ✅ CORRECTION: Utiliser 'flask db upgrade' sans 'heads' car une migration de fusion existe maintenant
-            # 'upgrade' sans argument applique toutes les migrations jusqu'au head unique (la migration de fusion)
+
+            # ✅ CORRECTION: Gérer le cas où une seule branche est appliquée
+            # Si plusieurs heads existent (branches divergentes), utiliser 'upgrade heads' pour appliquer toutes les branches
+            # Sinon, utiliser 'upgrade' normal pour appliquer jusqu'au head unique
+            echo "🔍 Vérification de l'état des migrations..."
+            HEADS_OUTPUT=$(docker compose -f docker-compose.production.yml exec -T \
+              -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
+              -e DATABASE_URL="${DATABASE_URL}" \
+              -e POSTGRES_USER="${POSTGRES_USER}" \
+              -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
+              -e POSTGRES_DB="${POSTGRES_DB}" \
+              -e POSTGRES_HOST="postgres" \
+              -e POSTGRES_PORT="5432" \
+              -e REDIS_URL="${REDIS_URL}" \
+              -e REDIS_PASSWORD="${REDIS_PASSWORD}" \
+              -e MAIL_PASSWORD="${MAIL_PASSWORD}" \
+              backend flask db heads 2>&1 || echo "")
+
+            # Compter le nombre de heads (lignes qui commencent par un hash de révision)
+            HEAD_COUNT=$(echo "$HEADS_OUTPUT" | grep -cE "^[a-f0-9]{12}" || echo "0")
+
+            if [ "$HEAD_COUNT" -gt 1 ]; then
+              echo "⚠️  Plusieurs heads détectés ($HEAD_COUNT), application de toutes les branches avec 'upgrade heads'..."
+              # Appliquer toutes les branches jusqu'à leurs heads respectifs
+              docker compose -f docker-compose.production.yml exec -T \
+                -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
+                -e DATABASE_URL="${DATABASE_URL}" \
+                -e POSTGRES_USER="${POSTGRES_USER}" \
+                -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
+                -e POSTGRES_DB="${POSTGRES_DB}" \
+                -e POSTGRES_HOST="postgres" \
+                -e POSTGRES_PORT="5432" \
+                -e REDIS_URL="${REDIS_URL}" \
+                -e REDIS_PASSWORD="${REDIS_PASSWORD}" \
+                -e MAIL_PASSWORD="${MAIL_PASSWORD}" \
+                backend flask db upgrade heads || {
+                echo "❌ Erreur lors de l'application des branches avec 'upgrade heads'"
+                exit 1
+              }
+              echo "✅ Toutes les branches appliquées, application du merge..."
+            else
+              echo "ℹ️  Head unique détecté, application normale des migrations..."
+            fi
+
+            # Maintenant appliquer jusqu'au head unique (merge ou head unique)
+            echo "🔄 Application des migrations jusqu'au head unique..."
             docker compose -f docker-compose.production.yml exec -T \
               -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
               -e DATABASE_URL="${DATABASE_URL}" \
