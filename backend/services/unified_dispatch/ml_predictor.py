@@ -545,6 +545,11 @@ class DelayMLPredictor(object):
             # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
             joblib.dump(model_data, f)
 
+        # S'assurer que le fichier a les bonnes permissions (644 = rw-r--r--)
+        # Permet la lecture/écriture par le propriétaire et la lecture par les autres
+        with contextlib.suppress(OSError, PermissionError):
+            model_path_obj.chmod(0o644)
+
         logger.info("[MLPredictor] Model saved to %s", model_path_obj)
 
     def load_model(self) -> None:
