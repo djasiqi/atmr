@@ -374,12 +374,17 @@ jobs:
 
             # Créer les répertoires nécessaires pour les données (si volumes locaux)
             echo "📁 Création des répertoires de données..."
-            mkdir -p data/rl/shadow_mode data/ml data/rl || true
+            mkdir -p data/rl/shadow_mode data/ml data/rl data/ml/models || true
             chmod -R 755 data 2>/dev/null || true
             # 🔐 S'assurer que le user du container backend a les droits sur les modèles ML
             # Le backend tourne généralement avec UID 1000 dans l'image Docker
             chown -R 1000:1000 data 2>/dev/null || true
-            echo "✅ Répertoires de données créés"
+            # S'assurer que les fichiers existants ont aussi les bonnes permissions
+            if [ -d "data/ml/models" ]; then
+              chmod -R 755 data/ml/models 2>/dev/null || true
+              chown -R 1000:1000 data/ml/models 2>/dev/null || true
+            fi
+            echo "✅ Répertoires de données créés avec permissions correctes"
 
             echo "🔄 Démarrage des services..."
             # Docker Compose chargera automatiquement .env pour remplacer ${VAR} dans le YAML
@@ -479,33 +484,37 @@ jobs:
               backend flask db heads 2>&1 || echo "")
 
             # Compter le nombre de heads (lignes qui commencent par un hash de révision)
-            HEAD_COUNT=$(echo "$HEADS_OUTPUT" | grep -cE "^[a-f0-9]{12}" || echo "0")
+            # Utiliser wc -l pour compter les lignes au lieu de grep -c pour éviter les problèmes
+            HEAD_COUNT=$(echo "$HEADS_OUTPUT" | grep -E "^[a-f0-9]{12}" | wc -l | tr -d ' ' || echo "0")
 
-            if [ "$HEAD_COUNT" -gt 1 ]; then
-              echo "⚠️  Plusieurs heads détectés ($HEAD_COUNT), application de toutes les branches avec 'upgrade heads'..."
-              # Appliquer toutes les branches jusqu'à leurs heads respectifs
-              docker compose -f docker-compose.production.yml exec -T \
-                -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
-                -e DATABASE_URL="${DATABASE_URL}" \
-                -e POSTGRES_USER="${POSTGRES_USER}" \
-                -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
-                -e POSTGRES_DB="${POSTGRES_DB}" \
-                -e POSTGRES_HOST="postgres" \
-                -e POSTGRES_PORT="5432" \
-                -e REDIS_URL="${REDIS_URL}" \
-                -e REDIS_PASSWORD="${REDIS_PASSWORD}" \
-                -e MAIL_PASSWORD="${MAIL_PASSWORD}" \
-                backend flask db upgrade heads || {
-                echo "❌ Erreur lors de l'application des branches avec 'upgrade heads'"
-                exit 1
-              }
-              echo "✅ Toutes les branches appliquées, application du merge..."
-            else
-              echo "ℹ️  Head unique détecté, application normale des migrations..."
+            # Vérifier s'il y a un merge migration (contient "merge_" dans le nom)
+            HAS_MERGE=$(echo "$HEADS_OUTPUT" | grep -c "merge_" || echo "0")
+
+            # S'assurer que HEAD_COUNT est un nombre valide
+            if ! [[ "$HEAD_COUNT" =~ ^[0-9]+$ ]]; then
+              echo "⚠️  Erreur lors du comptage des heads, utilisation de la valeur par défaut: 0"
+              HEAD_COUNT=0
             fi
 
-            # Maintenant appliquer jusqu'au head unique (merge ou head unique)
-            echo "🔄 Application des migrations jusqu'au head unique..."
+            echo "📊 Nombre de heads détectés: $HEAD_COUNT"
+            echo "📊 Merge migration détectée: $HAS_MERGE"
+
+            # Déterminer la commande d'upgrade selon le nombre de heads et la présence de merge
+            # Si plusieurs heads OU merge migration détectée, utiliser 'upgrade heads'
+            if [ "$HEAD_COUNT" -gt 1 ] || [ "$HAS_MERGE" -gt 0 ]; then
+              if [ "$HAS_MERGE" -gt 0 ]; then
+                echo "⚠️  Merge migration détectée, utilisation de 'upgrade heads' pour gérer le merge..."
+              else
+                echo "⚠️  Plusieurs heads détectés ($HEAD_COUNT), utilisation de 'upgrade heads' pour gérer les merges..."
+              fi
+              UPGRADE_CMD="upgrade heads"
+            else
+              echo "ℹ️  Head unique détecté, application normale des migrations..."
+              UPGRADE_CMD="upgrade"
+            fi
+
+            echo "🔄 Application des migrations avec: flask db $UPGRADE_CMD"
+
             docker compose -f docker-compose.production.yml exec -T \
               -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
               -e DATABASE_URL="${DATABASE_URL}" \
@@ -517,7 +526,7 @@ jobs:
               -e REDIS_URL="${REDIS_URL}" \
               -e REDIS_PASSWORD="${REDIS_PASSWORD}" \
               -e MAIL_PASSWORD="${MAIL_PASSWORD}" \
-              backend flask db upgrade || {
+              backend flask db $UPGRADE_CMD || {
               echo "❌ Erreur lors de l'exécution des migrations"
               echo "---- Diagnostics (migration failed) ----"
               echo "Variables d'environnement utilisées:"
