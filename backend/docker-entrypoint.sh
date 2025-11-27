@@ -254,8 +254,12 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 # Utiliser REDIS_URL en priorité (configuré dans le workflow de déploiement)
-# Sinon CELERY_BROKER_URL, sinon fallback localhost
-redis_url = os.getenv('REDIS_URL') or os.getenv('CELERY_BROKER_URL') or 'redis://127.0.0.1:6379/0'
+# Sinon CELERY_BROKER_URL, sinon fallback Docker (service redis)
+redis_url = (
+    os.getenv('REDIS_URL') 
+    or os.getenv('CELERY_BROKER_URL') 
+    or 'redis://redis:6379/0'  # valeur par défaut en environnement Docker
+)
 print(f'Redis URL: {redis_url}')
 
 try:

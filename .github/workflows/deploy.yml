@@ -185,7 +185,7 @@ jobs:
           sarif_file: trivy-results.sarif
 
       - name: Copy compose files to server
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@master
         with:
           host: ${{ env.SSH_HOST }}
           username: ${{ env.SSH_USER }}
@@ -195,7 +195,7 @@ jobs:
           target: "/srv/atmr"
 
       - name: Copy smoke tests script to server
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@master
         with:
           host: ${{ env.SSH_HOST }}
           username: ${{ env.SSH_USER }}
@@ -205,7 +205,7 @@ jobs:
           target: "/srv/atmr/scripts/"
 
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@v0.1.10
+        uses: appleboy/ssh-action@master
         with:
           host: ${{ env.SSH_HOST }}
           username: ${{ env.SSH_USER }}

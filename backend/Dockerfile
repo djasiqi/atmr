@@ -17,14 +17,11 @@ RUN apt-get update && apt-get upgrade -y && \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.base.txt requirements.prod.txt requirements-dev.txt* requirements-otel.txt* ./
+# ⚠️ Builder PROD : uniquement requirements.prod.txt (+ base inclus dedans)
+COPY requirements.base.txt requirements.prod.txt requirements-otel.txt* ./
 RUN python -m pip install --upgrade pip && \
-    echo "📦 Installation des dépendances de développement..." && \
-    if [ -f requirements-dev.txt ]; then \
-    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements-dev.txt; \
-    else \
-    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.prod.txt; \
-    fi && \
+    echo "📦 Installation des dépendances de production..." && \
+    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.prod.txt && \
     if [ -f requirements-otel.txt ]; then \
     pip wheel --no-cache-dir --wheel-dir /wheels -r requirements-otel.txt; \
     fi
@@ -61,12 +58,8 @@ RUN apt-get update && apt-get upgrade -y && \
 COPY --from=builder /wheels /wheels
 COPY --from=builder /app/requirements*.txt ./
 RUN python -m pip install --upgrade pip && \
-    echo "📦 Installation des dépendances de développement..." && \
-    if [ -f requirements-dev.txt ]; then \
-    pip install --no-index --find-links=/wheels -r requirements-dev.txt; \
-    else \
-    pip install --no-index --find-links=/wheels -r requirements.prod.txt; \
-    fi && \
+    echo "📦 Installation des dépendances de production..." && \
+    pip install --no-index --find-links=/wheels -r requirements.prod.txt && \
     if [ -f requirements-otel.txt ]; then \
     pip install --no-index --find-links=/wheels -r requirements-otel.txt; \
     fi && \

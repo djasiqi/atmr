@@ -1,0 +1,132 @@
+# Workflow pour construire l'image Docker RL/ML
+#
+# ⚠️ IMPORTANT: Cette image est lourde (torch, gymnasium, optuna) et ne doit PAS
+# être construite sur les runners GitHub standards (risque de "No space left on device").
+#
+# Options de déploiement:
+# 1. Self-hosted runner (recommandé) : sur votre serveur 8vCPU/16GB
+# 2. Déclenchement manuel uniquement (workflow_dispatch)
+# 3. Build local puis push manuel vers Docker Hub
+
+name: Build & Push RL Image
+
+on:
+    workflow_dispatch: # Déclenchement manuel uniquement
+        inputs:
+            tag:
+                description: "Tag de l'image (ex: latest, v1.0.0)"
+                required: false
+                default: "rl-latest"
+            push:
+                description: "Push vers Docker Hub"
+                type: boolean
+                required: false
+                default: false
+
+permissions:
+    contents: read
+
+jobs:
+    build-rl-image:
+        # ⚠️ Utiliser un self-hosted runner si disponible (plus de ressources)
+        # Sinon, ubuntu-latest mais risque de "No space left on device"
+        # Pour utiliser self-hosted, modifiez cette ligne en: runs-on: self-hosted
+        runs-on: ubuntu-latest
+
+        env:
+            DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE || 'djasiqi/atmr-backend' }}
+            DOCKER_TAG: ${{ github.event.inputs.tag || 'rl-latest' }}
+            DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+            DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Set up QEMU
+              uses: docker/setup-qemu-action@v3
+              continue-on-error: true
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
+
+            - name: Clean up disk space
+              run: |
+                  echo "🧹 Nettoyage de l'espace disque avant le build RL..."
+                  docker system prune -af --volumes || true
+                  rm -rf ~/.cache/pip || true
+                  df -h
+
+            - name: Login to Docker Hub
+              if: ${{ github.event.inputs.push == 'true' || github.event.inputs.push == '' }}
+              uses: docker/login-action@v3
+              with:
+                  username: ${{ env.DOCKERHUB_USERNAME }}
+                  password: ${{ env.DOCKERHUB_TOKEN }}
+
+            - name: Calculate requirements hash
+              id: requirements_hash
+              run: |
+                  # Calculer un hash des fichiers requirements RL pour invalider le cache si nécessaire
+                  if [ -f backend/requirements-rl.txt ] && [ -f backend/requirements.base.txt ]; then
+                    REQUIREMENTS_HASH=$(sha256sum backend/requirements-rl.txt backend/requirements.base.txt 2>/dev/null | sha256sum | cut -d' ' -f1)
+                    echo "requirements_hash=${REQUIREMENTS_HASH}" >> $GITHUB_OUTPUT
+                    echo "📋 Hash de requirements-rl.txt + requirements.base.txt: ${REQUIREMENTS_HASH:0:12}..."
+                  else
+                    echo "⚠️  requirements-rl.txt ou requirements.base.txt non trouvés"
+                    echo "requirements_hash=missing" >> $GITHUB_OUTPUT
+                  fi
+
+            - name: Build & push RL image
+              uses: docker/build-push-action@v5
+              with:
+                  context: ./backend
+                  file: ./backend/Dockerfile.rl
+                  target: runtime
+                  build-args: |
+                      WITH_RL=true
+                      RL_ENABLED=true
+                      REQUIREMENTS_HASH=${{ steps.requirements_hash.outputs.requirements_hash }}
+                  push: ${{ github.event.inputs.push == 'true' || github.event.inputs.push == '' }}
+                  tags: ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
+                  cache-from: type=gha
+                  cache-to: type=gha,mode=max
+                  no-cache: false
+
+            - name: Verify image was built
+              if: ${{ github.event.inputs.push != 'true' }}
+              run: |
+                  echo "🔍 Vérification que l'image a bien été construite..."
+                  IMAGE_TAG="${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}"
+                  if docker images | grep -q "${IMAGE_TAG}"; then
+                    echo "✅ Image ${IMAGE_TAG} construite localement"
+                    docker images | grep "${IMAGE_TAG}"
+                  else
+                    echo "⚠️  Image ${IMAGE_TAG} non trouvée localement"
+                  fi
+
+            - name: Verify image was pushed
+              if: ${{ github.event.inputs.push == 'true' || github.event.inputs.push == '' }}
+              run: |
+                  echo "🔍 Vérification que l'image a bien été poussée..."
+                  IMAGE_TAG="${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}"
+                  echo "Image attendue: ${IMAGE_TAG}"
+
+                  # Vérifier que l'image existe sur Docker Hub (avec retry)
+                  for i in {1..5}; do
+                    if docker manifest inspect "${IMAGE_TAG}" > /dev/null 2>&1; then
+                      echo "✅ Image ${IMAGE_TAG} trouvée sur Docker Hub"
+                      exit 0
+                    fi
+                    echo "  Tentative $i/5: Image non trouvée, attente 5 secondes..."
+                    sleep 5
+                  done
+
+                  echo "❌ Image ${IMAGE_TAG} non trouvée sur Docker Hub après 5 tentatives"
+                  exit 1
+
+            - name: Show image size
+              run: |
+                  IMAGE_TAG="${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}"
+                  echo "📦 Taille de l'image RL:"
+                  docker images "${IMAGE_TAG}" --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}" || true
