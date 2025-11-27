@@ -119,6 +119,7 @@ jobs:
         with:
           context: ./backend
           file: ./backend/Dockerfile.production
+          target: runtime
           build-args: |
             WITH_RL=false
             REQUIREMENTS_HASH=${{ steps.requirements_hash.outputs.requirements_hash }}
