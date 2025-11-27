@@ -484,7 +484,8 @@ jobs:
             docker_exec flask db current || true
             docker_exec flask db heads || true
             echo "🔄 Upgrade des migrations vers le head..."
-            UPGRADE_OUTPUT=$(docker_exec flask db upgrade 2>&1) || {
+            # Utiliser 'upgrade heads' pour gérer les merge migrations avec plusieurs heads
+            UPGRADE_OUTPUT=$(docker_exec flask db upgrade heads 2>&1) || {
               UPGRADE_EXIT_CODE=$?
               echo "$UPGRADE_OUTPUT"
               echo "⚠️  Première tentative échouée (code: $UPGRADE_EXIT_CODE), vérification de l'état..."
@@ -500,7 +501,7 @@ jobs:
                   exit 1
                 }
                 echo "✅ Révision 24bbcb82c891 marquée, nouvelle tentative d'upgrade..."
-                docker_exec flask db upgrade || {
+                docker_exec flask db upgrade heads || {
                   echo "❌ Erreur lors de l'exécution des migrations après stamp"
                   docker_exec flask db current || true
                   docker_exec flask db heads || true
