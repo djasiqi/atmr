@@ -43,7 +43,6 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
     outputs:
-      image_tag: ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
       push_success: ${{ steps.verify_push.outputs.success }}
     steps:
       - name: Checkout
@@ -280,13 +279,30 @@ jobs:
       - name: Verify image exists on Docker Hub
         run: |
           echo "🔍 Vérification que l'image existe sur Docker Hub..."
-          IMAGE_TAG="${{ needs.build-and-push.outputs.image_tag }}"
 
-          # Valider que image_tag n'est pas vide
-          if [ -z "${IMAGE_TAG}" ] || [ "${IMAGE_TAG}" = ":" ]; then
-            echo "❌ Erreur: image_tag est vide ou invalide"
-            echo "💡 Vérifiez que les secrets DOCKER_IMAGE et DOCKER_TAG sont définis dans GitHub Secrets"
+          # Construire IMAGE_TAG à partir des variables d'environnement
+          # (évite le warning GitHub Actions sur les outputs contenant des secrets)
+          IMAGE_TAG="${DOCKER_IMAGE}:${DOCKER_TAG}"
+
+          # Valider que DOCKER_IMAGE et DOCKER_TAG ne sont pas vides
+          if [ -z "${DOCKER_IMAGE}" ]; then
+            echo "❌ Erreur: DOCKER_IMAGE est vide"
+            echo "💡 Vérifiez que le secret DOCKER_IMAGE est défini dans GitHub Secrets"
+            exit 1
+          fi
+
+          if [ -z "${DOCKER_TAG}" ]; then
+            echo "❌ Erreur: DOCKER_TAG est vide"
+            echo "💡 Vérifiez que le secret DOCKER_TAG est défini dans GitHub Secrets"
             echo "💡 Ou fournissez un tag via l'input 'tag' lors du déclenchement manuel"
+            exit 1
+          fi
+
+          # Valider que image_tag n'est pas vide ou invalide
+          if [ -z "${IMAGE_TAG}" ] || [ "${IMAGE_TAG}" = ":" ]; then
+            echo "❌ Erreur: image_tag est vide ou invalide (${IMAGE_TAG})"
+            echo "💡 DOCKER_IMAGE: ${DOCKER_IMAGE}"
+            echo "💡 DOCKER_TAG: ${DOCKER_TAG}"
             exit 1
           fi
 
