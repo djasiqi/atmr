@@ -560,6 +560,19 @@ jobs:
             echo "⏳ Attente que le conteneur backend redémarre..."
             sleep 5
 
+            # Corriger à nouveau les permissions après le redémarrage (au cas où le fichier serait recréé)
+            echo "🔐 Vérification finale des permissions après redémarrage..."
+            docker compose -f docker-compose.production.yml exec -T backend bash -c "
+              if [ -f /app/data/ml/models/delay_predictor.pkl ]; then
+                chmod 644 /app/data/ml/models/delay_predictor.pkl 2>/dev/null || true
+                chown 999:999 /app/data/ml/models/delay_predictor.pkl 2>/dev/null || true
+                echo '✅ Permissions finales vérifiées pour delay_predictor.pkl'
+                ls -la /app/data/ml/models/delay_predictor.pkl || true
+              fi
+            " || {
+              echo "⚠️  Erreur lors de la vérification finale des permissions (non bloquant)"
+            }
+
             echo "⏳ Attente que PostgreSQL soit prêt..."
             echo "📊 Vérification de l'état du conteneur PostgreSQL..."
             POSTGRES_READY=false
@@ -680,6 +693,32 @@ jobs:
             else
               echo "ℹ️  Head unique détecté, application normale des migrations..."
               UPGRADE_CMD="upgrade"
+            fi
+
+            # Vérifier l'état actuel de la base de données avant d'appliquer les migrations
+            echo "🔍 Vérification de l'état actuel de la base de données..."
+            CURRENT_REV=$(docker compose -f docker-compose.production.yml exec -T \
+              -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
+              -e DATABASE_URL="${DATABASE_URL}" \
+              -e POSTGRES_USER="${POSTGRES_USER}" \
+              -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
+              -e POSTGRES_DB="${POSTGRES_DB}" \
+              -e POSTGRES_HOST="postgres" \
+              -e POSTGRES_PORT="5432" \
+              -e REDIS_URL="${REDIS_URL}" \
+              -e REDIS_PASSWORD="${REDIS_PASSWORD}" \
+              -e MAIL_PASSWORD="${MAIL_PASSWORD}" \
+              backend flask db current 2>&1 | grep -E "^[a-f0-9]{12}" | head -1 || echo "")
+
+            echo "📋 Révision actuelle de la base de données: ${CURRENT_REV:-none}"
+
+            # Si c'est une merge migration et que la révision actuelle est déjà une des révisions du merge,
+            # utiliser 'upgrade head' (singulier) au lieu de 'upgrade heads'
+            if [ "$HAS_MERGE" -gt 0 ] && [ -n "$CURRENT_REV" ]; then
+              if echo "$HEADS_OUTPUT" | grep -q "$CURRENT_REV"; then
+                echo "ℹ️  Merge migration détectée mais révision actuelle déjà dans les heads, utilisation de 'upgrade head'..."
+                UPGRADE_CMD="upgrade head"
+              fi
             fi
 
             echo "🔄 Application des migrations avec: flask db $UPGRADE_CMD"
