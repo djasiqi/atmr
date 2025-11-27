@@ -354,6 +354,22 @@ jobs:
             cd /srv/atmr
             set -o errexit -o nounset -o pipefail
 
+            # Fonction helper pour docker compose exec avec toutes les variables d'environnement
+            docker_exec() {
+              docker compose -f docker-compose.production.yml exec -T \
+                -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
+                -e DATABASE_URL="${DATABASE_URL}" \
+                -e POSTGRES_USER="${POSTGRES_USER}" \
+                -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
+                -e POSTGRES_DB="${POSTGRES_DB}" \
+                -e POSTGRES_HOST="postgres" \
+                -e POSTGRES_PORT="5432" \
+                -e REDIS_URL="${REDIS_URL}" \
+                -e REDIS_PASSWORD="${REDIS_PASSWORD}" \
+                -e MAIL_PASSWORD="${MAIL_PASSWORD}" \
+                backend "$@"
+            }
+
             # Fonction de rollback en cas d'erreur
             rollback() {
               echo "🔄 Rollback en cours..."
@@ -376,99 +392,43 @@ jobs:
             export DOCKER_IMAGE="${DOCKER_IMAGE}"
             export DOCKER_TAG="${DOCKER_TAG}"
 
-            # Validation des secrets critiques après export
-            echo "🔍 Validation des secrets critiques..."
             MISSING_SECRETS=()
-            if [ -z "${APP_ENCRYPTION_KEY_B64:-}" ]; then MISSING_SECRETS+=("APP_ENCRYPTION_KEY_B64"); fi
-            if [ -z "${SECRET_KEY:-}" ]; then MISSING_SECRETS+=("SECRET_KEY"); fi
-            if [ -z "${JWT_SECRET_KEY:-}" ]; then MISSING_SECRETS+=("JWT_SECRET_KEY"); fi
-            if [ -z "${POSTGRES_PASSWORD:-}" ]; then MISSING_SECRETS+=("POSTGRES_PASSWORD"); fi
-            if [ -z "${POSTGRES_USER:-}" ]; then MISSING_SECRETS+=("POSTGRES_USER"); fi
-            if [ -z "${POSTGRES_DB:-}" ]; then MISSING_SECRETS+=("POSTGRES_DB"); fi
-            if [ -z "${REDIS_PASSWORD:-}" ]; then MISSING_SECRETS+=("REDIS_PASSWORD"); fi
-            if [ -z "${DOCKER_IMAGE:-}" ]; then MISSING_SECRETS+=("DOCKER_IMAGE"); fi
-            if [ -z "${DOCKER_TAG:-}" ]; then MISSING_SECRETS+=("DOCKER_TAG"); fi
+            [ -z "${APP_ENCRYPTION_KEY_B64:-}" ] && MISSING_SECRETS+=("APP_ENCRYPTION_KEY_B64")
+            [ -z "${SECRET_KEY:-}" ] && MISSING_SECRETS+=("SECRET_KEY")
+            [ -z "${JWT_SECRET_KEY:-}" ] && MISSING_SECRETS+=("JWT_SECRET_KEY")
+            [ -z "${POSTGRES_PASSWORD:-}" ] && MISSING_SECRETS+=("POSTGRES_PASSWORD")
+            [ -z "${POSTGRES_USER:-}" ] && MISSING_SECRETS+=("POSTGRES_USER")
+            [ -z "${POSTGRES_DB:-}" ] && MISSING_SECRETS+=("POSTGRES_DB")
+            [ -z "${REDIS_PASSWORD:-}" ] && MISSING_SECRETS+=("REDIS_PASSWORD")
+            [ -z "${DOCKER_IMAGE:-}" ] && MISSING_SECRETS+=("DOCKER_IMAGE")
+            [ -z "${DOCKER_TAG:-}" ] && MISSING_SECRETS+=("DOCKER_TAG")
+            [ ${#MISSING_SECRETS[@]} -ne 0 ] && { echo "❌ Secrets manquants: ${MISSING_SECRETS[*]}"; exit 1; }
 
-            if [ ${#MISSING_SECRETS[@]} -ne 0 ]; then
-              echo "❌ Secrets manquants: ${MISSING_SECRETS[*]}"
-              echo "⚠️  Veuillez configurer ces secrets dans GitHub Actions (Settings → Secrets and variables → Actions)"
-              exit 1
-            fi
-            echo "✅ Tous les secrets critiques sont présents"
-
-            # Construire DATABASE_URL et SQLALCHEMY_DATABASE_URI avec échappement URL du mot de passe
-            # Le code Flask peut aussi le construire depuis POSTGRES_*, mais on le passe explicitement pour être sûr
-            # Échapper le mot de passe pour éviter les problèmes avec les caractères spéciaux (!, @, #, etc.)
             ESCAPED_PASSWORD=$(python3 -c "from urllib.parse import quote_plus; import sys; print(quote_plus(sys.argv[1]))" "${POSTGRES_PASSWORD}")
             export DATABASE_URL="postgresql+psycopg2://${POSTGRES_USER}:${ESCAPED_PASSWORD}@postgres:5432/${POSTGRES_DB}"
             export SQLALCHEMY_DATABASE_URI="${DATABASE_URL}"
-
-            # Construire REDIS_URL avec échappement URL du mot de passe Redis
-            # Le code Python (celery_app.py) peut aussi le construire depuis REDIS_PASSWORD, mais on le passe explicitement
-            # pour que validate_required_env_vars soit satisfait
             ESCAPED_REDIS_PASSWORD=$(python3 -c "from urllib.parse import quote_plus; import sys; print(quote_plus(sys.argv[1]))" "${REDIS_PASSWORD}")
             export REDIS_URL="redis://:${ESCAPED_REDIS_PASSWORD}@redis:6379/0"
 
-            # Note: MAIL_PASSWORD, SENTRY_DSN et PDF_BASE_URL sont optionnels mais recommandés
-            if [ -z "${MAIL_PASSWORD:-}" ]; then
-              echo "⚠️  MAIL_PASSWORD non défini (optionnel mais recommandé)"
-            fi
-            if [ -z "${SENTRY_DSN:-}" ]; then
-              echo "⚠️  SENTRY_DSN non défini (optionnel mais recommandé)"
-            fi
-            if [ -z "${PDF_BASE_URL:-}" ]; then
-              echo "⚠️  PDF_BASE_URL non défini (optionnel mais recommandé pour les URLs de PDFs)"
-              echo "💡 L'application utilisera 'http://localhost:5000' par défaut"
-            fi
-
-            # Fonction pour pull avec retry et timeout
             pull_with_retry() {
-              local max_attempts=3
-              local attempt=1
-              local timeout=600  # 10 minutes
-              
+              local max_attempts=3 attempt=1 timeout=600
               while [ $attempt -le $max_attempts ]; do
-                echo "🔄 Pull de l'image Docker (tentative $attempt/$max_attempts)..."
-                if timeout $timeout docker compose -f docker-compose.production.yml pull; then
+                echo "🔄 Pull Docker ($attempt/$max_attempts)..."
+                if command -v timeout >/dev/null 2>&1 && timeout $timeout docker compose -f docker-compose.production.yml pull || ! command -v timeout >/dev/null 2>&1 && docker compose -f docker-compose.production.yml pull; then
                   echo "✅ Pull réussi"
                   return 0
+                elif [ $attempt -lt $max_attempts ]; then
+                  sleep 10
+                  attempt=$((attempt + 1))
                 else
-                  local exit_code=$?
-                  if [ $attempt -lt $max_attempts ]; then
-                    echo "⚠️  Pull échoué (code: $exit_code), nouvelle tentative dans 10 secondes..."
-                    sleep 10
-                    attempt=$((attempt + 1))
-                  else
-                    echo "❌ Pull échoué après $max_attempts tentatives"
-                    return $exit_code
-                  fi
+                  echo "❌ Pull échoué"
+                  exit 1
                 fi
               done
             }
-
-            # Vérifier si timeout est disponible, sinon utiliser une alternative
-            if command -v timeout >/dev/null 2>&1; then
-              pull_with_retry
-            else
-              echo "🔄 Pull de l'image Docker..."
-              docker compose -f docker-compose.production.yml pull || {
-                echo "❌ Échec du pull Docker"
-                exit 1
-              }
-            fi
-            echo "🔄 Arrêt des conteneurs existants..."
+            pull_with_retry
             docker compose -f docker-compose.production.yml down --remove-orphans || true
-
-            # Vérifier que les variables sont disponibles pour docker-compose
-            echo "🔍 Vérification des variables pour docker-compose..."
-            if [ -z "${POSTGRES_USER:-}" ] || [ -z "${POSTGRES_PASSWORD:-}" ] || [ -z "${POSTGRES_DB:-}" ]; then
-              echo "❌ Variables POSTGRES_* manquantes pour docker-compose"
-              exit 1
-            fi
-            echo "✅ Variables POSTGRES_* disponibles pour docker-compose"
-
-            # Créer un fichier .env.production avec DATABASE_URL pour docker-compose
-            echo "📝 Création du fichier .env.production avec DATABASE_URL..."
+            [ -z "${POSTGRES_USER:-}" ] || [ -z "${POSTGRES_PASSWORD:-}" ] || [ -z "${POSTGRES_DB:-}" ] && { echo "❌ Variables POSTGRES_* manquantes"; exit 1; }
             {
               echo "DATABASE_URL=${DATABASE_URL}"
               echo "SQLALCHEMY_DATABASE_URI=${SQLALCHEMY_DATABASE_URI}"
@@ -485,328 +445,76 @@ jobs:
               echo "MAIL_PASSWORD=${MAIL_PASSWORD:-}"
               echo "SENTRY_DSN=${SENTRY_DSN:-}"
               echo "PDF_BASE_URL=${PDF_BASE_URL:-}"
-            } > .env.production
-            chmod 600 .env.production
-            echo "✅ Fichier .env.production créé"
-
-            # ⚠️ IMPORTANT: Docker Compose charge automatiquement .env (pas .env.production)
-            # Créer un fichier .env pour que docker-compose puisse charger les variables
-            # pour le remplacement ${VAR} dans docker-compose.production.yml
-            # Les variables sont déjà exportées dans le shell, mais docker-compose a besoin du fichier .env
-            cp .env.production .env
-            chmod 600 .env
-            echo "✅ Fichier .env créé (nécessaire pour docker-compose pour remplacer \${VAR} dans le YAML)"
-
-            # Créer les répertoires nécessaires pour les données (si volumes locaux)
-            echo "📁 Création des répertoires de données..."
-            mkdir -p data/rl/shadow_mode data/ml data/rl data/ml/models || true
-            chmod -R 755 data 2>/dev/null || true
-            # 🔐 S'assurer que le user du container backend a les droits sur les modèles ML
-            # Le backend tourne avec UID 999 (appuser) dans l'image Docker (voir Dockerfile.production)
-            chown -R 999:999 data 2>/dev/null || true
-            # S'assurer que les fichiers existants ont aussi les bonnes permissions
-            if [ -d "data/ml/models" ]; then
-              chmod -R 755 data/ml/models 2>/dev/null || true
-              chown -R 999:999 data/ml/models 2>/dev/null || true
-            fi
-            echo "✅ Répertoires de données créés avec permissions correctes"
-
-            echo "🔄 Démarrage des services..."
-            # Docker Compose chargera automatiquement .env pour remplacer ${VAR} dans le YAML
-            # Les variables sont aussi exportées dans le shell pour les commandes exec
+            } > .env.production && chmod 600 .env.production
+            cp .env.production .env && chmod 600 .env
+            mkdir -p data/rl/shadow_mode data/ml data/rl data/ml/models && chmod -R 755 data && chown -R 999:999 data 2>/dev/null || true
             docker compose -f docker-compose.production.yml up -d
 
-            echo "⏳ Attente que le conteneur backend soit prêt..."
-            # Attendre que le conteneur backend soit démarré
             for i in $(seq 1 30); do
               BACKEND_STATUS=$(docker compose -f docker-compose.production.yml ps backend --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
-              if [ "$BACKEND_STATUS" = "running" ]; then
-                echo "✅ Conteneur backend démarré"
-                break
-              fi
-              echo "  Tentative $i/30: Attente du démarrage du conteneur backend (État: ${BACKEND_STATUS})..."
+              [ "$BACKEND_STATUS" = "running" ] && echo "✅ Backend démarré" && break
               sleep 1
             done
 
-            # 🔐 CRITIQUE: Corriger les permissions AVANT que l'application ne charge les modèles ML
-            echo "🔐 Correction des permissions des fichiers ML (avant chargement des modèles)..."
-            docker compose -f docker-compose.production.yml exec -T backend bash -c "
-              mkdir -p /app/data/ml/models 2>/dev/null || true
-              chmod -R 755 /app/data/ml/models 2>/dev/null || true
-              # Le conteneur tourne avec UID 999 (appuser), s'assurer que les fichiers lui appartiennent
-              # Voir Dockerfile.production: useradd -r -g appgroup -u 999
-              if [ -d /app/data/ml/models ]; then
-                chown -R 999:999 /app/data/ml/models 2>/dev/null || true
-                # Si le fichier delay_predictor.pkl existe, corriger ses permissions spécifiquement
-                if [ -f /app/data/ml/models/delay_predictor.pkl ]; then
-                  chmod 644 /app/data/ml/models/delay_predictor.pkl 2>/dev/null || true
-                  chown 999:999 /app/data/ml/models/delay_predictor.pkl 2>/dev/null || true
-                  echo '✅ Permissions corrigées pour delay_predictor.pkl'
-                  ls -la /app/data/ml/models/delay_predictor.pkl || true
-                else
-                  echo 'ℹ️  Fichier delay_predictor.pkl non trouvé (sera créé lors de l''entraînement)'
-                fi
-                echo '📋 Permissions du répertoire data/ml/models:'
-                ls -la /app/data/ml/models/ || true
-              fi
-            " || {
-              echo "⚠️  Erreur lors de la correction des permissions (non bloquant, mais peut causer des erreurs)"
-            }
-            echo "✅ Permissions des fichiers ML corrigées"
-
-            # Redémarrer le conteneur backend pour que l'application recharge les modèles avec les bonnes permissions
-            echo "🔄 Redémarrage du conteneur backend pour appliquer les permissions..."
+            echo "🔐 Correction des permissions ML..."
+            docker compose -f docker-compose.production.yml exec -T backend bash -c "mkdir -p /app/data/ml/models && chmod -R 755 /app/data/ml/models && chown -R 999:999 /app/data/ml/models 2>/dev/null || true; [ -f /app/data/ml/models/delay_predictor.pkl ] && chmod 644 /app/data/ml/models/delay_predictor.pkl && chown 999:999 /app/data/ml/models/delay_predictor.pkl 2>/dev/null || true" || true
             docker compose -f docker-compose.production.yml restart backend || true
-            echo "⏳ Attente que le conteneur backend redémarre..."
             sleep 5
+            docker compose -f docker-compose.production.yml exec -T backend bash -c "[ -f /app/data/ml/models/delay_predictor.pkl ] && chmod 644 /app/data/ml/models/delay_predictor.pkl && chown 999:999 /app/data/ml/models/delay_predictor.pkl 2>/dev/null || true" || true
 
-            # Corriger à nouveau les permissions après le redémarrage (au cas où le fichier serait recréé)
-            echo "🔐 Vérification finale des permissions après redémarrage..."
-            docker compose -f docker-compose.production.yml exec -T backend bash -c "
-              if [ -f /app/data/ml/models/delay_predictor.pkl ]; then
-                chmod 644 /app/data/ml/models/delay_predictor.pkl 2>/dev/null || true
-                chown 999:999 /app/data/ml/models/delay_predictor.pkl 2>/dev/null || true
-                echo '✅ Permissions finales vérifiées pour delay_predictor.pkl'
-                ls -la /app/data/ml/models/delay_predictor.pkl || true
-              fi
-            " || {
-              echo "⚠️  Erreur lors de la vérification finale des permissions (non bloquant)"
-            }
-
-            echo "⏳ Attente que PostgreSQL soit prêt..."
-            echo "📊 Vérification de l'état du conteneur PostgreSQL..."
             POSTGRES_READY=false
-            HEALTH="none"
             for i in $(seq 1 60); do
-              # Vérifier l'état du conteneur
               POSTGRES_STATUS=$(docker compose -f docker-compose.production.yml ps postgres --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
               if [ "$POSTGRES_STATUS" = "running" ]; then
-                # Vérifier le healthcheck
                 HEALTH=$(docker inspect --format='{{.State.Health.Status}}' atmr-postgres 2>/dev/null || echo "none")
-                if [ "$HEALTH" = "healthy" ]; then
-                  # Vérifier avec pg_isready
-                  if docker compose -f docker-compose.production.yml exec -T postgres pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" > /dev/null 2>&1; then
-                    echo "✅ PostgreSQL est prêt et healthy"
-                    POSTGRES_READY=true
-                    break
-                  fi
-                elif [ "$HEALTH" = "unhealthy" ]; then
-                  echo "⚠️  PostgreSQL est unhealthy, affichage des logs..."
-                  docker compose -f docker-compose.production.yml logs postgres | tail -50
+                if [ "$HEALTH" = "healthy" ] && docker compose -f docker-compose.production.yml exec -T postgres pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" > /dev/null 2>&1; then
+                  echo "✅ PostgreSQL prêt"
+                  POSTGRES_READY=true
+                  break
                 fi
               elif [ "$POSTGRES_STATUS" = "exited" ] || [ "$POSTGRES_STATUS" = "dead" ]; then
-                echo "❌ Le conteneur PostgreSQL a échoué, affichage des logs..."
                 docker compose -f docker-compose.production.yml logs postgres | tail -50
                 exit 1
               fi
-              echo "  Tentative $i/60 (État: ${POSTGRES_STATUS:-unknown}, Health: ${HEALTH:-none})..."
               sleep 2
             done
-
-            # Vérifier si PostgreSQL est prêt après la boucle
-            if [ "$POSTGRES_READY" = "false" ]; then
-              echo "❌ Timeout: PostgreSQL n'est pas prêt après 120 secondes"
-              echo "---- État du conteneur ----"
-              docker compose -f docker-compose.production.yml ps postgres
-              echo "---- Logs PostgreSQL (dernières 100 lignes) ----"
-              docker compose -f docker-compose.production.yml logs postgres | tail -100
-              exit 1
-            fi
-            echo "🔄 Exécution des migrations de base de données..."
-
-            # S'assurer que l'app Flask voit bien DATABASE_URL (utilisé en priorité dans la config)
+            [ "$POSTGRES_READY" = "false" ] && { docker compose -f docker-compose.production.yml logs postgres | tail -100; exit 1; }
             export DATABASE_URL="${SQLALCHEMY_DATABASE_URI}"
+            echo "📋 État migrations:"
+            docker_exec flask db current || true
+            docker_exec flask db heads || true
 
-            # Vérifier l'état des migrations avant upgrade
-            echo "📋 État des migrations avant upgrade:"
-            docker compose -f docker-compose.production.yml exec -T \
-              -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
-              -e DATABASE_URL="${DATABASE_URL}" \
-              -e POSTGRES_USER="${POSTGRES_USER}" \
-              -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
-              -e POSTGRES_DB="${POSTGRES_DB}" \
-              -e POSTGRES_HOST="postgres" \
-              -e POSTGRES_PORT="5432" \
-              -e REDIS_URL="${REDIS_URL}" \
-              -e REDIS_PASSWORD="${REDIS_PASSWORD}" \
-              -e MAIL_PASSWORD="${MAIL_PASSWORD}" \
-              backend flask db current || true
-            docker compose -f docker-compose.production.yml exec -T \
-              -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
-              -e DATABASE_URL="${DATABASE_URL}" \
-              -e POSTGRES_USER="${POSTGRES_USER}" \
-              -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
-              -e POSTGRES_DB="${POSTGRES_DB}" \
-              -e POSTGRES_HOST="postgres" \
-              -e POSTGRES_PORT="5432" \
-              -e REDIS_URL="${REDIS_URL}" \
-              -e REDIS_PASSWORD="${REDIS_PASSWORD}" \
-              -e MAIL_PASSWORD="${MAIL_PASSWORD}" \
-              backend flask db heads || true
-
-            # Passer toutes les variables nécessaires pour que Flask puisse construire SQLALCHEMY_DATABASE_URI
-            # Le code Flask essaie d'abord DATABASE_URL, puis SQLALCHEMY_DATABASE_URI, puis construit depuis POSTGRES_*
-            # REDIS_URL est également nécessaire pour validate_required_env_vars en production
-
-            # ✅ CORRECTION: Gérer le cas où une seule branche est appliquée
-            # Si plusieurs heads existent (branches divergentes), utiliser 'upgrade heads' pour appliquer toutes les branches
-            # Sinon, utiliser 'upgrade' normal pour appliquer jusqu'au head unique
             echo "🔍 Vérification de l'état des migrations..."
-            HEADS_OUTPUT=$(docker compose -f docker-compose.production.yml exec -T \
-              -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
-              -e DATABASE_URL="${DATABASE_URL}" \
-              -e POSTGRES_USER="${POSTGRES_USER}" \
-              -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
-              -e POSTGRES_DB="${POSTGRES_DB}" \
-              -e POSTGRES_HOST="postgres" \
-              -e POSTGRES_PORT="5432" \
-              -e REDIS_URL="${REDIS_URL}" \
-              -e REDIS_PASSWORD="${REDIS_PASSWORD}" \
-              -e MAIL_PASSWORD="${MAIL_PASSWORD}" \
-              backend flask db heads 2>&1 || echo "")
+            HEADS_OUTPUT=$(docker_exec flask db heads 2>&1 || echo "")
 
-            # Compter le nombre de heads (lignes qui commencent par un hash de révision)
-            # Utiliser wc -l pour compter les lignes au lieu de grep -c pour éviter les problèmes
             HEAD_COUNT=$(echo "$HEADS_OUTPUT" | grep -E "^[a-f0-9]{12}" | wc -l | tr -d ' ' || echo "0")
-
-            # Vérifier s'il y a un merge migration (contient "merge_" dans le nom)
             HAS_MERGE=$(echo "$HEADS_OUTPUT" | grep -c "merge_" || echo "0")
-
-            # S'assurer que HEAD_COUNT est un nombre valide
-            if ! [[ "$HEAD_COUNT" =~ ^[0-9]+$ ]]; then
-              echo "⚠️  Erreur lors du comptage des heads, utilisation de la valeur par défaut: 0"
-              HEAD_COUNT=0
-            fi
-
-            echo "📊 Nombre de heads détectés: $HEAD_COUNT"
-            echo "📊 Merge migration détectée: $HAS_MERGE"
-
-            # Déterminer la commande d'upgrade selon le nombre de heads et la présence de merge
-            # Si plusieurs heads OU merge migration détectée, utiliser 'upgrade heads'
+            if ! [[ "$HEAD_COUNT" =~ ^[0-9]+$ ]]; then HEAD_COUNT=0; fi
+            echo "📊 Heads: $HEAD_COUNT, Merge: $HAS_MERGE"
             if [ "$HEAD_COUNT" -gt 1 ] || [ "$HAS_MERGE" -gt 0 ]; then
-              if [ "$HAS_MERGE" -gt 0 ]; then
-                echo "⚠️  Merge migration détectée, utilisation de 'upgrade heads' pour gérer le merge..."
-              else
-                echo "⚠️  Plusieurs heads détectés ($HEAD_COUNT), utilisation de 'upgrade heads' pour gérer les merges..."
-              fi
               UPGRADE_CMD="upgrade heads"
             else
-              echo "ℹ️  Head unique détecté, application normale des migrations..."
               UPGRADE_CMD="upgrade"
             fi
-
-            # Vérifier l'état actuel de la base de données avant d'appliquer les migrations
-            echo "🔍 Vérification de l'état actuel de la base de données..."
-            CURRENT_REV=$(docker compose -f docker-compose.production.yml exec -T \
-              -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
-              -e DATABASE_URL="${DATABASE_URL}" \
-              -e POSTGRES_USER="${POSTGRES_USER}" \
-              -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
-              -e POSTGRES_DB="${POSTGRES_DB}" \
-              -e POSTGRES_HOST="postgres" \
-              -e POSTGRES_PORT="5432" \
-              -e REDIS_URL="${REDIS_URL}" \
-              -e REDIS_PASSWORD="${REDIS_PASSWORD}" \
-              -e MAIL_PASSWORD="${MAIL_PASSWORD}" \
-              backend flask db current 2>&1 | grep -E "^[a-f0-9]{12}" | head -1 || echo "")
-
-            echo "📋 Révision actuelle de la base de données: ${CURRENT_REV:-none}"
-
-            # Si c'est une merge migration et que la révision actuelle est déjà une des révisions du merge,
-            # utiliser 'upgrade head' (singulier) au lieu de 'upgrade heads'
-            if [ "$HAS_MERGE" -gt 0 ] && [ -n "$CURRENT_REV" ]; then
-              if echo "$HEADS_OUTPUT" | grep -q "$CURRENT_REV"; then
-                echo "ℹ️  Merge migration détectée mais révision actuelle déjà dans les heads, utilisation de 'upgrade head'..."
-                UPGRADE_CMD="upgrade head"
-              fi
+            CURRENT_REV=$(docker_exec flask db current 2>&1 | grep -E "^[a-f0-9]{12}" | head -1 || echo "")
+            if [ "$HAS_MERGE" -gt 0 ] && [ -n "$CURRENT_REV" ] && echo "$HEADS_OUTPUT" | grep -q "$CURRENT_REV"; then
+              UPGRADE_CMD="upgrade head"
             fi
 
             echo "🔄 Application des migrations avec: flask db $UPGRADE_CMD"
 
-            docker compose -f docker-compose.production.yml exec -T \
-              -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
-              -e DATABASE_URL="${DATABASE_URL}" \
-              -e POSTGRES_USER="${POSTGRES_USER}" \
-              -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
-              -e POSTGRES_DB="${POSTGRES_DB}" \
-              -e POSTGRES_HOST="postgres" \
-              -e POSTGRES_PORT="5432" \
-              -e REDIS_URL="${REDIS_URL}" \
-              -e REDIS_PASSWORD="${REDIS_PASSWORD}" \
-              -e MAIL_PASSWORD="${MAIL_PASSWORD}" \
-              backend flask db $UPGRADE_CMD || {
-              echo "❌ Erreur lors de l'exécution des migrations"
-              echo "---- Diagnostics (migration failed) ----"
-              echo "Variables d'environnement utilisées:"
-              echo "  POSTGRES_USER=${POSTGRES_USER}"
-              echo "  POSTGRES_DB=${POSTGRES_DB}"
-              echo "  SQLALCHEMY_DATABASE_URI=${SQLALCHEMY_DATABASE_URI}"
-              echo "  DATABASE_URL=${DATABASE_URL}"
-                docker compose -f docker-compose.production.yml exec -T \
-                  -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
-                  -e DATABASE_URL="${DATABASE_URL}" \
-                  -e POSTGRES_USER="${POSTGRES_USER}" \
-                  -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
-                  -e POSTGRES_DB="${POSTGRES_DB}" \
-                  -e POSTGRES_HOST="postgres" \
-                  -e POSTGRES_PORT="5432" \
-                  -e REDIS_URL="${REDIS_URL}" \
-                  -e REDIS_PASSWORD="${REDIS_PASSWORD}" \
-                  -e MAIL_PASSWORD="${MAIL_PASSWORD}" \
-                  backend flask db current || true
-                docker compose -f docker-compose.production.yml exec -T \
-                  -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
-                  -e DATABASE_URL="${DATABASE_URL}" \
-                  -e POSTGRES_USER="${POSTGRES_USER}" \
-                  -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
-                  -e POSTGRES_DB="${POSTGRES_DB}" \
-                  -e POSTGRES_HOST="postgres" \
-                  -e POSTGRES_PORT="5432" \
-                  -e REDIS_URL="${REDIS_URL}" \
-                  -e REDIS_PASSWORD="${REDIS_PASSWORD}" \
-                  -e MAIL_PASSWORD="${MAIL_PASSWORD}" \
-                  backend flask db heads || true
+            docker_exec flask db $UPGRADE_CMD || {
+              echo "❌ Erreur migrations"
+              docker_exec flask db current || true
+              docker_exec flask db heads || true
               docker compose -f docker-compose.production.yml logs backend | tail -50 || true
               exit 1
             }
-            echo "✅ Migrations appliquées avec succès"
+            docker compose -f docker-compose.production.yml exec -T backend bash -c "mkdir -p /app/data/ml/models && chmod -R 755 /app/data/ml/models && chown -R 999:999 /app/data/ml/models 2>/dev/null || true; [ -f /app/data/ml/models/delay_predictor.pkl ] && chmod 644 /app/data/ml/models/delay_predictor.pkl && chown 999:999 /app/data/ml/models/delay_predictor.pkl 2>/dev/null || true" || true
 
-            # Corriger les permissions des fichiers ML depuis l'intérieur du conteneur
-            echo "🔐 Correction des permissions des fichiers ML..."
-            docker compose -f docker-compose.production.yml exec -T backend bash -c "
-              mkdir -p /app/data/ml/models 2>/dev/null || true
-              chmod -R 755 /app/data/ml/models 2>/dev/null || true
-              # Le conteneur tourne avec UID 999 (appuser), s'assurer que les fichiers lui appartiennent
-              # Voir Dockerfile.production: useradd -r -g appgroup -u 999
-              if [ -d /app/data/ml/models ]; then
-                chown -R 999:999 /app/data/ml/models 2>/dev/null || true
-                # Si le fichier delay_predictor.pkl existe, corriger ses permissions spécifiquement
-                if [ -f /app/data/ml/models/delay_predictor.pkl ]; then
-                  chmod 644 /app/data/ml/models/delay_predictor.pkl 2>/dev/null || true
-                  chown 999:999 /app/data/ml/models/delay_predictor.pkl 2>/dev/null || true
-                  echo '✅ Permissions corrigées pour delay_predictor.pkl'
-                else
-                  echo 'ℹ️  Fichier delay_predictor.pkl non trouvé (sera créé lors de l''entraînement)'
-                fi
-              fi
-            " || {
-              echo "⚠️  Erreur lors de la correction des permissions (non bloquant)"
-            }
-            echo "✅ Permissions des fichiers ML vérifiées"
-
-            # Smoke tests post-déploiement
-            echo "🧪 Exécution des smoke tests..."
             if [ -f "/srv/atmr/scripts/smoke_tests.sh" ]; then
               export BACKEND_URL="http://localhost:5000"
-              bash /srv/atmr/scripts/smoke_tests.sh || {
-                echo "❌ Les smoke tests ont échoué"
-                rollback
-              }
-            else
-              echo "⚠️  Script de smoke tests non trouvé, tests ignorés"
+              bash /srv/atmr/scripts/smoke_tests.sh || rollback
             fi
-
-            # Désactiver le trap de rollback après succès
             trap - ERR
-
-            echo "✅ Déploiement terminé avec succès"
+            echo "✅ Déploiement terminé"
