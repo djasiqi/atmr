@@ -90,10 +90,14 @@ services:
     image: ${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}
     container_name: atmr-backend
     restart: unless-stopped
+    # Charger les variables depuis .env.production (créé par le workflow GitHub Actions)
+    env_file:
+      - .env.production
     # Variables d'environnement chargées depuis GitHub Secrets via workflow
     environment:
       # Configuration Flask
       FLASK_ENV: production
+      FLASK_CONFIG: production # ⚠️ IMPORTANT: Nécessaire pour charger ProductionConfig
       FLASK_APP: app.py
 
       # Base de données (variables individuelles pour échappement URL automatique)
@@ -102,18 +106,25 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-atmr_db}
-      # ⚠️ IMPORTANT: Ne pas construire SQLALCHEMY_DATABASE_URI/DATABASE_URL ici
-      # car Docker Compose n'échappe pas les caractères spéciaux dans POSTGRES_PASSWORD
-      # Flask config.py construira automatiquement l'URL avec échappement correct
+      # ⚠️ IMPORTANT: DATABASE_URL doit être construit avec échappement du mot de passe
+      # Pour générer l'URL correctement échappée, utilisez:
+      # python3 -c "from urllib.parse import quote_plus; print(f'postgresql+psycopg2://{user}:{quote_plus(password)}@{host}:{port}/{db}')"
+      # Ou utilisez le script: python scripts/generate_database_url.py USER PASSWORD HOST PORT DB
+      # Si DATABASE_URL n'est pas défini, Flask config.py construira automatiquement l'URL
       # via _build_database_url_safe() qui utilise urllib.parse.quote_plus()
-      # SQLALCHEMY_DATABASE_URI et DATABASE_URL seront passés explicitement
-      # via -e dans docker compose exec pour les migrations uniquement
+      DATABASE_URL: ${DATABASE_URL:-}
+      SQLALCHEMY_DATABASE_URI: ${SQLALCHEMY_DATABASE_URI:-${DATABASE_URL:-}}
 
       # Redis/Celery avec authentification
+      # ⚠️ IMPORTANT: Ne pas construire les URLs Redis ici car Docker Compose
+      # n'échappe pas les caractères spéciaux dans REDIS_PASSWORD
+      # Le code Python (celery_app.py) construira automatiquement les URLs
+      # avec échappement correct depuis REDIS_PASSWORD
       REDIS_PASSWORD: ${REDIS_PASSWORD}
-      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
-      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/0
-      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: "0"
+      # CELERY_BROKER_URL et CELERY_RESULT_BACKEND seront construits par celery_app.py
 
       # Optimisations PyTorch
       OMP_NUM_THREADS: 2
@@ -177,6 +188,9 @@ services:
     image: ${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}
     container_name: atmr-celery-worker
     restart: unless-stopped
+    # Charger les variables depuis .env.production (créé par le workflow GitHub Actions)
+    env_file:
+      - .env.production
     command: celery -A celery_app.celery worker --loglevel=info --concurrency=2
     healthcheck:
       test: ["CMD", "celery", "-A", "celery_app.celery", "inspect", "ping"]
@@ -187,6 +201,7 @@ services:
     environment:
       # Même configuration que le backend
       FLASK_ENV: production
+      FLASK_CONFIG: production # ⚠️ IMPORTANT: Nécessaire pour charger ProductionConfig
       # Base de données (variables individuelles pour échappement URL automatique)
       POSTGRES_USER: ${POSTGRES_USER:-atmr_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-atmr_password}
@@ -197,9 +212,15 @@ services:
       SQLALCHEMY_DATABASE_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       # DATABASE_URL sera construit par config.py avec échappement URL automatique
       # Redis/Celery avec authentification
+      # ⚠️ IMPORTANT: Ne pas construire les URLs Redis ici car Docker Compose
+      # n'échappe pas les caractères spéciaux dans REDIS_PASSWORD
+      # Le code Python (celery_app.py) construira automatiquement les URLs
+      # avec échappement correct depuis REDIS_PASSWORD
       REDIS_PASSWORD: ${REDIS_PASSWORD}
-      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
-      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/0
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: "0"
+      # CELERY_BROKER_URL et CELERY_RESULT_BACKEND seront construits par celery_app.py
 
       # Optimisations PyTorch pour le worker
       OMP_NUM_THREADS: 1
@@ -237,6 +258,9 @@ services:
     image: ${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}
     container_name: atmr-celery-beat
     restart: unless-stopped
+    # Charger les variables depuis .env.production (créé par le workflow GitHub Actions)
+    env_file:
+      - .env.production
     command: celery -A celery_app.celery beat --loglevel=info
     healthcheck:
       test: ["CMD", "test", "-f", "/app/celerybeat-schedule/db"]
@@ -246,6 +270,7 @@ services:
       start_period: 60s
     environment:
       FLASK_ENV: production
+      FLASK_CONFIG: production # ⚠️ IMPORTANT: Nécessaire pour charger ProductionConfig
       # Base de données (variables individuelles pour échappement URL automatique)
       POSTGRES_USER: ${POSTGRES_USER:-atmr_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-atmr_password}
@@ -256,9 +281,15 @@ services:
       SQLALCHEMY_DATABASE_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       # DATABASE_URL sera construit par config.py avec échappement URL automatique
       # Redis/Celery avec authentification
+      # ⚠️ IMPORTANT: Ne pas construire les URLs Redis ici car Docker Compose
+      # n'échappe pas les caractères spéciaux dans REDIS_PASSWORD
+      # Le code Python (celery_app.py) construira automatiquement les URLs
+      # avec échappement correct depuis REDIS_PASSWORD
       REDIS_PASSWORD: ${REDIS_PASSWORD}
-      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
-      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/0
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: "0"
+      # CELERY_BROKER_URL et CELERY_RESULT_BACKEND seront construits par celery_app.py
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       APP_ENCRYPTION_KEY_B64: ${APP_ENCRYPTION_KEY_B64}
     volumes:
@@ -287,8 +318,15 @@ services:
     restart: unless-stopped
     command: celery -A celery_app.celery flower --port=5555
     environment:
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      # ⚠️ IMPORTANT: Ne pas construire les URLs Redis ici car Docker Compose
+      # n'échappe pas les caractères spéciaux dans REDIS_PASSWORD
+      # Le code Python (celery_app.py) construira automatiquement les URLs
+      # avec échappement correct depuis REDIS_PASSWORD
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: "0"
+      # CELERY_BROKER_URL et CELERY_RESULT_BACKEND seront construits par celery_app.py
     ports:
       - "5555:5555"
     networks:

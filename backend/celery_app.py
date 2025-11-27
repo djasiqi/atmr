@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import os
 from typing import TYPE_CHECKING, Any
+from urllib.parse import quote_plus
 
 from celery import Celery
 
@@ -14,9 +15,56 @@ logger = logging.getLogger(__name__)
 
 # Default configuration
 # (⚠️ par défaut on pointe vers le service Docker 'redis', pas localhost)
-REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
-CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", REDIS_URL)
-CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", REDIS_URL)
+
+# Construire les URLs Redis avec échappement du mot de passe si nécessaire
+_redis_password = os.getenv("REDIS_PASSWORD", "")
+_redis_host = os.getenv("REDIS_HOST", "redis")
+_redis_port = os.getenv("REDIS_PORT", "6379")
+_redis_db = os.getenv("REDIS_DB", "0")
+
+# Si REDIS_URL est fourni, l'utiliser tel quel
+# Sinon, construire depuis REDIS_PASSWORD avec échappement
+if os.getenv("REDIS_URL"):
+    REDIS_URL = os.getenv("REDIS_URL")
+elif _redis_password:
+    # Échapper le mot de passe pour l'URL
+    _redis_password_escaped = quote_plus(_redis_password)
+    REDIS_URL = (
+        f"redis://:{_redis_password_escaped}@{_redis_host}:{_redis_port}/{_redis_db}"
+    )
+else:
+    REDIS_URL = f"redis://{_redis_host}:{_redis_port}/{_redis_db}"
+
+# ⚠️ IMPORTANT: Construire les URLs Redis avec échappement correct du mot de passe
+# Si REDIS_PASSWORD est disponible, toujours construire les URLs avec échappement
+# même si CELERY_BROKER_URL/CELERY_RESULT_BACKEND sont définis (pour éviter les URLs non échappées)
+_broker_url_env = os.getenv("CELERY_BROKER_URL")
+_result_backend_env = os.getenv("CELERY_RESULT_BACKEND")
+
+# Si REDIS_PASSWORD est disponible et qu'une des URLs n'est pas définie ou contient des caractères non échappés,
+# reconstruire les URLs avec échappement correct
+if _redis_password:
+    # Construire l'URL avec échappement depuis REDIS_PASSWORD
+    _redis_password_escaped = quote_plus(_redis_password)
+    _redis_url_escaped = (
+        f"redis://:{_redis_password_escaped}@{_redis_host}:{_redis_port}/{_redis_db}"
+    )
+
+    # Utiliser les URLs échappées si les URLs de l'environnement ne sont pas définies
+    # ou si elles contiennent le mot de passe non échappé (détection simple)
+    if not _broker_url_env or _redis_password in _broker_url_env:
+        CELERY_BROKER_URL = _redis_url_escaped
+    else:
+        CELERY_BROKER_URL = _broker_url_env
+
+    if not _result_backend_env or _redis_password in _result_backend_env:
+        CELERY_RESULT_BACKEND = _redis_url_escaped
+    else:
+        CELERY_RESULT_BACKEND = _result_backend_env
+else:
+    # Pas de mot de passe, utiliser les URLs fournies ou REDIS_URL par défaut
+    CELERY_BROKER_URL = _broker_url_env if _broker_url_env else REDIS_URL
+    CELERY_RESULT_BACKEND = _result_backend_env if _result_backend_env else REDIS_URL
 CELERY_TIMEZONE = os.getenv("CELERY_TIMEZONE", "Europe/Zurich")
 DISPATCH_AUTORUN_INTERVAL_SEC = int(os.getenv("DISPATCH_AUTORUN_INTERVAL_SEC", "300"))
 
@@ -37,6 +85,15 @@ celery: Celery = Celery(
     ],
 )
 
+# Calculer worker_max_tasks_per_child avant l'appel à celery.conf.update
+# ⚠️ IMPORTANT: 0 n'est plus accepté par billiard, on le convertit en None
+_max_tasks_env = os.getenv("CELERY_WORKER_MAX_TASKS_PER_CHILD")
+if _max_tasks_env is None:
+    _max_tasks = 200  # Default: 200 tasks par worker
+else:
+    _max_tasks_int = int(_max_tasks_env)
+    _max_tasks = None if _max_tasks_int == 0 else _max_tasks_int
+
 # Configure Celery
 celery.conf.update(
     timezone=CELERY_TIMEZONE,
@@ -48,7 +105,7 @@ celery.conf.update(
     # - corrigé de 0.600
     task_soft_time_limit=540,  # ✅ 9 minutes soft limit (540 secondes)
     # - corrigé de 0.540
-    worker_max_tasks_per_child=0.200,  # Restart worker after 200 tasks
+    worker_max_tasks_per_child=_max_tasks,  # None ou int > 0 (0 converti en None)
     worker_prefetch_multiplier=1,  # One task at a time
     task_acks_late=True,  # Acknowledge task after execution
     task_reject_on_worker_lost=True,  # Requeue task if worker dies
