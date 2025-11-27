@@ -1,0 +1,9 @@
+# Requirements pour la production (API, workers, etc.)
+# Inclut les dépendances de base + spécifiques à la production
+# SANS les dépendances RL lourdes (torch, gymnasium, optuna, etc.)
+
+-r requirements.base.txt
+
+# Pas de dépendances supplémentaires spécifiques à la prod
+# Toutes les dépendances nécessaires sont dans requirements.base.txt
+

@@ -132,6 +132,12 @@ class Config:
     # Ratelimit on/off (tests = off plus bas)
     RATELIMIT_ENABLED = True
 
+    # ✅ Reinforcement Learning / ML lourd
+    # En production, RL_ENABLED=false (pas de torch, gymnasium, optuna)
+    # En environnement RL, RL_ENABLED=true (image Dockerfile.rl)
+    RL_ENABLED = os.getenv("RL_ENABLED", "false").lower() in ("true", "1", "yes")
+    WITH_RL = os.getenv("WITH_RL", "false").lower() in ("true", "1", "yes")
+
     # ✅ URLs dynamiques pour PDFs/uploads
     PDF_BASE_URL: str = os.getenv("PDF_BASE_URL", "http://localhost:5000")
     UPLOADS_PUBLIC_BASE = os.getenv("UPLOADS_PUBLIC_BASE", "/uploads")

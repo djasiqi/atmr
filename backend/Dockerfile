@@ -17,21 +17,17 @@ RUN apt-get update && apt-get upgrade -y && \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt* requirements-rl.txt* ./
+COPY requirements.base.txt requirements.prod.txt requirements-dev.txt* requirements-otel.txt* ./
 RUN python -m pip install --upgrade pip && \
-    if [ -f requirements.txt ]; then pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt; fi && \
-    if [ -f requirements-rl.txt ]; then pip wheel --no-cache-dir --wheel-dir /wheels -r requirements-rl.txt; fi && \
-    pip wheel --no-cache-dir --wheel-dir /wheels \
-    prometheus-client \
-    opentelemetry-api \
-    opentelemetry-sdk \
-    opentelemetry-instrumentation-flask \
-    opentelemetry-instrumentation-sqlalchemy \
-    opentelemetry-instrumentation-celery \
-    opentelemetry-instrumentation-requests \
-    opentelemetry-exporter-otlp-proto-grpc \
-    pytest-cov \
-    coverage
+    echo "📦 Installation des dépendances de développement..." && \
+    if [ -f requirements-dev.txt ]; then \
+    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements-dev.txt; \
+    else \
+    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.prod.txt; \
+    fi && \
+    if [ -f requirements-otel.txt ]; then \
+    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements-otel.txt; \
+    fi
 
 
 ############ Stage 2: runtime (léger, non-root, sécurisé) ######################
@@ -63,21 +59,17 @@ RUN apt-get update && apt-get upgrade -y && \
 
 # Installer les wheels construites au stage builder
 COPY --from=builder /wheels /wheels
-COPY --from=builder /app/requirements.txt* /app/requirements-rl.txt* ./
+COPY --from=builder /app/requirements*.txt ./
 RUN python -m pip install --upgrade pip && \
-    if [ -f requirements.txt ]; then pip install --no-index --find-links=/wheels -r requirements.txt; fi && \
-    if [ -f requirements-rl.txt ]; then pip install --no-index --find-links=/wheels -r requirements-rl.txt; fi && \
-    pip install --no-index --find-links=/wheels \
-    prometheus-client \
-    opentelemetry-api \
-    opentelemetry-sdk \
-    opentelemetry-instrumentation-flask \
-    opentelemetry-instrumentation-sqlalchemy \
-    opentelemetry-instrumentation-celery \
-    opentelemetry-instrumentation-requests \
-    opentelemetry-exporter-otlp-proto-grpc \
-    pytest-cov \
-    coverage && \
+    echo "📦 Installation des dépendances de développement..." && \
+    if [ -f requirements-dev.txt ]; then \
+    pip install --no-index --find-links=/wheels -r requirements-dev.txt; \
+    else \
+    pip install --no-index --find-links=/wheels -r requirements.prod.txt; \
+    fi && \
+    if [ -f requirements-otel.txt ]; then \
+    pip install --no-index --find-links=/wheels -r requirements-otel.txt; \
+    fi && \
     rm -rf /wheels
 
 # Créer un utilisateur non-root

@@ -1,12 +1,17 @@
-# backend/Dockerfile
-# Multi-stage Dockerfile optimisé pour la production ATMR
+# backend/Dockerfile.production
+# Multi-stage Dockerfile optimisé pour la production ATMR (SANS RL/ML lourd)
 # Sécurité, performance et robustesse maximisées
+# 
+# Cette image est légère et ne contient PAS torch, gymnasium, optuna, etc.
+# Pour l'environnement RL/ML, utilisez Dockerfile.rl
 
 ########## Stage 1: Builder (compilation des wheels et dépendances) ##########
 FROM python:3.11-slim-bookworm AS builder
 
-ARG WITH_RL=true
+# Production n'installe JAMAIS les dépendances RL
+ARG WITH_RL=false
 ENV WITH_RL=${WITH_RL}
+ENV RL_ENABLED=false
 
 # Variables d'environnement pour optimiser la compilation
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -43,18 +48,14 @@ RUN apt-get update && apt-get upgrade -y && \
     && rm -rf /var/lib/apt/lists/*
 
 # Copier et installer les dépendances Python
-# Utiliser un ARG pour invalider le cache si requirements.txt change
+# Utiliser un ARG pour invalider le cache si requirements.prod.txt change
 ARG REQUIREMENTS_HASH
 ENV REQUIREMENTS_HASH=${REQUIREMENTS_HASH}
-COPY requirements.txt requirements-rl.txt ./
+COPY requirements.base.txt requirements.prod.txt ./
 RUN --mount=type=cache,target=/root/.cache/pip \
     python -m pip install --upgrade pip setuptools wheel && \
-    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt && \
-    (if [ "$WITH_RL" = "true" ] && [ -f requirements-rl.txt ]; then \
-    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements-rl.txt; \
-    else \
-    echo "Skip RL wheels (WITH_RL=$WITH_RL)"; \
-    fi) && \
+    echo "📦 Installation des dépendances de production (SANS RL/ML lourd)..." && \
+    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.prod.txt && \
     (if [ -f requirements-dev.txt ]; then \
     pip wheel --no-cache-dir --wheel-dir /wheels -r requirements-dev.txt; \
     else \
@@ -78,8 +79,10 @@ RUN if command -v grype >/dev/null 2>&1; then \
 ########## Stage 2: Runtime optimisé (léger, sécurisé, performant) ##########
 FROM python:3.11-slim-bookworm AS runtime
 
-ARG WITH_RL=true
+# Production n'active JAMAIS RL
+ARG WITH_RL=false
 ENV WITH_RL=${WITH_RL}
+ENV RL_ENABLED=false
 
 # Variables d'environnement pour la production
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -164,12 +167,8 @@ RUN apt-get update && apt-get upgrade -y && \
 COPY --from=builder /wheels /wheels
 COPY --from=builder /app/requirements*.txt ./
 RUN python -m pip install --upgrade pip && \
-    pip install --no-index --find-links=/wheels -r requirements.txt && \
-    (if [ "$WITH_RL" = "true" ] && [ -f requirements-rl.txt ]; then \
-    pip install --no-index --find-links=/wheels -r requirements-rl.txt; \
-    else \
-    echo "Skip RL install (WITH_RL=$WITH_RL)"; \
-    fi) && \
+    echo "📦 Installation des dépendances de production..." && \
+    pip install --no-index --find-links=/wheels -r requirements.prod.txt && \
     rm -rf /wheels /root/.cache/pip
 
 # Création d'un utilisateur non-root sécurisé
