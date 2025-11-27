@@ -329,6 +329,14 @@ jobs:
             chmod 600 .env.production
             echo "✅ Fichier .env.production créé"
 
+            # ⚠️ IMPORTANT: Docker Compose charge automatiquement .env (pas .env.production)
+            # Créer un fichier .env pour que docker-compose puisse charger les variables
+            # pour le remplacement ${VAR} dans docker-compose.production.yml
+            # Les variables sont déjà exportées dans le shell, mais docker-compose a besoin du fichier .env
+            cp .env.production .env
+            chmod 600 .env
+            echo "✅ Fichier .env créé (nécessaire pour docker-compose pour remplacer \${VAR} dans le YAML)"
+
             # Créer les répertoires nécessaires pour les données (si volumes locaux)
             echo "📁 Création des répertoires de données..."
             mkdir -p data/rl/shadow_mode data/ml data/rl || true
@@ -336,6 +344,8 @@ jobs:
             echo "✅ Répertoires de données créés"
 
             echo "🔄 Démarrage des services..."
+            # Docker Compose chargera automatiquement .env pour remplacer ${VAR} dans le YAML
+            # Les variables sont aussi exportées dans le shell pour les commandes exec
             docker compose -f docker-compose.production.yml up -d
 
             echo "⏳ Attente que PostgreSQL soit prêt..."
