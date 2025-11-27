@@ -51,23 +51,59 @@ jobs:
 
       - name: Validate required secrets
         run: |
-          REQUIRED_SECRETS=(
-            "DOCKER_IMAGE"
-            "DOCKER_TAG"
-            "DOCKERHUB_USERNAME"
-            "DOCKERHUB_TOKEN"
-          )
+          echo "🔍 Validation des secrets requis..."
           MISSING_SECRETS=()
-          for secret in "${REQUIRED_SECRETS[@]}"; do
-            if [ -z "${!secret:-}" ]; then
-              MISSING_SECRETS+=("$secret")
-            fi
-          done
+
+          # Vérifier DOCKER_IMAGE
+          if [ -z "${{ secrets.DOCKER_IMAGE }}" ]; then
+            MISSING_SECRETS+=("DOCKER_IMAGE")
+          else
+            echo "✅ DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}"
+          fi
+
+          # Vérifier DOCKER_TAG (peut être remplacé par l'input tag)
+          DOCKER_TAG_VALUE="${{ github.event.inputs.tag != '' && github.event.inputs.tag || secrets.DOCKER_TAG }}"
+          if [ -z "${DOCKER_TAG_VALUE}" ]; then
+            MISSING_SECRETS+=("DOCKER_TAG")
+          else
+            echo "✅ DOCKER_TAG: ${DOCKER_TAG_VALUE}"
+          fi
+
+          # Vérifier DOCKERHUB_USERNAME
+          if [ -z "${{ secrets.DOCKERHUB_USERNAME }}" ]; then
+            MISSING_SECRETS+=("DOCKERHUB_USERNAME")
+          else
+            echo "✅ DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}"
+          fi
+
+          # Vérifier DOCKERHUB_TOKEN
+          if [ -z "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+            MISSING_SECRETS+=("DOCKERHUB_TOKEN")
+          else
+            echo "✅ DOCKERHUB_TOKEN: [masqué]"
+          fi
+
           if [ ${#MISSING_SECRETS[@]} -ne 0 ]; then
-            echo "❌ Secrets manquants: ${MISSING_SECRETS[*]}"
+            echo ""
+            echo "❌ Secrets manquants ou vides: ${MISSING_SECRETS[*]}"
+            echo ""
+            echo "💡 Pour résoudre ce problème:"
+            echo "   1. Allez dans Settings > Secrets and variables > Actions"
+            echo "   2. Ajoutez ou vérifiez les secrets suivants:"
+            for secret in "${MISSING_SECRETS[@]}"; do
+              echo "      - ${secret}"
+            done
+            echo ""
+            echo "   Exemple de valeurs:"
+            echo "   - DOCKER_IMAGE: djasiqi/atmr-backend"
+            echo "   - DOCKER_TAG: latest"
+            echo "   - DOCKERHUB_USERNAME: votre-username"
+            echo "   - DOCKERHUB_TOKEN: votre-token-docker-hub"
             exit 1
           fi
-          echo "✅ Tous les secrets requis sont présents (${#REQUIRED_SECRETS[@]} secrets validés)"
+
+          echo ""
+          echo "✅ Tous les secrets requis sont présents et non vides"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -245,6 +281,15 @@ jobs:
         run: |
           echo "🔍 Vérification que l'image existe sur Docker Hub..."
           IMAGE_TAG="${{ needs.build-and-push.outputs.image_tag }}"
+
+          # Valider que image_tag n'est pas vide
+          if [ -z "${IMAGE_TAG}" ] || [ "${IMAGE_TAG}" = ":" ]; then
+            echo "❌ Erreur: image_tag est vide ou invalide"
+            echo "💡 Vérifiez que les secrets DOCKER_IMAGE et DOCKER_TAG sont définis dans GitHub Secrets"
+            echo "💡 Ou fournissez un tag via l'input 'tag' lors du déclenchement manuel"
+            exit 1
+          fi
+
           echo "Image attendue: ${IMAGE_TAG}"
 
           # Vérifier que l'image existe sur Docker Hub (avec retry)
