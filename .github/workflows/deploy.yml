@@ -484,12 +484,14 @@ jobs:
             docker_exec flask db current || true
             docker_exec flask db heads || true
             echo "🔄 Upgrade des migrations vers le head..."
-            if ! docker_exec flask db upgrade 2>&1; then
-              echo "⚠️  Première tentative échouée, vérification de l'état..."
+            UPGRADE_OUTPUT=$(docker_exec flask db upgrade 2>&1) || {
+              UPGRADE_EXIT_CODE=$?
+              echo "$UPGRADE_OUTPUT"
+              echo "⚠️  Première tentative échouée (code: $UPGRADE_EXIT_CODE), vérification de l'état..."
               CURRENT_OUTPUT=$(docker_exec flask db current 2>&1 || echo "")
               echo "$CURRENT_OUTPUT"
-              # Si la base est à 68116559b15d mais pas à 24bbcb82c891, marquer 24bbcb82c891 comme appliquée
-              if echo "$CURRENT_OUTPUT" | grep -q "68116559b15d" && ! echo "$CURRENT_OUTPUT" | grep -q "24bbcb82c891"; then
+              # Si erreur "overlaps" et base à 68116559b15d mais pas à 24bbcb82c891, marquer 24bbcb82c891 comme appliquée
+              if echo "$UPGRADE_OUTPUT" | grep -q "overlaps" && echo "$CURRENT_OUTPUT" | grep -q "68116559b15d" && ! echo "$CURRENT_OUTPUT" | grep -q "24bbcb82c891"; then
                 echo "🔄 Marquage de la révision 24bbcb82c891 comme appliquée (nécessaire pour la merge migration)..."
                 docker_exec flask db stamp 24bbcb82c891 || {
                   echo "❌ Échec du marquage de la révision 24bbcb82c891"
@@ -507,12 +509,13 @@ jobs:
                 }
               else
                 echo "❌ Erreur lors de l'exécution des migrations"
+                echo "💡 Si l'erreur est 'overlaps', vérifiez que les deux révisions parentes sont appliquées"
                 docker_exec flask db current || true
                 docker_exec flask db heads || true
                 docker compose -f docker-compose.production.yml logs backend | tail -100 || true
                 exit 1
               fi
-            fi
+            }
             echo "✅ Migrations appliquées avec succès"
             docker compose -f docker-compose.production.yml exec -T --user root backend bash -c "mkdir -p /app/data /app/data/ml /app/data/ml/models && chmod -R 755 /app/data && chown -R 999:999 /app/data 2>/dev/null || true; [ -f /app/data/ml/models/delay_predictor.pkl ] && chmod 644 /app/data/ml/models/delay_predictor.pkl && chown 999:999 /app/data/ml/models/delay_predictor.pkl 2>/dev/null || true" || true
 
