@@ -221,11 +221,11 @@ else:
 
 # Test de connexion si possible
 try:
-    from sqlalchemy import create_engine
+    from sqlalchemy import create_engine, text
     if db_url:
         engine = create_engine(db_url)
         with engine.connect() as conn:
-            result = conn.execute('SELECT 1')
+            result = conn.execute(text('SELECT 1'))
             print('✅ Connexion à la base de données réussie')
 except Exception as e:
     print(f'⚠️  Erreur de connexion à la base de données: {e}')
@@ -241,7 +241,9 @@ import os
 import logging
 logging.basicConfig(level=logging.INFO)
 
-redis_url = os.getenv('CELERY_BROKER_URL', 'redis://127.0.0.1:6379/0')
+# Utiliser REDIS_URL en priorité (configuré dans le workflow de déploiement)
+# Sinon CELERY_BROKER_URL, sinon fallback localhost
+redis_url = os.getenv('REDIS_URL') or os.getenv('CELERY_BROKER_URL') or 'redis://127.0.0.1:6379/0'
 print(f'Redis URL: {redis_url}')
 
 try:
@@ -262,12 +264,22 @@ check_dependencies() {
 import logging
 logging.basicConfig(level=logging.INFO)
 
-dependencies = [
-    'flask', 'sqlalchemy', 'celery', 'redis', 'pandas', 
-    'numpy', 'scikit-learn', 'torch', 'gymnasium'
-]
+# Dépendances critiques (toujours requises)
+critical_deps = ['flask', 'sqlalchemy', 'celery', 'redis', 'pandas', 'numpy']
 
-for dep in dependencies:
+# Dépendances ML (installées avec WITH_RL=true)
+ml_deps = ['sklearn', 'torch', 'gymnasium']
+
+# Vérifier les dépendances critiques
+for dep in critical_deps:
+    try:
+        __import__(dep)
+        print(f'✅ {dep}')
+    except ImportError:
+        print(f'❌ {dep} manquant')
+
+# Vérifier les dépendances ML (toujours vérifiées car installées)
+for dep in ml_deps:
     try:
         __import__(dep)
         print(f'✅ {dep}')
