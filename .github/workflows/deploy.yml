@@ -349,7 +349,7 @@ jobs:
           username: ${{ env.SSH_USER }}
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
-          envs: APP_ENCRYPTION_KEY_B64,SECRET_KEY,JWT_SECRET_KEY,POSTGRES_PASSWORD,POSTGRES_USER,POSTGRES_DB,REDIS_PASSWORD,REDIS_URL,MAIL_PASSWORD,SENTRY_DSN,DOCKER_IMAGE,DOCKER_TAG,DATABASE_URL,SQLALCHEMY_DATABASE_URI
+          envs: APP_ENCRYPTION_KEY_B64,SECRET_KEY,JWT_SECRET_KEY,POSTGRES_PASSWORD,POSTGRES_USER,POSTGRES_DB,REDIS_PASSWORD,REDIS_URL,MAIL_PASSWORD,SENTRY_DSN,PDF_BASE_URL,DOCKER_IMAGE,DOCKER_TAG,DATABASE_URL,SQLALCHEMY_DATABASE_URI
           script: |
             cd /srv/atmr
             set -o errexit -o nounset -o pipefail
@@ -389,6 +389,7 @@ jobs:
             export REDIS_PASSWORD="${{ secrets.REDIS_PASSWORD }}"
             export MAIL_PASSWORD="${{ secrets.MAIL_PASSWORD }}"
             export SENTRY_DSN="${{ secrets.SENTRY_DSN }}"
+            export PDF_BASE_URL="${{ secrets.PDF_BASE_URL }}"
             export DOCKER_IMAGE="${DOCKER_IMAGE}"
             export DOCKER_TAG="${DOCKER_TAG}"
 
@@ -449,18 +450,17 @@ jobs:
             cp .env.production .env && chmod 600 .env
             mkdir -p data/rl/shadow_mode data/ml data/rl data/ml/models && chmod -R 755 data && chown -R 999:999 data 2>/dev/null || true
             docker compose -f docker-compose.production.yml up -d
-
+            echo "⏳ Attente du démarrage du backend..."
             for i in $(seq 1 30); do
               BACKEND_STATUS=$(docker compose -f docker-compose.production.yml ps backend --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
               [ "$BACKEND_STATUS" = "running" ] && echo "✅ Backend démarré" && break
               sleep 1
             done
-
-            echo "🔐 Correction des permissions ML..."
-            docker compose -f docker-compose.production.yml exec -T backend bash -c "mkdir -p /app/data/ml/models && chmod -R 755 /app/data/ml/models && chown -R 999:999 /app/data/ml/models 2>/dev/null || true; [ -f /app/data/ml/models/delay_predictor.pkl ] && chmod 644 /app/data/ml/models/delay_predictor.pkl && chown 999:999 /app/data/ml/models/delay_predictor.pkl 2>/dev/null || true" || true
+            echo "🔐 Correction des permissions ML (dans le volume Docker)..."
+            docker compose -f docker-compose.production.yml exec -T --user root backend bash -c "mkdir -p /app/data /app/data/ml /app/data/ml/models && chmod -R 755 /app/data && chown -R 999:999 /app/data && [ -f /app/data/ml/models/delay_predictor.pkl ] && chmod 644 /app/data/ml/models/delay_predictor.pkl && chown 999:999 /app/data/ml/models/delay_predictor.pkl || true; ls -la /app/data/ml/models/ 2>/dev/null || true" || true
+            echo "🔄 Redémarrage du backend pour appliquer les permissions..."
             docker compose -f docker-compose.production.yml restart backend || true
             sleep 5
-            docker compose -f docker-compose.production.yml exec -T backend bash -c "[ -f /app/data/ml/models/delay_predictor.pkl ] && chmod 644 /app/data/ml/models/delay_predictor.pkl && chown 999:999 /app/data/ml/models/delay_predictor.pkl 2>/dev/null || true" || true
 
             POSTGRES_READY=false
             for i in $(seq 1 60); do
@@ -486,31 +486,69 @@ jobs:
 
             echo "🔍 Vérification de l'état des migrations..."
             HEADS_OUTPUT=$(docker_exec flask db heads 2>&1 || echo "")
+            CURRENT_REV=$(docker_exec flask db current 2>&1 | grep -E "^[a-f0-9]{12}" | head -1 || echo "")
 
             HEAD_COUNT=$(echo "$HEADS_OUTPUT" | grep -E "^[a-f0-9]{12}" | wc -l | tr -d ' ' || echo "0")
             HAS_MERGE=$(echo "$HEADS_OUTPUT" | grep -c "merge_" || echo "0")
             if ! [[ "$HEAD_COUNT" =~ ^[0-9]+$ ]]; then HEAD_COUNT=0; fi
-            echo "📊 Heads: $HEAD_COUNT, Merge: $HAS_MERGE"
-            if [ "$HEAD_COUNT" -gt 1 ] || [ "$HAS_MERGE" -gt 0 ]; then
+            echo "📊 Heads: $HEAD_COUNT, Merge: $HAS_MERGE, Current: ${CURRENT_REV:-none}"
+
+            # Pour les merge migrations, TOUJOURS utiliser 'upgrade heads' (pluriel)
+            # Cela applique toutes les branches jusqu'aux heads, résolvant automatiquement le merge
+            if [ "$HAS_MERGE" -gt 0 ]; then
               UPGRADE_CMD="upgrade heads"
+              echo "ℹ️  Merge migration détectée, utilisation de 'upgrade heads'"
+            elif [ "$HEAD_COUNT" -gt 1 ]; then
+              UPGRADE_CMD="upgrade heads"
+              echo "ℹ️  Plusieurs heads détectés, utilisation de 'upgrade heads'"
             else
               UPGRADE_CMD="upgrade"
-            fi
-            CURRENT_REV=$(docker_exec flask db current 2>&1 | grep -E "^[a-f0-9]{12}" | head -1 || echo "")
-            if [ "$HAS_MERGE" -gt 0 ] && [ -n "$CURRENT_REV" ] && echo "$HEADS_OUTPUT" | grep -q "$CURRENT_REV"; then
-              UPGRADE_CMD="upgrade head"
+              echo "ℹ️  Head unique, utilisation de 'upgrade'"
             fi
 
             echo "🔄 Application des migrations avec: flask db $UPGRADE_CMD"
 
-            docker_exec flask db $UPGRADE_CMD || {
-              echo "❌ Erreur migrations"
-              docker_exec flask db current || true
-              docker_exec flask db heads || true
-              docker compose -f docker-compose.production.yml logs backend | tail -50 || true
-              exit 1
+            # Capturer la sortie pour détecter les erreurs "overlaps"
+            MIGRATION_OUTPUT=$(docker_exec flask db $UPGRADE_CMD 2>&1) || {
+              MIGRATION_EXIT_CODE=$?
+              echo "$MIGRATION_OUTPUT"
+              
+              # Si c'est une erreur "overlaps" avec la merge migration, essayer une approche alternative
+              if echo "$MIGRATION_OUTPUT" | grep -q "overlaps" && echo "$HEADS_OUTPUT" | grep -q "merge_68116559b15d_24bbcb82c891"; then
+                echo "⚠️  Erreur 'overlaps' détectée, tentative de résolution..."
+                echo "📋 État actuel de la base de données:"
+                docker_exec flask db current || true
+                echo "📋 Historique des révisions:"
+                docker_exec flask db history || true
+                
+                # Essayer d'appliquer directement la merge migration si elle est le head
+                if echo "$HEADS_OUTPUT" | grep -q "merge_68116559b15d_24bbcb82c891.*head"; then
+                  echo "🔄 Application directe de la merge migration (head)..."
+                  docker_exec flask db upgrade merge_68116559b15d_24bbcb82c891 || {
+                    echo "❌ Échec de l'application directe de la merge migration"
+                    docker_exec flask db current || true
+                    docker_exec flask db heads || true
+                    docker compose -f docker-compose.production.yml logs backend | tail -50 || true
+                    exit 1
+                  }
+                  echo "✅ Merge migration appliquée avec succès"
+                else
+                  echo "❌ Impossible de résoudre le conflit de merge automatiquement"
+                  docker_exec flask db current || true
+                  docker_exec flask db heads || true
+                  docker compose -f docker-compose.production.yml logs backend | tail -50 || true
+                  exit 1
+                fi
+              else
+                echo "❌ Erreur migrations (code: $MIGRATION_EXIT_CODE)"
+                docker_exec flask db current || true
+                docker_exec flask db heads || true
+                docker compose -f docker-compose.production.yml logs backend | tail -50 || true
+                exit 1
+              fi
             }
-            docker compose -f docker-compose.production.yml exec -T backend bash -c "mkdir -p /app/data/ml/models && chmod -R 755 /app/data/ml/models && chown -R 999:999 /app/data/ml/models 2>/dev/null || true; [ -f /app/data/ml/models/delay_predictor.pkl ] && chmod 644 /app/data/ml/models/delay_predictor.pkl && chown 999:999 /app/data/ml/models/delay_predictor.pkl 2>/dev/null || true" || true
+            echo "✅ Migrations appliquées avec succès"
+            docker compose -f docker-compose.production.yml exec -T --user root backend bash -c "mkdir -p /app/data /app/data/ml /app/data/ml/models && chmod -R 755 /app/data && chown -R 999:999 /app/data 2>/dev/null || true; [ -f /app/data/ml/models/delay_predictor.pkl ] && chmod 644 /app/data/ml/models/delay_predictor.pkl && chown 999:999 /app/data/ml/models/delay_predictor.pkl 2>/dev/null || true" || true
 
             if [ -f "/srv/atmr/scripts/smoke_tests.sh" ]; then
               export BACKEND_URL="http://localhost:5000"

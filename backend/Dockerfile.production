@@ -142,6 +142,7 @@ RUN apt-get update && apt-get upgrade -y && \
     gzip \
     curl \
     dumb-init \
+    gosu \
     && \
     # Mise à jour sécuritaire des paquets critiques
     apt-get install -y --no-install-recommends \
@@ -183,8 +184,8 @@ RUN chmod -R 755 /app && \
     find /app -name "*.py" -exec chmod 644 {} \; && \
     find /app -name "*.sh" -exec chmod 755 {} \;
 
-# Passage à l'utilisateur non-root
-USER appuser
+# Passage à l'utilisateur non-root (sera fait dans le script d'entrée après correction des permissions)
+# USER appuser
 
 # Exposition du port
 EXPOSE 5000
