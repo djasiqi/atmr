@@ -4,6 +4,16 @@ name: Build & Deploy
 # ⏸️ Workflow suspendu temporairement - focus sur lint
 on:
   workflow_dispatch: # Seulement déclenchement manuel autorisé
+    inputs:
+      tag:
+        description: "Tag de l'image (ex: latest, v1.0.0). Laissez vide pour utiliser DOCKER_TAG du secret"
+        required: false
+        default: ""
+      skip_deploy:
+        description: "Ne pas déployer sur le serveur (seulement build + push)"
+        type: boolean
+        required: false
+        default: false
   # push:
   #   branches: [main]
   #   paths:
@@ -26,7 +36,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
-      DOCKER_TAG: ${{ secrets.DOCKER_TAG }}
+      # Utiliser l'input tag si fourni, sinon utiliser le secret DOCKER_TAG
+      DOCKER_TAG: ${{ github.event.inputs.tag != '' && github.event.inputs.tag || secrets.DOCKER_TAG }}
       SSH_HOST: ${{ secrets.SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER }}
       SSH_PORT: ${{ secrets.SSH_PORT }}
@@ -164,8 +175,12 @@ jobs:
           done
 
           echo "❌ L'image ${IMAGE_TAG} n'a pas été trouvée sur Docker Hub après 5 tentatives"
-          echo "⚠️  Le déploiement va échouer car l'image n'existe pas"
-          exit 1
+          if [ "${{ github.event.inputs.skip_deploy }}" != "true" ]; then
+            echo "⚠️  Le déploiement va échouer car l'image n'existe pas"
+            exit 1
+          else
+            echo "ℹ️  Déploiement ignoré (skip_deploy=true), mais l'image n'a pas été trouvée"
+          fi
 
       - name: Scan image with Trivy
         uses: aquasecurity/trivy-action@master
@@ -185,6 +200,7 @@ jobs:
           sarif_file: trivy-results.sarif
 
       - name: Copy compose files to server
+        if: github.event.inputs.skip_deploy != 'true'
         uses: appleboy/scp-action@master
         with:
           host: ${{ env.SSH_HOST }}
@@ -195,6 +211,7 @@ jobs:
           target: "/srv/atmr"
 
       - name: Copy smoke tests script to server
+        if: github.event.inputs.skip_deploy != 'true'
         uses: appleboy/scp-action@master
         with:
           host: ${{ env.SSH_HOST }}
@@ -205,6 +222,7 @@ jobs:
           target: "/srv/atmr/scripts/"
 
       - name: Deploy via SSH
+        if: github.event.inputs.skip_deploy != 'true'
         uses: appleboy/ssh-action@master
         with:
           host: ${{ env.SSH_HOST }}
