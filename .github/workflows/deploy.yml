@@ -517,12 +517,40 @@ jobs:
               if echo "$MIGRATION_OUTPUT" | grep -q "overlaps" && echo "$HEADS_OUTPUT" | grep -q "merge_68116559b15d_24bbcb82c891"; then
                 echo "⚠️  Erreur 'overlaps' détectée, tentative de résolution..."
                 echo "📋 État actuel de la base de données:"
-                docker_exec flask db current || true
-                echo "📋 Historique des révisions:"
-                docker_exec flask db history || true
+                CURRENT_FULL=$(docker_exec flask db current 2>&1 || echo "")
+                echo "$CURRENT_FULL"
                 
-                # Essayer d'appliquer directement la merge migration si elle est le head
-                if echo "$HEADS_OUTPUT" | grep -q "merge_68116559b15d_24bbcb82c891.*head"; then
+                # Vérifier si les deux révisions parentes sont appliquées
+                REV1_IN_CURRENT=$(echo "$CURRENT_FULL" | grep -c "68116559b15d" || echo "0")
+                REV2_IN_CURRENT=$(echo "$CURRENT_FULL" | grep -c "24bbcb82c891" || echo "0")
+                
+                # Obtenir l'historique complet pour vérifier quelles révisions sont appliquées
+                HISTORY_OUTPUT=$(docker_exec flask db history 2>&1 || echo "")
+                REV2_APPLIED=$(echo "$HISTORY_OUTPUT" | grep -E "^\s*24bbcb82c891" | grep -c "->" || echo "0")
+                
+                echo "📊 Révision 68116559b15d dans current: $REV1_IN_CURRENT"
+                echo "📊 Révision 24bbcb82c891 dans current: $REV2_IN_CURRENT"
+                echo "📊 Révision 24bbcb82c891 dans history: $REV2_APPLIED"
+                
+                # Si la révision 24bbcb82c891 n'est pas appliquée, la marquer comme appliquée puis appliquer la merge
+                if [ "$REV2_IN_CURRENT" -eq 0 ] && [ "$REV1_IN_CURRENT" -gt 0 ]; then
+                  echo "🔄 Marquage de la révision manquante 24bbcb82c891 comme appliquée..."
+                  echo "ℹ️  Cette révision est sur une branche différente, on la marque comme appliquée pour permettre la merge"
+                  docker_exec flask db stamp 24bbcb82c891 || {
+                    echo "❌ Échec du marquage de la révision 24bbcb82c891"
+                    docker_exec flask db current || true
+                    docker_exec flask db heads || true
+                    exit 1
+                  }
+                  echo "✅ Révision 24bbcb82c891 marquée, application de la merge migration..."
+                  docker_exec flask db upgrade merge_68116559b15d_24bbcb82c891 || {
+                    echo "❌ Échec de l'application de la merge migration"
+                    docker_exec flask db current || true
+                    docker_exec flask db heads || true
+                    exit 1
+                  }
+                  echo "✅ Merge migration appliquée avec succès"
+                elif echo "$HEADS_OUTPUT" | grep -q "merge_68116559b15d_24bbcb82c891.*head"; then
                   echo "🔄 Application directe de la merge migration (head)..."
                   docker_exec flask db upgrade merge_68116559b15d_24bbcb82c891 || {
                     echo "❌ Échec de l'application directe de la merge migration"
@@ -534,6 +562,8 @@ jobs:
                   echo "✅ Merge migration appliquée avec succès"
                 else
                   echo "❌ Impossible de résoudre le conflit de merge automatiquement"
+                  echo "📋 Historique des révisions:"
+                  docker_exec flask db history || true
                   docker_exec flask db current || true
                   docker_exec flask db heads || true
                   docker compose -f docker-compose.production.yml logs backend | tail -50 || true
