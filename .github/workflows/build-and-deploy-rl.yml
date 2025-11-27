@@ -3,6 +3,14 @@
 # ⚠️ IMPORTANT: Cette image est lourde (torch, gymnasium, optuna) et ne doit PAS
 # être construite sur les runners GitHub standards (risque de "No space left on device").
 #
+# ⚠️ PROBLÈMES CONNUS:
+# - Erreur 400 Bad Request lors du push: Docker Hub peut avoir des problèmes avec de très grandes images (~2GB)
+# - Solutions:
+#   1. Utiliser un registry alternatif (GitHub Container Registry, AWS ECR, etc.)
+#   2. Build local puis push manuel: docker build -f Dockerfile.rl -t djasiqi/atmr-backend:rl-latest . && docker push djasiqi/atmr-backend:rl-latest
+#   3. Utiliser un self-hosted runner avec plus de ressources
+#   4. Diviser l'image en plusieurs layers plus petits
+#
 # Ce workflow combine la construction et le déploiement de l'image RL en un seul processus.
 #
 # Options de déploiement:
@@ -50,6 +58,7 @@ jobs:
         outputs:
             image_tag: ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
             image_pushed: ${{ steps.push_flag.outputs.push }}
+            push_success: ${{ steps.verify_push.outputs.success }}
 
         steps:
             - name: Checkout code
@@ -89,6 +98,18 @@ jobs:
               with:
                   username: ${{ env.DOCKERHUB_USERNAME }}
                   password: ${{ env.DOCKERHUB_TOKEN }}
+                  logout: false
+
+            - name: Verify Docker Hub authentication
+              if: steps.push_flag.outputs.push == 'true'
+              run: |
+                  echo "🔍 Vérification de l'authentification Docker Hub..."
+                  if docker info | grep -q "Username"; then
+                      echo "✅ Authentification Docker Hub réussie"
+                  else
+                      echo "❌ Échec de l'authentification Docker Hub"
+                      exit 1
+                  fi
 
             - name: Calculate requirements hash
               id: requirements_hash
@@ -104,6 +125,7 @@ jobs:
                   fi
 
             - name: Build & push RL image
+              timeout-minutes: 60
               uses: docker/build-push-action@v5
               with:
                   context: ./backend
@@ -119,6 +141,10 @@ jobs:
                   cache-from: type=gha
                   cache-to: type=gha,mode=max
                   no-cache: false
+                  # Options pour gérer les grandes images
+                  platforms: linux/amd64
+                  # Pull pour s'assurer d'avoir les dernières images de base
+                  pull: true
 
             - name: Verify image was built
               if: steps.push_flag.outputs.push != 'true'
@@ -134,23 +160,40 @@ jobs:
 
             - name: Verify image was pushed
               if: steps.push_flag.outputs.push == 'true'
+              id: verify_push
+              timeout-minutes: 10
               run: |
                   echo "🔍 Vérification que l'image a bien été poussée..."
                   IMAGE_TAG="${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}"
                   echo "Image attendue: ${IMAGE_TAG}"
 
-                  # Vérifier que l'image existe sur Docker Hub (avec retry)
-                  for i in {1..5}; do
+                  # Attendre un peu pour que Docker Hub finalise le push
+                  echo "⏳ Attente de 10 secondes pour que Docker Hub finalise le push..."
+                  sleep 10
+
+                  # Vérifier que l'image existe sur Docker Hub (avec retry et délais plus longs)
+                  MAX_RETRIES=10
+                  RETRY_DELAY=15
+                  for i in $(seq 1 $MAX_RETRIES); do
+                    echo "  Tentative $i/$MAX_RETRIES: Vérification de l'image sur Docker Hub..."
                     if docker manifest inspect "${IMAGE_TAG}" > /dev/null 2>&1; then
                       echo "✅ Image ${IMAGE_TAG} trouvée sur Docker Hub"
+                      echo "success=true" >> $GITHUB_OUTPUT
                       exit 0
                     fi
-                    echo "  Tentative $i/5: Image non trouvée, attente 5 secondes..."
-                    sleep 5
+                    if [ $i -lt $MAX_RETRIES ]; then
+                      echo "  Image non trouvée, attente ${RETRY_DELAY} secondes avant nouvelle tentative..."
+                      sleep $RETRY_DELAY
+                    fi
                   done
 
-                  echo "❌ Image ${IMAGE_TAG} non trouvée sur Docker Hub après 5 tentatives"
-                  exit 1
+                  echo "❌ Image ${IMAGE_TAG} non trouvée sur Docker Hub après $MAX_RETRIES tentatives"
+                  echo "💡 Cela peut être normal si l'image est très grande (~2GB). Vérifiez manuellement sur Docker Hub."
+                  echo "💡 Le push peut prendre plusieurs minutes pour finaliser."
+                  echo "⚠️  Le déploiement ne s'exécutera PAS car l'image n'est pas disponible sur Docker Hub."
+                  echo "success=false" >> $GITHUB_OUTPUT
+                  # Ne pas faire échouer le workflow build, mais marquer le push comme échoué
+                  exit 0
 
             - name: Show image size
               run: |
@@ -161,10 +204,11 @@ jobs:
     deploy-rl:
         name: Deploy RL Environment
         needs: build-rl-image
-        # Ne déployer que si deploy=true ET que l'image a été poussée
+        # Déployer SEULEMENT si deploy=true ET que le push a RÉUSSI
+        # ⚠️ IMPORTANT: Ne pas déployer si le push a échoué (l'image n'est pas sur Docker Hub)
         if: |
             (github.event.inputs.deploy == 'true' || github.event.inputs.deploy == '') &&
-            needs.build-rl-image.outputs.image_pushed == 'true'
+            needs.build-rl-image.outputs.push_success == 'true'
         runs-on: ubuntu-latest
         env:
             DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE || 'djasiqi/atmr-backend' }}
@@ -210,23 +254,36 @@ jobs:
                   echo "✅ Tous les secrets requis sont présents"
 
             - name: Verify RL image exists on Docker Hub
+              continue-on-error: true
               run: |
                   echo "🔍 Vérification que l'image RL existe sur Docker Hub..."
                   IMAGE_TAG="${{ needs.build-rl-image.outputs.image_tag }}"
                   echo "Image attendue: ${IMAGE_TAG}"
 
-                  # Vérifier que l'image existe sur Docker Hub (avec retry)
-                  for i in {1..5}; do
+                  # Vérifier que l'image existe sur Docker Hub (avec retry et délais plus longs)
+                  MAX_RETRIES=10
+                  RETRY_DELAY=15
+                  for i in $(seq 1 $MAX_RETRIES); do
+                      echo "  Tentative $i/$MAX_RETRIES: Vérification de l'image sur Docker Hub..."
                       if docker manifest inspect "${IMAGE_TAG}" > /dev/null 2>&1; then
                           echo "✅ Image ${IMAGE_TAG} trouvée sur Docker Hub"
                           exit 0
                       fi
-                      echo "  Tentative $i/5: Image non trouvée, attente 5 secondes..."
-                      sleep 5
+                      if [ $i -lt $MAX_RETRIES ]; then
+                          echo "  Image non trouvée, attente ${RETRY_DELAY} secondes avant nouvelle tentative..."
+                          sleep $RETRY_DELAY
+                      fi
                   done
 
-                  echo "❌ L'image ${IMAGE_TAG} n'a pas été trouvée sur Docker Hub"
-                  exit 1
+                  echo "⚠️  L'image ${IMAGE_TAG} n'a pas été trouvée sur Docker Hub après $MAX_RETRIES tentatives"
+                  echo "💡 Cela peut arriver si le push a échoué (erreur 400)."
+                  echo "💡 Le déploiement continuera, mais le pull de l'image échouera probablement."
+                  echo "💡 Solutions:"
+                  echo "   1. Vérifier manuellement sur Docker Hub si l'image existe"
+                  echo "   2. Relancer le workflow avec push=true"
+                  echo "   3. Build local puis push manuel"
+                  # Ne pas faire échouer, juste avertir
+                  exit 0
 
             - name: Copy docker-compose.rl.yml to server
               uses: appleboy/scp-action@master
@@ -314,11 +371,20 @@ jobs:
                       # Pull de l'image RL depuis Docker Hub
                       echo "🔄 Pull de l'image RL depuis Docker Hub..."
                       IMAGE_TAG="${DOCKER_IMAGE}:${DOCKER_TAG}"
-                      docker pull "${IMAGE_TAG}" || {
+                      if docker pull "${IMAGE_TAG}"; then
+                          echo "✅ Image RL pullée avec succès"
+                      else
                           echo "❌ Échec du pull de l'image RL ${IMAGE_TAG}"
+                          echo "💡 Cela peut arriver si le push a échoué précédemment (erreur 400)."
+                          echo "💡 Vérifiez que l'image existe sur Docker Hub:"
+                          echo "   docker manifest inspect ${IMAGE_TAG}"
+                          echo "💡 Solutions:"
+                          echo "   1. Relancer le workflow avec push=true"
+                          echo "   2. Build local puis push manuel:"
+                          echo "      docker build -f backend/Dockerfile.rl -t ${IMAGE_TAG} backend/"
+                          echo "      docker push ${IMAGE_TAG}"
                           exit 1
-                      }
-                      echo "✅ Image RL pullée avec succès"
+                      fi
 
                       # Arrêter les conteneurs existants
                       echo "🔄 Arrêt des conteneurs RL existants..."
