@@ -11,10 +11,12 @@
 services:
   # Worker RL pour training et expériences
   rl-worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.rl
-    image: djasiqi/atmr-backend-rl:latest
+    # Utiliser l'image depuis Docker Hub (construite par workflow GitHub Actions)
+    # Pour build local, décommenter la section build ci-dessus et commenter image
+    image: ${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-rl-latest}
+    # build:
+    #   context: ./backend
+    #   dockerfile: Dockerfile.rl
     container_name: atmr-rl-worker
     restart: unless-stopped
     env_file:
@@ -120,10 +122,12 @@ services:
 
   # Optuna Dashboard pour visualiser les expériences (optionnel)
   optuna-dashboard:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.rl
-    image: djasiqi/atmr-backend-rl:latest
+    # Utiliser l'image depuis Docker Hub (construite par workflow GitHub Actions)
+    # Pour build local, décommenter la section build ci-dessus et commenter image
+    image: ${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-rl-latest}
+    # build:
+    #   context: ./backend
+    #   dockerfile: Dockerfile.rl
     container_name: atmr-optuna-dashboard
     restart: unless-stopped
     env_file:
