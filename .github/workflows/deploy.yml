@@ -33,26 +33,18 @@ permissions:
 
 jobs:
   build-and-push:
+    name: Build & Push Production Image
     runs-on: ubuntu-latest
     env:
       DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
       # Utiliser l'input tag si fourni, sinon utiliser le secret DOCKER_TAG
       DOCKER_TAG: ${{ github.event.inputs.tag != '' && github.event.inputs.tag || secrets.DOCKER_TAG }}
-      SSH_HOST: ${{ secrets.SSH_HOST }}
-      SSH_USER: ${{ secrets.SSH_USER }}
-      SSH_PORT: ${{ secrets.SSH_PORT }}
-      SSH_KEY: ${{ secrets.SSH_KEY }}
-      APP_ENCRYPTION_KEY_B64: ${{ secrets.APP_ENCRYPTION_KEY_B64 }}
-      SECRET_KEY: ${{ secrets.SECRET_KEY }}
-      JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
-      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-      POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-      POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
-      REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
-      MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
-      SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    outputs:
+      image_tag: ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
+      push_success: ${{ steps.verify_push.outputs.success }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -62,19 +54,6 @@ jobs:
           REQUIRED_SECRETS=(
             "DOCKER_IMAGE"
             "DOCKER_TAG"
-            "SSH_HOST"
-            "SSH_USER"
-            "SSH_KEY"
-            "SSH_PORT"
-            "APP_ENCRYPTION_KEY_B64"
-            "SECRET_KEY"
-            "JWT_SECRET_KEY"
-            "POSTGRES_PASSWORD"
-            "POSTGRES_USER"
-            "POSTGRES_DB"
-            "REDIS_PASSWORD"
-            "MAIL_PASSWORD"
-            "SENTRY_DSN"
             "DOCKERHUB_USERNAME"
             "DOCKERHUB_TOKEN"
           )
@@ -159,6 +138,7 @@ jobs:
           no-cache: false
 
       - name: Verify image was pushed
+        id: verify_push
         run: |
           echo "🔍 Vérification que l'image a bien été poussée..."
           IMAGE_TAG="${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}"
@@ -168,6 +148,7 @@ jobs:
           for i in {1..5}; do
             if docker manifest inspect "${IMAGE_TAG}" > /dev/null 2>&1; then
               echo "✅ Image ${IMAGE_TAG} trouvée sur Docker Hub"
+              echo "success=true" >> $GITHUB_OUTPUT
               exit 0
             fi
             echo "  Tentative $i/5: Image non trouvée, attente 5 secondes..."
@@ -175,8 +156,9 @@ jobs:
           done
 
           echo "❌ L'image ${IMAGE_TAG} n'a pas été trouvée sur Docker Hub après 5 tentatives"
+          echo "success=false" >> $GITHUB_OUTPUT
           if [ "${{ github.event.inputs.skip_deploy }}" != "true" ]; then
-            echo "⚠️  Le déploiement va échouer car l'image n'existe pas"
+            echo "⚠️  Le déploiement ne s'exécutera pas car l'image n'existe pas"
             exit 1
           else
             echo "ℹ️  Déploiement ignoré (skip_deploy=true), mais l'image n'a pas été trouvée"
@@ -199,8 +181,86 @@ jobs:
         with:
           sarif_file: trivy-results.sarif
 
+  deploy:
+    name: Deploy Production Environment
+    needs: build-and-push
+    # Déployer SEULEMENT si skip_deploy=false ET que le push a RÉUSSI
+    # ⚠️ IMPORTANT: Ne pas déployer si le push a échoué (l'image n'est pas sur Docker Hub)
+    if: |
+      github.event.inputs.skip_deploy != 'true' &&
+      needs.build-and-push.outputs.push_success == 'true'
+    runs-on: ubuntu-latest
+    env:
+      DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
+      # Utiliser l'input tag si fourni, sinon utiliser le secret DOCKER_TAG
+      DOCKER_TAG: ${{ github.event.inputs.tag != '' && github.event.inputs.tag || secrets.DOCKER_TAG }}
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_PORT: ${{ secrets.SSH_PORT }}
+      SSH_KEY: ${{ secrets.SSH_KEY }}
+      APP_ENCRYPTION_KEY_B64: ${{ secrets.APP_ENCRYPTION_KEY_B64 }}
+      SECRET_KEY: ${{ secrets.SECRET_KEY }}
+      JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+      POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+      REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+      MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+      SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        run: |
+          REQUIRED_SECRETS=(
+            "SSH_HOST"
+            "SSH_USER"
+            "SSH_KEY"
+            "SSH_PORT"
+            "APP_ENCRYPTION_KEY_B64"
+            "SECRET_KEY"
+            "JWT_SECRET_KEY"
+            "POSTGRES_PASSWORD"
+            "POSTGRES_USER"
+            "POSTGRES_DB"
+            "REDIS_PASSWORD"
+            "DOCKER_IMAGE"
+            "DOCKER_TAG"
+          )
+          MISSING_SECRETS=()
+          for secret in "${REQUIRED_SECRETS[@]}"; do
+            if [ -z "${!secret:-}" ]; then
+              MISSING_SECRETS+=("$secret")
+            fi
+          done
+          if [ ${#MISSING_SECRETS[@]} -ne 0 ]; then
+            echo "❌ Secrets manquants: ${MISSING_SECRETS[*]}"
+            exit 1
+          fi
+          echo "✅ Tous les secrets requis sont présents"
+
+      - name: Verify image exists on Docker Hub
+        run: |
+          echo "🔍 Vérification que l'image existe sur Docker Hub..."
+          IMAGE_TAG="${{ needs.build-and-push.outputs.image_tag }}"
+          echo "Image attendue: ${IMAGE_TAG}"
+
+          # Vérifier que l'image existe sur Docker Hub (avec retry)
+          for i in {1..5}; do
+            if docker manifest inspect "${IMAGE_TAG}" > /dev/null 2>&1; then
+              echo "✅ Image ${IMAGE_TAG} trouvée sur Docker Hub"
+              exit 0
+            fi
+            echo "  Tentative $i/5: Image non trouvée, attente 5 secondes..."
+            sleep 5
+          done
+
+          echo "❌ L'image ${IMAGE_TAG} n'a pas été trouvée sur Docker Hub"
+          exit 1
+
       - name: Copy compose files to server
-        if: github.event.inputs.skip_deploy != 'true'
         uses: appleboy/scp-action@master
         with:
           host: ${{ env.SSH_HOST }}
@@ -211,7 +271,6 @@ jobs:
           target: "/srv/atmr"
 
       - name: Copy smoke tests script to server
-        if: github.event.inputs.skip_deploy != 'true'
         uses: appleboy/scp-action@master
         with:
           host: ${{ env.SSH_HOST }}
@@ -222,7 +281,6 @@ jobs:
           target: "/srv/atmr/scripts/"
 
       - name: Deploy via SSH
-        if: github.event.inputs.skip_deploy != 'true'
         uses: appleboy/ssh-action@master
         with:
           host: ${{ env.SSH_HOST }}
@@ -253,8 +311,8 @@ jobs:
             export REDIS_PASSWORD="${{ secrets.REDIS_PASSWORD }}"
             export MAIL_PASSWORD="${{ secrets.MAIL_PASSWORD }}"
             export SENTRY_DSN="${{ secrets.SENTRY_DSN }}"
-            export DOCKER_IMAGE="${{ secrets.DOCKER_IMAGE }}"
-            export DOCKER_TAG="${{ secrets.DOCKER_TAG }}"
+            export DOCKER_IMAGE="${DOCKER_IMAGE}"
+            export DOCKER_TAG="${DOCKER_TAG}"
 
             # Validation des secrets critiques après export
             echo "🔍 Validation des secrets critiques..."
@@ -562,6 +620,28 @@ jobs:
               exit 1
             }
             echo "✅ Migrations appliquées avec succès"
+
+            # Corriger les permissions des fichiers ML depuis l'intérieur du conteneur
+            echo "🔐 Correction des permissions des fichiers ML..."
+            docker compose -f docker-compose.production.yml exec -T backend bash -c "
+              mkdir -p /app/data/ml/models 2>/dev/null || true
+              chmod -R 755 /app/data/ml/models 2>/dev/null || true
+              # Le conteneur tourne avec UID 1000 (appuser), s'assurer que les fichiers lui appartiennent
+              if [ -d /app/data/ml/models ]; then
+                chown -R 1000:1000 /app/data/ml/models 2>/dev/null || true
+                # Si le fichier delay_predictor.pkl existe, corriger ses permissions spécifiquement
+                if [ -f /app/data/ml/models/delay_predictor.pkl ]; then
+                  chmod 644 /app/data/ml/models/delay_predictor.pkl 2>/dev/null || true
+                  chown 1000:1000 /app/data/ml/models/delay_predictor.pkl 2>/dev/null || true
+                  echo '✅ Permissions corrigées pour delay_predictor.pkl'
+                else
+                  echo 'ℹ️  Fichier delay_predictor.pkl non trouvé (sera créé lors de l''entraînement)'
+                fi
+              fi
+            " || {
+              echo "⚠️  Erreur lors de la correction des permissions (non bloquant)"
+            }
+            echo "✅ Permissions des fichiers ML vérifiées"
 
             # Smoke tests post-déploiement
             echo "🧪 Exécution des smoke tests..."
