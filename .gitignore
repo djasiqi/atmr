@@ -1,4 +1,7 @@
-﻿# ===== Python =====
+﻿# ===== Markdown files =====
+*.md
+
+# ===== Python =====
 __pycache__/
 *.pyc
 *.pyo
@@ -105,6 +108,7 @@ celerybeat-schedule*
 backend/celerybeat-schedule*
 
 # ===== Documentation temporaire / Audits =====
+docs/
 *_AUDIT*.md
 *_CHECKLIST*.md
 *_RAPPORT*.md
