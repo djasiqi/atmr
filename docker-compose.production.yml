@@ -375,6 +375,8 @@ volumes:
     driver: local
   backend_cache:
     driver: local
+  backend_uploads:
+    driver: local
   celery_beat_data:
     driver: local
   nginx_logs:

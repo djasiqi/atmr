@@ -63,16 +63,21 @@ fi
 
 # Créer les répertoires de données nécessaires AVANT le warmup
 echo "📁 Création des répertoires de données..."
-mkdir -p /app/data/ml /app/data/ml/models /app/data/rl /app/data/rl/shadow_mode /app/logs /app/cache
+mkdir -p /app/data/ml /app/data/ml/models /app/data/rl /app/data/rl/shadow_mode /app/logs /app/cache /app/uploads/company_logos
 
 # S'assurer que les répertoires ont les bonnes permissions
 # Utiliser 777 temporairement pour éviter les problèmes de permissions avec les volumes Docker
 # En production, vous devriez utiliser un utilisateur non-root et des permissions plus restrictives
-chmod -R 777 /app/data /app/logs /app/cache 2>/dev/null || true
+chmod -R 777 /app/data /app/logs /app/cache /app/uploads 2>/dev/null || true
 
 # S'assurer que le répertoire models existe et a les bonnes permissions
 if [ -d /app/data/ml/models ]; then
     chmod -R 755 /app/data/ml/models 2>/dev/null || true
+fi
+
+# S'assurer que le répertoire uploads/company_logos existe et a les bonnes permissions
+if [ -d /app/uploads/company_logos ]; then
+    chmod -R 755 /app/uploads/company_logos 2>/dev/null || true
 fi
 
 # Essayer de changer le propriétaire si possible (peut échouer selon la configuration Docker)
