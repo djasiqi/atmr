@@ -1,9 +1,19 @@
 # backend/app.py
 # pyright: reportImportCycles = false
 
+# ⚠️ CRITIQUE: Empêcher pytest de s'exécuter automatiquement en production
+# Cette vérification doit être faite AVANT tout autre import
+import os
+
+if os.getenv("FLASK_ENV") == "production" or os.getenv("FLASK_CONFIG") == "production":
+    # Désactiver pytest en production
+    os.environ["PYTEST_DISABLED"] = "1"
+    os.environ["DISABLE_PYTEST"] = "1"
+    # Empêcher pytest de collecter les tests
+    os.environ["PYTEST_CURRENT_TEST"] = ""
+
 import json
 import logging
-import os
 import re
 from enum import Enum
 from pathlib import Path

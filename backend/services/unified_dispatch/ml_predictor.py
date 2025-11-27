@@ -3,6 +3,7 @@
 # Constantes pour éviter les valeurs magiques
 from __future__ import annotations
 
+import contextlib
 import logging
 from dataclasses import dataclass
 from datetime import datetime
@@ -515,7 +516,17 @@ class DelayMLPredictor(object):
             msg = "No model to save"
             raise RuntimeError(msg)
 
-        Path(self.model_path).parent.mkdir(parents=True, exist_ok=True)
+        model_path_obj = Path(self.model_path)
+
+        # Convertir en chemin absolu si relatif
+        if not model_path_obj.is_absolute():
+            app_root = Path("/app")
+            model_path_obj = app_root / model_path_obj
+
+        # Créer le répertoire parent avec les bonnes permissions
+        model_path_obj.parent.mkdir(parents=True, exist_ok=True)
+        with contextlib.suppress(OSError, PermissionError):
+            model_path_obj.parent.chmod(0o755)
 
         model_data = {
             "model": self.model,
@@ -525,7 +536,7 @@ class DelayMLPredictor(object):
             "trained_at": datetime.now().isoformat(),
         }
 
-        with Path(self.model_path).open("wb") as f:
+        with model_path_obj.open("wb") as f:
             # Utilisation de joblib (recommandé pour scikit-learn)
             # au lieu de pickle direct
             # joblib utilise pickle en interne mais avec des optimisations
@@ -534,16 +545,28 @@ class DelayMLPredictor(object):
             # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
             joblib.dump(model_data, f)
 
-        logger.info("[MLPredictor] Model saved to %s", self.model_path)
+        logger.info("[MLPredictor] Model saved to %s", model_path_obj)
 
     def load_model(self) -> None:
         """Charge le modèle depuis le disque."""
-        if not Path(self.model_path).exists():
-            msg = f"Model file not found: {self.model_path}"
-            raise FileNotFoundError(msg)
+        model_path_obj = Path(self.model_path)
+
+        # Convertir en chemin absolu si relatif
+        if not model_path_obj.is_absolute():
+            app_root = Path("/app")
+            model_path_obj = app_root / model_path_obj
+
+        if not model_path_obj.exists():
+            logger.warning("[MLPredictor] Model file not found: %s", model_path_obj)
+            return
 
         try:
-            with Path(self.model_path).open("rb") as f:
+            # S'assurer que le répertoire parent existe et a les bonnes permissions
+            model_path_obj.parent.mkdir(parents=True, exist_ok=True)
+            with contextlib.suppress(OSError, PermissionError):
+                model_path_obj.parent.chmod(0o755)
+
+            with model_path_obj.open("rb") as f:
                 # Utilisation de joblib (recommandé pour scikit-learn)
                 # au lieu de pickle direct
                 # joblib utilise pickle en interne mais avec des optimisations

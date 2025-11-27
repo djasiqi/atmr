@@ -1,0 +1,11 @@
+# Requirements pour le développement et les tests
+# Ces dépendances ne sont PAS installées dans l'image de production
+
+# Tests
+pytest>=8.0.0
+pytest-flask>=1.3.0
+
+# Outils de développement (optionnel, peut être dans requirements.txt si utilisé en prod)
+# factory-boy>=3.3.0  # Déjà dans requirements.txt car utilisé en production
+# rich>=13.0.0  # Déjà dans requirements.txt car utilisé en production
+

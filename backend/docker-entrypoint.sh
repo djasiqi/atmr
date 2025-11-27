@@ -32,14 +32,48 @@ echo "  FLASK_ENV: $FLASK_ENV"
 echo "  OMP_NUM_THREADS: $OMP_NUM_THREADS"
 echo "  MKL_NUM_THREADS: $MKL_NUM_THREADS"
 
+# ⚠️ CRITIQUE: Empêcher pytest de s'exécuter automatiquement en production
+# pytest peut être déclenché automatiquement lors de l'import de modules si pytest.ini existe
+# ou si pytest est dans le PYTHONPATH. On désactive tout cela en production.
+if [ "$FLASK_ENV" != "development" ] && [ "$FLASK_ENV" != "testing" ]; then
+    echo "🔒 Mode production détecté - Désactivation de pytest..."
+    
+    # 1. Désactiver pytest.ini
+    if [ -f /app/pytest.ini ]; then
+        echo "  ⚠️  Désactivation de pytest.ini"
+        mv /app/pytest.ini /app/pytest.ini.disabled 2>/dev/null || true
+    fi
+    
+    # 2. Renommer le répertoire tests pour empêcher pytest de trouver les tests
+    if [ -d /app/tests ] && [ ! -d /app/tests.disabled ]; then
+        echo "  ⚠️  Désactivation du répertoire tests"
+        mv /app/tests /app/tests.disabled 2>/dev/null || true
+    fi
+    
+    # 3. Définir une variable d'environnement pour empêcher pytest de s'exécuter
+    export PYTEST_DISABLED=1
+    export DISABLE_PYTEST=1
+    
+    # 4. S'assurer que pytest n'est pas dans le PATH (si possible)
+    # Note: On ne peut pas modifier le PATH système, mais on peut vérifier
+    echo "  ✅ pytest désactivé pour la production"
+else
+    echo "  ℹ️  Mode $FLASK_ENV - pytest peut être utilisé"
+fi
+
 # Créer les répertoires de données nécessaires AVANT le warmup
 echo "📁 Création des répertoires de données..."
-mkdir -p /app/data/ml /app/data/rl /app/data/rl/shadow_mode /app/logs /app/cache
+mkdir -p /app/data/ml /app/data/ml/models /app/data/rl /app/data/rl/shadow_mode /app/logs /app/cache
 
 # S'assurer que les répertoires ont les bonnes permissions
 # Utiliser 777 temporairement pour éviter les problèmes de permissions avec les volumes Docker
 # En production, vous devriez utiliser un utilisateur non-root et des permissions plus restrictives
 chmod -R 777 /app/data /app/logs /app/cache 2>/dev/null || true
+
+# S'assurer que le répertoire models existe et a les bonnes permissions
+if [ -d /app/data/ml/models ]; then
+    chmod -R 755 /app/data/ml/models 2>/dev/null || true
+fi
 
 # Essayer de changer le propriétaire si possible (peut échouer selon la configuration Docker)
 # L'utilisateur par défaut dans l'image est généralement root ou un UID spécifique

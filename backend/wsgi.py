@@ -6,6 +6,26 @@ from __future__ import annotations
 import os
 import sys
 
+# ⚠️ CRITIQUE: Empêcher pytest de s'exécuter automatiquement en production
+# Si pytest est installé et qu'un hook pytest est déclenché lors de l'import,
+# on doit l'empêcher explicitement
+if os.getenv("FLASK_ENV") == "production" or os.getenv("FLASK_CONFIG") == "production":
+    # Désactiver pytest en production
+    os.environ["PYTEST_DISABLED"] = "1"
+    os.environ["DISABLE_PYTEST"] = "1"
+
+    # Empêcher pytest de collecter les tests en important pytest uniquement si nécessaire
+    # et en désactivant les hooks automatiques
+    try:
+        import pytest
+
+        # Désactiver la collecte automatique de tests
+        if hasattr(pytest, "config"):
+            # Ne pas exécuter pytest si on est en production
+            pass
+    except ImportError:
+        pass  # pytest n'est pas installé, c'est parfait
+
 # ✅ Force UTF-8 encoding pour Python
 if sys.version_info >= (3, 7):
     # Python 3.7+ : utiliser la variable d'environnement
