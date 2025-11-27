@@ -79,6 +79,24 @@ fi
 # On essaie de créer les répertoires, mais on continue même en cas d'échec
 # Les répertoires devraient être créés par le script de déploiement sur l'hôte
 echo "📁 Création des répertoires de données..."
+
+# Si on est root, corriger les permissions avant de passer à appuser
+if [ "$(id -u)" = "0" ]; then
+    echo "🔐 Correction des permissions en tant que root..."
+    mkdir -p /app/data /app/data/ml /app/data/ml/models /app/data/rl /app/data/rl/shadow_mode
+    mkdir -p /app/logs /app/cache /app/uploads/company_logos
+    chmod -R 755 /app/data /app/logs /app/cache /app/uploads 2>/dev/null || true
+    chown -R 999:999 /app/data /app/logs /app/cache /app/uploads 2>/dev/null || true
+    # Corriger les permissions de tous les fichiers .pkl existants
+    find /app/data/ml/models -name "*.pkl" -type f -exec chmod 644 {} \; -exec chown 999:999 {} \; 2>/dev/null || true
+    echo "✅ Permissions corrigées"
+    echo "📋 Vérification des permissions de /app/data/ml/models:"
+    ls -la /app/data/ml/models/ 2>/dev/null || echo "  Répertoire non accessible"
+    # Passer à appuser si on est root
+    exec gosu appuser "$0" "$@"
+fi
+
+# Si on est appuser, essayer de créer les répertoires (peut échouer silencieusement)
 mkdir -p /app/data/ml /app/data/ml/models /app/data/rl /app/data/rl/shadow_mode 2>/dev/null || {
     echo "⚠️  Impossible de créer /app/data/* (permissions insuffisantes ou volume monté)"
     echo "   Les répertoires devraient être créés par le script de déploiement"
@@ -91,9 +109,7 @@ mkdir -p /app/uploads/company_logos 2>/dev/null || {
 }
 
 # S'assurer que les répertoires ont les bonnes permissions (si on a les droits)
-# Utiliser 777 temporairement pour éviter les problèmes de permissions avec les volumes Docker
-# En production, vous devriez utiliser un utilisateur non-root et des permissions plus restrictives
-chmod -R 777 /app/data /app/logs /app/cache /app/uploads 2>/dev/null || {
+chmod -R 755 /app/data /app/logs /app/cache /app/uploads 2>/dev/null || {
     echo "⚠️  Impossible de modifier les permissions (normal si volumes montés avec root)"
 }
 
