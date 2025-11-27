@@ -242,6 +242,7 @@ jobs:
       REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
       MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
       SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+      PDF_BASE_URL: ${{ secrets.PDF_BASE_URL }}
 
     steps:
       - name: Checkout code
@@ -408,12 +409,16 @@ jobs:
             ESCAPED_REDIS_PASSWORD=$(python3 -c "from urllib.parse import quote_plus; import sys; print(quote_plus(sys.argv[1]))" "${REDIS_PASSWORD}")
             export REDIS_URL="redis://:${ESCAPED_REDIS_PASSWORD}@redis:6379/0"
 
-            # Note: MAIL_PASSWORD et SENTRY_DSN sont optionnels mais recommandés
+            # Note: MAIL_PASSWORD, SENTRY_DSN et PDF_BASE_URL sont optionnels mais recommandés
             if [ -z "${MAIL_PASSWORD:-}" ]; then
               echo "⚠️  MAIL_PASSWORD non défini (optionnel mais recommandé)"
             fi
             if [ -z "${SENTRY_DSN:-}" ]; then
               echo "⚠️  SENTRY_DSN non défini (optionnel mais recommandé)"
+            fi
+            if [ -z "${PDF_BASE_URL:-}" ]; then
+              echo "⚠️  PDF_BASE_URL non défini (optionnel mais recommandé pour les URLs de PDFs)"
+              echo "💡 L'application utilisera 'http://localhost:5000' par défaut"
             fi
 
             # Fonction pour pull avec retry et timeout
@@ -479,6 +484,7 @@ jobs:
               echo "DOCKER_TAG=${DOCKER_TAG}"
               echo "MAIL_PASSWORD=${MAIL_PASSWORD:-}"
               echo "SENTRY_DSN=${SENTRY_DSN:-}"
+              echo "PDF_BASE_URL=${PDF_BASE_URL:-}"
             } > .env.production
             chmod 600 .env.production
             echo "✅ Fichier .env.production créé"
@@ -496,12 +502,12 @@ jobs:
             mkdir -p data/rl/shadow_mode data/ml data/rl data/ml/models || true
             chmod -R 755 data 2>/dev/null || true
             # 🔐 S'assurer que le user du container backend a les droits sur les modèles ML
-            # Le backend tourne généralement avec UID 1000 dans l'image Docker
-            chown -R 1000:1000 data 2>/dev/null || true
+            # Le backend tourne avec UID 999 (appuser) dans l'image Docker (voir Dockerfile.production)
+            chown -R 999:999 data 2>/dev/null || true
             # S'assurer que les fichiers existants ont aussi les bonnes permissions
             if [ -d "data/ml/models" ]; then
               chmod -R 755 data/ml/models 2>/dev/null || true
-              chown -R 1000:1000 data/ml/models 2>/dev/null || true
+              chown -R 999:999 data/ml/models 2>/dev/null || true
             fi
             echo "✅ Répertoires de données créés avec permissions correctes"
 
@@ -509,6 +515,50 @@ jobs:
             # Docker Compose chargera automatiquement .env pour remplacer ${VAR} dans le YAML
             # Les variables sont aussi exportées dans le shell pour les commandes exec
             docker compose -f docker-compose.production.yml up -d
+
+            echo "⏳ Attente que le conteneur backend soit prêt..."
+            # Attendre que le conteneur backend soit démarré
+            for i in $(seq 1 30); do
+              BACKEND_STATUS=$(docker compose -f docker-compose.production.yml ps backend --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
+              if [ "$BACKEND_STATUS" = "running" ]; then
+                echo "✅ Conteneur backend démarré"
+                break
+              fi
+              echo "  Tentative $i/30: Attente du démarrage du conteneur backend (État: ${BACKEND_STATUS})..."
+              sleep 1
+            done
+
+            # 🔐 CRITIQUE: Corriger les permissions AVANT que l'application ne charge les modèles ML
+            echo "🔐 Correction des permissions des fichiers ML (avant chargement des modèles)..."
+            docker compose -f docker-compose.production.yml exec -T backend bash -c "
+              mkdir -p /app/data/ml/models 2>/dev/null || true
+              chmod -R 755 /app/data/ml/models 2>/dev/null || true
+              # Le conteneur tourne avec UID 999 (appuser), s'assurer que les fichiers lui appartiennent
+              # Voir Dockerfile.production: useradd -r -g appgroup -u 999
+              if [ -d /app/data/ml/models ]; then
+                chown -R 999:999 /app/data/ml/models 2>/dev/null || true
+                # Si le fichier delay_predictor.pkl existe, corriger ses permissions spécifiquement
+                if [ -f /app/data/ml/models/delay_predictor.pkl ]; then
+                  chmod 644 /app/data/ml/models/delay_predictor.pkl 2>/dev/null || true
+                  chown 999:999 /app/data/ml/models/delay_predictor.pkl 2>/dev/null || true
+                  echo '✅ Permissions corrigées pour delay_predictor.pkl'
+                  ls -la /app/data/ml/models/delay_predictor.pkl || true
+                else
+                  echo 'ℹ️  Fichier delay_predictor.pkl non trouvé (sera créé lors de l''entraînement)'
+                fi
+                echo '📋 Permissions du répertoire data/ml/models:'
+                ls -la /app/data/ml/models/ || true
+              fi
+            " || {
+              echo "⚠️  Erreur lors de la correction des permissions (non bloquant, mais peut causer des erreurs)"
+            }
+            echo "✅ Permissions des fichiers ML corrigées"
+
+            # Redémarrer le conteneur backend pour que l'application recharge les modèles avec les bonnes permissions
+            echo "🔄 Redémarrage du conteneur backend pour appliquer les permissions..."
+            docker compose -f docker-compose.production.yml restart backend || true
+            echo "⏳ Attente que le conteneur backend redémarre..."
+            sleep 5
 
             echo "⏳ Attente que PostgreSQL soit prêt..."
             echo "📊 Vérification de l'état du conteneur PostgreSQL..."
@@ -687,13 +737,14 @@ jobs:
             docker compose -f docker-compose.production.yml exec -T backend bash -c "
               mkdir -p /app/data/ml/models 2>/dev/null || true
               chmod -R 755 /app/data/ml/models 2>/dev/null || true
-              # Le conteneur tourne avec UID 1000 (appuser), s'assurer que les fichiers lui appartiennent
+              # Le conteneur tourne avec UID 999 (appuser), s'assurer que les fichiers lui appartiennent
+              # Voir Dockerfile.production: useradd -r -g appgroup -u 999
               if [ -d /app/data/ml/models ]; then
-                chown -R 1000:1000 /app/data/ml/models 2>/dev/null || true
+                chown -R 999:999 /app/data/ml/models 2>/dev/null || true
                 # Si le fichier delay_predictor.pkl existe, corriger ses permissions spécifiquement
                 if [ -f /app/data/ml/models/delay_predictor.pkl ]; then
                   chmod 644 /app/data/ml/models/delay_predictor.pkl 2>/dev/null || true
-                  chown 1000:1000 /app/data/ml/models/delay_predictor.pkl 2>/dev/null || true
+                  chown 999:999 /app/data/ml/models/delay_predictor.pkl 2>/dev/null || true
                   echo '✅ Permissions corrigées pour delay_predictor.pkl'
                 else
                   echo 'ℹ️  Fichier delay_predictor.pkl non trouvé (sera créé lors de l''entraînement)'
