@@ -1,0 +1,28 @@
+# Requirements RL sans PyTorch (pour dev local / laptop sans GPU)
+# 
+# Usage:
+#   - Dev local sans GPU
+#   - Tests légers RL
+#   - Laptop sans CUDA
+#
+# Pour l'environnement RL complet avec PyTorch, utilisez requirements-rl.txt
+
+-r requirements.base.txt
+
+# ========== RL Core Framework ==========
+gymnasium>=0.29.0
+
+# ========== Auto-tuning & Hyperparameter Optimization ==========
+optuna>=3.3.0
+optuna-dashboard>=0.13.0
+
+# ========== Monitoring & Visualization ==========
+tensorboard>=2.13.0
+matplotlib>=3.7.0
+
+# ========== Supporting Libraries ==========
+cloudpickle>=3.0.0  # Pour serialization
+
+# NOTE: torch et torchvision ne sont PAS inclus ici
+# Pour les installer, utilisez requirements-rl.txt ou installez-les manuellement
+

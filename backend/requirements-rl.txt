@@ -1,11 +1,18 @@
 ﻿# Requirements pour le module Reinforcement Learning
+# Inclut les dépendances de base + spécifiques au RL/ML lourd
+# NOTE: PyTorch (torch/torchvision) est installé directement dans le Dockerfile.rl
+# avec --extra-index-url pour utiliser la version CPU-only (beaucoup plus légère que CUDA)
+
+-r requirements.base.txt
+
+# ========== Deep Learning (PyTorch) ==========
+# NOTE: torch et torchvision sont installés directement dans Dockerfile.rl
+# avec --extra-index-url https://download.pytorch.org/whl/cpu pour la version CPU-only
+# torch>=2.0.0
+# torchvision>=0.15.0
 
 # ========== RL Core Framework ==========
 gymnasium>=0.29.0
-
-# ========== Deep Learning (PyTorch) ==========
-torch>=2.0.0
-torchvision>=0.15.0
 
 # ========== Auto-tuning & Hyperparameter Optimization ==========
 optuna>=3.3.0
@@ -15,7 +22,5 @@ optuna-dashboard>=0.13.0
 tensorboard>=2.13.0
 matplotlib>=3.7.0
 
-
 # ========== Supporting Libraries ==========
 cloudpickle>=3.0.0  # Pour serialization
-torchvision>=0.15.0  # Pour image processing RL

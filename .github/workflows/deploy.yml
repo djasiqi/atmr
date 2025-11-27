@@ -86,6 +86,16 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Clean up disk space
+        run: |
+          echo "🧹 Nettoyage de l'espace disque avant le build..."
+          # Nettoyer les images Docker inutilisées
+          docker system prune -af --volumes || true
+          # Nettoyer les caches pip
+          rm -rf ~/.cache/pip || true
+          # Afficher l'espace disque disponible
+          df -h
+
       - name: Generate SBOM with Trivy
         uses: aquasecurity/trivy-action@master
         with:
@@ -105,12 +115,18 @@ jobs:
         id: requirements_hash
         run: |
           # Calculer un hash des fichiers requirements pour invalider le cache si nécessaire
-          if [ -f backend/requirements.txt ]; then
+          # Utiliser requirements.prod.txt (qui inclut requirements.base.txt)
+          if [ -f backend/requirements.prod.txt ]; then
+            REQUIREMENTS_HASH=$(sha256sum backend/requirements.prod.txt backend/requirements.base.txt 2>/dev/null | sha256sum | cut -d' ' -f1)
+            echo "requirements_hash=${REQUIREMENTS_HASH}" >> $GITHUB_OUTPUT
+            echo "📋 Hash de requirements.prod.txt + requirements.base.txt: ${REQUIREMENTS_HASH:0:12}..."
+          elif [ -f backend/requirements.txt ]; then
+            # Fallback pour compatibilité
             REQUIREMENTS_HASH=$(sha256sum backend/requirements.txt | cut -d' ' -f1)
             echo "requirements_hash=${REQUIREMENTS_HASH}" >> $GITHUB_OUTPUT
-            echo "📋 Hash de requirements.txt: ${REQUIREMENTS_HASH:0:12}..."
+            echo "📋 Hash de requirements.txt (fallback): ${REQUIREMENTS_HASH:0:12}..."
           else
-            echo "⚠️  requirements.txt non trouvé"
+            echo "⚠️  requirements.prod.txt et requirements.txt non trouvés"
             echo "requirements_hash=missing" >> $GITHUB_OUTPUT
           fi
 
@@ -121,7 +137,8 @@ jobs:
           file: ./backend/Dockerfile.production
           target: runtime
           build-args: |
-            WITH_RL=true
+            WITH_RL=false
+            RL_ENABLED=false
             REQUIREMENTS_HASH=${{ steps.requirements_hash.outputs.requirements_hash }}
           push: true
           tags: ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}

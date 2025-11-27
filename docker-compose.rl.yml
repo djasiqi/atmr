@@ -1,0 +1,158 @@
+# docker-compose.rl.yml
+# Configuration Docker Compose pour l'environnement Reinforcement Learning / ML
+#
+# Usage:
+#   docker compose -f docker-compose.rl.yml up -d
+#   docker compose -f docker-compose.rl.yml logs -f rl-worker
+#
+# Cette stack est séparée de la production et peut être déployée sur un serveur différent
+# (ou le même serveur mais dans un contexte isolé)
+
+services:
+  # Worker RL pour training et expériences
+  rl-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.rl
+    image: djasiqi/atmr-backend-rl:latest
+    container_name: atmr-rl-worker
+    restart: unless-stopped
+    env_file:
+      - .env.rl
+    environment:
+      - RL_ENABLED=true
+      - WITH_RL=true
+      - APP_ENV=rl
+      - FLASK_ENV=development
+    volumes:
+      - ./data/rl:/app/data/rl
+      - ./data/ml:/app/data/ml
+      - ./data/rl/shadow_mode:/app/data/rl/shadow_mode
+    networks:
+      - atmr-rl-network
+    depends_on:
+      - rl-postgres
+      - rl-redis
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: "4.0"
+        reservations:
+          memory: 2G
+          cpus: "2.0"
+    # Exemple de commande pour training
+    # command: python -m atmr.rl.train
+    # Ou pour un worker Celery RL
+    # command: celery -A atmr.celery_app worker -l info -Q rl_queue
+
+  # Base de données PostgreSQL pour les expériences RL
+  # Peut être une DB séparée ou utiliser des snapshots de la prod
+  rl-postgres:
+    image: postgres:15-alpine
+    container_name: atmr-rl-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${RL_POSTGRES_DB:-atmr_rl_db}
+      POSTGRES_USER: ${RL_POSTGRES_USER:-atmr_rl_user}
+      POSTGRES_PASSWORD: ${RL_POSTGRES_PASSWORD:-atmr_rl_password}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - rl_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432" # Port différent pour éviter conflit avec prod
+    networks:
+      - atmr-rl-network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB} && psql -U $${POSTGRES_USER} -d $${POSTGRES_DB} -c 'SELECT 1' > /dev/null 2>&1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "1.0"
+        reservations:
+          memory: 1G
+          cpus: "0.5"
+
+  # Redis pour les tâches RL (optionnel, peut partager avec prod)
+  rl-redis:
+    image: redis:7-alpine
+    container_name: atmr-rl-redis
+    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - |
+        redis-server \
+          --requirepass "${RL_REDIS_PASSWORD:-atmr_rl_redis_password}" \
+          --appendonly yes \
+          --maxmemory 512mb \
+          --maxmemory-policy allkeys-lru \
+          --bind 0.0.0.0 \
+          --protected-mode yes
+    volumes:
+      - rl_redis_data:/data
+    ports:
+      - "6380:6379" # Port différent pour éviter conflit avec prod
+    networks:
+      - atmr-rl-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+
+  # Optuna Dashboard pour visualiser les expériences (optionnel)
+  optuna-dashboard:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.rl
+    image: djasiqi/atmr-backend-rl:latest
+    container_name: atmr-optuna-dashboard
+    restart: unless-stopped
+    env_file:
+      - .env.rl
+    environment:
+      - RL_ENABLED=true
+      - WITH_RL=true
+    command: optuna-dashboard --host 0.0.0.0 --port 8080 sqlite:///app/data/rl/optuna.db
+    volumes:
+      - ./data/rl:/app/data/rl
+    ports:
+      - "8080:8080"
+    networks:
+      - atmr-rl-network
+    depends_on:
+      - rl-postgres
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+
+networks:
+  atmr-rl-network:
+    driver: bridge
+    name: atmr-rl-network
+
+volumes:
+  rl_postgres_data:
+    name: atmr-rl-postgres-data
+  rl_redis_data:
+    name: atmr-rl-redis-data

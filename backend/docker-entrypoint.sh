@@ -159,14 +159,22 @@ except Exception as e:
         echo "  ⚠️  Modèle de prédiction de retard non trouvé"
     fi
     
-    # Warmup des modèles RL
-    if [ -f "/app/data/rl/best_model.pth" ]; then
-        echo "  🤖 Chargement du modèle RL..."
+    # Warmup des modèles RL (uniquement si RL_ENABLED=true)
+    rl_enabled=$(python -c "import os; print('true' if os.getenv('RL_ENABLED', 'false').lower() in ('true', '1', 'yes') else 'false')")
+    if [ "$rl_enabled" = "true" ] && [ -f "/app/data/rl/best_model.pth" ]; then
+        echo "  🤖 Chargement du modèle RL (RL_ENABLED=true)..."
         python -c "
-import torch
+import os
 import logging
 logging.basicConfig(level=logging.INFO)
+
+# Vérifier que RL est activé
+if not os.getenv('RL_ENABLED', 'false').lower() in ('true', '1', 'yes'):
+    print('ℹ️  RL désactivé – skip warmup RL')
+    exit(0)
+
 try:
+    import torch
     model = torch.load('/app/data/rl/best_model.pth', map_location='cpu')
     print(f'✅ Modèle RL chargé: {type(model).__name__}')
     # Test d'inférence pour vérifier le modèle
@@ -175,9 +183,13 @@ try:
         with torch.no_grad():
             _ = model(dummy_input)
         print('✅ Test d\'inférence RL réussi')
+except ImportError as e:
+    print(f'⚠️  PyTorch non disponible (RL_ENABLED=true mais torch manquant): {e}')
 except Exception as e:
     print(f'⚠️  Erreur lors du chargement du modèle RL: {e}')
 "
+    elif [ "$rl_enabled" = "false" ]; then
+        echo "  ℹ️  RL désactivé (RL_ENABLED=false) – skip warmup RL"
     else
         echo "  ⚠️  Modèle RL non trouvé"
     fi
@@ -261,14 +273,21 @@ check_dependencies() {
     echo "📦 Vérification des dépendances critiques..."
     
     python -c "
+import os
 import logging
 logging.basicConfig(level=logging.INFO)
 
-# Dépendances critiques (toujours requises)
-critical_deps = ['flask', 'sqlalchemy', 'celery', 'redis', 'pandas', 'numpy']
+# Vérifier si RL est activé
+rl_enabled = os.getenv('RL_ENABLED', 'false').lower() in ('true', '1', 'yes')
+with_rl = os.getenv('WITH_RL', 'false').lower() in ('true', '1', 'yes')
+rl_active = rl_enabled or with_rl
 
-# Dépendances ML (installées avec WITH_RL=true)
-ml_deps = ['sklearn', 'torch', 'gymnasium']
+if not rl_active:
+    print('ℹ️  RL désactivé dans cet environnement – on ignore les dépendances RL.')
+    print('   (torch, gymnasium, optuna ne sont pas installés en production)')
+
+# Dépendances critiques (toujours requises)
+critical_deps = ['flask', 'sqlalchemy', 'celery', 'redis', 'pandas', 'numpy', 'sklearn']
 
 # Vérifier les dépendances critiques
 for dep in critical_deps:
@@ -278,13 +297,18 @@ for dep in critical_deps:
     except ImportError:
         print(f'❌ {dep} manquant')
 
-# Vérifier les dépendances ML (toujours vérifiées car installées)
-for dep in ml_deps:
-    try:
-        __import__(dep)
-        print(f'✅ {dep}')
-    except ImportError:
-        print(f'❌ {dep} manquant')
+# Vérifier les dépendances ML uniquement si RL est activé
+if rl_active:
+    print('📦 Vérification des dépendances RL/ML...')
+    ml_deps = ['torch', 'gymnasium', 'optuna']
+    for dep in ml_deps:
+        try:
+            __import__(dep)
+            print(f'✅ {dep}')
+        except ImportError:
+            print(f'❌ {dep} manquant (requis pour RL)')
+else:
+    print('ℹ️  Dépendances RL ignorées (RL_ENABLED=false)')
 "
 }
 
