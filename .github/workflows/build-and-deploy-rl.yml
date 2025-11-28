@@ -329,6 +329,24 @@ jobs:
                       echo "📁 Répertoire de déploiement: ${RL_DEPLOY_DIR}"
                       echo "${RL_DEPLOY_DIR}" > /tmp/rl_deploy_dir.txt
 
+            - name: Clean up /tmp/docker-compose.rl.yml before copy
+              uses: appleboy/ssh-action@master
+              with:
+                  host: ${{ env.SSH_HOST }}
+                  username: ${{ env.SSH_USER }}
+                  key: ${{ env.SSH_KEY }}
+                  port: ${{ env.SSH_PORT }}
+                  script: |
+                      # Supprimer le fichier ou répertoire existant dans /tmp
+                      if [ -d "/tmp/docker-compose.rl.yml" ]; then
+                          echo "🗑️  Suppression du répertoire /tmp/docker-compose.rl.yml"
+                          rm -rf /tmp/docker-compose.rl.yml
+                      elif [ -f "/tmp/docker-compose.rl.yml" ]; then
+                          echo "🗑️  Suppression du fichier /tmp/docker-compose.rl.yml"
+                          rm -f /tmp/docker-compose.rl.yml
+                      fi
+                      echo "✅ /tmp/ nettoyé pour la copie"
+
             - name: Copy docker-compose.rl.yml to server
               continue-on-error: true
               id: copy_compose
@@ -343,8 +361,7 @@ jobs:
                   overwrite: true # Écraser le fichier s'il existe déjà
                   # Copier vers /tmp/ pour éviter les problèmes de permissions
 
-            - name: Verify and copy docker-compose.rl.yml if needed
-              if: steps.copy_compose.outcome == 'failure' || steps.copy_compose.outcome == 'success'
+            - name: Verify docker-compose.rl.yml was copied
               uses: appleboy/ssh-action@master
               with:
                   host: ${{ env.SSH_HOST }}
@@ -355,11 +372,15 @@ jobs:
                       # Vérifier si le fichier existe dans /tmp
                       if [ -f "/tmp/docker-compose.rl.yml" ]; then
                           echo "✅ docker-compose.rl.yml trouvé dans /tmp (copié par SCP)"
+                          # Afficher le port configuré pour vérification
+                          if grep -q "8081:8080" /tmp/docker-compose.rl.yml; then
+                              echo "✅ Port 8081 correctement configuré dans docker-compose.rl.yml"
+                          else
+                              echo "⚠️  Port 8081 non trouvé dans docker-compose.rl.yml"
+                          fi
                       else
-                          echo "⚠️  docker-compose.rl.yml non trouvé dans /tmp, copie via SSH..."
-                          # Copier le fichier via SSH en utilisant base64
-                          # Le contenu sera fourni par l'étape suivante
-                          echo "💡 Le fichier sera copié dans le script de déploiement"
+                          echo "⚠️  docker-compose.rl.yml non trouvé dans /tmp"
+                          echo "💡 Le fichier sera copié depuis base64 dans le script de déploiement"
                       fi
 
             - name: Deploy RL environment via SSH
@@ -389,26 +410,34 @@ jobs:
                           exit 1
                       }
 
-                      # Copier docker-compose.rl.yml depuis /tmp si nécessaire, sinon depuis base64
-                      if [ ! -f "docker-compose.rl.yml" ]; then
-                          if [ -f "/tmp/docker-compose.rl.yml" ]; then
-                              cp /tmp/docker-compose.rl.yml docker-compose.rl.yml
-                              echo "✅ docker-compose.rl.yml copié depuis /tmp"
+                      # Copier docker-compose.rl.yml depuis /tmp si disponible, sinon depuis base64
+                      # Toujours remplacer pour s'assurer d'avoir la dernière version
+                      if [ -f "/tmp/docker-compose.rl.yml" ]; then
+                          cp -f /tmp/docker-compose.rl.yml docker-compose.rl.yml
+                          echo "✅ docker-compose.rl.yml copié depuis /tmp (remplacé)"
+                          # Vérifier que le port 8081 est bien configuré
+                          if grep -q "8081:8080" docker-compose.rl.yml; then
+                              echo "✅ Port 8081 correctement configuré"
                           else
-                              echo "⚠️  docker-compose.rl.yml non trouvé dans /tmp, copie depuis base64..."
-                              # Décoder le fichier depuis base64
-                              COMPOSE_B64="${{ steps.encode_compose.outputs.compose_b64 }}"
-                              if [ -n "${COMPOSE_B64}" ]; then
-                                  echo "${COMPOSE_B64}" | base64 -d > docker-compose.rl.yml
-                                  echo "✅ docker-compose.rl.yml créé depuis base64"
+                              echo "⚠️  Port 8081 non trouvé, vérification du fichier..."
+                              grep -n "808" docker-compose.rl.yml || true
+                          fi
+                      else
+                          echo "⚠️  docker-compose.rl.yml non trouvé dans /tmp, copie depuis base64..."
+                          # Décoder le fichier depuis base64
+                          COMPOSE_B64="${{ steps.encode_compose.outputs.compose_b64 }}"
+                          if [ -n "${COMPOSE_B64}" ]; then
+                              echo "${COMPOSE_B64}" | base64 -d > docker-compose.rl.yml
+                              echo "✅ docker-compose.rl.yml créé depuis base64"
+                          else
+                              if [ -f "docker-compose.rl.yml" ]; then
+                                  echo "⚠️  Utilisation du fichier existant (base64 non disponible)"
                               else
                                   echo "❌ Impossible de copier docker-compose.rl.yml"
                                   echo "💡 Vérifiez que l'étape 'Copy docker-compose.rl.yml to server' a réussi"
                                   exit 1
                               fi
                           fi
-                      else
-                          echo "✅ docker-compose.rl.yml existe déjà dans ${RL_DEPLOY_DIR}"
                       fi
 
                       set -o errexit -o nounset -o pipefail
