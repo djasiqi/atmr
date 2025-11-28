@@ -440,12 +440,21 @@ jobs:
 
                       # Injecter le hash d'authentification Optuna depuis le secret
                       if [ -n "${OPTUNA_AUTH_HASH:-}" ]; then
-                          # Échapper les $ dans le hash pour sed (chaque $ devient $$ pour YAML)
-                          # Dans docker-compose, les $ doivent être doublés ($$) pour être interprétés comme un seul $
-                          ESCAPED_HASH=$(echo "${OPTUNA_AUTH_HASH}" | sed 's/\$/$$$$/g')
+                          # Dans docker-compose YAML, chaque $ doit être doublé ($$) pour être interprété comme un seul $
+                          # Le secret contient le hash avec des $ (ex: $apr1$BttWEcBv$...)
+                          # On doit remplacer chaque $ par $$ pour YAML (ex: $$apr1$$BttWEcBv$$...)
+                          # Utiliser python pour échapper correctement (plus fiable que sed avec $)
+                          ESCAPED_HASH=$(python3 -c "import sys; print(sys.argv[1].replace('\$', '\$\$'))" "${OPTUNA_AUTH_HASH}")
                           # Remplacer le placeholder par le hash réel
                           sed -i "s|PLACEHOLDER_OPTUNA_AUTH_HASH|${ESCAPED_HASH}|g" docker-compose.rl.yml
                           echo "✅ Hash d'authentification Optuna injecté"
+                          # Vérification
+                          if grep -q "PLACEHOLDER_OPTUNA_AUTH_HASH" docker-compose.rl.yml; then
+                              echo "⚠️  Le placeholder n'a pas été remplacé, vérification..."
+                              grep "optuna-auth.basicauth.users" docker-compose.rl.yml || true
+                          else
+                              echo "✅ Placeholder remplacé avec succès"
+                          fi
                       else
                           echo "⚠️  OPTUNA_AUTH_HASH non défini, l'authentification ne sera pas activée"
                           # Commenter la ligne d'authentification si le secret n'est pas défini
