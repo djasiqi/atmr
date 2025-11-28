@@ -230,6 +230,20 @@ jobs:
             - name: Checkout code
               uses: actions/checkout@v4
 
+            - name: Encode docker-compose.rl.yml to base64
+              id: encode_compose
+              run: |
+                  if [ -f "docker-compose.rl.yml" ]; then
+                      COMPOSE_B64=$(base64 -w 0 docker-compose.rl.yml)
+                      echo "compose_b64<<EOF" >> $GITHUB_OUTPUT
+                      echo "$COMPOSE_B64" >> $GITHUB_OUTPUT
+                      echo "EOF" >> $GITHUB_OUTPUT
+                      echo "✅ docker-compose.rl.yml encodé en base64"
+                  else
+                      echo "❌ docker-compose.rl.yml introuvable"
+                      exit 1
+                  fi
+
             - name: Validate required secrets
               run: |
                   REQUIRED_SECRETS=(
@@ -285,7 +299,7 @@ jobs:
                   # Ne pas faire échouer, juste avertir
                   exit 0
 
-            - name: Prepare RL deployment directory and copy docker-compose.rl.yml
+            - name: Prepare RL deployment directory
               uses: appleboy/ssh-action@master
               with:
                   host: ${{ env.SSH_HOST }}
@@ -316,6 +330,8 @@ jobs:
                       echo "${RL_DEPLOY_DIR}" > /tmp/rl_deploy_dir.txt
 
             - name: Copy docker-compose.rl.yml to server
+              continue-on-error: true
+              id: copy_compose
               uses: appleboy/scp-action@master
               with:
                   host: ${{ env.SSH_HOST }}
@@ -323,7 +339,27 @@ jobs:
                   key: ${{ env.SSH_KEY }}
                   port: ${{ env.SSH_PORT }}
                   source: "docker-compose.rl.yml"
-                  target: "/tmp/docker-compose.rl.yml"
+                  target: "/tmp/"
+                  # Copier vers /tmp/ pour éviter les problèmes de permissions
+
+            - name: Verify and copy docker-compose.rl.yml if needed
+              if: steps.copy_compose.outcome == 'failure' || steps.copy_compose.outcome == 'success'
+              uses: appleboy/ssh-action@master
+              with:
+                  host: ${{ env.SSH_HOST }}
+                  username: ${{ env.SSH_USER }}
+                  key: ${{ env.SSH_KEY }}
+                  port: ${{ env.SSH_PORT }}
+                  script: |
+                      # Vérifier si le fichier existe dans /tmp
+                      if [ -f "/tmp/docker-compose.rl.yml" ]; then
+                          echo "✅ docker-compose.rl.yml trouvé dans /tmp (copié par SCP)"
+                      else
+                          echo "⚠️  docker-compose.rl.yml non trouvé dans /tmp, copie via SSH..."
+                          # Copier le fichier via SSH en utilisant base64
+                          # Le contenu sera fourni par l'étape suivante
+                          echo "💡 Le fichier sera copié dans le script de déploiement"
+                      fi
 
             - name: Deploy RL environment via SSH
               uses: appleboy/ssh-action@master
@@ -352,15 +388,23 @@ jobs:
                           exit 1
                       }
 
-                      # Copier docker-compose.rl.yml depuis /tmp si nécessaire
+                      # Copier docker-compose.rl.yml depuis /tmp si nécessaire, sinon depuis base64
                       if [ ! -f "docker-compose.rl.yml" ]; then
                           if [ -f "/tmp/docker-compose.rl.yml" ]; then
                               cp /tmp/docker-compose.rl.yml docker-compose.rl.yml
                               echo "✅ docker-compose.rl.yml copié depuis /tmp"
                           else
-                              echo "❌ docker-compose.rl.yml introuvable dans /tmp"
-                              echo "💡 Vérifiez que l'étape 'Copy docker-compose.rl.yml to server' a réussi"
-                              exit 1
+                              echo "⚠️  docker-compose.rl.yml non trouvé dans /tmp, copie depuis base64..."
+                              # Décoder le fichier depuis base64
+                              COMPOSE_B64="${{ steps.encode_compose.outputs.compose_b64 }}"
+                              if [ -n "${COMPOSE_B64}" ]; then
+                                  echo "${COMPOSE_B64}" | base64 -d > docker-compose.rl.yml
+                                  echo "✅ docker-compose.rl.yml créé depuis base64"
+                              else
+                                  echo "❌ Impossible de copier docker-compose.rl.yml"
+                                  echo "💡 Vérifiez que l'étape 'Copy docker-compose.rl.yml to server' a réussi"
+                                  exit 1
+                              fi
                           fi
                       else
                           echo "✅ docker-compose.rl.yml existe déjà dans ${RL_DEPLOY_DIR}"
