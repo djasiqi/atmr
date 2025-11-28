@@ -90,13 +90,24 @@ def upgrade():
 
     # 5. task_failure : supprimer les indexes first_seen et last_seen
     # (ils existent en DB mais ne sont pas dans le modèle)
-    with op.batch_alter_table("task_failure", schema=None) as batch_op:
-        # Vérifier si les indexes existent avant de les supprimer
-        # (utiliser batch_op.f() pour générer le nom automatique si nécessaire)
+    # Vérifier l'existence des index avec une requête SQL directe
+    task_failure_indexes_query = bind.execute(
+        sa.text(
+            """
+            SELECT indexname FROM pg_indexes 
+            WHERE tablename = 'task_failure'
+        """
+        )
+    )
+    task_failure_indexes = [row[0] for row in task_failure_indexes_query]
+    
+    # Supprimer seulement les index qui existent
+    if "ix_task_failure_first_seen" in task_failure_indexes:
         with suppress(Exception):
-            batch_op.drop_index("ix_task_failure_first_seen")
+            op.drop_index("ix_task_failure_first_seen", table_name="task_failure")
+    if "ix_task_failure_last_seen" in task_failure_indexes:
         with suppress(Exception):
-            batch_op.drop_index("ix_task_failure_last_seen")
+            op.drop_index("ix_task_failure_last_seen", table_name="task_failure")
 
     # 6. user.email : changer de VARCHAR(100) à String(255)
     with op.batch_alter_table("user", schema=None) as batch_op:
