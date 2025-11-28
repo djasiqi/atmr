@@ -23,24 +23,49 @@ depends_on = None
 
 def upgrade():
     """Synchronise la DB avec les modèles SQLAlchemy."""
+    from contextlib import suppress
+
+    from sqlalchemy import inspect
+
+    bind = op.get_bind()
+    inspector = inspect(bind)
+
+    # Vérifier l'état actuel de la table client
+    client_columns = {col["name"]: col for col in inspector.get_columns("client")}
+    client_indexes = [idx["name"] for idx in inspector.get_indexes("client")]
+    fk_constraints = [
+        fk["name"]
+        for fk in inspector.get_foreign_keys("client")
+        if fk["constrained_columns"] == ["company_id"]
+    ]
 
     # 1. client.company_id : rendre nullable=True
     with op.batch_alter_table("client", schema=None) as batch_op:
-        batch_op.alter_column("company_id", existing_type=sa.INTEGER(), nullable=True)
-
-        # 2. Créer l'index unique conditionnel uq_client_user_no_company
-        batch_op.create_index(
-            "uq_client_user_no_company",
-            ["user_id"],
-            unique=True,
-            postgresql_where=sa.text("company_id IS NULL"),
-        )
+        # Vérifier si company_id est déjà nullable
+        if not client_columns.get("company_id", {}).get("nullable", False):
+            batch_op.alter_column("company_id", existing_type=sa.INTEGER(), nullable=True)
 
         # 3. Modifier la FK pour ondelete='SET NULL' au lieu de 'CASCADE'
-        batch_op.drop_constraint("client_company_id_fkey", type_="foreignkey")
-        batch_op.create_foreign_key(
-            None, "company", ["company_id"], ["id"], ondelete="SET NULL"
-        )
+        if fk_constraints:
+            # Supprimer l'ancienne FK si elle existe
+            with suppress(Exception):
+                batch_op.drop_constraint("client_company_id_fkey", type_="foreignkey")
+            # Créer la nouvelle FK
+            batch_op.create_foreign_key(
+                None, "company", ["company_id"], ["id"], ondelete="SET NULL"
+            )
+
+    # 2. Créer l'index unique conditionnel uq_client_user_no_company (seulement s'il n'existe pas)
+    # Doit être fait en dehors de batch_alter_table pour pouvoir vérifier l'existence
+    if "uq_client_user_no_company" not in client_indexes:
+        with suppress(Exception):
+            op.create_index(
+                "uq_client_user_no_company",
+                "client",
+                ["user_id"],
+                unique=True,
+                postgresql_where=sa.text("company_id IS NULL"),
+            )
 
     # 4. driver.driver_photo : changer de TEXT à String(500)
     with op.batch_alter_table("driver", schema=None) as batch_op:
