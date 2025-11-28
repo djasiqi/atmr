@@ -135,7 +135,10 @@ services:
     environment:
       - RL_ENABLED=true
       - WITH_RL=true
-    command: optuna-dashboard --host 0.0.0.0 --port 8080 postgresql://${RL_POSTGRES_USER}:${RL_POSTGRES_PASSWORD}@rl-postgres:5432/${RL_POSTGRES_DB}
+    # Note: Les variables ${RL_POSTGRES_*} ne sont pas substituées dans la commande par Docker Compose
+    # Utilisation des valeurs directes avec encodage URL (mot de passe: @=%40, !=%21)
+    # Pour modifier, encoder le mot de passe avec urllib.parse.quote_plus() en Python
+    command: optuna-dashboard --host 0.0.0.0 --port 8080 postgresql://atmr:Palidhje%4037_46%21%21@rl-postgres:5432/atmr_rl_db
     volumes:
       - ./data/rl:/app/data/rl
     ports:
