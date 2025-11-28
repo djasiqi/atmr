@@ -522,7 +522,7 @@ jobs:
                       fi
                       
                       # Vérifier les réseaux possibles pour Traefik
-                      POSSIBLE_TRAEFIK_NETWORKS=("traefik_default" "atmr_default" "traefik-network" "traefik")
+                      POSSIBLE_TRAEFIK_NETWORKS=("traefik_proxy" "traefik_default" "atmr_default" "traefik-network" "traefik")
                       FOUND_TRAEFIK_NETWORK=""
                       
                       for net in "${POSSIBLE_TRAEFIK_NETWORKS[@]}"; do
