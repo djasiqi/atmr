@@ -545,65 +545,19 @@ jobs:
                       # Mettre à jour docker-compose.rl.yml avec le bon réseau ou le supprimer si Traefik n'est pas installé
                       if [ -n "${FINAL_TRAEFIK_NETWORK}" ]; then
                           echo "✅ Utilisation du réseau Traefik: ${FINAL_TRAEFIK_NETWORK}"
-                          # Mettre à jour le nom du réseau dans docker-compose.rl.yml
-                          if command -v python3 >/dev/null 2>&1; then
-                              cat > /tmp/update_traefik_network.py <<'PYEOF'
-import os
-import re
-import sys
-traefik_network = os.environ.get('FINAL_TRAEFIK_NETWORK', 'traefik_default')
-with open('docker-compose.rl.yml', 'r') as f:
-    content = f.read()
-content = re.sub(r'name: traefik_default', f'name: {traefik_network}', content)
-with open('docker-compose.rl.yml', 'w') as f:
-    f.write(content)
-PYEOF
-                              FINAL_TRAEFIK_NETWORK="${FINAL_TRAEFIK_NETWORK}" python3 /tmp/update_traefik_network.py
-                              rm -f /tmp/update_traefik_network.py
-                              echo "✅ docker-compose.rl.yml mis à jour avec le réseau ${FINAL_TRAEFIK_NETWORK}"
-                          else
-                              # Fallback avec sed
-                              sed -i "s/name: traefik_default/name: ${FINAL_TRAEFIK_NETWORK}/" docker-compose.rl.yml 2>/dev/null || true
-                              echo "✅ docker-compose.rl.yml mis à jour avec le réseau ${FINAL_TRAEFIK_NETWORK}"
-                          fi
+                          # Mettre à jour le nom du réseau dans docker-compose.rl.yml avec sed
+                          sed -i "s/name: traefik_default/name: ${FINAL_TRAEFIK_NETWORK}/" docker-compose.rl.yml 2>/dev/null || true
+                          echo "✅ docker-compose.rl.yml mis à jour avec le réseau ${FINAL_TRAEFIK_NETWORK}"
                       else
                           echo "⚠️  Aucun réseau Traefik trouvé"
                           echo "💡 Le service optuna-dashboard utilisera uniquement le réseau atmr-rl-network"
                           echo "💡 Suppression du réseau Traefik de docker-compose.rl.yml..."
-                          # Supprimer la référence au réseau Traefik dans docker-compose.rl.yml avec Python
-                          if command -v python3 >/dev/null 2>&1; then
-                              cat > /tmp/remove_traefik_network.py <<'PYEOF'
-with open('docker-compose.rl.yml', 'r') as f:
-    lines = f.readlines()
-new_lines = []
-skip_traefik_def = False
-for line in lines:
-    if '- traefik-network' in line:
-        continue
-    if 'traefik-network:' in line and 'external:' not in line:
-        skip_traefik_def = True
-        continue
-    if skip_traefik_def:
-        if line.strip().startswith('#') or line.strip() == '':
-            continue
-        if 'external:' in line or 'name:' in line:
-            continue
-        if line.strip() and not line.startswith(' '):
-            skip_traefik_def = False
-    if not skip_traefik_def:
-        new_lines.append(line)
-with open('docker-compose.rl.yml', 'w') as f:
-    f.writelines(new_lines)
-PYEOF
-                              python3 /tmp/remove_traefik_network.py
-                              rm -f /tmp/remove_traefik_network.py
-                              echo "✅ Réseau Traefik supprimé de docker-compose.rl.yml"
-                          else
-                              # Fallback avec sed (moins robuste)
-                              sed -i '/- traefik-network/d' docker-compose.rl.yml 2>/dev/null || true
-                              sed -i '/traefik-network:/,/name: traefik_default/d' docker-compose.rl.yml 2>/dev/null || true
-                              echo "✅ Réseau Traefik supprimé de docker-compose.rl.yml (fallback sed)"
-                          fi
+                          # Supprimer la référence au réseau Traefik dans docker-compose.rl.yml avec sed
+                          # Supprimer la ligne "- traefik-network" des networks du service optuna-dashboard
+                          sed -i '/- traefik-network/d' docker-compose.rl.yml 2>/dev/null || true
+                          # Supprimer la définition complète du réseau traefik-network (de "traefik-network:" jusqu'à la ligne avant "volumes:")
+                          sed -i '/^  traefik-network:/,/^volumes:/ { /^  traefik-network:/d; /^    external:/d; /^    name:/d; }' docker-compose.rl.yml 2>/dev/null || true
+                          echo "✅ Réseau Traefik supprimé de docker-compose.rl.yml"
                       fi
 
                       # Ouvrir le port 8081 dans le pare-feu si nécessaire
