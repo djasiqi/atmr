@@ -57,7 +57,20 @@ def upgrade():
 
     # 2. Créer l'index unique conditionnel uq_client_user_no_company (seulement s'il n'existe pas)
     # Doit être fait en dehors de batch_alter_table pour pouvoir vérifier l'existence
-    if "uq_client_user_no_company" not in client_indexes:
+    # Vérifier l'existence de l'index avec une requête SQL directe pour plus de robustesse
+    index_exists = bind.execute(
+        sa.text(
+            """
+            SELECT EXISTS (
+                SELECT 1 FROM pg_indexes 
+                WHERE tablename = 'client' 
+                AND indexname = 'uq_client_user_no_company'
+            )
+        """
+        )
+    ).scalar()
+    
+    if not index_exists:
         with suppress(Exception):
             op.create_index(
                 "uq_client_user_no_company",
