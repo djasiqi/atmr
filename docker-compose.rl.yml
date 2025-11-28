@@ -139,7 +139,7 @@ services:
     volumes:
       - ./data/rl:/app/data/rl
     ports:
-      - "8080:8080"
+      - "8081:8080"  # Port externe 8081 pour éviter conflit avec d'autres services
     networks:
       - atmr-rl-network
     depends_on:
