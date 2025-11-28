@@ -146,11 +146,32 @@ services:
     volumes:
       - ./data/rl:/app/data/rl
     ports:
-      - "8081:8080" # Port externe 8081 pour éviter conflit avec d'autres services
+      - "8081:8080" # Port externe 8081 pour éviter conflit avec d'autres services (conservé pour accès direct)
     networks:
       - atmr-rl-network
+      - traefik-network # Réseau Traefik pour le routage automatique
     depends_on:
       - rl-postgres
+    # Labels Traefik pour le routage automatique avec HTTPS
+    labels:
+      # Activer Traefik pour ce conteneur
+      - "traefik.enable=true"
+      # Router HTTP (port 80) vers optuna.lirie.ch
+      - "traefik.http.routers.optuna.rule=Host(`optuna.lirie.ch`)"
+      - "traefik.http.routers.optuna.entrypoints=web"
+      # Router HTTPS (port 443) vers optuna.lirie.ch avec certificat SSL automatique
+      - "traefik.http.routers.optuna-secure.rule=Host(`optuna.lirie.ch`)"
+      - "traefik.http.routers.optuna-secure.entrypoints=websecure"
+      - "traefik.http.routers.optuna-secure.tls.certresolver=letsencrypt"
+      # Redirection HTTP vers HTTPS
+      - "traefik.http.middlewares.optuna-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.optuna-redirect.redirectscheme.permanent=true"
+      - "traefik.http.routers.optuna.middlewares=optuna-redirect"
+      # Service backend (port interne du conteneur)
+      - "traefik.http.services.optuna.loadbalancer.server.port=8080"
+      # Headers pour proxy
+      - "traefik.http.middlewares.optuna-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
+      - "traefik.http.routers.optuna-secure.middlewares=optuna-headers"
     deploy:
       resources:
         limits:
@@ -161,6 +182,10 @@ networks:
   atmr-rl-network:
     driver: bridge
     name: atmr-rl-network
+  # Réseau externe Traefik (doit exister sur le serveur)
+  traefik-network:
+    external: true
+    name: traefik_default # Nom par défaut du réseau Traefik, ajustez si nécessaire
 
 volumes:
   rl_postgres_data:
