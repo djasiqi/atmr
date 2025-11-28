@@ -503,24 +503,125 @@ jobs:
                       chown -R 1000:1000 data 2>/dev/null || true
                       echo "✅ Répertoires de données RL créés"
 
+                      # Vérifier la configuration Traefik sur le serveur
+                      echo "🌐 Vérification de la configuration Traefik..."
+                      TRAEFIK_CONTAINER=$(docker ps --filter "name=traefik" --format "{{.Names}}" 2>/dev/null | head -n1 || echo "")
+                      TRAEFIK_NETWORK=""
+                      
+                      if [ -n "${TRAEFIK_CONTAINER}" ]; then
+                          echo "✅ Conteneur Traefik trouvé: ${TRAEFIK_CONTAINER}"
+                          # Détecter le réseau utilisé par Traefik
+                          TRAEFIK_NETWORK=$(docker inspect "${TRAEFIK_CONTAINER}" --format '{{range $net, $conf := .NetworkSettings.Networks}}{{$net}}{{end}}' 2>/dev/null | head -n1 || echo "")
+                          if [ -n "${TRAEFIK_NETWORK}" ]; then
+                              echo "✅ Réseau Traefik détecté: ${TRAEFIK_NETWORK}"
+                          else
+                              echo "⚠️  Impossible de détecter le réseau Traefik"
+                          fi
+                      else
+                          echo "⚠️  Aucun conteneur Traefik trouvé"
+                      fi
+                      
+                      # Vérifier les réseaux possibles pour Traefik
+                      POSSIBLE_TRAEFIK_NETWORKS=("traefik_default" "atmr_default" "traefik-network" "traefik")
+                      FOUND_TRAEFIK_NETWORK=""
+                      
+                      for net in "${POSSIBLE_TRAEFIK_NETWORKS[@]}"; do
+                          if docker network ls --format '{{.Name}}' | grep -q "^${net}$"; then
+                              FOUND_TRAEFIK_NETWORK="${net}"
+                              echo "✅ Réseau ${net} existe"
+                              break
+                          fi
+                      done
+                      
+                      # Utiliser le réseau détecté ou celui trouvé
+                      if [ -n "${TRAEFIK_NETWORK}" ]; then
+                          FINAL_TRAEFIK_NETWORK="${TRAEFIK_NETWORK}"
+                      elif [ -n "${FOUND_TRAEFIK_NETWORK}" ]; then
+                          FINAL_TRAEFIK_NETWORK="${FOUND_TRAEFIK_NETWORK}"
+                      else
+                          FINAL_TRAEFIK_NETWORK=""
+                      fi
+                      
+                      # Mettre à jour docker-compose.rl.yml avec le bon réseau ou le supprimer si Traefik n'est pas installé
+                      if [ -n "${FINAL_TRAEFIK_NETWORK}" ]; then
+                          echo "✅ Utilisation du réseau Traefik: ${FINAL_TRAEFIK_NETWORK}"
+                          # Mettre à jour le nom du réseau dans docker-compose.rl.yml
+                          if command -v python3 >/dev/null 2>&1; then
+                              FINAL_TRAEFIK_NETWORK="${FINAL_TRAEFIK_NETWORK}" python3 <<'PYEOF'
+import os
+import re
+traefik_network = os.environ.get('FINAL_TRAEFIK_NETWORK', 'traefik_default')
+with open('docker-compose.rl.yml', 'r') as f:
+    content = f.read()
+# Remplacer le nom du réseau Traefik
+content = re.sub(r'name: traefik_default', f'name: {traefik_network}', content)
+with open('docker-compose.rl.yml', 'w') as f:
+    f.write(content)
+PYEOF
+                              echo "✅ docker-compose.rl.yml mis à jour avec le réseau ${FINAL_TRAEFIK_NETWORK}"
+                          else
+                              # Fallback avec sed
+                              sed -i "s/name: traefik_default/name: ${FINAL_TRAEFIK_NETWORK}/" docker-compose.rl.yml 2>/dev/null || true
+                              echo "✅ docker-compose.rl.yml mis à jour avec le réseau ${FINAL_TRAEFIK_NETWORK}"
+                          fi
+                      else
+                          echo "⚠️  Aucun réseau Traefik trouvé"
+                          echo "💡 Le service optuna-dashboard utilisera uniquement le réseau atmr-rl-network"
+                          echo "💡 Suppression du réseau Traefik de docker-compose.rl.yml..."
+                          # Supprimer la référence au réseau Traefik dans docker-compose.rl.yml avec Python
+                          if command -v python3 >/dev/null 2>&1; then
+                              python3 <<EOF
+with open('docker-compose.rl.yml', 'r') as f:
+    lines = f.readlines()
+# Supprimer la ligne "- traefik-network" des networks
+new_lines = []
+skip_traefik_network = False
+skip_traefik_def = False
+for i, line in enumerate(lines):
+    if '- traefik-network' in line:
+        continue  # Supprimer cette ligne
+    if 'traefik-network:' in line and 'external:' not in line:
+        skip_traefik_def = True
+        continue
+    if skip_traefik_def:
+        if line.strip().startswith('#') or line.strip() == '':
+            continue
+        if 'external:' in line or 'name:' in line:
+            continue
+        if line.strip() and not line.startswith(' '):
+            skip_traefik_def = False
+    if not skip_traefik_def:
+        new_lines.append(line)
+with open('docker-compose.rl.yml', 'w') as f:
+    f.writelines(new_lines)
+EOF
+                              echo "✅ Réseau Traefik supprimé de docker-compose.rl.yml"
+                          else
+                              # Fallback avec sed (moins robuste)
+                              sed -i '/- traefik-network/d' docker-compose.rl.yml 2>/dev/null || true
+                              sed -i '/traefik-network:/,/name: traefik_default/d' docker-compose.rl.yml 2>/dev/null || true
+                              echo "✅ Réseau Traefik supprimé de docker-compose.rl.yml (fallback sed)"
+                          fi
+                      fi
+
                       # Ouvrir le port 8081 dans le pare-feu si nécessaire
                       echo "🔥 Configuration du pare-feu pour le port 8081..."
                       if command -v ufw >/dev/null 2>&1; then
                           # Ubuntu/Debian avec ufw
-                          if sudo ufw status | grep -q "8081"; then
+                          if ufw status | grep -q "8081" 2>/dev/null; then
                               echo "✅ Port 8081 déjà ouvert dans ufw"
                           else
                               echo "🔓 Ouverture du port 8081 dans ufw..."
-                              sudo ufw allow 8081/tcp || echo "⚠️  Impossible d'ouvrir le port 8081 (peut nécessiter sudo sans mot de passe)"
+                              ufw allow 8081/tcp 2>/dev/null || echo "⚠️  Impossible d'ouvrir le port 8081 (peut nécessiter sudo)"
                           fi
                       elif command -v firewall-cmd >/dev/null 2>&1; then
                           # CentOS/RHEL avec firewalld
-                          if sudo firewall-cmd --list-ports | grep -q "8081"; then
+                          if firewall-cmd --list-ports 2>/dev/null | grep -q "8081"; then
                               echo "✅ Port 8081 déjà ouvert dans firewalld"
                           else
                               echo "🔓 Ouverture du port 8081 dans firewalld..."
-                              sudo firewall-cmd --permanent --add-port=8081/tcp || echo "⚠️  Impossible d'ouvrir le port 8081"
-                              sudo firewall-cmd --reload || true
+                              firewall-cmd --permanent --add-port=8081/tcp 2>/dev/null || echo "⚠️  Impossible d'ouvrir le port 8081"
+                              firewall-cmd --reload 2>/dev/null || true
                           fi
                       else
                           echo "⚠️  Aucun gestionnaire de pare-feu détecté (ufw/firewalld)"
