@@ -503,6 +503,30 @@ jobs:
                       chown -R 1000:1000 data 2>/dev/null || true
                       echo "✅ Répertoires de données RL créés"
 
+                      # Ouvrir le port 8081 dans le pare-feu si nécessaire
+                      echo "🔥 Configuration du pare-feu pour le port 8081..."
+                      if command -v ufw >/dev/null 2>&1; then
+                          # Ubuntu/Debian avec ufw
+                          if sudo ufw status | grep -q "8081"; then
+                              echo "✅ Port 8081 déjà ouvert dans ufw"
+                          else
+                              echo "🔓 Ouverture du port 8081 dans ufw..."
+                              sudo ufw allow 8081/tcp || echo "⚠️  Impossible d'ouvrir le port 8081 (peut nécessiter sudo sans mot de passe)"
+                          fi
+                      elif command -v firewall-cmd >/dev/null 2>&1; then
+                          # CentOS/RHEL avec firewalld
+                          if sudo firewall-cmd --list-ports | grep -q "8081"; then
+                              echo "✅ Port 8081 déjà ouvert dans firewalld"
+                          else
+                              echo "🔓 Ouverture du port 8081 dans firewalld..."
+                              sudo firewall-cmd --permanent --add-port=8081/tcp || echo "⚠️  Impossible d'ouvrir le port 8081"
+                              sudo firewall-cmd --reload || true
+                          fi
+                      else
+                          echo "⚠️  Aucun gestionnaire de pare-feu détecté (ufw/firewalld)"
+                          echo "💡 Vérifiez manuellement que le port 8081 est ouvert"
+                      fi
+
                       # Pull de l'image RL depuis Docker Hub
                       echo "🔄 Pull de l'image RL depuis Docker Hub..."
                       IMAGE_TAG="${DOCKER_IMAGE}:${DOCKER_TAG}"
