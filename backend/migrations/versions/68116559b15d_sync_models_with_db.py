@@ -100,7 +100,7 @@ def upgrade():
         )
     )
     task_failure_indexes = [row[0] for row in task_failure_indexes_query]
-    
+
     # Supprimer seulement les index qui existent
     if "ix_task_failure_first_seen" in task_failure_indexes:
         with suppress(Exception):
