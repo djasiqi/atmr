@@ -285,6 +285,31 @@ jobs:
                   # Ne pas faire échouer, juste avertir
                   exit 0
 
+            - name: Create RL deployment directory on server
+              uses: appleboy/ssh-action@master
+              with:
+                  host: ${{ env.SSH_HOST }}
+                  username: ${{ env.SSH_USER }}
+                  key: ${{ env.SSH_KEY }}
+                  port: ${{ env.SSH_PORT }}
+                  script: |
+                      echo "📁 Création du répertoire de déploiement RL..."
+                      # Essayer sans sudo d'abord
+                      if mkdir -p /srv/atmr-rl 2>/dev/null; then
+                          echo "✅ Répertoire créé sans sudo"
+                      elif sudo mkdir -p /srv/atmr-rl 2>/dev/null; then
+                          echo "✅ Répertoire créé avec sudo"
+                          sudo chown -R ${{ env.SSH_USER }}:${{ env.SSH_USER }} /srv/atmr-rl
+                          sudo chmod 755 /srv/atmr-rl
+                      else
+                          echo "❌ Impossible de créer le répertoire /srv/atmr-rl"
+                          echo "💡 Vérifiez les permissions de l'utilisateur SSH"
+                          exit 1
+                      fi
+                      # S'assurer que les permissions sont correctes
+                      chmod 755 /srv/atmr-rl 2>/dev/null || sudo chmod 755 /srv/atmr-rl
+                      echo "✅ Répertoire /srv/atmr-rl prêt"
+
             - name: Copy docker-compose.rl.yml to server
               uses: appleboy/scp-action@master
               with:
