@@ -226,8 +226,9 @@ jobs:
             SECRET_KEY: ${{ secrets.SECRET_KEY }}
             JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
             # Hash d'authentification HTTP Basic pour Optuna Dashboard
-            # Format: $apr1$BttWEcBv$rlc3dgVlcMXxTVZ0cM0gK/ (sans le nom d'utilisateur)
+            # Format attendu dans le secret: $apr1$... (sans le nom d'utilisateur)
             # Générer avec: cat /srv/traefik/htpasswd | cut -d: -f2
+            # Ou: htpasswd -nb optuna VOTRE_MOT_DE_PASSE | cut -d: -f2
             OPTUNA_AUTH_HASH: ${{ secrets.OPTUNA_AUTH_HASH }}
 
         steps:
