@@ -285,32 +285,8 @@ jobs:
                   # Ne pas faire échouer, juste avertir
                   exit 0
 
-            - name: Create RL deployment directory on server
-              uses: appleboy/ssh-action@master
-              with:
-                  host: ${{ env.SSH_HOST }}
-                  username: ${{ env.SSH_USER }}
-                  key: ${{ env.SSH_KEY }}
-                  port: ${{ env.SSH_PORT }}
-                  script: |
-                      echo "📁 Création du répertoire de déploiement RL..."
-                      # Essayer sans sudo d'abord
-                      if mkdir -p /srv/atmr-rl 2>/dev/null; then
-                          echo "✅ Répertoire créé sans sudo"
-                      elif sudo mkdir -p /srv/atmr-rl 2>/dev/null; then
-                          echo "✅ Répertoire créé avec sudo"
-                          sudo chown -R ${{ env.SSH_USER }}:${{ env.SSH_USER }} /srv/atmr-rl
-                          sudo chmod 755 /srv/atmr-rl
-                      else
-                          echo "❌ Impossible de créer le répertoire /srv/atmr-rl"
-                          echo "💡 Vérifiez les permissions de l'utilisateur SSH"
-                          exit 1
-                      fi
-                      # S'assurer que les permissions sont correctes
-                      chmod 755 /srv/atmr-rl 2>/dev/null || sudo chmod 755 /srv/atmr-rl
-                      echo "✅ Répertoire /srv/atmr-rl prêt"
-
             - name: Copy docker-compose.rl.yml to server
+              continue-on-error: true
               uses: appleboy/scp-action@master
               with:
                   host: ${{ env.SSH_HOST }}
@@ -319,6 +295,7 @@ jobs:
                   port: ${{ env.SSH_PORT }}
                   source: "docker-compose.rl.yml"
                   target: "/srv/atmr-rl"
+                  # Si cette étape échoue (répertoire inexistant), le script de déploiement copiera le fichier
 
             - name: Deploy RL environment via SSH
               uses: appleboy/ssh-action@master
@@ -329,7 +306,55 @@ jobs:
                   port: ${{ env.SSH_PORT }}
                   envs: APP_ENCRYPTION_KEY_B64,SECRET_KEY,JWT_SECRET_KEY,RL_POSTGRES_PASSWORD,RL_POSTGRES_USER,RL_POSTGRES_DB,RL_REDIS_PASSWORD,DOCKER_IMAGE,DOCKER_TAG
                   script: |
-                      cd /srv/atmr-rl
+                      # Déterminer et créer le répertoire de déploiement
+                      echo "📁 Détermination du répertoire de déploiement RL..."
+                      
+                      # Vérifier si /srv/atmr-rl existe déjà ou peut être créé
+                      RL_DEPLOY_DIR="/srv/atmr-rl"
+                      if [ -d "${RL_DEPLOY_DIR}" ]; then
+                          echo "✅ Répertoire ${RL_DEPLOY_DIR} existe déjà"
+                      elif mkdir -p "${RL_DEPLOY_DIR}" 2>/dev/null; then
+                          echo "✅ Répertoire ${RL_DEPLOY_DIR} créé sans sudo"
+                          chmod 755 "${RL_DEPLOY_DIR}"
+                      elif sudo mkdir -p "${RL_DEPLOY_DIR}" 2>/dev/null; then
+                          echo "✅ Répertoire ${RL_DEPLOY_DIR} créé avec sudo"
+                          sudo chown -R ${{ env.SSH_USER }}:${{ env.SSH_USER }} "${RL_DEPLOY_DIR}"
+                          sudo chmod 755 "${RL_DEPLOY_DIR}"
+                      else
+                          # Si /srv n'est pas accessible, utiliser le home de l'utilisateur
+                          echo "⚠️  Impossible de créer dans /srv, utilisation du répertoire home"
+                          HOME_DIR=$(eval echo ~${{ env.SSH_USER }})
+                          RL_DEPLOY_DIR="${HOME_DIR}/atmr-rl"
+                          if mkdir -p "${RL_DEPLOY_DIR}" 2>/dev/null; then
+                              echo "✅ Répertoire ${RL_DEPLOY_DIR} créé"
+                              chmod 755 "${RL_DEPLOY_DIR}"
+                              echo "💡 Note: Le déploiement RL utilisera ${RL_DEPLOY_DIR} au lieu de /srv/atmr-rl"
+                          else
+                              echo "❌ Impossible de créer le répertoire de déploiement"
+                              echo "💡 Vérifiez les permissions de l'utilisateur SSH"
+                              exit 1
+                          fi
+                      fi
+                      
+                      echo "📁 Utilisation du répertoire: ${RL_DEPLOY_DIR}"
+                      cd "${RL_DEPLOY_DIR}"
+                      
+                      # Vérifier si docker-compose.rl.yml existe, sinon le copier depuis /tmp si disponible
+                      if [ ! -f "docker-compose.rl.yml" ]; then
+                          echo "⚠️  docker-compose.rl.yml non trouvé, vérification dans /tmp..."
+                          if [ -f "/tmp/docker-compose.rl.yml" ]; then
+                              cp /tmp/docker-compose.rl.yml docker-compose.rl.yml
+                              echo "✅ Fichier copié depuis /tmp"
+                          else
+                              echo "❌ docker-compose.rl.yml introuvable"
+                              echo "💡 Le fichier devrait avoir été copié par l'étape SCP précédente"
+                              echo "💡 Vérifiez que l'étape 'Copy docker-compose.rl.yml to server' a réussi"
+                              exit 1
+                          fi
+                      else
+                          echo "✅ docker-compose.rl.yml trouvé dans ${RL_DEPLOY_DIR}"
+                      fi
+                      
                       set -o errexit -o nounset -o pipefail
 
                       # Fonction de rollback en cas d'erreur
