@@ -172,9 +172,10 @@ services:
       # Pour utiliser cette option, montez le fichier dans Traefik: -v /srv/traefik/htpasswd:/srv/traefik/htpasswd:ro
       # - "traefik.http.middlewares.optuna-auth.basicauth.usersfile=/srv/traefik/htpasswd"
       # Option 2: Utiliser un hash inline (plus simple, pas besoin de monter de fichier)
-      # Le hash est généré depuis /srv/traefik/htpasswd avec: cat /srv/traefik/htpasswd
-      # Dans YAML, les $ doivent être échappés avec $$, donc $apr1$ devient $$apr1$$
-      - "traefik.http.middlewares.optuna-auth.basicauth.users=optuna:$$apr1$$BttWEcBv$$rlc3dgVlcMXxTVZ0cM0gK/"
+      # Le hash est injecté depuis la variable d'environnement OPTUNA_AUTH_HASH lors du déploiement
+      # Format attendu dans le secret: $apr1$BttWEcBv$rlc3dgVlcMXxTVZ0cM0gK/ (sans le nom d'utilisateur)
+      # Le hash sera remplacé par le script de déploiement
+      - "traefik.http.middlewares.optuna-auth.basicauth.users=optuna:PLACEHOLDER_OPTUNA_AUTH_HASH"
       # Service backend (port interne du conteneur)
       - "traefik.http.services.optuna.loadbalancer.server.port=8080"
       # Headers pour proxy
