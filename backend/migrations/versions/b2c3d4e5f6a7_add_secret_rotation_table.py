@@ -20,13 +20,14 @@ depends_on = None
 def upgrade():
     # Table pour stocker l'historique des rotations de secrets
     # Vérifier si la table existe déjà avant de la créer (pour éviter les erreurs lors des merges)
-    from sqlalchemy import inspect
     from contextlib import suppress
-    
+
+    from sqlalchemy import inspect
+
     bind = op.get_bind()
     inspector = inspect(bind)
     table_exists = "secret_rotation" in inspector.get_table_names()
-    
+
     if not table_exists:
         op.create_table(
             "secret_rotation",
@@ -41,7 +42,9 @@ def upgrade():
             ),
             sa.Column("environment", sa.String(length=20), nullable=False),
             sa.Column(
-                "rotation_metadata", postgresql.JSONB(astext_type=sa.Text()), nullable=True
+                "rotation_metadata",
+                postgresql.JSONB(astext_type=sa.Text()),
+                nullable=True,
             ),
             sa.Column("error_message", sa.Text(), nullable=True),
             sa.Column("task_id", sa.String(length=255), nullable=True),
@@ -59,10 +62,14 @@ def upgrade():
                 )
         if "ix_secret_rotation_status" not in index_names:
             with suppress(Exception):
-                op.create_index("ix_secret_rotation_status", "secret_rotation", ["status"])
+                op.create_index(
+                    "ix_secret_rotation_status", "secret_rotation", ["status"]
+                )
         if "ix_secret_rotation_rotated_at" not in index_names:
             with suppress(Exception):
-                op.create_index("ix_secret_rotation_rotated_at", "secret_rotation", ["rotated_at"])
+                op.create_index(
+                    "ix_secret_rotation_rotated_at", "secret_rotation", ["rotated_at"]
+                )
         if "ix_secret_rotation_environment" not in index_names:
             with suppress(Exception):
                 op.create_index(
@@ -70,14 +77,18 @@ def upgrade():
                 )
         if "ix_secret_rotation_task_id" not in index_names:
             with suppress(Exception):
-                op.create_index("ix_secret_rotation_task_id", "secret_rotation", ["task_id"])
+                op.create_index(
+                    "ix_secret_rotation_task_id", "secret_rotation", ["task_id"]
+                )
     else:
         # Si la table vient d'être créée, créer tous les index
         op.create_index(
             "ix_secret_rotation_secret_type", "secret_rotation", ["secret_type"]
         )
         op.create_index("ix_secret_rotation_status", "secret_rotation", ["status"])
-        op.create_index("ix_secret_rotation_rotated_at", "secret_rotation", ["rotated_at"])
+        op.create_index(
+            "ix_secret_rotation_rotated_at", "secret_rotation", ["rotated_at"]
+        )
         op.create_index(
             "ix_secret_rotation_environment", "secret_rotation", ["environment"]
         )
