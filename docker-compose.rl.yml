@@ -135,7 +135,7 @@ services:
     environment:
       - RL_ENABLED=true
       - WITH_RL=true
-    command: optuna-dashboard --host 0.0.0.0 --port 8080 sqlite:///app/data/rl/optuna.db
+    command: optuna-dashboard --host 0.0.0.0 --port 8080 postgresql://${RL_POSTGRES_USER}:${RL_POSTGRES_PASSWORD}@rl-postgres:5432/${RL_POSTGRES_DB}
     volumes:
       - ./data/rl:/app/data/rl
     ports:
