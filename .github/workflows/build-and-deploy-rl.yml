@@ -547,16 +547,19 @@ jobs:
                           echo "✅ Utilisation du réseau Traefik: ${FINAL_TRAEFIK_NETWORK}"
                           # Mettre à jour le nom du réseau dans docker-compose.rl.yml
                           if command -v python3 >/dev/null 2>&1; then
-                              FINAL_TRAEFIK_NETWORK="${FINAL_TRAEFIK_NETWORK}" python3 -c "
+                              cat > /tmp/update_traefik_network.py <<'PYEOF'
 import os
 import re
+import sys
 traefik_network = os.environ.get('FINAL_TRAEFIK_NETWORK', 'traefik_default')
 with open('docker-compose.rl.yml', 'r') as f:
     content = f.read()
 content = re.sub(r'name: traefik_default', f'name: {traefik_network}', content)
 with open('docker-compose.rl.yml', 'w') as f:
     f.write(content)
-"
+PYEOF
+                              FINAL_TRAEFIK_NETWORK="${FINAL_TRAEFIK_NETWORK}" python3 /tmp/update_traefik_network.py
+                              rm -f /tmp/update_traefik_network.py
                               echo "✅ docker-compose.rl.yml mis à jour avec le réseau ${FINAL_TRAEFIK_NETWORK}"
                           else
                               # Fallback avec sed
@@ -569,7 +572,7 @@ with open('docker-compose.rl.yml', 'w') as f:
                           echo "💡 Suppression du réseau Traefik de docker-compose.rl.yml..."
                           # Supprimer la référence au réseau Traefik dans docker-compose.rl.yml avec Python
                           if command -v python3 >/dev/null 2>&1; then
-                              python3 -c "
+                              cat > /tmp/remove_traefik_network.py <<'PYEOF'
 with open('docker-compose.rl.yml', 'r') as f:
     lines = f.readlines()
 new_lines = []
@@ -591,7 +594,9 @@ for line in lines:
         new_lines.append(line)
 with open('docker-compose.rl.yml', 'w') as f:
     f.writelines(new_lines)
-"
+PYEOF
+                              python3 /tmp/remove_traefik_network.py
+                              rm -f /tmp/remove_traefik_network.py
                               echo "✅ Réseau Traefik supprimé de docker-compose.rl.yml"
                           else
                               # Fallback avec sed (moins robuste)
