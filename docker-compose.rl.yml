@@ -22,10 +22,44 @@ services:
     env_file:
       - .env.rl
     environment:
+      # Configuration RL
       - RL_ENABLED=true
       - WITH_RL=true
       - APP_ENV=rl
-      - FLASK_ENV=development
+
+      # Configuration Flask
+      - FLASK_ENV=production
+      - FLASK_CONFIG=production
+      - FLASK_APP=app.py
+
+      # Base de données PostgreSQL RL
+      # ⚠️ IMPORTANT: Les variables individuelles sont fournies, le code Python construira DATABASE_URL automatiquement
+      - POSTGRES_USER=${RL_POSTGRES_USER:-atmr_rl_user}
+      - POSTGRES_PASSWORD=${RL_POSTGRES_PASSWORD:-atmr_rl_password}
+      - POSTGRES_HOST=rl-postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${RL_POSTGRES_DB:-atmr_rl_db}
+      # DATABASE_URL peut être fourni directement via .env.rl si nécessaire, sinon construit par config.py
+      - DATABASE_URL=${RL_DATABASE_URL:-}
+      - SQLALCHEMY_DATABASE_URI=${RL_DATABASE_URL:-}
+
+      # Redis RL (IMPORTANT: utiliser rl-redis, pas redis)
+      # ⚠️ IMPORTANT: Le code Python (celery_app.py) construira automatiquement les URLs Redis
+      # avec échappement correct depuis REDIS_PASSWORD si nécessaire
+      - REDIS_HOST=rl-redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_PASSWORD=${RL_REDIS_PASSWORD:-atmr_rl_redis_password}
+      # REDIS_URL peut être fourni directement via .env.rl si nécessaire
+      - REDIS_URL=${RL_REDIS_URL:-}
+      # CELERY_BROKER_URL et CELERY_RESULT_BACKEND seront construits par celery_app.py
+
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+      # ML/RL Models paths
+      - ML_MODELS_PATH=/app/data/ml
+      - RL_MODELS_PATH=/app/data/rl
     volumes:
       - ./data/rl:/app/data/rl
       - ./data/ml:/app/data/ml
@@ -33,8 +67,10 @@ services:
     networks:
       - atmr-rl-network
     depends_on:
-      - rl-postgres
-      - rl-redis
+      rl-postgres:
+        condition: service_healthy
+      rl-redis:
+        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -107,10 +143,14 @@ services:
     networks:
       - atmr-rl-network
     healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      # ⚠️ NOTE: Le healthcheck ne peut pas accéder aux variables d'environnement directement
+      # Si l'authentification est requise, utiliser redis-cli avec le mot de passe
+      # ou désactiver temporairement l'authentification pour le healthcheck
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
-      timeout: 3s
+      timeout: 5s
       retries: 5
+      start_period: 15s
     deploy:
       resources:
         limits:

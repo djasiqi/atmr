@@ -265,13 +265,29 @@ services:
     # Charger les variables depuis .env.production (créé par le workflow GitHub Actions)
     env_file:
       - .env.production
-    command: celery -A celery_app.celery beat --loglevel=info
+    command:
+      [
+        "celery",
+        "-A",
+        "celery_app.celery",
+        "beat",
+        "-l",
+        "info",
+        "-S",
+        "celery.beat.PersistentScheduler",
+        "-s",
+        "/app/celerybeat/celerybeat-schedule",
+      ]
     healthcheck:
-      test: ["CMD", "celery", "-A", "celery_app.celery", "inspect", "ping"]
-      interval: 30s
-      timeout: 10s
+      test:
+        [
+          "CMD-SHELL",
+          "test -f /app/celerybeat/celerybeat-schedule.dat && echo 'ok' || exit 1",
+        ]
+      interval: 60s
+      timeout: 5s
       retries: 3
-      start_period: 60s
+      start_period: 30s
     environment:
       FLASK_ENV: production
       FLASK_CONFIG: production # ⚠️ IMPORTANT: Nécessaire pour charger ProductionConfig
@@ -298,7 +314,7 @@ services:
       APP_ENCRYPTION_KEY_B64: ${APP_ENCRYPTION_KEY_B64}
     volumes:
       - backend_logs:/app/logs
-      - celery_beat_data:/app/celerybeat-schedule
+      - celery_beat_data:/app/celerybeat
     networks:
       - atmr-network
     depends_on:
@@ -324,6 +340,18 @@ services:
     env_file:
       - .env.production
     command: celery -A celery_app.celery flower --port=5555
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:5555', timeout=3)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     environment:
       FLASK_ENV: production
       FLASK_CONFIG: production
