@@ -167,10 +167,14 @@ services:
       - "traefik.http.middlewares.optuna-redirect.redirectscheme.scheme=https"
       - "traefik.http.middlewares.optuna-redirect.redirectscheme.permanent=true"
       - "traefik.http.routers.optuna.middlewares=optuna-redirect"
-      # Authentification HTTP Basic (nécessite un fichier htpasswd sur le serveur)
-      # Le fichier doit être créé avec: htpasswd -c /srv/traefik/htpasswd optuna
-      # Ou: echo "optuna:$(openssl passwd -apr1 'VOTRE_MOT_DE_PASSE')" > /srv/traefik/htpasswd
-      - "traefik.http.middlewares.optuna-auth.basicauth.usersfile=/srv/traefik/htpasswd"
+      # Authentification HTTP Basic
+      # Option 1: Utiliser un fichier htpasswd (nécessite que le fichier soit monté dans Traefik)
+      # Pour utiliser cette option, montez le fichier dans Traefik: -v /srv/traefik/htpasswd:/srv/traefik/htpasswd:ro
+      # - "traefik.http.middlewares.optuna-auth.basicauth.usersfile=/srv/traefik/htpasswd"
+      # Option 2: Utiliser un hash inline (plus simple, pas besoin de monter de fichier)
+      # Le hash est généré depuis /srv/traefik/htpasswd avec: cat /srv/traefik/htpasswd
+      # Dans YAML, les $ doivent être échappés avec $$, donc $apr1$ devient $$apr1$$
+      - "traefik.http.middlewares.optuna-auth.basicauth.users=optuna:$$apr1$$BttWEcBv$$rlc3dgVlcMXxTVZ0cM0gK/"
       # Service backend (port interne du conteneur)
       - "traefik.http.services.optuna.loadbalancer.server.port=8080"
       # Headers pour proxy
