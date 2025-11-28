@@ -173,7 +173,8 @@ services:
       # - "traefik.http.middlewares.optuna-auth.basicauth.usersfile=/srv/traefik/htpasswd"
       # Option 2: Utiliser un hash inline (plus simple, pas besoin de monter de fichier)
       # Le hash est injecté depuis la variable d'environnement OPTUNA_AUTH_HASH lors du déploiement
-      # Format attendu dans le secret: $apr1$BttWEcBv$rlc3dgVlcMXxTVZ0cM0gK/ (sans le nom d'utilisateur)
+      # Format attendu dans le secret GitHub Actions: $apr1$... (sans le nom d'utilisateur)
+      # Extraire avec: cat /srv/traefik/htpasswd | cut -d: -f2
       # Le hash sera remplacé par le script de déploiement
       - "traefik.http.middlewares.optuna-auth.basicauth.users=optuna:PLACEHOLDER_OPTUNA_AUTH_HASH"
       # Service backend (port interne du conteneur)
