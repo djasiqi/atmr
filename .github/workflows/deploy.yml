@@ -564,6 +564,18 @@ jobs:
                     echo "🔄 Marquage de l'ancêtre commun $ANCESTOR (si nécessaire)..."
                     docker_exec flask db stamp "$ANCESTOR" 2>&1 || echo "⚠️  Ancêtre peut-être déjà marqué, continuons..."
                     
+                    # Si la révision manquante est 24bbcb82c891, stamper aussi les migrations intermédiaires
+                    # de la branche f7e8d9c0b1a2 pour éviter les conflits lors de l'application de la merge
+                    if [ "$MISSING_REVISION" = "24bbcb82c891" ]; then
+                      echo "🔄 Marquage des migrations intermédiaires de la branche f7e8d9c0b1a2..."
+                      # Stamper f7e8d9c0b1a2 et ses révisions parentes si nécessaire
+                      docker_exec flask db stamp f7e8d9c0b1a2 2>&1 || echo "⚠️  f7e8d9c0b1a2 peut-être déjà marqué"
+                      # Stamper aussi les révisions parentes de f7e8d9c0b1a2 pour éviter les conflits
+                      docker_exec flask db stamp a1b2c3d4e5f6 2>&1 || echo "⚠️  a1b2c3d4e5f6 peut-être déjà marqué"
+                      docker_exec flask db stamp add_message_file_fields 2>&1 || echo "⚠️  add_message_file_fields peut-être déjà marqué"
+                      docker_exec flask db stamp b2c3d4e5f6a7 2>&1 || echo "⚠️  b2c3d4e5f6a7 peut-être déjà marqué"
+                    fi
+                    
                     echo "🔄 Marquage de la révision $MISSING_REVISION comme appliquée..."
                     # Stamper la révision manquante pour permettre la migration de merge
                     # Note: Cela suppose que les changements de la migration sont déjà dans la base de données
