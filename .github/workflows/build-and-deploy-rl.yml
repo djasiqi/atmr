@@ -225,6 +225,10 @@ jobs:
             APP_ENCRYPTION_KEY_B64: ${{ secrets.APP_ENCRYPTION_KEY_B64 }}
             SECRET_KEY: ${{ secrets.SECRET_KEY }}
             JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+            # Hash d'authentification HTTP Basic pour Optuna Dashboard
+            # Format: $apr1$BttWEcBv$rlc3dgVlcMXxTVZ0cM0gK/ (sans le nom d'utilisateur)
+            # Générer avec: cat /srv/traefik/htpasswd | cut -d: -f2
+            OPTUNA_AUTH_HASH: ${{ secrets.OPTUNA_AUTH_HASH }}
 
         steps:
             - name: Checkout code
@@ -390,7 +394,7 @@ jobs:
                   username: ${{ env.SSH_USER }}
                   key: ${{ env.SSH_KEY }}
                   port: ${{ env.SSH_PORT }}
-                  envs: APP_ENCRYPTION_KEY_B64,SECRET_KEY,JWT_SECRET_KEY,RL_POSTGRES_PASSWORD,RL_POSTGRES_USER,RL_POSTGRES_DB,RL_REDIS_PASSWORD,DOCKER_IMAGE,DOCKER_TAG
+                  envs: APP_ENCRYPTION_KEY_B64,SECRET_KEY,JWT_SECRET_KEY,RL_POSTGRES_PASSWORD,RL_POSTGRES_USER,RL_POSTGRES_DB,RL_REDIS_PASSWORD,DOCKER_IMAGE,DOCKER_TAG,OPTUNA_AUTH_HASH
                   script: |
                       # Récupérer le répertoire de déploiement depuis l'étape précédente
                       if [ -f "/tmp/rl_deploy_dir.txt" ]; then
@@ -415,13 +419,6 @@ jobs:
                       if [ -f "/tmp/docker-compose.rl.yml" ]; then
                           cp -f /tmp/docker-compose.rl.yml docker-compose.rl.yml
                           echo "✅ docker-compose.rl.yml copié depuis /tmp (remplacé)"
-                          # Vérifier que le port 8081 est bien configuré
-                          if grep -q "8081:8080" docker-compose.rl.yml; then
-                              echo "✅ Port 8081 correctement configuré"
-                          else
-                              echo "⚠️  Port 8081 non trouvé, vérification du fichier..."
-                              grep -n "808" docker-compose.rl.yml || true
-                          fi
                       else
                           echo "⚠️  docker-compose.rl.yml non trouvé dans /tmp, copie depuis base64..."
                           # Décoder le fichier depuis base64
@@ -438,6 +435,28 @@ jobs:
                                   exit 1
                               fi
                           fi
+                      fi
+
+                      # Injecter le hash d'authentification Optuna depuis le secret
+                      if [ -n "${OPTUNA_AUTH_HASH:-}" ]; then
+                          # Échapper les $ dans le hash pour sed (chaque $ devient $$ pour YAML)
+                          # Dans docker-compose, les $ doivent être doublés ($$) pour être interprétés comme un seul $
+                          ESCAPED_HASH=$(echo "${OPTUNA_AUTH_HASH}" | sed 's/\$/$$$$/g')
+                          # Remplacer le placeholder par le hash réel
+                          sed -i "s|PLACEHOLDER_OPTUNA_AUTH_HASH|${ESCAPED_HASH}|g" docker-compose.rl.yml
+                          echo "✅ Hash d'authentification Optuna injecté"
+                      else
+                          echo "⚠️  OPTUNA_AUTH_HASH non défini, l'authentification ne sera pas activée"
+                          # Commenter la ligne d'authentification si le secret n'est pas défini
+                          sed -i 's/.*optuna-auth\.basicauth\.users=optuna:PLACEHOLDER_OPTUNA_AUTH_HASH.*/# &/' docker-compose.rl.yml || true
+                      fi
+
+                      # Vérifier que le port 8081 est bien configuré
+                      if grep -q "8081:8080" docker-compose.rl.yml; then
+                          echo "✅ Port 8081 correctement configuré"
+                      else
+                          echo "⚠️  Port 8081 non trouvé, vérification du fichier..."
+                          grep -n "808" docker-compose.rl.yml || true
                       fi
 
                       set -o errexit -o nounset -o pipefail
@@ -507,7 +526,7 @@ jobs:
                       echo "🌐 Vérification de la configuration Traefik..."
                       TRAEFIK_CONTAINER=$(docker ps --filter "name=traefik" --format "{{.Names}}" 2>/dev/null | head -n1 || echo "")
                       TRAEFIK_NETWORK=""
-                      
+
                       if [ -n "${TRAEFIK_CONTAINER}" ]; then
                           echo "✅ Conteneur Traefik trouvé: ${TRAEFIK_CONTAINER}"
                           # Détecter le réseau utilisé par Traefik
@@ -520,11 +539,11 @@ jobs:
                       else
                           echo "⚠️  Aucun conteneur Traefik trouvé"
                       fi
-                      
+
                       # Vérifier les réseaux possibles pour Traefik
                       POSSIBLE_TRAEFIK_NETWORKS=("traefik_proxy" "traefik_default" "atmr_default" "traefik-network" "traefik")
                       FOUND_TRAEFIK_NETWORK=""
-                      
+
                       for net in "${POSSIBLE_TRAEFIK_NETWORKS[@]}"; do
                           if docker network ls --format '{{.Name}}' | grep -q "^${net}$"; then
                               FOUND_TRAEFIK_NETWORK="${net}"
@@ -532,7 +551,7 @@ jobs:
                               break
                           fi
                       done
-                      
+
                       # Utiliser le réseau détecté ou celui trouvé
                       if [ -n "${TRAEFIK_NETWORK}" ]; then
                           FINAL_TRAEFIK_NETWORK="${TRAEFIK_NETWORK}"
@@ -541,7 +560,7 @@ jobs:
                       else
                           FINAL_TRAEFIK_NETWORK=""
                       fi
-                      
+
                       # Mettre à jour docker-compose.rl.yml avec le bon réseau ou le supprimer si Traefik n'est pas installé
                       if [ -n "${FINAL_TRAEFIK_NETWORK}" ]; then
                           echo "✅ Utilisation du réseau Traefik: ${FINAL_TRAEFIK_NETWORK}"
