@@ -167,11 +167,16 @@ services:
       - "traefik.http.middlewares.optuna-redirect.redirectscheme.scheme=https"
       - "traefik.http.middlewares.optuna-redirect.redirectscheme.permanent=true"
       - "traefik.http.routers.optuna.middlewares=optuna-redirect"
+      # Authentification HTTP Basic (nécessite un fichier htpasswd sur le serveur)
+      # Le fichier doit être créé avec: htpasswd -c /srv/traefik/htpasswd optuna
+      # Ou: echo "optuna:$(openssl passwd -apr1 'VOTRE_MOT_DE_PASSE')" > /srv/traefik/htpasswd
+      - "traefik.http.middlewares.optuna-auth.basicauth.usersfile=/srv/traefik/htpasswd"
       # Service backend (port interne du conteneur)
       - "traefik.http.services.optuna.loadbalancer.server.port=8080"
       # Headers pour proxy
       - "traefik.http.middlewares.optuna-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
-      - "traefik.http.routers.optuna-secure.middlewares=optuna-headers"
+      # Appliquer l'authentification et les headers au router HTTPS
+      - "traefik.http.routers.optuna-secure.middlewares=optuna-auth,optuna-headers"
     deploy:
       resources:
         limits:
