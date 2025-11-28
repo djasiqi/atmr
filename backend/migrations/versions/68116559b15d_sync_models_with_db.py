@@ -23,8 +23,6 @@ depends_on = None
 
 def upgrade():
     """Synchronise la DB avec les modèles SQLAlchemy."""
-    from contextlib import suppress
-
     from sqlalchemy import inspect
 
     bind = op.get_bind()
@@ -32,7 +30,6 @@ def upgrade():
 
     # Vérifier l'état actuel de la table client
     client_columns = {col["name"]: col for col in inspector.get_columns("client")}
-    client_indexes = [idx["name"] for idx in inspector.get_indexes("client")]
     fk_constraints = [
         fk["name"]
         for fk in inspector.get_foreign_keys("client")
@@ -43,7 +40,9 @@ def upgrade():
     with op.batch_alter_table("client", schema=None) as batch_op:
         # Vérifier si company_id est déjà nullable
         if not client_columns.get("company_id", {}).get("nullable", False):
-            batch_op.alter_column("company_id", existing_type=sa.INTEGER(), nullable=True)
+            batch_op.alter_column(
+                "company_id", existing_type=sa.INTEGER(), nullable=True
+            )
 
         # 3. Modifier la FK pour ondelete='SET NULL' au lieu de 'CASCADE'
         if fk_constraints:
@@ -69,7 +68,7 @@ def upgrade():
         """
         )
     ).scalar()
-    
+
     if not index_exists:
         with suppress(Exception):
             op.create_index(
