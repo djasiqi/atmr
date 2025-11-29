@@ -361,9 +361,9 @@ class DriverUpcomingBookings(Resource):
             )
         )
 
-        from datetime import date
+        from datetime import date, timedelta
 
-        from shared.time_utils import day_local_bounds
+        from shared.time_utils import day_local_bounds, now_local
 
         # ✅ Récupérer les courses d'AUJOURD'HUI (passées et futures)
         # tant qu'elles ne sont pas terminées
@@ -375,6 +375,35 @@ class DriverUpcomingBookings(Resource):
         today_start = datetime.fromisoformat(str(today_start))
         today_end = datetime.fromisoformat(str(today_end))
 
+        # 🆕 LOGIQUE : À partir de 19h00, inclure aussi les courses du lendemain
+        # pour permettre aux chauffeurs de voir leur planning la veille
+        now = now_local()
+        cutoff_hour = 19  # 19h00
+        
+        # Si on est après 19h00, inclure aussi le lendemain
+        if now.hour >= cutoff_hour:
+            tomorrow = date.today() + timedelta(days=1)
+            tomorrow_start, tomorrow_end = day_local_bounds(tomorrow.strftime("%Y-%m-%d"))
+            tomorrow_start = datetime.fromisoformat(str(tomorrow_start))
+            tomorrow_end = datetime.fromisoformat(str(tomorrow_end))
+            # Étendre la plage jusqu'à la fin du lendemain
+            query_end = tomorrow_end
+            app_logger.info(
+                (
+                    f"📱 [Driver Bookings] After 19:00 - including tomorrow's bookings "
+                    f"(until {query_end})"
+                )
+            )
+        else:
+            # Avant 19h00 : uniquement les courses du jour
+            query_end = today_end
+            app_logger.info(
+                (
+                    f"📱 [Driver Bookings] Before 19:00 - today's bookings only "
+                    f"(until {query_end})"
+                )
+            )
+
         status_pred = Booking.status.in_(
             [BookingStatus.ASSIGNED, BookingStatus.EN_ROUTE, BookingStatus.IN_PROGRESS]
         )
@@ -383,7 +412,7 @@ class DriverUpcomingBookings(Resource):
             Booking.query.filter_by(driver_id=driver.id)
             .filter(
                 Booking.scheduled_time >= today_start,
-                Booking.scheduled_time < today_end,
+                Booking.scheduled_time < query_end,
             )
             .filter(status_pred)
             .order_by(Booking.scheduled_time.asc())
