@@ -874,16 +874,58 @@ class OptunaOptimize(Resource):
                 )
             )
 
-            # Note: L'exécution réelle nécessite un conteneur Docker avec accès au réseau
-            # Pour l'instant, on retourne les instructions et on peut lancer via Celery si disponible
-            # ou simplement informer l'admin que l'optimisation doit être lancée manuellement
+            # Lancer l'optimisation en arrière-plan (threading)
+            # Note: Dans l'environnement RL, on exécute directement sans Celery
+            # car le worker RL n'a pas de worker Celery configuré
+            import threading
 
-            # TODO: Implémenter l'exécution réelle via Celery ou subprocess Docker
-            # Pour l'instant, on retourne les paramètres configurés
+            def run_optuna_optimization():
+                """Fonction exécutée en arrière-plan pour l'optimisation Optuna."""
+                try:
+                    from tasks.rl_tasks import optuna_optimize_impl
+
+                    # Exécuter l'implémentation directement (sans Celery)
+                    result = optuna_optimize_impl(
+                        company_id=company_id,
+                        data_period=data_period,
+                        n_trials=n_trials,
+                        training_episodes=training_episodes,
+                        eval_episodes=eval_episodes,
+                        custom_days=custom_days if data_period == "custom" else None,
+                    )
+
+                    app_logger.info(
+                        f"✅ Optimisation Optuna terminée: {result.get('status', 'unknown')}"
+                    )
+
+                except Exception:
+                    app_logger.exception(
+                        "❌ Erreur lors de l'exécution de l'optimisation Optuna"
+                    )
+
+            # Démarrer le thread en arrière-plan
+            optuna_thread = threading.Thread(
+                target=run_optuna_optimization, daemon=True, name="optuna-optimization"
+            )
+            optuna_thread.start()
+
+            app_logger.info(
+                (
+                    f"✅ Thread Optuna démarré (thread_id={optuna_thread.ident}), "
+                    f"company_id={company_id}, trials={n_trials}"
+                )
+            )
+
+            # Construire le nom de l'étude pour l'URL Optuna Dashboard
+            if company_id:
+                study_name = f"dqn_optimization_company_{company_id}"
+            else:
+                study_name = "dqn_optimization_all_companies"
 
             response_data = {
                 "message": "Optimisation Optuna démarrée",
                 "status": "started",
+                "thread_id": str(optuna_thread.ident),
                 "config": {
                     "company_id": company_id,
                     "data_period": data_period,
@@ -892,9 +934,11 @@ class OptunaOptimize(Resource):
                     "eval_episodes": eval_episodes,
                     "custom_days": custom_days if data_period == "custom" else None,
                 },
+                "study_name": study_name,
                 "note": (
                     "L'optimisation s'exécute en arrière-plan. "
-                    "Consultez https://optuna.lirie.ch pour suivre la progression."
+                    f"Consultez https://optuna.lirie.ch pour suivre la progression. "
+                    f"Recherchez l'étude '{study_name}' dans le dashboard."
                 ),
             }
 

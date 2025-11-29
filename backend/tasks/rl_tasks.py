@@ -3,6 +3,7 @@
 # Constantes pour éviter les valeurs magiques
 import logging
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from celery_app import celery
 from ext import db
@@ -366,3 +367,198 @@ def generate_weekly_report_task():
     except Exception as e:
         logger.exception("[RL] ❌ Erreur lors de la génération du rapport")
         return {"status": "error", "error": str(e)}
+
+
+def optuna_optimize_impl(
+    company_id: int | None = None,
+    data_period: str = "week",
+    n_trials: int = 30,
+    training_episodes: int = 150,
+    eval_episodes: int = 15,
+    custom_days: int | None = None,  # noqa: ARG001
+) -> dict[str, Any]:
+    """Optimisation Optuna des hyperparamètres DQN (implémentation interne).
+
+    Lance une optimisation Optuna pour trouver les meilleurs hyperparamètres
+    du modèle DQN. Les études sont stockées dans PostgreSQL RL et visibles
+    dans Optuna Dashboard.
+
+    Cette fonction est utilisée directement par la route admin (via import)
+    et peut être appelée par la tâche Celery wrapper.
+
+    Args:
+        company_id: ID de l'entreprise (None = toutes les entreprises)
+        data_period: Période de données ("week", "month", "custom")
+        n_trials: Nombre de trials Optuna à exécuter
+        training_episodes: Nombre d'épisodes d'entraînement par trial
+        eval_episodes: Nombre d'épisodes d'évaluation par trial
+        custom_days: Nombre de jours personnalisé (si data_period="custom")
+            Non utilisé pour l'instant, réservé pour usage futur
+
+    Returns:
+        dict: Résultat de l'optimisation avec statut et métriques
+
+    """
+    import os
+    from urllib.parse import quote_plus
+
+    from services.rl.hyperparameter_tuner import HyperparameterTuner
+
+    logger.info(
+        (
+            "[RL] 🚀 Démarrage optimisation Optuna: "
+            "company_id=%s, period=%s, trials=%s, training=%s, eval=%s"
+        ),
+        company_id,
+        data_period,
+        n_trials,
+        training_episodes,
+        eval_episodes,
+    )
+
+    try:
+        # Construire l'URL PostgreSQL pour Optuna storage
+        # Utiliser les variables d'environnement RL
+        rl_postgres_user = os.getenv("RL_POSTGRES_USER", "atmr_rl_user")
+        rl_postgres_password = os.getenv("RL_POSTGRES_PASSWORD", "atmr_rl_password")
+        rl_postgres_host = os.getenv("RL_POSTGRES_HOST", "rl-postgres")
+        rl_postgres_port = os.getenv("RL_POSTGRES_PORT", "5432")
+        rl_postgres_db = os.getenv("RL_POSTGRES_DB", "atmr_rl_db")
+
+        # Échapper le mot de passe pour l'URL
+        password_escaped = quote_plus(rl_postgres_password)
+
+        # Construire l'URL PostgreSQL pour Optuna
+        # Format: postgresql://user:password@host:port/database
+        optuna_storage = (
+            f"postgresql://{rl_postgres_user}:{password_escaped}"
+            f"@{rl_postgres_host}:{rl_postgres_port}/{rl_postgres_db}"
+        )
+
+        logger.info(
+            "[RL] 📊 Storage Optuna configuré: postgresql://%s:***@%s:%s/%s",
+            rl_postgres_user,
+            rl_postgres_host,
+            rl_postgres_port,
+            rl_postgres_db,
+        )
+
+        # Construire le nom de l'étude (unique par entreprise)
+        if company_id:
+            study_name = f"dqn_optimization_company_{company_id}"
+        else:
+            study_name = "dqn_optimization_all_companies"
+
+        # Créer le tuner avec storage PostgreSQL
+        tuner = HyperparameterTuner(
+            n_trials=n_trials,
+            n_training_episodes=training_episodes,
+            n_eval_episodes=eval_episodes,
+            study_name=study_name,
+            storage=optuna_storage,
+        )
+
+        # Lancer l'optimisation
+        logger.info("[RL] 🎯 Lancement optimisation Optuna...")
+        study = tuner.optimize(show_progress_bar=False)
+
+        # Récupérer les résultats
+        best_trial = study.best_trial
+        best_value = study.best_value
+        n_completed_trials = len(
+            [t for t in study.trials if t.state.name == "COMPLETE"]
+        )
+
+        result = {
+            "status": "success",
+            "study_name": study_name,
+            "n_trials": n_trials,
+            "n_completed_trials": n_completed_trials,
+            "best_value": best_value,
+            "best_params": best_trial.params if best_trial else None,
+            "company_id": company_id,
+            "data_period": data_period,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "note": (
+                f"Optimisation terminée. "
+                f"Consultez https://optuna.lirie.ch pour voir les détails de l'étude '{study_name}'."
+            ),
+        }
+
+        logger.info(
+            (
+                "[RL] ✅ Optimisation Optuna terminée ! "
+                "Study: %s, Best value: %s, Completed trials: %s/%s"
+            ),
+            study_name,
+            best_value,
+            n_completed_trials,
+            n_trials,
+        )
+
+        return result
+
+    except ImportError as e:
+        logger.warning("[RL] ⚠️ Optuna/PyTorch non disponible: %s", e)
+        return {
+            "status": "error",
+            "error": "optuna_not_available",
+            "message": "Optuna ou PyTorch non disponible dans cet environnement",
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
+
+    except Exception as e:
+        logger.exception("[RL] ❌ Erreur lors de l'optimisation Optuna")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
+
+
+# Tâche Celery wrapper (pour exécution via Celery worker si disponible)
+@celery.task(
+    name="tasks.rl_optuna_optimize",
+    bind=True,
+    acks_late=True,
+    task_time_limit=86400,  # 24 heures max (optimisation longue)
+    task_soft_time_limit=82800,  # 23 heures soft limit
+    max_retries=0,  # Pas de retry automatique pour les optimisations longues
+    autoretry_for=(),
+)
+def optuna_optimize_task(
+    self,  # noqa: ARG001
+    company_id: int | None = None,
+    data_period: str = "week",
+    n_trials: int = 30,
+    training_episodes: int = 150,
+    eval_episodes: int = 15,
+    custom_days: int | None = None,
+) -> dict[str, Any]:
+    """Wrapper Celery pour optuna_optimize_impl.
+
+    Permet d'exécuter l'optimisation Optuna via un worker Celery.
+    Pour usage direct (sans Celery), utiliser optuna_optimize_impl().
+
+    Args:
+        self: Binding Celery (requis pour bind=True)
+        company_id: ID de l'entreprise (None = toutes les entreprises)
+        data_period: Période de données ("week", "month", "custom")
+        n_trials: Nombre de trials Optuna à exécuter
+        training_episodes: Nombre d'épisodes d'entraînement par trial
+        eval_episodes: Nombre d'épisodes d'évaluation par trial
+        custom_days: Nombre de jours personnalisé (si data_period="custom")
+
+    Returns:
+        dict: Résultat de l'optimisation avec statut et métriques
+
+    """
+    # Appeler l'implémentation réelle
+    return optuna_optimize_impl(
+        company_id=company_id,
+        data_period=data_period,
+        n_trials=n_trials,
+        training_episodes=training_episodes,
+        eval_episodes=eval_episodes,
+        custom_days=custom_days,
+    )
