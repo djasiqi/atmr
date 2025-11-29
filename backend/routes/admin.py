@@ -929,39 +929,98 @@ class OptunaOptimize(Resource):
                     # urllib3 peut ne pas être disponible, ce n'est pas critique
                     pass
 
-                # Faire la requête initiale (sans suivre les redirections pour pouvoir les intercepter)
-                response = requests.post(
-                    rl_endpoint,
-                    json=payload,
-                    headers={"Content-Type": "application/json"},
-                    timeout=10,  # Timeout court car la réponse est immédiate (202)
-                    verify=False,  # Désactiver vérification SSL pour communication interne Docker
-                    allow_redirects=False,  # Ne pas suivre automatiquement pour intercepter
-                )
-
-                # Gérer les redirections 302 (HTTPS → HTTP pour communication interne)
+                # Gérer les redirections 302 en boucle (HTTPS → HTTP pour communication interne)
+                # Le worker RL peut rediriger plusieurs fois, il faut forcer HTTP à chaque fois
                 HTTP_STATUS_FOUND = 302
-                if response.status_code == HTTP_STATUS_FOUND:
+                MAX_REDIRECTS = 5  # Limite de sécurité pour éviter boucles infinies
+                current_url = rl_endpoint
+                response: requests.Response | None = None
+                redirect_count = 0
+
+                # Headers pour forcer HTTP et indiquer communication interne
+                request_headers = {
+                    "Content-Type": "application/json",
+                    "X-Forwarded-Proto": "http",  # Forcer HTTP pour éviter redirection HTTPS
+                    "X-Internal-Request": "true",  # Indicateur requête interne
+                }
+
+                for redirect_count in range(MAX_REDIRECTS + 1):
+                    if redirect_count > 0:
+                        app_logger.info(
+                            f"🔄 Tentative {redirect_count + 1}: {current_url}"
+                        )
+
+                    # Faire la requête (sans suivre les redirections pour pouvoir les intercepter)
+                    response = requests.post(
+                        current_url,
+                        json=payload,
+                        headers=request_headers,
+                        timeout=10,
+                        verify=False,
+                        allow_redirects=False,  # Ne pas suivre automatiquement
+                    )
+
+                    # Si ce n'est pas une redirection, sortir de la boucle
+                    if response.status_code != HTTP_STATUS_FOUND:
+                        break
+
                     # Extraire l'URL de redirection depuis les headers
                     redirect_url = response.headers.get("Location", "")
+                    if not redirect_url:
+                        break
+
+                    # Toujours forcer HTTP (même si l'URL est déjà en HTTP)
                     if redirect_url.startswith("https://"):
-                        # Convertir HTTPS → HTTP pour communication interne Docker
                         redirect_url = redirect_url.replace("https://", "http://", 1)
                         app_logger.warning(
                             (
-                                f"⚠️ Redirection HTTPS détectée, conversion en HTTP: "
-                                f"{response.headers.get('Location')} → {redirect_url}"
+                                f"⚠️ Redirection HTTPS détectée (tentative {redirect_count + 1}), "
+                                f"conversion en HTTP: {current_url} → {redirect_url}"
                             )
                         )
-                        # Refaire la requête avec l'URL HTTP
-                        response = requests.post(
-                            redirect_url,
-                            json=payload,
-                            headers={"Content-Type": "application/json"},
-                            timeout=10,
-                            verify=False,
-                            allow_redirects=False,  # Ne plus suivre de redirections
-                        )
+                    elif not redirect_url.startswith("http://"):
+                        # URL relative, construire depuis l'URL actuelle
+                        from urllib.parse import urljoin
+
+                        redirect_url = urljoin(current_url, redirect_url)
+                        redirect_url = redirect_url.replace("https://", "http://", 1)
+
+                    # Forcer HTTP même si l'URL était déjà en HTTP
+                    if redirect_url.startswith("http://"):
+                        current_url = redirect_url
+                    else:
+                        # URL mal formée, sortir
+                        break
+
+                # Vérifier qu'on a une réponse valide
+                if response is None:
+                    error_msg = "Aucune réponse reçue du worker RL"
+                    app_logger.error(f"❌ {error_msg}")
+                    return (
+                        {
+                            "message": "Erreur lors de la communication avec le worker RL",
+                            "error": error_msg,
+                        },
+                        500,
+                    )
+
+                # Vérifier si on a atteint la limite de redirections
+                if (
+                    redirect_count >= MAX_REDIRECTS
+                    and response.status_code == HTTP_STATUS_FOUND
+                ):
+                    error_msg = (
+                        f"Trop de redirections ({MAX_REDIRECTS}), "
+                        f"dernière URL: {current_url}"
+                    )
+                    app_logger.error(f"❌ {error_msg}")
+                    return (
+                        {
+                            "message": "Erreur lors de la communication avec le worker RL",
+                            "error": error_msg,
+                        },
+                        500,
+                    )
 
                 HTTP_STATUS_ACCEPTED = 202
                 if response.status_code == HTTP_STATUS_ACCEPTED:
