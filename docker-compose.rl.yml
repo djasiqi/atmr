@@ -102,11 +102,9 @@ services:
     networks:
       - atmr-rl-network
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB} && psql -U $${POSTGRES_USER} -d $${POSTGRES_DB} -c 'SELECT 1' > /dev/null 2>&1",
-        ]
+      # ⚠️ NOTE: Utiliser pg_isready simple car les variables d'environnement
+      # ne sont pas disponibles dans le healthcheck et le rôle peut ne pas exister
+      test: ["CMD-SHELL", "pg_isready || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5

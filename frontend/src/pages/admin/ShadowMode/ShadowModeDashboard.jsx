@@ -3,7 +3,7 @@ import { FaCheckCircle, FaExclamationTriangle, FaChartLine, FaRobot } from 'reac
 import useShadowMode from '../../../hooks/useShadowMode';
 import styles from './ShadowModeDashboard.module.css';
 import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
-import Sidebar from '../../../components/layout/Sidebar/AdminSidebar/AdminSidebar';
+import AdminSidebar from '../../../components/layout/Sidebar/AdminSidebar/AdminSidebar';
 
 /**
  * Dashboard Admin pour monitorer le Shadow Mode MDI.
@@ -37,7 +37,7 @@ const ShadowModeDashboard = () => {
       <div className={styles.container}>
         <HeaderDashboard />
         <div className={styles.layout}>
-          <Sidebar />
+          <AdminSidebar />
           <main className={styles.main}>
             <div className={styles.loadingContainer}>
               <div className={styles.spinner}></div>
@@ -54,7 +54,7 @@ const ShadowModeDashboard = () => {
       <div className={styles.container}>
         <HeaderDashboard />
         <div className={styles.layout}>
-          <Sidebar />
+          <AdminSidebar />
           <main className={styles.main}>
             <div className={styles.errorContainer}>
               <FaExclamationTriangle className={styles.errorIcon} />
@@ -76,7 +76,7 @@ const ShadowModeDashboard = () => {
       <div className={styles.container}>
         <HeaderDashboard />
         <div className={styles.layout}>
-          <Sidebar />
+          <AdminSidebar />
           <main className={styles.main}>
             <div className={styles.header}>
               <h1>
@@ -132,7 +132,7 @@ const ShadowModeDashboard = () => {
     <div className={styles.container}>
       <HeaderDashboard />
       <div className={styles.layout}>
-        <Sidebar />
+        <AdminSidebar />
         <main className={styles.main}>
           {/* Header */}
           <div className={styles.header}>

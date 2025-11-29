@@ -15,20 +15,20 @@
   box-sizing: border-box;
 }
 
-/* Liste principale (menu) */
-.menu {
+/* Liste des liens */
+.sidebar ul {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
 /* Chaque élément de la liste */
-.menu li {
+.sidebar li {
   margin-bottom: var(--spacing-xs);
 }
 
 /* Style de base des liens */
-.menu a {
+.sidebar a {
   color: var(--text-primary);
   text-decoration: none;
   display: flex;
@@ -42,11 +42,11 @@
 }
 
 /* Effet hover */
-.menu a:hover {
+.sidebar a:hover {
   color: var(--brand-primary);
 }
 
-/* Lien actif (utilisé par NavLink avec activeClassName) */
+/* Lien actif */
 .active {
   font-weight: var(--font-weight-bold);
   border-left: 4px solid var(--brand-primary);
@@ -54,12 +54,6 @@
   color: var(--brand-primary);
 }
 
-/* Icônes (facultatif) */
-.icon {
-  font-size: var(--font-xl);
-}
-
-/* Responsive : Sidebar en pleine largeur sur écrans étroits */
 @media (max-width: 768px) {
   .sidebar {
     width: 100%;

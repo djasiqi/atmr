@@ -18,7 +18,7 @@ import {
 } from 'recharts';
 import styles from './AdminDashboard.module.css';
 import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
-import Sidebar from '../../../components/layout/Sidebar/AdminSidebar/AdminSidebar';
+import AdminSidebar from '../../../components/layout/Sidebar/AdminSidebar/AdminSidebar';
 
 const AdminDashboard = () => {
   // La route est /dashboard/admin/:public_id → on récupère public_id
@@ -71,7 +71,7 @@ const AdminDashboard = () => {
     <div className={styles.adminContainer}>
       <HeaderDashboard />
       <div className={styles.dashboard}>
-        <Sidebar adminId={adminId} /> {/* ✅ Passer public_id (adminId) à la Sidebar */}
+        <AdminSidebar />
         <main className={styles.content}>
           <h1>📊 Tableau de bord administrateur</h1>
 

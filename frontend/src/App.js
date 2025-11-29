@@ -24,6 +24,7 @@ const AdminReservations = lazy(() => import('./pages/admin/Reservations/AdminRes
 const AdminInvoices = lazy(() => import('./pages/admin/Invoices/AdminInvoices'));
 const AdminSettings = lazy(() => import('./pages/admin/Settings/AdminSettings'));
 const ShadowModeDashboard = lazy(() => import('./pages/admin/ShadowMode/ShadowModeDashboard'));
+const AdminOptuna = lazy(() => import('./pages/admin/Optuna/AdminOptuna'));
 const ClientDashboard = lazy(() => import('./pages/client/Dashboard/ClientDashboard'));
 const AccountUser = lazy(() => import('./pages/client/Account/AccountUser'));
 const ReservationsPage = lazy(() => import('./pages/client/Reservations/ReservationsPage'));
@@ -259,6 +260,14 @@ const App = () => {
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <ShadowModeDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/admin/:public_id/optuna"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminOptuna />
                 </ProtectedRoute>
               }
             />
