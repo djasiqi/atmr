@@ -1,6 +1,6 @@
 import React from 'react';
 import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
-import Sidebar from '../../../components/layout/Sidebar/AdminSidebar/AdminSidebar';
+import AdminSidebar from '../../../components/layout/Sidebar/AdminSidebar/AdminSidebar';
 import styles from './AdminSettings.module.css';
 
 const AdminSettings = () => {
@@ -8,7 +8,7 @@ const AdminSettings = () => {
     <div className={styles.container}>
       <HeaderDashboard />
       <div className={styles.body}>
-        <Sidebar />
+        <AdminSidebar />
         <main className={styles.content}>
           <section className={styles.hero}>
             <h1>Paramètres administrateur</h1>

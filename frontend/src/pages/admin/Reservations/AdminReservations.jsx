@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
-import Sidebar from '../../../components/layout/Sidebar/AdminSidebar/AdminSidebar';
+import AdminSidebar from '../../../components/layout/Sidebar/AdminSidebar/AdminSidebar';
 import { fetchRecentBookings } from '../../../services/adminService';
 import styles from './AdminReservations.module.css';
 
@@ -31,7 +31,7 @@ const AdminReservations = () => {
     <div className={styles.container}>
       <HeaderDashboard />
       <div className={styles.body}>
-        <Sidebar />
+        <AdminSidebar />
         <main className={styles.content}>
           <header className={styles.header}>
             <h1>Reservations</h1>

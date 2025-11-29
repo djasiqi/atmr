@@ -209,3 +209,41 @@ export const resetUserPassword = async (userId) => {
     throw error;
   }
 };
+
+/**
+ * Déclenche l'optimisation Optuna pour les hyperparamètres DQN.
+ * @param {Object} config - Configuration de l'optimisation
+ * @param {number} [config.company_id] - ID de l'entreprise (optionnel)
+ * @param {string} [config.data_period] - Période de données: 'day', 'week', 'month', 'custom'
+ * @param {number} [config.n_trials] - Nombre de trials Optuna
+ * @param {number} [config.training_episodes] - Épisodes d'entraînement par trial
+ * @param {number} [config.eval_episodes] - Épisodes d'évaluation par trial
+ * @param {number} [config.custom_days] - Nombre de jours si data_period='custom'
+ */
+export const runOptunaOptimization = async (config = {}) => {
+  try {
+    const token = getAuthToken();
+    if (!token) {
+      throw new Error("Aucun token JWT trouvé. L'utilisateur doit être connecté.");
+    }
+
+    console.log('🚀 Démarrage de l\'optimisation Optuna...', config);
+
+    const response = await apiClient.post(
+      '/admin/optuna/optimize',
+      config,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+
+    console.log('✅ Optimisation Optuna démarrée :', response.data);
+    return response.data;
+  } catch (error) {
+    console.error(
+      '❌ Erreur lors du démarrage de l\'optimisation Optuna :',
+      error.response?.data || error.message
+    );
+    throw error;
+  }
+};

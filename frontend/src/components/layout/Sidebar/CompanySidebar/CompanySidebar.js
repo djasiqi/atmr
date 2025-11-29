@@ -1,5 +1,5 @@
 // src/components/layout/Sidebar/CompanySidebar/CompanySidebar.js
-import React, { useMemo } from 'react';
+import React from 'react';
 import { NavLink, useParams, useLocation } from 'react-router-dom';
 import {
   FaHome,
@@ -25,70 +25,79 @@ const CompanySidebar = () => {
       return match ? match[1] : null;
     })();
 
-  // Ne créer les items que si public_id existe
-  const items = useMemo(() => {
-    // Si pas de public_id, retourner tableau vide
-    if (!public_id) return [];
-
-    return [
-      {
-        to: `/dashboard/company/${public_id}`,
-        label: 'Tableau de bord',
-        icon: <FaHome />,
-        end: true,
-      },
-      {
-        to: `/dashboard/company/${public_id}/reservations`,
-        label: 'Réservations',
-        icon: <FaCar />,
-      },
-      {
-        to: `/dashboard/company/${public_id}/drivers`,
-        label: 'Chauffeurs',
-        icon: <FaUser />,
-      },
-      {
-        to: `/dashboard/company/${public_id}/clients`,
-        label: 'Gestion Clients',
-        icon: <FaUsers />,
-      },
-      {
-        to: `/dashboard/company/${public_id}/invoices/clients`,
-        label: 'Facturation par Client',
-        icon: <FaFileInvoice />,
-      },
-      {
-        to: `/dashboard/company/${public_id}/dispatch`,
-        label: 'Dispatch & Planification',
-        icon: <FaChartLine />,
-      },
-      {
-        to: `/dashboard/company/${public_id}/analytics`,
-        label: 'Analytics',
-        icon: <FaChartBar />,
-      },
-      {
-        to: `/dashboard/company/${public_id}/settings`,
-        label: 'Paramètres',
-        icon: <FaCog />,
-      },
-    ];
-  }, [public_id]);
+  // Si pas de public_id, ne rien afficher
+  if (!public_id) {
+    return null;
+  }
 
   return (
     <nav className={styles.sidebar}>
       <ul>
-        {items.map((item) => (
-          <li key={item.to}>
-            <NavLink
-              to={item.to}
-              end={!!item.end}
-              className={({ isActive }) => (isActive ? styles.active : '')}
-            >
-              {item.icon} {item.label}
-            </NavLink>
-          </li>
-        ))}
+        <li>
+          <NavLink
+            to={`/dashboard/company/${public_id}`}
+            end
+            className={({ isActive }) => (isActive ? styles.active : '')}
+          >
+            <FaHome /> Tableau de bord
+          </NavLink>
+        </li>
+        <li>
+          <NavLink
+            to={`/dashboard/company/${public_id}/reservations`}
+            className={({ isActive }) => (isActive ? styles.active : '')}
+          >
+            <FaCar /> Réservations
+          </NavLink>
+        </li>
+        <li>
+          <NavLink
+            to={`/dashboard/company/${public_id}/drivers`}
+            className={({ isActive }) => (isActive ? styles.active : '')}
+          >
+            <FaUser /> Chauffeurs
+          </NavLink>
+        </li>
+        <li>
+          <NavLink
+            to={`/dashboard/company/${public_id}/clients`}
+            className={({ isActive }) => (isActive ? styles.active : '')}
+          >
+            <FaUsers /> Gestion Clients
+          </NavLink>
+        </li>
+        <li>
+          <NavLink
+            to={`/dashboard/company/${public_id}/invoices/clients`}
+            className={({ isActive }) => (isActive ? styles.active : '')}
+          >
+            <FaFileInvoice /> Facturation par Client
+          </NavLink>
+        </li>
+        <li>
+          <NavLink
+            to={`/dashboard/company/${public_id}/dispatch`}
+            className={({ isActive }) => (isActive ? styles.active : '')}
+          >
+            <FaChartLine /> Dispatch & Planification
+          </NavLink>
+        </li>
+        <li>
+          <NavLink
+            to={`/dashboard/company/${public_id}/analytics`}
+            className={({ isActive }) => (isActive ? styles.active : '')}
+          >
+            <FaChartBar /> Analytics
+          </NavLink>
+        </li>
+        <li>
+          <NavLink
+            to={`/dashboard/company/${public_id}/settings`}
+            className={({ isActive }) => (isActive ? styles.active : '')}
+          >
+            <FaCog /> Paramètres
+          </NavLink>
+        </li>
       </ul>
     </nav>
   );

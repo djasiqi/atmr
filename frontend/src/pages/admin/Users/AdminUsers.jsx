@@ -9,7 +9,7 @@ import {
   fetchCompanies,
 } from '../../../services/adminService';
 import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
-import Sidebar from '../../../components/layout/Sidebar/AdminSidebar/AdminSidebar';
+import AdminSidebar from '../../../components/layout/Sidebar/AdminSidebar/AdminSidebar';
 import styles from './AdminUsers.module.css';
 
 const AdminUsers = () => {
@@ -172,7 +172,7 @@ const AdminUsers = () => {
 
       <div className={styles.dashboard}>
         {/* ✅ Intégration de la Sidebar */}
-        <Sidebar />
+        <AdminSidebar />
 
         <main className={styles.content}>
           <h1>👥 Gestion des utilisateurs</h1>
