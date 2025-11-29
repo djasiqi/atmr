@@ -48,50 +48,68 @@
   margin-bottom: var(--spacing-lg);
 }
 
-/* ✅ Style des cartes de statistiques */
+/* ✅ Style des cartes de statistiques (standardisé avec entreprise) */
 .stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: var(--spacing-lg);
+  gap: var(--spacing-sm);
   margin-top: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
 }
 
-/* ✅ Style des cartes individuelles */
+/* ✅ Style des cartes individuelles (standardisé avec entreprise) */
 .card {
-  background: linear-gradient(135deg, var(--indigo-500) 0%, var(--purple-500) 100%);
-  color: white;
-  padding: var(--spacing-lg);
+  background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+  padding: var(--spacing-sm) var(--spacing-lg);
   border-radius: var(--radius-lg);
-  text-align: center;
-  transition:
-    transform var(--transition-base),
-    box-shadow var(--transition-base);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  transition: all var(--transition-base);
+  border: 1px solid var(--border-primary);
+  position: relative;
+  z-index: auto;
 }
 
 .card:hover {
-  transform: translateY(-5px);
-  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--brand-primary);
+  z-index: auto;
 }
 
 /* ✅ Icônes des cartes */
 .icon {
-  font-size: var(--font-4xl);
-  margin-bottom: var(--spacing-sm);
-  color: white;
+  font-size: var(--font-3xl);
+  line-height: 1;
+  opacity: 0.9;
+  flex-shrink: 0;
+  color: var(--text-primary);
+}
+
+/* ✅ Contenu des cartes */
+.cardContent {
+  flex: 1;
+  text-align: left;
 }
 
 /* ✅ Titres des statistiques */
 .card h3 {
-  font-size: var(--font-lg);
-  font-weight: var(--font-weight-semibold);
-  margin-bottom: var(--spacing-xs);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-medium);
+  margin: 0 0 var(--spacing-xxs) 0;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-/* ✅ Valeurs des statistiques */
+/* ✅ Valeurs des statistiques (chiffres) */
 .card p {
-  font-size: var(--font-xl);
+  font-size: var(--font-2xl);
   font-weight: var(--font-weight-bold);
+  margin: 0;
+  color: var(--brand-primary);
 }
 
 /* ✅ Container pour les graphiques */
@@ -203,10 +221,28 @@
 
   .stats {
     grid-template-columns: 1fr;
+    gap: var(--spacing-sm);
   }
 
   .card {
-    padding: var(--spacing-md);
+    padding: var(--spacing-sm) var(--spacing-md);
+    gap: var(--spacing-sm);
+  }
+
+  .icon {
+    font-size: var(--font-2xl);
+  }
+
+  .cardContent h3 {
+    font-size: 0.7rem;
+  }
+
+  .cardContent p {
+    font-size: var(--font-xl);
+  }
+
+  .card:hover {
+    transform: none;
   }
 
   .chartContainer,

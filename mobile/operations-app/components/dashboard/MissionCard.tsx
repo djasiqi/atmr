@@ -42,13 +42,15 @@ const MissionCard: MissionCardType = ({
         return "🟡 En cours";
       case "completed":
         return "✅ Terminée";
+      case "canceled":
+        return "❌ Annulée";
       default:
         return "🕓 À venir";
     }
   };
 
   const handleStatusUpdate = async (
-    newStatus: "en_route" | "in_progress" | "completed"
+    newStatus: "en_route" | "in_progress" | "completed" | "canceled"
   ) => {
     if (!mission) return;
     try {
@@ -56,10 +58,19 @@ const MissionCard: MissionCardType = ({
       setStatus(newStatus);
       Object.assign(mission, { status: newStatus });
       if (newStatus === "completed") onComplete?.();
-    } catch (error) {
+      if (newStatus === "canceled") {
+        // ✅ Mission annulée : notifier et ne pas appeler onComplete
+        Alert.alert(
+          "Course annulée",
+          "La course a été annulée. Elle sera facturée comme booking annulé."
+        );
+      }
+    } catch (error: any) {
+      const errorMsg =
+        error?.response?.data?.error || error?.message || "Erreur inconnue";
       Alert.alert(
         "Erreur",
-        `Impossible de mettre à jour le statut : ${formatStatus(newStatus)}`
+        `Impossible de mettre à jour le statut : ${errorMsg}`
       );
     }
   };
@@ -71,7 +82,10 @@ const MissionCard: MissionCardType = ({
     return "";
   };
 
-  const shouldShowNavigation = status !== "completed" && status !== "canceled";
+  const shouldShowNavigation =
+    status !== "completed" &&
+    status !== "return_completed" &&
+    status !== "canceled";
 
   if (!mission) {
     return <MissionCard.EmptyState />;
@@ -179,25 +193,25 @@ const MissionCard: MissionCardType = ({
         {status === "in_progress" && (mission.medical_facility ||
           mission.doctor_name ||
           mission.hospital_service) && (
-          <View style={styles.medicalInfoSection}>
-            <Text style={styles.medicalTitle}>🏥 Destination médicale</Text>
-            {mission.medical_facility && (
-              <Text style={styles.medicalDetail}>
-                📍 {mission.medical_facility}
-              </Text>
-            )}
-            {mission.doctor_name && (
-              <Text style={styles.medicalDetail}>
-                👨‍⚕️ Dr {mission.doctor_name}
-              </Text>
-            )}
-            {mission.hospital_service && (
-              <Text style={styles.medicalDetail}>
-                🚪 {mission.hospital_service}
-              </Text>
-            )}
-          </View>
-        )}
+            <View style={styles.medicalInfoSection}>
+              <Text style={styles.medicalTitle}>🏥 Destination médicale</Text>
+              {mission.medical_facility && (
+                <Text style={styles.medicalDetail}>
+                  📍 {mission.medical_facility}
+                </Text>
+              )}
+              {mission.doctor_name && (
+                <Text style={styles.medicalDetail}>
+                  👨‍⚕️ Dr {mission.doctor_name}
+                </Text>
+              )}
+              {mission.hospital_service && (
+                <Text style={styles.medicalDetail}>
+                  🚪 {mission.hospital_service}
+                </Text>
+              )}
+            </View>
+          )}
 
         {/* Notes médicales - toujours visibles */}
         {mission.notes_medical && (
@@ -256,6 +270,30 @@ const MissionCard: MissionCardType = ({
           >
             <Ionicons name="checkmark-done" size={22} color="white" />
             <Text style={styles.actionLabel}>Terminer</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* ✅ Bouton d'annulation : disponible seulement si assigned ou en_route (pas in_progress = client à bord) */}
+        {(status === "assigned" || status === "en_route") && (
+          <TouchableOpacity
+            onPress={() => {
+              Alert.alert(
+                "Annuler la course",
+                "Le client a annulé la course ? Cette annulation sera facturée.",
+                [
+                  { text: "Non", style: "cancel" },
+                  {
+                    text: "Oui, annuler",
+                    style: "destructive",
+                    onPress: () => handleStatusUpdate("canceled"),
+                  },
+                ]
+              );
+            }}
+            style={[styles.actionItemEnhanced, { backgroundColor: "#dc3545" }]}
+          >
+            <Ionicons name="close-circle" size={22} color="white" />
+            <Text style={styles.actionLabel}>Annuler</Text>
           </TouchableOpacity>
         )}
 

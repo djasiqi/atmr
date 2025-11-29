@@ -382,7 +382,8 @@ export type BookingStatus =
   | "en_route"
   | "in_progress"
   | "completed"
-  | "return_completed";
+  | "return_completed"
+  | "canceled"; // ✅ Annulation par le chauffeur
 
 export const updateTripStatus = async (
   bookingId: number,

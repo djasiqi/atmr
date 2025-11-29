@@ -379,11 +379,13 @@ class DriverUpcomingBookings(Resource):
         # pour permettre aux chauffeurs de voir leur planning la veille
         now = now_local()
         cutoff_hour = 19  # 19h00
-        
+
         # Si on est après 19h00, inclure aussi le lendemain
         if now.hour >= cutoff_hour:
             tomorrow = date.today() + timedelta(days=1)
-            tomorrow_start, tomorrow_end = day_local_bounds(tomorrow.strftime("%Y-%m-%d"))
+            tomorrow_start, tomorrow_end = day_local_bounds(
+                tomorrow.strftime("%Y-%m-%d")
+            )
             tomorrow_start = datetime.fromisoformat(str(tomorrow_start))
             tomorrow_end = datetime.fromisoformat(str(tomorrow_end))
             # Étendre la plage jusqu'à la fin du lendemain
@@ -867,6 +869,7 @@ class UpdateBookingStatus(Resource):
                             "in_progress",
                             "completed",
                             "return_completed",
+                            "canceled",  # ✅ Annulation par le chauffeur
                         ]
                         if new_status_str not in valid_statuses:
                             result = {"error": "Invalid status"}
@@ -954,6 +957,48 @@ class UpdateBookingStatus(Resource):
                                 else:
                                     result = {"error": "Not a return trip"}
                                     status_code = 400
+
+                            # ✅ ANNULATION PAR LE CHAUFFEUR (facturable)
+                            elif new_status_str == "canceled":
+                                if booking.status == BookingStatus.CANCELED:
+                                    result = {"message": "Booking already canceled"}
+                                elif booking.status in [
+                                    BookingStatus.COMPLETED,
+                                    BookingStatus.RETURN_COMPLETED,
+                                ]:
+                                    result = {
+                                        "error": "Impossible d'annuler une course déjà terminée"
+                                    }
+                                    status_code = 400
+                                elif booking.status == BookingStatus.IN_PROGRESS:
+                                    result = {
+                                        "error": (
+                                            "Impossible d'annuler une course en cours : "
+                                            "le client est déjà à bord"
+                                        )
+                                    }
+                                    status_code = 400
+                                elif booking.status not in [
+                                    BookingStatus.ASSIGNED,
+                                    BookingStatus.EN_ROUTE,
+                                ]:
+                                    result = {
+                                        "error": (
+                                            "Impossible d'annuler une course "
+                                            "qui n'est pas assignée ou en route"
+                                        )
+                                    }
+                                    status_code = 400
+                                else:
+                                    # ✅ Annulation par le chauffeur : marquer comme CANCELED (facturable)
+                                    # Seulement si assigned ou en_route (pas in_progress = client à bord)
+                                    booking.status = BookingStatus.CANCELED
+                                    app_logger.info(
+                                        (
+                                            f"📱 [Driver Cancel] Chauffeur {driver.id} "
+                                            f"a annulé la course {booking_id} (statut précédent: {booking.status})"
+                                        )
+                                    )
 
                             if result is None:
                                 db.session.commit()
