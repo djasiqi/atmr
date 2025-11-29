@@ -161,6 +161,28 @@ services:
       - "5000:5000"
     networks:
       - atmr-network
+      - traefik-network
+    # Labels Traefik pour le routage automatique
+    labels:
+      # Activer Traefik pour ce conteneur
+      - "traefik.enable=true"
+      # Router les requêtes vers le backend sur www.lirie.ch
+      # Router HTTP (port 80) - redirige vers HTTPS
+      - "traefik.http.routers.backend.rule=Host(`www.lirie.ch`) || Host(`lirie.ch`)"
+      - "traefik.http.routers.backend.entrypoints=web"
+      # Router HTTPS (port 443) avec certificat SSL automatique
+      - "traefik.http.routers.backend-secure.rule=Host(`www.lirie.ch`) || Host(`lirie.ch`)"
+      - "traefik.http.routers.backend-secure.entrypoints=websecure"
+      - "traefik.http.routers.backend-secure.tls.certresolver=letsencrypt"
+      # Redirection HTTP vers HTTPS
+      - "traefik.http.middlewares.backend-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.backend-redirect.redirectscheme.permanent=true"
+      - "traefik.http.routers.backend.middlewares=backend-redirect"
+      # Service backend (port interne du conteneur)
+      - "traefik.http.services.backend.loadbalancer.server.port=5000"
+      # Headers pour proxy
+      - "traefik.http.middlewares.backend-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
+      - "traefik.http.routers.backend-secure.middlewares=backend-headers"
     depends_on:
       postgres:
         condition: service_healthy
@@ -428,3 +450,7 @@ networks:
     ipam:
       config:
         - subnet: 172.20.0.0/16
+  # Réseau externe Traefik (doit exister sur le serveur)
+  traefik-network:
+    external: true
+    name: traefik_proxy # Nom du réseau Traefik sur le serveur
