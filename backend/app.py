@@ -711,20 +711,29 @@ def create_app(config_name: str | None = None):
             "[App] Environnement RL détecté: force_https désactivé pour communication interne"
         )
 
-    # ✅ FIX: En mode testing, désactiver complètement Talisman
+    # ✅ FIX: Désactiver complètement Talisman pour le mode testing et l'environnement RL
     # pour éviter toute redirection 302
-    # Talisman peut encore causer des redirections même avec
-    # force_https=False dans certains cas
-    if (
+    # Talisman peut encore causer des redirections même avec force_https=False
+    # dans certains cas (notamment avec ProxyFix qui détecte X-Forwarded-Proto)
+    should_disable_talisman = (
         config_name == "testing"
         or app.config.get("TESTING", False)
         or os.getenv("FLASK_CONFIG") == "testing"
-    ):
-        # Ne pas initialiser Talisman en mode testing
+        or app_env == "rl"
+        or rl_enabled
+    )
+
+    if should_disable_talisman:
+        # Ne pas initialiser Talisman en mode testing ou environnement RL
         talisman = None
-        app.logger.info(
-            "[App] Talisman désactivé en mode testing pour éviter les redirections 302"
-        )
+        if app_env == "rl" or rl_enabled:
+            app.logger.info(
+                "[App] Talisman désactivé pour l'environnement RL (communication interne HTTP)"
+            )
+        else:
+            app.logger.info(
+                "[App] Talisman désactivé en mode testing pour éviter les redirections 302"
+            )
     else:
         talisman = Talisman(
             content_security_policy=csp,

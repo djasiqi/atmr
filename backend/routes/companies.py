@@ -154,6 +154,7 @@ vehicle_create_model = companies_ns.model(
         "wheelchair_accessible": fields.Boolean,
         "insurance_expires_at": fields.String(description="ISO 8601"),
         "inspection_expires_at": fields.String(description="ISO 8601"),
+        "is_active": fields.Boolean,
     },
 )
 
@@ -3881,13 +3882,6 @@ class DispatchNowReservation(Resource):
 class MyVehicles(Resource):
     @jwt_required()
     @role_required(UserRole.company)
-    @companies_ns.marshal_list_with(
-        vehicle_model,
-        code=200,
-        description="Liste des véhicules",
-        skip_none=True,
-        mask=None,
-    )
     def get(self):
         try:
             company, err, code = get_company_from_token()
@@ -3937,6 +3931,17 @@ class MyVehicles(Resource):
             return {"error": "Entreprise introuvable (ID invalide)."}, 500
 
         data = request.get_json() or {}
+
+        # Validation des champs requis (consolidée)
+        validation_error = None
+        if not data.get("model"):
+            validation_error = {"error": "Le modèle est requis"}, 400
+        elif not data.get("license_plate"):
+            validation_error = {"error": "La plaque d'immatriculation est requise"}, 400
+
+        if validation_error:
+            return validation_error
+
         try:
 
             def parse_dt(s):
@@ -3952,18 +3957,32 @@ class MyVehicles(Resource):
             v.vin = data.get("vin")
             v.seats = data.get("seats")
             v.wheelchair_accessible = bool(data.get("wheelchair_accessible", False))
+            v.is_active = bool(
+                data.get("is_active", True)
+            )  # Par défaut actif lors de la création
             v.insurance_expires_at = parse_dt(data.get("insurance_expires_at"))
             v.inspection_expires_at = parse_dt(data.get("inspection_expires_at"))
             db.session.add(v)
             db.session.commit()
+            app_logger.info(
+                "POST /me/vehicles: Vehicle created successfully for company %d: %s (%s)",
+                cid,
+                v.model,
+                v.license_plate,
+            )
             return v.serialize, 201
-        except (ValueError, IntegrityError) as e:
+        except (KeyError, ValueError, IntegrityError) as e:
             db.session.rollback()
-            return {"error": str(e)}, 400
+            error_msg = (
+                f"Champ requis manquant: {e}" if isinstance(e, KeyError) else str(e)
+            )
+            app_logger.warning("POST /me/vehicles: Validation/Integrity error: %s", e)
+            return {"error": error_msg}, 400
         except Exception as e:
             db.session.rollback()
+            app_logger.exception("POST /me/vehicles: Unexpected error: %s", e)
             sentry_sdk.capture_exception(e)
-            return {"error": "Erreur interne"}, 500
+            return {"error": "Erreur interne lors de la création du véhicule"}, 500
 
 
 # ======================================================
