@@ -3,8 +3,8 @@
 .sidebar {
   position: fixed;
   left: 0;
-  top: var(--header-height, 64px);
-  height: calc(100vh - var(--header-height, 64px));
+  top: 80px; /* Header admin fait 80px de haut */
+  height: calc(100vh - 80px);
   background: var(--bg-primary);
   border-right: 1px solid var(--border-primary);
   box-shadow: var(--shadow-sm);
@@ -174,30 +174,28 @@
 
 /* Responsive - Mobile */
 @media (max-width: 768px) {
+  /* Sur mobile, la sidebar reste toujours visible mais seulement en mode icônes */
   .sidebar {
-    width: var(--sidebar-width-expanded, 240px);
-    transform: translateX(-100%);
-    box-shadow: var(--shadow-xl);
+    width: var(--sidebar-width, 72px);
+    transform: translateX(0); /* Toujours visible */
+    box-shadow: var(--shadow-sm);
   }
 
-  .sidebar.expanded {
+  /* Sur mobile, on force toujours le mode collapsed (icônes seulement) */
+  .sidebar.expanded,
+  .sidebar.collapsed {
+    width: var(--sidebar-width, 72px);
     transform: translateX(0);
   }
 
-  .sidebar.collapsed {
-    transform: translateX(-100%);
+  /* Cacher le texte sur mobile */
+  .label {
+    display: none;
   }
 
-  /* Overlay pour mobile */
-  .sidebar.expanded::before {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: var(--sidebar-width-expanded, 240px);
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: -1;
+  /* Le bouton toggle reste visible mais peut être masqué si nécessaire */
+  .toggleButton {
+    display: none; /* Masquer le bouton toggle sur mobile car toujours en mode icônes */
   }
 }
 
