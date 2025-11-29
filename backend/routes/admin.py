@@ -33,6 +33,17 @@ stats_model = admin_ns.model(
         "totalUsers": fields.Integer,
         "totalInvoices": fields.Integer,
         "totalRevenue": fields.Float,
+        "bookingTrends": fields.List(
+            fields.Nested(
+                admin_ns.model(
+                    "BookingTrend",
+                    {
+                        "month": fields.String,
+                        "bookings": fields.Integer,
+                    },
+                )
+            )
+        ),
     },
 )
 
@@ -93,6 +104,49 @@ class AdminStats(Resource):
 
             total_revenue = db.session.execute(stmt).scalar_one()
 
+            # ✅ Calculer les tendances des réservations par mois (12 derniers mois)
+            from datetime import timedelta
+
+            trends = []
+            current_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+            for i in range(11, -1, -1):  # De 11 mois en arrière jusqu'à maintenant
+                # Calculer le début du mois
+                target_year = current_date.year
+                target_month = current_date.month - i
+                # Gérer le débordement d'année
+                while target_month <= 0:
+                    target_month += 12
+                    target_year -= 1
+                month_start = datetime(target_year, target_month, 1, 0, 0, 0, 0, UTC)
+
+                # Calculer la fin du mois
+                if i == 0:
+                    # Pour le mois actuel, utiliser la date actuelle
+                    month_end = now
+                else:
+                    # Pour les mois précédents, calculer la fin du mois
+                    if target_month == MONTH_THRESHOLD:
+                        next_year = target_year + 1
+                        next_month = 1
+                    else:
+                        next_year = target_year
+                        next_month = target_month + 1
+                    next_month_start = datetime(
+                        next_year, next_month, 1, 0, 0, 0, 0, UTC
+                    )
+                    month_end = next_month_start - timedelta(microseconds=1)
+
+                # Compter les réservations pour ce mois
+                month_count = Booking.query.filter(
+                    Booking.created_at >= month_start, Booking.created_at <= month_end
+                ).count()
+
+                # Format du mois pour l'affichage
+                month_label = month_start.strftime("%Y-%m")
+
+                trends.append({"month": month_label, "bookings": month_count})
+
             stats_msg = (
                 f"📊 Stats: {total_bookings} bookings, {total_users} users, "
                 + f"{total_invoices} invoices, {total_revenue} revenue"
@@ -103,6 +157,7 @@ class AdminStats(Resource):
                 "totalUsers": total_users,
                 "totalInvoices": total_invoices,
                 "totalRevenue": total_revenue,
+                "bookingTrends": trends,
             }, 200
 
         except Exception as e:

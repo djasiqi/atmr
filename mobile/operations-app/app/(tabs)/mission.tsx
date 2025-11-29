@@ -49,7 +49,7 @@ export default function MissionScreen() {
   const { location } = useLocation();
   const socket = useSocket();
   useNotifications();
-  
+
   // Hook pour les ETAs dynamiques basés sur la position GPS
   const { etas, hasGPS, getDuration } = useDynamicETA(!!driver);
 
@@ -89,7 +89,7 @@ export default function MissionScreen() {
             setCurrentIndex(0);
           }
         }
-      } catch {}
+      } catch { }
     })();
   }, []);
 
@@ -110,7 +110,7 @@ export default function MissionScreen() {
 
       // Mettre à jour le cache avec les nouvelles données uniquement
       AsyncStorage.setItem(MISSIONS_CACHE_KEY, JSON.stringify(sorted)).catch(
-        () => {}
+        () => { }
       );
 
       setMissions(sorted);
@@ -155,7 +155,7 @@ export default function MissionScreen() {
             new Date(b.scheduled_time).getTime()
         );
         AsyncStorage.setItem(MISSIONS_CACHE_KEY, JSON.stringify(sorted)).catch(
-          () => {}
+          () => { }
         );
         return sorted;
       });
@@ -167,15 +167,11 @@ export default function MissionScreen() {
       setMissions((prev) => {
         const updated = prev
           .map((m) => (m.id === data.id ? data : m))
-          .filter(
-            (m) =>
-              ![
-                "completed",
-                "return_completed",
-                "canceled",
-                "cancelled",
-              ].includes((m.status || "").toLowerCase())
-          )
+          .filter((m) => {
+            const s = (m.status || "").toLowerCase();
+            // ✅ Filtrer les missions terminées ou annulées
+            return !["completed", "return_completed", "canceled", "cancelled"].includes(s);
+          })
           .sort(
             (a, b) =>
               new Date(a.scheduled_time).getTime() -
@@ -189,17 +185,25 @@ export default function MissionScreen() {
           setCurrentIndex(0);
         }
         AsyncStorage.setItem(MISSIONS_CACHE_KEY, JSON.stringify(updated)).catch(
-          () => {}
+          () => { }
         );
         return updated;
       });
+      // ✅ Si la mission a été annulée, afficher un message
+      const statusLower = (data.status || "").toLowerCase();
+      if (statusLower === "canceled" || statusLower === "cancelled") {
+        Alert.alert(
+          "Course annulée",
+          "La course a été annulée et sera facturée comme booking annulé."
+        );
+      }
     };
 
     const onCancel = ({ id }: { id: number }) => {
       setMissions((prev) => {
         const next = prev.filter((m) => m.id !== id);
         AsyncStorage.setItem(MISSIONS_CACHE_KEY, JSON.stringify(next)).catch(
-          () => {}
+          () => { }
         );
         return next;
       });
@@ -240,7 +244,7 @@ export default function MissionScreen() {
       const statusToSend: BookingStatus = isReturn
         ? "return_completed"
         : "completed";
-      
+
       console.log("[Mission] Mise à jour du statut:", statusToSend, "pour booking", currentMission.id);
 
       await updateTripStatus(currentMission.id, statusToSend);
@@ -252,17 +256,19 @@ export default function MissionScreen() {
             m.id === currentMission.id ? { ...m, status: statusToSend } : m
           )
           .filter(
-            (m) =>
-              !["completed", "return_completed", "canceled", "cancelled"].includes(m.status?.toLowerCase() || "")
+            (m) => {
+              const s = (m.status || "").toLowerCase();
+              return !["completed", "return_completed", "canceled", "cancelled"].includes(s);
+            }
           )
       );
-      
+
       // Passer à la prochaine mission
       setCurrentIndex(0);
-      
+
       // Fermer le modal après succès
       setModalVisible(false);
-      
+
       console.log("✅ Mission terminée avec succès");
     } catch (error: any) {
       const msg =
@@ -293,7 +299,7 @@ export default function MissionScreen() {
   }
 
   return (
-    <ScrollView 
+    <ScrollView
       style={{ flex: 1, backgroundColor: "#F5F7F6" }} // ✅ Fond épuré cohérent avec le login
       refreshControl={
         <RefreshControl

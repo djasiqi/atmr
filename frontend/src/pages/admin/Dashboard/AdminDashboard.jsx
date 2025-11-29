@@ -82,42 +82,59 @@ const AdminDashboard = () => {
           <div className={styles.stats}>
             <div className={styles.card}>
               <FaCar className={styles.icon} />
-              <h3>Courses réalisées</h3>
-              <p>{stats.totalBookings || 0}</p>
+              <div className={styles.cardContent}>
+                <h3>Courses réalisées</h3>
+                <p>{stats.totalBookings || 0}</p>
+              </div>
             </div>
 
             <div className={styles.card}>
               <FaUser className={styles.icon} />
-              <h3>Utilisateurs actifs</h3>
-              <p>{stats.totalUsers || 0}</p>
+              <div className={styles.cardContent}>
+                <h3>Utilisateurs actifs</h3>
+                <p>{stats.totalUsers || 0}</p>
+              </div>
             </div>
 
             <div className={styles.card}>
               <FaFileInvoice className={styles.icon} />
-              <h3>Factures générées</h3>
-              <p>{stats.totalInvoices || 0}</p>
+              <div className={styles.cardContent}>
+                <h3>Factures générées</h3>
+                <p>{stats.totalInvoices || 0}</p>
+              </div>
             </div>
 
             <div className={styles.card}>
               <FaChartBar className={styles.icon} />
-              <h3>Revenu total (CHF)</h3>
-              <p>{stats.totalRevenue || 0} CHF</p>
+              <div className={styles.cardContent}>
+                <h3>Revenu total (CHF)</h3>
+                <p>{stats.totalRevenue || 0} CHF</p>
+              </div>
             </div>
           </div>
 
           {/* ✅ Graphiques */}
           <div className={styles.chartContainer}>
             <h2>📈 Évolution des réservations</h2>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={stats.bookingTrends || []}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="bookings" stroke="#8884d8" />
-              </LineChart>
-            </ResponsiveContainer>
+            {stats.bookingTrends && stats.bookingTrends.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={stats.bookingTrends}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Line type="monotone" dataKey="bookings" stroke="#8884d8" name="Réservations" />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div style={{ padding: '2rem', textAlign: 'center', color: '#666' }}>
+                <p>📊 Aucune donnée disponible pour l'instant</p>
+                <p style={{ fontSize: '0.9rem', marginTop: '0.5rem' }}>
+                  Les statistiques d'évolution apparaîtront une fois que des réservations auront été créées.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* ✅ Tableau des dernières courses */}
