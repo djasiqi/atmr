@@ -18,12 +18,14 @@
   flex: 1 1 auto;
   min-width: 0;
   padding: var(--spacing-lg);
+  width: 100%; /* Prendre toute la largeur disponible */
   background-color: var(--bg-primary);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
   
   /* S'adapte à la largeur de la sidebar (72px ou 240px) */
   margin: var(--spacing-lg);
+  margin-top: calc(80px + var(--spacing-lg)); /* Marge pour le header (80px) */
   margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-lg));
   max-width: calc(100% - var(--sidebar-w, 72px) - calc(var(--spacing-lg) * 2));
   
@@ -35,6 +37,20 @@
   transition:
     margin-left var(--transition-base),
     max-width var(--transition-base);
+}
+
+/* S'assurer que toutes les sections prennent 100% de la largeur */
+h1,
+.searchInput,
+.filters,
+.tableContainer {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+h1 {
+  text-align: left; /* Aligner à gauche */
 }
 
 /* ✅ Titre principal */
@@ -225,9 +241,15 @@ td:nth-child(4) {
 @media (max-width: 768px) {
   .content {
     margin: var(--spacing-sm);
-    margin-left: var(--spacing-sm);
-    max-width: calc(100% - calc(var(--spacing-sm) * 2));
+    margin-top: calc(80px + var(--spacing-sm));
+    margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-sm)); /* Sidebar toujours visible */
+    max-width: calc(100% - var(--sidebar-w, 72px) - calc(var(--spacing-sm) * 2));
+    width: 100%;
     padding: var(--spacing-md);
+  }
+
+  h1 {
+    text-align: left;
   }
 
   .filters {

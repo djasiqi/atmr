@@ -11,13 +11,14 @@
 .main {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 2rem;
-  max-width: 1200px;
+  padding: var(--spacing-lg);
+  width: 100%; /* Prendre toute la largeur disponible */
   
   /* S'adapte à la largeur de la sidebar (72px ou 240px) */
   margin: var(--spacing-lg);
+  margin-top: calc(80px + var(--spacing-lg)); /* Marge pour le header (80px) */
   margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-lg));
-  width: calc(100% - var(--sidebar-w, 72px) - calc(var(--spacing-lg) * 2));
+  max-width: calc(100% - var(--sidebar-w, 72px) - calc(var(--spacing-lg) * 2));
   
   overflow-x: hidden;
   overflow-y: auto;
@@ -29,7 +30,28 @@
   box-shadow: var(--shadow-md);
   transition:
     margin-left var(--transition-base),
-    width var(--transition-base);
+    max-width var(--transition-base);
+}
+
+.form {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.header {
+  width: 100%;
+  text-align: left; /* Aligner à gauche au lieu de centrer */
+}
+
+.header h1 {
+  text-align: left; /* Aligner à gauche */
+}
+
+.infoBox {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .header {
@@ -204,18 +226,22 @@
 
 @media (max-width: 768px) {
   .main {
-    padding: 1rem;
+    padding: var(--spacing-md);
     margin: var(--spacing-sm);
-    margin-left: var(--spacing-sm);
-    width: calc(100% - calc(var(--spacing-sm) * 2));
+    margin-top: calc(80px + var(--spacing-sm));
+    margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-sm)); /* Sidebar toujours visible */
+    max-width: calc(100% - var(--sidebar-w, 72px) - calc(var(--spacing-sm) * 2));
+    width: 100%;
   }
 
   .form {
-    padding: 1.5rem;
+    padding: var(--spacing-md);
+    width: 100%;
   }
 
   .header h1 {
     font-size: 1.5rem;
+    text-align: left;
   }
 }
 

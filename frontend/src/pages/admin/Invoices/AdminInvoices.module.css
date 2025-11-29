@@ -13,10 +13,12 @@
 .content {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 2.5rem 2rem;
+  padding: var(--spacing-lg);
+  width: 100%; /* Prendre toute la largeur disponible */
   
   /* S'adapte à la largeur de la sidebar (72px ou 240px) */
   margin: var(--spacing-lg);
+  margin-top: calc(80px + var(--spacing-lg)); /* Marge pour le header (80px) */
   margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-lg));
   max-width: calc(100% - var(--sidebar-w, 72px) - calc(var(--spacing-lg) * 2));
   
@@ -33,16 +35,31 @@
     max-width var(--transition-base);
 }
 
+.hero {
+  width: 100%;
+  max-width: 100%;
+  text-align: left; /* Aligner à gauche */
+  box-sizing: border-box;
+}
+
 .hero h1 {
   margin: 0;
   font-size: 2rem;
   color: #1f2937;
+  text-align: left; /* Aligner à gauche */
 }
 
 .hero p {
   margin-top: 0.5rem;
   color: #4b5563;
-  max-width: 680px;
+  max-width: 100%; /* Prendre toute la largeur disponible */
+  text-align: left; /* Aligner à gauche */
+}
+
+.placeholder {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .placeholder {
@@ -70,8 +87,15 @@
 @media (max-width: 768px) {
   .content {
     margin: var(--spacing-sm);
-    margin-left: var(--spacing-sm);
-    max-width: calc(100% - calc(var(--spacing-sm) * 2));
+    margin-top: calc(80px + var(--spacing-sm));
+    margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-sm)); /* Sidebar toujours visible */
+    max-width: calc(100% - var(--sidebar-w, 72px) - calc(var(--spacing-sm) * 2));
+    width: 100%;
     padding: var(--spacing-md);
+  }
+
+  .hero h1,
+  .hero p {
+    text-align: left;
   }
 }

@@ -2,8 +2,9 @@
 .adminContainer {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  min-height: 100vh;
   background-color: var(--bg-secondary);
+  box-sizing: border-box;
 }
 
 /* ✅ Mise en page du dashboard */
@@ -23,8 +24,10 @@
   
   /* S'adapte à la largeur de la sidebar (72px ou 240px) */
   margin: var(--spacing-lg);
+  margin-top: calc(80px + var(--spacing-lg)); /* Marge pour le header (80px) */
   margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-lg));
   max-width: calc(100% - var(--sidebar-w, 72px) - calc(var(--spacing-lg) * 2));
+  width: 100%; /* Prendre toute la largeur disponible */
   
   box-shadow: var(--shadow-md);
   overflow-x: hidden;
@@ -91,16 +94,110 @@
   font-weight: var(--font-weight-bold);
 }
 
+/* ✅ Container pour les graphiques */
+.chartContainer {
+  width: 100%;
+  margin: var(--spacing-xl) 0;
+  padding: var(--spacing-lg);
+  background-color: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  box-sizing: border-box;
+}
+
+.chartContainer h2 {
+  font-size: var(--font-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-md);
+}
+
+/* ✅ Container pour les tableaux */
+.tableContainer {
+  width: 100%;
+  margin: var(--spacing-xl) 0;
+  padding: var(--spacing-lg);
+  background-color: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  box-sizing: border-box;
+}
+
+.tableContainer h2 {
+  font-size: var(--font-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-md);
+}
+
+/* ✅ Style du tableau */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--spacing-md);
+}
+
+.table thead {
+  background-color: var(--bg-secondary);
+  border-bottom: 2px solid var(--border-primary);
+}
+
+.table th {
+  padding: var(--spacing-md);
+  text-align: left;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  font-size: var(--font-sm);
+}
+
+.table td {
+  padding: var(--spacing-md);
+  border-bottom: 1px solid var(--border-secondary);
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+}
+
+.table tbody tr:hover {
+  background-color: var(--bg-hover);
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ✅ Style des statuts */
+.status {
+  display: inline-block;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+}
+
+.status.pending {
+  background-color: var(--warning-bg);
+  color: var(--warning-text);
+}
+
+.status.completed {
+  background-color: var(--success-bg);
+  color: var(--success-text);
+}
+
+.status.canceled {
+  background-color: var(--danger-bg);
+  color: var(--danger-text);
+}
+
 /* ✅ Gestion de la responsivité */
 @media (max-width: 768px) {
-  .dashboard {
-    flex-direction: column;
-  }
-
   .content {
     margin: var(--spacing-sm);
-    margin-left: var(--spacing-sm);
-    max-width: calc(100% - calc(var(--spacing-sm) * 2));
+    margin-top: calc(80px + var(--spacing-sm));
+    margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-sm)); /* Sidebar toujours visible sur mobile */
+    max-width: calc(100% - var(--sidebar-w, 72px) - calc(var(--spacing-sm) * 2));
+    width: 100%;
     padding: var(--spacing-md);
   }
 
@@ -110,5 +207,23 @@
 
   .card {
     padding: var(--spacing-md);
+  }
+
+  .chartContainer,
+  .tableContainer {
+    width: 100%;
+    padding: var(--spacing-md);
+    margin: var(--spacing-lg) 0;
+  }
+
+  .table {
+    font-size: var(--font-xs);
+    min-width: 100%;
+  }
+
+  .table th,
+  .table td {
+    padding: var(--spacing-xs);
+    font-size: var(--font-xs);
   }
 }
