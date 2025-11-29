@@ -929,14 +929,39 @@ class OptunaOptimize(Resource):
                     # urllib3 peut ne pas être disponible, ce n'est pas critique
                     pass
 
+                # Faire la requête initiale (sans suivre les redirections pour pouvoir les intercepter)
                 response = requests.post(
                     rl_endpoint,
                     json=payload,
                     headers={"Content-Type": "application/json"},
                     timeout=10,  # Timeout court car la réponse est immédiate (202)
                     verify=False,  # Désactiver vérification SSL pour communication interne Docker
-                    allow_redirects=False,  # Ne pas suivre les redirections
+                    allow_redirects=False,  # Ne pas suivre automatiquement pour intercepter
                 )
+
+                # Gérer les redirections 302 (HTTPS → HTTP pour communication interne)
+                HTTP_STATUS_FOUND = 302
+                if response.status_code == HTTP_STATUS_FOUND:
+                    # Extraire l'URL de redirection depuis les headers
+                    redirect_url = response.headers.get("Location", "")
+                    if redirect_url.startswith("https://"):
+                        # Convertir HTTPS → HTTP pour communication interne Docker
+                        redirect_url = redirect_url.replace("https://", "http://", 1)
+                        app_logger.warning(
+                            (
+                                f"⚠️ Redirection HTTPS détectée, conversion en HTTP: "
+                                f"{response.headers.get('Location')} → {redirect_url}"
+                            )
+                        )
+                        # Refaire la requête avec l'URL HTTP
+                        response = requests.post(
+                            redirect_url,
+                            json=payload,
+                            headers={"Content-Type": "application/json"},
+                            timeout=10,
+                            verify=False,
+                            allow_redirects=False,  # Ne plus suivre de redirections
+                        )
 
                 HTTP_STATUS_ACCEPTED = 202
                 if response.status_code == HTTP_STATUS_ACCEPTED:
