@@ -868,8 +868,10 @@ class OptunaOptimize(Resource):
             custom_days = data.get("custom_days", 7)
 
             app_logger.info(
-                f"🚀 Démarrage optimisation Optuna par admin {get_jwt_identity()}: "
-                f"company_id={company_id}, period={data_period}, trials={n_trials}"
+                (
+                    f"🚀 Démarrage optimisation Optuna par admin {get_jwt_identity()}: "
+                    f"company_id={company_id}, period={data_period}, trials={n_trials}"
+                )
             )
 
             # Note: L'exécution réelle nécessite un conteneur Docker avec accès au réseau
