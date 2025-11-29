@@ -125,9 +125,19 @@ export default function AddressAutocomplete({
       const res = await fetch(url, { signal });
       if (res.ok) {
         const data = await res.json().catch(() => []);
-        if (Array.isArray(data) && data.length > 0) return data;
+        if (Array.isArray(data)) {
+          if (data.length > 0) {
+            console.log(`[AddressAutocomplete] ✅ Backend retourne ${data.length} résultats pour "${q}"`);
+            return data;
+          } else {
+            console.log(`[AddressAutocomplete] ⚠️ Backend retourne une liste vide pour "${q}"`);
+          }
+        }
+      } else {
+        console.warn(`[AddressAutocomplete] ⚠️ Erreur backend (${res.status}) pour "${q}"`);
       }
-    } catch {
+    } catch (error) {
+      console.error(`[AddressAutocomplete] ❌ Erreur lors de l'appel backend:`, error);
       // ignore -> fallback
     }
 
@@ -141,11 +151,18 @@ export default function AddressAutocomplete({
       url.searchParams.set('lon', String(BIAS.lon));
 
       const res = await fetch(url.toString(), { signal });
-      if (!res.ok) throw new Error('Photon error');
+      if (!res.ok) throw new Error(`Photon error: ${res.status}`);
       const data = await res.json();
       const feats = Array.isArray(data?.features) ? data.features : [];
-      return normalizePhoton(feats);
-    } catch {
+      const normalized = normalizePhoton(feats);
+      if (normalized.length > 0) {
+        console.log(`[AddressAutocomplete] ✅ Photon fallback retourne ${normalized.length} résultats pour "${q}"`);
+      } else {
+        console.log(`[AddressAutocomplete] ⚠️ Photon fallback ne trouve aucun résultat pour "${q}"`);
+      }
+      return normalized;
+    } catch (error) {
+      console.error(`[AddressAutocomplete] ❌ Erreur Photon fallback:`, error);
       return [];
     }
   }

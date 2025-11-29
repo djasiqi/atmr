@@ -149,8 +149,8 @@ const AdminUsers = () => {
   const filteredUsers = users
     .filter((user) => {
       const matchesSearch =
-        user.username.toLowerCase().includes(search.toLowerCase()) ||
-        user.email.toLowerCase().includes(search.toLowerCase());
+        norm(user.username).includes(norm(search)) ||
+        norm(user.email).includes(norm(search));
       const matchesRole = roleFilter ? norm(user.role) === norm(roleFilter) : true;
       return matchesSearch && matchesRole;
     })
@@ -158,7 +158,7 @@ const AdminUsers = () => {
       if (sortBy === 'created_at') {
         return new Date(b.created_at) - new Date(a.created_at);
       } else if (sortBy === 'username') {
-        return a.username.localeCompare(b.username);
+        return norm(a.username).localeCompare(norm(b.username));
       } else if (sortBy === 'role') {
         return norm(a.role).localeCompare(norm(b.role));
       }

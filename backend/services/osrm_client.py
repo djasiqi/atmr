@@ -253,6 +253,21 @@ def _table(
     # ✅ 2.3: Utiliser retry uniformisé avec exponential backoff
     from typing import cast
 
+    # ✅ Gestion des erreurs DNS: NameResolutionError de urllib3
+    try:
+        from urllib3.exceptions import NameResolutionError as Urllib3NameResolutionError
+    except ImportError:
+        Urllib3NameResolutionError = None
+
+    retryable_exceptions = (
+        requests.Timeout,
+        requests.ConnectionError,
+        TimeoutError,
+    )
+    # Ajouter NameResolutionError si disponible (urllib3)
+    if Urllib3NameResolutionError is not None:
+        retryable_exceptions = (*retryable_exceptions, Urllib3NameResolutionError)
+
     return cast(
         Dict[str, Any],
         retry_with_backoff(
@@ -263,11 +278,7 @@ def _table(
             base_delay_ms=250,
             max_delay_ms=2000,
             use_jitter=True,
-            retryable_exceptions=(
-                requests.Timeout,
-                requests.ConnectionError,
-                TimeoutError,
-            ),
+            retryable_exceptions=retryable_exceptions,
             logger_instance=logger,
         ),
     )
@@ -325,8 +336,23 @@ def _table_single_request(
 
         span.set_attribute("http.url", url)
 
-        r = requests.get(url, params=params, timeout=timeout)
-        r.raise_for_status()
+        try:
+            r = requests.get(url, params=params, timeout=timeout)
+            r.raise_for_status()
+        except (requests.ConnectionError, requests.Timeout) as e:
+            # ✅ Améliorer le logging pour les erreurs DNS/connexion
+            error_msg = str(e)
+            if (
+                "Failed to resolve" in error_msg
+                or "Name or service not known" in error_msg
+            ):
+                logger.error(
+                    "[OSRM] DNS resolution failed for host '%s': %s. OSRM service may not be available. Fallback will be used.",
+                    base_url,
+                    error_msg,
+                )
+            span.record_exception(e)
+            raise
 
         span.set_attribute("http.status_code", r.status_code)
         span.set_attribute(
@@ -399,8 +425,23 @@ def _route(
         span.set_attribute("http.url", url)
         span.set_attribute("waypoints_count", len(waypoints) if waypoints else 0)
 
-        r = requests.get(url, params=params, timeout=timeout)
-        r.raise_for_status()
+        try:
+            r = requests.get(url, params=params, timeout=timeout)
+            r.raise_for_status()
+        except (requests.ConnectionError, requests.Timeout) as e:
+            # ✅ Améliorer le logging pour les erreurs DNS/connexion
+            error_msg = str(e)
+            if (
+                "Failed to resolve" in error_msg
+                or "Name or service not known" in error_msg
+            ):
+                logger.error(
+                    "[OSRM] DNS resolution failed for host '%s': %s. OSRM service may not be available.",
+                    base_url,
+                    error_msg,
+                )
+            span.record_exception(e)
+            raise
 
         span.set_attribute("http.status_code", r.status_code)
         span.set_attribute(
@@ -691,9 +732,28 @@ def build_distance_matrix_osrm(
             data: Dict[str, Any] = cast("Dict[str, Any]", data_any)
         except Exception as e:
             # 🚨 Fallback si toutes les tentatives ont échoué
-            logger.warning(
-                "[OSRM] All attempts failed, using haversine fallback: %s", e
+            error_type = type(e).__name__
+            error_msg = str(e)
+
+            # ✅ Détecter spécifiquement les erreurs DNS
+            is_dns_error = (
+                "Failed to resolve" in error_msg
+                or "Name or service not known" in error_msg
+                or "NameResolutionError" in error_type
             )
+
+            if is_dns_error:
+                logger.warning(
+                    "[OSRM] DNS resolution failed for OSRM service. OSRM appears to be unavailable (service not found on network). Using haversine fallback for distance calculation. Error: %s (type: %s)",
+                    error_msg,
+                    error_type,
+                )
+            else:
+                logger.warning(
+                    "[OSRM] All attempts failed, using haversine fallback: %s (type: %s)",
+                    error_msg,
+                    error_type,
+                )
 
             # ✅ D3: Enregistrer l'utilisation du fallback haversine
             try:

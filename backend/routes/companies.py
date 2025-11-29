@@ -1003,25 +1003,94 @@ class DriverItem(Resource):
         if cid is None:
             return {"error": "Entreprise introuvable (ID invalide)."}, 500
 
-        driver = Driver.query.filter_by(id=driver_id, company_id=cid).one_or_none()
+        driver = (
+            Driver.query.options(joinedload(Driver.user))
+            .filter_by(id=driver_id, company_id=cid)
+            .one_or_none()
+        )
         if not driver:
             return {"error": "Driver not found for this company"}, 404
 
         data = request.get_json(silent=True) or {}
+        validation_error = None
+        validation_status = None
 
-        if "is_active" in data:
+        # ✅ Mise à jour des informations utilisateur
+        user = driver.user
+        if user:
+            if "first_name" in data:
+                user.first_name = (
+                    str(data["first_name"]).strip() if data["first_name"] else None
+                )
+            if "last_name" in data:
+                user.last_name = (
+                    str(data["last_name"]).strip() if data["last_name"] else None
+                )
+            if "email" in data:
+                email = str(data["email"]).strip() if data["email"] else None
+                # Vérifier que l'email n'est pas déjà utilisé par un autre utilisateur
+                if email:
+                    existing_user = User.query.filter(
+                        User.email == email, User.id != user.id
+                    ).first()
+                    if existing_user:
+                        validation_error = {
+                            "error": "Cet email est déjà utilisé par un autre utilisateur"
+                        }
+                        validation_status = 400
+
+                if not validation_error:
+                    user.email = email
+            if "address" in data:
+                user.address = str(data["address"]).strip() if data["address"] else None
+
+        # ✅ Mise à jour des informations du chauffeur
+        if not validation_error and "is_active" in data:
             driver.is_active = bool(data["is_active"])
 
-        if "driver_type" in data:
+        if not validation_error and "driver_type" in data:
             try:
                 driver.driver_type = DriverType[str(data["driver_type"]).upper()]
             except KeyError:
-                return {"error": "Type de chauffeur invalide: REGULAR | EMERGENCY"}, 400
+                validation_error = {
+                    "error": "Type de chauffeur invalide: REGULAR | EMERGENCY"
+                }
+                validation_status = 400
+
+        # ✅ Mise à jour du véhicule assigné
+        if not validation_error and "vehicle_id" in data:
+            vehicle_id = data["vehicle_id"]
+            if vehicle_id is None or vehicle_id == "":
+                driver.vehicle_id = None
+            else:
+                try:
+                    vehicle_id_int = int(vehicle_id)
+                    # Vérifier que le véhicule appartient bien à l'entreprise
+                    vehicle = Vehicle.query.filter_by(
+                        id=vehicle_id_int, company_id=cid
+                    ).first()
+                    if vehicle:
+                        driver.vehicle_id = vehicle_id_int
+                    else:
+                        validation_error = {
+                            "error": f"Véhicule {vehicle_id_int} non trouvé ou n'appartient pas à cette entreprise"
+                        }
+                        validation_status = 400
+                except (ValueError, TypeError):
+                    validation_error = {
+                        "error": "vehicle_id doit être un nombre entier valide"
+                    }
+                    validation_status = 400
+
+        if validation_error:
+            return validation_error, validation_status
 
         try:
             db.session.commit()
             if company:
                 _driver_trigger(company, "availability")
+            # Recharger pour obtenir les relations à jour
+            db.session.refresh(driver)
             return {
                 "message": "Driver updated successfully",
                 "driver": driver.serialize,
@@ -1029,6 +1098,7 @@ class DriverItem(Resource):
         except Exception as e:
             sentry_sdk.capture_exception(e)
             db.session.rollback()
+            app_logger.error("❌ Erreur mise à jour chauffeur: %s", str(e))
             return {"error": "Une erreur interne est survenue."}, 500
 
     @jwt_required()
@@ -1060,6 +1130,77 @@ class DriverItem(Resource):
             sentry_sdk.capture_exception(e)
             db.session.rollback()
             return {"error": "Une erreur interne est survenue."}, 500
+
+
+@companies_ns.route("/me/drivers/<int:driver_id>/reset-password")
+class ResetDriverPassword(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    @limiter.limit("10 per hour")  # ✅ 2.8: Rate limiting réinitialisation mot de passe
+    def post(self, driver_id):
+        """Réinitialise le mot de passe d'un chauffeur."""
+        company, error_response, status_code = get_company_from_token()
+        if error_response:
+            return error_response, status_code
+
+        # 🔒 company.id → int sûr
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+
+        driver = (
+            Driver.query.options(joinedload(Driver.user))
+            .filter_by(id=driver_id, company_id=cid)
+            .one_or_none()
+        )
+        if not driver:
+            return {"error": "Driver not found for this company"}, 404
+
+        user = driver.user
+        if not user:
+            return {"error": "Utilisateur associé au chauffeur introuvable"}, 404
+
+        try:
+            # Générer un nouveau mot de passe aléatoire
+            new_password = "".join(
+                random.choices(string.ascii_letters + string.digits, k=12)
+            )
+            # Validation explicite du mot de passe avant set_password
+            from routes.utils import validate_password
+
+            if not validate_password(new_password):
+                error_response = {
+                    "error": "Le mot de passe généré ne respecte pas les critères de sécurité"
+                }
+                error_status = 500
+            else:
+                user.set_password(new_password)  # nosem
+                user.force_password_change = True
+                db.session.commit()
+
+                app_logger.info(
+                    "✅ Mot de passe réinitialisé pour chauffeur ID %d (user_id: %d)",
+                    driver_id,
+                    user.id,
+                )
+                error_response = {
+                    "message": "Mot de passe réinitialisé avec succès",
+                    "new_password": new_password,
+                    "force_password_change": True,
+                }
+                error_status = 200
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            db.session.rollback()
+            app_logger.exception("❌ ERREUR reset_password driver: %s", str(e))
+            error_response = {"error": "Une erreur interne est survenue."}
+            error_status = 500
+
+        return error_response, error_status
 
 
 # ======================================================

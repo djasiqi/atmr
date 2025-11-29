@@ -1,8 +1,12 @@
 /* src/components/reservations/EditReservationModal.module.css */
 .modalWrapper {
   padding: var(--spacing-xl);
-  max-width: 600px;
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-width: 0; /* Permet au contenu de rétrécir si nécessaire */
 }
 
 .modalWrapper h3 {
@@ -18,6 +22,8 @@
   padding: var(--spacing-md);
   margin-bottom: var(--spacing-lg);
   border: 1px solid var(--border-primary);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .infoRow {
@@ -43,6 +49,10 @@
 
 .formGroup {
   margin-bottom: var(--spacing-md);
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 
 .formGroup label {
@@ -51,11 +61,14 @@
   color: var(--text-primary);
   font-size: var(--font-sm);
   font-weight: var(--font-weight-medium);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .input,
 .textarea {
   width: 100%;
+  min-width: 0;
   padding: var(--spacing-sm) var(--spacing-md);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-md);
@@ -99,6 +112,8 @@
   margin-top: var(--spacing-xl);
   padding-top: var(--spacing-lg);
   border-top: 1px solid var(--border-primary);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* Responsive */
@@ -110,4 +125,22 @@
   .buttonGroup {
     flex-direction: column;
   }
+
+  .buttonGroup button {
+    width: 100%;
+  }
+}
+
+/* S'assurer que AddressAutocomplete et autres éléments prennent toute la largeur */
+.modalWrapper :global(input[type="text"]),
+.modalWrapper :global(input[type="date"]),
+.modalWrapper :global(input[type="time"]),
+.modalWrapper :global(textarea) {
+  width: 100% !important;
+  box-sizing: border-box;
+}
+
+/* S'assurer que le wrapper d'AddressAutocomplete prend toute la largeur */
+.modalWrapper :global([style*="position: relative"]) {
+  width: 100% !important;
 }

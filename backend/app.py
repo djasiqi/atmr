@@ -1015,7 +1015,7 @@ def create_app(config_name: str | None = None):
         # (évite 404 si RESTX rate) ---
         from routes.companies import CompanyDriversList, CompanyMe
 
-        @app.route("/api/companies/me", methods=["GET", "PUT", "OPTIONS"])
+        @app.route("/api/companies/me", methods=["GET", "PUT", "OPTIONS"])  # type: ignore[arg-type]
         def _compat_companies_me():  # pyright: ignore[reportUnusedFunction]
             if request.method == "OPTIONS":
                 return make_response("", 204)
@@ -1028,7 +1028,7 @@ def create_app(config_name: str | None = None):
 
         @app.route(
             "/api/v<int:version>/companies/me", methods=["GET", "PUT", "OPTIONS"]
-        )
+        )  # type: ignore[arg-type]
         def _compat_companies_me_v(version: int):  # pyright: ignore  # noqa: ARG001
             if request.method == "OPTIONS":
                 return make_response("", 204)
@@ -1039,7 +1039,7 @@ def create_app(config_name: str | None = None):
                 return res.put()
             raise NotFound
 
-        @app.route("/api/companies/me/drivers", methods=["GET", "OPTIONS"])
+        @app.route("/api/companies/me/drivers", methods=["GET", "OPTIONS"])  # type: ignore[arg-type]
         def _compat_companies_me_drivers():  # pyright: ignore[reportUnusedFunction]
             if request.method == "OPTIONS":
                 return make_response("", 204)
@@ -1047,7 +1047,7 @@ def create_app(config_name: str | None = None):
 
         @app.route(
             "/api/v<int:version>/companies/me/drivers", methods=["GET", "OPTIONS"]
-        )
+        )  # type: ignore[arg-type]
         def _compat_companies_me_drivers_v(  # pyright: ignore[reportUnusedFunction]
             version: int,  # noqa: ARG001
         ):

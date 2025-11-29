@@ -336,7 +336,7 @@ const CompanyDriver = () => {
 
           {showEditDriverModal && driverToEdit && (
             <div className="modal-overlay" onClick={() => setShowEditDriverModal(false)}>
-              <div className="modal-content modal-lg" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-content modal-xl" onClick={(e) => e.stopPropagation()}>
                 <h3>Modifier le chauffeur {driverToEdit.username}</h3>
                 <EditDriverForm
                   driver={driverToEdit}

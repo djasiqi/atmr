@@ -4,28 +4,24 @@
 .form {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--spacing-2xl);
+  gap: var(--spacing-xl);
   width: 100%;
-  padding: var(--spacing-xl) var(--spacing-2xl) var(--spacing-2xl) var(--spacing-2xl);
+  max-width: 100%;
+  padding: var(--spacing-xl);
   color: var(--text-secondary);
-  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
-  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+  background: transparent;
   margin: 0;
+  box-sizing: border-box;
+  min-width: 0; /* Permet au contenu de rétrécir si nécessaire */
 }
 
-/* --- Section d'informations en lecture seule --- */
-.readOnlySection {
+/* --- Sections du formulaire --- */
+.section {
+  display: contents; /* Permet aux enfants d'utiliser le grid du parent */
+}
+
+.section > h4 {
   grid-column: 1 / -1;
-  background: var(--bg-primary);
-  padding: var(--spacing-lg);
-  border-radius: var(--radius-lg);
-  border: 2px solid var(--border-primary);
-  box-shadow: var(--shadow-sm);
-}
-
-.readOnlySection h4,
-.form h4 {
-  /* Style commun pour tous les titres h4 du formulaire */
   margin-top: 0;
   margin-bottom: var(--spacing-md);
   color: var(--brand-primary);
@@ -33,18 +29,6 @@
   font-weight: var(--font-weight-semibold);
   border-bottom: 2px solid var(--border-primary);
   padding-bottom: var(--spacing-sm);
-}
-
-.readOnlySection p {
-  margin: var(--spacing-xs) 0;
-  font-size: var(--font-size-sm);
-  color: var(--text-secondary);
-  line-height: var(--line-height-relaxed);
-}
-
-.readOnlySection p strong {
-  color: var(--text-primary);
-  font-weight: var(--font-weight-semibold);
 }
 
 /* --- Séparateur visuel --- */
@@ -71,7 +55,9 @@
   letter-spacing: 0.3px;
 }
 
-.formGroup input[type='text'] {
+.formGroup input[type='text'],
+.formGroup input[type='email'],
+.formGroup select {
   width: 100%;
   padding: var(--spacing-sm) var(--spacing-md);
   border: 2px solid var(--border-secondary);
@@ -84,19 +70,47 @@
   box-sizing: border-box;
 }
 
-.formGroup input[type='text']:hover {
+.formGroup input[type='text']:hover,
+.formGroup input[type='email']:hover,
+.formGroup select:hover {
   border-color: var(--border-hover);
 }
 
-.formGroup input[type='text']:focus {
+.formGroup input[type='text']:focus,
+.formGroup input[type='email']:focus,
+.formGroup select:focus {
   border-color: var(--brand-primary);
   box-shadow: 0 0 0 3px rgba(0, 121, 107, 0.1);
   background: var(--bg-primary);
+  outline: none;
 }
 
-.formGroup input[type='text']::placeholder {
+.formGroup input[type='text']::placeholder,
+.formGroup input[type='email']::placeholder {
   color: var(--text-placeholder);
   font-weight: var(--font-weight-normal);
+}
+
+.formGroup input[type='text']:disabled,
+.formGroup input[type='email']:disabled,
+.formGroup select:disabled {
+  background: var(--bg-secondary);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* Style pour le select */
+.select {
+  cursor: pointer;
+}
+
+.select option {
+  padding: var(--spacing-sm);
+}
+
+.required {
+  color: var(--text-error);
+  margin-left: 4px;
 }
 
 /* --- Groupe pour la Checkbox --- */
@@ -141,15 +155,64 @@
   color: #334155;
 }
 
+/* --- Informations véhicule sélectionné --- */
+.vehicleInfo {
+  grid-column: 1 / -1;
+  background: var(--bg-secondary);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-primary);
+  margin-top: var(--spacing-sm);
+}
+
+.vehicleInfo p {
+  margin: var(--spacing-xs) 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.vehicleInfo p strong {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* --- Messages de chargement et d'avertissement --- */
+.loadingText,
+.warningText {
+  padding: var(--spacing-md);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  text-align: center;
+}
+
+.loadingText {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.warningText {
+  background: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffc107;
+}
+
 /* --- Conteneur pour les boutons --- */
 .formActions {
   grid-column: 1 / -1;
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
   gap: var(--spacing-md);
   margin-top: var(--spacing-lg);
   padding-top: var(--spacing-lg);
   border-top: 2px solid var(--border-primary);
+}
+
+.buttonGroup {
+  display: flex;
+  gap: var(--spacing-md);
+  justify-content: flex-end;
 }
 
 /* --- Style de base partagé par les deux boutons --- */
@@ -193,12 +256,48 @@
   border-color: var(--border-hover);
 }
 
-/* --- Styles pour les boutons désactivés (partagé) --- */
-.submitButton:disabled,
-.cancelButton:disabled {
+/* --- Bouton de réinitialisation du mot de passe --- */
+.resetPasswordButton {
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border: 2px solid var(--text-warning);
+  border-radius: var(--radius-lg);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  background: var(--bg-primary);
+  color: var(--text-warning);
+}
+
+.resetPasswordButton:hover:not(:disabled) {
+  background: #fff3cd;
+  border-color: #ffc107;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.resetPasswordButton:disabled {
   opacity: 0.6;
   cursor: not-allowed;
   transform: none;
+}
+
+/* --- Styles pour les boutons désactivés (partagé) --- */
+.submitButton:disabled,
+.cancelButton:disabled,
+.resetPasswordButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* --- S'assurer que AddressAutocomplete prend toute la largeur --- */
+.formGroup :global(div[style*="position: relative"]) {
+  width: 100% !important;
 }
 
 /* --- Responsive --- */
@@ -207,5 +306,22 @@
     grid-template-columns: 1fr;
     gap: var(--spacing-lg);
     padding: var(--spacing-lg);
+  }
+
+  .formActions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .resetPasswordButton {
+    width: 100%;
+  }
+
+  .buttonGroup {
+    width: 100%;
+  }
+
+  .buttonGroup button {
+    flex: 1;
   }
 }
