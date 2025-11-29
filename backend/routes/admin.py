@@ -874,73 +874,99 @@ class OptunaOptimize(Resource):
                 )
             )
 
-            # Lancer l'optimisation en arrière-plan (threading)
-            # Note: Dans l'environnement RL, on exécute directement sans Celery
-            # car le worker RL n'a pas de worker Celery configuré
-            import threading
+            # Faire une requête HTTP vers le worker RL pour lancer l'optimisation
+            # Le worker RL a accès à Optuna et à la base de données RL PostgreSQL
+            import os
 
-            def run_optuna_optimization():
-                """Fonction exécutée en arrière-plan pour l'optimisation Optuna."""
-                try:
-                    from tasks.rl_tasks import optuna_optimize_impl
+            import requests
 
-                    # Exécuter l'implémentation directement (sans Celery)
-                    result = optuna_optimize_impl(
-                        company_id=company_id,
-                        data_period=data_period,
-                        n_trials=n_trials,
-                        training_episodes=training_episodes,
-                        eval_episodes=eval_episodes,
-                        custom_days=custom_days if data_period == "custom" else None,
-                    )
-
-                    app_logger.info(
-                        f"✅ Optimisation Optuna terminée: {result.get('status', 'unknown')}"
-                    )
-
-                except Exception:
-                    app_logger.exception(
-                        "❌ Erreur lors de l'exécution de l'optimisation Optuna"
-                    )
-
-            # Démarrer le thread en arrière-plan
-            optuna_thread = threading.Thread(
-                target=run_optuna_optimization, daemon=True, name="optuna-optimization"
-            )
-            optuna_thread.start()
+            # URL du worker RL (par défaut : atmr-rl-worker:5000 dans le réseau Docker)
+            rl_worker_url = os.getenv(
+                "RL_WORKER_URL", "http://atmr-rl-worker:5000"
+            ).rstrip("/")
+            rl_endpoint = f"{rl_worker_url}/api/v1/rl/optuna/optimize"
 
             app_logger.info(
                 (
-                    f"✅ Thread Optuna démarré (thread_id={optuna_thread.ident}), "
-                    f"company_id={company_id}, trials={n_trials}"
+                    f"📡 Envoi requête vers worker RL: {rl_endpoint} "
+                    f"(company_id={company_id}, trials={n_trials})"
                 )
             )
 
-            # Construire le nom de l'étude pour l'URL Optuna Dashboard
-            if company_id:
-                study_name = f"dqn_optimization_company_{company_id}"
-            else:
-                study_name = "dqn_optimization_all_companies"
-
-            response_data = {
-                "message": "Optimisation Optuna démarrée",
-                "status": "started",
-                "thread_id": str(optuna_thread.ident),
-                "config": {
-                    "company_id": company_id,
-                    "data_period": data_period,
-                    "n_trials": n_trials,
-                    "training_episodes": training_episodes,
-                    "eval_episodes": eval_episodes,
-                    "custom_days": custom_days if data_period == "custom" else None,
-                },
-                "study_name": study_name,
-                "note": (
-                    "L'optimisation s'exécute en arrière-plan. "
-                    f"Consultez https://optuna.lirie.ch pour suivre la progression. "
-                    f"Recherchez l'étude '{study_name}' dans le dashboard."
-                ),
+            # Préparer les données à envoyer
+            payload = {
+                "company_id": company_id,
+                "data_period": data_period,
+                "n_trials": n_trials,
+                "training_episodes": training_episodes,
+                "eval_episodes": eval_episodes,
+                "custom_days": custom_days if data_period == "custom" else None,
             }
+
+            try:
+                # Faire la requête HTTP vers le worker RL
+                response = requests.post(
+                    rl_endpoint,
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
+                    timeout=10,  # Timeout court car la réponse est immédiate (202)
+                )
+
+                HTTP_STATUS_ACCEPTED = 202
+                if response.status_code == HTTP_STATUS_ACCEPTED:
+                    # Succès : le worker RL a accepté la requête
+                    worker_response = response.json()
+                    app_logger.info(
+                        (
+                            f"✅ Worker RL a accepté l'optimisation: "
+                            f"{worker_response.get('status', 'unknown')}"
+                        )
+                    )
+                    # Utiliser directement la réponse du worker RL
+                    response_data = worker_response
+                else:
+                    # Erreur : le worker RL a rejeté la requête
+                    error_msg = response.text or f"Status code: {response.status_code}"
+                    app_logger.error(
+                        (
+                            f"❌ Erreur lors de l'appel au worker RL "
+                            f"(status {response.status_code}): {error_msg}"
+                        )
+                    )
+                    return (
+                        {
+                            "message": "Erreur lors de la communication avec le worker RL",
+                            "error": error_msg,
+                        },
+                        500,
+                    )
+
+            except requests.exceptions.RequestException as e:
+                # Erreur de connexion au worker RL
+                app_logger.exception(
+                    (
+                        f"❌ Impossible de se connecter au worker RL "
+                        f"({rl_endpoint}): {e!s}"
+                    )
+                )
+                return (
+                    {
+                        "message": (
+                            "Impossible de se connecter au worker RL. "
+                            "Vérifiez que le worker RL est démarré et accessible."
+                        ),
+                        "error": str(e),
+                        "rl_worker_url": rl_worker_url,
+                    },
+                    503,  # Service Unavailable
+                )
+
+            # Construire le nom de l'étude pour l'audit logging
+            study_name = (
+                f"dqn_optimization_company_{company_id}"
+                if company_id
+                else "dqn_optimization_all_companies"
+            )
 
             # Audit logging
             try:
@@ -961,6 +987,7 @@ class OptunaOptimize(Resource):
                         "company_id": company_id,
                         "data_period": data_period,
                         "n_trials": n_trials,
+                        "study_name": study_name,
                     },
                     ip_address=request.remote_addr,
                     user_agent=request.headers.get("User-Agent"),

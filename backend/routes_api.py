@@ -36,6 +36,12 @@ from routes.secret_rotation_monitoring import secret_rotation_ns
 from routes.shadow_mode_routes import shadow_mode_bp  # Shadow Mode RL
 from routes.utils import utils_ns
 
+# Routes RL (uniquement disponible dans l'environnement RL)
+try:
+    from routes.rl_routes import rl_ns
+except ImportError:
+    rl_ns = None
+
 authorizations = {
     "BearerAuth": {"type": "apiKey", "in": "header", "name": "Authorization"}
 }
@@ -167,6 +173,10 @@ api_v1.add_namespace(analytics_ns, path="/analytics")
 
 # Company settings
 api_v1.add_namespace(settings_ns, path="/company-settings")
+
+# Routes RL (uniquement dans l'environnement RL)
+if rl_ns:
+    api_v1.add_namespace(rl_ns, path="/rl")
 
 # ✅ 3.2: API v2 - Vide pour l'instant, prête pour nouvelles routes
 # Exemple d'ajout futur:

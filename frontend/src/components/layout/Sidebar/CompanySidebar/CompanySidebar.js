@@ -38,6 +38,18 @@ const CompanySidebar = () => {
     localStorage.setItem('companySidebarExpanded', String(isExpanded));
   }, [isExpanded]);
 
+  // Mettre à jour la variable CSS pour la responsivité du contenu principal
+  // S'exécute au montage et à chaque changement d'état
+  useEffect(() => {
+    const sidebarWidth = isExpanded ? 240 : 72; // Largeur en pixels
+    document.documentElement.style.setProperty('--sidebar-w', `${sidebarWidth}px`);
+    
+    // Cleanup : restaurer la valeur par défaut si nécessaire
+    return () => {
+      document.documentElement.style.setProperty('--sidebar-w', '72px');
+    };
+  }, [isExpanded]);
+
   const toggleSidebar = () => {
     setIsExpanded(!isExpanded);
   };

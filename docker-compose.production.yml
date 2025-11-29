@@ -151,6 +151,10 @@ services:
       # PDF Base URL (optionnel mais recommandé)
       PDF_BASE_URL: ${PDF_BASE_URL:-}
 
+      # Worker RL Configuration
+      # URL du worker RL pour les requêtes d'optimisation Optuna
+      RL_WORKER_URL: ${RL_WORKER_URL:-http://atmr-rl-worker:5000}
+
     volumes:
       - backend_logs:/app/logs
       - backend_data:/app/data
@@ -162,6 +166,7 @@ services:
     networks:
       - atmr-network
       - traefik-network
+      - atmr-rl-network # Pour communiquer avec le worker RL
     # Labels Traefik pour le routage automatique
     labels:
       # Activer Traefik pour ce conteneur
@@ -454,3 +459,7 @@ networks:
   traefik-network:
     external: true
     name: traefik_proxy # Nom du réseau Traefik sur le serveur
+  # Réseau externe RL (défini dans docker-compose.rl.yml)
+  atmr-rl-network:
+    external: true
+    name: atmr-rl-network
