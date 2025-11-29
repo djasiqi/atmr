@@ -14,6 +14,7 @@
   height: 100%;
   /* 👇 décale toute la zone droite selon la largeur courante de la sidebar */
   margin-left: var(--sidebar-w);
+  transition: margin-left var(--transition-base);
 }
 
 .content {
