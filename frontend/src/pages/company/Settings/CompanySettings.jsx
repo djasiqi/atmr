@@ -9,6 +9,7 @@ import OperationsTab from './tabs/OperationsTab';
 import BillingTab from './tabs/BillingTab';
 import NotificationsTab from './tabs/NotificationsTab';
 import SecurityTab from './tabs/SecurityTab';
+import VehiclesTab from './tabs/VehiclesTab';
 
 import useCompanyData from '../../../hooks/useCompanyData';
 import { updateCompanyInfo, uploadCompanyLogo } from '../../../services/companyService';
@@ -49,14 +50,14 @@ export default function CompanySettings() {
   // Onglet actif (détecte le hash dans l'URL)
   const [activeTab, setActiveTab] = useState(() => {
     const hash = location.hash.replace('#', '');
-    const validTabs = ['general', 'operations', 'billing', 'notifications', 'security'];
+    const validTabs = ['general', 'operations', 'billing', 'notifications', 'security', 'vehicles'];
     return validTabs.includes(hash) ? hash : 'general';
   });
 
   // Écouter les changements de hash (via React Router location)
   useEffect(() => {
     const hash = location.hash.replace('#', '');
-    const validTabs = ['general', 'operations', 'billing', 'notifications', 'security'];
+    const validTabs = ['general', 'operations', 'billing', 'notifications', 'security', 'vehicles'];
     if (validTabs.includes(hash)) {
       setActiveTab(hash);
     }
@@ -67,7 +68,7 @@ export default function CompanySettings() {
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace('#', '');
-      const validTabs = ['general', 'operations', 'billing', 'notifications', 'security'];
+      const validTabs = ['general', 'operations', 'billing', 'notifications', 'security', 'vehicles'];
       if (validTabs.includes(hash)) {
         setActiveTab(hash);
       }
@@ -362,6 +363,7 @@ export default function CompanySettings() {
   const tabs = [
     { id: 'general', label: 'Général', icon: '🏢' },
     { id: 'operations', label: 'Opérations', icon: '🚗' },
+    { id: 'vehicles', label: 'Véhicules', icon: '🚙' },
     { id: 'billing', label: 'Facturation', icon: '💰' },
     { id: 'notifications', label: 'Notifications', icon: '📧' },
     { id: 'security', label: 'Sécurité', icon: '🔐' },
@@ -457,6 +459,7 @@ export default function CompanySettings() {
               )}
 
               {activeTab === 'operations' && <OperationsTab />}
+              {activeTab === 'vehicles' && <VehiclesTab />}
               {activeTab === 'billing' && <BillingTab />}
               {activeTab === 'notifications' && <NotificationsTab />}
               {activeTab === 'security' && <SecurityTab />}
