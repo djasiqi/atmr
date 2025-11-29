@@ -611,10 +611,20 @@ def create_app(config_name: str | None = None):
             "connect-src": f"'self' {frontend_url} ws: wss:",
         }
         # En production, on force HTTPS pour la sécurité
+        # SAUF pour l'environnement RL où on accepte HTTP (communication interne Docker)
         # Note: Les healthchecks Docker utilisent HTTP depuis localhost
         # On va créer un endpoint /health exempt de Talisman
         # pour permettre les healthchecks
-        force_https = True
+        app_env = os.getenv("APP_ENV", "").lower()
+        rl_enabled = os.getenv("RL_ENABLED", "false").lower() == "true"
+        # Désactiver force_https pour l'environnement RL (communication interne)
+        if app_env == "rl" or rl_enabled:
+            force_https = False
+            app.logger.info(
+                "[App] Environnement RL détecté: force_https désactivé pour communication interne"
+            )
+        else:
+            force_https = True
 
     # ✅ Définir /health AVANT Talisman pour qu'il ne soit pas soumis à force_https
     # Les healthchecks Docker utilisent HTTP depuis localhost
