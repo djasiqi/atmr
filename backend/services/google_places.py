@@ -97,9 +97,18 @@ def autocomplete_address(
         response.raise_for_status()
         data = response.json()
 
-        if data.get("status") not in ("OK", "ZERO_RESULTS"):
-            error_msg = data.get("error_message", data.get("status", "Unknown error"))
-            app_logger.warning("⚠️ Google Places Autocomplete: %s", error_msg)
+        status = data.get("status")
+        if status not in ("OK", "ZERO_RESULTS"):
+            error_msg = data.get("error_message", status or "Unknown error")
+            app_logger.warning(
+                "⚠️ Google Places Autocomplete error (status: %s): %s", status, error_msg
+            )
+            # Pour les erreurs critiques (clé API invalide, quota dépassé, etc.),
+            # lever une exception pour déclencher le fallback
+            if status in ("REQUEST_DENIED", "INVALID_REQUEST", "OVER_QUERY_LIMIT"):
+                msg = f"Google Places API error ({status}): {error_msg}"
+                raise GooglePlacesError(msg)
+            # Pour les autres erreurs, retourner une liste vide (le fallback ne sera pas déclenché)
             return []
 
         predictions = data.get("predictions", [])

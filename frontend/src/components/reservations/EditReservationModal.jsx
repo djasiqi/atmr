@@ -188,7 +188,7 @@ const EditReservationModal = ({ isOpen, onClose, reservation, onConfirm }) => {
       : '00:00';
 
   return (
-    <Modal onClose={onClose}>
+    <Modal onClose={onClose} size="xl">
       <div className={styles.modalWrapper}>
         <h3>Éditer la réservation #{reservation?.id}</h3>
 
@@ -209,28 +209,32 @@ const EditReservationModal = ({ isOpen, onClose, reservation, onConfirm }) => {
           <label htmlFor="pickup-location" className={styles.label}>
             Adresse de départ <span>*</span>
           </label>
-          <AddressAutocomplete
-            id="pickup-location"
-            value={typeof pickupLocation === 'string' ? pickupLocation : ''}
-            onChange={handlePickupAddressChange}
-            onSelect={handlePickupAddressSelect}
-            placeholder="Adresse de prise en charge"
-            disabled={loading}
-          />
+          <div style={{ width: '100%' }}>
+            <AddressAutocomplete
+              id="pickup-location"
+              value={typeof pickupLocation === 'string' ? pickupLocation : ''}
+              onChange={handlePickupAddressChange}
+              onSelect={handlePickupAddressSelect}
+              placeholder="Adresse de prise en charge"
+              disabled={loading}
+            />
+          </div>
         </div>
 
         <div className={styles.formGroup}>
           <label htmlFor="dropoff-location" className={styles.label}>
             Adresse d'arrivée <span>*</span>
           </label>
-          <AddressAutocomplete
-            id="dropoff-location"
-            value={typeof dropoffLocation === 'string' ? dropoffLocation : ''}
-            onChange={handleDropoffAddressChange}
-            onSelect={handleDropoffAddressSelect}
-            placeholder="Adresse de destination"
-            disabled={loading}
-          />
+          <div style={{ width: '100%' }}>
+            <AddressAutocomplete
+              id="dropoff-location"
+              value={typeof dropoffLocation === 'string' ? dropoffLocation : ''}
+              onChange={handleDropoffAddressChange}
+              onSelect={handleDropoffAddressSelect}
+              placeholder="Adresse de destination"
+              disabled={loading}
+            />
+          </div>
         </div>
 
         <div className={styles.formGroup}>

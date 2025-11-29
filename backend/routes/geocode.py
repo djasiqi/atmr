@@ -271,6 +271,17 @@ class GeocodeAutocomplete(Resource):
                     q, location={"lat": lat, "lng": lon}, limit=limit
                 )
 
+                if google_results:
+                    current_app.logger.debug(
+                        "✅ Google Places retourne %d résultats pour '%s'",
+                        len(google_results),
+                        q,
+                    )
+                else:
+                    current_app.logger.debug(
+                        "⚠️ Google Places ne retourne aucun résultat pour '%s'", q
+                    )
+
                 for pred in google_results:
                     # Pour chaque prédiction, on peut optionnellement
                     # récupérer les coordonnées via Place Details
@@ -299,27 +310,41 @@ class GeocodeAutocomplete(Resource):
                 try:
                     ph = photon_query(
                         q,
-                        lat=0.0,
-                        lon=0.0,
+                        lat=lat,
+                        lon=lon,
                         limit=limit,
                         hospital_hint=looks_like_hospital(q),
                     )
-                    results.extend(normalize_photon(ph))
+                    photon_results = normalize_photon(ph)
+                    if photon_results:
+                        current_app.logger.info(
+                            "✅ Photon fallback retourne %d résultats pour '%s'",
+                            len(photon_results),
+                            q,
+                        )
+                    results.extend(photon_results)
                 except Exception as e2:
-                    current_app.logger.warning("Photon autocomplete error: %s", e2)
+                    current_app.logger.error("❌ Photon autocomplete error: %s", e2)
         else:
             # 3) Photon (biais Genève + hint hôpital) - mode fallback
             try:
                 ph = photon_query(
                     q,
-                    lat=0.0,
-                    lon=0.0,
+                    lat=lat,
+                    lon=lon,
                     limit=limit,
                     hospital_hint=looks_like_hospital(q),
                 )
-                results.extend(normalize_photon(ph))
+                photon_results = normalize_photon(ph)
+                if photon_results:
+                    current_app.logger.debug(
+                        "✅ Photon retourne %d résultats pour '%s'",
+                        len(photon_results),
+                        q,
+                    )
+                results.extend(photon_results)
             except Exception as e:
-                current_app.logger.warning("Photon autocomplete error: %s", e)
+                current_app.logger.error("❌ Photon autocomplete error: %s", e)
 
         # 4) Dédup (adresse + coords arrondies)
         seen: set[Tuple[str, float, float]] = set()
