@@ -31,6 +31,8 @@ services:
       - FLASK_ENV=production
       - FLASK_CONFIG=production
       - FLASK_APP=app.py
+      # Désactiver API legacy pour éviter conflit de routes Flask
+      - API_LEGACY_ENABLED=false
 
       # Base de données PostgreSQL RL
       # ⚠️ IMPORTANT: Les variables individuelles sont fournies, le code Python construira DATABASE_URL automatiquement
@@ -102,9 +104,9 @@ services:
     networks:
       - atmr-rl-network
     healthcheck:
-      # ⚠️ NOTE: Utiliser pg_isready simple car les variables d'environnement
-      # ne sont pas disponibles dans le healthcheck et le rôle peut ne pas exister
-      test: ["CMD-SHELL", "pg_isready || exit 1"]
+      # ⚠️ NOTE: Utiliser pg_isready avec l'utilisateur postgres par défaut
+      # (l'utilisateur root n'existe pas dans PostgreSQL)
+      test: ["CMD-SHELL", "pg_isready -U postgres || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
