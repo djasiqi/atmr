@@ -52,7 +52,11 @@ services:
       - REDIS_PORT=6379
       - REDIS_DB=0
       - REDIS_PASSWORD=${RL_REDIS_PASSWORD:-atmr_rl_redis_password}
-      # REDIS_URL peut être fourni directement via .env.rl si nécessaire
+      # REDIS_URL : construire depuis REDIS_HOST (celery_app.py le fera automatiquement)
+      # ⚠️ NOTE: docker-entrypoint.sh utilise une valeur par défaut si REDIS_URL est vide
+      # Pour éviter cela, définir REDIS_URL dans .env.rl avec le mot de passe échappé :
+      # REDIS_URL=redis://:PASSWORD_ESCAPED@rl-redis:6379/0
+      # Ou attendre que docker-entrypoint.sh soit corrigé (reconstruction image requise)
       - REDIS_URL=${RL_REDIS_URL:-}
       # CELERY_BROKER_URL et CELERY_RESULT_BACKEND seront construits par celery_app.py
 
