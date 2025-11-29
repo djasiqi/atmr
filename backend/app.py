@@ -610,21 +610,12 @@ def create_app(config_name: str | None = None):
             "img-src": "'self' data: blob:",
             "connect-src": f"'self' {frontend_url} ws: wss:",
         }
-        # En production, on force HTTPS pour la sécurité
-        # SAUF pour l'environnement RL où on accepte HTTP (communication interne Docker)
+        # En production, on force HTTPS pour la sécurité par défaut
+        # (la vérification finale pour l'environnement RL sera faite après)
         # Note: Les healthchecks Docker utilisent HTTP depuis localhost
         # On va créer un endpoint /health exempt de Talisman
         # pour permettre les healthchecks
-        app_env = os.getenv("APP_ENV", "").lower()
-        rl_enabled = os.getenv("RL_ENABLED", "false").lower() == "true"
-        # Désactiver force_https pour l'environnement RL (communication interne)
-        if app_env == "rl" or rl_enabled:
-            force_https = False
-            app.logger.info(
-                "[App] Environnement RL détecté: force_https désactivé pour communication interne"
-            )
-        else:
-            force_https = True
+        force_https = True
 
     # ✅ Définir /health AVANT Talisman pour qu'il ne soit pas soumis à force_https
     # Les healthchecks Docker utilisent HTTP depuis localhost
@@ -708,6 +699,17 @@ def create_app(config_name: str | None = None):
     if app.config.get("TESTING", False) or os.getenv("FLASK_CONFIG") == "testing":
         force_https = False
         strict_transport_security = False
+
+    # ✅ FIX RL: Vérification finale pour désactiver force_https dans l'environnement RL
+    # Cette vérification doit être faite APRÈS toutes les autres vérifications
+    # pour s'assurer que force_https reste False pour l'environnement RL
+    app_env = os.getenv("APP_ENV", "").lower()
+    rl_enabled = os.getenv("RL_ENABLED", "false").lower() == "true"
+    if app_env == "rl" or rl_enabled:
+        force_https = False
+        app.logger.info(
+            "[App] Environnement RL détecté: force_https désactivé pour communication interne"
+        )
 
     # ✅ FIX: En mode testing, désactiver complètement Talisman
     # pour éviter toute redirection 302
