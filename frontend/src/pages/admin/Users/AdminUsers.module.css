@@ -15,13 +15,26 @@
 
 /* ✅ Contenu principal */
 .content {
-  flex-grow: 1;
+  flex: 1 1 auto;
+  min-width: 0;
   padding: var(--spacing-lg);
   background-color: var(--bg-primary);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
+  
+  /* S'adapte à la largeur de la sidebar (72px ou 240px) */
   margin: var(--spacing-lg);
-  transition: all var(--transition-base);
+  margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-lg));
+  max-width: calc(100% - var(--sidebar-w, 72px) - calc(var(--spacing-lg) * 2));
+  
+  overflow-x: hidden;
+  overflow-y: auto;
+  position: relative;
+  z-index: var(--z-base);
+  box-sizing: border-box;
+  transition:
+    margin-left var(--transition-base),
+    max-width var(--transition-base);
 }
 
 /* ✅ Titre principal */
@@ -210,6 +223,13 @@ td:nth-child(4) {
 
 /* ✅ Responsive design */
 @media (max-width: 768px) {
+  .content {
+    margin: var(--spacing-sm);
+    margin-left: var(--spacing-sm);
+    max-width: calc(100% - calc(var(--spacing-sm) * 2));
+    padding: var(--spacing-md);
+  }
+
   .filters {
     flex-direction: column;
     align-items: stretch;
