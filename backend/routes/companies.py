@@ -3881,20 +3881,44 @@ class DispatchNowReservation(Resource):
 class MyVehicles(Resource):
     @jwt_required()
     @role_required(UserRole.company)
+    @companies_ns.marshal_list_with(
+        vehicle_model,
+        code=200,
+        description="Liste des véhicules",
+        skip_none=True,
+        mask=None,
+    )
     def get(self):
-        company, err, code = get_company_from_token()
-        if err:
-            return err, code
-        # 🔒 company.id → int sûr
-        cid_obj = getattr(company, "id", None)
         try:
-            cid = int(cid_obj) if cid_obj is not None else None
-        except Exception:
-            cid = None
-        if cid is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
-        vehicles = Vehicle.query.filter_by(company_id=cid).all()
-        return [v.serialize for v in vehicles], 200
+            company, err, code = get_company_from_token()
+            if err:
+                app_logger.warning(
+                    "GET /me/vehicles: get_company_from_token error: %s", err
+                )
+                return err, code
+            # 🔒 company.id → int sûr
+            cid_obj = getattr(company, "id", None)
+            try:
+                cid = int(cid_obj) if cid_obj is not None else None
+            except Exception as e:
+                app_logger.error("GET /me/vehicles: Error converting company.id: %s", e)
+                cid = None
+            if cid is None:
+                app_logger.error("GET /me/vehicles: company.id is None")
+                return {"error": "Entreprise introuvable (ID invalide)."}, 500
+            vehicles = Vehicle.query.filter_by(company_id=cid).all()
+            app_logger.info(
+                "GET /me/vehicles: Found %d vehicles for company %d", len(vehicles), cid
+            )
+            result = [v.serialize for v in vehicles]
+            return result, 200
+        except Exception as e:
+            app_logger.exception("GET /me/vehicles: Unexpected error: %s", e)
+            sentry_sdk.capture_exception(e)
+            error_msg = "Erreur lors de la récupération des véhicules: {}".format(
+                str(e)
+            )
+            return {"error": error_msg}, 500
 
     @jwt_required()
     @role_required(UserRole.company)
