@@ -1,5 +1,5 @@
 // src/pages/company/Dashboard/CompanyDashboard.jsx
-import React, { useCallback, useState, useEffect, useMemo } from 'react';
+import React, { useCallback, useState, useEffect, useMemo, useTransition } from 'react';
 import useCompanySocket from '../../../hooks/useCompanySocket';
 import useDispatchStatus from '../../../hooks/useDispatchStatus';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -62,6 +62,8 @@ const CompanyDashboard = () => {
 
   // queryClient pour invalidation
   const queryClient = useQueryClient();
+  // ✅ PERF: useTransition pour améliorer l'INP
+  const [, startTransition] = useTransition();
   const [showEditModal, setShowEditModal] = useState(false);
   const [driverToEdit, setDriverToEdit] = useState(null);
   const [showBookingModal, setShowBookingModal] = useState(false);
@@ -78,10 +80,13 @@ const CompanyDashboard = () => {
     setDriverToEdit(null);
   };
 
+  // ✅ PERF: Utiliser startTransition pour les mises à jour non-urgentes
   const handleToggleType = async (driverId) => {
     try {
       await toggleDriverType(driverId);
+      startTransition(() => {
       reloadDriver();
+      });
     } catch (err) {
       console.error('Erreur lors du changement de type du chauffeur :', err);
     }
@@ -93,7 +98,9 @@ const CompanyDashboard = () => {
       const d = (driver || []).find((x) => x.id === driverId);
       if (!d) return;
       await updateDriverStatus(driverId, { is_available: !d.is_available });
-      await reloadDriver();
+      startTransition(() => {
+        reloadDriver();
+      });
     } catch (err) {
       console.error('Erreur mise à jour disponibilité chauffeur :', err);
     }
@@ -107,25 +114,36 @@ const CompanyDashboard = () => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteModalReservation, setDeleteModalReservation] = useState(null);
 
+  // ✅ PERF: Utiliser useMemo pour optimiser les recherches
+  const reservationsMap = useMemo(() => {
+    const map = new Map();
+    (reservations || []).forEach((r) => {
+      if (r?.id) map.set(r.id, r);
+    });
+    return map;
+  }, [reservations]);
+
   const handleScheduleReservation = (reservation) => {
     // Passer l'objet complet (pas juste l'ID)
     const resObj =
       typeof reservation === 'object'
         ? reservation
-        : reservations.find((r) => r.id === reservation);
+        : reservationsMap.get(reservation);
     if (!resObj) return;
     setScheduleModalReservation(resObj);
     setScheduleModalOpen(true);
   };
 
-  // Dispatch urgent: +15 min
+  // ✅ PERF: Dispatch urgent avec startTransition pour les mises à jour non-urgentes
   const handleDispatchNow = async (reservation) => {
     const id = reservation?.id ?? reservation;
     if (!id) return;
     try {
       await dispatchNowForReservation(id, 15);
-      await reloadReservations();
-      await queryClient.invalidateQueries(['reservations']);
+      startTransition(() => {
+        reloadReservations();
+        queryClient.invalidateQueries(['reservations']);
+      });
       toast.success('Dispatch urgent déclenché avec succès');
     } catch (e) {
       // ⚡ Gestion améliorée : extraire le message du backend
@@ -204,13 +222,15 @@ const CompanyDashboard = () => {
     return () => socket.off('new_reservation', handleNewReservation);
   }, [socket, handleNewReservation]);
 
-  // WS: changements d'assignations & progression du dispatch
+  // ✅ PERF: WebSocket handlers avec startTransition pour éviter de bloquer
   useEffect(() => {
     if (!socket) return;
     const refetchAll = () => {
+      startTransition(() => {
       refetchAssigned?.();
       reloadReservations?.();
       refetchDelays?.();
+      });
     };
     const onAssignCreated = () => refetchAll();
     const onAssignUpdated = () => refetchAll();
@@ -246,11 +266,13 @@ const CompanyDashboard = () => {
     };
   }, [socket, refetchAssigned, reloadReservations, refetchDelays]);
 
-  // Callbacks réservations
+  // ✅ PERF: Callbacks réservations avec startTransition
   const handleAccept = async (id) => {
     try {
       await acceptReservation(id);
+      startTransition(() => {
       reloadReservations();
+      });
     } catch (err) {
       console.error('Erreur acceptation :', err);
     }
@@ -258,14 +280,16 @@ const CompanyDashboard = () => {
   const handleReject = async (id) => {
     try {
       await rejectReservation(id);
+      startTransition(() => {
       reloadReservations();
+      });
     } catch (err) {
       console.error('Erreur rejet :', err);
     }
   };
   const openAssignModal = (res) => {
-    // Passer l'objet complet
-    const resObj = typeof res === 'object' ? res : reservations.find((r) => r.id === res);
+    // ✅ PERF: Utiliser la Map au lieu de find
+    const resObj = typeof res === 'object' ? res : reservationsMap.get(res);
     if (!resObj) return;
     setAssignModalReservation(resObj);
     setAssignModalOpen(true);
@@ -273,7 +297,10 @@ const CompanyDashboard = () => {
   const handleAssignDriver = async (reservationId, driverId) => {
     try {
       await assignDriver(reservationId, driverId);
+      startTransition(() => {
       reloadReservations();
+      });
+      // ✅ PERF: Mise à jour modale immédiate (urgente)
       setAssignModalOpen(false);
       setAssignModalReservation(null);
     } catch (err) {
@@ -281,13 +308,13 @@ const CompanyDashboard = () => {
     }
   };
 
-  // Ouvre la modale de retour
+  // ✅ PERF: Ouvre la modale de retour avec Map optimisée
   const handleTriggerReturn = (reservation) => {
     // Passer l'objet complet (pas juste l'ID)
     const resObj =
       typeof reservation === 'object'
         ? reservation
-        : reservations.find((r) => r.id === reservation);
+        : reservationsMap.get(reservation);
     if (!resObj) return;
     setScheduleModalReservation(resObj);
     setScheduleModalOpen(true);
@@ -323,8 +350,10 @@ const CompanyDashboard = () => {
       }
       await triggerReturnBooking(reservationId, payload);
       setScheduleModalReservation(null);
-      await reloadReservations();
-      await queryClient.invalidateQueries(['reservations']);
+      startTransition(() => {
+        reloadReservations();
+        queryClient.invalidateQueries(['reservations']);
+      });
     } catch (err) {
       console.error('Retour :', err);
       alert(err?.response?.data?.error || 'Erreur serveur.');
@@ -332,11 +361,11 @@ const CompanyDashboard = () => {
   };
 
   const handleDeleteReservationClick = (reservation) => {
-    // Passer l'objet complet
+    // ✅ PERF: Utiliser la Map au lieu de find
     const resObj =
       typeof reservation === 'object'
         ? reservation
-        : reservations.find((r) => r.id === reservation);
+        : reservationsMap.get(reservation);
     if (!resObj) return;
     setDeleteModalReservation(resObj);
     setDeleteModalOpen(true);
@@ -351,12 +380,14 @@ const CompanyDashboard = () => {
     setDeleteModalReservation(null);
   };
 
-  // Après ajout manuel
+  // ✅ PERF: Après ajout manuel avec startTransition
   const handleManualBookingSuccess = (resp) => {
     const ymd = String(resp?.reservation?.scheduled_time || '').slice(0, 10);
     if (ymd) setDispatchDay(ymd);
+    startTransition(() => {
     reloadReservations();
     queryClient.invalidateQueries(['reservations']);
+    });
   };
 
   // Filtrage listes
@@ -372,7 +403,9 @@ const CompanyDashboard = () => {
   const handleToggleDriver = async (driverId, current) => {
     try {
       await updateDriverStatus(driverId, !current);
+      startTransition(() => {
       reloadDriver();
+      });
     } catch (err) {
       console.error('Erreur mise à jour chauffeur :', err);
     }
@@ -380,7 +413,9 @@ const CompanyDashboard = () => {
   const handleDeleteDriver = async (driverId) => {
     try {
       await deleteDriver(driverId);
+      startTransition(() => {
       reloadDriver();
+      });
     } catch (err) {
       console.error('Erreur suppression chauffeur :', err);
     }
@@ -398,9 +433,11 @@ const CompanyDashboard = () => {
         const result = await deleteReservation(id);
         console.log('✅ Réservation supprimée:', result);
 
-        // Rafraîchir les données
-        await reloadReservations();
-        await queryClient.invalidateQueries(['reservations']);
+        // ✅ PERF: Rafraîchir les données de manière non-bloquante
+        startTransition(() => {
+          reloadReservations();
+          queryClient.invalidateQueries(['reservations']);
+        });
 
         alert(`✅ Réservation #${id} supprimée avec succès`);
       } catch (e) {
@@ -498,6 +535,11 @@ const CompanyDashboard = () => {
             <a
               href={company?.public_id ? `/dashboard/company/${company.public_id}/dispatch` : '#'}
               className={styles.delayAlertLink}
+              onClick={(e) => {
+                if (!company?.public_id) {
+                  e.preventDefault();
+                }
+              }}
             >
               Voir les détails et suggestions →
             </a>
@@ -537,8 +579,13 @@ const CompanyDashboard = () => {
               <div className={styles.quickActions}>
                 {/* Dispatch & Planification */}
                 <a
-                  href={`/dashboard/company/${company?.public_id}/dispatch`}
+                  href={company?.public_id ? `/dashboard/company/${company.public_id}/dispatch` : '#'}
                   className={styles.actionButton}
+                  onClick={(e) => {
+                    if (!company?.public_id) {
+                      e.preventDefault();
+                    }
+                  }}
                 >
                   <span className={styles.actionIcon}>🚀</span>
                   <span className={styles.actionText}>

@@ -56,16 +56,27 @@ const queryClient = new QueryClient();
 
 // Keep-alive user activity
 let lastActivity = Date.now();
+let activityTimeout = null;
+
+// ✅ PERF: Throttle activity tracking pour réduire INP
 function resetActivityTimer() {
+  // Throttle à 1 seconde pour éviter trop d'appels
+  if (activityTimeout) {
+    return;
+  }
   lastActivity = Date.now();
+  activityTimeout = setTimeout(() => {
+    activityTimeout = null;
+  }, 1000);
 }
 
 // Rafraîchissement automatique du token toutes les 50 min si actif
 function setupTokenAutoRefresh() {
-  // Écoute activité
-  window.addEventListener('mousemove', resetActivityTimer);
-  window.addEventListener('keydown', resetActivityTimer);
-  window.addEventListener('touchstart', resetActivityTimer);
+  // ✅ PERF: Écoute activité avec options passives pour meilleure performance
+  const options = { passive: true, capture: false };
+  window.addEventListener('mousemove', resetActivityTimer, options);
+  window.addEventListener('keydown', resetActivityTimer, options);
+  window.addEventListener('touchstart', resetActivityTimer, options);
 
   const id = setInterval(
     async () => {

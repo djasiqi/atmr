@@ -168,50 +168,50 @@ const EditDriverForm = ({ driver, onSubmit, onClose }) => {
       <div className={styles.section}>
         <h4>Informations personnelles</h4>
 
-        <div className={styles.formGroup}>
+      <div className={styles.formGroup}>
           <label htmlFor="first_name">
             Prénom <span className={styles.required}>*</span>
           </label>
-          <input
-            type="text"
+        <input
+          type="text"
             id="first_name"
             name="first_name"
             value={userData.first_name}
             onChange={handleUserChange}
             placeholder="Prénom du chauffeur"
-            required
+          required
             disabled={isSubmitting}
-          />
-        </div>
+        />
+      </div>
 
-        <div className={styles.formGroup}>
+      <div className={styles.formGroup}>
           <label htmlFor="last_name">
             Nom <span className={styles.required}>*</span>
           </label>
-          <input
-            type="text"
+        <input
+          type="text"
             id="last_name"
             name="last_name"
             value={userData.last_name}
             onChange={handleUserChange}
             placeholder="Nom du chauffeur"
-            required
+          required
             disabled={isSubmitting}
-          />
-        </div>
+        />
+      </div>
 
-        <div className={styles.formGroup}>
+      <div className={styles.formGroup}>
           <label htmlFor="email">
             Email <span className={styles.required}>*</span>
           </label>
-          <input
+        <input
             type="email"
             id="email"
             name="email"
             value={userData.email}
             onChange={handleUserChange}
             placeholder="email@exemple.com"
-            required
+          required
             disabled={isSubmitting}
           />
         </div>
@@ -228,7 +228,7 @@ const EditDriverForm = ({ driver, onSubmit, onClose }) => {
             onSelect={handleDomicileAddressSelect}
             placeholder="Adresse complète du domicile"
             disabled={isSubmitting}
-          />
+        />
         </div>
       </div>
 
@@ -284,17 +284,17 @@ const EditDriverForm = ({ driver, onSubmit, onClose }) => {
 
       {/* Section : Statut */}
       <div className={styles.section} style={{ gridColumn: '1 / -1' }}>
-        <h4>Statut</h4>
-        <div className={styles.checkboxGroup}>
-          <input
-            type="checkbox"
-            name="is_active"
-            id="is_active_checkbox"
-            checked={formData.is_active}
-            onChange={handleChange}
+      <h4>Statut</h4>
+      <div className={styles.checkboxGroup}>
+        <input
+          type="checkbox"
+          name="is_active"
+          id="is_active_checkbox"
+          checked={formData.is_active}
+          onChange={handleChange}
             disabled={isSubmitting}
-          />
-          <label htmlFor="is_active_checkbox">Chauffeur actif</label>
+        />
+        <label htmlFor="is_active_checkbox">Chauffeur actif</label>
         </div>
       </div>
 
@@ -309,14 +309,14 @@ const EditDriverForm = ({ driver, onSubmit, onClose }) => {
           {isResettingPassword ? 'Réinitialisation...' : '🔑 Réinitialiser le mot de passe'}
         </button>
         <div className={styles.buttonGroup}>
-          <button
-            type="button"
-            onClick={onClose}
-            className={styles.cancelButton}
+        <button
+          type="button"
+          onClick={onClose}
+          className={styles.cancelButton}
             disabled={isSubmitting || isResettingPassword}
-          >
-            Annuler
-          </button>
+        >
+          Annuler
+        </button>
           <button
             type="submit"
             className={styles.submitButton}
