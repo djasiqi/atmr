@@ -210,14 +210,14 @@ const EditReservationModal = ({ isOpen, onClose, reservation, onConfirm }) => {
             Adresse de départ <span>*</span>
           </label>
           <div style={{ width: '100%' }}>
-            <AddressAutocomplete
-              id="pickup-location"
-              value={typeof pickupLocation === 'string' ? pickupLocation : ''}
-              onChange={handlePickupAddressChange}
-              onSelect={handlePickupAddressSelect}
-              placeholder="Adresse de prise en charge"
-              disabled={loading}
-            />
+          <AddressAutocomplete
+            id="pickup-location"
+            value={typeof pickupLocation === 'string' ? pickupLocation : ''}
+            onChange={handlePickupAddressChange}
+            onSelect={handlePickupAddressSelect}
+            placeholder="Adresse de prise en charge"
+            disabled={loading}
+          />
           </div>
         </div>
 
@@ -226,14 +226,14 @@ const EditReservationModal = ({ isOpen, onClose, reservation, onConfirm }) => {
             Adresse d'arrivée <span>*</span>
           </label>
           <div style={{ width: '100%' }}>
-            <AddressAutocomplete
-              id="dropoff-location"
-              value={typeof dropoffLocation === 'string' ? dropoffLocation : ''}
-              onChange={handleDropoffAddressChange}
-              onSelect={handleDropoffAddressSelect}
-              placeholder="Adresse de destination"
-              disabled={loading}
-            />
+          <AddressAutocomplete
+            id="dropoff-location"
+            value={typeof dropoffLocation === 'string' ? dropoffLocation : ''}
+            onChange={handleDropoffAddressChange}
+            onSelect={handleDropoffAddressSelect}
+            placeholder="Adresse de destination"
+            disabled={loading}
+          />
           </div>
         </div>
 

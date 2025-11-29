@@ -1,5 +1,5 @@
 // frontend/src/components/common/AddressAutocomplete.jsx
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useDeferredValue, useTransition } from 'react';
 // Using fetch with relative '/api' path to leverage CRA proxy in dev and avoid CORS
 
 export default function AddressAutocomplete({
@@ -21,6 +21,10 @@ export default function AddressAutocomplete({
   const [loading, setLoading] = useState(false);
   const [justSelected, setJustSelected] = useState(false); // Pour éviter la réouverture après sélection
   const [userIsTyping, setUserIsTyping] = useState(false); // Tracker si l'utilisateur tape activement
+
+  // ✅ PERF: useDeferredValue pour différer les recherches et améliorer l'INP
+  const deferredQuery = useDeferredValue(query);
+  const [, startTransition] = useTransition();
 
   const abortRef = useRef(null);
   const wrapRef = useRef(null);
@@ -132,7 +136,7 @@ export default function AddressAutocomplete({
           } else {
             console.log(`[AddressAutocomplete] ⚠️ Backend retourne une liste vide pour "${q}"`);
           }
-        }
+      }
       } else {
         console.warn(`[AddressAutocomplete] ⚠️ Erreur backend (${res.status}) pour "${q}"`);
       }
@@ -174,10 +178,14 @@ export default function AddressAutocomplete({
       return;
     }
 
-    if (!query || (typeof query === 'string' ? query.trim().length : 0) < minChars) {
+    // ✅ PERF: Utiliser deferredQuery pour réduire le travail urgent
+    const queryToUse = deferredQuery;
+    if (!queryToUse || (typeof queryToUse === 'string' ? queryToUse.trim().length : 0) < minChars) {
+      startTransition(() => {
       setItems([]);
       setOpen(false);
       setLoading(false);
+      });
       return;
     }
     debounce(async () => {
@@ -185,15 +193,17 @@ export default function AddressAutocomplete({
         abortRef.current?.abort();
         const ctl = new AbortController();
         abortRef.current = ctl;
+        startTransition(() => {
         setLoading(true);
+        });
 
-        const queryStr = String(query || '');
+        const queryStr = String(queryToUse || '');
         const next = await fetchSuggestions(queryStr, ctl.signal);
         let enriched = Array.isArray(next) ? next : [];
 
         // Filet de sécu : si l'utilisateur tape "hug" et qu'aucun alias n'est présent,
         // on injecte l'adresse HUG en tête (évite de dépendre à 100% du backend).
-        const qn = (query || '').toString().trim().toLowerCase();
+        const qn = (queryToUse || '').toString().trim().toLowerCase();
         const hasAlias = enriched.some((it) => it.source === 'alias');
         const looksHUG = /\bhug\b|h[ôo]pit(?:al|aux).+gen[eè]ve|\bh[ôo]pital\s+cantonal\b/.test(qn);
         if (looksHUG && !hasAlias) {
@@ -207,15 +217,22 @@ export default function AddressAutocomplete({
           });
         }
 
+        // ✅ PERF: Utiliser startTransition pour les mises à jour non-urgentes
+        startTransition(() => {
         setItems(enriched);
         // Ne rouvrir le menu que si l'utilisateur tape activement
         if (userIsTyping && !justSelected) {
           setOpen(true);
         }
         setHighlight(enriched.length ? 0 : -1);
+          setLoading(false);
+        });
       } catch {
+        startTransition(() => {
         setItems([]);
         setOpen(false);
+          setLoading(false);
+        });
       } finally {
         setLoading(false);
       }
