@@ -7,6 +7,7 @@ import {
   deleteVehicle,
 } from '../../../../services/companyService';
 import styles from '../CompanySettings.module.css';
+import modalStyles from '../../Clients/components/ClientFormModal.module.css';
 
 const VehiclesTab = () => {
   const [vehicles, setVehicles] = useState([]);
@@ -99,9 +100,16 @@ const VehiclesTab = () => {
       {message && <div className={styles.success}>{message}</div>}
       {error && <div className={styles.error}>{error}</div>}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-lg)' }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: 'var(--spacing-lg)',
+        }}
+      >
         <h2>🚗 Gestion de la flotte</h2>
-        <button className={`${styles.button} ${styles.primary}`} onClick={handleCreate}>
+        <button className="btn btn-primary" onClick={handleCreate}>
           ➕ Ajouter un véhicule
         </button>
       </div>
@@ -113,61 +121,64 @@ const VehiclesTab = () => {
           <p>Créez votre premier véhicule pour commencer</p>
         </div>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <div className="table-container">
+          <table className="table">
             <thead>
-              <tr style={{ borderBottom: '2px solid var(--border-color)' }}>
-                <th style={{ padding: 'var(--spacing-md)', textAlign: 'left' }}>Modèle</th>
-                <th style={{ padding: 'var(--spacing-md)', textAlign: 'left' }}>Plaque</th>
-                <th style={{ padding: 'var(--spacing-md)', textAlign: 'left' }}>Année</th>
-                <th style={{ padding: 'var(--spacing-md)', textAlign: 'left' }}>Places</th>
-                <th style={{ padding: 'var(--spacing-md)', textAlign: 'left' }}>FAH</th>
-                <th style={{ padding: 'var(--spacing-md)', textAlign: 'left' }}>Statut</th>
-                <th style={{ padding: 'var(--spacing-md)', textAlign: 'right' }}>Actions</th>
+              <tr>
+                <th>Modèle</th>
+                <th>Plaque</th>
+                <th>Année</th>
+                <th>Places</th>
+                <th>FAH</th>
+                <th>Statut</th>
+                <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {vehicles.map((vehicle) => (
                 <tr
                   key={vehicle.id}
-                  style={{
-                    borderBottom: '1px solid var(--border-color)',
-                    opacity: vehicle.is_active ? 1 : 0.6,
-                  }}
+                  style={{ opacity: vehicle.is_active ? 1 : 0.6 }}
                 >
-                  <td style={{ padding: 'var(--spacing-md)' }}>{vehicle.model || '-'}</td>
-                  <td style={{ padding: 'var(--spacing-md)', fontFamily: 'monospace' }}>
+                  <td>
+                    <strong>{vehicle.model || '-'}</strong>
+                  </td>
+                  <td style={{ fontFamily: 'monospace', fontWeight: 'var(--font-weight-medium)' }}>
                     {vehicle.license_plate || '-'}
                   </td>
-                  <td style={{ padding: 'var(--spacing-md)' }}>{vehicle.year || '-'}</td>
-                  <td style={{ padding: 'var(--spacing-md)' }}>{vehicle.seats || '-'}</td>
-                  <td style={{ padding: 'var(--spacing-md)' }}>
-                    {vehicle.wheelchair_accessible ? '✅' : '❌'}
-                  </td>
-                  <td style={{ padding: 'var(--spacing-md)' }}>
+                  <td>{vehicle.year || '-'}</td>
+                  <td>{vehicle.seats || '-'}</td>
+                  <td>{vehicle.wheelchair_accessible ? '✅' : '❌'}</td>
+                  <td>
                     <span
                       style={{
                         padding: '4px 8px',
                         borderRadius: '4px',
                         fontSize: '0.85rem',
-                        backgroundColor: vehicle.is_active ? 'var(--success-light)' : 'var(--error-light)',
+                        backgroundColor: vehicle.is_active
+                          ? 'var(--success-light)'
+                          : 'var(--error-light)',
                         color: vehicle.is_active ? 'var(--success)' : 'var(--error)',
+                        fontWeight: 'var(--font-weight-medium)',
                       }}
                     >
                       {vehicle.is_active ? 'Actif' : 'Inactif'}
                     </span>
                   </td>
-                  <td style={{ padding: 'var(--spacing-md)', textAlign: 'right' }}>
+                  <td style={{ textAlign: 'right' }}>
                     <button
-                      className={`${styles.button} ${styles.secondary}`}
+                      className="btn btn-secondary"
                       onClick={() => handleEdit(vehicle)}
-                      style={{ marginRight: 'var(--spacing-xs)' }}
+                      style={{ marginRight: 'var(--spacing-xs)', padding: 'var(--spacing-xs)' }}
+                      title="Modifier"
                     >
                       ✏️
                     </button>
                     <button
-                      className={`${styles.button} ${styles.secondary}`}
+                      className="btn btn-secondary"
                       onClick={() => handleDelete(vehicle)}
+                      style={{ padding: 'var(--spacing-xs)' }}
+                      title="Supprimer"
                     >
                       🗑️
                     </button>
@@ -195,17 +206,24 @@ const VehiclesTab = () => {
       {/* Modal Suppression */}
       {showDeleteModal && vehicleToDelete && (
         <div className="modal-overlay" onClick={() => setShowDeleteModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3>Confirmer la suppression</h3>
-            <p>
-              Êtes-vous sûr de vouloir supprimer le véhicule{' '}
-              <strong>{vehicleToDelete.model}</strong> ({vehicleToDelete.license_plate}) ?
-            </p>
-            <div style={{ display: 'flex', gap: 'var(--spacing-md)', justifyContent: 'flex-end', marginTop: 'var(--spacing-lg)' }}>
-              <button className={`${styles.button} ${styles.secondary}`} onClick={() => setShowDeleteModal(false)}>
+          <div className="modal-content modal-md" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">🗑️ Confirmer la suppression</h2>
+              <button className="modal-close" onClick={() => setShowDeleteModal(false)}>
+                ✕
+              </button>
+            </div>
+            <div className="modal-body">
+              <p>
+                Êtes-vous sûr de vouloir supprimer le véhicule{' '}
+                <strong>{vehicleToDelete.model}</strong> ({vehicleToDelete.license_plate}) ?
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowDeleteModal(false)}>
                 Annuler
               </button>
-              <button className={`${styles.button} ${styles.primary}`} onClick={handleConfirmDelete}>
+              <button className="btn btn-primary" onClick={handleConfirmDelete}>
                 Supprimer
               </button>
             </div>
@@ -274,110 +292,158 @@ const VehicleModal = ({ vehicle, onSave, onClose }) => {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
-        <h2>{vehicle ? '✏️ Modifier le véhicule' : '➕ Ajouter un véhicule'}</h2>
-        <form onSubmit={handleSubmit}>
-          <div className={styles.formGroup}>
-            <label htmlFor="model">
-              Modèle <span style={{ color: 'var(--error)' }}>*</span>
-            </label>
-            <input
-              type="text"
-              id="model"
-              name="model"
-              value={formData.model}
-              onChange={handleChange}
-              required
-              placeholder="Ex: Peugeot Expert"
-            />
-          </div>
+      <div className="modal-content modal-md" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2 className="modal-title">
+            {vehicle ? '✏️ Modifier le véhicule' : '➕ Ajouter un véhicule'}
+          </h2>
+          <button className="modal-close" onClick={onClose}>
+            ✕
+          </button>
+        </div>
 
-          <div className={styles.formGroup}>
-            <label htmlFor="license_plate">
-              Plaque d'immatriculation <span style={{ color: 'var(--error)' }}>*</span>
-            </label>
-            <input
-              type="text"
-              id="license_plate"
-              name="license_plate"
-              value={formData.license_plate}
-              onChange={handleChange}
-              required
-              placeholder="Ex: GE-123-456"
-              style={{ fontFamily: 'monospace', textTransform: 'uppercase' }}
-            />
-          </div>
+        <form onSubmit={handleSubmit} className={modalStyles.form}>
+          {/* Informations du véhicule */}
+          <div className={modalStyles.section}>
+            <h3 className={modalStyles.sectionTitle}>🚗 Informations du véhicule</h3>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)' }}>
-            <div className={styles.formGroup}>
-              <label htmlFor="year">Année</label>
+            <div className={modalStyles.formGroup}>
+              <label htmlFor="model" className={modalStyles.label}>
+                Modèle <span style={{ color: 'var(--danger-primary)' }}>*</span>
+              </label>
               <input
-                type="number"
-                id="year"
-                name="year"
-                value={formData.year}
+                type="text"
+                id="model"
+                name="model"
+                value={formData.model}
                 onChange={handleChange}
-                min="1950"
-                max="2100"
-                placeholder="Ex: 2020"
+                className={modalStyles.input}
+                required
+                placeholder="Ex: Peugeot Expert"
+                disabled={saving}
               />
             </div>
 
-            <div className={styles.formGroup}>
-              <label htmlFor="seats">Nombre de places</label>
+            <div className={modalStyles.formGroup}>
+              <label htmlFor="license_plate" className={modalStyles.label}>
+                Plaque d'immatriculation <span style={{ color: 'var(--danger-primary)' }}>*</span>
+              </label>
               <input
-                type="number"
-                id="seats"
-                name="seats"
-                value={formData.seats}
+                type="text"
+                id="license_plate"
+                name="license_plate"
+                value={formData.license_plate}
                 onChange={handleChange}
-                min="0"
-                placeholder="Ex: 7"
+                className={modalStyles.input}
+                required
+                placeholder="Ex: GE-123-456"
+                style={{ fontFamily: 'monospace', textTransform: 'uppercase' }}
+                disabled={saving}
+              />
+            </div>
+
+            <div className={modalStyles.formRow}>
+              <div className={modalStyles.formGroup}>
+                <label htmlFor="year" className={modalStyles.label}>
+                  Année
+                </label>
+                <input
+                  type="number"
+                  id="year"
+                  name="year"
+                  value={formData.year}
+                  onChange={handleChange}
+                  className={modalStyles.input}
+                  min="1950"
+                  max="2100"
+                  placeholder="Ex: 2020"
+                  disabled={saving}
+                />
+              </div>
+
+              <div className={modalStyles.formGroup}>
+                <label htmlFor="seats" className={modalStyles.label}>
+                  Nombre de places
+                </label>
+                <input
+                  type="number"
+                  id="seats"
+                  name="seats"
+                  value={formData.seats}
+                  onChange={handleChange}
+                  className={modalStyles.input}
+                  min="0"
+                  placeholder="Ex: 7"
+                  disabled={saving}
+                />
+              </div>
+            </div>
+
+            <div className={modalStyles.formGroup}>
+              <label htmlFor="vin" className={modalStyles.label}>
+                VIN (numéro de série)
+              </label>
+              <input
+                type="text"
+                id="vin"
+                name="vin"
+                value={formData.vin}
+                onChange={handleChange}
+                className={modalStyles.input}
+                placeholder="Optionnel"
+                disabled={saving}
               />
             </div>
           </div>
 
-          <div className={styles.formGroup}>
-            <label htmlFor="vin">VIN (numéro de série)</label>
-            <input
-              type="text"
-              id="vin"
-              name="vin"
-              value={formData.vin}
-              onChange={handleChange}
-              placeholder="Optionnel"
-            />
+          {/* Caractéristiques */}
+          <div className={modalStyles.section}>
+            <h3 className={modalStyles.sectionTitle}>⚙️ Caractéristiques</h3>
+
+            <div className={modalStyles.checkboxGroup}>
+              <label className={modalStyles.checkboxLabel}>
+                <input
+                  type="checkbox"
+                  name="wheelchair_accessible"
+                  checked={formData.wheelchair_accessible}
+                  onChange={handleChange}
+                  disabled={saving}
+                />
+                <span className={modalStyles.checkboxText}>
+                  <strong>Accessible aux fauteuils roulants (FAH)</strong>
+                  <small>Véhicule équipé pour transporter des fauteuils roulants</small>
+                </span>
+              </label>
+            </div>
           </div>
 
-          <div className={styles.formGroup}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
-              <input
-                type="checkbox"
-                name="wheelchair_accessible"
-                checked={formData.wheelchair_accessible}
-                onChange={handleChange}
-              />
-              <span>Accessible aux fauteuils roulants (FAH)</span>
-            </label>
+          {/* Statut */}
+          <div className={modalStyles.section}>
+            <h3 className={modalStyles.sectionTitle}>Statut</h3>
+
+            <div className={modalStyles.checkboxGroup}>
+              <label className={modalStyles.checkboxLabel}>
+                <input
+                  type="checkbox"
+                  name="is_active"
+                  checked={formData.is_active}
+                  onChange={handleChange}
+                  disabled={saving}
+                />
+                <span className={modalStyles.checkboxText}>
+                  <strong>Véhicule actif</strong>
+                  <small>Les véhicules inactifs ne sont pas disponibles pour assignation</small>
+                </span>
+              </label>
+            </div>
           </div>
 
-          <div className={styles.formGroup}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
-              <input
-                type="checkbox"
-                name="is_active"
-                checked={formData.is_active}
-                onChange={handleChange}
-              />
-              <span>Véhicule actif</span>
-            </label>
-          </div>
-
-          <div style={{ display: 'flex', gap: 'var(--spacing-md)', justifyContent: 'flex-end', marginTop: 'var(--spacing-lg)' }}>
-            <button type="button" className={`${styles.button} ${styles.secondary}`} onClick={onClose}>
+          {/* Actions */}
+          <div className="modal-footer">
+            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>
               Annuler
             </button>
-            <button type="submit" className={`${styles.button} ${styles.primary}`} disabled={saving}>
+            <button type="submit" className="btn btn-primary" disabled={saving}>
               {saving ? '💾 Enregistrement...' : '💾 Enregistrer'}
             </button>
           </div>
