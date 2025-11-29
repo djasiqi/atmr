@@ -884,6 +884,18 @@ class OptunaOptimize(Resource):
             rl_worker_url = os.getenv(
                 "RL_WORKER_URL", "http://atmr-rl-worker:5000"
             ).rstrip("/")
+
+            # Forcer HTTP si l'URL commence par https:// (communication interne Docker)
+            if rl_worker_url.startswith("https://"):
+                rl_worker_url = rl_worker_url.replace("https://", "http://", 1)
+                app_logger.warning(
+                    "⚠️ URL worker RL était en HTTPS, conversion en HTTP pour communication interne"
+                )
+
+            # S'assurer que l'URL commence par http://
+            if not rl_worker_url.startswith("http://"):
+                rl_worker_url = f"http://{rl_worker_url}"
+
             rl_endpoint = f"{rl_worker_url}/api/v1/rl/optuna/optimize"
 
             app_logger.info(
@@ -905,11 +917,25 @@ class OptunaOptimize(Resource):
 
             try:
                 # Faire la requête HTTP vers le worker RL
+                # Forcer HTTP (pas HTTPS) et désactiver la vérification SSL
+                # car la communication est interne au réseau Docker
+
+                # Désactiver les avertissements SSL pour les connexions internes non sécurisées
+                try:
+                    import urllib3
+
+                    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+                except ImportError:
+                    # urllib3 peut ne pas être disponible, ce n'est pas critique
+                    pass
+
                 response = requests.post(
                     rl_endpoint,
                     json=payload,
                     headers={"Content-Type": "application/json"},
                     timeout=10,  # Timeout court car la réponse est immédiate (202)
+                    verify=False,  # Désactiver vérification SSL pour communication interne Docker
+                    allow_redirects=False,  # Ne pas suivre les redirections
                 )
 
                 HTTP_STATUS_ACCEPTED = 202
