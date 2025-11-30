@@ -698,18 +698,60 @@ def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
 
             # ✅ Vérifier et forcer Redis comme transport
             broker_url = celery_app.conf.broker_url
-            broker_transport = celery_app.conf.broker_transport
 
             # Constante pour la longueur max de l'URL du broker à afficher
             MAX_BROKER_URL_DISPLAY_LENGTH = 50
 
-            # Forcer explicitement le transport Redis si ce n'est pas déjà fait
-            if broker_transport != "redis":
-                logger.warning(
-                    "[Queue] Forcing broker_transport to redis (was: %s)",
-                    broker_transport,
+            # ✅ Forcer explicitement le transport Redis (toujours, pour être sûr)
+            celery_app.conf.broker_transport = "redis"
+
+            # ✅ Vérifier que le broker_url commence bien par "redis://"
+            if broker_url and not broker_url.startswith("redis://"):
+                logger.error(
+                    "[Queue] ⚠️ broker_url ne commence pas par 'redis://': %s",
+                    broker_url[:MAX_BROKER_URL_DISPLAY_LENGTH] + "***"
+                    if len(broker_url) > MAX_BROKER_URL_DISPLAY_LENGTH
+                    else broker_url,
                 )
-                celery_app.conf.broker_transport = "redis"
+                # Reconstruire l'URL Redis depuis les variables d'environnement
+                import os
+                from urllib.parse import quote_plus
+
+                redis_host = os.getenv("REDIS_HOST", "redis")
+                redis_port = os.getenv("REDIS_PORT", "6379")
+                redis_db = os.getenv("REDIS_DB", "0")
+                redis_password = os.getenv("REDIS_PASSWORD", "")
+                if redis_password:
+                    redis_password_escaped = quote_plus(redis_password)
+                    broker_url = f"redis://:{redis_password_escaped}@{redis_host}:{redis_port}/{redis_db}"
+                else:
+                    broker_url = f"redis://{redis_host}:{redis_port}/{redis_db}"
+                celery_app.conf.broker_url = broker_url
+                logger.info(
+                    "[Queue] ✅ broker_url reconstruit pour Redis: %s",
+                    broker_url[:MAX_BROKER_URL_DISPLAY_LENGTH] + "***"
+                    if len(broker_url) > MAX_BROKER_URL_DISPLAY_LENGTH
+                    else broker_url,
+                )
+
+            # ✅ FORCER la réinitialisation de la connexion Celery
+            # La connexion peut être mise en cache avec AMQP, il faut la fermer
+            # et forcer une nouvelle connexion avec Redis
+            with suppress(Exception):
+                # Fermer la connexion existante si elle existe
+                connection = getattr(celery_app, "_connection", None)
+                if connection:
+                    logger.info(
+                        "[Queue] Fermeture de la connexion Celery existante pour forcer Redis"
+                    )
+                    with suppress(Exception):
+                        connection.close()
+                    celery_app._connection = None
+
+                # Forcer la suppression du cache de connexion
+                broker_connection = getattr(celery_app, "broker_connection", None)
+                if broker_connection is not None:
+                    celery_app.broker_connection = None
 
             logger.info(
                 "[Queue] Enqueuing task with broker_url=%s, transport=%s",
