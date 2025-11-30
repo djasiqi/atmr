@@ -123,7 +123,16 @@ export default function AddressAutocomplete({
 
     // 1) Proxy backend — mélange alias/favoris + Photon si ton backend le fait
     try {
-      const url = `/api/v1/geocode/autocomplete?q=${encodeURIComponent(q)}&lat=${encodeURIComponent(
+      // ✅ FIX: Utiliser l'URL complète de l'API en production (api.lirie.ch)
+      // ou l'URL relative en développement
+      const apiBaseUrl =
+        process.env.REACT_APP_API_BASE_URL ||
+        process.env.REACT_APP_API_URL ||
+        (typeof window !== 'undefined' && window.location.hostname === 'localhost'
+          ? '/api/v1'
+          : 'https://api.lirie.ch/api/v1');
+      
+      const url = `${apiBaseUrl}/geocode/autocomplete?q=${encodeURIComponent(q)}&lat=${encodeURIComponent(
         BIAS.lat
       )}&lon=${encodeURIComponent(BIAS.lon)}&limit=${encodeURIComponent(maxResults)}`;
       const res = await fetch(url, { signal });
