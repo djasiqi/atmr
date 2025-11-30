@@ -5,7 +5,10 @@
 # Cette vérification doit être faite AVANT tout autre import
 import os
 
-if os.getenv("FLASK_ENV") == "production" or os.getenv("FLASK_CONFIG") == "production":
+if (
+    os.getenv("FLASK_ENV", default=None) == "production"
+    or os.getenv("FLASK_CONFIG", default=None) == "production"
+):
     # Désactiver pytest en production
     os.environ["PYTEST_DISABLED"] = "1"
     os.environ["DISABLE_PYTEST"] = "1"
@@ -58,7 +61,7 @@ from ext import bcrypt, db, jwt, limiter, mail, migrate, socketio
 # ---------- Chargement .env ----------
 BASE_DIR = Path(__file__).resolve().parent
 # Charger .env avec override uniquement en développement
-if os.getenv("FLASK_ENV") == "development":
+if os.getenv("FLASK_ENV", default=None) == "development":
     load_dotenv(BASE_DIR / ".env", override=True)
 else:
     # Production: ne jamais override les variables d'environnement système
@@ -84,7 +87,10 @@ def validate_required_env_vars(config_name: str) -> None:
     required_vars: set[str] = set()
 
     # Au moins une clé secrète est requise (JWT ou Flask)
-    if not (os.getenv("JWT_SECRET_KEY") or os.getenv("SECRET_KEY")):
+    if not (
+        os.getenv("JWT_SECRET_KEY", default=None)
+        or os.getenv("SECRET_KEY", default=None)
+    ):
         raise RuntimeError(
             "JWT_SECRET_KEY ou SECRET_KEY manquant(e). "
             + "Ajoutez au moins l'une de ces variables dans backend/.env "
@@ -100,12 +106,12 @@ def validate_required_env_vars(config_name: str) -> None:
 
         # Vérifier que la configuration de base de données est disponible
         has_db_config = (
-            os.getenv("DATABASE_URL")
-            or os.getenv("SQLALCHEMY_DATABASE_URI")
+            os.getenv("DATABASE_URL", default=None)
+            or os.getenv("SQLALCHEMY_DATABASE_URI", default=None)
             or (
-                os.getenv("POSTGRES_USER")
-                and os.getenv("POSTGRES_PASSWORD")
-                and os.getenv("POSTGRES_DB")
+                os.getenv("POSTGRES_USER", default=None)
+                and os.getenv("POSTGRES_PASSWORD", default=None)
+                and os.getenv("POSTGRES_DB", default=None)
             )
         )
         if not has_db_config:
@@ -116,7 +122,9 @@ def validate_required_env_vars(config_name: str) -> None:
             )
 
         # ✅ Redis : soit REDIS_URL, soit au moins REDIS_PASSWORD
-        has_redis_config = os.getenv("REDIS_URL") or os.getenv("REDIS_PASSWORD")
+        has_redis_config = os.getenv("REDIS_URL", default=None) or os.getenv(
+            "REDIS_PASSWORD", default=None
+        )
         if not has_redis_config:
             raise RuntimeError(
                 "Configuration Redis manquante pour production. "
@@ -132,7 +140,7 @@ def validate_required_env_vars(config_name: str) -> None:
         # Vérifier les variables requises
         missing: list[str] = []
         for var in required_vars:
-            if not os.getenv(var):
+            if not os.getenv(var, default=None):
                 missing.append(var)
 
         if missing:
@@ -145,7 +153,9 @@ def validate_required_env_vars(config_name: str) -> None:
             raise RuntimeError(error_msg)
 
         # Vérifier variables recommandées et avertir si manquantes
-        missing_recommended = [var for var in recommended_vars if not os.getenv(var)]
+        missing_recommended = [
+            var for var in recommended_vars if not os.getenv(var, default=None)
+        ]
         if missing_recommended:
             import logging
 
@@ -343,8 +353,8 @@ def create_app(config_name: str | None = None):
         cors_origins: str | list[str] = "*"  # dev permissif
     else:
         cors_origins = (
-            os.getenv("SOCKETIO_CORS_ORIGINS", "").split(",")
-            if os.getenv("SOCKETIO_CORS_ORIGINS")
+            os.getenv("SOCKETIO_CORS_ORIGINS", default="").split(",")
+            if os.getenv("SOCKETIO_CORS_ORIGINS", default=None)
             else []
         )
 
@@ -696,7 +706,10 @@ def create_app(config_name: str | None = None):
     # ✅ FIX RC1: Double vérification pour s'assurer que force_https
     # est False en testing (au cas où config_name n'est pas "testing"
     # mais FLASK_CONFIG=testing)
-    if app.config.get("TESTING", False) or os.getenv("FLASK_CONFIG") == "testing":
+    if (
+        app.config.get("TESTING", False)
+        or os.getenv("FLASK_CONFIG", default=None) == "testing"
+    ):
         force_https = False
         strict_transport_security = False
 
@@ -718,7 +731,7 @@ def create_app(config_name: str | None = None):
     should_disable_talisman = (
         config_name == "testing"
         or app.config.get("TESTING", False)
-        or os.getenv("FLASK_CONFIG") == "testing"
+        or os.getenv("FLASK_CONFIG", default=None) == "testing"
         or app_env == "rl"
         or rl_enabled
     )
@@ -776,7 +789,7 @@ def create_app(config_name: str | None = None):
     )
 
     # 6) Sentry
-    sentry_dsn = os.getenv("SENTRY_DSN")
+    sentry_dsn = os.getenv("SENTRY_DSN", default=None)
     if sentry_dsn and config_name != "testing":
         sentry_sdk.init(
             dsn=sentry_dsn,

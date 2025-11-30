@@ -247,3 +247,41 @@ export const runOptunaOptimization = async (config = {}) => {
     throw error;
   }
 };
+
+/**
+ * Entraîne un modèle DQN complet avec les hyperparamètres optimaux.
+ * @param {Object} config - Configuration de l'entraînement
+ * @param {string} [config.config_path] - Chemin vers optimal_config.json
+ * @param {string} [config.study_name] - Nom de l'étude Optuna
+ * @param {string} [config.model_output_path] - Chemin de sortie pour le modèle
+ * @param {number} [config.training_episodes] - Nombre d'épisodes d'entraînement
+ * @param {number} [config.eval_episodes] - Nombre d'épisodes d'évaluation
+ * @param {number} [config.company_id] - ID de l'entreprise
+ */
+export const trainModelWithOptimalParams = async (config = {}) => {
+  try {
+    const token = getAuthToken();
+    if (!token) {
+      throw new Error("Aucun token JWT trouvé. L'utilisateur doit être connecté.");
+    }
+
+    console.log('🎓 Démarrage de l\'entraînement du modèle avec hyperparamètres optimaux...', config);
+
+    const response = await apiClient.post(
+      '/admin/optuna/train',
+      config,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+
+    console.log('✅ Entraînement du modèle démarré :', response.data);
+    return response.data;
+  } catch (error) {
+    console.error(
+      '❌ Erreur lors du démarrage de l\'entraînement du modèle :',
+      error.response?.data || error.message
+    );
+    throw error;
+  }
+};
