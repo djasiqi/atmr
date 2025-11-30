@@ -12,7 +12,10 @@ from typing import Any
 from flask import current_app
 from flask_restx import Namespace, Resource, fields
 
-from tasks.rl_tasks import optuna_optimize_impl
+from tasks.rl_tasks import (
+    optuna_optimize_impl,
+    train_model_with_optimal_params_impl,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -167,3 +170,143 @@ class RLOptunaOptimize(Resource):
         except Exception as e:
             logger.exception("❌ [RL] ERREUR optuna_optimize: %s", e)
             return {"message": "Erreur lors du démarrage de l'optimisation"}, 500
+
+
+# Modèle pour l'entraînement avec hyperparamètres optimaux
+train_optimal_model = rl_ns.model(
+    "TrainOptimalModel",
+    {
+        "config_path": fields.String(
+            required=False,
+            description="Chemin vers optimal_config.json (optionnel)",
+        ),
+        "study_name": fields.String(
+            required=False,
+            description="Nom de l'étude Optuna (optionnel, si config_path non fourni)",
+        ),
+        "model_output_path": fields.String(
+            required=False,
+            default="data/rl/models/dqn_optimized.pth",
+            description="Chemin de sortie pour le modèle entraîné",
+        ),
+        "training_episodes": fields.Integer(
+            required=False,
+            default=1000,
+            description="Nombre d'épisodes d'entraînement complet",
+        ),
+        "eval_episodes": fields.Integer(
+            required=False,
+            default=50,
+            description="Nombre d'épisodes d'évaluation finale",
+        ),
+        "company_id": fields.Integer(
+            required=False, description="ID de l'entreprise (optionnel)"
+        ),
+    },
+)
+
+
+@rl_ns.route("/train/optimal")
+class RLTrainOptimal(Resource):
+    """Endpoint pour entraîner un modèle DQN avec les hyperparamètres optimaux."""
+
+    @rl_ns.expect(train_optimal_model, validate=False)
+    def post(self):
+        """
+        Entraîne un modèle DQN complet avec les hyperparamètres optimaux.
+
+        Les hyperparamètres peuvent être chargés depuis:
+        - Un fichier optimal_config.json (config_path)
+        - Une étude Optuna (study_name)
+        - Les hyperparamètres par défaut (si aucun des deux n'est fourni)
+
+        Cette route exécute l'entraînement en arrière-plan dans un thread.
+        L'entraînement peut prendre plusieurs heures selon le nombre d'épisodes.
+
+        Retourne immédiatement avec un statut de démarrage (202 Accepted).
+        """
+        try:
+            data = rl_ns.payload or {}
+            config_path = data.get("config_path")
+            study_name = data.get("study_name")
+            model_output_path = data.get(
+                "model_output_path", "data/rl/models/dqn_optimized.pth"
+            )
+            training_episodes = data.get("training_episodes", 1000)
+            eval_episodes = data.get("eval_episodes", 50)
+            company_id = data.get("company_id")
+
+            logger.info(
+                (
+                    "🎓 [RL] Démarrage entraînement modèle optimal: "
+                    "config_path=%s, study_name=%s, episodes=%s"
+                ),
+                config_path,
+                study_name,
+                training_episodes,
+            )
+
+            # Capturer l'application Flask AVANT de créer le thread
+            flask_app = current_app._get_current_object()
+
+            # Lancer l'entraînement en arrière-plan (threading)
+            def run_training():
+                """Fonction exécutée en arrière-plan pour l'entraînement."""
+                try:
+                    with flask_app.app_context():
+                        result = train_model_with_optimal_params_impl(
+                            config_path=config_path,
+                            study_name=study_name,
+                            model_output_path=model_output_path,
+                            training_episodes=training_episodes,
+                            eval_episodes=eval_episodes,
+                            company_id=company_id,
+                        )
+
+                        logger.info(
+                            "✅ [RL] Entraînement terminé: %s",
+                            result.get("status", "unknown"),
+                        )
+
+                except Exception:
+                    logger.exception(
+                        "❌ [RL] Erreur lors de l'exécution de l'entraînement"
+                    )
+
+            # Démarrer le thread en arrière-plan
+            training_thread = threading.Thread(
+                target=run_training,
+                daemon=True,
+                name="rl-model-training",
+            )
+            training_thread.start()
+
+            logger.info(
+                ("✅ [RL] Thread entraînement démarré (thread_id=%s), episodes=%s"),
+                training_thread.ident,
+                training_episodes,
+            )
+
+            response_data: dict[str, Any] = {
+                "message": "Entraînement du modèle démarré",
+                "status": "started",
+                "thread_id": str(training_thread.ident),
+                "config": {
+                    "config_path": config_path,
+                    "study_name": study_name,
+                    "model_output_path": model_output_path,
+                    "training_episodes": training_episodes,
+                    "eval_episodes": eval_episodes,
+                    "company_id": company_id,
+                },
+                "note": (
+                    "L'entraînement s'exécute en arrière-plan. "
+                    f"Le modèle sera sauvegardé dans {model_output_path} une fois terminé."
+                ),
+            }
+
+            return response_data, 202  # 202 Accepted (traitement asynchrone)
+
+        except Exception as e:
+            logger.exception("❌ [RL] ERREUR train_optimal: %s", e)
+            return {"message": "Erreur lors du démarrage de l'entraînement"}, 500

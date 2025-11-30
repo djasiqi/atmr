@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { FaRobot, FaPlay, FaSpinner, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
-import { runOptunaOptimization, fetchCompanies } from '../../../services/adminService';
+import { runOptunaOptimization, fetchCompanies, trainModelWithOptimalParams } from '../../../services/adminService';
 import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
 import AdminSidebar from '../../../components/layout/Sidebar/AdminSidebar/AdminSidebar';
 import styles from './AdminOptuna.module.css';
 
 const AdminOptuna = () => {
   const [loading, setLoading] = useState(false);
+  const [trainingLoading, setTrainingLoading] = useState(false);
   const [companies, setCompanies] = useState([]);
   const [status, setStatus] = useState(null); // 'idle', 'running', 'success', 'error'
   const [statusMessage, setStatusMessage] = useState('');
+  const [trainingStatus, setTrainingStatus] = useState(null);
+  const [trainingStatusMessage, setTrainingStatusMessage] = useState('');
   
   // Configuration de l'optimisation
   const [config, setConfig] = useState({
@@ -19,6 +22,16 @@ const AdminOptuna = () => {
     training_episodes: 150,
     eval_episodes: 15,
     custom_days: 7,
+  });
+
+  // Configuration de l'entraînement
+  const [trainingConfig, setTrainingConfig] = useState({
+    config_path: '',
+    study_name: '',
+    model_output_path: 'data/rl/models/dqn_optimized.pth',
+    training_episodes: 1000,
+    eval_episodes: 50,
+    company_id: '',
   });
 
   useEffect(() => {
@@ -96,6 +109,64 @@ const AdminOptuna = () => {
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleTrainingSubmit = async (e) => {
+    if (e) e.preventDefault();
+    
+    if (trainingConfig.training_episodes < 100 || trainingConfig.training_episodes > 10000) {
+      alert('⚠️ Le nombre d\'épisodes d\'entraînement doit être entre 100 et 10000');
+      return;
+    }
+
+    setTrainingLoading(true);
+    setTrainingStatus('running');
+    setTrainingStatusMessage('Démarrage de l\'entraînement du modèle...');
+
+    try {
+      // Préparer les données (enlever les champs vides)
+      const payload = {
+        model_output_path: trainingConfig.model_output_path,
+        training_episodes: trainingConfig.training_episodes,
+        eval_episodes: trainingConfig.eval_episodes,
+      };
+
+      if (trainingConfig.config_path) {
+        payload.config_path = trainingConfig.config_path;
+      }
+
+      if (trainingConfig.study_name) {
+        payload.study_name = trainingConfig.study_name;
+      }
+
+      if (trainingConfig.company_id) {
+        payload.company_id = trainingConfig.company_id;
+      }
+
+      await trainModelWithOptimalParams(payload);
+      
+      setTrainingStatus('success');
+      setTrainingStatusMessage(
+        `✅ Entraînement démarré avec succès ! ` +
+        `Le modèle sera sauvegardé dans ${trainingConfig.model_output_path} une fois terminé.`
+      );
+      
+      // Réinitialiser après 5 secondes
+      setTimeout(() => {
+        setTrainingStatus('idle');
+        setTrainingStatusMessage('');
+      }, 5000);
+
+    } catch (error) {
+      setTrainingStatus('error');
+      setTrainingStatusMessage(
+        error.response?.data?.message || 
+        error.message || 
+        'Erreur lors du démarrage de l\'entraînement'
+      );
+    } finally {
+      setTrainingLoading(false);
     }
   };
 
@@ -260,6 +331,138 @@ const AdminOptuna = () => {
             </div>
           </form>
 
+          {/* Section Entraînement du modèle */}
+          <div className={styles.section}>
+            <div className={styles.header}>
+              <h2>
+                <FaRobot /> Entraînement du modèle avec hyperparamètres optimaux
+              </h2>
+              <p>
+                Après l'optimisation Optuna, entraînez un modèle complet avec les meilleurs hyperparamètres trouvés.
+              </p>
+            </div>
+
+            {trainingStatus && (
+              <div className={`${styles.alert} ${styles[trainingStatus]}`}>
+                {trainingStatus === 'running' && <FaSpinner className={styles.spinner} />}
+                {trainingStatus === 'success' && <FaCheckCircle />}
+                {trainingStatus === 'error' && <FaExclamationTriangle />}
+                <span>{trainingStatusMessage}</span>
+              </div>
+            )}
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              handleTrainingSubmit();
+            }} className={styles.form}>
+              <div className={styles.formGroup}>
+                <label htmlFor="training_config_path">
+                  Chemin vers optimal_config.json
+                  <span className={styles.hint}>
+                    Ex: data/rl/optimal_config_dqn_optimization_all_companies.json
+                  </span>
+                </label>
+                <input
+                  type="text"
+                  id="training_config_path"
+                  name="config_path"
+                  value={trainingConfig.config_path}
+                  onChange={(e) => setTrainingConfig({...trainingConfig, config_path: e.target.value})}
+                  placeholder="data/rl/optimal_config_*.json"
+                />
+              </div>
+
+              <div className={styles.formGroup}>
+                <label htmlFor="training_study_name">
+                  OU Nom de l'étude Optuna
+                  <span className={styles.hint}>
+                    Ex: dqn_optimization_all_companies
+                  </span>
+                </label>
+                <input
+                  type="text"
+                  id="training_study_name"
+                  name="study_name"
+                  value={trainingConfig.study_name}
+                  onChange={(e) => setTrainingConfig({...trainingConfig, study_name: e.target.value})}
+                  placeholder="dqn_optimization_all_companies"
+                />
+              </div>
+
+              <div className={styles.formGroup}>
+                <label htmlFor="training_model_output_path">
+                  Chemin de sortie du modèle
+                  <span className={styles.hint}>
+                    Où sauvegarder le modèle entraîné
+                  </span>
+                </label>
+                <input
+                  type="text"
+                  id="training_model_output_path"
+                  name="model_output_path"
+                  value={trainingConfig.model_output_path}
+                  onChange={(e) => setTrainingConfig({...trainingConfig, model_output_path: e.target.value})}
+                />
+              </div>
+
+              <div className={styles.formGroup}>
+                <label htmlFor="training_episodes">
+                  Épisodes d'entraînement
+                  <span className={styles.hint}>
+                    Nombre d'épisodes d'entraînement complet (recommandé: 1000+)
+                  </span>
+                </label>
+                <input
+                  type="number"
+                  id="training_episodes"
+                  name="training_episodes"
+                  min="100"
+                  max="10000"
+                  value={trainingConfig.training_episodes}
+                  onChange={(e) => setTrainingConfig({...trainingConfig, training_episodes: parseInt(e.target.value, 10) || 1000})}
+                  required
+                />
+              </div>
+
+              <div className={styles.formGroup}>
+                <label htmlFor="training_eval_episodes">
+                  Épisodes d'évaluation
+                  <span className={styles.hint}>
+                    Nombre d'épisodes d'évaluation finale (recommandé: 50)
+                  </span>
+                </label>
+                <input
+                  type="number"
+                  id="training_eval_episodes"
+                  name="eval_episodes"
+                  min="10"
+                  max="200"
+                  value={trainingConfig.eval_episodes}
+                  onChange={(e) => setTrainingConfig({...trainingConfig, eval_episodes: parseInt(e.target.value, 10) || 50})}
+                  required
+                />
+              </div>
+
+              <div className={styles.formActions}>
+                <button
+                  type="submit"
+                  disabled={trainingLoading}
+                  className={styles.submitButton}
+                >
+                  {trainingLoading ? (
+                    <>
+                      <FaSpinner className={styles.spinner} /> Démarrage...
+                    </>
+                  ) : (
+                    <>
+                      <FaPlay /> Lancer l'entraînement
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+
           <div className={styles.infoBox}>
             <h3>ℹ️ Informations</h3>
             <ul>
@@ -277,6 +480,9 @@ const AdminOptuna = () => {
               </li>
               <li>
                 <strong>Recommandation :</strong> Utilisez "Semaine" pour les mises à jour régulières et "Mois" pour l'optimisation initiale.
+              </li>
+              <li>
+                <strong>Après l'optimisation :</strong> Utilisez la section "Entraînement du modèle" pour entraîner un modèle complet avec les meilleurs hyperparamètres trouvés.
               </li>
             </ul>
           </div>

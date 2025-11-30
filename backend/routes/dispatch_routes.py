@@ -11,12 +11,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import UTC, date, datetime, timedelta
 from enum import Enum
-
-# Constantes pour éviter les valeurs magiques
+from http import HTTPStatus
 from typing import Any, Dict, cast
 
 from flask import current_app, request
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import get_jwt_identity, jwt_required
 from flask_restx import Namespace, Resource, fields
 from marshmallow import INCLUDE, Schema, validate
 from marshmallow import fields as ma_fields
@@ -31,6 +30,7 @@ from models import (
     Company,
     DispatchRun,
     Driver,
+    User,
     UserRole,
 )
 from routes.companies import get_company_from_token
@@ -1792,7 +1792,7 @@ class LiveDelaysResource(Resource):
             "company_id": "ID entreprise (optionnel pour ADMIN)",
         }
     )
-    def get(self):
+    def get(self):  # noqa: PLR0911
         """Retards en temps réel avec recalcul des ETAs et suggestions intelligentes.
         Inclut les retards actuels ET prédits, avec suggestions de réassignation
         et impact sur les courses suivantes.
@@ -1818,14 +1818,11 @@ class LiveDelaysResource(Resource):
 
         # ✅ Gérer le cas admin : accès total, company_id optionnel
         # Utiliser get_company_from_token qui charge déjà l'utilisateur et vérifie le rôle
-        from flask_jwt_extended import get_jwt_identity
-        from models import User, UserRole
-
         # Tentative standard (pour COMPANY)
         company, err, code = get_company_from_token()
 
         # Si erreur et c'est un 404 "No company", vérifier si c'est un admin
-        if err and code == 404:
+        if err and code == HTTPStatus.NOT_FOUND:
             user_public_id = get_jwt_identity()
             user = User.query.filter_by(public_id=user_public_id).first()
 
@@ -1840,7 +1837,9 @@ class LiveDelaysResource(Resource):
 
                     company_obj = Company.query.filter_by(id=company_id).first()
                     if not company_obj:
-                        return {"error": f"Entreprise {company_id} introuvable"}, 404
+                        return {
+                            "error": f"Entreprise {company_id} introuvable"
+                        }, HTTPStatus.NOT_FOUND
                     company = company_obj
                 else:
                     # Admin sans company_id : utiliser la première entreprise trouvée
@@ -1848,7 +1847,7 @@ class LiveDelaysResource(Resource):
                     if not company_obj:
                         return {
                             "error": "Aucune entreprise trouvée dans le système"
-                        }, 404
+                        }, HTTPStatus.NOT_FOUND
                     company = company_obj
             else:
                 # Pas admin, retourner l'erreur originale
@@ -1858,6 +1857,9 @@ class LiveDelaysResource(Resource):
             return err, code
 
         # Si on arrive ici, company est défini (via get_company_from_token ou logique admin)
+        if company is None:
+            return {"error": "Entreprise introuvable"}, HTTPStatus.NOT_FOUND
+
         time_expr = _booking_time_expr()
 
         # ✅ CRITIQUE: Filtrer les assignations par proximité temporelle

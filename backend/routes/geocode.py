@@ -302,6 +302,32 @@ class GeocodeAutocomplete(Resource):
                             "lon": None,
                         }
                     )
+
+                # ✅ FIX: Si Google Places retourne une liste vide, faire fallback vers Photon
+                if not google_results:
+                    current_app.logger.debug(
+                        "⚠️ Google Places retourne 0 résultats pour '%s', fallback vers Photon",
+                        q,
+                    )
+                    # Fallback vers Photon si Google ne retourne rien
+                    try:
+                        ph = photon_query(
+                            q,
+                            lat=lat,
+                            lon=lon,
+                            limit=limit,
+                            hospital_hint=looks_like_hospital(q),
+                        )
+                        photon_results = normalize_photon(ph)
+                        if photon_results:
+                            current_app.logger.info(
+                                "✅ Photon fallback retourne %d résultats pour '%s'",
+                                len(photon_results),
+                                q,
+                            )
+                        results.extend(photon_results)
+                    except Exception as e2:
+                        current_app.logger.error("❌ Photon autocomplete error: %s", e2)
             except GooglePlacesError as e:
                 current_app.logger.warning(
                     "⚠️ Google Places API error, falling back to Photon: %s", e

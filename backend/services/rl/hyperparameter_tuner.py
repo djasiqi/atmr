@@ -15,6 +15,10 @@ STEPS_PERCENT = 100
 # 20 = 0  # Constante corrigée
 EPISODE_ZERO = 0
 BEST_VALUE_THRESHOLD = 544
+# Constantes pour les fenêtres de calcul de moyenne mobile
+RECENT_REWARDS_WINDOW = 20  # Fenêtre pour moyenne mobile des rewards récents
+DIAGNOSTIC_WINDOW = 10  # Fenêtre pour calcul des métriques de diagnostic
+DEGRADATION_CHECK_WINDOW = 20  # Fenêtre pour détection de dégradation
 
 """Auto-Tuner pour hyperparamètres DQN avec Optuna.
 
@@ -146,8 +150,36 @@ class HyperparameterTuner:
 
             # Intermediate reporting pour pruning
             if episode % 2 == EPISODE_ZERO and episode > EPISODE_ZERO:
-                intermediate_value = sum(episode_rewards[-20:]) / 20
+                # ✅ FIX: Utiliser moyenne mobile sur les 20 derniers épisodes
+                # pour une estimation plus stable de la performance
+                recent_rewards = (
+                    episode_rewards[-RECENT_REWARDS_WINDOW:]
+                    if len(episode_rewards) >= RECENT_REWARDS_WINDOW
+                    else episode_rewards
+                )
+                intermediate_value = sum(recent_rewards) / len(recent_rewards)
                 trial.report(intermediate_value, episode)
+
+                # ✅ FIX: Ajouter métriques de diagnostic comme user attributes
+                if len(episode_rewards) >= DIAGNOSTIC_WINDOW:
+                    recent_avg = (
+                        sum(episode_rewards[-DIAGNOSTIC_WINDOW:]) / DIAGNOSTIC_WINDOW
+                    )
+                    trial.set_user_attr("recent_avg_reward", recent_avg)
+                    trial.set_user_attr("best_episode_reward", max(episode_rewards))
+                    trial.set_user_attr("worst_episode_reward", min(episode_rewards))
+                    # Détecter dégradation: si les 10 derniers sont pires que les 10 précédents
+                    if len(episode_rewards) >= DEGRADATION_CHECK_WINDOW:
+                        previous_avg = (
+                            sum(
+                                episode_rewards[
+                                    -DEGRADATION_CHECK_WINDOW:-DIAGNOSTIC_WINDOW
+                                ]
+                            )
+                            / DIAGNOSTIC_WINDOW
+                        )
+                        degradation = recent_avg - previous_avg
+                        trial.set_user_attr("reward_degradation", degradation)
 
                 # Pruning : arrêter si performance clairement mauvaise
                 if trial.should_prune():
@@ -188,19 +220,26 @@ class HyperparameterTuner:
             Dictionnaire de configuration suggérée
 
         """
-        return {
+        # ✅ FIX: Conditionner les paramètres N-step à use_n_step
+        use_n_step = trial.suggest_categorical("use_n_step", [True, False])
+
+        config = {
             # === PARAMÈTRES DE BASE ===
             # Apprentissage
-            "learning_rate": trial.suggest_float("learning_rate", 1e-5, 1e-2, log=True),
+            # ✅ FIX: Augmenter learning_rate min pour éviter apprentissage trop lent
+            "learning_rate": trial.suggest_float("learning_rate", 1e-4, 1e-2, log=True),
             "gamma": trial.suggest_float("gamma", 0.90, 0.999),
             "batch_size": trial.suggest_categorical("batch_size", [32, 64, 128, 256]),
             # Exploration
-            "epsilon_start": trial.suggest_float("epsilon_start", 0.7, 1),
+            # ✅ FIX: Réduire epsilon_start max pour éviter exploration excessive
+            "epsilon_start": trial.suggest_float("epsilon_start", 0.7, 0.95),
             "epsilon_end": trial.suggest_float("epsilon_end", 0.1, 0.1),
-            "epsilon_decay": trial.suggest_float("epsilon_decay", 0.990, 0.999),
+            # ✅ FIX: Augmenter epsilon_decay min pour convergence plus rapide
+            "epsilon_decay": trial.suggest_float("epsilon_decay", 0.995, 0.999),
             # Replay buffer
+            # ✅ FIX: Augmenter buffer_size min pour plus de stabilité
             "buffer_size": trial.suggest_categorical(
-                "buffer_size", [50000, 100000, 200000, 500000]
+                "buffer_size", [100000, 200000, 500000]
             ),
             # Target network
             "target_update_freq": trial.suggest_int("target_update_freq", 5, 50),
@@ -220,19 +259,28 @@ class HyperparameterTuner:
             # Importance sampling fin
             "beta_end": trial.suggest_float("beta_end", 0.8, 1),
             # N-step Learning
-            "use_n_step": trial.suggest_categorical("use_n_step", [True, False]),
-            # Nombre d'étapes pour N-step
-            "n_step": trial.suggest_int("n_step", 2, 5),
-            # Gamma pour N-step
-            "n_step_gamma": trial.suggest_float("n_step_gamma", 0.95, 0.999),
+            "use_n_step": use_n_step,
             # Dueling DQN
             "use_dueling": trial.suggest_categorical("use_dueling", [True, False]),
             # Soft update
             "tau": trial.suggest_float("tau", 0.001, 0.1),  # Soft update rate
             # === ENVIRONNEMENT ===
-            "num_drivers": trial.suggest_int("num_drivers", 5, 20),
-            "max_bookings": trial.suggest_int("max_bookings", 10, 50),
+            # ✅ FIX: Réduire num_drivers max pour ratio plus réaliste
+            "num_drivers": trial.suggest_int("num_drivers", 5, 15),
+            # ✅ FIX: Augmenter max_bookings min pour ratio plus équilibré
+            "max_bookings": trial.suggest_int("max_bookings", 15, 30),
         }
+
+        # ✅ FIX: Conditionner n_step et n_step_gamma à use_n_step=True
+        if use_n_step:
+            config["n_step"] = trial.suggest_int("n_step", 2, 5)
+            config["n_step_gamma"] = trial.suggest_float("n_step_gamma", 0.95, 0.999)
+        else:
+            # Valeurs par défaut si N-step désactivé (ne seront pas utilisées)
+            config["n_step"] = 3
+            config["n_step_gamma"] = 0.99
+
+        return config
 
     def optimize(self, show_progress_bar: bool | None = None) -> optuna.Study:
         """Lance l'optimisation Optuna.
@@ -260,9 +308,10 @@ class HyperparameterTuner:
             )
 
         # Créer pruner pour arrêter trials non prometteurs
+        # ✅ FIX: Réduire n_warmup_steps pour arrêter plus tôt les trials non prometteurs
         pruner = optuna.pruners.MedianPruner(
             n_startup_trials=5,  # Laisser 5 trials complets avant pruning
-            n_warmup_steps=20,  # Attendre 20 étapes avant pruning
+            n_warmup_steps=10,  # Attendre 10 étapes avant pruning (réduit de 20)
         )
 
         # Créer sampler pour exploration efficace

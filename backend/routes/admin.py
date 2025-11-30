@@ -1166,3 +1166,200 @@ class OptunaOptimize(Resource):
             sentry_sdk.capture_exception(e)
             app_logger.error(f"❌ ERREUR optuna_optimize: {e!s}", exc_info=True)
             return {"message": "Erreur lors du démarrage de l'optimisation"}, 500
+
+
+# Modèle pour l'entraînement avec hyperparamètres optimaux
+train_optimal_model = admin_ns.model(
+    "TrainOptimalModel",
+    {
+        "config_path": fields.String(
+            required=False,
+            description="Chemin vers optimal_config.json (optionnel)",
+        ),
+        "study_name": fields.String(
+            required=False,
+            description="Nom de l'étude Optuna (optionnel, si config_path non fourni)",
+        ),
+        "model_output_path": fields.String(
+            required=False,
+            default="data/rl/models/dqn_optimized.pth",
+            description="Chemin de sortie pour le modèle entraîné",
+        ),
+        "training_episodes": fields.Integer(
+            required=False,
+            default=1000,
+            description="Nombre d'épisodes d'entraînement complet",
+        ),
+        "eval_episodes": fields.Integer(
+            required=False,
+            default=50,
+            description="Nombre d'épisodes d'évaluation finale",
+        ),
+        "company_id": fields.Integer(
+            required=False, description="ID de l'entreprise (optionnel)"
+        ),
+    },
+)
+
+
+@admin_ns.route("/optuna/train")
+class OptunaTrain(Resource):
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @ip_whitelist_required()
+    @limiter.limit("5 per hour")  # Limite plus stricte (entraînement long)
+    @admin_ns.expect(train_optimal_model, validate=False)
+    def post(self):
+        """
+        Entraîne un modèle DQN complet avec les hyperparamètres optimaux.
+
+        Les hyperparamètres peuvent être chargés depuis:
+        - Un fichier optimal_config.json (config_path)
+        - Une étude Optuna (study_name)
+        - Les hyperparamètres par défaut (si aucun des deux n'est fourni)
+
+        Cette route lance l'entraînement en arrière-plan via le worker RL.
+        L'entraînement peut prendre plusieurs heures selon le nombre d'épisodes.
+
+        Retourne immédiatement avec un statut de démarrage.
+        """
+        try:
+            data = request.get_json() or {}
+            config_path = data.get("config_path")
+            study_name = data.get("study_name")
+            model_output_path = data.get(
+                "model_output_path", "data/rl/models/dqn_optimized.pth"
+            )
+            training_episodes = data.get("training_episodes", 1000)
+            eval_episodes = data.get("eval_episodes", 50)
+            company_id = data.get("company_id")
+
+            app_logger.info(
+                (
+                    f"🎓 Démarrage entraînement modèle optimal par admin {get_jwt_identity()}: "
+                    f"config_path={config_path}, study_name={study_name}, episodes={training_episodes}"
+                )
+            )
+
+            # Faire une requête HTTP vers le worker RL pour lancer l'entraînement
+            import os
+
+            import requests
+
+            # URL du worker RL (par défaut : atmr-rl-worker:5000 dans le réseau Docker)
+            rl_worker_url = os.getenv(
+                "RL_WORKER_URL", "http://atmr-rl-worker:5000"
+            ).rstrip("/")
+
+            # Forcer HTTP pour communication interne Docker
+            if rl_worker_url.startswith("https://"):
+                rl_worker_url = rl_worker_url.replace("https://", "http://", 1)
+
+            if not rl_worker_url.startswith("http://"):
+                rl_worker_url = f"http://{rl_worker_url}"
+
+            rl_endpoint = f"{rl_worker_url}/api/v1/rl/train/optimal"
+
+            app_logger.info(
+                f"📡 Envoi requête vers worker RL: {rl_endpoint} (episodes={training_episodes})"
+            )
+
+            # Préparer les données à envoyer
+            payload = {
+                "config_path": config_path,
+                "study_name": study_name,
+                "model_output_path": model_output_path,
+                "training_episodes": training_episodes,
+                "eval_episodes": eval_episodes,
+                "company_id": company_id,
+            }
+
+            # Désactiver les avertissements SSL pour les connexions internes
+            try:
+                import urllib3
+
+                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            except ImportError:
+                pass
+
+            try:
+                response = requests.post(
+                    rl_endpoint,
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
+                    timeout=10,
+                    verify=False,
+                    allow_redirects=False,
+                )
+
+                HTTP_STATUS_ACCEPTED = 202
+                if response.status_code == HTTP_STATUS_ACCEPTED:
+                    worker_response = response.json()
+                    app_logger.info(
+                        f"✅ Worker RL a accepté l'entraînement: {worker_response.get('status', 'unknown')}"
+                    )
+                    response_data = worker_response
+                else:
+                    error_msg = response.text or f"Status code: {response.status_code}"
+                    app_logger.error(
+                        f"❌ Erreur lors de l'appel au worker RL (status {response.status_code}): {error_msg}"
+                    )
+                    return (
+                        {
+                            "message": "Erreur lors de la communication avec le worker RL",
+                            "error": error_msg,
+                        },
+                        500,
+                    )
+
+            except requests.exceptions.RequestException as e:
+                app_logger.exception(
+                    f"❌ Impossible de se connecter au worker RL ({rl_endpoint}): {e!s}"
+                )
+                return (
+                    {
+                        "message": (
+                            "Impossible de se connecter au worker RL. "
+                            "Vérifiez que le worker RL est démarré et accessible."
+                        ),
+                        "error": str(e),
+                        "rl_worker_url": rl_worker_url,
+                    },
+                    503,  # Service Unavailable
+                )
+
+            # Audit logging
+            try:
+                from security.audit_log import AuditLogger
+
+                current_user_id = get_jwt_identity()
+                current_user = User.query.filter_by(public_id=current_user_id).first()
+
+                AuditLogger.log_action(
+                    action_type="rl_model_training_started",
+                    action_category="ml_ops",
+                    user_id=current_user.id if current_user else None,
+                    user_type=current_user.role.value
+                    if current_user and current_user.role
+                    else "admin",
+                    result_status="success",
+                    action_details={
+                        "config_path": config_path,
+                        "study_name": study_name,
+                        "model_output_path": model_output_path,
+                        "training_episodes": training_episodes,
+                        "eval_episodes": eval_episodes,
+                        "company_id": company_id,
+                    },
+                    ip_address=request.remote_addr,
+                    user_agent=request.headers.get("User-Agent"),
+                )
+            except Exception as audit_error:
+                app_logger.warning(f"⚠️ Erreur audit logging: {audit_error}")
+
+            return response_data, 202  # 202 Accepted (traitement asynchrone)
+
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            app_logger.error(f"❌ ERREUR optuna_train: {e!s}", exc_info=True)
+            return {"message": "Erreur lors du démarrage de l'entraînement"}, 500
