@@ -273,15 +273,25 @@ const VehicleModal = ({ vehicle, onSave, onClose }) => {
     e.preventDefault();
     setSaving(true);
     try {
+      // ✅ Construire le payload en omettant les champs vides (pas de null)
       const payload = {
         model: formData.model.trim(),
         license_plate: formData.license_plate.trim().toUpperCase(),
-        year: formData.year ? parseInt(formData.year) : null,
-        vin: formData.vin.trim() || null,
-        seats: formData.seats ? parseInt(formData.seats) : null,
         wheelchair_accessible: formData.wheelchair_accessible,
         is_active: formData.is_active,
       };
+      
+      // Ajouter les champs optionnels seulement s'ils ont une valeur
+      if (formData.year && formData.year.trim()) {
+        payload.year = parseInt(formData.year);
+      }
+      if (formData.vin && formData.vin.trim()) {
+        payload.vin = formData.vin.trim();
+      }
+      if (formData.seats && formData.seats.trim()) {
+        payload.seats = parseInt(formData.seats);
+      }
+      
       await onSave(payload);
     } catch (err) {
       console.error('Erreur sauvegarde véhicule:', err);

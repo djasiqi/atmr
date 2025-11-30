@@ -86,12 +86,17 @@ class RLOptunaOptimize(Resource):
                 n_trials,
             )
 
+            # Capturer l'application Flask AVANT de créer le thread
+            # current_app est un proxy local qui n'est pas disponible dans les threads
+            flask_app = current_app._get_current_object()
+
             # Lancer l'optimisation en arrière-plan (threading)
             def run_optuna_optimization():
                 """Fonction exécutée en arrière-plan pour l'optimisation Optuna."""
                 try:
                     # Créer un contexte d'application Flask pour le thread
-                    with current_app.app_context():
+                    # en utilisant l'application Flask capturée avant le thread
+                    with flask_app.app_context():
                         result = optuna_optimize_impl(
                             company_id=company_id,
                             data_period=data_period,

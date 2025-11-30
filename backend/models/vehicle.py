@@ -106,8 +106,10 @@ class Vehicle(db.Model):
 
     @validates("year")
     def _v_year(self, _key, value):
-        if value is not None and (value < VALUE_THRESHOLD or value > YEAR_MAX_VALUE):
-            msg = "Année du véhicule invalide."
+        # ✅ Correction: VALUE_THRESHOLD (2100) est utilisé incorrectement, utiliser 1950 comme minimum
+        YEAR_MIN_VALUE = 1950
+        if value is not None and (value < YEAR_MIN_VALUE or value > YEAR_MAX_VALUE):
+            msg = f"Année du véhicule invalide (doit être entre {YEAR_MIN_VALUE} et {YEAR_MAX_VALUE})."
             raise ValueError(msg)
         return value
 

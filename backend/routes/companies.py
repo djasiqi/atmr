@@ -148,13 +148,13 @@ vehicle_create_model = companies_ns.model(
     {
         "model": fields.String(required=True),
         "license_plate": fields.String(required=True),
-        "year": fields.Integer,
-        "vin": fields.String,
-        "seats": fields.Integer,
-        "wheelchair_accessible": fields.Boolean,
-        "insurance_expires_at": fields.String(description="ISO 8601"),
-        "inspection_expires_at": fields.String(description="ISO 8601"),
-        "is_active": fields.Boolean,
+        "year": fields.Integer(allow_null=True),  # ✅ Permettre None
+        "vin": fields.String(allow_null=True),  # ✅ Permettre None
+        "seats": fields.Integer(allow_null=True),  # ✅ Permettre None
+        "wheelchair_accessible": fields.Boolean(allow_null=True),
+        "insurance_expires_at": fields.String(description="ISO 8601", allow_null=True),
+        "inspection_expires_at": fields.String(description="ISO 8601", allow_null=True),
+        "is_active": fields.Boolean(allow_null=True),
     },
 )
 
@@ -3916,7 +3916,9 @@ class MyVehicles(Resource):
 
     @jwt_required()
     @role_required(UserRole.company)
-    @companies_ns.expect(vehicle_create_model, validate=True)
+    @companies_ns.expect(
+        vehicle_create_model, validate=False
+    )  # ✅ validate=False pour accepter champs optionnels omis
     def post(self):
         company, err, code = get_company_from_token()
         if err:
@@ -3932,6 +3934,9 @@ class MyVehicles(Resource):
 
         data = request.get_json() or {}
 
+        # ✅ Log du payload reçu pour débogage
+        app_logger.info("POST /me/vehicles: Received payload: %s", data)
+
         # Validation des champs requis (consolidée)
         validation_error = None
         if not data.get("model"):
@@ -3940,6 +3945,9 @@ class MyVehicles(Resource):
             validation_error = {"error": "La plaque d'immatriculation est requise"}, 400
 
         if validation_error:
+            app_logger.warning(
+                "POST /me/vehicles: Validation error: %s", validation_error
+            )
             return validation_error
 
         try:
@@ -3953,9 +3961,23 @@ class MyVehicles(Resource):
             v.company_id = cid
             v.model = data["model"]
             v.license_plate = data["license_plate"]
-            v.year = data.get("year")
-            v.vin = data.get("vin")
-            v.seats = data.get("seats")
+            # ✅ Convertir year en int si présent, sinon None
+            year_val = data.get("year")
+            v.year = (
+                int(year_val)
+                if year_val is not None and str(year_val).strip()
+                else None
+            )
+            # ✅ VIN: seulement si présent et non vide
+            vin_val = data.get("vin")
+            v.vin = str(vin_val).strip() if vin_val and str(vin_val).strip() else None
+            # ✅ Seats: convertir en int si présent, sinon None
+            seats_val = data.get("seats")
+            v.seats = (
+                int(seats_val)
+                if seats_val is not None and str(seats_val).strip()
+                else None
+            )
             v.wheelchair_accessible = bool(data.get("wheelchair_accessible", False))
             v.is_active = bool(
                 data.get("is_active", True)

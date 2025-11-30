@@ -1785,8 +1785,13 @@ def _calculate_eta_for_assignment(
 @dispatch_ns.route("/delays/live")
 class LiveDelaysResource(Resource):
     @jwt_required()
-    @role_required(UserRole.company)
-    @dispatch_ns.doc(params={"date": "YYYY-MM-DD"})
+    @role_required(["ADMIN", "COMPANY"])  # ✅ Permettre aux admins d'accéder
+    @dispatch_ns.doc(
+        params={
+            "date": "YYYY-MM-DD",
+            "company_id": "ID entreprise (optionnel pour ADMIN)",
+        }
+    )
     def get(self):
         """Retards en temps réel avec recalcul des ETAs et suggestions intelligentes.
         Inclut les retards actuels ET prédits, avec suggestions de réassignation
@@ -1811,7 +1816,48 @@ class LiveDelaysResource(Resource):
 
         d0, d1 = day_local_bounds(d.strftime("%Y-%m-%d"))
 
-        company = _get_current_company()
+        # ✅ Gérer le cas admin : accès total, company_id optionnel
+        # Utiliser get_company_from_token qui charge déjà l'utilisateur et vérifie le rôle
+        from flask_jwt_extended import get_jwt_identity
+        from models import User, UserRole
+
+        # Tentative standard (pour COMPANY)
+        company, err, code = get_company_from_token()
+
+        # Si erreur et c'est un 404 "No company", vérifier si c'est un admin
+        if err and code == 404:
+            user_public_id = get_jwt_identity()
+            user = User.query.filter_by(public_id=user_public_id).first()
+
+            if user and user.role == UserRole.admin:
+                # Admin : accès total, company_id optionnel
+                company_id_param = request.args.get("company_id")
+                if company_id_param:
+                    try:
+                        company_id = int(company_id_param)
+                    except (ValueError, TypeError):
+                        return {"error": "company_id doit être un nombre entier"}, 400
+
+                    company_obj = Company.query.filter_by(id=company_id).first()
+                    if not company_obj:
+                        return {"error": f"Entreprise {company_id} introuvable"}, 404
+                    company = company_obj
+                else:
+                    # Admin sans company_id : utiliser la première entreprise trouvée
+                    company_obj = Company.query.first()
+                    if not company_obj:
+                        return {
+                            "error": "Aucune entreprise trouvée dans le système"
+                        }, 404
+                    company = company_obj
+            else:
+                # Pas admin, retourner l'erreur originale
+                return err, code
+        elif err:
+            # Autre erreur, la retourner
+            return err, code
+
+        # Si on arrive ici, company est défini (via get_company_from_token ou logique admin)
         time_expr = _booking_time_expr()
 
         # ✅ CRITIQUE: Filtrer les assignations par proximité temporelle
