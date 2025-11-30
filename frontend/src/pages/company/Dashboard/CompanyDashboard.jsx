@@ -1,5 +1,6 @@
 // src/pages/company/Dashboard/CompanyDashboard.jsx
 import React, { useCallback, useState, useEffect, useMemo, useTransition } from 'react';
+import { Link } from 'react-router-dom';
 import useCompanySocket from '../../../hooks/useCompanySocket';
 import useDispatchStatus from '../../../hooks/useDispatchStatus';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -532,17 +533,16 @@ const CompanyDashboard = () => {
                 <>{delayCount} retard(s) détecté(s) aujourd'hui</>
               )}
             </span>
-            <a
-              href={company?.public_id ? `/dashboard/company/${company.public_id}/dispatch` : '#'}
-              className={styles.delayAlertLink}
-              onClick={(e) => {
-                if (!company?.public_id) {
-                  e.preventDefault();
-                }
-              }}
-            >
-              Voir les détails et suggestions →
-            </a>
+            {company?.public_id ? (
+              <Link
+                to={`/dashboard/company/${company.public_id}/dispatch`}
+                className={styles.delayAlertLink}
+              >
+                Voir les détails et suggestions →
+              </Link>
+            ) : (
+              <span className={styles.delayAlertLink}>Voir les détails et suggestions →</span>
+            )}
           </div>
         </div>
       )}
@@ -578,21 +578,26 @@ const CompanyDashboard = () => {
               {/* Actions rapides */}
               <div className={styles.quickActions}>
                 {/* Dispatch & Planification */}
-                <a
-                  href={company?.public_id ? `/dashboard/company/${company.public_id}/dispatch` : '#'}
-                  className={styles.actionButton}
-                  onClick={(e) => {
-                    if (!company?.public_id) {
-                      e.preventDefault();
-                    }
-                  }}
-                >
-                  <span className={styles.actionIcon}>🚀</span>
-                  <span className={styles.actionText}>
-                    <strong>Dispatch & Planification</strong>
-                    <small>Optimiser les courses</small>
-                  </span>
-                </a>
+                {company?.public_id ? (
+                  <Link
+                    to={`/dashboard/company/${company.public_id}/dispatch`}
+                    className={styles.actionButton}
+                  >
+                    <span className={styles.actionIcon}>🚀</span>
+                    <span className={styles.actionText}>
+                      <strong>Dispatch & Planification</strong>
+                      <small>Optimiser les courses</small>
+                    </span>
+                  </Link>
+                ) : (
+                  <button className={styles.actionButton} disabled>
+                    <span className={styles.actionIcon}>🚀</span>
+                    <span className={styles.actionText}>
+                      <strong>Dispatch & Planification</strong>
+                      <small>Optimiser les courses</small>
+                    </span>
+                  </button>
+                )}
 
                 {/* Créer une réservation */}
                 <button onClick={() => setShowBookingModal(true)} className={styles.actionButton}>

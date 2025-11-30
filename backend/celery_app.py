@@ -71,10 +71,12 @@ CELERY_TIMEZONE = os.getenv("CELERY_TIMEZONE", "Europe/Zurich")
 DISPATCH_AUTORUN_INTERVAL_SEC = int(os.getenv("DISPATCH_AUTORUN_INTERVAL_SEC", "300"))
 
 # Create Celery instance
+# ✅ Forcer explicitement le transport Redis pour éviter confusion avec AMQP
 celery: Celery = Celery(
     "atmr",
     broker=CELERY_BROKER_URL,
     backend=CELERY_RESULT_BACKEND,
+    broker_transport="redis",  # ✅ Forcer transport Redis explicitement
     include=[
         "tasks.dispatch_tasks",
         "tasks.planning_tasks",
@@ -98,6 +100,10 @@ else:
 
 # Configure Celery
 celery.conf.update(
+    broker_transport="redis",  # ✅ Forcer explicitement le transport Redis
+    broker_connection_retry=True,  # Retry automatique en cas d'erreur de connexion
+    broker_connection_retry_on_startup=True,  # important avec Docker
+    broker_connection_max_retries=10,  # Nombre max de tentatives
     timezone=CELERY_TIMEZONE,
     task_serializer="json",
     accept_content=["json"],
@@ -111,7 +117,6 @@ celery.conf.update(
     worker_prefetch_multiplier=1,  # One task at a time
     task_acks_late=True,  # Acknowledge task after execution
     task_reject_on_worker_lost=True,  # Requeue task if worker dies
-    broker_connection_retry_on_startup=True,  # important avec Docker
     # ✅ A3: Configuration des queues (default, realtime, dlq)
     task_routes={
         "tasks.dispatch_tasks.*": {"queue": "default"},

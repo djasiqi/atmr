@@ -693,7 +693,31 @@ def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
             )
 
             # Import here to avoid circular imports
+            from celery_app import celery as celery_app
             from tasks.dispatch_tasks import run_dispatch_task
+
+            # ✅ Vérifier et forcer Redis comme transport
+            broker_url = celery_app.conf.broker_url
+            broker_transport = celery_app.conf.broker_transport
+
+            # Constante pour la longueur max de l'URL du broker à afficher
+            MAX_BROKER_URL_DISPLAY_LENGTH = 50
+
+            # Forcer explicitement le transport Redis si ce n'est pas déjà fait
+            if broker_transport != "redis":
+                logger.warning(
+                    "[Queue] Forcing broker_transport to redis (was: %s)",
+                    broker_transport,
+                )
+                celery_app.conf.broker_transport = "redis"
+
+            logger.info(
+                "[Queue] Enqueuing task with broker_url=%s, transport=%s",
+                broker_url[:MAX_BROKER_URL_DISPLAY_LENGTH] + "***"
+                if broker_url and len(broker_url) > MAX_BROKER_URL_DISPLAY_LENGTH
+                else broker_url,
+                celery_app.conf.broker_transport,
+            )
 
             # Enqueue Celery task
             # ✅ Forcer explicitement la queue "default"
