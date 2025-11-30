@@ -734,24 +734,64 @@ def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
                     else broker_url,
                 )
 
-            # ✅ FORCER la réinitialisation de la connexion Celery
-            # La connexion peut être mise en cache avec AMQP, il faut la fermer
-            # et forcer une nouvelle connexion avec Redis
+            # ✅ FORCER la réinitialisation COMPLÈTE de la connexion Celery
+            # Le problème : Celery/Kombu utilise AMQP en cache même si on configure Redis
+            # Solution : Fermer TOUTES les connexions et forcer une nouvelle connexion Redis
             with suppress(Exception):
-                # Fermer la connexion existante si elle existe
+                # 1. Fermer la connexion principale si elle existe
                 connection = getattr(celery_app, "_connection", None)
                 if connection:
                     logger.info(
-                        "[Queue] Fermeture de la connexion Celery existante pour forcer Redis"
+                        "[Queue] 🔄 Fermeture de la connexion Celery principale"
                     )
                     with suppress(Exception):
                         connection.close()
                     celery_app._connection = None
 
-                # Forcer la suppression du cache de connexion
+                # 2. Forcer la suppression du cache de connexion broker
                 broker_connection = getattr(celery_app, "broker_connection", None)
                 if broker_connection is not None:
+                    logger.info("[Queue] 🔄 Suppression du cache broker_connection")
+                    with suppress(Exception):
+                        broker_connection.close()
                     celery_app.broker_connection = None
+
+                # 3. Forcer la suppression de tous les caches de connexion Kombu
+                # Kombu peut mettre en cache la connexion dans plusieurs endroits
+                if hasattr(celery_app, "pool"):
+                    pool = getattr(celery_app, "pool", None)
+                    if pool and hasattr(pool, "_connection"):
+                        logger.info("[Queue] 🔄 Suppression du cache pool._connection")
+                        with suppress(Exception):
+                            if pool._connection:
+                                pool._connection.close()
+                        pool._connection = None
+
+            # 4. FORCER la création d'une nouvelle connexion avec Redis explicitement
+            # en passant broker_url et transport directement
+            logger.info("[Queue] 🔄 Création d'une nouvelle connexion Redis explicite")
+            try:
+                # Forcer la création d'une nouvelle connexion avec Redis
+                # en passant broker_url et transport explicitement
+                from kombu import Connection
+
+                # Créer une nouvelle connexion Kombu avec Redis explicitement
+                redis_connection = Connection(
+                    broker_url,
+                    transport="redis",
+                    transport_options={},
+                )
+
+                # Remplacer la connexion du broker par notre connexion Redis
+                celery_app.broker_connection = redis_connection
+
+                logger.info("[Queue] ✅ Nouvelle connexion Redis créée explicitement")
+            except Exception as conn_err:
+                logger.warning(
+                    "[Queue] ⚠️ Erreur lors de la création explicite de la connexion Redis: %s",
+                    conn_err,
+                )
+                # Continuer quand même, peut-être que la connexion par défaut fonctionnera
 
             logger.info(
                 "[Queue] Enqueuing task with broker_url=%s, transport=%s",
