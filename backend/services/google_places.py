@@ -79,8 +79,13 @@ def autocomplete_address(
         "input": query,
         "key": GOOGLE_API_KEY,
         "language": language,
-        "components": f"country:{country}",
     }
+
+    # ✅ FIX: Utiliser le paramètre country pour limiter la recherche
+    # Si country est spécifié, limiter à ce pays
+    # Si country n'est pas spécifié, pas de restriction (recherche mondiale avec biais Genève)
+    if country:
+        params["components"] = f"country:{country.lower()}"
 
     # Ne pas ajouter "types" pour permettre la recherche dans tous les types
     # (adresses, établissements, POI, etc.)

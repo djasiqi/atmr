@@ -48,9 +48,24 @@ const NewClientModal = ({ onClose, onSave }) => {
     console.log('📍 [Domicile] Adresse sélectionnée:', item);
 
     // Extraire les composants de l'adresse
-    const address = item.address || item.label || '';
+    // Priorité : utiliser les composants extraits (street, street_number) si disponibles
+    // Sinon, utiliser address ou label
+    const streetNumber = item.street_number || '';
+    const street = item.street || '';
+    const address =
+      streetNumber && street
+        ? `${streetNumber} ${street}`.trim()
+        : street || item.address || item.label || '';
     const postcode = item.postcode || '';
     const city = item.city || '';
+
+    console.log('📍 [Domicile] Composants extraits:', {
+      streetNumber,
+      street,
+      address,
+      postcode,
+      city,
+    });
 
     setFormData((prev) => ({
       ...prev,

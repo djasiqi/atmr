@@ -305,21 +305,36 @@ export default function AddressAutocomplete({
         if (response.ok) {
           const details = await response.json();
 
-          // Enrichir l'item avec les coordonnées GPS
+          // Extraire les composants d'adresse depuis address_components
+          const addressComponents = details.address_components || [];
+          const streetNumber = addressComponents.find((c) =>
+            c.types?.includes('street_number')
+          )?.long_name;
+          const route = addressComponents.find((c) => c.types?.includes('route'))?.long_name;
+          const city =
+            addressComponents.find((c) => c.types?.includes('locality'))?.long_name ||
+            addressComponents.find((c) => c.types?.includes('administrative_area_level_2'))
+              ?.long_name ||
+            it.city;
+          const postcode =
+            addressComponents.find((c) => c.types?.includes('postal_code'))?.long_name ||
+            it.postcode;
+
+          // Construire l'adresse complète (rue + numéro)
+          const streetAddress = [streetNumber, route].filter(Boolean).join(' ') || route || '';
+
+          // Enrichir l'item avec les coordonnées GPS et les composants d'adresse
           const enrichedItem = {
             ...it,
             lat: details.lat,
             lon: details.lon,
-            address: details.address || fullAddress,
-            // Extraire les composants d'adresse si disponibles
-            ...(details.address_components && {
-              city:
-                details.address_components.find((c) => c.types?.includes('locality'))?.long_name ||
-                it.city,
-              postcode:
-                details.address_components.find((c) => c.types?.includes('postal_code'))
-                  ?.long_name || it.postcode,
-            }),
+            address: streetAddress || details.address || fullAddress,
+            street: route || '',
+            street_number: streetNumber || '',
+            city: city || it.city || '',
+            postcode: postcode || it.postcode || '',
+            // Garder l'adresse complète formatée pour l'affichage
+            label: details.address || fullAddress,
           };
 
           onSelect?.(enrichedItem);

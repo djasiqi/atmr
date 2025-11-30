@@ -266,15 +266,58 @@ class GeocodeAutocomplete(Resource):
         # 3) Google Places API (prioritaire) ou fallback Photon
         if USE_GOOGLE_PLACES:
             try:
-                # Appel à Google Places Autocomplete
-                google_results = autocomplete_address(
-                    q, location={"lat": lat, "lng": lon}, limit=limit
-                )
+                # ✅ FIX: Recherche multi-pays - d'abord Suisse (CH), puis France (FR)
+                # Pour la zone frontalière Genève, permettre recherche dans les deux pays
+                google_results_ch: List[Dict[str, Any]] = []
+                google_results_fr: List[Dict[str, Any]] = []
+
+                # 3a) Recherche en Suisse (CH) en premier
+                try:
+                    google_results_ch = autocomplete_address(
+                        q, country="CH", location={"lat": lat, "lng": lon}, limit=limit
+                    )
+                    if google_results_ch:
+                        current_app.logger.debug(
+                            "✅ Google Places (CH) retourne %d résultats pour '%s'",
+                            len(google_results_ch),
+                            q,
+                        )
+                except Exception as e_ch:
+                    current_app.logger.warning(
+                        "⚠️ Erreur Google Places (CH) pour '%s': %s", q, e_ch
+                    )
+
+                # 3b) Recherche en France (FR) ensuite (si on n'a pas assez de résultats)
+                # On limite à 3 résultats FR pour compléter (max 5 total)
+                if len(google_results_ch) < limit:
+                    try:
+                        fr_limit = max(1, limit - len(google_results_ch))
+                        google_results_fr = autocomplete_address(
+                            q,
+                            country="FR",
+                            location={"lat": lat, "lng": lon},
+                            limit=fr_limit,
+                        )
+                        if google_results_fr:
+                            current_app.logger.debug(
+                                "✅ Google Places (FR) retourne %d résultats pour '%s'",
+                                len(google_results_fr),
+                                q,
+                            )
+                    except Exception as e_fr:
+                        current_app.logger.warning(
+                            "⚠️ Erreur Google Places (FR) pour '%s': %s", q, e_fr
+                        )
+
+                # Combiner les résultats : CH en premier, puis FR
+                google_results = google_results_ch + google_results_fr
 
                 if google_results:
                     current_app.logger.debug(
-                        "✅ Google Places retourne %d résultats pour '%s'",
+                        "✅ Google Places total: %d résultats (%d CH + %d FR) pour '%s'",
                         len(google_results),
+                        len(google_results_ch),
+                        len(google_results_fr),
                         q,
                     )
                 else:
