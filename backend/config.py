@@ -118,7 +118,11 @@ class Config:
         seconds=int(os.getenv("JWT_REFRESH_TOKEN_EXPIRES_SECONDS", str(30 * 24 * 3600)))
     )
     # Validation de l'audience JWT (prévention token replay)
-    JWT_DECODE_AUDIENCE = "atmr-api"
+    # Désactivé pour permettre plusieurs audiences :
+    # - "atmr-api" pour web/chauffeur mobile
+    # - "atmr-mobile-enterprise" pour entreprise mobile
+    # La validation est faite manuellement dans les routes concernées
+    JWT_DECODE_AUDIENCE = None  # None = désactive la validation automatique
     # Algorithme de signature JWT (HS256 = symétrique, secret partagé via Vault)
     JWT_ALGORITHM = "HS256"
 

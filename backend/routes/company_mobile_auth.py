@@ -11,6 +11,7 @@ from datetime import timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 import jwt
+import sentry_sdk
 from flask import current_app, request
 from flask_jwt_extended import (
     create_access_token,
@@ -717,30 +718,63 @@ class EnterpriseMobileRefresh(Resource):
 class EnterpriseMobileSession(Resource):
     @jwt_required()
     def get(self):
-        claims = get_jwt()
-        identity = get_jwt_identity()
-        user = User.query.filter_by(public_id=str(identity)).first()
-        if not user or user.role not in (UserRole.COMPANY, UserRole.ADMIN):
-            return {"error": "Accès refusé."}, 403
-        company = user.company
-        if not company:
-            return {"error": "Entreprise introuvable."}, 404
+        try:
+            claims = get_jwt()
+            identity = get_jwt_identity()
 
-        return {
-            "user": {
-                "id": user.id,
-                "public_id": user.public_id,
-                "email": user.email,
-                "first_name": user.first_name,
-                "last_name": user.last_name,
-                "role": user.role.value,
-            },
-            "company": {
-                "id": company.id,
-                "name": company.name,
-                "dispatch_mode": company.dispatch_mode.value,
-            },
-            "scopes": claims.get("scopes", []),
-            "session_id": claims.get("session_id"),
-            "aud": claims.get("aud"),
-        }, 200
+            # ✅ Validation manuelle de l'audience pour les tokens entreprise mobile
+            aud = claims.get("aud")
+            if aud and aud != MOBILE_AUDIENCE:
+                logger.warning(
+                    "[AUTH][Enterprise] Token avec audience incorrecte: %s (attendu: %s)",
+                    aud,
+                    MOBILE_AUDIENCE,
+                )
+                return {"error": "Token invalide (audience incorrecte)."}, 401
+
+            user = User.query.filter_by(public_id=str(identity)).first()
+            if not user or user.role not in (UserRole.COMPANY, UserRole.ADMIN):
+                return {"error": "Accès refusé."}, 403
+
+            # Récupérer l'entreprise
+            company = user.company
+            # Pour ADMIN, si pas de relation directe, récupérer la première entreprise
+            if user.role == UserRole.ADMIN and not company:
+                company = Company.query.first()
+                if not company:
+                    return {"error": "Aucune entreprise trouvée."}, 404
+            elif not company:
+                return {"error": "Entreprise introuvable."}, 404
+
+            return {
+                "user": {
+                    "id": user.id,
+                    "public_id": user.public_id,
+                    "email": user.email,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "role": user.role.value,
+                },
+                "company": {
+                    "id": company.id,
+                    "name": company.name,
+                    "dispatch_mode": company.dispatch_mode.value,
+                },
+                "scopes": claims.get("scopes", []),
+                "session_id": claims.get("session_id"),
+                "aud": claims.get("aud"),
+            }, 200
+        except jwt.exceptions.ExpiredSignatureError:
+            logger.warning("Token expiré pour /auth/session")
+            return {"error": "Token expiré. Veuillez vous reconnecter."}, 401
+        except jwt.exceptions.InvalidAudienceError:
+            logger.warning("Token avec audience invalide pour /auth/session")
+            return {"error": "Token invalide (audience incorrecte)."}, 401
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.exception(
+                "❌ ERREUR /auth/session: %s - %s",
+                type(e).__name__,
+                str(e),
+            )
+            return {"error": "Une erreur interne est survenue."}, 500
