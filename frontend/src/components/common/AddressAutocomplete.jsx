@@ -311,7 +311,11 @@ export default function AddressAutocomplete({
     onChange?.({ target: { name, value: fullAddress } });
 
     // ✅ Si c'est une suggestion Google Places avec place_id, récupérer les coordonnées GPS
-    if (it.source === 'google_places' && it.place_id && (!it.lat || !it.lon)) {
+    // ⚠️ IMPORTANT : Ne pas appeler onSelect immédiatement pour éviter double mise à jour
+    // On l'appellera après l'enrichissement avec les coordonnées GPS
+    const shouldEnrich = it.source === 'google_places' && it.place_id && (!it.lat || !it.lon);
+    
+    if (shouldEnrich) {
       try {
         const response = await fetch(
           `/api/v1/geocode/place-details?place_id=${encodeURIComponent(it.place_id)}`
@@ -338,54 +342,69 @@ export default function AddressAutocomplete({
           // Construire l'adresse complète (rue + numéro)
           const streetAddress = [streetNumber, route].filter(Boolean).join(' ') || route || '';
           
+          // ✅ PRÉSERVER l'adresse originale sélectionnée par l'utilisateur
+          // Ne remplacer que si l'adresse enrichie est clairement meilleure (a un numéro manquant dans l'original)
+          const originalLabel = fullAddress || it.label || '';
+          const originalHasNumber = /\d+/.test(originalLabel);
+          const enrichedHasNumber = streetNumber && streetNumber.trim() !== '';
+          
           // Construire le label : nom du lieu (si présent) + adresse complète avec numéro
           const placeName = it.main_text || (it.types?.some(t => 
             ['establishment', 'point_of_interest'].includes(t)
           ) ? it.label : null);
           
-          // Utiliser l'adresse formatée complète de Google (contient normalement le numéro)
-          // Si c'est un établissement avec un nom, format: "Nom, Adresse complète"
-          let finalLabel = details.address || fullAddress;
+          // Déterminer quel label utiliser :
+          // - Préférer l'original si l'enrichi n'apporte pas de numéro manquant
+          // - Utiliser l'enrichi seulement si l'original n'a pas de numéro ET l'enrichi en a un
+          let finalLabel = originalLabel;
           
-          if (placeName && streetAddress) {
-            // Pour les établissements avec nom, inclure le nom + adresse avec numéro
-            const addressParts = [streetAddress];
-            if (postcode) addressParts.push(postcode);
-            if (city) addressParts.push(city);
-            const addressStr = addressParts.join(', ');
-            finalLabel = `${placeName}, ${addressStr}`;
-          } else if (placeName && details.address) {
-            // Lieu nommé : "Nom, Adresse complète formatée"
-            finalLabel = `${placeName}, ${details.address}`;
-          } else if (details.address) {
-            // Utiliser directement l'adresse formatée complète de Google
-            finalLabel = details.address;
+          // Si l'original n'a pas de numéro mais l'enrichi en a un, construire un nouveau label
+          if (!originalHasNumber && enrichedHasNumber && streetAddress) {
+            if (placeName && streetAddress) {
+              // Pour les établissements avec nom, inclure le nom + adresse avec numéro
+              const addressParts = [streetAddress];
+              if (postcode) addressParts.push(postcode);
+              if (city) addressParts.push(city);
+              const addressStr = addressParts.join(', ');
+              finalLabel = `${placeName}, ${addressStr}`;
+            } else if (streetAddress) {
+              // Adresse avec numéro mais sans nom d'établissement
+              const addressParts = [streetAddress];
+              if (postcode) addressParts.push(postcode);
+              if (city) addressParts.push(city);
+              finalLabel = addressParts.join(', ');
+            }
           }
+          // Sinon, garder l'adresse originale (celle sélectionnée par l'utilisateur)
 
           // Enrichir l'item avec les coordonnées GPS et les composants d'adresse
+          // ✅ IMPORTANT : Préserver l'adresse originale dans le label pour ne pas la modifier
           const enrichedItem = {
             ...it,
             lat: details.lat,
             lon: details.lon,
-            address: streetAddress || details.address || fullAddress,
-            street: route || '',
-            street_number: streetNumber || '',
+            address: streetAddress || it.address || fullAddress,
+            street: route || it.street || '',
+            street_number: streetNumber || it.street_number || '',
             city: city || it.city || '',
             postcode: postcode || it.postcode || '',
-            // Garder l'adresse complète formatée pour l'affichage (avec numéro)
+            // ✅ Préserver l'adresse originale sélectionnée par l'utilisateur
             label: finalLabel,
           };
 
+          // ✅ Appeler onSelect avec l'item enrichi (qui préserve l'adresse originale)
           onSelect?.(enrichedItem);
           return;
         }
       } catch (error) {
         console.warn('⚠️ Erreur lors de la récupération des coordonnées GPS:', error);
+        // En cas d'erreur, appeler onSelect avec l'item original
+        onSelect?.(it);
       }
+    } else {
+      // Sinon, passer l'item tel quel (Photon, alias, ou Google avec coordonnées déjà présentes)
+      onSelect?.(it);
     }
-
-    // Sinon, passer l'item tel quel (Photon, alias, ou Google avec coordonnées déjà présentes)
-    onSelect?.(it);
   }
 
   function onKeyDown(e) {
