@@ -827,29 +827,18 @@ export default function ManualBookingForm({ onSuccess }) {
                   extractFloorInfo(establishmentName);
                 establishmentName = cleanedEstablishmentName || establishmentName;
 
-                // Construire l'adresse complète pour la destination
-                let fullAddress = '';
+                // ✅ PRÉSERVER l'adresse originale sélectionnée par l'utilisateur
+                // Utiliser le label original (celui affiché dans le modal et sélectionné)
+                const originalLabel = item.label || '';
+                let fullAddress = originalLabel;
                 let floorInfo = floorFromName; // Étage extrait du nom
 
-                if (item.address && (item.postcode || item.city)) {
-                  // On a une vraie adresse structurée
-                  // Nettoyer l'adresse pour retirer l'étage
-                  const { floor: floorFromAddress, cleanedText: cleanedAddress } = extractFloorInfo(
-                    item.address
-                  );
-                  floorInfo = floorInfo || floorFromAddress;
-
-                  fullAddress = [cleanedAddress, item.postcode, item.city, item.country]
-                    .filter(Boolean)
-                    .join(' · ');
-                } else {
-                  // Pas d'adresse structurée, utiliser secondary_text ou label
-                  const addressText = item.secondary_text || item.display_name || item.label || '';
-                  const { floor: floorFromText, cleanedText: cleanedAddressText } =
-                    extractFloorInfo(addressText);
-                  floorInfo = floorInfo || floorFromText;
-                  fullAddress = cleanedAddressText || addressText;
-                }
+                // Nettoyer l'adresse pour retirer l'étage si présent dans le label original
+                const { floor: floorFromLabel, cleanedText: cleanedLabel } = extractFloorInfo(originalLabel);
+                floorInfo = floorInfo || floorFromLabel;
+                
+                // Utiliser l'adresse nettoyée, ou l'originale si pas d'étage
+                fullAddress = cleanedLabel || originalLabel;
 
                 console.log('🏥 [Destination] fullAddress final:', fullAddress);
                 console.log('🏥 [Destination] establishmentName final:', establishmentName);
