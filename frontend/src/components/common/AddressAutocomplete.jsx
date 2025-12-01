@@ -73,12 +73,27 @@ export default function AddressAutocomplete({
       const postcode = props.postcode || '';
       const city = props.city || props.locality || '';
 
-      // Construire le label : TOUJOURS une adresse lisible
+      // Construire le label : TOUJOURS inclure l'adresse complète avec numéro si disponible
       let label = '';
+      const placeName = props.name;
 
-      if (props.name) {
-        // Si c'est un lieu nommé (ex: "HUG", "Aéroport")
-        label = props.name;
+      if (placeName && fullStreetAddress) {
+        // Lieu nommé avec adresse complète : "Nom, Rue Numéro, CP, Ville"
+        const addressParts = [fullStreetAddress];
+        if (postcode) addressParts.push(postcode);
+        if (city) addressParts.push(city);
+        const addressStr = addressParts.join(', ');
+        label = `${placeName}, ${addressStr}`;
+      } else if (placeName && street) {
+        // Lieu nommé avec rue mais sans numéro : "Nom, Rue, CP, Ville"
+        const addressParts = [street];
+        if (postcode) addressParts.push(postcode);
+        if (city) addressParts.push(city);
+        const addressStr = addressParts.join(', ');
+        label = `${placeName}, ${addressStr}`;
+      } else if (placeName) {
+        // Lieu nommé sans adresse : juste le nom (fallback)
+        label = placeName;
       } else if (fullStreetAddress && city) {
         // Format complet : "Rue Numéro, CP, Ville"
         label = postcode
@@ -322,6 +337,30 @@ export default function AddressAutocomplete({
 
           // Construire l'adresse complète (rue + numéro)
           const streetAddress = [streetNumber, route].filter(Boolean).join(' ') || route || '';
+          
+          // Construire le label : nom du lieu (si présent) + adresse complète avec numéro
+          const placeName = it.main_text || (it.types?.some(t => 
+            ['establishment', 'point_of_interest'].includes(t)
+          ) ? it.label : null);
+          
+          // Utiliser l'adresse formatée complète de Google (contient normalement le numéro)
+          // Si c'est un établissement avec un nom, format: "Nom, Adresse complète"
+          let finalLabel = details.address || fullAddress;
+          
+          if (placeName && streetAddress) {
+            // Pour les établissements avec nom, inclure le nom + adresse avec numéro
+            const addressParts = [streetAddress];
+            if (postcode) addressParts.push(postcode);
+            if (city) addressParts.push(city);
+            const addressStr = addressParts.join(', ');
+            finalLabel = `${placeName}, ${addressStr}`;
+          } else if (placeName && details.address) {
+            // Lieu nommé : "Nom, Adresse complète formatée"
+            finalLabel = `${placeName}, ${details.address}`;
+          } else if (details.address) {
+            // Utiliser directement l'adresse formatée complète de Google
+            finalLabel = details.address;
+          }
 
           // Enrichir l'item avec les coordonnées GPS et les composants d'adresse
           const enrichedItem = {
@@ -333,8 +372,8 @@ export default function AddressAutocomplete({
             street_number: streetNumber || '',
             city: city || it.city || '',
             postcode: postcode || it.postcode || '',
-            // Garder l'adresse complète formatée pour l'affichage
-            label: details.address || fullAddress,
+            // Garder l'adresse complète formatée pour l'affichage (avec numéro)
+            label: finalLabel,
           };
 
           onSelect?.(enrichedItem);

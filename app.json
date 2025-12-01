@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "66fea93a-c917-4305-8965-88e169712b97"
+      }
+    },
+    "android": {
+      "package": "com.drinjasiqi.atmr"
+    }
+  }
+}

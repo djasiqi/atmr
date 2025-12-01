@@ -635,20 +635,35 @@ const DispatchTable = ({
                 ? drivers.find((d) => d.id === b.assignment.driver_id) || {}
                 : {};
               // ✅ Résolution robuste du nom chauffeur (string, objet, fallback id)
+              // Priorité : full_name > first_name + last_name > username > name
               let driverName = 'Non assigné';
               if (typeof b?.driver === 'string' && b.driver.trim()) {
                 driverName = b.driver.trim();
+              } else if (b?.driver?.full_name) {
+                driverName = b.driver.full_name;
+              } else if (b?.driver?.first_name || b?.driver?.last_name) {
+                driverName = `${b.driver.first_name || ''} ${b.driver.last_name || ''}`.trim();
               } else if (b?.driver_username) {
                 driverName = b.driver_username;
               } else if (b?.driver?.username) {
                 driverName = b.driver.username;
               } else if (b?.driver_name) {
                 driverName = b.driver_name;
-              } else if (assignedDriver.username || assignedDriver.name) {
-                driverName = assignedDriver.username || assignedDriver.name;
               } else if (b?.driver_id) {
                 const byId = drivers.find((d) => d.id === b.driver_id);
-                if (byId) driverName = byId.username || byId.name || `#${byId.id}`;
+                if (byId) {
+                  driverName =
+                    byId.full_name ||
+                    (byId.first_name || byId.last_name
+                      ? `${byId.first_name || ''} ${byId.last_name || ''}`.trim()
+                      : byId.username || byId.name || `#${byId.id}`);
+                }
+              } else if (assignedDriver) {
+                driverName =
+                  assignedDriver.full_name ||
+                  (assignedDriver.first_name || assignedDriver.last_name
+                    ? `${assignedDriver.first_name || ''} ${assignedDriver.last_name || ''}`.trim()
+                    : assignedDriver.username || assignedDriver.name || 'Non assigné');
               }
               // Si la course est terminée mais aucun nom détecté, afficher "Inconnu" plutôt que "Non assigné"
               if ((b.status || '').toLowerCase() === 'completed' && driverName === 'Non assigné') {

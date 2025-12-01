@@ -125,10 +125,30 @@ def normalize_photon(data: Dict[str, Any]) -> List[Dict[str, Any]]:
                 " ".join(x for x in [street, housenumber] if x) if street else None
             )
 
-            # Construire le label : nom OU adresse complète OU au moins la
-            # ville
-            if props.get("name"):
-                label = props.get("name")
+            # Construire le label : TOUJOURS inclure l'adresse complète avec numéro si disponible
+            place_name = props.get("name")
+            
+            if place_name and street_with_number:
+                # Lieu nommé avec adresse complète : "Nom, Rue Numéro, CP, Ville"
+                address_parts = [street_with_number]
+                if postcode:
+                    address_parts.append(postcode)
+                if city:
+                    address_parts.append(city)
+                address_str = ", ".join(address_parts)
+                label = f"{place_name}, {address_str}"
+            elif place_name and street:
+                # Lieu nommé avec rue mais sans numéro : "Nom, Rue, CP, Ville"
+                address_parts = [street]
+                if postcode:
+                    address_parts.append(postcode)
+                if city:
+                    address_parts.append(city)
+                address_str = ", ".join(address_parts)
+                label = f"{place_name}, {address_str}"
+            elif place_name:
+                # Lieu nommé sans adresse : juste le nom (fallback)
+                label = place_name
             elif street_with_number:
                 # Adresse complète : "Rue + Numéro, CP, Ville"
                 parts = [street_with_number, postcode, city]
@@ -138,6 +158,7 @@ def normalize_photon(data: Dict[str, Any]) -> List[Dict[str, Any]]:
             else:
                 label = "Adresse"
 
+            # L'adresse à afficher doit toujours inclure le numéro si disponible
             address_display = street_with_number or street or label
 
             out.append(

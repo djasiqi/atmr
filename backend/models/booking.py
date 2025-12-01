@@ -285,6 +285,15 @@ class Booking(db.Model):
                 "last_name": getattr(cli_user, "last_name", "") if cli_user else "",
                 "email": getattr(cli_user, "email", "") if cli_user else "",
                 "full_name": self.customer_full_name,
+                "birth_date": (
+                    cli_user.birth_date.strftime("%Y-%m-%d")
+                    if cli_user and cli_user.birth_date
+                    else None
+                ),
+                "contact_phone": getattr(cli, "contact_phone", None) if cli else None,
+                "door_code": getattr(cli, "door_code", None) if cli else None,
+                "floor": getattr(cli, "floor", None) if cli else None,
+                "access_notes": getattr(cli, "access_notes", None) if cli else None,
             },
             "company": self.company.name if self.company else "Non assignée",
             "driver": {
