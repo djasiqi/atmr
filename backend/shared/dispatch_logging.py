@@ -68,7 +68,7 @@ class DispatchLoggerAdapter(logging.LoggerAdapter[logging.Logger]):
                 span_context = span.get_span_context()
                 if span_context.is_valid:
                     trace_id = format(span_context.trace_id, "032x")
-                    extra["trace_id"] = trace_id
+                    extra["request_trace_id"] = trace_id
                     extra["span_id"] = format(span_context.span_id, "016x")
         except ImportError:
             pass  # OpenTelemetry non disponible
