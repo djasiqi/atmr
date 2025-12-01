@@ -139,6 +139,9 @@ celery.conf.update(
     },
     # Routage automatique vers DLQ après échecs
     task_acks_on_failure_or_timeout=False,  # Ne pas ack si échec (permet DLQ)
+    # ✅ Forcer explicitement les URLs de broker pour Redis
+    broker_write_url=CELERY_BROKER_URL,  # Forcer l'URL de broker pour écriture
+    broker_read_url=CELERY_BROKER_URL,  # Forcer l'URL de broker pour lecture
 )
 
 # Configure Beat schedule

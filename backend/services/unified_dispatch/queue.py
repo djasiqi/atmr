@@ -705,6 +705,10 @@ def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
             # ✅ Forcer explicitement le transport Redis (toujours, pour être sûr)
             celery_app.conf.broker_transport = "redis"
 
+            # ✅ Forcer aussi broker_write_url pour s'assurer que Redis est utilisé
+            celery_app.conf.broker_write_url = broker_url
+            celery_app.conf.broker_read_url = broker_url
+
             # ✅ Vérifier que le broker_url commence bien par "redis://"
             if broker_url and not broker_url.startswith("redis://"):
                 logger.error(
@@ -810,6 +814,7 @@ def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
 
             # Initialiser old_connection pour pouvoir la restaurer
             old_connection = None
+            old_connection_for_write = None
 
             try:
                 # Si on a créé une connexion Redis, forcer Celery à l'utiliser
@@ -817,17 +822,37 @@ def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
                     logger.info(
                         "[Queue] 🔄 Remplacement de broker_connection pour forcer Redis"
                     )
-                    # Sauvegarder l'ancienne connexion
+                    # Sauvegarder l'ancienne connexion et les méthodes internes
                     old_connection = getattr(celery_app, "broker_connection", None)
-                    # Remplacer par notre connexion Redis
+                    old_connection_for_write = getattr(
+                        celery_app, "_connection_for_write", None
+                    )
+
+                    # Forcer la connexion Redis
                     celery_app.broker_connection = redis_connection
 
+                    # Forcer aussi _connection_for_write pour éviter qu'il crée une nouvelle connexion AMQP
+                    def force_redis_connection(*_args: Any, **_kwargs: Any) -> Any:
+                        logger.info(
+                            "[Queue] 🔄 Utilisation de la connexion Redis forcée"
+                        )
+                        return redis_connection
+
+                    celery_app._connection_for_write = force_redis_connection
+
                     logger.info(
-                        "[Queue] ✅ broker_connection remplacée, utilisation de send_task()"
+                        "[Queue] ✅ broker_connection et _connection_for_write remplacés"
                     )
 
                 # Utiliser send_task() qui utilisera notre connexion Redis
                 task_name = "tasks.dispatch_tasks.run_dispatch_task"
+
+                # Vérifier la connexion avant d'envoyer
+                logger.info(
+                    "[Queue] 🔍 Vérification connexion avant send_task: broker_transport=%s",
+                    celery_app.conf.broker_transport,
+                )
+
                 result = celery_app.send_task(
                     task_name,
                     kwargs=run_kwargs,
@@ -853,6 +878,19 @@ def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
                 if old_connection is not None:
                     celery_app.broker_connection = old_connection
                     logger.info("[Queue] 🔄 Ancienne connexion restaurée")
+                # Restaurer _connection_for_write si on l'a remplacé
+                if (
+                    redis_connection is not None
+                    and old_connection_for_write is not None
+                ):
+                    celery_app._connection_for_write = old_connection_for_write
+                    logger.info("[Queue] 🔄 _connection_for_write restauré")
+                elif redis_connection is not None and hasattr(
+                    celery_app, "_connection_for_write"
+                ):
+                    # Supprimer l'attribut si on l'a ajouté
+                    with suppress(Exception):
+                        delattr(celery_app, "_connection_for_write")
             st.last_task_id = task.id
             _CELERY_STATE[company_id] = task.state
 

@@ -124,7 +124,11 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: "0"
-      # CELERY_BROKER_URL et CELERY_RESULT_BACKEND seront construits par celery_app.py
+      # ✅ Forcer explicitement CELERY_BROKER_URL et CELERY_RESULT_BACKEND pour éviter AMQP par défaut
+      # Utiliser REDIS_URL si disponible, sinon laisser vide pour que celery_app.py construise depuis REDIS_PASSWORD
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-${REDIS_URL}}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-${REDIS_URL}}
+      CELERY_TIMEZONE: ${CELERY_TIMEZONE:-Europe/Zurich}
 
       # Optimisations PyTorch
       OMP_NUM_THREADS: 2
@@ -251,7 +255,12 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: "0"
-      # CELERY_BROKER_URL et CELERY_RESULT_BACKEND seront construits par celery_app.py
+      REDIS_URL: ${REDIS_URL:-}
+      # ✅ Forcer explicitement CELERY_BROKER_URL et CELERY_RESULT_BACKEND pour éviter AMQP par défaut
+      # Utiliser REDIS_URL si disponible, sinon laisser vide pour que celery_app.py construise depuis REDIS_PASSWORD
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-${REDIS_URL}}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-${REDIS_URL}}
+      CELERY_TIMEZONE: ${CELERY_TIMEZONE:-Europe/Zurich}
 
       # Optimisations PyTorch pour le worker
       OMP_NUM_THREADS: 1
@@ -336,7 +345,12 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: "0"
-      # CELERY_BROKER_URL et CELERY_RESULT_BACKEND seront construits par celery_app.py
+      REDIS_URL: ${REDIS_URL:-}
+      # ✅ Forcer explicitement CELERY_BROKER_URL et CELERY_RESULT_BACKEND pour éviter AMQP par défaut
+      # Utiliser REDIS_URL si disponible, sinon laisser vide pour que celery_app.py construise depuis REDIS_PASSWORD
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-${REDIS_URL}}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-${REDIS_URL}}
+      CELERY_TIMEZONE: ${CELERY_TIMEZONE:-Europe/Zurich}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       APP_ENCRYPTION_KEY_B64: ${APP_ENCRYPTION_KEY_B64}
     volumes:
