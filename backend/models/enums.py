@@ -152,8 +152,16 @@ class DispatchStatus(str, PyEnum):
 
 class CancelReason(str, PyEnum):
     """Raison d'annulation d'une réservation."""
-    CANCEL = "CANCEL"  # Annulation réelle, facturée
+
+    CANCEL = "CANCEL"  # Annulation réelle, facturée (par défaut)
     RELEASE = "RELEASE"  # Libération pour réassignation, non facturée
+    # Nouvelles raisons avec justification
+    CLIENT_REQUEST = "CLIENT_REQUEST"  # Client a demandé l'annulation → facturée
+    CLIENT_NO_SHOW = "CLIENT_NO_SHOW"  # Client ne s'est pas présenté → facturée
+    COMPANY_ISSUE = "COMPANY_ISSUE"  # Problème entreprise → non facturée
+    DELAY = "DELAY"  # Retard important → non facturée
+    VEHICLE_ISSUE = "VEHICLE_ISSUE"  # Problème véhicule → non facturée
+    OTHER = "OTHER"  # Autre raison → non facturée par défaut
 
 
 # ========== ENUMS PLANNING / DRIVER ==========

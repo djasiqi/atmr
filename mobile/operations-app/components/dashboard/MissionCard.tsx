@@ -4,6 +4,7 @@ import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import type { Booking as Mission } from "@/services/api";
 import { styles } from "@/styles/missionCardStyles";
 import { updateTripStatus } from "@/services/api";
+import CancelJustificationModal from "./CancelJustificationModal";
 
 type Props = {
   mission: Mission | null;
@@ -27,6 +28,8 @@ const MissionCard: MissionCardType = ({
   const [status, setStatus] = useState<Mission["status"] | undefined>(
     mission?.status
   );
+  const [cancelModalVisible, setCancelModalVisible] = useState(false);
+  const [releaseModalVisible, setReleaseModalVisible] = useState(false);
 
   useEffect(() => {
     setStatus(mission?.status);
@@ -51,11 +54,11 @@ const MissionCard: MissionCardType = ({
 
   const handleStatusUpdate = async (
     newStatus: "en_route" | "in_progress" | "completed" | "canceled",
-    cancelReason?: "CANCEL" | "RELEASE"
+    cancelReason?: "CANCEL" | "RELEASE" | string
   ) => {
     if (!mission) return;
     try {
-      await updateTripStatus(mission.id, newStatus, cancelReason);
+      await updateTripStatus(mission.id, newStatus, cancelReason as any);
       setStatus(newStatus);
       Object.assign(mission, { status: newStatus });
       if (newStatus === "completed") onComplete?.();
@@ -69,7 +72,7 @@ const MissionCard: MissionCardType = ({
         } else {
           Alert.alert(
             "Course annulée",
-            "La course a été annulée. Elle sera facturée comme booking annulé."
+            "La course a été annulée avec justification."
           );
         }
       }
@@ -82,6 +85,40 @@ const MissionCard: MissionCardType = ({
       );
     }
   };
+
+  const handleCancelJustification = (reason: string, isClientFault: boolean) => {
+    // La raison sera envoyée au backend qui décidera de la facturation
+    handleStatusUpdate("canceled", reason);
+    setCancelModalVisible(false);
+  };
+
+  const handleReleaseConfirm = () => {
+    handleStatusUpdate("canceled", "RELEASE");
+    setReleaseModalVisible(false);
+  };
+
+  // Gérer le modal de libération avec un hook
+  React.useEffect(() => {
+    if (releaseModalVisible) {
+      Alert.alert(
+        "Libérer la course",
+        "Êtes-vous sûr de vouloir libérer cette course pour réassignation ?",
+        [
+          {
+            text: "Non",
+            style: "cancel",
+            onPress: () => setReleaseModalVisible(false),
+          },
+          {
+            text: "Oui, libérer",
+            style: "default",
+            onPress: handleReleaseConfirm,
+          },
+        ]
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [releaseModalVisible]);
 
   const getCurrentDestination = (): string => {
     if (!mission) return "";
@@ -118,12 +155,23 @@ const MissionCard: MissionCardType = ({
     <View style={styles.containerEnhanced}>
       {/* Ligne 1 : Nom et Statut */}
       <View style={styles.headerRowEnhanced}>
-        <Text style={styles.clientName}>
-          {mission.client_name ||
-            mission.customer_name ||
-            mission.client?.full_name ||
-            "Non spécifié"}
-        </Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.clientName}>
+            {mission.client_name ||
+              mission.customer_name ||
+              mission.client?.full_name ||
+              "Non spécifié"}
+          </Text>
+          {mission.client?.birth_date && (
+            <Text style={[styles.detailText, { fontSize: 12, marginTop: 4, color: "#5F7369" }]}>
+              📅 {new Date(mission.client.birth_date).toLocaleDateString('fr-FR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+              })}
+            </Text>
+          )}
+        </View>
         <View style={styles.statusBadgeContainer}>
           <Text style={styles.statusBadgeText}>
             {formatStatus(status ?? "")}
@@ -232,11 +280,11 @@ const MissionCard: MissionCardType = ({
         )}
       </View>
 
-      {/* Actions */}
+      {/* Actions principales : Appeler, GPS, En route/À bord/Terminer */}
       <View style={styles.actionsRowEnhanced}>
         {onCall && (
           <TouchableOpacity onPress={onCall} style={styles.actionItemEnhanced}>
-            <Ionicons name="call" size={22} color="white" />
+            <Ionicons name="call" size={18} color="white" />
             <Text style={styles.actionLabel}>Appeler</Text>
           </TouchableOpacity>
         )}
@@ -246,7 +294,7 @@ const MissionCard: MissionCardType = ({
             onPress={() => onNavigate(getCurrentDestination())}
             style={styles.actionItemEnhanced}
           >
-            <MaterialIcons name="navigation" size={22} color="white" />
+            <MaterialIcons name="navigation" size={18} color="white" />
             <Text style={styles.actionLabel}>GPS</Text>
           </TouchableOpacity>
         )}
@@ -256,7 +304,7 @@ const MissionCard: MissionCardType = ({
             onPress={() => handleStatusUpdate("en_route")}
             style={styles.actionItemEnhanced}
           >
-            <Ionicons name="walk" size={22} color="white" />
+            <Ionicons name="walk" size={18} color="white" />
             <Text style={styles.actionLabel}>En route</Text>
           </TouchableOpacity>
         )}
@@ -266,7 +314,7 @@ const MissionCard: MissionCardType = ({
             onPress={() => handleStatusUpdate("in_progress")}
             style={styles.actionItemEnhanced}
           >
-            <Ionicons name="person" size={22} color="white" />
+            <Ionicons name="person" size={18} color="white" />
             <Text style={styles.actionLabel}>À bord</Text>
           </TouchableOpacity>
         )}
@@ -276,37 +324,8 @@ const MissionCard: MissionCardType = ({
             onPress={() => handleStatusUpdate("completed")}
             style={styles.actionItemEnhanced}
           >
-            <Ionicons name="checkmark-done" size={22} color="white" />
+            <Ionicons name="checkmark-done" size={18} color="white" />
             <Text style={styles.actionLabel}>Terminer</Text>
-          </TouchableOpacity>
-        )}
-
-        {/* ✅ Bouton d'annulation/libération : disponible seulement si assigned ou en_route (pas in_progress = client à bord) */}
-        {(status === "assigned" || status === "en_route") && (
-          <TouchableOpacity
-            onPress={() => {
-              Alert.alert(
-                "Annuler ou libérer la course",
-                "Choisissez une action :",
-                [
-                  { text: "Annuler", style: "cancel" },
-                  {
-                    text: "Annuler et facturer",
-                    style: "destructive",
-                    onPress: () => handleStatusUpdate("canceled", "CANCEL"),
-                  },
-                  {
-                    text: "Libérer pour réassignation",
-                    style: "default",
-                    onPress: () => handleStatusUpdate("canceled", "RELEASE"),
-                  },
-                ]
-              );
-            }}
-            style={[styles.actionItemEnhanced, { backgroundColor: "#dc3545" }]}
-          >
-            <Ionicons name="close-circle" size={22} color="white" />
-            <Text style={styles.actionLabel}>Annuler</Text>
           </TouchableOpacity>
         )}
 
@@ -317,13 +336,47 @@ const MissionCard: MissionCardType = ({
           >
             <Ionicons
               name="information-circle-outline"
-              size={22}
+              size={18}
               color="white"
             />
             <Text style={styles.actionLabel}>Détails</Text>
           </TouchableOpacity>
         )}
       </View>
+
+      {/* Actions secondaires : Annuler (en dessous) */}
+      {(status === "assigned" || status === "en_route") && (
+        <View style={styles.actionsRowSecondary}>
+          <TouchableOpacity
+            onPress={() => setReleaseModalVisible(true)}
+            style={[
+              styles.actionItemEnhanced,
+              { backgroundColor: "#6c757d", flex: 1, maxWidth: "48%" },
+            ]}
+          >
+            <Ionicons name="refresh" size={18} color="white" />
+            <Text style={styles.actionLabel}>Libérer</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setCancelModalVisible(true)}
+            style={[
+              styles.actionItemEnhanced,
+              { backgroundColor: "#dc3545", flex: 1, maxWidth: "48%" },
+            ]}
+          >
+            <Ionicons name="close-circle" size={18} color="white" />
+            <Text style={styles.actionLabel}>Annuler</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Modal de justification d'annulation */}
+      <CancelJustificationModal
+        visible={cancelModalVisible}
+        onClose={() => setCancelModalVisible(false)}
+        onConfirm={handleCancelJustification}
+      />
+
     </View>
   );
 };

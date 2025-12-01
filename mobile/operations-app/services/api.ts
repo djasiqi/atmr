@@ -389,7 +389,7 @@ export type BookingStatus =
 export const updateTripStatus = async (
   bookingId: number,
   status: BookingStatus,
-  cancelReason?: "CANCEL" | "RELEASE"
+  cancelReason?: "CANCEL" | "RELEASE" | string
 ): Promise<void> => {
   const payload: { status: BookingStatus; cancel_reason?: string } = { status };
   if (cancelReason && status === "canceled") {

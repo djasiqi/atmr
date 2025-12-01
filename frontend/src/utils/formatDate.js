@@ -85,12 +85,9 @@ export function renderBookingDateTime(booking) {
     }
   }
 
-  // Priorité aux champs déjà formatés par le backend (qu'on suppose **locaux naïfs**)
-  if (booking.date_formatted) {
-    const timeFormatted = booking.time_formatted ? ` • ${booking.time_formatted}` : '';
-    return `${booking.date_formatted}${timeFormatted}`;
-  }
-  // Sinon, on affiche la chaîne naïve telle quelle
+  // ✅ Toujours utiliser le format suisse (dd.MM.yyyy) même si date_formatted est présent
+  // Ignorer date_formatted du backend pour uniformiser l'affichage
+  // Utiliser directement scheduled_time pour garantir le format suisse
   return formatLocalNaive(booking.scheduled_time);
 }
 

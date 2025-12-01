@@ -16,6 +16,7 @@ import * as Crypto from "expo-crypto";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/fr";
+import { Ionicons } from "@expo/vector-icons";
 
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -57,6 +58,7 @@ export default function RideDetailsScreen() {
   const [allowEmergency, setAllowEmergency] = useState(false);
   const [scheduleValue, setScheduleValue] = useState("");
   const [scheduleVisible, setScheduleVisible] = useState(false);
+  const [driverPickerVisible, setDriverPickerVisible] = useState(false);
 
   const summary = detail?.summary;
   const suggestions = detail?.suggestions ?? [];
@@ -64,6 +66,13 @@ export default function RideDetailsScreen() {
   const conflicts = detail?.conflicts ?? [];
 
   const isAssigned = summary?.status === "assigned" || !!summary?.driver?.id;
+
+  // ✅ Vérifier si l'assignation/annulation est désactivée (completed ou in_board uniquement)
+  // Note: in_progress et en_route permettent toujours l'assignation/annulation
+  const statusLower = summary?.status?.toLowerCase() || "";
+  const isCompleted = statusLower === "completed";
+  const isInBoard = statusLower === "in_board";
+  const isActionDisabled = isCompleted || isInBoard;
 
   const loadDetail = useCallback(async () => {
     if (!rideId) return;
@@ -123,7 +132,7 @@ export default function RideDetailsScreen() {
           error?.message;
         setErrorMessage(
           responseMessage ||
-            "Impossible de finaliser l’assignation. Vérifiez les validations (fairness, préférences, conflits)."
+          "Impossible de finaliser l’assignation. Vérifiez les validations (fairness, préférences, conflits)."
         );
       } finally {
         setActionLoading(false);
@@ -367,8 +376,11 @@ export default function RideDetailsScreen() {
                 )}
               </View>
               <TouchableOpacity
-                style={styles.assignButton}
-                disabled={actionLoading}
+                style={[
+                  styles.assignButton,
+                  isActionDisabled && styles.assignButtonDisabled,
+                ]}
+                disabled={actionLoading || isActionDisabled}
                 onPress={() =>
                   handleAssign(
                     suggestion.driver_id,
@@ -377,7 +389,12 @@ export default function RideDetailsScreen() {
                   )
                 }
               >
-                <Text style={styles.assignButtonText}>
+                <Text
+                  style={[
+                    styles.assignButtonText,
+                    isActionDisabled && styles.assignButtonTextDisabled,
+                  ]}
+                >
                   {isAssigned ? "Réassigner" : "Assigner"}
                 </Text>
               </TouchableOpacity>
@@ -388,14 +405,34 @@ export default function RideDetailsScreen() {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Assignation manuelle</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="ID chauffeur"
-          placeholderTextColor="#8DA0C1"
-          value={manualDriverId}
-          onChangeText={setManualDriverId}
-          autoCapitalize="none"
-        />
+
+        {/* ✅ Dropdown pour choisir le chauffeur au lieu d'un champ ID */}
+        <TouchableOpacity
+          style={[
+            styles.input,
+            styles.pickerInput,
+            isActionDisabled && styles.inputDisabled,
+          ]}
+          onPress={() => !isActionDisabled && setDriverPickerVisible(true)}
+          disabled={isActionDisabled}
+        >
+          <Text
+            style={[
+              styles.pickerText,
+              !manualDriverId && styles.pickerPlaceholder,
+            ]}
+          >
+            {manualDriverId
+              ? suggestions.find((s) => s.driver_id === manualDriverId)
+                ?.driver_name ||
+              summary?.driver?.name ||
+              `Chauffeur #${manualDriverId}`
+              : "-- Sélectionner un chauffeur --"}
+          </Text>
+          {!isActionDisabled && (
+            <Ionicons name="chevron-down" size={20} color="#8DA0C1" />
+          )}
+        </TouchableOpacity>
         <TextInput
           style={[styles.input, styles.inputMultiline]}
           placeholder="Commentaire (optionnel)"
@@ -420,9 +457,10 @@ export default function RideDetailsScreen() {
         <TouchableOpacity
           style={[
             styles.primaryButton,
-            manualAssignDisabled && styles.primaryButtonDisabled,
+            (manualAssignDisabled || isActionDisabled) &&
+            styles.primaryButtonDisabled,
           ]}
-          disabled={manualAssignDisabled}
+          disabled={manualAssignDisabled || isActionDisabled}
           onPress={() =>
             handleAssign(manualDriverId.trim(), manualReason || undefined)
           }
@@ -431,6 +469,14 @@ export default function RideDetailsScreen() {
             {isAssigned ? "Réassigner" : "Assigner"} le chauffeur
           </Text>
         </TouchableOpacity>
+
+        {isActionDisabled && (
+          <Text style={styles.disabledHint}>
+            {isCompleted
+              ? "La course est terminée. L'assignation et l'annulation ne sont plus possibles."
+              : "Le client est à bord. L'assignation et l'annulation ne sont plus possibles."}
+          </Text>
+        )}
       </View>
 
       <View style={styles.section}>
@@ -478,7 +524,7 @@ export default function RideDetailsScreen() {
         >
           <Text style={styles.secondaryButtonText}>Rafraîchir</Text>
         </TouchableOpacity>
-        {isAssigned && (
+        {isAssigned && !isActionDisabled && (
           <TouchableOpacity
             style={[styles.secondaryButton, styles.flexButton]}
             onPress={handleCancel}
@@ -531,6 +577,72 @@ export default function RideDetailsScreen() {
                 <Text style={styles.modalConfirmText}>Confirmer</Text>
               </Pressable>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ✅ Modal pour sélectionner un chauffeur */}
+      <Modal
+        visible={driverPickerVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDriverPickerVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Choisir un chauffeur</Text>
+            <ScrollView style={styles.driverListModal} nestedScrollEnabled>
+              {suggestions.length === 0 ? (
+                <Text style={styles.muted}>Aucun chauffeur disponible</Text>
+              ) : (
+                suggestions.map((suggestion: DriverSuggestion) => (
+                  <TouchableOpacity
+                    key={suggestion.driver_id}
+                    style={[
+                      styles.driverOption,
+                      manualDriverId === suggestion.driver_id &&
+                      styles.driverOptionSelected,
+                    ]}
+                    onPress={() => {
+                      setManualDriverId(suggestion.driver_id);
+                      setDriverPickerVisible(false);
+                    }}
+                  >
+                    <View style={styles.driverOptionContent}>
+                      <Text style={styles.driverOptionName}>
+                        {suggestion.driver_name}
+                      </Text>
+                      <Text style={styles.driverOptionMeta}>
+                        Score: {suggestion.score.toFixed(2)}
+                        {suggestion.preferred_match && " • Préféré"}
+                        {suggestion.is_emergency && " • Urgence"}
+                      </Text>
+                    </View>
+                    {manualDriverId === suggestion.driver_id && (
+                      <Ionicons name="checkmark" size={20} color="#1EB980" />
+                    )}
+                  </TouchableOpacity>
+                ))
+              )}
+              {/* Option pour réinitialiser */}
+              <TouchableOpacity
+                style={styles.driverOption}
+                onPress={() => {
+                  setManualDriverId("");
+                  setDriverPickerVisible(false);
+                }}
+              >
+                <Text style={styles.driverOptionReset}>
+                  Effacer la sélection
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+            <Pressable
+              style={styles.modalCancel}
+              onPress={() => setDriverPickerVisible(false)}
+            >
+              <Text style={styles.modalCancelText}>Fermer</Text>
+            </Pressable>
           </View>
         </View>
       </Modal>
@@ -816,28 +928,35 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(5,22,16,0.82)",
     alignItems: "center",
     justifyContent: "center",
+    padding: 24,
   },
   modalCard: {
-    backgroundColor: "#102347",
-    width: "80%",
-    borderRadius: 16,
-    padding: 20,
+    backgroundColor: "#08211A",
+    width: "100%",
+    maxWidth: 420,
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: "rgba(46,128,94,0.4)",
+    gap: 16,
   },
   modalTitle: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 10,
+    color: "#E6F2EA",
+    fontSize: 20,
+    fontWeight: "700",
   },
   modalInput: {
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderRadius: 12,
-    padding: 12,
-    color: "#FFFFFF",
-    marginBottom: 16,
+    backgroundColor: "rgba(10,34,26,0.82)",
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    color: "#E6F2EA",
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: "rgba(59,143,105,0.28)",
   },
   modalActions: {
     flexDirection: "row",
@@ -849,17 +968,85 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   modalCancelText: {
-    color: "#9AA5CC",
+    color: "rgba(184,214,198,0.75)",
     fontWeight: "600",
   },
   modalConfirm: {
-    backgroundColor: "#4D6BFE",
-    paddingVertical: 10,
+    backgroundColor: "#1EB980",
+    paddingVertical: 12,
     paddingHorizontal: 18,
-    borderRadius: 10,
+    borderRadius: 14,
   },
   modalConfirmText: {
+    color: "#052015",
+    fontWeight: "700",
+  },
+  // ✅ Styles pour le dropdown de sélection de chauffeur
+  pickerInput: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  pickerText: {
     color: "#FFFFFF",
+    fontSize: 15,
+    flex: 1,
+  },
+  pickerPlaceholder: {
+    color: "#8DA0C1",
+  },
+  inputDisabled: {
+    opacity: 0.5,
+  },
+  disabledHint: {
+    color: "#F87171",
+    fontSize: 12,
+    marginTop: 8,
+    fontStyle: "italic",
+  },
+  driverListModal: {
+    maxHeight: 400,
+    marginBottom: 16,
+  },
+  driverOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: "rgba(10,34,26,0.6)",
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "rgba(59,143,105,0.28)",
+  },
+  driverOptionSelected: {
+    backgroundColor: "rgba(30,185,128,0.2)",
+    borderWidth: 1,
+    borderColor: "#1EB980",
+  },
+  driverOptionContent: {
+    flex: 1,
+  },
+  driverOptionName: {
+    color: "#E6F2EA",
+    fontSize: 16,
     fontWeight: "600",
+    marginBottom: 4,
+  },
+  driverOptionMeta: {
+    color: "rgba(184,214,198,0.8)",
+    fontSize: 13,
+  },
+  driverOptionReset: {
+    color: "rgba(184,214,198,0.75)",
+    fontSize: 15,
+    fontStyle: "italic",
+  },
+  assignButtonDisabled: {
+    opacity: 0.5,
+    backgroundColor: "#6C7AA5",
+  },
+  assignButtonTextDisabled: {
+    color: "#94A3C1",
   },
 });

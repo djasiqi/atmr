@@ -94,11 +94,12 @@ def sort_key_local(dt: Union[str, datetime, None]) -> datetime:
 def split_date_time_local(
     dt: Union[str, datetime, None],
 ) -> Tuple[str | None, str | None]:
-    """Retourne ('YYYY-MM-DD', 'HH:MM') sans conversions - pour l'affichage."""
+    """Retourne ('DD.MM.YYYY', 'HH:MM') au format suisse - pour l'affichage."""
     d = parse_local_naive(dt)
     if not d:
         return None, None
-    return d.strftime("%Y-%m-%d"), d.strftime("%H:%M")
+    # ✅ Format suisse : dd.MM.yyyy (au lieu de YYYY-MM-DD)
+    return d.strftime("%d.%m.%Y"), d.strftime("%H:%M")
 
 
 # ---------------------------------------------------------------------------

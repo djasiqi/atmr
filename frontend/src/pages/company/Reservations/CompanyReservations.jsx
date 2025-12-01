@@ -97,22 +97,28 @@ const CompanyReservations = () => {
     }
   }, [selectedDay]);
 
+  // ✅ Fonction helper pour vérifier si une réservation est terminée (cohérent avec OverviewCards)
+  const isCompletedStatus = useCallback((status) => {
+    const normStatus = String(status || '').toLowerCase();
+    return ['completed', 'return_completed', 'done', 'finished'].includes(normStatus);
+  }, []);
+
   // Calculer les statistiques
-  const calculateStats = (reservationsData) => {
+  const calculateStats = useCallback((reservationsData) => {
     const newStats = {
       total: reservationsData.length,
       pending: reservationsData.filter((r) => r.status === 'pending').length,
       inProgress: reservationsData.filter((r) =>
         ['accepted', 'assigned', 'in_progress'].includes(r.status)
       ).length,
-      completed: reservationsData.filter((r) => r.status === 'completed').length,
+      completed: reservationsData.filter((r) => isCompletedStatus(r.status)).length,
       canceled: reservationsData.filter((r) => r.status === 'canceled').length,
       revenue: reservationsData
-        .filter((r) => r.status === 'completed')
+        .filter((r) => isCompletedStatus(r.status))
         .reduce((sum, r) => sum + (Number(r.amount) || 0), 0),
     };
     setStats(newStats);
-  };
+  }, [isCompletedStatus]);
 
   // Générer les alertes
   const generateAlerts = (reservationsData) => {
@@ -299,7 +305,7 @@ const CompanyReservations = () => {
           case 'in_progress':
             return ['accepted', 'assigned', 'in_progress'].includes(r.status);
           case 'completed':
-            return r.status === 'completed';
+            return isCompletedStatus(r.status);
           case 'canceled':
             return r.status === 'canceled';
           default:
@@ -357,15 +363,31 @@ const CompanyReservations = () => {
       filtered = filtered.filter((r) => (r.status || '').toLowerCase() === statusFilter);
     }
 
+    // ✅ Tri robuste : gérer les dates invalides/null
     filtered.sort((a, b) => {
-      const dateA = new Date(a.scheduled_time);
-      const dateB = new Date(b.scheduled_time);
+      // Extraire les dates en gérant les cas null/undefined/invalides
+      const getDateValue = (reservation) => {
+        const timeStr = reservation.scheduled_time || reservation.pickup_time || reservation.created_at;
+        if (!timeStr) return 0; // Dates manquantes en dernier (ou premier si asc)
+        const date = new Date(timeStr);
+        return isNaN(date.getTime()) ? 0 : date.getTime();
+      };
+
+      const dateA = getDateValue(a);
+      const dateB = getDateValue(b);
+
+      // Gérer les dates invalides : les mettre à la fin (ou au début si asc)
+      if (dateA === 0 && dateB === 0) return 0; // Les deux invalides : ordre inchangé
+      if (dateA === 0) return 1; // A invalide : A après B
+      if (dateB === 0) return -1; // B invalide : B après A
+
+      // Tri normal selon l'ordre sélectionné
       return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
     });
 
     setFilteredReservations(filtered);
     setCurrentPage(1);
-  }, [reservations, searchTerm, statusFilter, sortOrder, activeTab]);
+  }, [reservations, searchTerm, statusFilter, sortOrder, activeTab, isCompletedStatus]);
 
   // Pagination
   const currentReservations = useMemo(() => {
