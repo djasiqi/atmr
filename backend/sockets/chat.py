@@ -17,6 +17,7 @@ from typing import cast as tcast
 
 from flask import request, session
 from flask_jwt_extended import decode_token
+import jwt.exceptions as jwt_exceptions
 from flask_socketio import SocketIO, emit, join_room
 
 from ext import db, redis_client
@@ -142,7 +143,56 @@ def init_chat_socket(socketio: SocketIO):
                 return False
 
             # Vérifie & décode (lève si invalide/expiré)
-            decoded = decode_token(token)
+            try:
+                decoded = decode_token(token)
+            except jwt_exceptions.ExpiredSignatureError:
+                logger.info(
+                    "socket_connect_error",
+                    extra={
+                        "event": "connect_error",
+                        "reason": "token_expired",
+                        "ip": client_ip,
+                        "timestamp": now.isoformat(),
+                        "request_trace_id": trace_id,
+                    },
+                )
+                emit(
+                    "unauthorized",
+                    {"error": "Token expiré. Veuillez vous reconnecter."},
+                )
+                ws_metrics.on_error("token_expired")
+                return False
+            except jwt_exceptions.InvalidAudienceError:
+                logger.info(
+                    "socket_connect_error",
+                    extra={
+                        "event": "connect_error",
+                        "reason": "token_invalid_audience",
+                        "ip": client_ip,
+                        "timestamp": now.isoformat(),
+                        "request_trace_id": trace_id,
+                    },
+                )
+                emit("unauthorized", {"error": "Token invalide (audience incorrecte)."})
+                ws_metrics.on_error("token_invalid_audience")
+                return False
+            except Exception as e:
+                logger.warning(
+                    "socket_connect_error",
+                    extra={
+                        "event": "connect_error",
+                        "reason": "token_decode_error",
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "ip": client_ip,
+                        "timestamp": now.isoformat(),
+                        "request_trace_id": trace_id,
+                    },
+                )
+                emit("unauthorized", {"error": "Token invalide."})
+                ws_metrics.on_error("token_decode_error")
+                return False
+
             public_id = decoded.get("sub")
             if not public_id:
                 logger.info(
