@@ -4,14 +4,16 @@ const pkg = require('./package.json');
 const withAndroidBackButtonMod = require('./prebuild-mods/withAndroidBackButtonMod');
 const withAndroidGoogleMapsKey = require('./prebuild-mods/withAndroidGoogleMapsKey');
 const withAndroidImmersiveMode = require('./prebuild-mods/withAndroidImmersiveMode');
+const withAndroidR8Enabled = require('./prebuild-mods/withAndroidR8Enabled');
 
 const APP_VARIANT = process.env.APP_VARIANT || "prod";
 const isDevVariant = APP_VARIANT === "dev";
 const runtimeBase = pkg.version || "1.0.0";
 
-module.exports = withAndroidImmersiveMode(
-  withAndroidGoogleMapsKey(
-    withAndroidBackButtonMod(() => ({
+module.exports = withAndroidR8Enabled(
+  withAndroidImmersiveMode(
+    withAndroidGoogleMapsKey(
+      withAndroidBackButtonMod(() => ({
   name: isDevVariant ? "Liri Opérations Dev" : "Liri Opérations",
   slug: "operations-app",
   runtimeVersion: isDevVariant ? `${runtimeBase}-dev` : runtimeBase,
@@ -132,5 +134,6 @@ module.exports = withAndroidImmersiveMode(
 
   owner: "drinjasiqi",
 }))
+    )
   )
 );

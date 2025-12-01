@@ -15,9 +15,9 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Dict, cast
 from typing import cast as tcast
 
+import jwt.exceptions as jwt_exceptions
 from flask import request, session
 from flask_jwt_extended import decode_token
-import jwt.exceptions as jwt_exceptions
 from flask_socketio import SocketIO, emit, join_room
 
 from ext import db, redis_client

@@ -741,12 +741,18 @@ class EnterpriseMobileSession(Resource):
             # Pour ADMIN, si pas de relation directe, récupérer la première entreprise
             if user.role == UserRole.ADMIN and not company:
                 company = Company.query.first()
-                if not company:
-                    return {"error": "Aucune entreprise trouvée."}, 404
-            elif not company:
-                return {"error": "Entreprise introuvable."}, 404
 
-            return {
+            # Valider que l'entreprise existe
+            if not company:
+                error_msg = (
+                    "Aucune entreprise trouvée."
+                    if user.role == UserRole.ADMIN
+                    else "Entreprise introuvable."
+                )
+                return {"error": error_msg}, 404
+
+            # Succès : construire la réponse
+            response_data = {
                 "user": {
                     "id": user.id,
                     "public_id": user.public_id,
@@ -763,13 +769,25 @@ class EnterpriseMobileSession(Resource):
                 "scopes": claims.get("scopes", []),
                 "session_id": claims.get("session_id"),
                 "aud": claims.get("aud"),
-            }, 200
-        except jwt.exceptions.ExpiredSignatureError:
-            logger.warning("Token expiré pour /auth/session")
-            return {"error": "Token expiré. Veuillez vous reconnecter."}, 401
-        except jwt.exceptions.InvalidAudienceError:
-            logger.warning("Token avec audience invalide pour /auth/session")
-            return {"error": "Token invalide (audience incorrecte)."}, 401
+            }
+            return response_data, 200
+
+        except (
+            jwt.exceptions.ExpiredSignatureError,
+            jwt.exceptions.InvalidAudienceError,
+        ) as jwt_error:
+            error_msg = (
+                "Token expiré. Veuillez vous reconnecter."
+                if isinstance(jwt_error, jwt.exceptions.ExpiredSignatureError)
+                else "Token invalide (audience incorrecte)."
+            )
+            log_msg = (
+                "Token expiré pour /auth/session"
+                if isinstance(jwt_error, jwt.exceptions.ExpiredSignatureError)
+                else "Token avec audience invalide pour /auth/session"
+            )
+            logger.warning(log_msg)
+            return {"error": error_msg}, 401
         except Exception as e:
             sentry_sdk.capture_exception(e)
             logger.exception(
