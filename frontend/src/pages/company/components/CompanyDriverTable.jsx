@@ -27,7 +27,12 @@ const CompanyDriverTable = ({ drivers, onEdit, onDeleteRequest }) => {
                   />
                   {/* On ne garde que la div pour le nom complet */}
                   <div className={styles.fullName}>
-                    {driver.first_name} {driver.last_name}
+                    {driver.full_name ||
+                      (driver.first_name || driver.last_name
+                        ? `${driver.first_name || ''} ${driver.last_name || ''}`.trim()
+                        : driver.username ||
+                          driver.name ||
+                          `Chauffeur #${driver.id}`)}
                   </div>
                 </div>
               </td>

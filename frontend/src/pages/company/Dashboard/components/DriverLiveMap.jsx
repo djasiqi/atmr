@@ -117,7 +117,10 @@ const createStyledTooltip = (driver) => {
         font-size: 12px;
         line-height: 1.2;
       ">
-        ${driver.first_name || driver.username || `Chauffeur ${driver.id}`}
+        ${driver.full_name ||
+          (driver.first_name || driver.last_name
+            ? `${driver.first_name || ''} ${driver.last_name || ''}`.trim()
+            : driver.username || `Chauffeur ${driver.id}`)}
       </div>
       <div style="
         font-size: 10px;

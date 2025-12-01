@@ -57,21 +57,61 @@ const dropoffDivIcon = L.divIcon({
 });
 
 // --------- Helper pour pan/fit ----------
-const MapPanTo = ({ center }) => {
+const MapPanTo = ({ center, enabled = true }) => {
   const map = useMap();
+  const lastCenterRef = useRef(null);
+  
   useEffect(() => {
-    if (center) map.setView(center, map.getZoom(), { animate: true });
-  }, [center, map]);
+    if (!enabled || !center) return;
+    
+    // Éviter les appels répétés avec le même center
+    const centerStr = `${center.lat},${center.lng}`;
+    if (lastCenterRef.current === centerStr) return;
+    lastCenterRef.current = centerStr;
+    
+    // Attendre que la carte soit prête
+    if (!map || !map.getContainer()) return;
+    
+    try {
+      map.setView([center.lat, center.lng], map.getZoom(), { animate: false });
+    } catch (error) {
+      console.warn('MapPanTo error:', error);
+    }
+  }, [center, map, enabled]);
   return null;
 };
 
-const MapFitBounds = ({ bounds }) => {
+const MapFitBounds = ({ bounds, enabled = true }) => {
   const map = useMap();
+  const lastBoundsRef = useRef(null);
+  const isInitializedRef = useRef(false);
+  
   useEffect(() => {
-    if (bounds && bounds.length >= 2) {
-      map.fitBounds(bounds, { padding: [32, 32] });
+    if (!enabled || !bounds || bounds.length < 2) return;
+    
+    // Éviter les appels répétés avec les mêmes bounds
+    const boundsStr = JSON.stringify(bounds);
+    if (lastBoundsRef.current === boundsStr && isInitializedRef.current) return;
+    
+    // Attendre que la carte soit prête
+    if (!map || !map.getContainer()) {
+      // Réessayer après un court délai
+      const timer = setTimeout(() => {
+        if (map && map.getContainer()) {
+          isInitializedRef.current = true;
+        }
+      }, 100);
+      return () => clearTimeout(timer);
     }
-  }, [bounds, map]);
+    
+    try {
+      map.fitBounds(bounds, { padding: [32, 32], animate: false });
+      lastBoundsRef.current = boundsStr;
+      isInitializedRef.current = true;
+    } catch (error) {
+      console.warn('MapFitBounds error:', error);
+    }
+  }, [bounds, map, enabled]);
   return null;
 };
 
@@ -97,8 +137,9 @@ const MapFitBounds = ({ bounds }) => {
  *    ]
  *  - delays?: { [bookingId]: { delay_minutes:number, is_dropoff?:bool } }
  */
-const DriverMap = ({ assignments = [], myLocation, delays = {} }) => {
+const DriverMap = ({ assignments = [], myLocation, delays = {}, isLoaded = true }) => {
   const [mapCenter, setMapCenter] = useState(defaultCenter);
+  const [mapReady, setMapReady] = useState(false);
 
   // Dernière position rendue (pour throttle)
   const lastRenderedPosRef = useRef(null);
@@ -294,19 +335,53 @@ const DriverMap = ({ assignments = [], myLocation, delays = {} }) => {
       [maxLat, maxLng],
     ];
   }, [displayPos, activeAssignments]);
+  
+  // Déterminer si on utilise fitBounds ou panTo
+  // fitBounds si on a des routes/POIs, sinon panTo pour suivre la position
+  const useFitBounds = bounds && bounds.length >= 2 && activeAssignments.length > 0;
+
+  // Ne pas afficher la carte si elle n'est pas chargée
+  if (!isLoaded) {
+    return (
+      <div className={styles.driverMapContainer}>
+        <div className={styles.loadingContainer}>
+          <div className={styles.spinner} />
+          <p>Chargement de la carte...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className={styles.driverMapContainer}>
-      <MapContainer center={mapCenter} zoom={12} className={styles.leafletMap}>
+    <div className={`${styles.driverMapContainer} ${!mapReady ? styles.loading : ''}`}>
+      <MapContainer 
+        key="driver-map" // Clé stable pour éviter les re-mounts
+        center={mapCenter} 
+        zoom={12} 
+        className={styles.leafletMap}
+        whenReady={() => {
+          // Petit délai pour s'assurer que Leaflet est complètement initialisé
+          setTimeout(() => {
+            setMapReady(true);
+          }, 100);
+        }}
+        // Désactiver les animations pour éviter les conflits
+        zoomControl={true}
+        scrollWheelZoom={true}
+        doubleClickZoom={true}
+        touchZoom={true}
+      >
         <TileLayer
           attribution="&copy; OpenStreetMap contributors"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {/* Pan léger sur changements de position */}
-        <MapPanTo center={mapCenter} />
-        {/* FitBounds sur route/POIs/driver */}
-        {bounds && <MapFitBounds bounds={bounds} />}
+        {/* Utiliser soit fitBounds soit panTo, pas les deux - seulement si la carte est prête */}
+        {mapReady && (useFitBounds ? (
+          <MapFitBounds bounds={bounds} enabled={true} />
+        ) : (
+          displayPos && <MapPanTo center={mapCenter} enabled={true} />
+        ))}
 
         {/* Position conducteur (throttlée) */}
         {displayPos && (

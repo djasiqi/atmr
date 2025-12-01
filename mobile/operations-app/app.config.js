@@ -3,16 +3,22 @@ require('dotenv-flow').config();
 const pkg = require('./package.json');
 const withAndroidBackButtonMod = require('./prebuild-mods/withAndroidBackButtonMod');
 const withAndroidGoogleMapsKey = require('./prebuild-mods/withAndroidGoogleMapsKey');
+const withAndroidImmersiveMode = require('./prebuild-mods/withAndroidImmersiveMode');
 
 const APP_VARIANT = process.env.APP_VARIANT || "prod";
 const isDevVariant = APP_VARIANT === "dev";
 const runtimeBase = pkg.version || "1.0.0";
 
-module.exports = withAndroidGoogleMapsKey(
-  withAndroidBackButtonMod(() => ({
+module.exports = withAndroidImmersiveMode(
+  withAndroidGoogleMapsKey(
+    withAndroidBackButtonMod(() => ({
   name: isDevVariant ? "Liri Opérations Dev" : "Liri Opérations",
   slug: "operations-app",
   runtimeVersion: isDevVariant ? `${runtimeBase}-dev` : runtimeBase,
+  // ✅ Configuration EAS Update
+  updates: {
+    url: "https://u.expo.dev/3be107c7-29d2-4987-91a0-8d7c31604891"
+  },
   // sdkVersion: "53.0.0", // Supprimé : n'est plus nécessaire avec les SDKs récents
   scheme: "liri",
   orientation: "portrait",
@@ -126,4 +132,5 @@ module.exports = withAndroidGoogleMapsKey(
 
   owner: "drinjasiqi",
 }))
+  )
 );

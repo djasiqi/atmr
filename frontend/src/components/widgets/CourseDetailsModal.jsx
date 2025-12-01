@@ -54,12 +54,40 @@ const CourseDetailsModal = ({ course, onClose }) => {
             <p>
               <strong>Client :</strong> {course.customer_name}
             </p>
+            {course.client?.birth_date && (
+              <p>
+                <strong>Date de naissance :</strong>{' '}
+                {new Date(course.client.birth_date).toLocaleDateString('fr-FR', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric',
+                })}
+              </p>
+            )}
+            {course.client?.contact_phone && (
+              <p>
+                <strong>Téléphone :</strong> {course.client.contact_phone}
+              </p>
+            )}
             <p>
               <strong>Heure :</strong> {renderBookingDateTime(course)}
             </p>
             <p>
               <strong>Départ :</strong> {course.pickup_location}
             </p>
+            {(course.client?.door_code || course.client?.floor) && (
+              <p>
+                <strong>Accès :</strong>{' '}
+                {course.client?.door_code && `Code: ${course.client.door_code}`}
+                {course.client?.door_code && course.client?.floor && ' - '}
+                {course.client?.floor && `Étage: ${course.client.floor}`}
+              </p>
+            )}
+            {course.client?.access_notes && (
+              <p>
+                <strong>Notes d'accès :</strong> {course.client.access_notes}
+              </p>
+            )}
             <p>
               <strong>Destination :</strong> {course.dropoff_location}
             </p>
