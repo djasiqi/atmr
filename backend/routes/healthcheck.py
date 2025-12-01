@@ -4,6 +4,7 @@ from flask import Blueprint, jsonify
 from sqlalchemy import text
 
 from ext import db, redis_client
+from services.websocket_healthcheck import check_websocket_health
 
 healthcheck_bp = Blueprint("healthcheck", __name__)
 
@@ -75,3 +76,32 @@ def detailed_health():
 
     http_code = 200 if status["status"] == "ok" else 503
     return jsonify(status), http_code
+
+
+@healthcheck_bp.route("/health/websocket")
+def websocket_health():
+    """Health check spécifique pour Socket.IO.
+
+    Returns:
+        200 si OK, 503 si dégradé/erreur.
+        Peut être utilisé pour monitoring externe (optionnellement public).
+    """
+    try:
+        health_data = check_websocket_health()
+        status = health_data.get("status", "error")
+
+        # 200 si OK, 503 si dégradé ou erreur
+        http_code = 200 if status == "ok" else 503
+        return jsonify(health_data), http_code
+    except Exception as e:
+        # En cas d'erreur inattendue, retourner 503
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "error": str(e),
+                    "last_check": None,
+                }
+            ),
+            503,
+        )

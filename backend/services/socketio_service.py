@@ -4,10 +4,14 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any, cast
 
+from sqlalchemy.orm import joinedload
+
 from ext import app_logger, socketio
 
 if TYPE_CHECKING:
     from models import Booking
+else:
+    from models import Driver
 
 # ---------------------------------------------------------------------------
 # Constantes simples
@@ -304,6 +308,11 @@ def emit_delay_detected(
     is_dropoff: bool = False,
     namespace: str = DEFAULT_NAMESPACE,
 ) -> None:
+    """Émet un événement de retard détecté avec les informations du chauffeur.
+    
+    Charge automatiquement les informations du chauffeur (nom, téléphone, véhicule)
+    pour les afficher dans le frontend.
+    """
     payload: dict[str, Any] = {
         "assignment_id": assignment_id,
         "booking_id": booking_id,
@@ -312,6 +321,47 @@ def emit_delay_detected(
         "has_alternative": bool(has_alternative),
         "is_dropoff": bool(is_dropoff),
     }
+    
+    # Charger les informations du chauffeur pour l'affichage
+    try:
+        from ext import db
+        
+        driver = (
+            Driver.query.options(joinedload(Driver.user))
+            .filter_by(id=driver_id)
+            .first()
+        )
+        
+        if driver:
+            user = getattr(driver, "user", None)
+            if user:
+                first_name = getattr(user, "first_name", None) or ""
+                last_name = getattr(user, "last_name", None) or ""
+                driver_name = f"{first_name} {last_name}".strip()
+                if not driver_name:
+                    driver_name = getattr(user, "username", None) or f"Chauffeur #{driver_id}"
+                
+                payload["driver_name"] = driver_name
+                payload["driver_phone"] = getattr(user, "phone", None)
+            
+            # Récupérer la plaque d'immatriculation depuis le Driver
+            license_plate = getattr(driver, "license_plate", None)
+            if license_plate:
+                payload["driver_vehicle"] = license_plate
+            else:
+                # Fallback sur vehicle_assigned si license_plate n'est pas disponible
+                vehicle_assigned = getattr(driver, "vehicle_assigned", None)
+                if vehicle_assigned:
+                    payload["driver_vehicle"] = vehicle_assigned
+        
+    except Exception as e:
+        # En cas d'erreur, continuer sans les infos du chauffeur (non bloquant)
+        app_logger.warning(
+            "[socketio] Erreur lors du chargement des infos chauffeur pour driver_id=%s: %s",
+            driver_id,
+            e,
+        )
+    
     if has_alternative and alternative_driver_id is not None:
         payload["alternative_driver_id"] = int(alternative_driver_id)
     if alternative_delay_minutes is not None:

@@ -150,6 +150,12 @@ class DispatchStatus(str, PyEnum):
     FAILED = "FAILED"
 
 
+class CancelReason(str, PyEnum):
+    """Raison d'annulation d'une réservation."""
+    CANCEL = "CANCEL"  # Annulation réelle, facturée
+    RELEASE = "RELEASE"  # Libération pour réassignation, non facturée
+
+
 # ========== ENUMS PLANNING / DRIVER ==========
 
 

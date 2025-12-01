@@ -13,9 +13,10 @@ from flask_restx import Namespace, Resource, fields
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import joinedload
 
-from ext import app_logger, db, limiter, role_required
+from ext import app_logger, db, limiter, redis_client, role_required
 from models import Booking, BookingStatus, Client, Invoice, User, UserRole
 from security.ip_whitelist import ip_whitelist_required
+from services.websocket_metrics import ws_metrics
 
 MONTH_THRESHOLD = 12
 TOTAL_ACTIONS_ZERO = 0
@@ -1363,3 +1364,39 @@ class OptunaTrain(Resource):
             sentry_sdk.capture_exception(e)
             app_logger.error(f"❌ ERREUR optuna_train: {e!s}", exc_info=True)
             return {"message": "Erreur lors du démarrage de l'entraînement"}, 500
+
+
+@admin_ns.route("/websocket/metrics")
+class WebSocketMetricsResource(Resource):
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @limiter.limit("100 per hour")
+    def get(self):
+        """Retourne les métriques WebSocket pour monitoring."""
+        try:
+            stats = ws_metrics.get_stats()
+
+            # Ajouter métriques Redis (si disponible)
+            if redis_client:
+                try:
+                    # Compter connexions actives via Redis (drivers avec last_seen récent)
+                    keys = redis_client.keys("driver:*:last_seen")
+                    # keys peut être une liste ou None
+                    if keys is not None:
+                        stats["drivers_online_count"] = (
+                            len(list(keys)) if isinstance(keys, (list, tuple)) else 0
+                        )
+                    else:
+                        stats["drivers_online_count"] = 0
+                except Exception:
+                    stats["drivers_online_count"] = 0
+            else:
+                stats["drivers_online_count"] = 0
+
+            app_logger.info("📊 Métriques WebSocket récupérées")
+            return stats, 200
+
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            app_logger.error(f"❌ ERREUR websocket_metrics: {e!s}", exc_info=True)
+            return {"error": "Erreur lors de la récupération des métriques"}, 500

@@ -338,6 +338,7 @@ export type Booking = {
     first_name: string;
     last_name: string;
     full_name: string;
+    birth_date?: string;
   };
   client_phone: string;
   medical_destination?: string;
@@ -387,9 +388,14 @@ export type BookingStatus =
 
 export const updateTripStatus = async (
   bookingId: number,
-  status: BookingStatus
+  status: BookingStatus,
+  cancelReason?: "CANCEL" | "RELEASE"
 ): Promise<void> => {
-  await api.put(`/driver/me/bookings/${bookingId}/status`, { status });
+  const payload: { status: BookingStatus; cancel_reason?: string } = { status };
+  if (cancelReason && status === "canceled") {
+    payload.cancel_reason = cancelReason;
+  }
+  await api.put(`/driver/me/bookings/${bookingId}/status`, payload);
 };
 
 export const completeTrip = async (

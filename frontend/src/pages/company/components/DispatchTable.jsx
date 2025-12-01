@@ -228,6 +228,7 @@ const DispatchTable = ({
 
   // --- "dernière mise à jour" ---
   const [updatedAt, setUpdatedAt] = useState(Date.now());
+  const [lastDelayUpdate, setLastDelayUpdate] = useState(Date.now()); // Track last delay update
   const [relativeNow, setRelativeNow] = useState(Date.now());
   useEffect(() => {
     const id = setInterval(() => setRelativeNow(Date.now()), 60_000);
@@ -286,6 +287,7 @@ const DispatchTable = ({
           }
         }
         setDelays(map);
+        setLastDelayUpdate(Date.now()); // ✅ Track last delay update
       } catch {}
     };
     load();
@@ -295,6 +297,58 @@ const DispatchTable = ({
       clearInterval(id);
     };
   }, [dispatchDay]);
+  
+  // ✅ Polling de secours : actualiser toutes les 60s si socket déconnecté ou données stale
+  useEffect(() => {
+    const pollingInterval = setInterval(() => {
+      const socketDead = !socket?.connected;
+      const delaysStale = Date.now() - lastDelayUpdate > 60000; // >60s sans mise à jour
+      
+      if (socketDead || delaysStale) {
+        console.log(JSON.stringify({
+          event: 'dispatch_polling_fallback',
+          reason: socketDead ? 'socket_disconnected' : 'data_stale',
+          socket_connected: socket?.connected || false,
+          time_since_last_update_ms: Date.now() - lastDelayUpdate,
+          timestamp: new Date().toISOString()
+        }));
+        
+        // Recharger les retards
+        fetchDispatchDelays(dispatchDay)
+          .then((data) => {
+            const map = {};
+            for (const d of data || []) {
+              const bid = d.booking_id;
+              if (!bid) continue;
+              const prev = map[bid]?.delay_minutes ?? 0;
+              const cur = Number(
+                d.delay_minutes ?? d.pickup_delay_minutes ?? d.dropoff_delay_minutes ?? 0
+              );
+              if (!map[bid] || cur > prev) {
+                map[bid] = {
+                  booking_id: bid,
+                  delay_minutes: cur,
+                  is_dropoff: d.is_dropoff || false,
+                  estimated_arrival: d.estimated_arrival || d.pickup_eta || d.dropoff_eta || null,
+                  scheduled_time: d.scheduled_time || null,
+                };
+              }
+            }
+            setDelays(map);
+            setLastDelayUpdate(Date.now());
+          })
+          .catch((err) => {
+            console.warn(JSON.stringify({
+              event: 'dispatch_polling_error',
+              error: err?.message || String(err),
+              timestamp: new Date().toISOString()
+            }));
+          });
+      }
+    }, 60000); // Toutes les 60s
+    
+    return () => clearInterval(pollingInterval);
+  }, [socket, lastDelayUpdate, dispatchDay]);
 
   // --- Abonnement Socket pour la date sélectionnée + évènements temps réel ---
   useEffect(() => {
@@ -354,6 +408,11 @@ const DispatchTable = ({
           alternative_driver_id: data.alternative_driver_id,
           alternative_estimated_arrival: data.alternative_estimated_arrival,
           alternative_delay_minutes: data.alternative_delay_minutes,
+          // Informations du chauffeur pour affichage
+          driver_name: data.driver_name,
+          driver_phone: data.driver_phone,
+          driver_vehicle: data.driver_vehicle,
+          driver_id: data.driver_id,
         },
       }));
     };
@@ -712,8 +771,26 @@ const DispatchTable = ({
                         );
                       }
                       if (t.kind === 'delayed') {
+                        const delayInfo = delays[b.id];
+                        const tooltipContent = delayInfo?.driver_name
+                          ? (
+                            <div>
+                              <div><strong>{delayInfo.driver_name}</strong></div>
+                              {delayInfo.driver_phone && (
+                                <div>
+                                  <a href={`tel:${delayInfo.driver_phone}`} style={{ color: 'white', textDecoration: 'underline' }}>
+                                    {delayInfo.driver_phone}
+                                  </a>
+                                </div>
+                              )}
+                              {delayInfo.driver_vehicle && (
+                                <div>Véhicule: {delayInfo.driver_vehicle}</div>
+                              )}
+                            </div>
+                          )
+                          : 'Retard important';
                         return (
-                          <Tooltip title="Retard important">
+                          <Tooltip title={tooltipContent}>
                             <Chip size="small" label={t.label} className={styles.statusChipDelay} />
                           </Tooltip>
                         );
@@ -786,7 +863,25 @@ const DispatchTable = ({
                 {delays[selectedBooking.id] && (
                   <div style={{ marginTop: 8 }}>
                     <Alert severity="warning" variant="outlined" sx={{ borderStyle: 'dashed' }}>
-                      Retard estimé : {delays[selectedBooking.id].delay_minutes} min
+                      <div>Retard estimé : {delays[selectedBooking.id].delay_minutes} min</div>
+                      {delays[selectedBooking.id].driver_name && (
+                        <div style={{ marginTop: 4 }}>
+                          <strong>Chauffeur :</strong> {delays[selectedBooking.id].driver_name}
+                          {delays[selectedBooking.id].driver_phone && (
+                            <span>
+                              {' — '}
+                              <a href={`tel:${delays[selectedBooking.id].driver_phone}`}>
+                                {delays[selectedBooking.id].driver_phone}
+                              </a>
+                            </span>
+                          )}
+                          {delays[selectedBooking.id].driver_vehicle && (
+                            <div style={{ marginTop: 2 }}>
+                              <strong>Véhicule :</strong> {delays[selectedBooking.id].driver_vehicle}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </Alert>
                   </div>
                 )}

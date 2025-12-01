@@ -1,0 +1,103 @@
+/* frontend/src/components/common/SocketStatusBadge.module.css */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  cursor: default;
+  user-select: none;
+  height: 28px;
+  min-width: 100px;
+  justify-content: center;
+}
+
+.icon {
+  font-size: 10px;
+  line-height: 1;
+  display: inline-block;
+}
+
+.text {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* État connecté - Vert */
+.connected {
+  background-color: #e8f5e9;
+  color: #4caf50;
+  border: 1px solid #4caf50;
+}
+
+.connected .icon {
+  color: #4caf50;
+}
+
+/* État déconnecté - Rouge */
+.disconnected {
+  background-color: #ffebee;
+  color: #f44336;
+  border: 1px solid #f44336;
+}
+
+.disconnected .icon {
+  color: #f44336;
+}
+
+/* État reconnexion - Orange */
+.reconnecting {
+  background-color: #fff3e0;
+  color: #ff9800;
+  border: 1px solid #ff9800;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.reconnecting .icon {
+  color: #ff9800;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive : masquer sur mobile si nécessaire */
+@media (max-width: 768px) {
+  .badge {
+    min-width: auto;
+    padding: 4px 8px;
+  }
+
+  .text {
+    display: none; /* Masquer le texte sur mobile, garder juste l'icône */
+  }
+
+  .badge {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    justify-content: center;
+    padding: 0;
+  }
+}
+

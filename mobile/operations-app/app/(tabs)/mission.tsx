@@ -9,6 +9,7 @@ import MissionCard from "@/components/dashboard/MissionCard";
 import MissionHeader from "@/components/dashboard/MissionHeader";
 import MissionMap from "@/components/dashboard/MissionMap";
 import ConfirmCompletionModal from "@/components/dashboard/ConfirmCompletionModal";
+import SocketStatusIndicator from "@/components/common/SocketStatusIndicator";
 import { Loader } from "@/components/ui/Loader";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
@@ -17,6 +18,7 @@ import {
   Booking,
   BookingStatus,
 } from "@/services/api";
+import { sendDriverHeartbeat } from "@/services/socket";
 
 /**
  * Détecte si la mission est un retour, quel que soit le type de donnée reçu (bool, int, string, etc.)
@@ -59,6 +61,7 @@ export default function MissionScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState<number>(Date.now()); // Track last update time
 
   const currentMission = missions[currentIndex] || null;
   const MISSIONS_CACHE_KEY = "missions_cache_v1";
@@ -115,14 +118,16 @@ export default function MissionScreen() {
 
       setMissions(sorted);
       setCurrentIndex(0);
+      setLastUpdate(Date.now()); // Mettre à jour le timestamp de dernière mise à jour
     } catch {
       Alert.alert("Erreur", "Impossible de charger les missions.");
     } finally {
       if (!isRefreshAction) {
         setIsLoading(false);
       }
+      setIsRefreshing(false);
     }
-  }, []);
+  }, [driver]);
 
   // Fonction de rafraîchissement pour pull-to-refresh
   const onRefresh = useCallback(async () => {
@@ -169,7 +174,7 @@ export default function MissionScreen() {
           .map((m) => (m.id === data.id ? data : m))
           .filter((m) => {
             const s = (m.status || "").toLowerCase();
-            // ✅ Filtrer les missions terminées ou annulées
+            // ✅ Filtrer les missions terminées ou annulées (mais pas les libérées qui reviennent à ASSIGNED)
             return !["completed", "return_completed", "canceled", "cancelled"].includes(s);
           })
           .sort(
@@ -190,6 +195,8 @@ export default function MissionScreen() {
         return updated;
       });
       // ✅ Si la mission a été annulée, afficher un message
+      // Note: Si la mission est libérée (retour à ASSIGNED), elle reste dans la liste
+      // et sera réassignée automatiquement, pas besoin d'alerte
       const statusLower = (data.status || "").toLowerCase();
       if (statusLower === "canceled" || statusLower === "cancelled") {
         Alert.alert(
@@ -211,17 +218,78 @@ export default function MissionScreen() {
         Alert.alert("❌ Mission annulée", "La mission en cours a été annulée.");
         setCurrentIndex(0); // Tu peux l'améliorer plus tard si besoin
       }
+      setLastUpdate(Date.now()); // Mettre à jour le timestamp
+    };
+
+    // Gestion de la déconnexion WebSocket
+    const onDisconnect = () => {
+      console.log("⚠️ [Mission] Socket déconnecté, tentative de reconnexion...");
+      // Le client Socket.IO reconnecte automatiquement, mais on peut forcer un refresh
+    };
+
+    // Gestion de la reconnexion WebSocket
+    const onReconnect = () => {
+      console.log("✅ [Mission] Socket reconnecté, rechargement des missions...");
+      // Recharger les missions après reconnexion
+      loadMissions(true); // Refresh silencieux
     };
 
     socket.on("new_booking", onNew);
     socket.on("booking_updated", onUpdate);
     socket.on("booking_cancelled", onCancel);
+    socket.on("disconnect", onDisconnect);
+    socket.on("reconnect", onReconnect);
     return () => {
       socket.off("new_booking", onNew);
       socket.off("booking_updated", onUpdate);
       socket.off("booking_cancelled", onCancel);
+      socket.off("disconnect", onDisconnect);
+      socket.off("reconnect", onReconnect);
     };
-  }, [socket, currentMission?.id]);
+  }, [socket, currentMission?.id, loadMissions]);
+
+  // ✅ Polling de secours : actualiser toutes les 60s si socket déconnecté ou si pas de missions depuis >60s
+  useEffect(() => {
+    const pollingInterval = setInterval(() => {
+      const now = Date.now();
+      const timeSinceLastUpdate = now - lastUpdate;
+      const shouldPoll =
+        !socket?.connected || // Socket déconnecté
+        (missions.length === 0 && timeSinceLastUpdate > 60000); // Pas de missions depuis >60s
+
+      if (shouldPoll) {
+        console.log(`🔄 [Mission] Polling de secours déclenché (socket: ${socket?.connected ? 'connecté' : 'déconnecté'}, timeSinceLastUpdate: ${Math.round(timeSinceLastUpdate / 1000)}s)`);
+        loadMissions(true); // Refresh silencieux
+      }
+    }, 60000); // Toutes les 60s
+
+    return () => clearInterval(pollingInterval);
+  }, [socket, missions.length, lastUpdate, loadMissions]);
+
+  // ✅ Heartbeat métier : envoyer métadonnées toutes les 60s si socket connecté et mission active
+  useEffect(() => {
+    if (!socket?.connected || !currentMission) return;
+
+    const heartbeatInterval = setInterval(() => {
+      if (socket?.connected && currentMission) {
+        sendDriverHeartbeat({
+          last_mission_id: currentMission.id,
+          location: location?.coords ? {
+            lat: location.coords.latitude,
+            lon: location.coords.longitude
+          } : undefined
+        }).catch((err) => {
+          console.warn(JSON.stringify({
+            event: "driver_heartbeat_error",
+            error: err?.message || String(err),
+            timestamp: new Date().toISOString()
+          }));
+        });
+      }
+    }, 60000); // Toutes les 60s
+
+    return () => clearInterval(heartbeatInterval);
+  }, [socket, currentMission, location]);
 
   const openNavigation = (destination: string) => {
     const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
@@ -299,67 +367,72 @@ export default function MissionScreen() {
   }
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: "#F5F7F6" }} // ✅ Fond épuré cohérent avec le login
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefreshing}
-          onRefresh={onRefresh}
-          colors={["#0A7F59"]} // Android - accent color
-          tintColor="#0A7F59" // iOS - accent color
-        />
-      }
-    >
-      <MissionHeader
-        driverName={driver.first_name || "Chauffeur"}
-        date={new Date().toLocaleDateString()}
-      />
+    <View style={{ flex: 1, backgroundColor: "#F5F7F6" }}>
+      {/* 🆕 Indicateur de statut connexion Socket.IO */}
+      <SocketStatusIndicator />
 
-      {location && currentMission && (
-        <MissionMap
-          location={location}
-          destination={
-            currentMission.status === "in_progress"
-              ? currentMission.dropoff_location!
-              : currentMission.pickup_location!
-          }
-        />
-      )}
-
-      {currentMission ? (
-        <View className="px-4 pt-4">
-          <MissionCard
-            mission={{
-              ...currentMission,
-              // Utiliser la durée dynamique si disponible, sinon la durée statique
-              duration_seconds: getDuration(currentMission.id) || currentMission.duration_seconds
-            }}
-            onComplete={handleOpenModal}
-            onCall={() =>
-              currentMission.client_phone &&
-              Linking.openURL(`tel:${currentMission.client_phone}`)
-            }
-            onNavigate={() => {
-              const dest =
-                currentMission.status === "in_progress"
-                  ? currentMission.dropoff_location!
-                  : currentMission.pickup_location!;
-              openNavigation(dest);
-            }}
+      <ScrollView
+        style={{ flex: 1 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            colors={["#0A7F59"]} // Android - accent color
+            tintColor="#0A7F59" // iOS - accent color
           />
-        </View>
-      ) : (
-        <View className="flex-1 items-center justify-center py-10 px-4">
-          <MissionCard.EmptyState />
-        </View>
-      )}
+        }
+      >
+        <MissionHeader
+          driverName={driver.first_name || "Chauffeur"}
+          date={new Date().toLocaleDateString()}
+        />
 
-      <ConfirmCompletionModal
-        visible={modalVisible}
-        onClose={() => setModalVisible(false)}
-        onConfirm={confirmCompletion}
-        isLoading={isSubmitting}
-      />
-    </ScrollView>
+        {location && currentMission && (
+          <MissionMap
+            location={location}
+            destination={
+              currentMission.status === "in_progress"
+                ? currentMission.dropoff_location!
+                : currentMission.pickup_location!
+            }
+          />
+        )}
+
+        {currentMission ? (
+          <View className="px-4 pt-4">
+            <MissionCard
+              mission={{
+                ...currentMission,
+                // Utiliser la durée dynamique si disponible, sinon la durée statique
+                duration_seconds: getDuration(currentMission.id) || currentMission.duration_seconds
+              }}
+              onComplete={handleOpenModal}
+              onCall={() =>
+                currentMission.client_phone &&
+                Linking.openURL(`tel:${currentMission.client_phone}`)
+              }
+              onNavigate={() => {
+                const dest =
+                  currentMission.status === "in_progress"
+                    ? currentMission.dropoff_location!
+                    : currentMission.pickup_location!;
+                openNavigation(dest);
+              }}
+            />
+          </View>
+        ) : (
+          <View className="flex-1 items-center justify-center py-10 px-4">
+            <MissionCard.EmptyState />
+          </View>
+        )}
+
+        <ConfirmCompletionModal
+          visible={modalVisible}
+          onClose={() => setModalVisible(false)}
+          onConfirm={confirmCompletion}
+          isLoading={isSubmitting}
+        />
+      </ScrollView>
+    </View>
   );
 }
