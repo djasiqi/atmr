@@ -770,6 +770,10 @@ def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
             # 4. FORCER la création d'une nouvelle connexion avec Redis explicitement
             # en passant broker_url et transport directement
             logger.info("[Queue] 🔄 Création d'une nouvelle connexion Redis explicite")
+
+            # Initialiser redis_connection à None
+            redis_connection = None
+
             try:
                 # Forcer la création d'une nouvelle connexion avec Redis
                 # en passant broker_url et transport explicitement
@@ -781,9 +785,6 @@ def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
                     transport="redis",
                     transport_options={},
                 )
-
-                # Remplacer la connexion du broker par notre connexion Redis
-                celery_app.broker_connection = redis_connection
 
                 logger.info("[Queue] ✅ Nouvelle connexion Redis créée explicitement")
             except Exception as conn_err:
@@ -801,12 +802,57 @@ def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
                 celery_app.conf.broker_transport,
             )
 
-            # Enqueue Celery task
-            # ✅ Forcer explicitement la queue "default"
-            # pour éviter les problèmes de routage
-            # .apply_async permet de spécifier la queue, contrairement à .delay
-            TaskCallable = cast("Any", run_dispatch_task)
-            task = TaskCallable.apply_async(kwargs=run_kwargs, queue="default")
+            # Enqueue Celery task avec Celery normalement
+            # ✅ Forcer Celery à utiliser Redis en remplaçant broker_connection
+            logger.info(
+                "[Queue] 📤 Enfilage de la tâche via Celery avec connexion Redis forcée"
+            )
+
+            # Initialiser old_connection pour pouvoir la restaurer
+            old_connection = None
+
+            try:
+                # Si on a créé une connexion Redis, forcer Celery à l'utiliser
+                if redis_connection is not None:
+                    logger.info(
+                        "[Queue] 🔄 Remplacement de broker_connection pour forcer Redis"
+                    )
+                    # Sauvegarder l'ancienne connexion
+                    old_connection = getattr(celery_app, "broker_connection", None)
+                    # Remplacer par notre connexion Redis
+                    celery_app.broker_connection = redis_connection
+
+                    logger.info(
+                        "[Queue] ✅ broker_connection remplacée, utilisation de send_task()"
+                    )
+
+                # Utiliser send_task() qui utilisera notre connexion Redis
+                task_name = "tasks.dispatch_tasks.run_dispatch_task"
+                result = celery_app.send_task(
+                    task_name,
+                    kwargs=run_kwargs,
+                    queue="default",
+                )
+
+                task = result
+                logger.info(
+                    "[Queue] ✅ Tâche envoyée via Celery.send_task() (task_id=%s)",
+                    result.id,
+                )
+            except Exception as send_err:
+                logger.error(
+                    "[Queue] ❌ Erreur avec send_task(), fallback apply_async(): %s",
+                    send_err,
+                )
+                logger.exception("[Queue] Stack trace complète:")
+                # Fallback : utiliser apply_async() normalement
+                TaskCallable = cast("Any", run_dispatch_task)
+                task = TaskCallable.apply_async(kwargs=run_kwargs, queue="default")
+            finally:
+                # Restaurer l'ancienne connexion si on l'a remplacée
+                if old_connection is not None:
+                    celery_app.broker_connection = old_connection
+                    logger.info("[Queue] 🔄 Ancienne connexion restaurée")
             st.last_task_id = task.id
             _CELERY_STATE[company_id] = task.state
 
