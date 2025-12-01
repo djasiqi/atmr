@@ -206,14 +206,14 @@ export const styles = StyleSheet.create({
     gap: 10,
   },
 
-  // ✅ Bouton d'action avec style élégant (inspiré du login)
+  // ✅ Bouton d'action avec style élégant (inspiré du login) - RÉDUIT
   actionItemEnhanced: {
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: palette.accent,
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
     flex: 1,
     flexBasis: 0,
     flexGrow: 1,
@@ -221,19 +221,29 @@ export const styles = StyleSheet.create({
     marginVertical: 0,
     marginHorizontal: 0,
     shadowColor: palette.accent,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.24,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
 
-  // ✅ Label d'action avec typographie élégante
+  // ✅ Label d'action avec typographie élégante - RÉDUIT
   actionLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: "#FFFFFF",
-    marginTop: 6,
+    marginTop: 4,
     textAlign: "center",
     fontWeight: "600",
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
+  },
+
+  // ✅ Nouvelle row pour les boutons secondaires (Annuler en dessous)
+  actionsRowSecondary: {
+    flexDirection: "row",
+    flexWrap: "nowrap",
+    justifyContent: "center",
+    alignItems: "stretch",
+    marginTop: 10,
+    gap: 10,
   },
 });

@@ -18,6 +18,12 @@ from ext import app_logger, db, redis_client, role_required, socketio
 from models import Assignment, Booking, BookingStatus, Driver, User, UserRole
 from models.enums import CancelReason
 
+# Import conditionnel pour éviter les dépendances circulaires
+try:
+    from routes.companies import _maybe_trigger_dispatch
+except ImportError:
+    _maybe_trigger_dispatch = None
+
 # Constantes pour éviter les valeurs magiques
 LAT_THRESHOLD = 90
 LON_THRESHOLD = 180
@@ -992,23 +998,32 @@ class UpdateBookingStatus(Resource):
                                     status_code = 400
                                 else:
                                     # Récupérer la raison d'annulation (CANCEL ou RELEASE)
-                                    cancel_reason_str = data.get("cancel_reason", "CANCEL")
+                                    cancel_reason_str = data.get(
+                                        "cancel_reason", "CANCEL"
+                                    )
                                     cancel_reason = CancelReason.CANCEL  # Par défaut
                                     try:
                                         cancel_reason = CancelReason(cancel_reason_str)
                                     except ValueError:
                                         # Si la valeur n'est pas valide, utiliser CANCEL par défaut
                                         app_logger.warning(
-                                            f"Raison d'annulation invalide: {cancel_reason_str}, "
-                                            "utilisation de CANCEL par défaut"
+                                            (
+                                                f"Raison d'annulation invalide: {cancel_reason_str}, "
+                                                "utilisation de CANCEL par défaut"
+                                            )
                                         )
-                                    
+
                                     if cancel_reason == CancelReason.RELEASE:
-                                        # ✅ LIBÉRATION : remettre à ASSIGNED pour permettre réassignation
-                                        # Ne pas facturer, permettre à l'entreprise de réassigner
-                                        booking.status = BookingStatus.ASSIGNED
+                                        # ✅ LIBÉRATION : remettre à ACCEPTED pour permettre réassignation
+                                        # Ne pas facturer, permettre à l'entreprise de réassigner ou au système de réassigner automatiquement
+                                        # ACCEPTED est le statut approprié car le booking est accepté mais pas encore assigné à un chauffeur
+                                        # Cela fonctionne même si le statut était EN_ROUTE - le booking revient à ACCEPTED pour être réassigné
+                                        previous_status = (
+                                            booking.status
+                                        )  # Sauvegarder l'ancien statut pour le log
+                                        booking.status = BookingStatus.ACCEPTED
                                         booking.driver_id = None
-                                        
+
                                         # Supprimer l'assignment pour permettre une nouvelle assignation
                                         assignment = Assignment.query.filter_by(
                                             booking_id=booking_id
@@ -1017,18 +1032,20 @@ class UpdateBookingStatus(Resource):
                                         if assignment:
                                             assignment_id_str = str(assignment.id)
                                             db.session.delete(assignment)
-                                        
+
                                         app_logger.info(
                                             (
                                                 f"📱 [Driver Release] Chauffeur {driver.id} "
                                                 f"a libéré la course {booking_id} pour réassignation "
-                                                f"(statut précédent: {booking.status})"
+                                                f"(statut précédent: {previous_status}, nouveau statut: ACCEPTED)"
                                             )
                                         )
-                                        
+
                                         # Émettre événement d'annulation d'assignment pour notifier l'entreprise
-                                        from services.socketio_service import emit_assignment_cancelled
-                                        
+                                        from services.socketio_service import (
+                                            emit_assignment_cancelled,
+                                        )
+
                                         if assignment_id_str:
                                             emit_assignment_cancelled(
                                                 company_id=booking.company_id,
@@ -1036,16 +1053,50 @@ class UpdateBookingStatus(Resource):
                                                 booking_id=booking_id,
                                                 driver_id=driver.id,
                                             )
+
+                                        # ✅ Déclencher un dispatch automatique pour réassigner immédiatement
+                                        # si le dispatch est activé pour l'entreprise
+                                        if _maybe_trigger_dispatch:
+                                            try:
+                                                _maybe_trigger_dispatch(
+                                                    booking.company_id, "reassign"
+                                                )
+                                            except Exception as e:
+                                                app_logger.warning(
+                                                    "Erreur lors du déclenchement du dispatch: %s",
+                                                    e,
+                                                )
                                     else:
-                                        # ✅ ANNULATION RÉELLE : marquer comme CANCELED (facturable)
+                                        # ✅ ANNULATION RÉELLE : marquer comme CANCELED
+                                        # Déterminer si facturation selon la raison
+                                        client_fault_reasons = {
+                                            CancelReason.CLIENT_REQUEST,
+                                            CancelReason.CLIENT_NO_SHOW,
+                                            CancelReason.CANCEL,  # Par défaut, CANCEL est facturé
+                                        }
+                                        should_bill = (
+                                            cancel_reason in client_fault_reasons
+                                        )
+
+                                        # Stocker la raison d'annulation pour la facturation
+                                        # Note: On peut ajouter un champ cancel_reason dans le modèle Booking si nécessaire
                                         booking.status = BookingStatus.CANCELED
+
+                                        billing_status = (
+                                            "facturée"
+                                            if should_bill
+                                            else "non facturée"
+                                        )
                                         app_logger.info(
                                             (
                                                 f"📱 [Driver Cancel] Chauffeur {driver.id} "
-                                                f"a annulé la course {booking_id} (facturable) "
+                                                f"a annulé la course {booking_id} (raison: {cancel_reason.value}, {billing_status}) "
                                                 f"(statut précédent: {booking.status})"
                                             )
                                         )
+
+                                        # TODO: Si nécessaire, stocker cancel_reason dans un champ du booking
+                                        # pour la facturation ultérieure (booking.cancel_reason = cancel_reason.value)
 
                             if result is None:
                                 db.session.commit()

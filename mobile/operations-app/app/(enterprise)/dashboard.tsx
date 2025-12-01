@@ -1,13 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  Modal,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from "react-native";
+import * as Crypto from "expo-crypto";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import dayjs from "dayjs";
@@ -23,8 +27,16 @@ import {
   getDispatchStatus,
   markRideUrgent,
   runDispatch,
+  getDispatchRideDetails,
+  assignRide,
+  reassignRide,
 } from "@/services/enterpriseDispatch";
-import { DispatchStatus, RideSummary } from "@/types/enterpriseDispatch";
+import {
+  DispatchStatus,
+  RideSummary,
+  DriverSuggestion,
+  RideDetail,
+} from "@/types/enterpriseDispatch";
 import { RideSnippetCard } from "@/components/enterprise/cards/RideSnippetCard";
 import { EnterpriseDriversMap } from "@/components/enterprise/EnterpriseDriversMap";
 import { useEnterpriseDriverTracking } from "@/hooks/useEnterpriseDriverTracking";
@@ -55,6 +67,16 @@ const enterprisePalette = {
   cardBorder: "rgba(61,147,110,0.26)",
   textStrong: "#F1FFF9",
   textSecondary: "rgba(200,231,213,0.78)",
+  // ✅ Couleurs modales alignées avec rides.tsx
+  modalOverlay: "rgba(5,22,16,0.82)",
+  modalBackground: "#08211A",
+  modalBorder: "rgba(46,128,94,0.4)",
+  modalTitle: "#E6F2EA",
+  modalText: "rgba(184,214,198,0.8)",
+  modalButton: "#1EB980",
+  modalButtonText: "#052015",
+  modalCancelText: "rgba(184,214,198,0.75)",
+  loadingText: "rgba(184,214,198,0.7)",
 };
 
 dayjs.extend(utc);
@@ -85,6 +107,17 @@ export default function EnterpriseDashboardScreen() {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [dispatching, setDispatching] = useState(false);
+
+  // ✅ États pour le modal d'assignation de chauffeur
+  const [assignModalVisible, setAssignModalVisible] = useState(false);
+  const [selectedRideForAssignment, setSelectedRideForAssignment] = useState<
+    RideSummary | null
+  >(null);
+  const [rideSuggestions, setRideSuggestions] = useState<DriverSuggestion[]>(
+    []
+  );
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [assigning, setAssigning] = useState(false);
 
   const { markers: driverMarkers, refreshLocations } =
     useEnterpriseDriverTracking();
@@ -168,6 +201,103 @@ export default function EnterpriseDashboardScreen() {
       }
     },
     [loadData]
+  );
+
+  // ✅ Ouvrir le modal d'assignation et charger les suggestions de chauffeurs
+  const handleOpenAssignModal = useCallback(
+    async (ride: RideSummary) => {
+      // ✅ Vérifier si l'assignation/annulation est désactivée (completed ou in_board uniquement)
+      const statusLower = ride?.status?.toLowerCase() || "";
+      const isCompleted = statusLower === "completed";
+      const isInBoard = statusLower === "in_board";
+      const isActionDisabled = isCompleted || isInBoard;
+
+      if (isActionDisabled) {
+        Alert.alert(
+          "Action impossible",
+          isCompleted
+            ? "La course est terminée. L'assignation n'est plus possible."
+            : "Le client est à bord. L'assignation n'est plus possible."
+        );
+        return;
+      }
+
+      setSelectedRideForAssignment(ride);
+      setAssignModalVisible(true);
+      setLoadingSuggestions(true);
+      setRideSuggestions([]);
+
+      try {
+        const details: RideDetail = await getDispatchRideDetails(ride.id);
+        setRideSuggestions(details.suggestions || []);
+      } catch (error: any) {
+        const message =
+          error?.response?.data?.error ??
+          error?.message ??
+          "Impossible de charger les suggestions de chauffeurs.";
+        Alert.alert("Erreur", message);
+        setAssignModalVisible(false);
+        setSelectedRideForAssignment(null);
+      } finally {
+        setLoadingSuggestions(false);
+      }
+    },
+    []
+  );
+
+  // ✅ Fermer le modal d'assignation
+  const handleCloseAssignModal = useCallback(() => {
+    setAssignModalVisible(false);
+    setSelectedRideForAssignment(null);
+    setRideSuggestions([]);
+  }, []);
+
+  // ✅ Assigner un chauffeur depuis le modal
+  const handleAssignDriver = useCallback(
+    async (driverId: string, reason?: string) => {
+      if (!selectedRideForAssignment) return;
+
+      const isAssigned =
+        selectedRideForAssignment.status === "assigned" ||
+        !!selectedRideForAssignment.driver?.id;
+
+      setAssigning(true);
+      try {
+        if (isAssigned) {
+          await reassignRide(selectedRideForAssignment.id, {
+            driver_id: driverId,
+            reason: reason ?? undefined,
+            allow_emergency: false,
+            respect_preferences: true,
+            idempotency_key: Crypto.randomUUID(),
+          });
+        } else {
+          await assignRide(selectedRideForAssignment.id, {
+            driver_id: driverId,
+            reason: reason ?? undefined,
+            allow_emergency: false,
+            respect_preferences: true,
+            idempotency_key: Crypto.randomUUID(),
+          });
+        }
+        Alert.alert(
+          "Assignation effectuée",
+          "La course a été mise à jour avec succès."
+        );
+        handleCloseAssignModal();
+        await loadData();
+      } catch (error: any) {
+        const message =
+          error?.response?.data?.error ??
+          error?.response?.data?.message ??
+          error?.message ??
+          "Impossible de finaliser l'assignation.";
+        Alert.alert("Erreur", message);
+      } finally {
+        setAssigning(false);
+      }
+    },
+    [selectedRideForAssignment, handleCloseAssignModal, loadData]
   );
 
   const manualStats = useMemo(() => {
@@ -283,11 +413,7 @@ export default function EnterpriseDashboardScreen() {
                     params: { rideId: ride.id },
                   } as any),
                 onQuickAction: () => handleUrgentDelay(ride.id),
-                onPrimaryAction: () =>
-                  router.push({
-                    pathname: "/(enterprise)/ride-details",
-                    params: { rideId: ride.id },
-                  } as any),
+                onPrimaryAction: () => handleOpenAssignModal(ride),
               }}
             />
           );
@@ -450,6 +576,136 @@ export default function EnterpriseDashboardScreen() {
       {dispatchMode === "fully_auto" && urgentSection}
 
       {errorMessage && <Text style={styles.error}>{errorMessage}</Text>}
+
+      {/* ✅ Modal pour sélectionner un chauffeur */}
+      <Modal
+        visible={assignModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={handleCloseAssignModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Assigner un chauffeur</Text>
+            {selectedRideForAssignment && (
+              <Text style={styles.modalSubtitle}>
+                Course #{selectedRideForAssignment.id}
+              </Text>
+            )}
+
+            {selectedRideForAssignment && (
+              <View style={styles.modalRideInfo}>
+                <Text style={styles.modalRideClient}>
+                  {selectedRideForAssignment.client.name}
+                </Text>
+                <Text style={styles.modalRideRoute} numberOfLines={1}>
+                  {selectedRideForAssignment.route.pickup_address}
+                </Text>
+                <Text style={styles.modalRideRoute} numberOfLines={1}>
+                  → {selectedRideForAssignment.route.dropoff_address}
+                </Text>
+              </View>
+            )}
+
+            {loadingSuggestions ? (
+              <View style={styles.modalLoading}>
+                <ActivityIndicator color={enterprisePalette.dispatchButton} />
+                <Text style={styles.modalLoadingText}>
+                  Chargement des suggestions...
+                </Text>
+              </View>
+            ) : rideSuggestions.length === 0 ? (
+              <Text style={styles.modalEmpty}>
+                Aucun chauffeur disponible pour cette course.
+              </Text>
+            ) : (
+              <ScrollView
+                style={styles.modalDriverList}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={false}
+              >
+                {rideSuggestions.map((suggestion: DriverSuggestion) => (
+                  <TouchableOpacity
+                    key={suggestion.driver_id}
+                    style={styles.modalDriverOption}
+                    onPress={() => handleAssignDriver(suggestion.driver_id)}
+                    disabled={assigning}
+                  >
+                    <View style={styles.modalDriverInfo}>
+                      <Text style={styles.modalDriverName}>
+                        {suggestion.driver_name}
+                      </Text>
+                      <Text style={styles.modalDriverMeta}>
+                        Score: {suggestion.score.toFixed(2)}
+                        {suggestion.preferred_match && " • Préféré"}
+                        {suggestion.is_emergency && " • Urgence"}
+                      </Text>
+                      {suggestion.reason && (
+                        <Text style={styles.modalDriverReason}>
+                          {suggestion.reason}
+                        </Text>
+                      )}
+                    </View>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={20}
+                      color={enterprisePalette.dispatchButton}
+                    />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+
+            <View style={styles.modalActions}>
+              <Pressable
+                style={styles.modalCancelButton}
+                onPress={handleCloseAssignModal}
+                disabled={assigning}
+              >
+                <Text style={styles.modalCancelText}>Annuler</Text>
+              </Pressable>
+              {selectedRideForAssignment && (
+                <Pressable
+                  style={styles.modalViewDetailsButton}
+                  onPress={() => {
+                    handleCloseAssignModal();
+                    router.push({
+                      pathname: "/(enterprise)/ride-details",
+                      params: { rideId: selectedRideForAssignment.id },
+                    } as any);
+                  }}
+                  disabled={assigning}
+                >
+                  <Text style={styles.modalViewDetailsText}>
+                    Voir la fiche complète
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+
+            {assigning && (
+              <View
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  backgroundColor: "rgba(0,0,0,0.8)",
+                  borderRadius: 24,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <ActivityIndicator color="#FFFFFF" size="large" />
+                <Text style={styles.modalAssigningText}>
+                  Assignation en cours...
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -781,5 +1037,132 @@ const styles = StyleSheet.create({
     marginTop: 14,
     gap: 12,
     marginBottom: 24,
+  },
+  // ✅ Styles pour le modal d'assignation (alignés avec rides.tsx)
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: enterprisePalette.modalOverlay,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 420,
+    backgroundColor: enterprisePalette.modalBackground,
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: enterprisePalette.modalBorder,
+    maxHeight: "80%",
+    gap: 16,
+  },
+  modalTitle: {
+    color: enterprisePalette.modalTitle,
+    fontSize: 20,
+    fontWeight: "700",
+  },
+  modalSubtitle: {
+    color: enterprisePalette.modalText,
+    fontSize: 14,
+    fontWeight: "400",
+  },
+  modalRideInfo: {
+    backgroundColor: "rgba(10,34,26,0.82)",
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: enterprisePalette.surfaceBorder,
+  },
+  modalRideClient: {
+    color: enterprisePalette.modalTitle,
+    fontSize: 15,
+    fontWeight: "600",
+    marginBottom: 6,
+  },
+  modalRideRoute: {
+    color: enterprisePalette.modalText,
+    fontSize: 13,
+    marginTop: 4,
+  },
+  modalLoading: {
+    alignItems: "center",
+    paddingVertical: 40,
+    gap: 12,
+  },
+  modalLoadingText: {
+    color: enterprisePalette.loadingText,
+    fontSize: 14,
+  },
+  modalEmpty: {
+    color: enterprisePalette.modalText,
+    fontSize: 14,
+    textAlign: "center",
+    paddingVertical: 40,
+  },
+  modalDriverList: {
+    maxHeight: 400,
+    marginBottom: 16,
+  },
+  modalDriverOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "rgba(10,34,26,0.6)",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: enterprisePalette.surfaceBorder,
+  },
+  modalDriverInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  modalDriverName: {
+    color: enterprisePalette.modalTitle,
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  modalDriverMeta: {
+    color: enterprisePalette.modalText,
+    fontSize: 13,
+    marginBottom: 4,
+  },
+  modalDriverReason: {
+    color: enterprisePalette.loadingText,
+    fontSize: 12,
+    fontStyle: "italic",
+  },
+  modalActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+  },
+  modalCancelButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  modalCancelText: {
+    color: enterprisePalette.modalCancelText,
+    fontWeight: "600",
+    fontSize: 15,
+  },
+  modalViewDetailsButton: {
+    backgroundColor: enterprisePalette.modalButton,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 14,
+  },
+  modalViewDetailsText: {
+    color: enterprisePalette.modalButtonText,
+    fontWeight: "700",
+    fontSize: 15,
+  },
+  modalAssigningText: {
+    color: "#FFFFFF",
+    marginTop: 12,
+    fontSize: 14,
   },
 });

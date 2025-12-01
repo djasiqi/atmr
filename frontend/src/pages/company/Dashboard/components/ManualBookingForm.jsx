@@ -476,10 +476,22 @@ export default function ManualBookingForm({ onSuccess }) {
       setServiceObj(null); // pas d'ID → on laisse vide ; l'utilisateur choisira dans la liste
     }
     if (extracted.doctor_name) setDoctorName(extracted.doctor_name);
-    // building/floor -> concat dans notes
+    
+    // Helper pour vérifier si un texte existe déjà dans les notes (normalisé)
+    const hasTextInNotes = (notes, text) => {
+      if (!notes || !text) return false;
+      const normalize = (t) => t.toLowerCase().replace(/[🏢\s]/g, '').trim();
+      return normalize(notes).includes(normalize(text));
+    };
+    
+    // building/floor -> concat dans notes seulement s'ils ne sont pas déjà présents
     let notes = value || '';
-    if (extracted.building) notes += (notes ? '\n' : '') + extracted.building;
-    if (extracted.floor) notes += (notes ? '\n' : '') + extracted.floor;
+    if (extracted.building && !hasTextInNotes(notes, extracted.building)) {
+      notes += (notes ? '\n' : '') + extracted.building;
+    }
+    if (extracted.floor && !hasTextInNotes(notes, extracted.floor)) {
+      notes += (notes ? '\n' : '') + extracted.floor;
+    }
     if (notes !== value) setNotesMedical(notes);
   }
 
@@ -817,6 +829,16 @@ export default function ManualBookingForm({ onSuccess }) {
                   return { floor: null, cleanedText: text };
                 };
 
+                // Fonction pour vérifier si l'étage existe déjà dans les notes
+                const hasFloorInNotes = (notes, floorInfo) => {
+                  if (!notes || !floorInfo) return false;
+                  // Normaliser les deux textes pour la comparaison (enlever emoji, espaces, etc.)
+                  const normalizeFloor = (text) => text.toLowerCase().replace(/[🏢\s]/g, '').trim();
+                  const normalizedFloor = normalizeFloor(floorInfo);
+                  // Vérifier si l'étage (normalisé) existe dans les notes
+                  return normalizeFloor(notes).includes(normalizedFloor);
+                };
+
                 // ✅ Utiliser main_text pour Google Places (nom sans adresse), sinon label
                 // main_text = "HUG Maternité" ou "Dr méd. Lakki Brahim"
                 // label = "HUG Maternité, Boulevard de la Cluse, Genève, Suisse" (complet)
@@ -859,20 +881,34 @@ export default function ManualBookingForm({ onSuccess }) {
 
                 // ⚠️ IMPORTANT : Vérifier DOCTEUR en PREMIER (avant établissement)
                 // Car les docteurs ont aussi le type "health" qui déclencherait looksLikeMedical
-                const looksLikeDoctor =
+                // Mais exclure les centres d'imagerie et cliniques (ce sont des établissements, pas des docteurs)
+                const isMedicalCenter = 
+                  txt.includes('centre d\'imagerie') ||
+                  txt.includes('centre d imagerie') ||
+                  txt.includes('clinique') ||
+                  txt.includes('hôpital') ||
+                  txt.includes('hopital');
+                
+                const looksLikeDoctor = !isMedicalCenter && (
                   txt.includes('dr ') ||
                   txt.includes('dr.') ||
                   txt.includes('dr méd') ||
                   txt.includes('docteur') ||
                   txt.includes('cabinet') ||
                   txt.includes('médecin') ||
-                  item.types?.includes('doctor');
+                  item.types?.includes('doctor')
+                );
 
                 const looksLikeMedical =
                   txt.includes('hôpital') ||
                   txt.includes('hopital') ||
                   txt.includes('clinique') ||
                   txt.includes('centre médical') ||
+                  txt.includes('centre d\'imagerie') ||
+                  txt.includes('centre d imagerie') ||
+                  txt.includes('imagerie médicale') ||
+                  txt.includes('radiology') ||
+                  txt.includes('radiologie') ||
                   txt.includes('centre d') ||
                   txt.includes('centre collectif') ||
                   txt.includes('hébergement') ||
@@ -903,12 +939,15 @@ export default function ManualBookingForm({ onSuccess }) {
                     // NE PAS remplir l'établissement pour un docteur
                     setEstablishmentText('');
                     setMedicalFacility('');
-                    // Ajouter l'étage dans les notes si présent
+                    // Ajouter l'étage dans les notes si présent et pas déjà présent
                     if (floorInfo) {
-                      const floorNote = `🏢 ${floorInfo}`;
-                      setNotesMedical((prevNotes) =>
-                        prevNotes ? `${prevNotes}\n${floorNote}` : floorNote
-                      );
+                      setNotesMedical((prevNotes) => {
+                        if (hasFloorInNotes(prevNotes, floorInfo)) {
+                          return prevNotes; // L'étage existe déjà, ne pas dupliquer
+                        }
+                        const floorNote = `🏢 ${floorInfo}`;
+                        return prevNotes ? `${prevNotes}\n${floorNote}` : floorNote;
+                      });
                     }
                   } else {
                     // Pour Photon/autre, utiliser l'extraction
@@ -925,12 +964,15 @@ export default function ManualBookingForm({ onSuccess }) {
                   if (isGooglePlace) {
                     setEstablishmentText(establishmentName);
                     setMedicalFacility(establishmentName);
-                    // Ajouter l'étage dans les notes si présent
+                    // Ajouter l'étage dans les notes si présent et pas déjà présent
                     if (floorInfo) {
-                      const floorNote = `🏢 ${floorInfo}`;
-                      setNotesMedical((prevNotes) =>
-                        prevNotes ? `${prevNotes}\n${floorNote}` : floorNote
-                      );
+                      setNotesMedical((prevNotes) => {
+                        if (hasFloorInNotes(prevNotes, floorInfo)) {
+                          return prevNotes; // L'étage existe déjà, ne pas dupliquer
+                        }
+                        const floorNote = `🏢 ${floorInfo}`;
+                        return prevNotes ? `${prevNotes}\n${floorNote}` : floorNote;
+                      });
                     }
                   } else {
                     // Pour Photon/autre, utiliser l'extraction
@@ -955,13 +997,14 @@ export default function ManualBookingForm({ onSuccess }) {
                       // C'est un lieu nommé (restaurant, magasin, parc, etc.)
                       console.log('📍 [Destination] Lieu public/POI détecté:', establishmentName);
                       let locationNote = `📍 Rendez-vous: ${establishmentName}`;
-                      // Ajouter l'étage si présent
-                      if (floorInfo) {
-                        locationNote += `\n🏢 ${floorInfo}`;
-                      }
-                      setNotesMedical((prevNotes) =>
-                        prevNotes ? `${prevNotes}\n${locationNote}` : locationNote
-                      );
+                      setNotesMedical((prevNotes) => {
+                        // Construire la note avec l'étage si présent et pas déjà dans prevNotes
+                        let finalNote = locationNote;
+                        if (floorInfo && !hasFloorInNotes(prevNotes, floorInfo)) {
+                          finalNote += `\n🏢 ${floorInfo}`;
+                        }
+                        return prevNotes ? `${prevNotes}\n${finalNote}` : finalNote;
+                      });
                       // Ne PAS remplir les champs médicaux
                       setEstablishmentText('');
                       setMedicalFacility('');

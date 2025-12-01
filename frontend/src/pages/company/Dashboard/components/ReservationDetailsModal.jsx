@@ -11,6 +11,16 @@ const ReservationDetailsModal = ({ reservation, onClose }) => {
         <p>
           <strong>Client :</strong> {reservation.customer_name}
         </p>
+        {reservation.client?.birth_date && (
+          <p>
+            <strong>Date de naissance :</strong>{' '}
+            {new Date(reservation.client.birth_date).toLocaleDateString('fr-FR', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric',
+            })}
+          </p>
+        )}
         <p>
           <strong>Date / Heure :</strong> {renderBookingDateTime(reservation)}
         </p>

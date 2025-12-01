@@ -77,7 +77,7 @@ const DriverSidebar = () => {
         onClick={toggleSidebar}
         aria-label={isExpanded ? 'Réduire la barre latérale' : 'Agrandir la barre latérale'}
         aria-expanded={isExpanded}
-      >
+          >
         {isExpanded ? <FaTimes /> : <FaBars />}
       </button>
 
@@ -87,17 +87,17 @@ const DriverSidebar = () => {
           const Icon = item.icon;
           return (
             <li key={item.to} className={styles.menuItem}>
-              <NavLink
+          <NavLink
                 to={item.to}
                 className={({ isActive }) =>
                   `${styles.menuLink} ${isActive ? styles.active : ''}`
                 }
                 title={!isExpanded ? item.label : undefined}
-              >
+          >
                 <Icon className={styles.icon} />
                 {isExpanded && <span className={styles.label}>{item.label}</span>}
-              </NavLink>
-            </li>
+          </NavLink>
+        </li>
           );
         })}
       </ul>
