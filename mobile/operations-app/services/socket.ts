@@ -1,9 +1,8 @@
 // services/socket.ts
 import { io, type Socket } from "socket.io-client";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-// @ts-expect-error - NetInfo sera installé via npm install @react-native-community/netinfo
 import NetInfo from "@react-native-community/netinfo";
-import { baseURL } from "./api"; // ← réutilise l’URL déjà déduite (Expo dev/prod)
+import { baseURL } from "./api"; // ← réutilise l'URL déjà déduite (Expo dev/prod)
 
 type SocketRole = "driver" | "enterprise";
 

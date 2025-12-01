@@ -100,7 +100,7 @@ def init_chat_socket(socketio: SocketIO):
                     "ip": client_ip,
                     "attempts": len(_connection_rate_limit[client_ip]),
                     "timestamp": now.isoformat(),
-                    "trace_id": trace_id,
+                    "request_trace_id": trace_id,
                 },
             )
             emit(
@@ -120,7 +120,7 @@ def init_chat_socket(socketio: SocketIO):
                 "ip": client_ip,
                 "user_agent": ua,
                 "timestamp": now.isoformat(),
-                "trace_id": trace_id,
+                "request_trace_id": trace_id,
             },
         )
 
@@ -134,7 +134,7 @@ def init_chat_socket(socketio: SocketIO):
                         "reason": "token_missing",
                         "ip": client_ip,
                         "timestamp": now.isoformat(),
-                        "trace_id": trace_id,
+                        "request_trace_id": trace_id,
                     },
                 )
                 emit("unauthorized", {"error": "Token JWT manquant"})
@@ -152,7 +152,7 @@ def init_chat_socket(socketio: SocketIO):
                         "reason": "token_no_sub",
                         "ip": client_ip,
                         "timestamp": now.isoformat(),
-                        "trace_id": trace_id,
+                        "request_trace_id": trace_id,
                     },
                 )
                 emit("unauthorized", {"error": "Token sans 'sub'"})
@@ -166,7 +166,7 @@ def init_chat_socket(socketio: SocketIO):
                     "user_public_id": public_id,
                     "ip": client_ip,
                     "timestamp": now.isoformat(),
-                    "trace_id": trace_id,
+                    "request_trace_id": trace_id,
                 },
             )
 
@@ -180,7 +180,7 @@ def init_chat_socket(socketio: SocketIO):
                         "user_public_id": public_id,
                         "ip": client_ip,
                         "timestamp": now.isoformat(),
-                        "trace_id": trace_id,
+                        "request_trace_id": trace_id,
                     },
                 )
                 emit("unauthorized", {"error": "Utilisateur non trouvé"})
@@ -207,7 +207,7 @@ def init_chat_socket(socketio: SocketIO):
                             "user_id": user.id,
                             "ip": client_ip,
                             "timestamp": now.isoformat(),
-                            "trace_id": trace_id,
+                            "request_trace_id": trace_id,
                         },
                     )
                     raise Exception(msg)
@@ -247,7 +247,7 @@ def init_chat_socket(socketio: SocketIO):
                         "rooms": [company_room, driver_room],
                         "ip": client_ip,
                         "timestamp": now.isoformat(),
-                        "trace_id": trace_id,
+                        "request_trace_id": trace_id,
                     },
                 )
 
@@ -262,7 +262,7 @@ def init_chat_socket(socketio: SocketIO):
                             "user_id": user.id,
                             "ip": client_ip,
                             "timestamp": now.isoformat(),
-                            "trace_id": trace_id,
+                            "request_trace_id": trace_id,
                         },
                     )
                     emit("unauthorized", {"error": "Entreprise introuvable"})
@@ -298,7 +298,7 @@ def init_chat_socket(socketio: SocketIO):
                         "rooms": [room],
                         "ip": client_ip,
                         "timestamp": now.isoformat(),
-                        "trace_id": trace_id,
+                        "request_trace_id": trace_id,
                     },
                 )
             else:
@@ -311,7 +311,7 @@ def init_chat_socket(socketio: SocketIO):
                         "role": user.role.value,
                         "ip": client_ip,
                         "timestamp": now.isoformat(),
-                        "trace_id": trace_id,
+                        "request_trace_id": trace_id,
                     },
                 )
                 emit("unauthorized", {"error": "Rôle non autorisé pour le chat"})
@@ -329,7 +329,7 @@ def init_chat_socket(socketio: SocketIO):
                     "error_type": type(e).__name__,
                     "ip": client_ip,
                     "timestamp": datetime.now(UTC).isoformat(),
-                    "trace_id": trace_id if "trace_id" in locals() else None,
+                    "request_trace_id": trace_id if "trace_id" in locals() else None,
                 },
             )
             ws_metrics.on_error("connect_exception")
@@ -1226,7 +1226,7 @@ def init_chat_socket(socketio: SocketIO):
                 "role": info.get("role") if info else None,
                 "ip": info.get("ip") if info else None,
                 "timestamp": now.isoformat(),
-                "trace_id": trace_id,
+                "request_trace_id": trace_id,
             },
         )
 
@@ -1257,7 +1257,7 @@ def init_chat_socket(socketio: SocketIO):
                     "driver_id": driver_id,
                     "company_id": company_id,
                     "timestamp": now.isoformat(),
-                    "trace_id": trace_id,
+                    "request_trace_id": trace_id,
                 },
             )
             emit("pong", {"timestamp": now.isoformat()})
@@ -1305,7 +1305,7 @@ def init_chat_socket(socketio: SocketIO):
                         "reason": "driver_id_not_found",
                         "sid": sid,
                         "timestamp": now.isoformat(),
-                        "trace_id": trace_id,
+                        "request_trace_id": trace_id,
                     },
                 )
                 emit("error", {"error": "Driver ID introuvable"})
@@ -1341,7 +1341,7 @@ def init_chat_socket(socketio: SocketIO):
                             "driver_id": driver_id,
                             "error": str(e_redis),
                             "timestamp": now.isoformat(),
-                            "trace_id": trace_id,
+                            "request_trace_id": trace_id,
                         },
                     )
 
@@ -1356,7 +1356,7 @@ def init_chat_socket(socketio: SocketIO):
                     "last_mission_id": data.get("last_mission_id"),
                     "has_location": bool(data.get("location")),
                     "timestamp": now.isoformat(),
-                    "trace_id": trace_id,
+                    "request_trace_id": trace_id,
                 },
             )
 
