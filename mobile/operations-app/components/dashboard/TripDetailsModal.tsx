@@ -204,6 +204,18 @@ export default function TripDetailsModal({ visible, tripId, onClose }: Props) {
                   <Text style={styles.label}>Client :</Text>
                   <Text style={styles.value}>{trip.client_name || "Non spécifié"}</Text>
                 </View>
+                {trip.client?.birth_date && (
+                  <View style={styles.rowBetween}>
+                    <Text style={styles.label}>Date de naissance :</Text>
+                    <Text style={styles.value}>
+                      {new Date(trip.client.birth_date).toLocaleDateString('fr-FR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric'
+                      })}
+                    </Text>
+                  </View>
+                )}
               </View>
 
               {/* Lieux */}
@@ -230,15 +242,7 @@ export default function TripDetailsModal({ visible, tripId, onClose }: Props) {
                 </View>
               </View>
 
-              {/* Montant / Distance / Durée */}
-              <View style={styles.section}>
-                <View style={styles.rowBetween}>
-                  <Text style={styles.label}>Montant :</Text>
-                  <Text style={styles.value}>
-                    {trip.amount ? `${trip.amount.toFixed(2)} CHF` : "Non spécifié"}
-                  </Text>
-                </View>
-              </View>
+              {/* Distance / Durée - Montant masqué pour les chauffeurs */}
 
               {trip.distance_meters && (
                 <View style={styles.section}>

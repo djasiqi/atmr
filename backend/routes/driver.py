@@ -15,7 +15,8 @@ from flask_restx import Namespace, Resource, fields
 from sqlalchemy import or_
 
 from ext import app_logger, db, redis_client, role_required, socketio
-from models import Booking, BookingStatus, Driver, User, UserRole
+from models import Assignment, Booking, BookingStatus, Driver, User, UserRole
+from models.enums import CancelReason
 
 # Constantes pour éviter les valeurs magiques
 LAT_THRESHOLD = 90
@@ -958,7 +959,7 @@ class UpdateBookingStatus(Resource):
                                     result = {"error": "Not a return trip"}
                                     status_code = 400
 
-                            # ✅ ANNULATION PAR LE CHAUFFEUR (facturable)
+                            # ✅ ANNULATION PAR LE CHAUFFEUR (facturable) OU LIBÉRATION (réassignation)
                             elif new_status_str == "canceled":
                                 if booking.status == BookingStatus.CANCELED:
                                     result = {"message": "Booking already canceled"}
@@ -990,15 +991,61 @@ class UpdateBookingStatus(Resource):
                                     }
                                     status_code = 400
                                 else:
-                                    # ✅ Annulation par le chauffeur : marquer comme CANCELED (facturable)
-                                    # Seulement si assigned ou en_route (pas in_progress = client à bord)
-                                    booking.status = BookingStatus.CANCELED
-                                    app_logger.info(
-                                        (
-                                            f"📱 [Driver Cancel] Chauffeur {driver.id} "
-                                            f"a annulé la course {booking_id} (statut précédent: {booking.status})"
+                                    # Récupérer la raison d'annulation (CANCEL ou RELEASE)
+                                    cancel_reason_str = data.get("cancel_reason", "CANCEL")
+                                    cancel_reason = CancelReason.CANCEL  # Par défaut
+                                    try:
+                                        cancel_reason = CancelReason(cancel_reason_str)
+                                    except ValueError:
+                                        # Si la valeur n'est pas valide, utiliser CANCEL par défaut
+                                        app_logger.warning(
+                                            f"Raison d'annulation invalide: {cancel_reason_str}, "
+                                            "utilisation de CANCEL par défaut"
                                         )
-                                    )
+                                    
+                                    if cancel_reason == CancelReason.RELEASE:
+                                        # ✅ LIBÉRATION : remettre à ASSIGNED pour permettre réassignation
+                                        # Ne pas facturer, permettre à l'entreprise de réassigner
+                                        booking.status = BookingStatus.ASSIGNED
+                                        booking.driver_id = None
+                                        
+                                        # Supprimer l'assignment pour permettre une nouvelle assignation
+                                        assignment = Assignment.query.filter_by(
+                                            booking_id=booking_id
+                                        ).first()
+                                        assignment_id_str = None
+                                        if assignment:
+                                            assignment_id_str = str(assignment.id)
+                                            db.session.delete(assignment)
+                                        
+                                        app_logger.info(
+                                            (
+                                                f"📱 [Driver Release] Chauffeur {driver.id} "
+                                                f"a libéré la course {booking_id} pour réassignation "
+                                                f"(statut précédent: {booking.status})"
+                                            )
+                                        )
+                                        
+                                        # Émettre événement d'annulation d'assignment pour notifier l'entreprise
+                                        from services.socketio_service import emit_assignment_cancelled
+                                        
+                                        if assignment_id_str:
+                                            emit_assignment_cancelled(
+                                                company_id=booking.company_id,
+                                                assignment_id=assignment_id_str,
+                                                booking_id=booking_id,
+                                                driver_id=driver.id,
+                                            )
+                                    else:
+                                        # ✅ ANNULATION RÉELLE : marquer comme CANCELED (facturable)
+                                        booking.status = BookingStatus.CANCELED
+                                        app_logger.info(
+                                            (
+                                                f"📱 [Driver Cancel] Chauffeur {driver.id} "
+                                                f"a annulé la course {booking_id} (facturable) "
+                                                f"(statut précédent: {booking.status})"
+                                            )
+                                        )
 
                             if result is None:
                                 db.session.commit()

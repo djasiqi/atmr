@@ -7,6 +7,7 @@ import useCompanyData from '../../../hooks/useCompanyData';
 import useDispatchDelays from '../../../hooks/useDispatchDelays';
 import { logoutUser } from '../../../utils/apiClient';
 import resolveLogoUrl from '../../../utils/resolveLogoUrl';
+import SocketStatusBadge from '../../common/SocketStatusBadge';
 
 function getInitials(name = '') {
   const parts = name.trim().split(/\s+/).slice(0, 2);
@@ -101,6 +102,9 @@ const CompanyHeader = () => {
             <span className={styles.badgeCount}>{delayCount}</span>
           </Link>
         )}
+
+        {/* 🆕 Badge de statut connexion Socket.IO */}
+        <SocketStatusBadge />
 
         <button type="button" className={styles.logoutBtn} onClick={logoutUser}>
           Déconnexion

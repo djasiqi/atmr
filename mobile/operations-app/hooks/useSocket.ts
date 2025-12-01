@@ -32,7 +32,10 @@ export const useSocket = (
       s.off("unauthorized");
 
       s.on("connect", () => {
-        console.log("✅ WebSocket connecté");
+        console.log(JSON.stringify({
+          event: "socket_connect",
+          timestamp: new Date().toISOString()
+        }));
         backoffRef.current = 2000;
         if (reconnectTimerRef.current) {
           clearTimeout(reconnectTimerRef.current);
@@ -42,21 +45,45 @@ export const useSocket = (
       });
 
       s.on("disconnect", () => {
-        console.log("⚠️ WebSocket déconnecté");
+        console.log(JSON.stringify({
+          event: "socket_disconnect",
+          timestamp: new Date().toISOString()
+        }));
       });
 
       s.on("connect_error", (err: any) => {
-        console.warn("❗ socket connect_error:", err?.message || err);
+        console.warn(JSON.stringify({
+          event: "socket_connect_error",
+          error: err?.message || String(err),
+          timestamp: new Date().toISOString()
+        }));
         scheduleReconnection();
       });
 
-      s.on("reconnect", () => {
-        console.log("🔄 Reconnexion WebSocket");
+      s.on("reconnect", (attempt) => {
+        console.log(JSON.stringify({
+          event: "socket_reconnect",
+          attempt: attempt,
+          timestamp: new Date().toISOString()
+        }));
         s.emit("join_driver_room");
       });
 
+      // ✅ Listener pong pour heartbeat applicatif
+      s.on("pong", (data: any) => {
+        console.log(JSON.stringify({
+          event: "heartbeat_pong",
+          timestamp: data?.timestamp,
+          received_at: new Date().toISOString()
+        }));
+      });
+
       s.on("new_booking", async (data: any) => {
-        console.log("📦 Nouvelle mission :", data);
+        console.log(JSON.stringify({
+          event: "new_booking",
+          booking_id: data?.id,
+          timestamp: new Date().toISOString()
+        }));
         try {
           await Notifications.scheduleNotificationAsync({
             content: {
@@ -67,14 +94,23 @@ export const useSocket = (
             trigger: null,
           });
         } catch (err) {
-          console.warn("⚠️ Erreur notification :", err);
+          console.warn(JSON.stringify({
+            event: "notification_error",
+            error: err instanceof Error ? err.message : String(err),
+            timestamp: new Date().toISOString()
+          }));
         }
         onNewBooking?.(data);
       });
 
       // ✅ FIX: Écouter aussi "booking_updated" pour compatibilité (même handler)
       s.on("booking_updated", async (data: any) => {
-        console.log("🔄 Mission mise à jour :", data);
+        console.log(JSON.stringify({
+          event: "booking_updated",
+          booking_id: data?.id,
+          status: data?.status,
+          timestamp: new Date().toISOString()
+        }));
         try {
           await Notifications.scheduleNotificationAsync({
             content: {
@@ -85,23 +121,39 @@ export const useSocket = (
             trigger: null,
           });
         } catch (err) {
-          console.warn("⚠️ Erreur notification :", err);
+          console.warn(JSON.stringify({
+            event: "notification_error",
+            error: err instanceof Error ? err.message : String(err),
+            timestamp: new Date().toISOString()
+          }));
         }
         onNewBooking?.(data);
       });
 
       s.on("team_chat_message", (message: any) => {
-        console.log("💬 Message équipe :", message);
+        console.log(JSON.stringify({
+          event: "team_chat_message",
+          sender_id: message?.sender_id,
+          timestamp: new Date().toISOString()
+        }));
         onTeamMessage?.(message);
       });
 
       s.on("error", (data: any) => {
-        console.error("❌ Erreur Socket.IO:", data);
+        console.error(JSON.stringify({
+          event: "socket_error",
+          error: data?.error || String(data),
+          timestamp: new Date().toISOString()
+        }));
       });
 
       // Si le serveur nous dit "unauthorized" → on ne tente PAS de refresh
       s.on("unauthorized", async (data: any) => {
-        console.error("❌ Socket unauthorized:", data);
+        console.error(JSON.stringify({
+          event: "socket_unauthorized",
+          error: data?.error || String(data),
+          timestamp: new Date().toISOString()
+        }));
         // Option : purger le token si tu veux forcer un relogin
         // await AsyncStorage.removeItem(TOKEN_KEY);
         scheduleReconnection();
@@ -112,7 +164,11 @@ export const useSocket = (
       if (reconnectTimerRef.current || !isMountedRef.current) return;
 
       const delay = Math.min(backoffRef.current, 30000);
-      console.log(`⏳ Reconnexion socket dans ${Math.round(delay / 1000)}s`);
+      console.log(JSON.stringify({
+        event: "socket_reconnect_scheduled",
+        delay_ms: delay,
+        timestamp: new Date().toISOString()
+      }));
 
       reconnectTimerRef.current = setTimeout(async () => {
         reconnectTimerRef.current = null;
@@ -120,7 +176,11 @@ export const useSocket = (
 
         const token = await AsyncStorage.getItem(TOKEN_KEY);
         if (!token) {
-          console.warn("🔒 Aucun token — arrêt des tentatives socket.");
+          console.warn(JSON.stringify({
+            event: "socket_reconnect_aborted",
+            reason: "no_token",
+            timestamp: new Date().toISOString()
+          }));
           return;
         }
 
@@ -132,7 +192,12 @@ export const useSocket = (
             backoffRef.current = 2000; // reset si succès
           }
         } catch (e) {
-          console.warn("♻️ Reconnexion échouée, on re-tentera.", e);
+          console.warn(JSON.stringify({
+            event: "socket_reconnect_failed",
+            error: e instanceof Error ? e.message : String(e),
+            next_attempt_ms: Math.min(backoffRef.current * 2, 30000),
+            timestamp: new Date().toISOString()
+          }));
           backoffRef.current = Math.min(backoffRef.current * 2, 30000);
           scheduleReconnection();
         }
@@ -143,7 +208,11 @@ export const useSocket = (
     (async () => {
       const token = await AsyncStorage.getItem(TOKEN_KEY);
       if (!token) {
-        console.warn("🔒 Aucun token — socket non initialisé.");
+        console.warn(JSON.stringify({
+          event: "socket_init_aborted",
+          reason: "no_token",
+          timestamp: new Date().toISOString()
+        }));
         return;
       }
       try {

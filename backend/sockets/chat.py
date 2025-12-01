@@ -9,8 +9,9 @@ et appelées par le framework.
 """
 
 import logging
+from collections import defaultdict
 from contextlib import suppress
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Dict, cast
 from typing import cast as tcast
 
@@ -21,6 +22,7 @@ from flask_socketio import SocketIO, emit, join_room
 from ext import db, redis_client
 from models import Company, Driver, Message, SenderRole, User, UserRole
 from services.spam_protection import can_send_message
+from services.websocket_metrics import ws_metrics
 
 # Constantes pour éviter les valeurs magiques
 RECEIVER_ID_ZERO = 0
@@ -35,6 +37,10 @@ logger = logging.getLogger("socketio")
 
 # Petit index en mémoire pour le debug/nettoyage : sid -> infos
 _SID_INDEX: Dict[str, Dict[str, Any]] = {}
+
+# Rate limiting connexions : compteur par IP
+_connection_rate_limit: Dict[str, list[datetime]] = defaultdict(list)
+MAX_CONNECTIONS_PER_MINUTE = 5
 
 # Les handlers Socket.IO sont enregistrés par @socketio.on()
 
@@ -73,30 +79,112 @@ def init_chat_socket(socketio: SocketIO):
 
     @socketio.on("connect", namespace="/")
     def handle_connect(auth: dict[str, Any] | None) -> bool:  # noqa: PLR0911
-        logger.info("🔌 [CONNECT] HANDLER APPELÉ ! auth=%s", auth)
-        client_ip = request.environ.get("REMOTE_ADDR")
+        client_ip = request.environ.get("REMOTE_ADDR", "unknown")
         ua = request.headers.get("User-Agent", "Unknown")
-        logger.info("🔌 SIO connect from %s UA=%s", client_ip, ua)
+        trace_id = request.headers.get("X-Trace-ID") or request.headers.get("Trace-Id")
+        now = datetime.now(UTC)
+
+        # ✅ Rate limiting : nettoyer anciennes tentatives (>1 min)
+        _connection_rate_limit[client_ip] = [
+            ts
+            for ts in _connection_rate_limit[client_ip]
+            if (now - ts) < timedelta(minutes=1)
+        ]
+
+        # ✅ Vérifier limite de connexions par IP
+        if len(_connection_rate_limit[client_ip]) >= MAX_CONNECTIONS_PER_MINUTE:
+            logger.warning(
+                "socket_rate_limit_exceeded",
+                extra={
+                    "event": "rate_limit_exceeded",
+                    "ip": client_ip,
+                    "attempts": len(_connection_rate_limit[client_ip]),
+                    "timestamp": now.isoformat(),
+                    "trace_id": trace_id,
+                },
+            )
+            emit(
+                "error",
+                {"error": "Trop de tentatives de connexion. Réessayez dans 1 minute."},
+            )
+            ws_metrics.on_error("rate_limit_exceeded")
+            return False
+
+        # Enregistrer tentative
+        _connection_rate_limit[client_ip].append(now)
+
+        logger.info(
+            "socket_connect_attempt",
+            extra={
+                "event": "connect_attempt",
+                "ip": client_ip,
+                "user_agent": ua,
+                "timestamp": now.isoformat(),
+                "trace_id": trace_id,
+            },
+        )
 
         try:
             token = _extract_token(auth)
             if not token:
-                logger.info("⛔ Refus: token JWT manquant")
+                logger.info(
+                    "socket_connect_refused",
+                    extra={
+                        "event": "connect_refused",
+                        "reason": "token_missing",
+                        "ip": client_ip,
+                        "timestamp": now.isoformat(),
+                        "trace_id": trace_id,
+                    },
+                )
                 emit("unauthorized", {"error": "Token JWT manquant"})
+                ws_metrics.on_error("token_missing")
                 return False
 
             # Vérifie & décode (lève si invalide/expiré)
             decoded = decode_token(token)
             public_id = decoded.get("sub")
             if not public_id:
+                logger.info(
+                    "socket_connect_refused",
+                    extra={
+                        "event": "connect_refused",
+                        "reason": "token_no_sub",
+                        "ip": client_ip,
+                        "timestamp": now.isoformat(),
+                        "trace_id": trace_id,
+                    },
+                )
                 emit("unauthorized", {"error": "Token sans 'sub'"})
+                ws_metrics.on_error("token_invalid")
                 return False
-            logger.info("🧾 Token validé pour user %s", public_id)
+
+            logger.debug(
+                "socket_token_validated",
+                extra={
+                    "event": "token_validated",
+                    "user_public_id": public_id,
+                    "ip": client_ip,
+                    "timestamp": now.isoformat(),
+                    "trace_id": trace_id,
+                },
+            )
 
             user = User.query.filter_by(public_id=public_id).first()
             if not user:
-                logger.info("⛔ user not found: %s", public_id)
+                logger.info(
+                    "socket_connect_refused",
+                    extra={
+                        "event": "connect_refused",
+                        "reason": "user_not_found",
+                        "user_public_id": public_id,
+                        "ip": client_ip,
+                        "timestamp": now.isoformat(),
+                        "trace_id": trace_id,
+                    },
+                )
                 emit("unauthorized", {"error": "Utilisateur non trouvé"})
+                ws_metrics.on_error("user_not_found")
                 return False
 
             # Stash session minimale
@@ -104,10 +192,24 @@ def init_chat_socket(socketio: SocketIO):
             session["first_name"] = user.first_name
             session["role"] = user.role.value.lower()
 
+            sid = _get_sid()
+            trace_id = trace_id or f"socket-{sid[:8]}"
+
             if user.role == UserRole.driver:
                 driver = Driver.query.filter_by(user_id=user.id).first()
                 if not driver or not driver.company_id:
                     msg = "Chauffeur ou entreprise associée introuvable"
+                    logger.error(
+                        "socket_connect_error",
+                        extra={
+                            "event": "connect_error",
+                            "reason": "driver_or_company_not_found",
+                            "user_id": user.id,
+                            "ip": client_ip,
+                            "timestamp": now.isoformat(),
+                            "trace_id": trace_id,
+                        },
+                    )
                     raise Exception(msg)
 
                 company_room = f"company_{driver.company_id}"
@@ -116,14 +218,8 @@ def init_chat_socket(socketio: SocketIO):
                 join_room(driver_room)
 
                 emit("connected", {"message": "✅ Chauffeur connecté"})
-                logger.info(
-                    "🔌 Driver %s -> rooms: %s, %s",
-                    driver.id,
-                    company_room,
-                    driver_room,
-                )
 
-                _SID_INDEX[_get_sid()] = {
+                _SID_INDEX[sid] = {
                     "user_public_id": public_id,
                     "user_id": user.id,
                     "driver_id": driver.id,
@@ -132,31 +228,111 @@ def init_chat_socket(socketio: SocketIO):
                     "role": "driver",
                 }
 
+                # ✅ Métriques
+                ws_metrics.on_connect(company_id=driver.company_id, user_id=user.id)
+                # ✅ Tracking rooms
+                ws_metrics.on_room_join(company_room)
+                ws_metrics.on_room_join(driver_room)
+
+                logger.info(
+                    "socket_connect_success",
+                    extra={
+                        "event": "connect_success",
+                        "sid": sid,
+                        "user_id": user.id,
+                        "user_public_id": public_id,
+                        "driver_id": driver.id,
+                        "company_id": driver.company_id,
+                        "role": "driver",
+                        "rooms": [company_room, driver_room],
+                        "ip": client_ip,
+                        "timestamp": now.isoformat(),
+                        "trace_id": trace_id,
+                    },
+                )
+
             elif user.role == UserRole.company:
                 company = Company.query.filter_by(user_id=user.id).first()
                 if not company:
+                    logger.error(
+                        "socket_connect_error",
+                        extra={
+                            "event": "connect_error",
+                            "reason": "company_not_found",
+                            "user_id": user.id,
+                            "ip": client_ip,
+                            "timestamp": now.isoformat(),
+                            "trace_id": trace_id,
+                        },
+                    )
                     emit("unauthorized", {"error": "Entreprise introuvable"})
+                    ws_metrics.on_error("company_not_found")
                     return False
 
                 room = f"company_{company.id}"
                 join_room(room)
                 emit("connected", {"message": f"✅ Entreprise connectée à {room}"})
-                logger.info("🏢 Company %s -> room: %s", company.id, room)
 
-                _SID_INDEX[_get_sid()] = {
+                _SID_INDEX[sid] = {
                     "user_public_id": public_id,
+                    "user_id": user.id,
                     "company_id": company.id,
                     "ip": client_ip,
                     "role": "company",
                 }
+
+                # ✅ Métriques
+                ws_metrics.on_connect(company_id=company.id, user_id=user.id)
+                # ✅ Tracking rooms
+                ws_metrics.on_room_join(room)
+
+                logger.info(
+                    "socket_connect_success",
+                    extra={
+                        "event": "connect_success",
+                        "sid": sid,
+                        "user_id": user.id,
+                        "user_public_id": public_id,
+                        "company_id": company.id,
+                        "role": "company",
+                        "rooms": [room],
+                        "ip": client_ip,
+                        "timestamp": now.isoformat(),
+                        "trace_id": trace_id,
+                    },
+                )
             else:
+                logger.warning(
+                    "socket_connect_refused",
+                    extra={
+                        "event": "connect_refused",
+                        "reason": "role_not_authorized",
+                        "user_id": user.id,
+                        "role": user.role.value,
+                        "ip": client_ip,
+                        "timestamp": now.isoformat(),
+                        "trace_id": trace_id,
+                    },
+                )
                 emit("unauthorized", {"error": "Rôle non autorisé pour le chat"})
+                ws_metrics.on_error("role_not_authorized")
                 return False
 
             return True
 
         except Exception as e:
-            logger.exception("❌ Erreur de connexion WebSocket : %s", e)
+            logger.exception(
+                "socket_connect_error",
+                extra={
+                    "event": "connect_error",
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "ip": client_ip,
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "trace_id": trace_id if "trace_id" in locals() else None,
+                },
+            )
+            ws_metrics.on_error("connect_exception")
             emit("unauthorized", {"error": str(e)})
             return False
 
@@ -517,6 +693,9 @@ def init_chat_socket(socketio: SocketIO):
             join_room(driver_room)
             company_room = f"company_{driver.company_id}"
             join_room(company_room)
+            # ✅ Tracking rooms
+            ws_metrics.on_room_join(driver_room)
+            ws_metrics.on_room_join(company_room)
             logger.info(
                 "✅ Driver %s joined rooms [%s, %s]",
                 driver.id,
@@ -636,18 +815,19 @@ def init_chat_socket(socketio: SocketIO):
             now_iso = datetime.now(UTC).isoformat()
             try:
                 # 🔹 Redis: clé courte pour get_driver_locations()
-                key = f"driver:{driver.id}:loc"
-                redis_client.hset(
-                    key,
-                    mapping={
-                        "lat": str(latitude),
-                        "lon": str(longitude),
-                        "ts": now_iso,
-                    },
-                )
-                # TTL raisonnable (par ex. 24h) pour éviter d'accumuler les clés mortes
-                with suppress(Exception):
-                    redis_client.expire(key, 24 * 3600)
+                if redis_client:  # ✅ Vérification explicite pour satisfaire le linter
+                    key = f"driver:{driver.id}:loc"
+                    redis_client.hset(
+                        key,
+                        mapping={
+                            "lat": str(latitude),
+                            "lon": str(longitude),
+                            "ts": now_iso,
+                        },
+                    )
+                    # TTL raisonnable (par ex. 24h) pour éviter d'accumuler les clés mortes
+                    with suppress(Exception):
+                        redis_client.expire(key, 24 * 3600)
             except Exception as e_redis:
                 logger.exception(
                     "❌ Erreur écriture Redis driver_location pour driver %s: %s",
@@ -789,16 +969,19 @@ def init_chat_socket(socketio: SocketIO):
 
                     # Persister dans Redis
                     try:
-                        key = f"driver:{driver.id}:loc"
-                        redis_client.hset(
-                            key,
-                            mapping={
-                                "lat": str(latitude),
-                                "lon": str(longitude),
-                                "ts": now_iso,
-                            },
-                        )
-                        redis_client.expire(key, 24 * 3600)
+                        if (
+                            redis_client
+                        ):  # ✅ Vérification explicite pour satisfaire le linter
+                            key = f"driver:{driver.id}:loc"
+                            redis_client.hset(
+                                key,
+                                mapping={
+                                    "lat": str(latitude),
+                                    "lon": str(longitude),
+                                    "ts": now_iso,
+                                },
+                            )
+                            redis_client.expire(key, 24 * 3600)
                     except Exception as e_redis:
                         logger.exception(
                             "❌ Erreur Redis driver_location_batch pour driver %s: %s",
@@ -877,6 +1060,8 @@ def init_chat_socket(socketio: SocketIO):
 
                 room = f"company_{company.id}"
                 join_room(room)
+                # ✅ Tracking rooms
+                ws_metrics.on_room_join(room)
                 emit("joined_company", {"company_id": company.id, "room": room})
                 logger.info("🏢 Company %s joined room: %s", company.id, room)
             elif user_role == "driver":
@@ -890,6 +1075,8 @@ def init_chat_socket(socketio: SocketIO):
 
                 room = f"company_{driver.company_id}"
                 join_room(room)
+                # ✅ Tracking rooms
+                ws_metrics.on_room_join(room)
                 emit("joined_company", {"company_id": driver.company_id, "room": room})
                 logger.info("🚗 Driver %s joined company room: %s", driver.id, room)
             else:
@@ -929,10 +1116,14 @@ def init_chat_socket(socketio: SocketIO):
             for driver in drivers:
                 try:
                     # Try Redis first
-                    key = f"driver:{driver.id}:loc"
-                    h_raw = redis_client.hgetall(key)
-                    # Calme Pylance: redis-py retourne un dict[bytes, bytes]
-                    h: Mapping[bytes, Any] = cast("Mapping[bytes, Any]", h_raw)
+                    h: Mapping[bytes, Any] = {}
+                    if (
+                        redis_client
+                    ):  # ✅ Vérification explicite pour satisfaire le linter
+                        key = f"driver:{driver.id}:loc"
+                        h_raw = redis_client.hgetall(key)
+                        # Calme Pylance: redis-py retourne un dict[bytes, bytes]
+                        h = cast("Mapping[bytes, Any]", h_raw)
 
                     if h:
                         # Redis returns bytes -> decode
@@ -1002,6 +1193,188 @@ def init_chat_socket(socketio: SocketIO):
     def handle_disconnect():
         sid = _get_sid()
         info = _SID_INDEX.pop(sid, None)
-        logger.info("👋 SIO disconnect sid=%s info=%s", sid, info)
+        trace_id = request.headers.get("X-Trace-ID") or request.headers.get("Trace-Id")
+        now = datetime.now(UTC)
+
+        company_id = info.get("company_id") if info else None
+        user_id = info.get("user_id") if info else None
+        driver_id = info.get("driver_id") if info else None
+        role = info.get("role") if info else None
+
+        # ✅ Tracking rooms : quitter les rooms appropriées
+        if role == "driver" and driver_id and company_id:
+            driver_room = f"driver_{driver_id}"
+            company_room = f"company_{company_id}"
+            ws_metrics.on_room_leave(driver_room)
+            ws_metrics.on_room_leave(company_room)
+        elif role == "company" and company_id:
+            company_room = f"company_{company_id}"
+            ws_metrics.on_room_leave(company_room)
+
+        # ✅ Métriques
+        ws_metrics.on_disconnect(company_id=company_id)
+
+        logger.info(
+            "socket_disconnect",
+            extra={
+                "event": "disconnect",
+                "sid": sid,
+                "user_id": user_id,
+                "user_public_id": info.get("user_public_id") if info else None,
+                "driver_id": info.get("driver_id") if info else None,
+                "company_id": company_id,
+                "role": info.get("role") if info else None,
+                "ip": info.get("ip") if info else None,
+                "timestamp": now.isoformat(),
+                "trace_id": trace_id,
+            },
+        )
+
+    @socketio.on("ping")
+    def handle_ping():
+        """Handler pour le heartbeat ping/pong avec logging structuré.
+        Répond avec un pong contenant le timestamp actuel.
+        """
+        try:
+            sid = _get_sid()
+            sid_data = _SID_INDEX.get(sid, {})
+            user_public_id = sid_data.get("user_public_id")
+            role = sid_data.get("role", "unknown")
+            driver_id = sid_data.get("driver_id")
+            company_id = sid_data.get("company_id")
+            trace_id = request.headers.get("X-Trace-ID") or request.headers.get(
+                "Trace-Id"
+            )
+            now = datetime.now(UTC)
+
+            logger.debug(
+                "socket_heartbeat_ping",
+                extra={
+                    "event": "heartbeat_ping",
+                    "sid": sid,
+                    "user_public_id": user_public_id or "unknown",
+                    "role": role,
+                    "driver_id": driver_id,
+                    "company_id": company_id,
+                    "timestamp": now.isoformat(),
+                    "trace_id": trace_id,
+                },
+            )
+            emit("pong", {"timestamp": now.isoformat()})
+        except Exception as e:
+            logger.exception(
+                "socket_heartbeat_ping_error",
+                extra={
+                    "event": "heartbeat_ping_error",
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "timestamp": datetime.now(UTC).isoformat(),
+                },
+            )
+            ws_metrics.on_error("heartbeat_ping_exception")
+            # Envoyer pong même en cas d'erreur pour ne pas casser le heartbeat
+            emit("pong", {"timestamp": datetime.now(UTC).isoformat()})
+
+    @socketio.on("driver:heartbeat")
+    def handle_driver_heartbeat(data):
+        """Heartbeat applicatif avec métadonnées métier.
+
+        Data:
+            {
+                "last_mission_id": 123,
+                "location": {"lat": 46.2, "lon": 6.1},
+                "timestamp": 1234567890
+            }
+        """
+        try:
+            sid = _get_sid()
+            sid_data = _SID_INDEX.get(sid, {})
+            driver_id = sid_data.get("driver_id")
+            company_id = sid_data.get("company_id")
+            user_public_id = sid_data.get("user_public_id")
+            trace_id = request.headers.get("X-Trace-ID") or request.headers.get(
+                "Trace-Id"
+            )
+            now = datetime.now(UTC)
+
+            if not driver_id:
+                logger.warning(
+                    "socket_driver_heartbeat_error",
+                    extra={
+                        "event": "driver_heartbeat_error",
+                        "reason": "driver_id_not_found",
+                        "sid": sid,
+                        "timestamp": now.isoformat(),
+                        "trace_id": trace_id,
+                    },
+                )
+                emit("error", {"error": "Driver ID introuvable"})
+                ws_metrics.on_error("driver_heartbeat_no_driver_id")
+                return
+
+            # ✅ Mettre à jour last_seen_at en Redis (TTL 120s)
+            if redis_client:
+                try:
+                    redis_client.setex(
+                        f"driver:{driver_id}:last_seen",
+                        120,  # TTL 2 minutes
+                        now.isoformat(),
+                    )
+
+                    # Stocker métadonnées optionnelles
+                    if data.get("location"):
+                        redis_client.hset(
+                            f"driver:{driver_id}:heartbeat",
+                            mapping={
+                                "last_mission_id": str(data.get("last_mission_id", "")),
+                                "lat": str(data.get("location", {}).get("lat", "")),
+                                "lon": str(data.get("location", {}).get("lon", "")),
+                                "ts": now.isoformat(),
+                            },
+                        )
+                        redis_client.expire(f"driver:{driver_id}:heartbeat", 120)
+                except Exception as e_redis:
+                    logger.warning(
+                        "socket_driver_heartbeat_redis_error",
+                        extra={
+                            "event": "driver_heartbeat_redis_error",
+                            "driver_id": driver_id,
+                            "error": str(e_redis),
+                            "timestamp": now.isoformat(),
+                            "trace_id": trace_id,
+                        },
+                    )
+
+            logger.debug(
+                "socket_driver_heartbeat",
+                extra={
+                    "event": "driver_heartbeat",
+                    "sid": sid,
+                    "driver_id": driver_id,
+                    "company_id": company_id,
+                    "user_public_id": user_public_id,
+                    "last_mission_id": data.get("last_mission_id"),
+                    "has_location": bool(data.get("location")),
+                    "timestamp": now.isoformat(),
+                    "trace_id": trace_id,
+                },
+            )
+
+            emit(
+                "driver:heartbeat:ack",
+                {"timestamp": now.isoformat(), "driver_id": driver_id},
+            )
+        except Exception as e:
+            logger.exception(
+                "socket_driver_heartbeat_error",
+                extra={
+                    "event": "driver_heartbeat_error",
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "timestamp": datetime.now(UTC).isoformat(),
+                },
+            )
+            ws_metrics.on_error("driver_heartbeat_exception")
+            emit("error", {"error": str(e)})
 
     # Les handlers sont enregistrés via @socketio.on() ci-dessus

@@ -17,7 +17,8 @@ let backgroundInitRunning = false;
 
 // ✅ PERF: Configuration batching pour économiser batterie
 const BATCH_SIZE = 3;  // Buffer de 3-5 positions avant envoi
-const BATCH_INTERVAL_MS = 15000;  // Flush toutes les 15s (au lieu de 5s)
+const BATCH_INTERVAL_MS = 10000;  // Flush toutes les 10s (réduit de 15s)
+const HEARTBEAT_INTERVAL_MS = 30000;  // Heartbeat GPS toutes les 30s même si immobile
 
 export const useLocation = () => {
   const { driver } = useAuth();
@@ -263,8 +264,8 @@ export const useLocation = () => {
         : Infinity;
 
       // ✅ Toujours envoyer la première position (même si déplacement faible)
-      // ✅ Réduire le seuil à 20m pour être plus réactif
-      const DISTANCE_THRESHOLD = 20; // Réduit de 50m à 20m
+      // ✅ Réduire le seuil à 10m pour être plus réactif
+      const DISTANCE_THRESHOLD = 10; // Réduit de 20m à 10m
       
       if (!lastLoc || movedDistance >= DISTANCE_THRESHOLD) {
         positionBuffer.current.push(loc);
@@ -282,7 +283,7 @@ export const useLocation = () => {
 
     requestLocationPermissions();
 
-    // ✅ PERF: Flush périodique du buffer (toutes les 15s)
+    // ✅ PERF: Flush périodique du buffer (toutes les 10s)
     // ✅ Si buffer vide mais position récente disponible, forcer l'envoi de la dernière position
     const flushInterval = setInterval(() => {
       console.log(`⏰ [useLocation] Flush périodique (buffer=${positionBuffer.current.length})`);
@@ -296,9 +297,33 @@ export const useLocation = () => {
       flushPositionBatch();
     }, BATCH_INTERVAL_MS);
 
+    // ✅ Heartbeat GPS : forcer l'envoi de la position toutes les 30s même si immobile
+    // Cela garantit que le serveur reçoit régulièrement des positions même sans mouvement
+    const heartbeatInterval = setInterval(() => {
+      if (lastReceivedLocation.current && driver && socket?.connected) {
+        console.log(`💓 [useLocation] Heartbeat GPS - forcer envoi dernière position`);
+        // Ajouter la dernière position au buffer si elle n'y est pas déjà
+        const lastPos = lastReceivedLocation.current;
+        const alreadyInBuffer = positionBuffer.current.some(
+          (loc) =>
+            loc.coords.latitude === lastPos.coords.latitude &&
+            loc.coords.longitude === lastPos.coords.longitude &&
+            Math.abs((loc.timestamp || 0) - (lastPos.timestamp || 0)) < 1000
+        );
+        if (!alreadyInBuffer) {
+          positionBuffer.current.push(lastReceivedLocation.current);
+        }
+        // Forcer le flush immédiat
+        flushPositionBatch();
+      } else {
+        console.log(`💓 [useLocation] Heartbeat GPS - skip (pas de position ou socket déconnecté)`);
+      }
+    }, HEARTBEAT_INTERVAL_MS);
+
     return () => {
       isMounted = false;
-      clearInterval(flushInterval);  // Cleanup interval
+      clearInterval(flushInterval);  // Cleanup flush interval
+      clearInterval(heartbeatInterval);  // Cleanup heartbeat interval
       
       // Flush final avant cleanup
       if (positionBuffer.current.length > 0) {

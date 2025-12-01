@@ -50,20 +50,28 @@ const MissionCard: MissionCardType = ({
   };
 
   const handleStatusUpdate = async (
-    newStatus: "en_route" | "in_progress" | "completed" | "canceled"
+    newStatus: "en_route" | "in_progress" | "completed" | "canceled",
+    cancelReason?: "CANCEL" | "RELEASE"
   ) => {
     if (!mission) return;
     try {
-      await updateTripStatus(mission.id, newStatus);
+      await updateTripStatus(mission.id, newStatus, cancelReason);
       setStatus(newStatus);
       Object.assign(mission, { status: newStatus });
       if (newStatus === "completed") onComplete?.();
       if (newStatus === "canceled") {
-        // ✅ Mission annulée : notifier et ne pas appeler onComplete
-        Alert.alert(
-          "Course annulée",
-          "La course a été annulée. Elle sera facturée comme booking annulé."
-        );
+        // ✅ Mission annulée : notifier selon le type
+        if (cancelReason === "RELEASE") {
+          Alert.alert(
+            "Course libérée",
+            "La course a été libérée. Un autre chauffeur pourra être assigné."
+          );
+        } else {
+          Alert.alert(
+            "Course annulée",
+            "La course a été annulée. Elle sera facturée comme booking annulé."
+          );
+        }
       }
     } catch (error: any) {
       const errorMsg =
@@ -273,19 +281,24 @@ const MissionCard: MissionCardType = ({
           </TouchableOpacity>
         )}
 
-        {/* ✅ Bouton d'annulation : disponible seulement si assigned ou en_route (pas in_progress = client à bord) */}
+        {/* ✅ Bouton d'annulation/libération : disponible seulement si assigned ou en_route (pas in_progress = client à bord) */}
         {(status === "assigned" || status === "en_route") && (
           <TouchableOpacity
             onPress={() => {
               Alert.alert(
-                "Annuler la course",
-                "Le client a annulé la course ? Cette annulation sera facturée.",
+                "Annuler ou libérer la course",
+                "Choisissez une action :",
                 [
-                  { text: "Non", style: "cancel" },
+                  { text: "Annuler", style: "cancel" },
                   {
-                    text: "Oui, annuler",
+                    text: "Annuler et facturer",
                     style: "destructive",
-                    onPress: () => handleStatusUpdate("canceled"),
+                    onPress: () => handleStatusUpdate("canceled", "CANCEL"),
+                  },
+                  {
+                    text: "Libérer pour réassignation",
+                    style: "default",
+                    onPress: () => handleStatusUpdate("canceled", "RELEASE"),
                   },
                 ]
               );
