@@ -140,6 +140,47 @@ else:
     LOCATION_PROCESSING_LATENCY_SECONDS = None
     GEOFENCING_ARRIVALS_TOTAL = None
 
+# ==================== Realtime Optimizer Metrics ====================
+
+if PROMETHEUS_AVAILABLE and Histogram and Counter:
+    # Temps d'exécution realtime optimizer
+    REALTIME_OPTIMIZER_EXECUTION_TIME_SECONDS = Histogram(
+        "realtime_optimizer_execution_time_seconds",
+        "Temps d'exécution realtime optimizer (secondes)",
+        ["company_id"],
+        buckets=[0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0],
+    )
+
+    # Opportunités détectées
+    REALTIME_OPTIMIZER_OPPORTUNITIES_TOTAL = Counter(
+        "realtime_optimizer_opportunities_total",
+        "Total opportunités d'optimisation détectées",
+        ["company_id", "severity"],  # severity: "low", "medium", "high", "critical"
+    )
+
+    # Réassignations automatiques
+    REALTIME_OPTIMIZER_REASSIGNMENTS_TOTAL = Counter(
+        "realtime_optimizer_reassignments_total",
+        "Total réassignations automatiques",
+        ["company_id"],
+    )
+else:
+    REALTIME_OPTIMIZER_EXECUTION_TIME_SECONDS = None
+    REALTIME_OPTIMIZER_OPPORTUNITIES_TOTAL = None
+    REALTIME_OPTIMIZER_REASSIGNMENTS_TOTAL = None
+
+# ==================== Driver Metrics ====================
+
+if PROMETHEUS_AVAILABLE and Gauge:
+    # Chauffeurs en ligne
+    DRIVERS_ONLINE = Gauge(
+        "drivers_online",
+        "Nombre de chauffeurs en ligne",
+        ["company_id"],
+    )
+else:
+    DRIVERS_ONLINE = None
+
 
 # ==================== Helper Functions ====================
 
@@ -305,3 +346,72 @@ def track_geofencing_arrival(arrival_type: str) -> None:
         GEOFENCING_ARRIVALS_TOTAL.labels(type=arrival_type).inc()
     except Exception as e:
         logger.debug("[PrometheusMetrics] Error tracking geofencing: %s", e)
+
+
+def track_realtime_optimizer_execution(
+    company_id: int, execution_time_seconds: float
+) -> None:
+    """Enregistre le temps d'exécution du realtime optimizer.
+
+    Args:
+        company_id: ID de l'entreprise
+        execution_time_seconds: Temps d'exécution en secondes
+    """
+    if not PROMETHEUS_AVAILABLE or not REALTIME_OPTIMIZER_EXECUTION_TIME_SECONDS:
+        return
+
+    try:
+        REALTIME_OPTIMIZER_EXECUTION_TIME_SECONDS.labels(
+            company_id=str(company_id)
+        ).observe(execution_time_seconds)
+    except Exception as e:
+        logger.debug("[PrometheusMetrics] Error tracking realtime optimizer: %s", e)
+
+
+def track_realtime_optimizer_opportunity(company_id: int, severity: str) -> None:
+    """Enregistre une opportunité d'optimisation détectée.
+
+    Args:
+        company_id: ID de l'entreprise
+        severity: Sévérité ("low", "medium", "high", "critical")
+    """
+    if not PROMETHEUS_AVAILABLE or not REALTIME_OPTIMIZER_OPPORTUNITIES_TOTAL:
+        return
+
+    try:
+        REALTIME_OPTIMIZER_OPPORTUNITIES_TOTAL.labels(
+            company_id=str(company_id), severity=severity
+        ).inc()
+    except Exception as e:
+        logger.debug("[PrometheusMetrics] Error tracking optimizer opportunity: %s", e)
+
+
+def track_realtime_optimizer_reassignment(company_id: int) -> None:
+    """Enregistre une réassignation automatique.
+
+    Args:
+        company_id: ID de l'entreprise
+    """
+    if not PROMETHEUS_AVAILABLE or not REALTIME_OPTIMIZER_REASSIGNMENTS_TOTAL:
+        return
+
+    try:
+        REALTIME_OPTIMIZER_REASSIGNMENTS_TOTAL.labels(company_id=str(company_id)).inc()
+    except Exception as e:
+        logger.debug("[PrometheusMetrics] Error tracking reassignment: %s", e)
+
+
+def update_drivers_online(company_id: int, count: int) -> None:
+    """Met à jour le nombre de chauffeurs en ligne.
+
+    Args:
+        company_id: ID de l'entreprise
+        count: Nombre de chauffeurs en ligne
+    """
+    if not PROMETHEUS_AVAILABLE or not DRIVERS_ONLINE:
+        return
+
+    try:
+        DRIVERS_ONLINE.labels(company_id=str(company_id)).set(count)
+    except Exception as e:
+        logger.debug("[PrometheusMetrics] Error updating drivers online: %s", e)

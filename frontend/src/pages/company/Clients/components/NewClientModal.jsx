@@ -49,15 +49,78 @@ const NewClientModal = ({ onClose, onSave }) => {
 
     // Extraire les composants de l'adresse
     // Priorité : utiliser les composants extraits (street, street_number) si disponibles
-    // Sinon, utiliser address ou label
-    const streetNumber = item.street_number || '';
-    const street = item.street || '';
+    let streetNumber = item.street_number || '';
+    let street = item.street || '';
+    let postcode = item.postcode || '';
+    let city = item.city || '';
+
+    // Si les composants ne sont pas disponibles, parser depuis le label
+    if (!street && !postcode && !city && item.label) {
+      const label = item.label;
+      console.log('📍 [Domicile] Parsing depuis label:', label);
+      
+      // Pattern pour parser : "Rue Numéro, Code postal Ville" ou "Rue Numéro, Code postal, Ville"
+      // Exemples:
+      // - "Chemin des Campanules 2, 1219 Aïre, Suisse"
+      // - "Rue de Vermont 6bis, 1202, Genève"
+      // - "Avenue Ernest-Pictet 9, 1203, Genève"
+      
+      // Regex pour extraire: rue+numéro, code postal, ville
+      // Format attendu: "Rue Numéro, CP Ville" ou "Rue Numéro, CP, Ville"
+      const addressMatch = label.match(/^(.+?),\s*(\d{4})\s+([^,]+?)(?:\s*,\s*Suisse)?$/);
+      
+      if (addressMatch) {
+        const [, fullStreet, zip, town] = addressMatch;
+        // Séparer la rue et le numéro si possible
+        const streetMatch = fullStreet.match(/^(.+?)\s+(\d+[a-z]*)$/);
+        if (streetMatch) {
+          street = streetMatch[1].trim();
+          streetNumber = streetMatch[2].trim();
+        } else {
+          // Si pas de numéro séparé, garder tout comme rue
+          street = fullStreet.trim();
+        }
+        postcode = zip.trim();
+        city = town.trim();
+      } else {
+        // Fallback: essayer de séparer par virgules
+        const parts = label.split(',').map(p => p.trim());
+        if (parts.length >= 3) {
+          // Format: "Rue Numéro, CP, Ville"
+          const streetPart = parts[0];
+          const streetMatch = streetPart.match(/^(.+?)\s+(\d+[a-z]*)$/);
+          if (streetMatch) {
+            street = streetMatch[1].trim();
+            streetNumber = streetMatch[2].trim();
+          } else {
+            street = streetPart;
+          }
+          postcode = parts[1];
+          city = parts[2].replace(/\s*Suisse\s*$/, '').trim();
+        } else if (parts.length === 2) {
+          // Format: "Rue Numéro, CP Ville"
+          const streetPart = parts[0];
+          const streetMatch = streetPart.match(/^(.+?)\s+(\d+[a-z]*)$/);
+          if (streetMatch) {
+            street = streetMatch[1].trim();
+            streetNumber = streetMatch[2].trim();
+          } else {
+            street = streetPart;
+          }
+          const zipCityMatch = parts[1].match(/^(\d{4})\s+(.+?)(?:\s*,\s*Suisse)?$/);
+          if (zipCityMatch) {
+            postcode = zipCityMatch[1];
+            city = zipCityMatch[2].trim();
+          }
+        }
+      }
+    }
+
+    // Construire l'adresse complète (rue + numéro)
     const address =
       streetNumber && street
-        ? `${streetNumber} ${street}`.trim()
-        : street || item.address || item.label || '';
-    const postcode = item.postcode || '';
-    const city = item.city || '';
+        ? `${street} ${streetNumber}`.trim()
+        : street || item.address || '';
 
     console.log('📍 [Domicile] Composants extraits:', {
       streetNumber,

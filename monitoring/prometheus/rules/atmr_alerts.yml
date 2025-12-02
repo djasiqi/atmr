@@ -1,0 +1,231 @@
+# atmr_alerts.yml
+# Règles d'alertes spécifiques ATMR (WebSocket, ETA, OSRM, Dispatch)
+
+groups:
+  # ==================== WebSocket Alerts ====================
+  - name: websocket
+    interval: 30s
+    rules:
+      - alert: WebSocketHighDisconnections
+        expr: |
+          rate(socketio_disconnections_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: websocket
+        annotations:
+          summary: "Trop de déconnexions WebSocket"
+          description: "{{ $value }} déconnexions/seconde sur les 5 dernières minutes"
+
+      - alert: WebSocketNoHeartbeat
+        expr: |
+          time() - socketio_heartbeat_latency_ms{quantile="0.5"} > 60
+        for: 1m
+        labels:
+          severity: critical
+          component: websocket
+        annotations:
+          summary: "Absence heartbeat WebSocket > 1 min"
+          description: "Aucun heartbeat reçu depuis plus de 1 minute"
+
+      - alert: WebSocketHighEventsDropped
+        expr: |
+          (
+            rate(socketio_events_total[5m]) - rate(socketio_events_total[5m] offset 5m)
+          ) / rate(socketio_events_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: websocket
+        annotations:
+          summary: "Taux d'événements WebSocket droppés > 5%"
+          description: "{{ $value | humanizePercentage }} des événements sont droppés"
+
+      - alert: WebSocketHighReconnections
+        expr: |
+          rate(socketio_reconnections_total[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: websocket
+        annotations:
+          summary: "Taux de reconnexions WebSocket élevé"
+          description: "{{ $value }} reconnexions/seconde sur les 5 dernières minutes"
+
+      - alert: WebSocketHighRateLimitHits
+        expr: |
+          rate(socketio_rate_limit_hits_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: websocket
+        annotations:
+          summary: "Trop de hits de rate limiting WebSocket"
+          description: "{{ $value }} hits/seconde de rate limiting"
+
+  # ==================== OSRM Alerts ====================
+  - name: osrm
+    interval: 30s
+    rules:
+      - alert: OSRMHighLatency
+        expr: |
+          histogram_quantile(0.95, rate(osrm_cache_hits_total[5m])) > 1.5
+          OR
+          histogram_quantile(0.95, rate(osrm_cache_misses_total[5m])) > 1.5
+        for: 5m
+        labels:
+          severity: warning
+          component: osrm
+        annotations:
+          summary: "Latence OSRM élevée (p95 > 1.5s)"
+          description: "Latence p95 OSRM: {{ $value }}s"
+
+      - alert: OSRMHighFailureRate
+        expr: |
+          (
+            rate(eta_errors_total{error_type="osrm_timeout"}[5m]) +
+            rate(eta_errors_total{error_type="osrm_error"}[5m])
+          ) / rate(eta_calculations_total[5m]) > 0.10
+        for: 5m
+        labels:
+          severity: critical
+          component: osrm
+        annotations:
+          summary: "Taux d'échec OSRM > 10%"
+          description: "{{ $value | humanizePercentage }} des requêtes OSRM échouent"
+
+      - alert: OSRMLowCacheHitRate
+        expr: |
+          osrm_cache_hit_rate < 0.70
+        for: 10m
+        labels:
+          severity: warning
+          component: osrm
+        annotations:
+          summary: "Cache hit rate OSRM < 70%"
+          description: "Hit rate actuel: {{ $value | humanizePercentage }}"
+
+      - alert: OSRMCacheBypassHigh
+        expr: |
+          rate(osrm_cache_bypass_total[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: osrm
+        annotations:
+          summary: "Trop de bypass cache OSRM (Redis HS?)"
+          description: "{{ $value }} bypass/seconde - Redis peut être indisponible"
+
+  # ==================== ETA Alerts ====================
+  - name: eta
+    interval: 1m
+    rules:
+      - alert: ETALowAccuracy
+        expr: |
+          avg_over_time(eta_accuracy_rate[1h]) < 0.80
+        for: 1h
+        labels:
+          severity: warning
+          component: eta
+        annotations:
+          summary: "Précision ETA < 80% (rolling window 1h)"
+          description: "Précision moyenne: {{ $value | humanizePercentage }}"
+
+      - alert: ETAHighErrorRate
+        expr: |
+          rate(eta_errors_total[5m]) / rate(eta_calculations_total[5m]) > 0.10
+        for: 10m
+        labels:
+          severity: warning
+          component: eta
+        annotations:
+          summary: "Taux d'erreur ETA > 10%"
+          description: "{{ $value | humanizePercentage }} des calculs ETA échouent"
+
+      - alert: ETAHighLatency
+        expr: |
+          histogram_quantile(0.95, rate(eta_calculation_latency_seconds_bucket[5m])) > 2.0
+        for: 5m
+        labels:
+          severity: warning
+          component: eta
+        annotations:
+          summary: "Latence calcul ETA élevée (p95 > 2s)"
+          description: "Latence p95: {{ $value }}s"
+
+  # ==================== Dispatch Alerts ====================
+  - name: dispatch
+    interval: 1m
+    rules:
+      - alert: DispatchEngineStuck
+        expr: |
+          dispatch_resolution_time_seconds > 600
+        for: 10m
+        labels:
+          severity: critical
+          component: dispatch
+        annotations:
+          summary: "Moteur dispatch bloqué (> 10 min)"
+          description: "Temps de résolution: {{ $value }}s"
+
+      - alert: DispatchHighDelayRate
+        expr: |
+          dispatch_delay_rate > 0.20
+        for: 30m
+        labels:
+          severity: warning
+          component: dispatch
+        annotations:
+          summary: "Taux de retard dispatch > 20%"
+          description: "Taux actuel: {{ $value | humanizePercentage }}"
+
+      - alert: DispatchHighCriticalDelays
+        expr: |
+          rate(dispatch_delays_total{severity="critical"}[5m]) > 5
+        for: 10m
+        labels:
+          severity: critical
+          component: dispatch
+        annotations:
+          summary: "Trop de retards critiques détectés"
+          description: "{{ $value }} retards critiques/seconde"
+
+      - alert: DispatchNoAssignments
+        expr: |
+          rate(dispatch_assignments_total[10m]) == 0
+          AND
+          rate(dispatch_assignments_total[10m] offset 10m) > 0
+        for: 10m
+        labels:
+          severity: warning
+          component: dispatch
+        annotations:
+          summary: "Aucune assignation créée depuis 10 min"
+          description: "Le dispatch semble bloqué"
+
+  # ==================== Location Alerts ====================
+  - name: location
+    interval: 1m
+    rules:
+      - alert: LocationLowUpdateRate
+        expr: |
+          rate(location_positions_total[5m]) < 0.1
+        for: 10m
+        labels:
+          severity: warning
+          component: location
+        annotations:
+          summary: "Taux de mises à jour position très faible"
+          description: "{{ $value }} positions/seconde (attendu: > 1/s)"
+
+      - alert: LocationHighProcessingLatency
+        expr: |
+          histogram_quantile(0.95, rate(location_processing_latency_seconds_bucket[5m])) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          component: location
+        annotations:
+          summary: "Latence traitement position élevée (p95 > 1s)"
+          description: "Latence p95: {{ $value }}s"
+

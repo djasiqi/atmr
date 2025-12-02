@@ -1,0 +1,207 @@
+# infrastructure_alerts.yml
+# Règles d'alertes infrastructure (CPU, RAM, Disk, PostgreSQL, Redis)
+
+groups:
+  # ==================== Infrastructure System ====================
+  - name: infrastructure
+    interval: 30s
+    rules:
+      - alert: HighMemoryUsage
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.90
+        for: 5m
+        labels:
+          severity: critical
+          component: infrastructure
+        annotations:
+          summary: "Utilisation RAM > 90%"
+          description: "RAM utilisée: {{ $value | humanizePercentage }}"
+
+      - alert: HighCPUUsage
+        expr: |
+          100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 5m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "Utilisation CPU > 85%"
+          description: "CPU utilisé: {{ $value }}%"
+
+      - alert: LowDiskSpace
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.20
+        for: 5m
+        labels:
+          severity: critical
+          component: infrastructure
+        annotations:
+          summary: "Espace disque < 20%"
+          description: "Espace disponible: {{ $value | humanizePercentage }}"
+
+      - alert: HighDiskIO
+        expr: |
+          rate(node_disk_io_time_seconds_total[5m]) > 0.90
+        for: 5m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "I/O disque élevé (> 90%)"
+          description: "I/O disque: {{ $value | humanizePercentage }}"
+
+      - alert: HighLoadAverage
+        expr: |
+          node_load1 > count(node_cpu_seconds_total{mode="idle"}) * 1.5
+        for: 5m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "Load average élevé"
+          description: "Load 1min: {{ $value }}"
+
+  # ==================== PostgreSQL Alerts ====================
+  - name: postgres
+    interval: 30s
+    rules:
+      - alert: PostgreSQLDown
+        expr: |
+          up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "PostgreSQL est down"
+          description: "Le service PostgreSQL n'est pas accessible"
+
+      - alert: PostgreSQLSlowQueries
+        expr: |
+          rate(pg_stat_statements_mean_exec_time_seconds[5m]) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Requêtes PostgreSQL lentes (> 1s)"
+          description: "Temps moyen: {{ $value }}s"
+
+      - alert: PostgreSQLHighConnections
+        expr: |
+          pg_stat_database_numbackends / pg_settings_max_connections > 0.80
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Connexions PostgreSQL > 80% du max"
+          description: "{{ $value | humanizePercentage }} des connexions utilisées"
+
+      - alert: PostgreSQLHighReplicationLag
+        expr: |
+          pg_replication_lag > 30
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Replication lag PostgreSQL élevé"
+          description: "Lag: {{ $value }}s"
+
+      - alert: PostgreSQLHighCacheMissRate
+        expr: |
+          (1 - (pg_stat_database_blks_hit / (pg_stat_database_blks_hit + pg_stat_database_blks_read))) < 0.90
+        for: 10m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Cache hit rate PostgreSQL < 90%"
+          description: "Hit rate: {{ $value | humanizePercentage }}"
+
+  # ==================== Redis Alerts ====================
+  - name: redis
+    interval: 30s
+    rules:
+      - alert: RedisDown
+        expr: |
+          up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: cache
+        annotations:
+          summary: "Redis est down"
+          description: "Le service Redis n'est pas accessible"
+
+      - alert: RedisHighMemoryUsage
+        expr: |
+          redis_memory_used_bytes / redis_memory_max_bytes > 0.90
+        for: 5m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Utilisation mémoire Redis > 90%"
+          description: "Mémoire utilisée: {{ $value | humanizePercentage }}"
+
+      - alert: RedisHighEvictions
+        expr: |
+          rate(redis_evicted_keys_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Taux d'évictions Redis élevé"
+          description: "{{ $value }} évictions/seconde"
+
+      - alert: RedisHighLatency
+        expr: |
+          redis_commands_duration_seconds_total{command="ping"} > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Latence Redis élevée (> 10ms)"
+          description: "Latence ping: {{ $value }}s"
+
+  # ==================== Container Alerts (cAdvisor) ====================
+  - name: containers
+    interval: 30s
+    rules:
+      - alert: ContainerHighCPU
+        expr: |
+          rate(container_cpu_usage_seconds_total[5m]) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          component: containers
+        annotations:
+          summary: "Container {{ $labels.name }} utilise > 85% CPU"
+          description: "CPU: {{ $value | humanizePercentage }}"
+
+      - alert: ContainerHighMemory
+        expr: |
+          container_memory_usage_bytes / container_spec_memory_limit_bytes > 0.90
+        for: 5m
+        labels:
+          severity: warning
+          component: containers
+        annotations:
+          summary: "Container {{ $labels.name }} utilise > 90% mémoire"
+          description: "Mémoire: {{ $value | humanizePercentage }}"
+
+      - alert: ContainerRestartLoop
+        expr: |
+          rate(container_start_time_seconds[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+          component: containers
+        annotations:
+          summary: "Container {{ $labels.name }} en boucle de redémarrage"
+          description: "{{ $value }} redémarrages/seconde"
+

@@ -1,0 +1,155 @@
+# prometheus.yml
+# Configuration Prometheus production pour ATMR
+# Scraping haute fréquence pour WebSocket, fréquence normale pour le reste
+
+global:
+  scrape_interval: 15s  # Intervalle par défaut
+  evaluation_interval: 15s  # Évaluation des règles d'alertes
+  external_labels:
+    cluster: "atmr-production"
+    environment: "production"
+    region: "switzerland"
+
+# Configuration Alertmanager
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+      timeout: 10s
+      api_version: v2
+
+# Règles d'alertes
+rule_files:
+  - "rules/atmr_alerts.yml"
+  - "rules/infrastructure_alerts.yml"
+
+# Scrape configurations
+scrape_configs:
+  # ==================== Backend Flask / Socket.IO ====================
+  - job_name: "atmr-backend"
+    metrics_path: "/api/v1/prometheus/metrics"
+    static_configs:
+      - targets:
+          - "backend:5000"
+        labels:
+          service: "atmr-backend"
+          component: "api"
+          environment: "production"
+    scrape_interval: 5s  # Haute fréquence pour WebSocket
+    scrape_timeout: 10s
+    honor_labels: true
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: "socketio_.*"
+        target_label: "metric_type"
+        replacement: "websocket"
+      - source_labels: [__name__]
+        regex: "eta_.*"
+        target_label: "metric_type"
+        replacement: "eta"
+      - source_labels: [__name__]
+        regex: "osrm_.*"
+        target_label: "metric_type"
+        replacement: "osrm"
+      - source_labels: [__name__]
+        regex: "dispatch_.*"
+        target_label: "metric_type"
+        replacement: "dispatch"
+      - source_labels: [__name__]
+        regex: "location_.*"
+        target_label: "metric_type"
+        replacement: "location"
+      - source_labels: [__name__]
+        regex: "http_.*"
+        target_label: "metric_type"
+        replacement: "http"
+
+  # ==================== Celery Workers ====================
+  - job_name: "atmr-celery-worker"
+    metrics_path: "/api/v1/prometheus/metrics"
+    static_configs:
+      - targets:
+          - "celery-worker:5000"
+        labels:
+          service: "atmr-celery-worker"
+          component: "worker"
+          environment: "production"
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+  # ==================== Redis ====================
+  - job_name: "redis"
+    static_configs:
+      - targets:
+          - "redis-exporter:9121"
+        labels:
+          service: "redis"
+          component: "cache"
+          environment: "production"
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+  # ==================== PostgreSQL ====================
+  - job_name: "postgres"
+    static_configs:
+      - targets:
+          - "postgres-exporter:9187"
+        labels:
+          service: "postgres"
+          component: "database"
+          environment: "production"
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+  # ==================== Node Exporter (Système) ====================
+  - job_name: "node"
+    static_configs:
+      - targets:
+          - "node-exporter:9100"
+        labels:
+          service: "node"
+          component: "system"
+          environment: "production"
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+  # ==================== cAdvisor (Conteneurs Docker) ====================
+  - job_name: "cadvisor"
+    static_configs:
+      - targets:
+          - "cadvisor:8080"
+        labels:
+          service: "cadvisor"
+          component: "containers"
+          environment: "production"
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+  # ==================== Prometheus lui-même ====================
+  - job_name: "prometheus"
+    static_configs:
+      - targets:
+          - "localhost:9090"
+        labels:
+          service: "prometheus"
+          component: "monitoring"
+    scrape_interval: 15s
+
+  # ==================== Alertmanager ====================
+  - job_name: "alertmanager"
+    static_configs:
+      - targets:
+          - "alertmanager:9093"
+        labels:
+          service: "alertmanager"
+          component: "monitoring"
+    scrape_interval: 15s
+
+# Remote write (optionnel, pour long-term storage)
+# remote_write:
+#   - url: "https://prometheus-remote-write.example.com/api/v1/write"
+#     queue_config:
+#       max_samples_per_send: 1000
+#       batch_send_deadline: 5s
+
