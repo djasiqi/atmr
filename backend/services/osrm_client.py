@@ -76,6 +76,29 @@ DEFAULT_RETRY_COUNT = int(os.getenv("UD_OSRM_RETRY", "2"))
 # ✅ Cache plus long pour routes (peu de changements topographiques)
 CACHE_TTL_SECONDS = int(os.getenv("UD_OSRM_CACHE_TTL", "7200"))  # 2h par défaut
 
+# ✅ 3.2.4: TTL adaptatif selon fréquence d'utilisation
+CACHE_TTL_FREQUENT = int(
+    os.getenv("UD_OSRM_CACHE_TTL_FREQUENT", "86400")
+)  # 24h pour routes fréquentes
+CACHE_TTL_MEDIUM = int(
+    os.getenv("UD_OSRM_CACHE_TTL_MEDIUM", "7200")
+)  # 2h pour routes moyennes
+CACHE_TTL_RARE = int(
+    os.getenv("UD_OSRM_CACHE_TTL_RARE", "3600")
+)  # 1h pour routes rares
+
+# Seuils de fréquence pour classification
+FREQUENT_ROUTE_THRESHOLD = int(
+    os.getenv("UD_OSRM_FREQUENT_THRESHOLD", "10")
+)  # ≥10 accès/jour = fréquent
+MEDIUM_ROUTE_THRESHOLD = int(
+    os.getenv("UD_OSRM_MEDIUM_THRESHOLD", "3")
+)  # 3-9 accès/jour = moyen
+# <3 accès/jour = rare
+
+# TTL pour compteur de fréquence (reset quotidien)
+FREQUENCY_COUNTER_TTL = 86400  # 24h
+
 # ============================================================
 # Optional Redis import (safe) + alias d'exception
 # ============================================================
@@ -453,6 +476,130 @@ def _route(
 
 
 # ============================================================
+# ✅ 3.2.4: Cache adaptatif - Compteur de fréquence et TTL
+# ============================================================
+
+
+def _increment_frequency_counter(
+    redis_client: Any | None, cache_key: str, cache_type: str = "route"
+) -> None:
+    """Incrémente le compteur de fréquence pour une route/table.
+
+    Args:
+        redis_client: Client Redis (peut être None)
+        cache_key: Clé de cache (ex: "osrm:route:{key}" ou "osrm:table:{key}")
+        cache_type: Type de cache ("route" ou "table")
+    """
+    if not redis_client:
+        return
+
+    # Clé pour compteur de fréquence
+    freq_key = f"osrm:freq:{cache_key}"
+    try:
+        redis_client.incr(freq_key)
+        redis_client.expire(freq_key, FREQUENCY_COUNTER_TTL)  # Reset après 24h
+        logger.debug(
+            "[OSRM Cache] Incremented frequency counter: key=%s type=%s",
+            cache_key[:CACHE_KEY_MAX_DISPLAY_LENGTH] + "..."
+            if len(cache_key) > CACHE_KEY_MAX_DISPLAY_LENGTH
+            else cache_key,
+            cache_type,
+        )
+    except Exception as e:
+        # Non-critique : si Redis échoue, on continue sans compteur
+        logger.debug("[OSRM Cache] Failed to increment frequency counter: %s", str(e))
+
+
+def _get_frequency_count(redis_client: Any | None, cache_key: str) -> int:
+    """Récupère le compteur de fréquence pour une route/table.
+
+    Args:
+        redis_client: Client Redis (peut être None)
+        cache_key: Clé de cache
+
+    Returns:
+        Nombre d'accès (0 si non disponible)
+    """
+    if not redis_client:
+        return 0
+
+    freq_key = f"osrm:freq:{cache_key}"
+    try:
+        count = redis_client.get(freq_key)
+        if count is None:
+            return 0
+        return int(count) if isinstance(count, (int, str, bytes)) else 0
+    except Exception:
+        return 0
+
+
+def _get_adaptive_ttl(
+    redis_client: Any | None,
+    cache_key: str,
+    default_ttl: int,
+    cache_type: str = "route",
+) -> int:
+    """Calcule TTL adaptatif selon fréquence d'utilisation.
+
+    Args:
+        redis_client: Client Redis (peut être None)
+        cache_key: Clé de cache
+        default_ttl: TTL par défaut (fallback si Redis indisponible)
+        cache_type: Type de cache ("route" ou "table")
+
+    Returns:
+        TTL en secondes (adaptatif ou default_ttl)
+    """
+    if not redis_client:
+        return default_ttl
+
+    try:
+        freq_count = _get_frequency_count(redis_client, cache_key)
+
+        # Classification selon fréquence
+        if freq_count >= FREQUENT_ROUTE_THRESHOLD:
+            ttl = CACHE_TTL_FREQUENT  # 24h
+            category = "frequent"
+        elif freq_count >= MEDIUM_ROUTE_THRESHOLD:
+            ttl = CACHE_TTL_MEDIUM  # 2h
+            category = "medium"
+        else:
+            ttl = CACHE_TTL_RARE  # 1h
+            category = "rare"
+
+        logger.debug(
+            "[OSRM Cache] Adaptive TTL: key=%s type=%s freq=%d category=%s ttl=%ds",
+            cache_key[:CACHE_KEY_MAX_DISPLAY_LENGTH] + "..."
+            if len(cache_key) > CACHE_KEY_MAX_DISPLAY_LENGTH
+            else cache_key,
+            cache_type,
+            freq_count,
+            category,
+            ttl,
+        )
+
+        # ✅ Métrique Prometheus pour routes fréquentes
+        try:
+            from services.unified_dispatch.osrm_cache_metrics import (
+                OSRM_CACHE_FREQUENT_ROUTES_TOTAL,
+            )
+
+            if freq_count >= FREQUENT_ROUTE_THRESHOLD:
+                OSRM_CACHE_FREQUENT_ROUTES_TOTAL.labels(cache_type=cache_type).inc()
+        except (ImportError, AttributeError):
+            # Métrique non disponible (module non importé ou non défini)
+            pass
+
+        return ttl
+    except Exception as e:
+        # En cas d'erreur, fallback vers TTL par défaut
+        logger.debug(
+            "[OSRM Cache] Failed to get adaptive TTL, using default: %s", str(e)
+        )
+        return default_ttl
+
+
+# ============================================================
 # Cache keys (stable, coord_precision ~ 1m)
 # ============================================================
 
@@ -609,6 +756,10 @@ def build_distance_matrix_osrm(
                     )
                     # ✅ A5: Track cache hit
                     increment_cache_hit(cache_type="table")
+                    # ✅ 3.2.4: Incrémenter compteur de fréquence à chaque accès
+                    _increment_frequency_counter(
+                        redis_client, f"osrm:table:{cache_key}", cache_type="table"
+                    )
             except _RedisConnError:
                 # Redis HS -> on continue sans cache
                 redis_available = False
@@ -779,12 +930,16 @@ def build_distance_matrix_osrm(
         # Écrit dans le cache
         try:
             if redis_client is not None and redis_available:
-                redis_client.setex(
-                    f"osrm:table:{cache_key}", CACHE_TTL_SECONDS, json.dumps(data)
+                table_cache_key = f"osrm:table:{cache_key}"
+                # ✅ 3.2.4: TTL adaptatif selon fréquence
+                _increment_frequency_counter(
+                    redis_client, table_cache_key, cache_type="table"
                 )
-                logger.debug(
-                    "OSRM cache SET key=%s ttl=%ss", cache_key, CACHE_TTL_SECONDS
+                ttl = _get_adaptive_ttl(
+                    redis_client, table_cache_key, CACHE_TTL_SECONDS, cache_type="table"
                 )
+                redis_client.setex(table_cache_key, ttl, json.dumps(data))
+                logger.debug("OSRM cache SET key=%s ttl=%ss", cache_key, ttl)
         except _RedisConnError:
             # Redis HS -> log mais on continue
             redis_available = False
@@ -858,6 +1013,10 @@ def route_info(
                 if "duration" in cached and "distance" in cached:
                     # ✅ Track cache hit
                     increment_cache_hit(cache_type="route")
+                    # ✅ 3.2.4: Incrémenter compteur de fréquence à chaque accès
+                    _increment_frequency_counter(
+                        redis_client, cache_key, cache_type="route"
+                    )
                     # ✅ S'assurer que fallback est présent dans le cache
                     # (rétrocompatibilité)
                     if "fallback" not in cached:
@@ -952,7 +1111,22 @@ def route_info(
     # Cache set
     try:
         if redis_client is not None:
-            ttl = CACHE_TTL_SECONDS if cache_ttl_s is None else max(int(cache_ttl_s), 0)
+            # ✅ 3.2.4: TTL adaptatif selon fréquence (si cache_ttl_s non spécifié)
+            if cache_ttl_s is None:
+                # Incrémenter compteur avant de calculer TTL adaptatif
+                _increment_frequency_counter(
+                    redis_client, cache_key, cache_type="route"
+                )
+                ttl = _get_adaptive_ttl(
+                    redis_client, cache_key, CACHE_TTL_SECONDS, cache_type="route"
+                )
+            else:
+                ttl = max(int(cache_ttl_s), 0)
+                # Incrémenter compteur même si TTL manuel
+                _increment_frequency_counter(
+                    redis_client, cache_key, cache_type="route"
+                )
+
             if ttl > 0:
                 redis_client.setex(cache_key, ttl, json.dumps(res))
                 logger.debug("OSRM cache SET key=%s ttl=%ss", cache_key, ttl)

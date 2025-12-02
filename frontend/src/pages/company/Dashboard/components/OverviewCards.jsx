@@ -32,6 +32,7 @@ const OverviewCards = ({
   assignedReservations, // accepted && !driver_id
   driver,
   day, // optionnel 'YYYY-MM-DD'
+  qualityMetrics, // ✅ 3.4.2: Métriques qualité depuis dashboard temps réel
 }) => {
   // Filtre jour (si fourni) — calcule 'all' *dans* le useMemo pour satisfaire eslint react-hooks/exhaustive-deps
   const dayList = useMemo(() => {
@@ -116,6 +117,37 @@ const OverviewCards = ({
           <p>{availableDriver}</p>
         </div>
       </div>
+      {/* ✅ 3.4.2: Métriques qualité depuis dashboard temps réel */}
+      {qualityMetrics && (
+        <>
+          {qualityMetrics.on_time_rate !== undefined && (
+            <div className={styles.card}>
+              <div className={styles.cardIcon}>⏱️</div>
+              <div className={styles.cardContent}>
+                <h3>Ponctualité</h3>
+                <p>{Math.round(qualityMetrics.on_time_rate * 100)}%</p>
+                {qualityMetrics.avg_delay !== undefined && qualityMetrics.avg_delay > 0 && (
+                  <small style={{ color: qualityMetrics.avg_delay > 5 ? '#f44336' : '#ff9800' }}>
+                    Retard moyen: {Math.round(qualityMetrics.avg_delay)} min
+                  </small>
+                )}
+              </div>
+            </div>
+          )}
+          {qualityMetrics.quality_score !== undefined && (
+            <div className={styles.card}>
+              <div className={styles.cardIcon}>⭐</div>
+              <div className={styles.cardContent}>
+                <h3>Qualité dispatch</h3>
+                <p>{Math.round(qualityMetrics.quality_score * 100)}%</p>
+                {qualityMetrics.assignment_rate !== undefined && (
+                  <small>Taux assignation: {Math.round(qualityMetrics.assignment_rate * 100)}%</small>
+                )}
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 };

@@ -103,7 +103,8 @@ class Driver(db.Model):
     )
 
     # Média & notifications
-    driver_photo: Mapped[str] = mapped_column(String(500), nullable=True)
+    # Note: Limite augmentée à 50000 pour accommoder les images base64 (migration 68116559b15d)
+    driver_photo: Mapped[str] = mapped_column(String(50000), nullable=True)
     push_token: Mapped[str] = mapped_column(String(255), nullable=True, index=True)
 
     # HR / Contrats & Qualifications

@@ -79,12 +79,33 @@ def upgrade():
                 postgresql_where=sa.text("company_id IS NULL"),
             )
 
-    # 4. driver.driver_photo : changer de TEXT à String(500)
+    # 4. driver.driver_photo : changer de TEXT à String(50000) pour accommoder les images base64
+    # Note: Certaines images base64 peuvent dépasser 500 caractères, donc on utilise 50000
+    # Constantes pour les limites
+    DEFAULT_PHOTO_LENGTH = 500
+    MAX_PHOTO_LENGTH = 50000
+
+    # Vérifier s'il y a des données qui dépassent la limite par défaut
+    max_length = (
+        bind.execute(
+            sa.text(
+                "SELECT MAX(LENGTH(driver_photo)) FROM driver WHERE driver_photo IS NOT NULL"
+            )
+        ).scalar()
+        or 0
+    )
+
+    # Utiliser une limite appropriée selon les données existantes
+    # Si des données dépassent la limite par défaut, utiliser la limite maximale pour accommoder les images base64
+    target_length = (
+        MAX_PHOTO_LENGTH if max_length > DEFAULT_PHOTO_LENGTH else DEFAULT_PHOTO_LENGTH
+    )
+
     with op.batch_alter_table("driver", schema=None) as batch_op:
         batch_op.alter_column(
             "driver_photo",
             existing_type=sa.TEXT(),
-            type_=sa.String(length=500),
+            type_=sa.String(length=target_length),
             existing_nullable=True,
         )
 

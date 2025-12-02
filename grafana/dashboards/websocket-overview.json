@@ -1,0 +1,255 @@
+{
+  "dashboard": {
+    "title": "WebSocket / Socket.IO Overview",
+    "tags": ["websocket", "socketio", "realtime"],
+    "timezone": "browser",
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Connexions Actives",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "socketio_connections_active",
+            "legendFormat": "{{company_id}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Connexions"}
+        ],
+        "legend": {
+          "show": true,
+          "values": true,
+          "current": true
+        }
+      },
+      {
+        "id": 2,
+        "title": "Total Connexions (Cumul)",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 0, "w": 6, "h": 8},
+        "targets": [
+          {
+            "expr": "socketio_connections_total",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Total Déconnexions (Cumul)",
+        "type": "stat",
+        "gridPos": {"x": 18, "y": 0, "w": 6, "h": 8},
+        "targets": [
+          {
+            "expr": "socketio_disconnections_total",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Latence Heartbeat (p50/p95/p99)",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, socketio_heartbeat_latency_ms_bucket)",
+            "legendFormat": "p50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, socketio_heartbeat_latency_ms_bucket)",
+            "legendFormat": "p95",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, socketio_heartbeat_latency_ms_bucket)",
+            "legendFormat": "p99",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {"format": "ms", "label": "Latence (ms)"}
+        ],
+        "legend": {
+          "show": true,
+          "values": true
+        }
+      },
+      {
+        "id": 5,
+        "title": "Reconnexions Total",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 8, "w": 6, "h": 8},
+        "targets": [
+          {
+            "expr": "socketio_reconnections_total",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 10, "color": "yellow"},
+                {"value": 50, "color": "red"}
+              ]
+            },
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Taux Reconnexion (%)",
+        "type": "stat",
+        "gridPos": {"x": 18, "y": 8, "w": 6, "h": 8},
+        "targets": [
+          {
+            "expr": "(socketio_reconnections_total / socketio_connections_total) * 100",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 5, "color": "yellow"},
+                {"value": 10, "color": "red"}
+              ]
+            },
+            "unit": "percent",
+            "decimals": 1
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "Events Socket.IO par Type",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(socketio_events_total[5m])",
+            "legendFormat": "{{event}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "Events/sec"}
+        ],
+        "legend": {
+          "show": true,
+          "values": true,
+          "current": true
+        }
+      },
+      {
+        "id": 8,
+        "title": "Erreurs par Type",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(socketio_errors_total[5m])",
+            "legendFormat": "{{error_type}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Erreurs/sec"}
+        ],
+        "legend": {
+          "show": true,
+          "values": true
+        }
+      },
+      {
+        "id": 9,
+        "title": "Rate Limit Hits par Event",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(socketio_rate_limit_hits_total[5m])",
+            "legendFormat": "{{event}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Hits/sec"}
+        ],
+        "legend": {
+          "show": true,
+          "values": true
+        }
+      },
+      {
+        "id": 10,
+        "title": "Rooms Actives",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "socketio_rooms_active",
+            "legendFormat": "{{room}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Clients"}
+        ],
+        "legend": {
+          "show": true,
+          "values": true
+        }
+      }
+    ],
+    "annotations": {
+      "list": [
+        {
+          "name": "High Reconnection Rate",
+          "datasource": "Prometheus",
+          "enable": true,
+          "expr": "(socketio_reconnections_total / socketio_connections_total) > 0.1",
+          "iconColor": "red",
+          "titleFormat": "High Reconnection Rate",
+          "tagsFormat": ""
+        },
+        {
+          "name": "High Heartbeat Latency",
+          "datasource": "Prometheus",
+          "enable": true,
+          "expr": "histogram_quantile(0.95, socketio_heartbeat_latency_ms_bucket) > 500",
+          "iconColor": "orange",
+          "titleFormat": "High Heartbeat Latency",
+          "tagsFormat": ""
+        }
+      ]
+    },
+    "version": 1
+  }
+}
+

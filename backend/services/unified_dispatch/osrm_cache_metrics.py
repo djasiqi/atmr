@@ -15,13 +15,14 @@ from typing import Any, Dict
 
 # Import optionnel prometheus_client (peut ne pas être installé en dev)
 try:
-    from prometheus_client import Counter, Gauge
+    from prometheus_client import Counter, Gauge, Histogram
 
     PROMETHEUS_AVAILABLE = True
 except ImportError:
     PROMETHEUS_AVAILABLE = False
     Counter = None
     Gauge = None
+    Histogram = None
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,31 @@ if PROMETHEUS_AVAILABLE and Counter is not None and Gauge is not None:
         "Taux de réussite du cache OSRM (0-1)",
     )
 
+    # ✅ 3.2.4: Métriques pour cache adaptatif
+    OSRM_CACHE_FREQUENT_ROUTES_TOTAL = Counter(
+        "osrm_cache_frequent_routes_total",
+        "Nombre total de routes classées comme fréquentes (≥10 accès/jour)",
+        ["cache_type"],  # cache_type: "route", "table"
+    )
+
+    if Histogram is not None:
+        OSRM_CACHE_TTL_SECONDS = Histogram(
+            "osrm_cache_ttl_seconds",
+            "Distribution des TTL utilisés pour le cache OSRM",
+            ["cache_type", "category"],  # category: "frequent", "medium", "rare"
+            buckets=[
+                3600,
+                7200,
+                14400,
+                28800,
+                43200,
+                86400,
+                172800,
+            ],  # 1h, 2h, 4h, 8h, 12h, 24h, 48h
+        )
+    else:
+        OSRM_CACHE_TTL_SECONDS = None
+
     # ✅ FIX: Initialiser les métriques avec 0.0 pour qu'elles apparaissent
     # même si jamais incrémentées
     # Note: Pour les Counters avec labels, on initialise avec un label par défaut
@@ -72,6 +98,8 @@ if PROMETHEUS_AVAILABLE and Counter is not None and Gauge is not None:
         OSRM_CACHE_MISSES_TOTAL.labels(cache_type="matrix").inc(0)
         OSRM_CACHE_BYPASS_TOTAL.inc(0)
         OSRM_CACHE_HIT_RATE.set(0.0)
+        OSRM_CACHE_FREQUENT_ROUTES_TOTAL.labels(cache_type="route").inc(0)
+        OSRM_CACHE_FREQUENT_ROUTES_TOTAL.labels(cache_type="table").inc(0)
     except Exception as e:
         # Ignorer les erreurs d'initialisation
         # (peut échouer si Prometheus non configuré)
@@ -83,6 +111,8 @@ else:
     OSRM_CACHE_MISSES_TOTAL = None
     OSRM_CACHE_BYPASS_TOTAL = None
     OSRM_CACHE_HIT_RATE = None
+    OSRM_CACHE_FREQUENT_ROUTES_TOTAL = None
+    OSRM_CACHE_TTL_SECONDS = None
 
 
 # ==================== Cache Metrics Counter ====================

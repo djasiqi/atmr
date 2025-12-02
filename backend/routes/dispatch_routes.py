@@ -50,9 +50,16 @@ from shared.time_utils import day_local_bounds, now_local
 N_BOOKINGS_ZERO = 0
 MAX_DELAY_ZERO = 0
 PICKUP_DELAY_ZERO = 0
-DELAY_MINUTES_THRESHOLD = 5
+DELAY_MINUTES_THRESHOLD = 5  # Ancien seuil (conservé pour compatibilité)
+# ✅ Classification des retards à 3 niveaux
+DELAY_MINUTES_REASONABLE_MAX = 5  # 1-5 min : raisonnable
+DELAY_MINUTES_MODERATE_MAX = 10  # 5-10 min : modéré
+# >10 min : critique
 TIME_DIFF_SECONDS_THRESHOLD = 0.300
 DELAY_MINUTES_ZERO = 0
+PREVIOUS_BOOKING_RELEVANCE_WINDOW_SECONDS = (
+    7200  # 2h : fenêtre pour considérer une course précédente comme pertinente
+)
 TOTAL_FEEDBACKS_ZERO = 0
 
 # RL Dispatch (déploiement production)
@@ -1736,6 +1743,98 @@ class DelaysResource(Resource):
         return delays
 
 
+# ✅ Fonction helper pour classifier la sévérité d'un retard
+def _classify_delay_severity(delay_minutes: int) -> str:
+    """Classifie la sévérité d'un retard en 3 niveaux.
+
+    Args:
+        delay_minutes: Retard en minutes (positif = retard, négatif = avance)
+
+    Returns:
+        - "on_time" : Pas de retard (<= 0 min)
+        - "reasonable" : Retard raisonnable (1-5 min)
+        - "moderate" : Retard modéré (5-10 min)
+        - "critical" : Retard critique (>10 min)
+        - "early" : En avance (négatif)
+    """
+    if delay_minutes <= 0:
+        # En avance ou à l'heure
+        if delay_minutes < -DELAY_MINUTES_THRESHOLD:
+            return "early"
+        return "on_time"
+    if delay_minutes <= DELAY_MINUTES_REASONABLE_MAX:
+        return "reasonable"  # 1-5 min : raisonnable
+    if delay_minutes <= DELAY_MINUTES_MODERATE_MAX:
+        return "moderate"  # 5-10 min : modéré
+    return "critical"  # >10 min : critique
+
+
+# ✅ Fonction helper pour trouver la course précédente du chauffeur
+def _get_driver_previous_booking(
+    driver_id: int,
+    current_booking: "Booking",
+    company_id: int,
+    current_date_start: datetime,
+    current_date_end: datetime,
+) -> tuple["Booking", "Assignment"] | tuple[None, None]:
+    """Trouve la course précédente du chauffeur avant la course courante.
+
+    Args:
+        driver_id: ID du chauffeur
+        current_booking: Course courante pour laquelle on cherche la précédente
+        company_id: ID de l'entreprise
+        current_date_start: Début de la journée (pour filtrer)
+        current_date_end: Fin de la journée (pour filtrer)
+
+    Returns:
+        Tuple (Booking, Assignment) de la course précédente, ou (None, None) si aucune
+    """
+    from shared.time_utils import _booking_time_expr
+
+    try:
+        current_scheduled_time = getattr(current_booking, "scheduled_time", None)
+        if not current_scheduled_time:
+            return None, None
+
+        # Récupérer toutes les assignations du chauffeur pour la même date
+        time_expr = _booking_time_expr()
+        previous_assignments = (
+            Assignment.query.join(Booking, Booking.id == Assignment.booking_id)
+            .filter(
+                Assignment.driver_id == driver_id,
+                Booking.company_id == company_id,
+                time_expr >= current_date_start,
+                time_expr < current_date_end,
+                time_expr < current_scheduled_time,  # Avant la course courante
+                # Exclure les statuts terminés
+                cast("Any", Booking.status).notin_(
+                    [
+                        BookingStatus.COMPLETED,
+                        BookingStatus.RETURN_COMPLETED,
+                        BookingStatus.CANCELED,
+                    ]
+                ),
+            )
+            .order_by(Booking.scheduled_time.desc())  # Plus récente en premier
+            .limit(1)
+            .all()
+        )
+
+        if previous_assignments:
+            prev_assignment = previous_assignments[0]
+            prev_booking = prev_assignment.booking
+            return prev_booking, prev_assignment
+
+        return None, None
+    except Exception as e:
+        logger.warning(
+            "[LiveDelays] Error finding previous booking for driver %d: %s",
+            driver_id,
+            e,
+        )
+        return None, None
+
+
 # ✅ Helper function pour calculer ETA en parallèle (utilisé par LiveDelaysResource)
 def _calculate_eta_for_assignment(
     driver_pos: tuple[float, float] | None,
@@ -1932,11 +2031,13 @@ class LiveDelaysResource(Resource):
             if not b:
                 continue
 
-            # ✅ Double vérification : skip les courses terminées
+            # ✅ Double vérification : skip les courses terminées et IN_PROGRESS
+            # IN_PROGRESS = client déjà à bord, donc pas de retard possible
             if b.status in [
                 BookingStatus.COMPLETED,
                 BookingStatus.RETURN_COMPLETED,
                 BookingStatus.CANCELED,
+                BookingStatus.IN_PROGRESS,  # ✅ Client déjà à bord, pas de retard
             ]:
                 continue
 
@@ -2131,18 +2232,104 @@ class LiveDelaysResource(Resource):
             pickup_time = _to_dt(pickup_time)
             dropoff_time = _to_dt(dropoff_time)
 
-            # ✅ Utiliser l'ETA calculé en parallèle
-            # (ou calculer en fallback si non disponible)
+            # ✅ ÉTAPE 4.1: Prendre en compte les courses précédentes du chauffeur
+            # Si le chauffeur a une course précédente en cours ou récente,
+            # calculer l'ETA depuis la destination de cette course plutôt que depuis la position GPS actuelle
+            effective_driver_pos = driver_pos  # Position à utiliser pour le calcul ETA
+
+            if driver and driver.id and pickup_time:
+                try:
+                    prev_b, prev_a = _get_driver_previous_booking(
+                        driver.id, b, company.id, d0, d1
+                    )
+                    if prev_b and prev_a:
+                        # Vérifier si la course précédente est en cours ou récente
+                        prev_status = getattr(prev_b, "status", None)
+                        prev_dropoff_time = getattr(
+                            prev_b, "dropoff_time", None
+                        ) or getattr(prev_b, "scheduled_time", None)
+
+                        if prev_status in [
+                            BookingStatus.ASSIGNED,
+                            BookingStatus.EN_ROUTE,
+                            BookingStatus.IN_PROGRESS,
+                        ] or (
+                            prev_dropoff_time
+                            and pickup_time
+                            and (pickup_time - prev_dropoff_time).total_seconds()
+                            < PREVIOUS_BOOKING_RELEVANCE_WINDOW_SECONDS
+                        ):
+                            # ✅ Utiliser la destination de la course précédente comme point de départ
+                            prev_dropoff_lat = getattr(prev_b, "dropoff_lat", None)
+                            prev_dropoff_lon = getattr(prev_b, "dropoff_lon", None)
+
+                            if prev_dropoff_lat and prev_dropoff_lon:
+                                effective_driver_pos = (
+                                    prev_dropoff_lat,
+                                    prev_dropoff_lon,
+                                )
+                                logger.debug(
+                                    (
+                                        "[LiveDelays] Using previous booking dropoff "
+                                        "as starting point for booking %d "
+                                        "(previous: %d, status: %s)"
+                                    ),
+                                    b.id,
+                                    prev_b.id,
+                                    prev_status,
+                                )
+                except Exception as e:
+                    logger.warning(
+                        "[LiveDelays] Error processing previous booking for assignment %s: %s",
+                        a.id,
+                        e,
+                    )
+
+            # ✅ Utiliser l'ETA calculé en parallèle (basé sur position GPS actuelle)
+            # OU recalculer avec la position effective (course précédente si applicable)
             current_eta = None
             if a.id in eta_results and pickup_time:
-                # ✅ ETA calculé en parallèle disponible
+                # ✅ ETA calculé en parallèle disponible (basé sur position GPS actuelle)
                 eta_seconds = eta_results[a.id]
-                current_eta = now_local() + timedelta(seconds=eta_seconds)
-            elif driver_pos and pickup_pos and pickup_time:
-                # Fallback: calculer maintenant si pas dans les résultats
-                # (ne devrait pas arriver normalement)
+
+                # ✅ Si on a une course précédente pertinente, recalculer depuis sa destination
+                if effective_driver_pos != driver_pos and pickup_pos:
+                    try:
+                        recalc_eta_seconds = _calculate_eta_for_assignment(
+                            effective_driver_pos, pickup_pos
+                        )
+                        if recalc_eta_seconds:
+                            current_eta = now_local() + timedelta(
+                                seconds=recalc_eta_seconds
+                            )
+                            logger.debug(
+                                (
+                                    "[LiveDelays] Recalculated ETA from previous booking "
+                                    "dropoff for assignment %d: %d min"
+                                ),
+                                a.id,
+                                recalc_eta_seconds // 60,
+                            )
+                        else:
+                            # Fallback sur ETA parallèle si recalcul échoue
+                            current_eta = now_local() + timedelta(seconds=eta_seconds)
+                    except Exception as e:
+                        logger.warning(
+                            "[LiveDelays] Failed to recalculate ETA from previous booking for assignment %s: %s",
+                            a.id,
+                            e,
+                        )
+                        # Fallback sur ETA parallèle
+                        current_eta = now_local() + timedelta(seconds=eta_seconds)
+                else:
+                    # Pas de course précédente pertinente, utiliser ETA parallèle
+                    current_eta = now_local() + timedelta(seconds=eta_seconds)
+            elif effective_driver_pos and pickup_pos and pickup_time:
+                # Fallback: calculer maintenant avec position effective
                 try:
-                    eta_seconds = _calculate_eta_for_assignment(driver_pos, pickup_pos)
+                    eta_seconds = _calculate_eta_for_assignment(
+                        effective_driver_pos, pickup_pos
+                    )
                     if eta_seconds:
                         current_eta = now_local() + timedelta(seconds=eta_seconds)
                 except Exception as e:
@@ -2199,10 +2386,8 @@ class LiveDelaysResource(Resource):
                             )
 
                             # Vérifier le statut de la course
-                            is_en_route = booking_status in [
-                                BookingStatus.EN_ROUTE,
-                                BookingStatus.IN_PROGRESS,
-                            ]
+                            # ✅ IN_PROGRESS exclu : client déjà à bord, pas de retard possible
+                            is_en_route = booking_status == BookingStatus.EN_ROUTE
 
                             if is_en_route:
                                 # ✅ Chauffeur en mouvement :
@@ -2210,11 +2395,9 @@ class LiveDelaysResource(Resource):
                                 # Exemple : Part avec 2 min de retard
                                 # → 2 min de retard à l'arrivée
                                 delay_minutes = potential_delay_minutes
-                                status = (
-                                    "late"
-                                    if delay_minutes > DELAY_MINUTES_THRESHOLD
-                                    else "on_time"
-                                )
+                                # ✅ Utiliser la classification à 3 niveaux
+                                severity = _classify_delay_severity(delay_minutes)
+                                status = severity if severity != "early" else "on_time"
                                 logger.debug(
                                     (
                                         "[LiveDelays] Driver EN_ROUTE "
@@ -2230,7 +2413,9 @@ class LiveDelaysResource(Resource):
                                 # signaler un problème
                                 # Il devrait être en route mais ne l'est pas
                                 delay_minutes = potential_delay_minutes
-                                status = "late"
+                                # ✅ Utiliser la classification à 3 niveaux
+                                severity = _classify_delay_severity(delay_minutes)
+                                status = severity if severity != "early" else "on_time"
                                 logger.warning(
                                     (
                                         "[LiveDelays] Driver should be EN_ROUTE "
@@ -2247,12 +2432,8 @@ class LiveDelaysResource(Resource):
                         delay_seconds = (current_eta - pickup_time).total_seconds()
                         delay_minutes = int(delay_seconds / 60)
 
-                        if delay_minutes > DELAY_MINUTES_THRESHOLD:
-                            status = "late"
-                        elif delay_minutes < -DELAY_MINUTES_THRESHOLD:
-                            status = "early"
-                        else:
-                            status = "on_time"
+                        # ✅ Utiliser la classification à 3 niveaux
+                        status = _classify_delay_severity(delay_minutes)
                 except Exception as e:
                     logger.warning(
                         "[LiveDelays] Error calculating intelligent delay: %s", e
@@ -2271,7 +2452,8 @@ class LiveDelaysResource(Resource):
                         time_diff_seconds > TIME_DIFF_SECONDS_THRESHOLD
                     ):  # 5 minutes de buffer
                         delay_minutes = int(time_diff_seconds / 60)
-                        status = "late"
+                        # ✅ Utiliser la classification à 3 niveaux
+                        status = _classify_delay_severity(delay_minutes)
                     elif time_diff_seconds < -TIME_DIFF_SECONDS_THRESHOLD:
                         delay_minutes = int(time_diff_seconds / 60)
                         status = "early"
@@ -2349,6 +2531,9 @@ class LiveDelaysResource(Resource):
 
             # Construire la réponse
             if current_eta or delay_minutes != DELAY_MINUTES_ZERO:
+                # ✅ Classifier la sévérité du retard
+                delay_severity = _classify_delay_severity(delay_minutes)
+
                 delay = {
                     "id": a.id,
                     "booking_id": a.booking_id,
@@ -2356,6 +2541,7 @@ class LiveDelaysResource(Resource):
                     "assignment_id": a.id,
                     "delay_minutes": delay_minutes,
                     "status": status,
+                    "delay_severity": delay_severity,  # ✅ Niveau de sévérité (reasonable/moderate/critical)
                     "current_eta": current_eta.isoformat() if current_eta else None,
                     "scheduled_time": pickup_time.isoformat() if pickup_time else None,
                     "pickup_time": pickup_time.isoformat() if pickup_time else None,
@@ -2391,9 +2577,29 @@ class LiveDelaysResource(Resource):
 
         # Statistiques globales
         total = len(delays)
-        late = len([d for d in delays if d["status"] == "late"])
+        # ✅ Compter les retards selon la nouvelle classification
+        # "late" était l'ancien statut, maintenant on a reasonable/moderate/critical
+        late = len(
+            [
+                d
+                for d in delays
+                if d.get("status") in ["late", "reasonable", "moderate", "critical"]
+                or d.get("delay_severity") in ["reasonable", "moderate", "critical"]
+            ]
+        )
         early = len([d for d in delays if d["status"] == "early"])
         on_time = len([d for d in delays if d["status"] == "on_time"])
+
+        # ✅ Statistiques détaillées par sévérité
+        reasonable_count = len(
+            [d for d in delays if d.get("delay_severity") == "reasonable"]
+        )
+        moderate_count = len(
+            [d for d in delays if d.get("delay_severity") == "moderate"]
+        )
+        critical_count = len(
+            [d for d in delays if d.get("delay_severity") == "critical"]
+        )
 
         avg_delay = 0
         if delays:
@@ -2404,10 +2610,14 @@ class LiveDelaysResource(Resource):
             "delays": delays,
             "summary": {
                 "total": total,
-                "late": late,
+                "late": late,  # Tous les retards (reasonable + moderate + critical)
                 "early": early,
                 "on_time": on_time,
                 "average_delay": round(avg_delay, 2),
+                # ✅ Détails par sévérité
+                "reasonable": reasonable_count,  # 1-5 min
+                "moderate": moderate_count,  # 5-10 min
+                "critical": critical_count,  # >10 min
             },
             "timestamp": now_local().isoformat(),
         }, 200

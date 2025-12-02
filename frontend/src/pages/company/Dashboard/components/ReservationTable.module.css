@@ -98,6 +98,15 @@
   background-color: rgba(220, 53, 69, 0.12);
 }
 
+.rowReasonableDelay {
+  border-left: 4px solid #28a745;
+  background-color: rgba(40, 167, 69, 0.05);
+}
+
+.rowReasonableDelay:hover {
+  background-color: rgba(40, 167, 69, 0.08);
+}
+
 .rowSlightDelay {
   border-left: 4px solid #ffc107;
   background-color: rgba(255, 193, 7, 0.08);
@@ -118,6 +127,20 @@
   font-size: 0.75rem;
   font-weight: 600;
   white-space: nowrap;
+}
+
+/* Variantes de badge selon la sévérité */
+.delayBadgeReasonable {
+  background-color: #28a745;
+}
+
+.delayBadgeModerate {
+  background-color: #ffc107;
+  color: #000;
+}
+
+.delayBadgeCritical {
+  background-color: #dc3545;
 }
 
 /* ✅ Indicateur de retard dans la colonne Statut */

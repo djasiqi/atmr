@@ -1,22 +1,29 @@
 from __future__ import annotations
 
 import contextlib
-import json
-import os
 import traceback
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 from typing import cast as tcast
 
-import requests
 from flask import request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from flask_restx import Namespace, Resource, fields
 from sqlalchemy import or_
 
 from ext import app_logger, db, redis_client, role_required, socketio
-from models import Assignment, Booking, BookingStatus, Driver, User, UserRole
+from models import (
+    Assignment,
+    Booking,
+    BookingStatus,
+    DelayEvent,
+    Driver,
+    TripTracking,
+    User,
+    UserRole,
+)
 from models.enums import CancelReason
+from shared.notifications import notify_booking_update
 
 # Import conditionnel pour éviter les dépendances circulaires
 try:
@@ -164,24 +171,6 @@ def get_driver_from_token() -> tuple[Driver | None, dict[str, Any] | None, int |
         f"Driver found: {driver.id} for user {getattr(user, 'username', user.id)}"
     )
     return driver, None, None
-
-
-def notify_driver_new_booking(driver_id: int, booking: Booking) -> None:
-    """Notifie le chauffeur d'une nouvelle mission assignée."""
-    room = f"driver_{driver_id}"
-    socketio.emit("new_booking", booking.to_dict(), to=room)
-    app_logger.info(f"📤 new_booking émis vers {room} pour booking_id={booking.id}")
-
-
-def notify_booking_update(driver_id: int, booking: Booking) -> None:
-    """Notifie le chauffeur d'une mise à jour de mission."""
-    room = f"driver_{driver_id}"
-    # ✅ FIX: Émettre "new_booking" au lieu de "booking_updated"
-    # pour cohérence avec le mobile
-    socketio.emit("new_booking", booking.to_dict(), to=room)
-    app_logger.info(
-        f"📤 new_booking (update) émis vers {room} pour booking_id={booking.id}"
-    )
 
 
 def notify_booking_cancelled(driver_id: int, booking_id: int) -> None:
@@ -600,100 +589,54 @@ class DriverLocation(Resource):
                         accuracy = float(p.get("accuracy", 0.0) or 0.0)
                         ts = p.get("ts") or datetime.now(UTC).isoformat()
 
-                        OSRM = os.getenv("UD_OSRM_BASE_URL", "http://localhost:5001")
-                        TTL = int(os.getenv("DRIVER_LOC_TTL_SEC", "600"))
-                        MATCH_WINDOW = int(os.getenv("DRIVER_LOC_MATCH_WINDOW", "5"))
+                        # ✅ 3.3.1: Utiliser LocationService pour centraliser la logique
+                        from services.location_service import get_location_service
 
-                        source = "raw"
+                        timestamp = (
+                            datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                            if ts
+                            else datetime.now(UTC)
+                        )
 
-                        # 1) Snap sur chaussée la plus proche
                         try:
-                            r = requests.get(
-                                f"{OSRM}/nearest/v1/driving/{lon},{lat}",
-                                params={"number": 1},
-                                timeout=2,
+                            location_service = get_location_service()
+                            result = location_service.update_driver_location(
+                                driver_id=driver.id,
+                                latitude=lat,
+                                longitude=lon,
+                                speed=speed if speed > 0 else None,
+                                heading=heading if heading >= 0 else None,
+                                accuracy=accuracy if accuracy > 0 else None,
+                                source="gps",
+                                timestamp=timestamp,
                             )
-                            if r.ok:
-                                loc = r.json()["waypoints"][0]["location"]
-                                lon, lat = float(loc[0]), float(loc[1])
-                                source = "osrm_nearest"
-                        except Exception:
-                            pass
 
-                        point = {
-                            "ts": ts,
-                            "lat": lat,
-                            "lon": lon,
-                            "speed": speed,
-                            "heading": heading,
-                        }
+                            # Utiliser position snapée
+                            lat = result.snapped_lat
+                            lon = result.snapped_lon
+                            source = result.source
 
-                        # 2) Ring buffer pour /match
-                        try:
-                            redis_ring: Any = redis_client
-                            ring_key = f"driver:{driver.id}:ring"
-                            redis_ring.lpush(ring_key, json.dumps(point))
-                            redis_ring.ltrim(ring_key, 0, MATCH_WINDOW - 1)
-                            redis_ring.expire(ring_key, TTL)
-                        except Exception:
-                            pass
+                            # Émettre events geofencing si détectés
+                            for event in result.geofence_events:
+                                if event == "arrived_at_pickup":
+                                    socketio.emit(
+                                        "driver:arrived_at_pickup",
+                                        {"driver_id": driver.id},
+                                        to=f"company_{driver.company_id}",
+                                    )
+                                elif event == "arrived_at_dropoff":
+                                    socketio.emit(
+                                        "driver:arrived_at_dropoff",
+                                        {"driver_id": driver.id},
+                                        to=f"company_{driver.company_id}",
+                                    )
 
-                        # 3) Lissage map-matching si on a assez de points
-                        try:
-                            redis_match: Any = redis_client
-                            pts_raw = redis_match.lrange(
-                                f"driver:{driver.id}:ring", 0, MATCH_WINDOW - 1
+                        except Exception as e_loc:
+                            app_logger.warning(
+                                "[LocationService] HTTP location update failed: %s",
+                                str(e_loc),
                             )
-                            pts = [json.loads(x) for x in pts_raw] if pts_raw else []
-                            if len(pts) >= MIN_POINTS_FOR_MATCHING:
-                                coords = ";".join(
-                                    f"{pp['lon']:.6f},{pp['lat']:.6f}"
-                                    for pp in reversed(pts)
-                                )
-                                r2 = requests.get(
-                                    f"{OSRM}/match/v1/driving/{coords}",
-                                    params={"tidy": "true", "overview": "false"},
-                                    timeout=3,
-                                )
-                                if r2.ok and r2.json().get("matchings"):
-                                    tp = r2.json()["tracepoints"][-1]
-                                    if tp and tp.get("location"):
-                                        lon, lat = (
-                                            float(tp["location"][0]),
-                                            float(tp["location"][1]),
-                                        )
-                                        source = "osrm_match"
-                        except Exception:
-                            pass
-
-                        # 4) Sauvegarde DB + Redis
-                        try:
-                            driver.latitude = lat
-                            driver.longitude = lon
-                            db.session.commit()
-                        except Exception as e:
-                            db.session.rollback()
-                            sentry_sdk.capture_exception(e)
-
-                        try:
-                            redis_loc: Any = redis_client
-                            key = f"driver:{driver.id}:loc"
-                            redis_loc.hset(
-                                key,
-                                mapping={
-                                    "company_id": driver.company_id,
-                                    "lat": lat,
-                                    "lon": lon,
-                                    "speed": speed,
-                                    "heading": heading,
-                                    "accuracy": accuracy,
-                                    "ts": ts,
-                                    "source": source,
-                                },
-                            )
-                            redis_loc.expire(key, TTL)
-                        except Exception:
-                            pass
+                            source = "raw"  # Fallback
 
                         # 5) Diffusion temps réel à la room entreprise
                         try:
@@ -930,6 +873,10 @@ class UpdateBookingStatus(Resource):
                                     else:
                                         booking.status = BookingStatus.RETURN_COMPLETED
                                         booking.completed_at = datetime.now(UTC)
+                                        # ✅ 3.5.1: Résoudre retards lors complétion
+                                        DelayEvent.resolve_delays_for_booking(
+                                            booking.id, booking.completed_at
+                                        )
                                 elif booking.status == BookingStatus.COMPLETED:
                                     result = {"message": "Booking already completed"}
                                 elif booking.status != BookingStatus.IN_PROGRESS:
@@ -943,6 +890,10 @@ class UpdateBookingStatus(Resource):
                                 else:
                                     booking.status = BookingStatus.COMPLETED
                                     booking.completed_at = datetime.now(UTC)
+                                    # ✅ 3.5.1: Résoudre retards lors complétion
+                                    DelayEvent.resolve_delays_for_booking(
+                                        booking.id, booking.completed_at
+                                    )
 
                             # TERMINER RETOUR explicite
                             elif new_status_str == "return_completed":
@@ -961,6 +912,10 @@ class UpdateBookingStatus(Resource):
                                 elif booking.is_return:
                                     booking.status = BookingStatus.RETURN_COMPLETED
                                     booking.completed_at = datetime.now(UTC)
+                                    # ✅ 3.5.1: Résoudre retards lors complétion
+                                    DelayEvent.resolve_delays_for_booking(
+                                        booking.id, booking.completed_at
+                                    )
                                 else:
                                     result = {"error": "Not a return trip"}
                                     status_code = 400
@@ -1396,3 +1351,109 @@ class CompletedTrips(Resource):
             .all()
         )
         return [trip.serialize for trip in trips], 200
+
+
+@driver_ns.route("/trips/<int:assignment_id>/tracking")
+class TripTrackingReplay(Resource):
+    """✅ 3.3.3: Route pour replay trajet complet avec analytics."""
+
+    @jwt_required()
+    @role_required(UserRole.driver)
+    def get(self, assignment_id: int):
+        """Replay trajet complet avec positions GPS et analytics.
+
+        Retourne:
+        - Liste des positions GPS pendant le trajet
+        - Analytics (vitesse moyenne, arrêts, détours)
+        - Timestamps pour replay temporel
+        """
+        try:
+            driver, error_response, status_code = get_driver_from_token()
+            if error_response:
+                return error_response, status_code
+            driver = cast("Driver", driver)
+
+            # Vérifier que l'assignment appartient au chauffeur
+            assignment = Assignment.query.get(assignment_id)
+            if not assignment or assignment.driver_id != driver.id:
+                return {"error": "Assignment not found or unauthorized"}, 404
+
+            # Récupérer toutes les positions du trajet
+            positions = (
+                TripTracking.query.filter_by(assignment_id=assignment_id)
+                .order_by(TripTracking.timestamp.asc())
+                .all()
+            )
+
+            if not positions:
+                return {
+                    "assignment_id": assignment_id,
+                    "positions": [],
+                    "analytics": {
+                        "total_positions": 0,
+                        "duration_seconds": 0,
+                        "average_speed_kmh": 0,
+                        "max_speed_kmh": 0,
+                        "total_distance_km": 0,
+                        "stops_count": 0,
+                    },
+                }, 200
+
+            # Calculer analytics
+            from shared.geo_utils import haversine_distance
+
+            total_distance_km = 0.0
+            speeds = []
+            stops_count = 0
+            last_position = None
+            STOP_THRESHOLD_MS = 1.0  # < 1 m/s = arrêt
+
+            for pos in positions:
+                if last_position:
+                    # Distance depuis dernière position
+                    distance_km = haversine_distance(
+                        last_position.latitude,
+                        last_position.longitude,
+                        pos.latitude,
+                        pos.longitude,
+                    )
+                    total_distance_km += distance_km
+
+                    # Détecter arrêts (vitesse < 1 m/s)
+                    if pos.speed is not None and pos.speed < STOP_THRESHOLD_MS:
+                        stops_count += 1
+
+                # Collecter vitesses
+                if pos.speed is not None and pos.speed > 0:
+                    speeds.append(pos.speed * 3.6)  # m/s -> km/h
+
+                last_position = pos
+
+            # Durée du trajet
+            duration_seconds = (
+                (positions[-1].timestamp - positions[0].timestamp).total_seconds()
+                if len(positions) > 1
+                else 0
+            )
+
+            # Analytics
+            average_speed_kmh = sum(speeds) / len(speeds) if speeds else 0.0
+            max_speed_kmh = max(speeds) if speeds else 0.0
+
+            return {
+                "assignment_id": assignment_id,
+                "booking_id": assignment.booking_id,
+                "positions": [pos.to_dict() for pos in positions],
+                "analytics": {
+                    "total_positions": len(positions),
+                    "duration_seconds": int(duration_seconds),
+                    "average_speed_kmh": round(average_speed_kmh, 2),
+                    "max_speed_kmh": round(max_speed_kmh, 2),
+                    "total_distance_km": round(total_distance_km, 2),
+                    "stops_count": stops_count,
+                },
+            }, 200
+
+        except Exception as e:
+            app_logger.exception("❌ Erreur trip tracking replay: %s", e)
+            return {"error": f"Internal error: {e!s}"}, 500

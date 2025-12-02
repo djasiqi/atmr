@@ -25,6 +25,7 @@ class PrometheusMetrics(Resource):
     - Toutes les métriques dispatch (Counter, Gauge, Histogram)
     - Métriques SLO (breaches, severity, alerts)
     - Métriques OSRM (cache hits/misses, circuit breaker)
+    - Métriques WebSocket (connections, heartbeat, errors, rate limits)
     """
 
     def get(self):
@@ -38,7 +39,9 @@ class PrometheusMetrics(Resource):
             try:
                 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
-                # Générer toutes les métriques enregistrées (dispatch, OSRM, etc.)
+                # Générer toutes les métriques enregistrées (dispatch, OSRM, WebSocket, etc.)
+                # Note: generate_latest() exporte automatiquement toutes les métriques
+                # Prometheus enregistrées, y compris celles de websocket_metrics.py
                 metrics_output = generate_latest()
 
                 # Ajouter les métriques SLO personnalisées

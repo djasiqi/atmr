@@ -210,6 +210,75 @@ export const getDispatchMessages = async (params?: {
   return rawMessages.map(normalizeDispatchMessage);
 };
 
+/**
+ * ✅ 3.4.2: Récupère les données du dashboard temps réel dispatch
+ * @param date - Date au format YYYY-MM-DD (optionnel, défaut: aujourd'hui)
+ */
+export interface RealtimeDashboardData {
+  date: string;
+  timestamp: string;
+  quality_metrics: {
+    quality_score: number;
+    assignment_rate: number;
+    on_time_rate: number;
+    pooling_rate: number;
+    fairness: number;
+    avg_delay: number;
+  };
+  current_delays: Array<{
+    assignment_id: number;
+    booking_id: number;
+    driver_id: number;
+    delay_minutes: number;
+    status: "late" | "early";
+    customer_name: string;
+    scheduled_time: string | null;
+  }>;
+  opportunities: Array<{
+    assignment_id: number;
+    booking_id: number;
+    driver_id: number;
+    current_delay_minutes: number;
+    severity: "critical" | "high" | "medium" | "low";
+    suggestions: Array<{
+      action: string;
+      priority: string;
+      message: string;
+      estimated_gain_minutes?: number;
+    }>;
+    detected_at: string;
+    auto_applicable: boolean;
+  }>;
+  driver_load: Array<{
+    driver_id: number;
+    name: string;
+    bookings_count: number;
+    is_emergency: boolean;
+  }>;
+  stats: {
+    total_bookings: number;
+    delayed_bookings: number;
+    early_bookings: number;
+    on_time_bookings: number;
+    critical_opportunities: number;
+    drivers_active: number;
+  };
+}
+
+export const fetchRealtimeDashboard = async (
+  date?: string
+): Promise<RealtimeDashboardData> => {
+  const params: { date?: string } = {};
+  if (date) {
+    params.date = date;
+  }
+  const response = await enterpriseApi.get<RealtimeDashboardData>(
+    "/company_dispatch/dashboard/realtime",
+    { params }
+  );
+  return response.data;
+};
+
 export const sendDispatchMessage = async (content: string) => {
   const response = await enterpriseApi.post<DispatchMessage>(
     "/dispatch/v1/chat/messages",

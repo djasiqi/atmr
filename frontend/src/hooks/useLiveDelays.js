@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { getLiveDelays } from '../services/dispatchMonitoringService';
 
 /**
@@ -39,6 +39,13 @@ export const useLiveDelays = (date) => {
       setLoading(false);
     }
   }, [date]);
+
+  // ✅ Charger automatiquement les delays quand la date change
+  useEffect(() => {
+    if (date) {
+      loadDelays();
+    }
+  }, [date, loadDelays]);
 
   return {
     delays,
