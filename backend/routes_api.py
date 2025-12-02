@@ -10,6 +10,7 @@ from flask_restx import Api
 
 from routes.admin import admin_ns
 from routes.analytics import analytics_ns  # /analytics
+from routes.app_version import app_version_ns  # Version check mobile
 from routes.auth import auth_ns
 from routes.bookings import bookings_ns
 from routes.clients import clients_ns
@@ -106,6 +107,9 @@ api_v1.add_namespace(secret_rotation_ns)
 
 # Routes companies
 api_v1.add_namespace(companies_ns, path="/companies")
+
+# Routes app version check (mobile)
+api_v1.add_namespace(app_version_ns, path="/app")
 
 # Routes driver
 api_v1.add_namespace(driver_ns, path="/driver")

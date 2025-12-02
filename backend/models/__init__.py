@@ -8,6 +8,7 @@ from ext import db
 
 # ========== ML & Autonomous Systems (après les autres modèles) ==========
 from .ab_test_result import ABTestResult
+from .app_version_config import AppVersionConfig
 from .autonomous_action import AutonomousAction
 
 # ========== ÉTAPE 1 : Import helpers & enums ==========
@@ -97,6 +98,7 @@ from .vehicle import Vehicle
 # ========== EXPORTS ==========
 __all__ = [
     "ABTestResult",
+    "AppVersionConfig",
     "Assignment",
     "AssignmentStatus",
     "AutonomousAction",
