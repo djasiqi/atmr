@@ -65,9 +65,26 @@ else
   exit 1
 fi
 
+# Trouver le binaire Alertmanager (peut être dans /bin, /usr/bin, ou accessible via PATH)
+ALERTMANAGER_BIN=""
+if [ -x "/bin/alertmanager" ]; then
+  ALERTMANAGER_BIN="/bin/alertmanager"
+elif [ -x "/usr/bin/alertmanager" ]; then
+  ALERTMANAGER_BIN="/usr/bin/alertmanager"
+elif [ -x "/alertmanager" ]; then
+  ALERTMANAGER_BIN="/alertmanager"
+elif command -v alertmanager >/dev/null 2>&1; then
+  ALERTMANAGER_BIN=$(command -v alertmanager)
+else
+  echo "❌ Binaire Alertmanager non trouvé"
+  exit 1
+fi
+
+echo "✅ Binaire Alertmanager trouvé: $ALERTMANAGER_BIN"
+
 # Valider la configuration avant de lancer Alertmanager
 echo "🔍 Validation de la configuration..."
-/alertmanager --config.file="$CONFIG_FILE" --storage.path=/alertmanager --check-config
+"$ALERTMANAGER_BIN" --config.file="$CONFIG_FILE" --storage.path=/alertmanager --check-config
 
 if [ $? -ne 0 ]; then
   echo "❌ Erreur de validation de la configuration Alertmanager"
@@ -77,4 +94,4 @@ fi
 echo "✅ Configuration valide, démarrage d'Alertmanager..."
 
 # Remplacer --config.file dans les arguments et lancer Alertmanager
-exec /alertmanager --config.file="$CONFIG_FILE" --storage.path=/alertmanager --web.external-url="${ALERTMANAGER_EXTERNAL_URL:-http://localhost:9093}"
+exec "$ALERTMANAGER_BIN" --config.file="$CONFIG_FILE" --storage.path=/alertmanager --web.external-url="${ALERTMANAGER_EXTERNAL_URL:-http://localhost:9093}"
