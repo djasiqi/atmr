@@ -74,10 +74,13 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
       # ⚠️ SÉCURITÉ: Root URL doit pointer vers l'URL publique (ex: https://grafana.lirie.ch)
       # Définir GRAFANA_ROOT_URL dans .env.production
-      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL}
-      - GF_SERVER_PROTOCOL=https
-      - GF_SECURITY_COOKIE_SECURE=true
-      - GF_SECURITY_COOKIE_SAMESITE=strict
+      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-http://localhost:3000}
+      # ⚠️ IMPORTANT: Utiliser HTTP en interne car Traefik gère HTTPS
+      # Traefik fait le reverse proxy et gère les certificats SSL
+      - GF_SERVER_PROTOCOL=http
+      # Les cookies sécurisés sont gérés par Traefik (HTTPS)
+      - GF_SECURITY_COOKIE_SECURE=false
+      - GF_SECURITY_COOKIE_SAMESITE=lax
       - GF_INSTALL_PLUGINS=
       - GF_ALERTING_ENABLED=true
       - GF_ALERTING_EXECUTION_TIMEOUT_SECONDS=30
@@ -139,16 +142,16 @@ services:
 
   # ==================== Alertmanager ====================
   alertmanager:
-    image: prom/alertmanager:v0.26.0
+    build:
+      context: ./monitoring/alertmanager
+      dockerfile: Dockerfile
     container_name: atmr-alertmanager
     restart: unless-stopped
     # Charger les variables depuis .env.production (créé par le workflow GitHub Actions)
     env_file:
       - .env.production
-    command:
-      - "--config.file=/etc/alertmanager/alertmanager.yml"
-      - "--storage.path=/alertmanager"
-      - "--web.external-url=${ALERTMANAGER_EXTERNAL_URL:-http://localhost:9093}"
+    # La commande est gérée par l'entrypoint qui fait la substitution de variables
+    # L'entrypoint utilisera --config.file=/tmp/alertmanager.yml (fichier généré)
     # ⚠️ SÉCURITÉ: Ne pas exposer le port publiquement en production
     # Alertmanager doit être accessible uniquement via réseau Docker interne
     # Pour accès externe, utiliser un reverse proxy interne
@@ -239,7 +242,7 @@ services:
       - /var/lib/docker/:/var/lib/docker:ro
       - /dev/disk/:/dev/disk:ro
     ports:
-      - "8080:8080"
+      - "8082:8080" # Port changé car 8080 est utilisé par Traefik
     networks:
       - monitoring
       - internal

@@ -465,10 +465,8 @@ volumes:
 # Réseau privé
 networks:
   atmr-network:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
+    external: true
+    name: atmr-network # Réseau externe créé manuellement
   # Réseau externe Traefik (doit exister sur le serveur)
   traefik-network:
     external: true
