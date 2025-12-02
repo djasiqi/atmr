@@ -1,0 +1,203 @@
+{
+  "dashboard": {
+    "title": "Dispatch Performance - ATMR",
+    "tags": ["dispatch", "vrptw", "optimization", "atmr"],
+    "timezone": "browser",
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Assignations Créées par Minute",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(dispatch_assignments_total[5m]) * 60",
+            "legendFormat": "{{company_id}} - {{status}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "1/m",
+            "decimals": 1
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Taux de Retard",
+        "type": "gauge",
+        "gridPos": {"x": 12, "y": 0, "w": 6, "h": 8},
+        "targets": [
+          {
+            "expr": "dispatch_delay_rate",
+            "legendFormat": "{{company_id}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "unit": "percentunit",
+            "min": 0,
+            "max": 1,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "green"},
+                {"value": 0.10, "color": "yellow"},
+                {"value": 0.20, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Retards Détectés par Sévérité",
+        "type": "timeseries",
+        "gridPos": {"x": 18, "y": 0, "w": 6, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(dispatch_delays_total[5m])",
+            "legendFormat": "{{severity}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "ops"
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Temps d'Exécution Dispatch (p50/p90/p99)",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(dispatch_resolution_time_seconds_bucket[5m]))",
+            "legendFormat": "p50 - {{algorithm}}",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.90, rate(dispatch_resolution_time_seconds_bucket[5m]))",
+            "legendFormat": "p90 - {{algorithm}}",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(dispatch_resolution_time_seconds_bucket[5m]))",
+            "legendFormat": "p99 - {{algorithm}}",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "s",
+            "decimals": 2
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Réassignations",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 8, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "rate(dispatch_assignments_total{status=\"reassigned\"}[5m])",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "unit": "ops"
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "SLO Breaches",
+        "type": "stat",
+        "gridPos": {"x": 18, "y": 8, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "dispatch_slo_breaches_total",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "green"},
+                {"value": 1, "color": "yellow"},
+                {"value": 5, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "SLO Breach Severity",
+        "type": "gauge",
+        "gridPos": {"x": 12, "y": 12, "w": 6, "h": 6},
+        "targets": [
+          {
+            "expr": "dispatch_slo_breach_severity",
+            "legendFormat": "{{severity}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "unit": "short",
+            "min": 0,
+            "max": 2,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "green"},
+                {"value": 1, "color": "yellow"},
+                {"value": 2, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Realtime Optimizer Execution Time",
+        "type": "timeseries",
+        "gridPos": {"x": 18, "y": 12, "w": 6, "h": 6},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(realtime_optimizer_execution_time_seconds_bucket[5m]))",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "s",
+            "decimals": 2
+          }
+        }
+      }
+    ],
+    "schemaVersion": 38,
+    "version": 1
+  }
+}
+

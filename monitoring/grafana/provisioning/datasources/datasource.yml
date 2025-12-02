@@ -1,0 +1,22 @@
+# datasources/datasource.yml
+# Configuration automatique de la datasource Prometheus dans Grafana
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      httpMethod: POST
+      timeInterval: "15s"
+      queryTimeout: "60s"
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: jaeger
+          urlDisplayLabel: "View in Jaeger"
+    version: 1
+

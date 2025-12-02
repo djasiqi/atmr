@@ -1,0 +1,204 @@
+# alertmanager.yml
+# Configuration Alertmanager production pour ATMR
+
+global:
+  resolve_timeout: 5m
+  # Slack webhook (optionnel, à configurer)
+  # slack_api_url: '${SLACK_WEBHOOK_URL}'
+  
+  # Email SMTP (optionnel, à configurer)
+  # smtp_smarthost: '${SMTP_HOST}:587'
+  # smtp_from: '${ALERTMANAGER_FROM_EMAIL}'
+  # smtp_auth_username: '${SMTP_USERNAME}'
+  # smtp_auth_password: '${SMTP_PASSWORD}'
+  # smtp_require_tls: true
+
+# Templates pour notifications personnalisées
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Routes d'alertes par criticité
+route:
+  receiver: 'default-receiver'
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+  
+  routes:
+    # Alertes critiques → PagerDuty / Slack critical
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      continue: true
+      group_wait: 0s
+      repeat_interval: 1h
+    
+    # Alertes WebSocket critiques → Notification immédiate
+    - match:
+        component: websocket
+        severity: critical
+      receiver: 'websocket-critical'
+      group_wait: 0s
+      repeat_interval: 30m
+    
+    # Alertes OSRM critiques → Notification immédiate
+    - match:
+        component: osrm
+        severity: critical
+      receiver: 'osrm-critical'
+      group_wait: 0s
+      repeat_interval: 1h
+    
+    # Alertes Dispatch critiques → Notification immédiate
+    - match:
+        component: dispatch
+        severity: critical
+      receiver: 'dispatch-critical'
+      group_wait: 0s
+      repeat_interval: 1h
+    
+    # Alertes infrastructure critiques → Notification immédiate
+    - match:
+        component: infrastructure
+        severity: critical
+      receiver: 'infrastructure-critical'
+      group_wait: 0s
+      repeat_interval: 1h
+    
+    # Alertes database critiques → Notification immédiate
+    - match:
+        component: database
+        severity: critical
+      receiver: 'database-critical'
+      group_wait: 0s
+      repeat_interval: 1h
+    
+    # Alertes warning → Slack warning channel
+    - match:
+        severity: warning
+      receiver: 'warning-alerts'
+      group_wait: 30s
+      repeat_interval: 6h
+
+# Inhibition rules (supprimer alertes redondantes)
+inhibit_rules:
+  # Si PostgreSQL est down, supprimer les alertes de requêtes lentes
+  - source_match:
+      alertname: PostgreSQLDown
+    target_match:
+      component: database
+    equal: ['instance']
+  
+  # Si Redis est down, supprimer les alertes de cache
+  - source_match:
+      alertname: RedisDown
+    target_match:
+      component: cache
+    equal: ['instance']
+  
+  # Si le backend est down, supprimer les alertes applicatives
+  - source_match:
+      alertname: BackendDown
+    target_match:
+      service: atmr-backend
+    equal: ['instance']
+
+# Receivers (destinations des alertes)
+receivers:
+  # Receiver par défaut (silencieux en production, log uniquement)
+  - name: 'default-receiver'
+    webhook_configs:
+      - url: 'http://localhost:5000/api/v1/alerts/webhook'
+        send_resolved: true
+
+  # Alertes critiques → Slack + Email
+  - name: 'critical-alerts'
+    # Slack (décommenter et configurer)
+    # slack_configs:
+    #   - api_url: '${SLACK_WEBHOOK_URL}'
+    #     channel: '#atmr-alerts-critical'
+    #     title: '🚨 ATMR Critical Alert'
+    #     text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+    #     send_resolved: true
+    
+    # Email (décommenter et configurer)
+    # email_configs:
+    #   - to: '${ALERT_EMAIL_TO}'
+    #     from: '${ALERTMANAGER_FROM_EMAIL}'
+    #     headers:
+    #       Subject: '🚨 ATMR Critical Alert: {{ .GroupLabels.alertname }}'
+    #     html: '{{ range .Alerts }}<h2>{{ .Annotations.summary }}</h2><p>{{ .Annotations.description }}</p>{{ end }}'
+    #     send_resolved: true
+    
+    # Webhook pour intégration custom
+    webhook_configs:
+      - url: 'http://backend:5000/api/v1/alerts/webhook'
+        send_resolved: true
+
+  # WebSocket critiques
+  - name: 'websocket-critical'
+    webhook_configs:
+      - url: 'http://backend:5000/api/v1/alerts/webhook'
+        send_resolved: true
+    # slack_configs:
+    #   - api_url: '${SLACK_WEBHOOK_URL}'
+    #     channel: '#atmr-websocket'
+    #     title: '🔌 WebSocket Critical'
+    #     send_resolved: true
+
+  # OSRM critiques
+  - name: 'osrm-critical'
+    webhook_configs:
+      - url: 'http://backend:5000/api/v1/alerts/webhook'
+        send_resolved: true
+    # slack_configs:
+    #   - api_url: '${SLACK_WEBHOOK_URL}'
+    #     channel: '#atmr-osrm'
+    #     title: '🗺️ OSRM Critical'
+    #     send_resolved: true
+
+  # Dispatch critiques
+  - name: 'dispatch-critical'
+    webhook_configs:
+      - url: 'http://backend:5000/api/v1/alerts/webhook'
+        send_resolved: true
+    # slack_configs:
+    #   - api_url: '${SLACK_WEBHOOK_URL}'
+    #     channel: '#atmr-dispatch'
+    #     title: '🚗 Dispatch Critical'
+    #     send_resolved: true
+
+  # Infrastructure critiques
+  - name: 'infrastructure-critical'
+    webhook_configs:
+      - url: 'http://backend:5000/api/v1/alerts/webhook'
+        send_resolved: true
+    # slack_configs:
+    #   - api_url: '${SLACK_WEBHOOK_URL}'
+    #     channel: '#atmr-infrastructure'
+    #     title: '🖥️ Infrastructure Critical'
+    #     send_resolved: true
+
+  # Database critiques
+  - name: 'database-critical'
+    webhook_configs:
+      - url: 'http://backend:5000/api/v1/alerts/webhook'
+        send_resolved: true
+    # slack_configs:
+    #   - api_url: '${SLACK_WEBHOOK_URL}'
+    #     channel: '#atmr-database'
+    #     title: '🗄️ Database Critical'
+    #     send_resolved: true
+
+  # Alertes warning
+  - name: 'warning-alerts'
+    webhook_configs:
+      - url: 'http://backend:5000/api/v1/alerts/webhook'
+        send_resolved: true
+    # slack_configs:
+    #   - api_url: '${SLACK_WEBHOOK_URL}'
+    #     channel: '#atmr-alerts-warning'
+    #     title: '⚠️ ATMR Warning'
+    #     send_resolved: true
+
