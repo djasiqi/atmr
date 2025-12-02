@@ -88,6 +88,51 @@
   background-color: var(--bg-hover);
 }
 
+/* ✅ Mise en évidence des lignes avec retard */
+.rowDelayed {
+  border-left: 4px solid #dc3545;
+  background-color: rgba(220, 53, 69, 0.08);
+}
+
+.rowDelayed:hover {
+  background-color: rgba(220, 53, 69, 0.12);
+}
+
+.rowSlightDelay {
+  border-left: 4px solid #ffc107;
+  background-color: rgba(255, 193, 7, 0.08);
+}
+
+.rowSlightDelay:hover {
+  background-color: rgba(255, 193, 7, 0.12);
+}
+
+/* ✅ Badge de retard à côté du nom du client */
+.delayBadge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  background-color: #dc3545;
+  color: white;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ✅ Indicateur de retard dans la colonne Statut */
+.delayIndicator {
+  margin-top: 4px;
+  padding: 4px 8px;
+  background-color: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 4px;
+  color: #856404;
+  font-size: 0.8rem;
+  font-weight: 600;
+  display: inline-block;
+}
+
 .actionsCell {
   text-align: right;
   white-space: nowrap;
