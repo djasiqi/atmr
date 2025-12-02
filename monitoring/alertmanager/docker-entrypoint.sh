@@ -38,7 +38,42 @@ if command -v envsubst >/dev/null 2>&1; then
   if [ -z "$SLACK_WEBHOOK_URL" ] || [ -z "$(echo "$SLACK_WEBHOOK_URL" | tr -d '[:space:]')" ]; then
     echo "⚠️  SLACK_WEBHOOK_URL vide, suppression des lignes Slack dans la config..."
     sed -i '/^[[:space:]]*slack_api_url:/d' "$CONFIG_DST"
-    sed -i '/^[[:space:]]*slack_configs:/,/^[[:space:]]*[a-zA-Z0-9_]\+:/d' "$CONFIG_DST"
+    # Utiliser awk dans un fichier temporaire pour éviter les problèmes d'échappement
+    cat > /tmp/remove_slack.awk << 'AWKEOF'
+BEGIN { in_slack = 0; slack_indent = 0 }
+/^[[:space:]]*slack_configs:/ {
+  in_slack = 1
+  slack_indent = 0
+  pos = 1
+  while (pos <= length($0) && (substr($0, pos, 1) == " " || substr($0, pos, 1) == "\t")) {
+    slack_indent++
+    pos++
+  }
+  next
+}
+in_slack == 1 {
+  current_indent = 0
+  pos = 1
+  while (pos <= length($0) && (substr($0, pos, 1) == " " || substr($0, pos, 1) == "\t")) {
+    current_indent++
+    pos++
+  }
+  if (/^[[:space:]]*email_configs:/ && current_indent <= slack_indent) {
+    in_slack = 0
+    print
+    next
+  }
+  if (current_indent <= slack_indent && length($0) > 0 && !/^[[:space:]]*$/) {
+    in_slack = 0
+    print
+    next
+  }
+  next
+}
+{ print }
+AWKEOF
+    awk -f /tmp/remove_slack.awk "$CONFIG_DST" > "$CONFIG_DST.tmp" && mv "$CONFIG_DST.tmp" "$CONFIG_DST"
+    rm -f /tmp/remove_slack.awk
   fi
 else
   echo "⚠️  envsubst non disponible, utilisation de sed simple..."
@@ -61,8 +96,44 @@ else
     echo "⚠️  SLACK_WEBHOOK_URL vide, suppression des lignes Slack dans la config..."
     # 1) supprimer slack_api_url dans global
     sed -i '/^[[:space:]]*slack_api_url:/d' "$CONFIG_DST"
-    # 2) supprimer blocs slack_configs (range sed simple)
-    sed -i '/^[[:space:]]*slack_configs:/,/^[[:space:]]*[a-zA-Z0-9_]\+:/d' "$CONFIG_DST"
+    # 2) supprimer blocs slack_configs : supprimer la ligne slack_configs: et toutes les lignes suivantes indentées
+    # jusqu'à ce qu'on trouve email_configs: ou une ligne non-indentée
+    # Utiliser un script awk dans un fichier temporaire pour éviter les problèmes d'échappement
+    cat > /tmp/remove_slack.awk << 'AWKEOF'
+BEGIN { in_slack = 0; slack_indent = 0 }
+/^[[:space:]]*slack_configs:/ {
+  in_slack = 1
+  slack_indent = 0
+  pos = 1
+  while (pos <= length($0) && (substr($0, pos, 1) == " " || substr($0, pos, 1) == "\t")) {
+    slack_indent++
+    pos++
+  }
+  next
+}
+in_slack == 1 {
+  current_indent = 0
+  pos = 1
+  while (pos <= length($0) && (substr($0, pos, 1) == " " || substr($0, pos, 1) == "\t")) {
+    current_indent++
+    pos++
+  }
+  if (/^[[:space:]]*email_configs:/ && current_indent <= slack_indent) {
+    in_slack = 0
+    print
+    next
+  }
+  if (current_indent <= slack_indent && length($0) > 0 && !/^[[:space:]]*$/) {
+    in_slack = 0
+    print
+    next
+  }
+  next
+}
+{ print }
+AWKEOF
+    awk -f /tmp/remove_slack.awk "$CONFIG_DST" > "$CONFIG_DST.tmp" && mv "$CONFIG_DST.tmp" "$CONFIG_DST"
+    rm -f /tmp/remove_slack.awk
   fi
 fi
 
