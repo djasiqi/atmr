@@ -82,16 +82,20 @@ fi
 
 echo "✅ Binaire Alertmanager trouvé: $ALERTMANAGER_BIN"
 
-# Valider la configuration avant de lancer Alertmanager
+# Valider la configuration avant de lancer Alertmanager (si --check-config est supporté)
+# Note: Certaines versions d'Alertmanager ne supportent pas --check-config
 echo "🔍 Validation de la configuration..."
-"$ALERTMANAGER_BIN" --config.file="$CONFIG_FILE" --storage.path=/alertmanager --check-config
-
-if [ $? -ne 0 ]; then
-  echo "❌ Erreur de validation de la configuration Alertmanager"
-  exit 1
+if "$ALERTMANAGER_BIN" --help 2>&1 | grep -q "check-config"; then
+  if ! "$ALERTMANAGER_BIN" --config.file="$CONFIG_FILE" --storage.path=/alertmanager --check-config; then
+    echo "❌ Erreur de validation de la configuration Alertmanager"
+    exit 1
+  fi
+  echo "✅ Configuration valide"
+else
+  echo "⚠️  --check-config non supporté par cette version, démarrage direct..."
 fi
 
-echo "✅ Configuration valide, démarrage d'Alertmanager..."
+echo "✅ Démarrage d'Alertmanager..."
 
 # Remplacer --config.file dans les arguments et lancer Alertmanager
 exec "$ALERTMANAGER_BIN" --config.file="$CONFIG_FILE" --storage.path=/alertmanager --web.external-url="${ALERTMANAGER_EXTERNAL_URL:-http://localhost:9093}"
