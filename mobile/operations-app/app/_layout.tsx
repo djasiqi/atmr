@@ -15,6 +15,10 @@ import {
   startAdaptiveLocationTracking,
   stopAdaptiveLocationTracking,
 } from "@/services/locationTracker";
+// Version check - gestion des mises à jour obligatoires/recommandées
+import { VersionProvider, useVersion } from "@/contexts/VersionContext";
+import { UpdateRequiredScreen } from "@/components/version/UpdateRequiredScreen";
+import { UpdateRecommendedModal } from "@/components/version/UpdateRecommendedModal";
 
 // ✅ Enregistrer la tâche de localisation en arrière-plan (uniquement si le module natif est disponible)
 // Note: expo-task-manager nécessite un rebuild natif. En développement avec Expo Go, on skip.
@@ -40,9 +44,11 @@ Sentry.init({
 
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <RootNav />
-    </AuthProvider>
+    <VersionProvider>
+      <AuthProvider>
+        <RootNav />
+      </AuthProvider>
+    </VersionProvider>
   );
 }
 
@@ -57,9 +63,18 @@ function RootNav() {
   } = useAuth();
   const userId = driver?.id ?? null;
 
+  // Version check - récupération du statut de mise à jour
+  const { status: updateStatus, isLoading: versionLoading } = useVersion();
+
   const segments = useSegments();
   const router = useRouter();
   const registeringRef = useRef(false);
+
+  // Si une mise à jour est REQUIRED, afficher l'écran bloquant
+  // (avant même l'authentification)
+  if (updateStatus === "UPDATE_REQUIRED") {
+    return <UpdateRequiredScreen />;
+  }
 
   // 🔐 Redirections selon l’état d’auth
   useEffect(() => {
@@ -232,5 +247,11 @@ function RootNav() {
     };
   }, [driver, isDriverAuthenticated, loading]);
 
-  return <Slot />;
+  return (
+    <>
+      <Slot />
+      {/* Modal de mise à jour recommandée (non bloquante) */}
+      {updateStatus === "UPDATE_RECOMMENDED" && <UpdateRecommendedModal />}
+    </>
+  );
 }
