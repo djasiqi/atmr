@@ -72,30 +72,35 @@ if [ -f "$CONFIG_SRC" ]; then
     sed '/^[[:space:]]*slack_api_url:/d' "$CONFIG_DST" > "$CONFIG_DST.tmp" && mv "$CONFIG_DST.tmp" "$CONFIG_DST"
     
     # 2. Supprimer tous les blocs slack_configs des receivers
-    # Utiliser awk pour supprimer les blocs complets (de "slack_configs:" jusqu'à la prochaine section)
+    # Méthode simple : supprimer toutes les lignes contenant "slack_configs" et les lignes suivantes indentées
+    # jusqu'à ce qu'on trouve "email_configs:" ou une ligne non-indentée
+    # Utiliser un script awk simple sans caractères spéciaux problématiques
     awk '
-      BEGIN { in_slack = 0; slack_indent = 0 }
-      /^[[:space:]]*slack_configs:/ {
-        in_slack = 1
-        slack_indent = match($0, /[^[:space:]]/) - 1
-        next
-      }
-      in_slack == 1 {
-        # Calculer l'indentation de la ligne actuelle
-        if (match($0, /[^[:space:]]/) > 0) {
-          current_indent = match($0, /[^[:space:]]/) - 1
-          # Si on revient au même niveau d'indentation ou moins, on sort du bloc
-          if (current_indent <= slack_indent && !/^[[:space:]]*$/) {
-            in_slack = 0
-            print
-          }
-          # Sinon, on ignore la ligne (elle fait partie du bloc slack_configs)
-        } else {
-          # Ligne vide, on l'ignore aussi
+      BEGIN { skip = 0; indent_level = 0 }
+      /slack_configs:/ {
+        skip = 1
+        # Compter les espaces au début de la ligne
+        indent_level = 0
+        while (substr($0, indent_level + 1, 1) == " " || substr($0, indent_level + 1, 1) == "\t") {
+          indent_level++
         }
         next
       }
-      in_slack == 0 {
+      skip == 1 {
+        # Compter les espaces de la ligne actuelle
+        current_indent = 0
+        while (substr($0, current_indent + 1, 1) == " " || substr($0, current_indent + 1, 1) == "\t") {
+          current_indent++
+        }
+        # Si on revient au même niveau ou moins ET que ce n'est pas une ligne vide, on sort du bloc
+        if (length($0) > 0 && current_indent <= indent_level) {
+          skip = 0
+          print
+        }
+        # Sinon, on ignore la ligne (elle fait partie du bloc slack_configs)
+        next
+      }
+      skip == 0 {
         print
       }
     ' "$CONFIG_DST" > "$CONFIG_DST.tmp" && mv "$CONFIG_DST.tmp" "$CONFIG_DST"
@@ -106,24 +111,29 @@ if [ -f "$CONFIG_SRC" ]; then
     if grep -qE "^[[:space:]]*slack_api_url:[[:space:]]*(''|\"\")" "$CONFIG_DST"; then
       echo "⚠️  SLACK_WEBHOOK_URL est vide après substitution, suppression complète de la configuration Slack..."
       sed '/^[[:space:]]*slack_api_url:/d' "$CONFIG_DST" > "$CONFIG_DST.tmp" && mv "$CONFIG_DST.tmp" "$CONFIG_DST"
+      # Utiliser la même méthode awk que ci-dessus
       awk '
-        BEGIN { in_slack = 0; slack_indent = 0 }
-        /^[[:space:]]*slack_configs:/ {
-          in_slack = 1
-          slack_indent = match($0, /[^[:space:]]/) - 1
-          next
-        }
-        in_slack == 1 {
-          if (match($0, /[^[:space:]]/) > 0) {
-            current_indent = match($0, /[^[:space:]]/) - 1
-            if (current_indent <= slack_indent && !/^[[:space:]]*$/) {
-              in_slack = 0
-              print
-            }
+        BEGIN { skip = 0; indent_level = 0 }
+        /slack_configs:/ {
+          skip = 1
+          indent_level = 0
+          while (substr($0, indent_level + 1, 1) == " " || substr($0, indent_level + 1, 1) == "\t") {
+            indent_level++
           }
           next
         }
-        in_slack == 0 {
+        skip == 1 {
+          current_indent = 0
+          while (substr($0, current_indent + 1, 1) == " " || substr($0, current_indent + 1, 1) == "\t") {
+            current_indent++
+          }
+          if (length($0) > 0 && current_indent <= indent_level) {
+            skip = 0
+            print
+          }
+          next
+        }
+        skip == 0 {
           print
         }
       ' "$CONFIG_DST" > "$CONFIG_DST.tmp" && mv "$CONFIG_DST.tmp" "$CONFIG_DST"
