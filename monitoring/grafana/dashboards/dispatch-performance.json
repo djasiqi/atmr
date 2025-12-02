@@ -1,10 +1,17 @@
 {
-  "dashboard": {
-    "title": "Dispatch Performance - ATMR",
-    "tags": ["dispatch", "vrptw", "optimization", "atmr"],
-    "timezone": "browser",
-    "refresh": "30s",
-    "panels": [
+  "id": null,
+  "uid": "dispatch-performance-atmr",
+  "title": "Dispatch Performance - ATMR",
+  "tags": ["dispatch", "vrptw", "optimization", "atmr"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "editable": true,
+  "graphTooltip": 0,
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "panels": [
       {
         "id": 1,
         "title": "Assignations Créées par Minute",
@@ -195,9 +202,8 @@
           }
         }
       }
-    ],
-    "schemaVersion": 38,
-    "version": 1
-  }
+  ],
+  "schemaVersion": 38,
+  "version": 1
 }
 

@@ -30,6 +30,19 @@ services:
       - monitoring
       - atmr-network
       - internal
+      - traefik-network
+    # ✅ Labels Traefik pour routage automatique
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(`prometheus.lirie.ch`)"
+      - "traefik.http.routers.prometheus.entrypoints=websecure"
+      - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+      # ⚠️ SÉCURITÉ: Authentification basique pour Prometheus (optionnel mais recommandé)
+      # Pour activer, générer un hash avec: echo $(htpasswd -nb admin password) | sed -e s/\\$/\\$\\$/g
+      # Puis décommenter les lignes suivantes:
+      # - "traefik.http.middlewares.prometheus-auth.basicauth.users=admin:$$apr1$$..."
+      # - "traefik.http.routers.prometheus.middlewares=prometheus-auth"
     healthcheck:
       test:
         [
@@ -104,17 +117,15 @@ services:
     networks:
       - monitoring
       - internal
-      # ✅ Réseau Traefik pour accès via reverse proxy (si Traefik est utilisé)
-      # Décommenter si Traefik est configuré:
-      # - traefik-network
-    # ✅ Labels Traefik pour routage automatique (si Traefik est utilisé)
-    # Décommenter et adapter si Traefik est configuré:
-    # labels:
-    #   - "traefik.enable=true"
-    #   - "traefik.http.routers.grafana.rule=Host(`grafana.lirie.ch`)"
-    #   - "traefik.http.routers.grafana.entrypoints=websecure"
-    #   - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
-    #   - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+      # ✅ Réseau Traefik pour accès via reverse proxy
+      - traefik-network
+    # ✅ Labels Traefik pour routage automatique
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.lirie.ch`)"
+      - "traefik.http.routers.grafana.entrypoints=websecure"
+      - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
     depends_on:
       - prometheus
     healthcheck:
@@ -164,8 +175,21 @@ services:
     networks:
       - monitoring
       - internal
+      - traefik-network
     depends_on:
       - prometheus
+    # ✅ Labels Traefik pour routage automatique
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.alertmanager.rule=Host(`alertmanager.lirie.ch`)"
+      - "traefik.http.routers.alertmanager.entrypoints=websecure"
+      - "traefik.http.routers.alertmanager.tls.certresolver=letsencrypt"
+      - "traefik.http.services.alertmanager.loadbalancer.server.port=9093"
+      # ⚠️ SÉCURITÉ: Authentification basique pour Alertmanager (optionnel mais recommandé)
+      # Pour activer, générer un hash avec: echo $(htpasswd -nb admin password) | sed -e s/\\$/\\$\\$/g
+      # Puis décommenter les lignes suivantes:
+      # - "traefik.http.middlewares.alertmanager-auth.basicauth.users=admin:$$apr1$$..."
+      # - "traefik.http.routers.alertmanager.middlewares=alertmanager-auth"
     healthcheck:
       test:
         [
@@ -361,4 +385,7 @@ networks:
   atmr-network:
     external: true
     name: atmr-network # Réseau principal ATMR (défini dans docker-compose.production.yml)
+  traefik-network:
+    external: true
+    name: traefik_proxy # Réseau Traefik (doit exister sur le serveur)
 

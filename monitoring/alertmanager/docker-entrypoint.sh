@@ -17,6 +17,20 @@ CONFIG_DST="/tmp/alertmanager.yml"
 : "${ALERT_EMAIL_TO:=}"
 : "${ALERTMANAGER_EXTERNAL_URL:=http://localhost:9093}"
 
+# Déterminer si TLS est requis selon le port
+# Port 465 = SSL implicite (non supporté directement par Alertmanager, utiliser 587)
+# Port 587 = STARTTLS (recommandé)
+# Port 25 = Pas de TLS (non recommandé)
+if [ "$SMTP_PORT" = "465" ]; then
+  echo "⚠️  Port 465 détecté. Alertmanager supporte mieux le port 587 avec STARTTLS."
+  echo "⚠️  Considérez utiliser le port 587 pour GoDaddy."
+  SMTP_REQUIRE_TLS="true"
+elif [ "$SMTP_PORT" = "587" ]; then
+  SMTP_REQUIRE_TLS="true"
+else
+  SMTP_REQUIRE_TLS="false"
+fi
+
 if [ ! -f "$CONFIG_SRC" ]; then
   echo "❌ Fichier de configuration non trouvé: $CONFIG_SRC" >&2
   exit 1
@@ -30,8 +44,8 @@ cp "$CONFIG_SRC" "$CONFIG_DST"
 # Si envsubst est dispo, on l'utilise
 if command -v envsubst >/dev/null 2>&1; then
   echo "✅ Utilisation de envsubst pour la substitution..."
-  export SLACK_WEBHOOK_URL SMTP_HOST SMTP_PORT ALERTMANAGER_FROM_EMAIL SMTP_USERNAME SMTP_PASSWORD ALERT_EMAIL_TO ALERTMANAGER_EXTERNAL_URL
-  envsubst '${SLACK_WEBHOOK_URL} ${SMTP_HOST} ${SMTP_PORT} ${ALERTMANAGER_FROM_EMAIL} ${SMTP_USERNAME} ${SMTP_PASSWORD} ${ALERT_EMAIL_TO} ${ALERTMANAGER_EXTERNAL_URL}' \
+  export SLACK_WEBHOOK_URL SMTP_HOST SMTP_PORT ALERTMANAGER_FROM_EMAIL SMTP_USERNAME SMTP_PASSWORD ALERT_EMAIL_TO ALERTMANAGER_EXTERNAL_URL SMTP_REQUIRE_TLS
+  envsubst '${SLACK_WEBHOOK_URL} ${SMTP_HOST} ${SMTP_PORT} ${ALERTMANAGER_FROM_EMAIL} ${SMTP_USERNAME} ${SMTP_PASSWORD} ${ALERT_EMAIL_TO} ${ALERTMANAGER_EXTERNAL_URL} ${SMTP_REQUIRE_TLS}' \
     < "$CONFIG_SRC" > "$CONFIG_DST"
   
   # Post-traitement : si SLACK_WEBHOOK_URL est vide, supprimer la config Slack
@@ -87,6 +101,7 @@ else
     -e "s|\${SMTP_PASSWORD}|$SMTP_PASSWORD|g" \
     -e "s|\${ALERT_EMAIL_TO}|$ALERT_EMAIL_TO|g" \
     -e "s|\${ALERTMANAGER_EXTERNAL_URL}|$ALERTMANAGER_EXTERNAL_URL|g" \
+    -e "s|\${SMTP_REQUIRE_TLS}|$SMTP_REQUIRE_TLS|g" \
     "$CONFIG_DST"
 
   # Gestion de SLACK_WEBHOOK_URL :
