@@ -46,11 +46,21 @@ if [ -f "$CONFIG_SRC" ]; then
   fi
   
   # Post-traitement : supprimer les lignes avec des valeurs vides qui causent des erreurs
-  # Si SLACK_WEBHOOK_URL est vide, commenter la ligne slack_api_url
-  if [ -z "$SLACK_WEBHOOK_URL" ]; then
-    echo "⚠️  SLACK_WEBHOOK_URL non défini, désactivation de Slack..."
-    # Utiliser sed avec fichier temporaire (portable sur toutes les distributions)
-    sed 's/^  slack_api_url:.*$/  # slack_api_url: "" # Désactivé (SLACK_WEBHOOK_URL non défini)/' "$CONFIG_DST" > "$CONFIG_DST.tmp" && mv "$CONFIG_DST.tmp" "$CONFIG_DST"
+  # Si SLACK_WEBHOOK_URL est vide ou contient seulement des espaces, supprimer complètement la ligne slack_api_url
+  # Vérifier aussi si la valeur après substitution est vide (chaîne vide ou seulement des espaces)
+  if [ -z "$SLACK_WEBHOOK_URL" ] || [ -z "$(echo "$SLACK_WEBHOOK_URL" | tr -d '[:space:]')" ]; then
+    echo "⚠️  SLACK_WEBHOOK_URL non défini ou vide, suppression de la configuration Slack..."
+    # Supprimer complètement la ligne slack_api_url (même si elle contient une chaîne vide après substitution)
+    sed '/^  slack_api_url:/d' "$CONFIG_DST" > "$CONFIG_DST.tmp" && mv "$CONFIG_DST.tmp" "$CONFIG_DST"
+    # Supprimer aussi les lignes vides qui pourraient rester
+    sed '/^[[:space:]]*$/d' "$CONFIG_DST" > "$CONFIG_DST.tmp" && mv "$CONFIG_DST.tmp" "$CONFIG_DST"
+  else
+    # Vérifier si après substitution, la valeur est vide (chaîne vide entre guillemets)
+    # Si c'est le cas, supprimer la ligne
+    if grep -q "^  slack_api_url: ''$" "$CONFIG_DST" || grep -q '^  slack_api_url: ""$' "$CONFIG_DST"; then
+      echo "⚠️  SLACK_WEBHOOK_URL est vide après substitution, suppression de la configuration Slack..."
+      sed '/^  slack_api_url:/d' "$CONFIG_DST" > "$CONFIG_DST.tmp" && mv "$CONFIG_DST.tmp" "$CONFIG_DST"
+    fi
   fi
   
   # Si SMTP_HOST est localhost (valeur par défaut), s'assurer que smtp_smarthost est correct
