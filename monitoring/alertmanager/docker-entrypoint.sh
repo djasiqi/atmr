@@ -19,17 +19,34 @@ CONFIG_SRC="/etc/alertmanager/alertmanager.yml"
 CONFIG_DST="/tmp/alertmanager.yml"
 
 # Fonction de substitution avec sed (fallback si envsubst n'est pas disponible)
+# Si SLACK_WEBHOOK_URL est vide, supprimer la ligne au lieu de la substituer
 substitute_with_sed() {
   local file="$1"
-  sed -e "s|\${SLACK_WEBHOOK_URL}|${SLACK_WEBHOOK_URL}|g" \
-      -e "s|\${SMTP_HOST}|${SMTP_HOST}|g" \
-      -e "s|\${SMTP_PORT}|${SMTP_PORT}|g" \
-      -e "s|\${ALERTMANAGER_FROM_EMAIL}|${ALERTMANAGER_FROM_EMAIL}|g" \
-      -e "s|\${SMTP_USERNAME}|${SMTP_USERNAME}|g" \
-      -e "s|\${SMTP_PASSWORD}|${SMTP_PASSWORD}|g" \
-      -e "s|\${ALERT_EMAIL_TO}|${ALERT_EMAIL_TO}|g" \
-      -e "s|\${ALERTMANAGER_EXTERNAL_URL}|${ALERTMANAGER_EXTERNAL_URL}|g" \
-      "$file"
+  local output=""
+  
+  # Si SLACK_WEBHOOK_URL est vide, supprimer la ligne slack_api_url directement
+  if [ -z "$SLACK_WEBHOOK_URL" ] || [ -z "$(echo "$SLACK_WEBHOOK_URL" | tr -d '[:space:]')" ]; then
+    # Supprimer la ligne slack_api_url avant la substitution
+    sed '/^[[:space:]]*slack_api_url:/d' "$file" | \
+    sed -e "s|\${SMTP_HOST}|${SMTP_HOST}|g" \
+        -e "s|\${SMTP_PORT}|${SMTP_PORT}|g" \
+        -e "s|\${ALERTMANAGER_FROM_EMAIL}|${ALERTMANAGER_FROM_EMAIL}|g" \
+        -e "s|\${SMTP_USERNAME}|${SMTP_USERNAME}|g" \
+        -e "s|\${SMTP_PASSWORD}|${SMTP_PASSWORD}|g" \
+        -e "s|\${ALERT_EMAIL_TO}|${ALERT_EMAIL_TO}|g" \
+        -e "s|\${ALERTMANAGER_EXTERNAL_URL}|${ALERTMANAGER_EXTERNAL_URL}|g"
+  else
+    # Substitution normale avec toutes les variables
+    sed -e "s|\${SLACK_WEBHOOK_URL}|${SLACK_WEBHOOK_URL}|g" \
+        -e "s|\${SMTP_HOST}|${SMTP_HOST}|g" \
+        -e "s|\${SMTP_PORT}|${SMTP_PORT}|g" \
+        -e "s|\${ALERTMANAGER_FROM_EMAIL}|${ALERTMANAGER_FROM_EMAIL}|g" \
+        -e "s|\${SMTP_USERNAME}|${SMTP_USERNAME}|g" \
+        -e "s|\${SMTP_PASSWORD}|${SMTP_PASSWORD}|g" \
+        -e "s|\${ALERT_EMAIL_TO}|${ALERT_EMAIL_TO}|g" \
+        -e "s|\${ALERTMANAGER_EXTERNAL_URL}|${ALERTMANAGER_EXTERNAL_URL}|g" \
+        "$file"
+  fi
 }
 
 # Si le fichier source existe, faire la substitution
@@ -46,21 +63,36 @@ if [ -f "$CONFIG_SRC" ]; then
   fi
   
   # Post-traitement : supprimer les lignes avec des valeurs vides qui causent des erreurs
-  # Si SLACK_WEBHOOK_URL est vide ou contient seulement des espaces, supprimer complètement la ligne slack_api_url
-  # Vérifier aussi si la valeur après substitution est vide (chaîne vide ou seulement des espaces)
+  # Si SLACK_WEBHOOK_URL est vide, supprimer complètement la ligne slack_api_url
+  # Vérifier AVANT et APRÈS la substitution pour être sûr
   if [ -z "$SLACK_WEBHOOK_URL" ] || [ -z "$(echo "$SLACK_WEBHOOK_URL" | tr -d '[:space:]')" ]; then
     echo "⚠️  SLACK_WEBHOOK_URL non défini ou vide, suppression de la configuration Slack..."
-    # Supprimer complètement la ligne slack_api_url (même si elle contient une chaîne vide après substitution)
-    sed '/^  slack_api_url:/d' "$CONFIG_DST" > "$CONFIG_DST.tmp" && mv "$CONFIG_DST.tmp" "$CONFIG_DST"
-    # Supprimer aussi les lignes vides qui pourraient rester
-    sed '/^[[:space:]]*$/d' "$CONFIG_DST" > "$CONFIG_DST.tmp" && mv "$CONFIG_DST.tmp" "$CONFIG_DST"
-  else
-    # Vérifier si après substitution, la valeur est vide (chaîne vide entre guillemets)
-    # Si c'est le cas, supprimer la ligne
-    if grep -q "^  slack_api_url: ''$" "$CONFIG_DST" || grep -q '^  slack_api_url: ""$' "$CONFIG_DST"; then
+    # Supprimer la ligne slack_api_url (peu importe son contenu après substitution)
+    sed '/^[[:space:]]*slack_api_url:/d' "$CONFIG_DST" > "$CONFIG_DST.tmp" && mv "$CONFIG_DST.tmp" "$CONFIG_DST"
+  fi
+  
+  # Vérifier aussi après substitution si la valeur est vide (chaîne vide entre guillemets simples ou doubles)
+  # Cette vérification est nécessaire car sed peut avoir substitué une chaîne vide
+  if grep -qE "^[[:space:]]*slack_api_url:" "$CONFIG_DST"; then
+    # Vérifier si la valeur est vide
+    SLACK_LINE=$(grep "^[[:space:]]*slack_api_url:" "$CONFIG_DST")
+    if echo "$SLACK_LINE" | grep -qE "(''|\"\"|'[[:space:]]*'|\"[[:space:]]*\")"; then
       echo "⚠️  SLACK_WEBHOOK_URL est vide après substitution, suppression de la configuration Slack..."
-      sed '/^  slack_api_url:/d' "$CONFIG_DST" > "$CONFIG_DST.tmp" && mv "$CONFIG_DST.tmp" "$CONFIG_DST"
+      sed '/^[[:space:]]*slack_api_url:/d' "$CONFIG_DST" > "$CONFIG_DST.tmp" && mv "$CONFIG_DST.tmp" "$CONFIG_DST"
     fi
+  fi
+  
+  # Supprimer les lignes vides qui pourraient rester
+  sed '/^[[:space:]]*$/d' "$CONFIG_DST" > "$CONFIG_DST.tmp" && mv "$CONFIG_DST.tmp" "$CONFIG_DST"
+  
+  # Debug : vérifier que la ligne a bien été supprimée
+  if grep -qE "^[[:space:]]*slack_api_url:" "$CONFIG_DST"; then
+    echo "❌ ERREUR: La ligne slack_api_url est toujours présente après suppression!"
+    echo "Contenu de la ligne: $(grep 'slack_api_url:' "$CONFIG_DST")"
+    # Forcer la suppression
+    sed '/^[[:space:]]*slack_api_url:/d' "$CONFIG_DST" > "$CONFIG_DST.tmp" && mv "$CONFIG_DST.tmp" "$CONFIG_DST"
+  else
+    echo "✅ Ligne slack_api_url correctement supprimée"
   fi
   
   # Si SMTP_HOST est localhost (valeur par défaut), s'assurer que smtp_smarthost est correct
