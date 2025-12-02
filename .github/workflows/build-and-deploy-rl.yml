@@ -475,6 +475,17 @@ jobs:
                       rollback() {
                           echo "🔄 Rollback en cours..."
                           docker compose -f docker-compose.rl.yml down --remove-orphans || true
+                          
+                          # Forcer la suppression des conteneurs RL orphelins
+                          for container_name in "atmr-rl-worker" "atmr-optuna-dashboard" "atmr-rl-postgres" "atmr-rl-redis"; do
+                              docker rm -f "${container_name}" 2>/dev/null || true
+                          done
+                          
+                          # Supprimer les conteneurs RL par pattern
+                          docker ps -a --format '{{.Names}}' | grep -E "(rl-worker|optuna-dashboard|rl-postgres|rl-redis)" | while read -r container; do
+                              [ -n "${container}" ] && docker rm -f "${container}" 2>/dev/null || true
+                          done || true
+                          
                           echo "❌ Déploiement RL échoué, rollback effectué"
                           exit 1
                       }
@@ -633,7 +644,36 @@ jobs:
 
                       # Arrêter les conteneurs existants
                       echo "🔄 Arrêt des conteneurs RL existants..."
+                      
+                      # 1. Arrêter via docker-compose (si le fichier existe)
                       docker compose -f docker-compose.rl.yml down --remove-orphans || true
+                      
+                      # 2. Forcer la suppression des conteneurs RL par nom (pour gérer les conteneurs orphelins)
+                      echo "🧹 Nettoyage des conteneurs RL orphelins..."
+                      for container_name in "atmr-rl-worker" "atmr-optuna-dashboard" "atmr-rl-postgres" "atmr-rl-redis"; do
+                          if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}$"; then
+                              echo "  Suppression du conteneur ${container_name}..."
+                              docker rm -f "${container_name}" 2>/dev/null || true
+                          fi
+                      done
+                      
+                      # 3. Supprimer les conteneurs RL par pattern (pour gérer les variantes de nom)
+                      docker ps -a --format '{{.Names}}' | grep -E "(rl-worker|optuna-dashboard|rl-postgres|rl-redis)" | while read -r container; do
+                          if [ -n "${container}" ]; then
+                              echo "  Suppression du conteneur ${container}..."
+                              docker rm -f "${container}" 2>/dev/null || true
+                          fi
+                      done || true
+                      
+                      # 4. Nettoyer les réseaux RL orphelins
+                      docker network ls --format '{{.Name}}' | grep -E "(rl-network|rl_)" | while read -r network; do
+                          if [ -n "${network}" ]; then
+                              echo "  Suppression du réseau ${network}..."
+                              docker network rm "${network}" 2>/dev/null || true
+                          fi
+                      done || true
+                      
+                      echo "✅ Nettoyage terminé"
 
                       # Mettre à jour l'image dans docker-compose.rl.yml si nécessaire
                       # (l'image est déjà définie dans le fichier, mais on s'assure qu'elle utilise le bon tag)
