@@ -17,8 +17,12 @@ services:
       - "--web.console.templates=/usr/share/prometheus/consoles"
       - "--web.enable-lifecycle"
       - "--web.enable-admin-api"
-    ports:
-      - "9090:9090"
+    # ⚠️ SÉCURITÉ: Ne pas exposer le port publiquement en production
+    # Prometheus doit être accessible uniquement via réseau Docker interne
+    # Pour accès externe, utiliser Grafana ou un reverse proxy interne
+    # Pour développement local uniquement, décommenter la ligne suivante:
+    # ports:
+    #   - "9090:9090"
     volumes:
       - ./monitoring/prometheus:/etc/prometheus:ro
       - prometheus-data:/prometheus
@@ -54,19 +58,39 @@ services:
     image: grafana/grafana:10.2.0
     container_name: atmr-grafana
     restart: unless-stopped
-    ports:
-      - "3001:3000"
+    # ⚠️ SÉCURITÉ: Ne pas exposer le port publiquement en production
+    # Utiliser Traefik ou Nginx comme reverse proxy avec HTTPS
+    # Pour développement local uniquement, décommenter la ligne suivante:
+    # ports:
+    #   - "3001:3000"
     environment:
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      # ⚠️ SÉCURITÉ: Variables OBLIGATOIRES - pas de fallback admin/admin
+      # Définir GRAFANA_ADMIN_USER et GRAFANA_ADMIN_PASSWORD dans .env.production
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
       - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-http://localhost:3001}
+      # ⚠️ SÉCURITÉ: Root URL doit pointer vers l'URL publique (ex: https://grafana.lirie.ch)
+      # Définir GRAFANA_ROOT_URL dans .env.production
+      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL}
+      - GF_SERVER_PROTOCOL=https
+      - GF_SECURITY_COOKIE_SECURE=true
+      - GF_SECURITY_COOKIE_SAMESITE=strict
       - GF_INSTALL_PLUGINS=
       - GF_ALERTING_ENABLED=true
       - GF_ALERTING_EXECUTION_TIMEOUT_SECONDS=30
       - GF_ALERTING_EVALUATION_TIMEOUT_SECONDS=30
       - GF_LOG_LEVEL=info
       - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+      # ✅ OAuth Google - DÉSACTIVÉ pour le moment (utilisateur unique)
+      # Pour activer OAuth plus tard, décommenter et configurer les secrets GitHub :
+      # - GF_AUTH_GOOGLE_ENABLED=${GRAFANA_OAUTH_GOOGLE_ENABLED:-false}
+      # - GF_AUTH_GOOGLE_CLIENT_ID=${GRAFANA_OAUTH_GOOGLE_CLIENT_ID:-}
+      # - GF_AUTH_GOOGLE_CLIENT_SECRET=${GRAFANA_OAUTH_GOOGLE_CLIENT_SECRET:-}
+      # - GF_AUTH_GOOGLE_SCOPES=openid email profile
+      # - GF_AUTH_GOOGLE_ALLOWED_DOMAINS=${GRAFANA_OAUTH_GOOGLE_ALLOWED_DOMAINS:-}
+      # - GF_AUTH_GOOGLE_ALLOW_SIGN_UP=false
+      # Voir docs/MONITORING_GRAFANA_OAUTH.md pour la configuration complète
+      - GF_AUTH_ANONYMOUS_ENABLED=false
     volumes:
       - grafana-data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
@@ -74,6 +98,17 @@ services:
     networks:
       - monitoring
       - internal
+      # ✅ Réseau Traefik pour accès via reverse proxy (si Traefik est utilisé)
+      # Décommenter si Traefik est configuré:
+      # - traefik-network
+    # ✅ Labels Traefik pour routage automatique (si Traefik est utilisé)
+    # Décommenter et adapter si Traefik est configuré:
+    # labels:
+    #   - "traefik.enable=true"
+    #   - "traefik.http.routers.grafana.rule=Host(`grafana.lirie.ch`)"
+    #   - "traefik.http.routers.grafana.entrypoints=websecure"
+    #   - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+    #   - "traefik.http.services.grafana.loadbalancer.server.port=3000"
     depends_on:
       - prometheus
     healthcheck:
@@ -108,8 +143,12 @@ services:
       - "--config.file=/etc/alertmanager/alertmanager.yml"
       - "--storage.path=/alertmanager"
       - "--web.external-url=${ALERTMANAGER_EXTERNAL_URL:-http://localhost:9093}"
-    ports:
-      - "9093:9093"
+    # ⚠️ SÉCURITÉ: Ne pas exposer le port publiquement en production
+    # Alertmanager doit être accessible uniquement via réseau Docker interne
+    # Pour accès externe, utiliser un reverse proxy interne
+    # Pour développement local uniquement, décommenter la ligne suivante:
+    # ports:
+    #   - "9093:9093"
     volumes:
       - ./monitoring/alertmanager:/etc/alertmanager:ro
       - alertmanager-data:/alertmanager

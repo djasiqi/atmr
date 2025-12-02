@@ -244,6 +244,23 @@ jobs:
       SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
       PDF_BASE_URL: ${{ secrets.PDF_BASE_URL }}
       GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+      # ✅ Secrets Monitoring (Grafana + Alertmanager)
+      GRAFANA_ADMIN_USER: ${{ secrets.GRAFANA_ADMIN_USER }}
+      GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+      GRAFANA_ROOT_URL: ${{ secrets.GRAFANA_ROOT_URL }}
+      # ✅ OAuth Google - DÉSACTIVÉ pour le moment (utilisateur unique)
+      # Pour activer plus tard, décommenter et ajouter les secrets GitHub :
+      # GRAFANA_OAUTH_GOOGLE_ENABLED: ${{ secrets.GRAFANA_OAUTH_GOOGLE_ENABLED }}
+      # GRAFANA_OAUTH_GOOGLE_CLIENT_ID: ${{ secrets.GRAFANA_OAUTH_GOOGLE_CLIENT_ID }}
+      # GRAFANA_OAUTH_GOOGLE_CLIENT_SECRET: ${{ secrets.GRAFANA_OAUTH_GOOGLE_CLIENT_SECRET }}
+      # GRAFANA_OAUTH_GOOGLE_ALLOWED_DOMAINS: ${{ secrets.GRAFANA_OAUTH_GOOGLE_ALLOWED_DOMAINS }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      SMTP_HOST: ${{ secrets.SMTP_HOST }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      ALERTMANAGER_FROM_EMAIL: ${{ secrets.ALERTMANAGER_FROM_EMAIL }}
+      ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
 
     steps:
       - name: Checkout code
@@ -330,7 +347,7 @@ jobs:
           username: ${{ env.SSH_USER }}
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
-          source: "docker-compose.production.yml"
+          source: "docker-compose.production.yml,docker-compose.monitoring.yml"
           target: "/srv/atmr"
 
       - name: Copy smoke tests script to server
@@ -350,7 +367,7 @@ jobs:
           username: ${{ env.SSH_USER }}
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
-          envs: APP_ENCRYPTION_KEY_B64,SECRET_KEY,JWT_SECRET_KEY,POSTGRES_PASSWORD,POSTGRES_USER,POSTGRES_DB,REDIS_PASSWORD,REDIS_URL,MAIL_PASSWORD,SENTRY_DSN,PDF_BASE_URL,GOOGLE_MAPS_API_KEY,DOCKER_IMAGE,DOCKER_TAG,DATABASE_URL,SQLALCHEMY_DATABASE_URI
+          envs: APP_ENCRYPTION_KEY_B64,SECRET_KEY,JWT_SECRET_KEY,POSTGRES_PASSWORD,POSTGRES_USER,POSTGRES_DB,REDIS_PASSWORD,REDIS_URL,MAIL_PASSWORD,SENTRY_DSN,PDF_BASE_URL,GOOGLE_MAPS_API_KEY,DOCKER_IMAGE,DOCKER_TAG,DATABASE_URL,SQLALCHEMY_DATABASE_URI,GRAFANA_ADMIN_USER,GRAFANA_ADMIN_PASSWORD,GRAFANA_ROOT_URL,SLACK_WEBHOOK_URL,SMTP_HOST,SMTP_PORT,SMTP_USERNAME,SMTP_PASSWORD,ALERTMANAGER_FROM_EMAIL,ALERT_EMAIL_TO
           script: |
             cd /srv/atmr
             set -o errexit -o nounset -o pipefail
@@ -394,6 +411,23 @@ jobs:
             export GOOGLE_MAPS_API_KEY="${{ secrets.GOOGLE_MAPS_API_KEY }}"
             export DOCKER_IMAGE="${DOCKER_IMAGE}"
             export DOCKER_TAG="${DOCKER_TAG}"
+            # ✅ Variables Monitoring (Grafana + Alertmanager)
+            export GRAFANA_ADMIN_USER="${{ secrets.GRAFANA_ADMIN_USER }}"
+            export GRAFANA_ADMIN_PASSWORD="${{ secrets.GRAFANA_ADMIN_PASSWORD }}"
+            export GRAFANA_ROOT_URL="${{ secrets.GRAFANA_ROOT_URL }}"
+            # ✅ OAuth Google - DÉSACTIVÉ pour le moment (utilisateur unique)
+            # Pour activer plus tard, décommenter :
+            # export GRAFANA_OAUTH_GOOGLE_ENABLED="${{ secrets.GRAFANA_OAUTH_GOOGLE_ENABLED }}"
+            # export GRAFANA_OAUTH_GOOGLE_CLIENT_ID="${{ secrets.GRAFANA_OAUTH_GOOGLE_CLIENT_ID }}"
+            # export GRAFANA_OAUTH_GOOGLE_CLIENT_SECRET="${{ secrets.GRAFANA_OAUTH_GOOGLE_CLIENT_SECRET }}"
+            # export GRAFANA_OAUTH_GOOGLE_ALLOWED_DOMAINS="${{ secrets.GRAFANA_OAUTH_GOOGLE_ALLOWED_DOMAINS }}"
+            export SLACK_WEBHOOK_URL="${{ secrets.SLACK_WEBHOOK_URL }}"
+            export SMTP_HOST="${{ secrets.SMTP_HOST }}"
+            export SMTP_PORT="${{ secrets.SMTP_PORT }}"
+            export SMTP_USERNAME="${{ secrets.SMTP_USERNAME }}"
+            export SMTP_PASSWORD="${{ secrets.SMTP_PASSWORD }}"
+            export ALERTMANAGER_FROM_EMAIL="${{ secrets.ALERTMANAGER_FROM_EMAIL }}"
+            export ALERT_EMAIL_TO="${{ secrets.ALERT_EMAIL_TO }}"
 
             MISSING_SECRETS=()
             [ -z "${APP_ENCRYPTION_KEY_B64:-}" ] && MISSING_SECRETS+=("APP_ENCRYPTION_KEY_B64")
@@ -450,6 +484,23 @@ jobs:
               echo "PDF_BASE_URL=${PDF_BASE_URL:-}"
               echo "GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY:-}"
               echo "USE_GOOGLE_PLACES=${USE_GOOGLE_PLACES:-true}"
+              # ✅ Variables Monitoring (Grafana + Alertmanager)
+              echo "GRAFANA_ADMIN_USER=${GRAFANA_ADMIN_USER:-}"
+              echo "GRAFANA_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-}"
+              echo "GRAFANA_ROOT_URL=${GRAFANA_ROOT_URL:-}"
+              # ✅ OAuth Google - DÉSACTIVÉ pour le moment (utilisateur unique)
+              # Pour activer plus tard, décommenter :
+              # echo "GRAFANA_OAUTH_GOOGLE_ENABLED=${GRAFANA_OAUTH_GOOGLE_ENABLED:-false}"
+              # echo "GRAFANA_OAUTH_GOOGLE_CLIENT_ID=${GRAFANA_OAUTH_GOOGLE_CLIENT_ID:-}"
+              # echo "GRAFANA_OAUTH_GOOGLE_CLIENT_SECRET=${GRAFANA_OAUTH_GOOGLE_CLIENT_SECRET:-}"
+              # echo "GRAFANA_OAUTH_GOOGLE_ALLOWED_DOMAINS=${GRAFANA_OAUTH_GOOGLE_ALLOWED_DOMAINS:-}"
+              echo "SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}"
+              echo "SMTP_HOST=${SMTP_HOST:-}"
+              echo "SMTP_PORT=${SMTP_PORT:-587}"
+              echo "SMTP_USERNAME=${SMTP_USERNAME:-}"
+              echo "SMTP_PASSWORD=${SMTP_PASSWORD:-}"
+              echo "ALERTMANAGER_FROM_EMAIL=${ALERTMANAGER_FROM_EMAIL:-}"
+              echo "ALERT_EMAIL_TO=${ALERT_EMAIL_TO:-}"
             } > .env.production && chmod 600 .env.production
             cp .env.production .env && chmod 600 .env
             mkdir -p data/rl/shadow_mode data/ml data/rl data/ml/models && chmod -R 755 data && chown -R 999:999 data 2>/dev/null || true

@@ -1,0 +1,143 @@
+# recording_rules.yml
+# Recording rules pour pré-agréger des métriques coûteuses
+# Améliore les performances des requêtes PromQL et des dashboards Grafana
+
+groups:
+  # ==================== WebSocket Recording Rules ====================
+  - name: websocket_recording
+    interval: 30s
+    rules:
+      # Taux d'événements WebSocket (5m)
+      - record: websocket:events_rate_5m
+        expr: rate(socketio_events_total[5m])
+        labels:
+          metric_type: websocket
+
+      # Taux de déconnexions WebSocket (5m)
+      - record: websocket:disconnections_rate_5m
+        expr: rate(socketio_disconnections_total[5m])
+        labels:
+          metric_type: websocket
+
+      # Taux de reconnexions WebSocket (5m)
+      - record: websocket:reconnections_rate_5m
+        expr: rate(socketio_reconnections_total[5m])
+        labels:
+          metric_type: websocket
+
+  # ==================== ETA Recording Rules ====================
+  - name: eta_recording
+    interval: 1m
+    rules:
+      # Taux de calculs ETA (5m)
+      - record: eta:calculations_rate_5m
+        expr: rate(eta_calculations_total[5m])
+        labels:
+          metric_type: eta
+
+      # Taux d'erreurs ETA (5m)
+      - record: eta:errors_rate_5m
+        expr: rate(eta_errors_total[5m])
+        labels:
+          metric_type: eta
+
+      # Latence ETA p95 (5m)
+      - record: eta:latency_p95_5m
+        expr: histogram_quantile(0.95, rate(eta_calculation_latency_seconds_bucket[5m]))
+        labels:
+          metric_type: eta
+          quantile: "0.95"
+
+  # ==================== Dispatch Recording Rules ====================
+  - name: dispatch_recording
+    interval: 1m
+    rules:
+      # Taux d'assignations dispatch (5m)
+      - record: dispatch:assignments_rate_5m
+        expr: rate(dispatch_assignments_total[5m])
+        labels:
+          metric_type: dispatch
+
+      # Taux de retards dispatch (5m)
+      - record: dispatch:delays_rate_5m
+        expr: rate(dispatch_delays_total[5m])
+        labels:
+          metric_type: dispatch
+
+      # Temps de résolution dispatch p95 (5m)
+      - record: dispatch:resolution_time_p95_5m
+        expr: histogram_quantile(0.95, rate(dispatch_resolution_time_seconds_bucket[5m]))
+        labels:
+          metric_type: dispatch
+          quantile: "0.95"
+
+  # ==================== OSRM Recording Rules ====================
+  - name: osrm_recording
+    interval: 1m
+    rules:
+      # Taux de cache hits OSRM (5m)
+      - record: osrm:cache_hits_rate_5m
+        expr: rate(osrm_cache_hits_total[5m])
+        labels:
+          metric_type: osrm
+
+      # Taux de cache misses OSRM (5m)
+      - record: osrm:cache_misses_rate_5m
+        expr: rate(osrm_cache_misses_total[5m])
+        labels:
+          metric_type: osrm
+
+      # Taux de bypass cache OSRM (5m)
+      - record: osrm:cache_bypass_rate_5m
+        expr: rate(osrm_cache_bypass_total[5m])
+        labels:
+          metric_type: osrm
+
+  # ==================== Location Recording Rules ====================
+  - name: location_recording
+    interval: 1m
+    rules:
+      # Taux de positions GPS (5m)
+      - record: location:positions_rate_5m
+        expr: rate(location_positions_total[5m])
+        labels:
+          metric_type: location
+
+      # Latence traitement position p95 (5m)
+      - record: location:processing_latency_p95_5m
+        expr: histogram_quantile(0.95, rate(location_processing_latency_seconds_bucket[5m]))
+        labels:
+          metric_type: location
+          quantile: "0.95"
+
+  # ==================== HTTP Recording Rules ====================
+  - name: http_recording
+    interval: 30s
+    rules:
+      # Taux de requêtes HTTP (5m)
+      - record: http:requests_rate_5m
+        expr: rate(http_requests_total[5m])
+        labels:
+          metric_type: http
+
+      # Latence HTTP p95 (5m)
+      - record: http:request_duration_p95_5m
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
+        labels:
+          metric_type: http
+          quantile: "0.95"
+
+      # Latence HTTP p99 (5m)
+      - record: http:request_duration_p99_5m
+        expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))
+        labels:
+          metric_type: http
+          quantile: "0.99"
+
+      # Taux d'erreurs HTTP 5xx (5m)
+      - record: http:errors_5xx_rate_5m
+        expr: rate(http_requests_total{status=~"5.."}[5m])
+        labels:
+          metric_type: http
+          error_type: "5xx"
+
