@@ -125,7 +125,7 @@ const OverviewCards = ({
               <div className={styles.cardIcon}>⏱️</div>
               <div className={styles.cardContent}>
                 <h3>Ponctualité</h3>
-                <p>{Math.round(qualityMetrics.on_time_rate * 100)}%</p>
+                <p>{Math.round(qualityMetrics.on_time_rate)}%</p>
                 {qualityMetrics.avg_delay !== undefined && qualityMetrics.avg_delay > 0 && (
                   <small style={{ color: qualityMetrics.avg_delay > 5 ? '#f44336' : '#ff9800' }}>
                     Retard moyen: {Math.round(qualityMetrics.avg_delay)} min
@@ -139,9 +139,9 @@ const OverviewCards = ({
               <div className={styles.cardIcon}>⭐</div>
               <div className={styles.cardContent}>
                 <h3>Qualité dispatch</h3>
-                <p>{Math.round(qualityMetrics.quality_score * 100)}%</p>
+                <p>{Math.round(qualityMetrics.quality_score)}%</p>
                 {qualityMetrics.assignment_rate !== undefined && (
-                  <small>Taux assignation: {Math.round(qualityMetrics.assignment_rate * 100)}%</small>
+                  <small>Taux assignation: {Math.round(qualityMetrics.assignment_rate)}%</small>
                 )}
               </div>
             </div>
