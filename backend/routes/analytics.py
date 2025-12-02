@@ -4,14 +4,16 @@
 import csv
 import io
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from typing import Any
 
 from flask import make_response, request
 from flask_jwt_extended import jwt_required
 from flask_restx import Namespace, Resource
+from sqlalchemy import and_
 
-from ext import role_required
-from models import UserRole
+from ext import db, role_required
+from models import Booking, EtaAccuracyLog, UserRole
 from routes.companies import get_company_from_token
 from services.analytics.aggregator import get_period_analytics, get_weekly_summary
 from services.analytics.insights import detect_patterns, generate_insights
@@ -372,3 +374,438 @@ class ExportAnalytics(Resource):
                 "success": False,
                 "error": f"Failed to export analytics: {e!s}",
             }, 500
+
+
+@analytics_ns.route("/eta/accuracy")
+class EtaAccuracy(Resource):
+    """Métriques précision ETA (prédit vs réel)."""
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    @analytics_ns.param(
+        "start_date",
+        "Date de début (YYYY-MM-DD, optionnel)",
+        type="string",
+        pattern="^\\d{4}-\\d{2}-\\d{2}$",
+    )
+    @analytics_ns.param(
+        "end_date",
+        "Date de fin (YYYY-MM-DD, optionnel)",
+        type="string",
+        pattern="^\\d{4}-\\d{2}-\\d{2}$",
+    )
+    @analytics_ns.param(
+        "source",
+        "Source ETA (osrm, osrm_ml, haversine, etc.)",
+        type="string",
+    )
+    @analytics_ns.param(
+        "group_by",
+        "Grouper par (hour, day, source, zone)",
+        type="string",
+        enum=["hour", "day", "source", "zone"],
+    )
+    def get(self):
+        """Récupère les métriques de précision ETA.
+
+        Query params:
+            - start_date: Date de début (YYYY-MM-DD), optionnel
+            - end_date: Date de fin (YYYY-MM-DD), optionnel
+            - source: Filtrer par source ETA (osrm, osrm_ml, etc.)
+            - group_by: Grouper résultats (hour, day, source, zone)
+
+        Returns:
+            Dict avec métriques précision (MAE, RMSE, précision moyenne, etc.)
+        """
+        try:
+            # Récupérer la company depuis le token JWT
+            company, err, code = get_company_from_token()
+            if err or company is None:
+                msg = (
+                    (err or {}).get("error")
+                    if isinstance(err, dict)
+                    else "Company not found"
+                )
+                return {"success": False, "error": msg}, code or 404
+
+            # Paramètres de requête
+            start_str = request.args.get("start_date")
+            end_str = request.args.get("end_date")
+            source_filter = request.args.get("source")
+            group_by = request.args.get("group_by", "day")
+
+            # Dates par défaut (30 derniers jours)
+            if start_str and end_str:
+                try:
+                    start_date = datetime.fromisoformat(start_str).date()
+                    end_date = datetime.fromisoformat(end_str).date()
+                except ValueError:
+                    return {
+                        "success": False,
+                        "error": "Invalid date format. Use YYYY-MM-DD",
+                    }, 400
+            else:
+                end_date = date.today()
+                start_date = end_date - timedelta(days=30)
+
+            # Requête de base
+            query = db.session.query(EtaAccuracyLog).filter(
+                and_(
+                    EtaAccuracyLog.created_at
+                    >= datetime.combine(start_date, datetime.min.time()),
+                    EtaAccuracyLog.created_at
+                    <= datetime.combine(end_date, datetime.max.time()),
+                    # Filtrer par company via bookings
+                    EtaAccuracyLog.booking_id.in_(
+                        db.session.query(Booking.id).filter(
+                            Booking.company_id == company.id
+                        )
+                    ),
+                )
+            )
+
+            # Filtrer par source si fourni
+            if source_filter:
+                query = query.filter(EtaAccuracyLog.source == source_filter)
+
+            # Filtrer seulement les logs avec actual_duration (trajets terminés)
+            query = query.filter(EtaAccuracyLog.actual_duration_seconds.isnot(None))
+
+            # Calculer métriques globales
+            logs = query.all()
+
+            if not logs:
+                return {
+                    "success": True,
+                    "data": {
+                        "total_samples": 0,
+                        "mae_seconds": 0,
+                        "rmse_seconds": 0,
+                        "mean_error_seconds": 0,
+                        "accuracy_percent": 0,
+                        "by_source": {},
+                        "by_hour": {},
+                    },
+                }
+
+            # Métriques globales
+            total_samples = len(logs)
+            errors = [abs(log.error_seconds or 0) for log in logs]
+            mean_error = sum(errors) / total_samples if total_samples > 0 else 0
+            mae_seconds = mean_error  # Mean Absolute Error
+            rmse_seconds = (
+                (sum(e**2 for e in errors) / total_samples) ** 0.5
+                if total_samples > 0
+                else 0
+            )
+
+            # Précision (erreur < 10% de l'ETA prédit)
+            accurate_count = sum(
+                1
+                for log in logs
+                if log.predicted_eta_seconds > 0
+                and abs(log.error_seconds or 0) < (log.predicted_eta_seconds * 0.1)
+            )
+            accuracy_percent = (
+                (accurate_count / total_samples * 100) if total_samples > 0 else 0
+            )
+
+            # Grouper par source
+            by_source: dict[str, dict[str, Any]] = {}
+            sources = {log.source for log in logs}
+            for src in sources:
+                src_logs = [log for log in logs if log.source == src]
+                src_errors = [abs(log.error_seconds or 0) for log in src_logs]
+                by_source[src] = {
+                    "count": len(src_logs),
+                    "mae_seconds": sum(src_errors) / len(src_errors)
+                    if src_errors
+                    else 0,
+                    "accuracy_percent": (
+                        sum(
+                            1
+                            for log in src_logs
+                            if log.predicted_eta_seconds > 0
+                            and abs(log.error_seconds or 0)
+                            < (log.predicted_eta_seconds * 0.1)
+                        )
+                        / len(src_logs)
+                        * 100
+                        if src_logs
+                        else 0
+                    ),
+                }
+
+            # Grouper par heure (si group_by=hour)
+            by_hour: dict[int, dict[str, Any]] = {}
+            if group_by == "hour":
+                for log in logs:
+                    hour = log.created_at.hour if log.created_at else 0
+                    if hour not in by_hour:
+                        by_hour[hour] = {"count": 0, "errors": []}
+                    by_hour[hour]["count"] += 1
+                    by_hour[hour]["errors"].append(abs(log.error_seconds or 0))
+
+                # Calculer MAE par heure
+                for hour, data in by_hour.items():
+                    errors_list = data["errors"]
+                    by_hour[hour] = {
+                        "count": data["count"],
+                        "mae_seconds": sum(errors_list) / len(errors_list)
+                        if errors_list
+                        else 0,
+                    }
+
+            return {
+                "success": True,
+                "data": {
+                    "total_samples": total_samples,
+                    "mae_seconds": round(mae_seconds, 2),
+                    "rmse_seconds": round(rmse_seconds, 2),
+                    "mean_error_seconds": round(mean_error, 2),
+                    "accuracy_percent": round(accuracy_percent, 2),
+                    "by_source": by_source,
+                    "by_hour": by_hour,
+                    "period": {
+                        "start_date": start_date.isoformat(),
+                        "end_date": end_date.isoformat(),
+                    },
+                },
+            }
+
+        except Exception as e:
+            logger.exception("[Analytics] Erreur ETA accuracy: %s", e)
+            return {"success": False, "error": str(e)}, 500
+
+
+@analytics_ns.route("/dispatch")
+class DispatchAnalytics(Resource):
+    """✅ 3.4.3: Analytics spécifiques au dispatch."""
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    @analytics_ns.param(
+        "start_date",
+        "Date de début (YYYY-MM-DD, optionnel, défaut: 30 jours)",
+        type="string",
+        pattern="^\\d{4}-\\d{2}-\\d{2}$",
+    )
+    @analytics_ns.param(
+        "end_date",
+        "Date de fin (YYYY-MM-DD, optionnel, défaut: aujourd'hui)",
+        type="string",
+        pattern="^\\d{4}-\\d{2}-\\d{2}$",
+    )
+    def get(self):
+        """Récupère les métriques de dispatch.
+
+        Métriques retournées:
+        - Coût moyen par trajet
+        - Satisfaction client (retards, annulations)
+        - Équité charge entre chauffeurs
+        - Taux réassignation
+        """
+        try:
+            company, err, code = get_company_from_token()
+            if err or company is None:
+                return {"error": err or "Company not found"}, code or 404
+
+            # Période par défaut: 30 derniers jours
+            end_date = date.today()
+            start_date_str = request.args.get("start_date")
+            end_date_str = request.args.get("end_date")
+
+            if start_date_str:
+                try:
+                    start_date = date.fromisoformat(start_date_str)
+                except ValueError:
+                    return {"error": "Invalid start_date format. Use YYYY-MM-DD"}, 400
+            else:
+                start_date = end_date - timedelta(days=30)
+
+            if end_date_str:
+                try:
+                    end_date = date.fromisoformat(end_date_str)
+                except ValueError:
+                    return {"error": "Invalid end_date format. Use YYYY-MM-DD"}, 400
+
+            # Récupérer les assignments de la période
+            from datetime import UTC as UTC_TZ
+
+            from models import Assignment, BookingStatus
+
+            assignments = (
+                Assignment.query.join(Booking, Booking.id == Assignment.booking_id)
+                .filter(
+                    Booking.company_id == company.id,
+                    Booking.scheduled_time
+                    >= datetime.combine(start_date, datetime.min.time()).replace(
+                        tzinfo=UTC_TZ
+                    ),
+                    Booking.scheduled_time
+                    < datetime.combine(
+                        end_date + timedelta(days=1), datetime.min.time()
+                    ).replace(tzinfo=UTC_TZ),
+                )
+                .all()
+            )
+
+            if not assignments:
+                return {
+                    "company_id": company.id,
+                    "period": {
+                        "start_date": start_date.isoformat(),
+                        "end_date": end_date.isoformat(),
+                    },
+                    "metrics": {
+                        "total_bookings": 0,
+                        "avg_cost_per_trip": 0,
+                        "customer_satisfaction": {
+                            "on_time_rate": 0,
+                            "delay_rate": 0,
+                            "cancellation_rate": 0,
+                            "avg_delay_minutes": 0,
+                        },
+                        "driver_fairness": {
+                            "load_std_dev": 0,
+                            "min_load": 0,
+                            "max_load": 0,
+                            "avg_load": 0,
+                        },
+                        "reassignment_rate": 0,
+                        "total_reassignments": 0,
+                    },
+                }, 200
+
+            # Calculer métriques
+            total_bookings = len(assignments)
+            completed_bookings = [
+                a
+                for a in assignments
+                if a.booking and a.booking.status == BookingStatus.COMPLETED
+            ]
+
+            # Coût moyen par trajet (approximation basée sur distance)
+            total_cost = 0.0
+            for a in completed_bookings:
+                if a.booking and a.booking.pickup_lat and a.booking.dropoff_lat:
+                    from shared.geo_utils import haversine_distance
+
+                    distance_km = haversine_distance(
+                        a.booking.pickup_lat,
+                        a.booking.pickup_lon,
+                        a.booking.dropoff_lat,
+                        a.booking.dropoff_lon,
+                    )
+                    # Estimation: 2€/km (à ajuster selon modèle tarifaire)
+                    total_cost += distance_km * 2.0
+
+            avg_cost_per_trip = (
+                total_cost / len(completed_bookings) if completed_bookings else 0.0
+            )
+
+            # Satisfaction client (retards, annulations)
+            on_time_count = 0
+            delayed_count = 0
+            total_delay_minutes = 0
+            for a in completed_bookings:
+                if a.booking and a.booking.scheduled_time and a.eta_pickup_at:
+                    delay_seconds = (
+                        a.eta_pickup_at - a.booking.scheduled_time
+                    ).total_seconds()
+                    delay_minutes = int(delay_seconds / 60)
+                    ON_TIME_THRESHOLD_MINUTES = 5  # ±5 min = à l'heure
+                    if abs(delay_minutes) <= ON_TIME_THRESHOLD_MINUTES:
+                        on_time_count += 1
+                    else:
+                        delayed_count += 1
+                        total_delay_minutes += max(0, delay_minutes)
+
+            on_time_rate = (
+                on_time_count / len(completed_bookings) if completed_bookings else 0.0
+            )
+            delay_rate = (
+                delayed_count / len(completed_bookings) if completed_bookings else 0.0
+            )
+            avg_delay_minutes = (
+                total_delay_minutes / delayed_count if delayed_count > 0 else 0.0
+            )
+
+            # Taux d'annulation
+            cancelled_bookings = [
+                a
+                for a in assignments
+                if a.booking and a.booking.status == BookingStatus.CANCELED
+            ]
+            cancellation_rate = (
+                len(cancelled_bookings) / total_bookings if total_bookings > 0 else 0.0
+            )
+
+            # Équité charge entre chauffeurs
+            from collections import defaultdict
+
+            driver_loads: dict[int, int] = defaultdict(int)
+            for a in assignments:
+                if a.driver_id:
+                    driver_loads[a.driver_id] += 1
+
+            if driver_loads:
+                loads = list(driver_loads.values())
+                avg_load = sum(loads) / len(loads)
+                variance = sum((x - avg_load) ** 2 for x in loads) / len(loads)
+                load_std_dev = variance**0.5
+                min_load = min(loads)
+                max_load = max(loads)
+            else:
+                avg_load = 0.0
+                load_std_dev = 0.0
+                min_load = 0
+                max_load = 0
+
+            # Taux réassignation (approximation: assignments avec updated_at > created_at)
+            reassigned_count = 0
+            for a in assignments:
+                if (
+                    hasattr(a, "updated_at")
+                    and hasattr(a, "created_at")
+                    and a.updated_at
+                    and a.created_at
+                    and a.updated_at > a.created_at
+                ):
+                    # Vérifier si c'est une vraie réassignation (changement driver)
+                    # Note: Cette heuristique est approximative
+                    reassigned_count += 1
+
+            reassignment_rate = (
+                reassigned_count / total_bookings if total_bookings > 0 else 0.0
+            )
+
+            return {
+                "company_id": company.id,
+                "period": {
+                    "start_date": start_date.isoformat(),
+                    "end_date": end_date.isoformat(),
+                },
+                "metrics": {
+                    "total_bookings": total_bookings,
+                    "avg_cost_per_trip": round(avg_cost_per_trip, 2),
+                    "customer_satisfaction": {
+                        "on_time_rate": round(on_time_rate, 3),
+                        "delay_rate": round(delay_rate, 3),
+                        "cancellation_rate": round(cancellation_rate, 3),
+                        "avg_delay_minutes": round(avg_delay_minutes, 1),
+                    },
+                    "driver_fairness": {
+                        "load_std_dev": round(load_std_dev, 2),
+                        "min_load": min_load,
+                        "max_load": max_load,
+                        "avg_load": round(avg_load, 2),
+                    },
+                    "reassignment_rate": round(reassignment_rate, 3),
+                    "total_reassignments": reassigned_count,
+                },
+            }, 200
+
+        except Exception as e:
+            logger.exception("[Analytics] Error in dispatch analytics: %s", e)
+            return {"error": f"Failed to fetch dispatch analytics: {e!s}"}, 500

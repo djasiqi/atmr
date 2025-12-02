@@ -11,6 +11,10 @@ import { Platform } from "react-native";
 import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { registerPushToken } from "@/services/api"; // si l'alias '@' n'est pas configuré: ../services/api
+import {
+  startAdaptiveLocationTracking,
+  stopAdaptiveLocationTracking,
+} from "@/services/locationTracker";
 
 // ✅ Enregistrer la tâche de localisation en arrière-plan (uniquement si le module natif est disponible)
 // Note: expo-task-manager nécessite un rebuild natif. En développement avec Expo Go, on skip.
@@ -190,6 +194,41 @@ function RootNav() {
 
     return () => {
       cancelled = true;
+    };
+  }, [driver, isDriverAuthenticated, loading]);
+
+  // ✅ 4. Fréquence GPS Adaptative Mobile : Démarrer tracking adaptatif pour les drivers
+  useEffect(() => {
+    if (loading || !isDriverAuthenticated || !driver) {
+      // Arrêter le tracking si le driver se déconnecte
+      if (!isDriverAuthenticated) {
+        stopAdaptiveLocationTracking();
+      }
+      return;
+    }
+
+    // Démarrer le tracking adaptatif pour le driver authentifié
+    let cancelled = false;
+
+    (async () => {
+      try {
+        console.log("📍 Démarrage du tracking GPS adaptatif...");
+        await startAdaptiveLocationTracking();
+        if (!cancelled) {
+          console.log("✅ Tracking GPS adaptatif démarré");
+        }
+      } catch (e: any) {
+        console.warn(
+          "❌ Erreur démarrage tracking GPS adaptatif:",
+          e?.message || String(e)
+        );
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      // Arrêter le tracking lors du démontage ou déconnexion
+      stopAdaptiveLocationTracking();
     };
   }, [driver, isDriverAuthenticated, loading]);
 

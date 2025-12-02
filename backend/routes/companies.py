@@ -24,6 +24,7 @@ from models import (
     Client,
     ClientType,
     Company,
+    DelayEvent,
     DispatchRun,
     Driver,
     DriverType,
@@ -34,12 +35,9 @@ from models import (
     Vehicle,
 )
 from models.enums import DispatchStatus as DispatchStatusEnum
-from routes.driver import (
-    notify_booking_update,
-    notify_driver_new_booking,
-)
 from services.unified_dispatch import queue
 from services.vacation_service import create_vacation
+from shared.notifications import notify_booking_update, notify_driver_new_booking
 from shared.time_utils import now_utc, parse_local_naive, to_geneva_local, to_utc
 from shared.upload_validation import (
     ALLOWED_LOGO_EXT,
@@ -931,9 +929,9 @@ class CompleteReservation(Resource):
 
         try:
             db.session.commit()
-            notify_booking_update(
-                booking.driver_id, booking
-            )  # Si tu as une notification
+            # ✅ 3.5.1: Résoudre retards lors complétion
+            DelayEvent.resolve_delays_for_booking(booking.id, booking.completed_at)
+            notify_booking_update(booking.driver_id, booking)
 
             return {
                 "message": "Réservation complétée avec succès",

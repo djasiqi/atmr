@@ -33,23 +33,39 @@ const DispatchTable = ({
   // ✅ Fonction helper pour trouver le retard d'une course
   const getDelayForBooking = (bookingId) => {
     if (!delays || delays.length === 0 || !bookingId) return null;
+    
     // Gérer les cas où booking_id pourrait être string ou number
-    return delays.find(d => 
+    const found = delays.find(d => 
       d.booking_id === bookingId || 
       Number(d.booking_id) === Number(bookingId)
     );
+    
+    return found;
   };
 
-  // ✅ Fonction pour déterminer le type de retard
+  // ✅ Fonction pour déterminer le type de retard (3 niveaux)
   const getDelayStatus = (delayInfo) => {
     if (!delayInfo) return null;
+    
+    // ✅ Priorité 1: Utiliser delay_severity du backend si disponible
+    const delaySeverity = delayInfo.delay_severity;
+    if (delaySeverity) {
+      // Mapper les statuts backend vers les classes CSS frontend
+      if (delaySeverity === 'reasonable') return 'reasonable';
+      if (delaySeverity === 'moderate') return 'moderate';
+      if (delaySeverity === 'critical') return 'critical';
+    }
+    
+    // ✅ Priorité 2: Utiliser delay_minutes pour déterminer la sévérité
     const delayMinutes = delayInfo.delay_minutes || 
                          delayInfo.pickup_delay_minutes || 
                          delayInfo.dropoff_delay_minutes || 
                          0;
+    
     if (delayMinutes <= 0) return null;
-    if (delayMinutes >= 10) return 'critical'; // Retard critique
-    return 'slight'; // Retard léger
+    if (delayMinutes <= 5) return 'reasonable';  // 1-5 min : raisonnable
+    if (delayMinutes <= 10) return 'moderate';   // 5-10 min : modéré
+    return 'critical';  // >10 min : critique
   };
 
   return (
@@ -101,14 +117,22 @@ const DispatchTable = ({
                 onClick={() => onRowClick?.(r)} 
                 className={`${styles.tableRow} ${
                   delayStatus === 'critical' ? styles.rowDelayed : 
-                  delayStatus === 'slight' ? styles.rowSlightDelay : ''
+                  delayStatus === 'moderate' ? styles.rowSlightDelay : 
+                  delayStatus === 'reasonable' ? styles.rowReasonableDelay : ''
                 }`}
               >
                 <td className={styles.clientCell}>
                   {r.client?.full_name || r.customer_name}
-                  {delayInfo && delayMinutes > 0 && (
-                    <span className={styles.delayBadge} title={`Retard de ${delayMinutes} minutes`}>
-                      ⚠️ {delayMinutes} min
+                  {delayInfo && delayStatus && (
+                    <span 
+                      className={`${styles.delayBadge} ${
+                        delayStatus === 'critical' ? styles.delayBadgeCritical :
+                        delayStatus === 'moderate' ? styles.delayBadgeModerate :
+                        styles.delayBadgeReasonable
+                      }`} 
+                      title={`Retard de ${delayMinutes} minutes (${delayStatus === 'reasonable' ? 'raisonnable' : delayStatus === 'moderate' ? 'modéré' : 'critique'})`}
+                    >
+                      {delayStatus === 'critical' ? '🚨' : '⚠️'} {delayMinutes > 0 ? `${delayMinutes} min` : 'Retard'}
                     </span>
                   )}
                 </td>
@@ -133,9 +157,9 @@ const DispatchTable = ({
                   <span className={`${styles.statusBadge} ${styles[status] || ''}`}>
                     {(r.status || '').replace('_', ' ') || status}
                   </span>
-                  {delayInfo && delayMinutes > 0 && (
+                  {delayInfo && delayStatus && (
                     <div className={styles.delayIndicator}>
-                      ⚠️ Retard: {delayMinutes} min
+                      ⚠️ Retard: {delayMinutes > 0 ? `${delayMinutes} min` : 'Détecté'}
                     </div>
                   )}
                 </td>

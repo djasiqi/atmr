@@ -86,6 +86,7 @@ celery: Celery = Celery(
         "tasks.purge_tasks",  # ✅ 3.3: Purge données RGPD
         "tasks.profiling_tasks",  # ✅ 3.4: Profiling CPU/mémoire automatique
         "tasks.dlq_cleanup_task",  # ✅ DLQ: Cleanup automatique DLQ
+        "tasks.archive_tasks",  # ✅ 3.5.2: Archivage positions automatique
     ],
 )
 
@@ -192,6 +193,15 @@ celery.conf.beat_schedule = {
         "options": {
             "expires": 600,  # Expire après 10 min
             "jitter": 30,  # ✅ 2.6: Jitter jusqu'à 30 secondes
+        },
+    },
+    # ✅ 3.5.2: Archivage automatique positions (hebdomadaire, dimanche à 2h)
+    "archive-old-positions": {
+        "task": "tasks.archive_tasks.archive_old_positions_task",
+        "schedule": 7 * 24 * 3600,  # 1 semaine (604800 secondes)
+        "options": {
+            "expires": 12 * 3600,  # Expire après 12h
+            "jitter": 1800,  # ✅ 2.6: Jitter jusqu'à 30 minutes (tasks hebdomadaires)
         },
     },
     # 🆕 RL: Nettoyage feedbacks mensuels (1er du mois à 4h)

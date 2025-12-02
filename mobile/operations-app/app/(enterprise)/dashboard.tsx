@@ -30,6 +30,8 @@ import {
   getDispatchRideDetails,
   assignRide,
   reassignRide,
+  fetchRealtimeDashboard,
+  type RealtimeDashboardData,
 } from "@/services/enterpriseDispatch";
 import {
   DispatchStatus,
@@ -119,6 +121,9 @@ export default function EnterpriseDashboardScreen() {
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [assigning, setAssigning] = useState(false);
 
+  // ✅ 3.4.2: État pour dashboard temps réel
+  const [realtimeDashboard, setRealtimeDashboard] = useState<RealtimeDashboardData | null>(null);
+
   const { markers: driverMarkers, refreshLocations } =
     useEnterpriseDriverTracking();
 
@@ -138,28 +143,41 @@ export default function EnterpriseDashboardScreen() {
     setLoading(true);
     setErrorMessage(null);
     try {
-      const [statusResponse, urgentResponse, unassignedResponse, allResponse] =
-        await Promise.all([
-          getDispatchStatus(),
-          getDispatchRides({
-            date: currentDate,
-            status: "urgent",
-            page_size: 5,
-          }),
-          getDispatchRides({
-            date: currentDate,
-            status: "unassigned",
-            page_size: 3,
-          }),
-          getDispatchRides({
-            date: currentDate,
-            page_size: 120,
-          }),
-        ]);
+      const [
+        statusResponse,
+        urgentResponse,
+        unassignedResponse,
+        allResponse,
+        realtimeResponse,
+      ] = await Promise.all([
+        getDispatchStatus(),
+        getDispatchRides({
+          date: currentDate,
+          status: "urgent",
+          page_size: 5,
+        }),
+        getDispatchRides({
+          date: currentDate,
+          status: "unassigned",
+          page_size: 3,
+        }),
+        getDispatchRides({
+          date: currentDate,
+          page_size: 120,
+        }),
+        // ✅ 3.4.2: Charger dashboard temps réel
+        fetchRealtimeDashboard(currentDate).catch((err) => {
+          console.warn("[Dashboard] Failed to load realtime dashboard:", err);
+          return null;
+        }),
+      ]);
       setStatus(statusResponse);
       setUrgentRides(urgentResponse.items);
       setUnassignedRides(unassignedResponse.items);
       setAllRides(allResponse.items);
+      if (realtimeResponse) {
+        setRealtimeDashboard(realtimeResponse);
+      }
       refreshLocations();
     } catch (error: any) {
       const message =
@@ -522,6 +540,105 @@ export default function EnterpriseDashboardScreen() {
     </Section>
   );
 
+  // ✅ 3.4.2: Section retards en cours depuis dashboard temps réel
+  const delaysSection =
+    realtimeDashboard?.current_delays && realtimeDashboard.current_delays.length > 0 ? (
+      <Section title="Retards en cours">
+        {realtimeDashboard.current_delays.slice(0, 5).map((delay) => (
+          <TouchableOpacity
+            key={delay.assignment_id}
+            style={[
+              styles.alertCard,
+              delay.status === "late" && {
+                backgroundColor: enterprisePalette.alertSurface,
+                borderColor: enterprisePalette.alertBorder,
+              },
+            ]}
+            onPress={() => {
+              router.push({
+                pathname: "/(enterprise)/ride-details",
+                params: { rideId: String(delay.booking_id) },
+              } as any);
+            }}
+          >
+            <View style={styles.alertHeader}>
+              <Text style={styles.alertBadge}>
+                {delay.status === "late" ? "Retard" : "En avance"}
+              </Text>
+              <Text style={styles.alertTime}>
+                {delay.delay_minutes > 0 ? "+" : ""}
+                {delay.delay_minutes} min
+              </Text>
+            </View>
+            <Text style={styles.alertClient}>{delay.customer_name || "Client"}</Text>
+            {delay.scheduled_time && (
+              <Text style={styles.alertRoute}>
+                Prévu: {dayjs(delay.scheduled_time).format("HH:mm")}
+              </Text>
+            )}
+          </TouchableOpacity>
+        ))}
+        {realtimeDashboard.current_delays.length > 5 && (
+          <Text style={styles.muted}>
+            +{realtimeDashboard.current_delays.length - 5} autre(s) retard(s)
+          </Text>
+        )}
+      </Section>
+    ) : null;
+
+  // ✅ 3.4.2: Section opportunités critiques
+  const criticalOpportunitiesSection =
+    realtimeDashboard?.opportunities &&
+      realtimeDashboard.opportunities.filter(
+        (opp) => opp.severity === "critical" || opp.severity === "high"
+      ).length > 0 ? (
+      <Section title="Opportunités critiques">
+        {realtimeDashboard.opportunities
+          .filter((opp) => opp.severity === "critical" || opp.severity === "high")
+          .slice(0, 3)
+          .map((opp) => (
+            <TouchableOpacity
+              key={opp.assignment_id}
+              style={[
+                styles.alertCard,
+                opp.severity === "critical" && {
+                  backgroundColor: enterprisePalette.alertSurface,
+                  borderColor: enterprisePalette.alertBorder,
+                },
+              ]}
+              onPress={() => {
+                router.push({
+                  pathname: "/(enterprise)/ride-details",
+                  params: { rideId: String(opp.booking_id) },
+                } as any);
+              }}
+            >
+              <View style={styles.alertHeader}>
+                <Text
+                  style={[
+                    styles.alertBadge,
+                    { color: opp.severity === "critical" ? "#F87171" : "#FF9800" },
+                  ]}
+                >
+                  {opp.severity === "critical" ? "Critique" : "Élevée"}
+                </Text>
+                {opp.current_delay_minutes !== undefined && (
+                  <Text style={styles.alertTime}>
+                    {opp.current_delay_minutes > 0 ? "+" : ""}
+                    {opp.current_delay_minutes} min
+                  </Text>
+                )}
+              </View>
+              {opp.suggestions && opp.suggestions.length > 0 && (
+                <Text style={styles.alertRoute} numberOfLines={2}>
+                  {opp.suggestions[0].message || opp.suggestions[0].action}
+                </Text>
+              )}
+            </TouchableOpacity>
+          ))}
+      </Section>
+    ) : null;
+
   return (
     <ScrollView
       style={styles.container}
@@ -574,6 +691,10 @@ export default function EnterpriseDashboardScreen() {
       )}
 
       {dispatchMode === "fully_auto" && urgentSection}
+
+      {/* ✅ 3.4.2: Sections dashboard temps réel */}
+      {delaysSection}
+      {criticalOpportunitiesSection}
 
       {errorMessage && <Text style={styles.error}>{errorMessage}</Text>}
 

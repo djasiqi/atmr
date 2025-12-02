@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   api:
     image: docker.io/djasiqi/atmr-backend:latest

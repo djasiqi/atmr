@@ -1907,14 +1907,81 @@ def calculate_eta(
     driver_position: Tuple[float, float],
     destination: Tuple[float, float],
     settings=DEFAULT_SETTINGS,
+    *,
+    booking: Any = None,
+    driver: Any = None,
+    use_ml: bool = True,
 ) -> int:
     """Calcule un ETA (en secondes) chauffeur -> destination
     (pickup le plus souvent).
-    Essaie OSRM si provider='osrm', sinon fallback Haversine via vitesse
-    moyenne.
-    ✅ OPTIMISÉ: Utilise route_info (via eta_seconds) au lieu de
-    build_distance_matrix_osrm pour 2 points.
+
+    ✅ NOUVEAU: Utilise EtaService unifié avec support ML.
+    ✅ COMPATIBILITÉ: Garde même signature pour compatibilité ascendante.
+
+    Args:
+        driver_position: Position chauffeur (lat, lon)
+        destination: Position destination (lat, lon)
+        settings: Settings dispatch (pour compatibilité)
+        booking: Objet Booking (optionnel, pour ML)
+        driver: Objet Driver (optionnel, pour ML)
+        use_ml: Activer correction ML si disponible
+
+    Returns:
+        ETA en secondes
     """
+    try:
+        # ✅ Utiliser EtaService unifié
+        from services.eta_service import EtaContext, get_eta_service
+
+        eta_service = get_eta_service()
+
+        # Créer contexte pour ML si disponible
+        context = None
+        if booking or driver:
+            context = EtaContext(
+                booking_id=getattr(booking, "id", None) if booking else None,
+                driver_id=getattr(driver, "id", None) if driver else None,
+                company_id=getattr(booking, "company_id", None) if booking else None,
+                scheduled_time=getattr(booking, "scheduled_time", None)
+                if booking
+                else None,
+                booking=booking,
+                driver=driver,
+            )
+
+        # ✅ Vérifier feature flag ML avant de passer use_ml
+        # Le feature flag est vérifié dans EtaService, mais on peut aussi le vérifier ici
+        # pour éviter des appels inutiles si ML est désactivé globalement
+        from services.feature_flags import FeatureFlags
+
+        # Si ML est désactivé globalement, forcer use_ml=False
+        if use_ml and not FeatureFlags.is_ml_enabled():
+            use_ml = False
+            logger.debug(
+                "[ETA] ML désactivé via feature flag, utilisation ETA standard"
+            )
+
+        # Calculer ETA avec service unifié
+        result = eta_service.calculate_eta(
+            origin=driver_position,
+            destination=destination,
+            context=context,
+            use_ml=use_ml,
+            use_osrm=str(
+                getattr(getattr(settings, "matrix", None), "provider", "haversine")
+            ).lower()
+            == "osrm",
+        )
+
+        return result.duration_seconds
+
+    except ImportError:
+        # Fallback si EtaService non disponible (migration en cours)
+        logger.warning("[ETA] EtaService non disponible, fallback méthode legacy")
+    except Exception as e:
+        logger.warning("[ETA] Erreur EtaService, fallback méthode legacy: %s", e)
+
+    # ✅ FALLBACK: Méthode legacy (compatibilité)
     try:
         provider = str(
             getattr(getattr(settings, "matrix", None), "provider", "haversine")

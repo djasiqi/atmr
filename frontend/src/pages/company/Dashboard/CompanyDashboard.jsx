@@ -11,6 +11,7 @@ import ReservationTable from './components/ReservationTable';
 import DriverTable from '../../driver/components/Dashboard/DriverTable';
 import ReservationModals from '../../../components/reservations/ReservationModals';
 import DriverLiveMap from './components/DriverLiveMap';
+import OpportunitiesSection from './components/OpportunitiesSection';
 import {
   acceptReservation,
   rejectReservation,
@@ -26,6 +27,7 @@ import {
 } from '../../../services/companyService';
 import useCompanyData from '../../../hooks/useCompanyData';
 import useDispatchDelays from '../../../hooks/useDispatchDelays';
+import useRealtimeDashboard from '../../../hooks/useRealtimeDashboard';
 import styles from './CompanyDashboard.module.css';
 import ManualBookingForm from './components/ManualBookingForm';
 import ChatWidget from '../../../components/widgets/ChatWidget';
@@ -60,6 +62,13 @@ const CompanyDashboard = () => {
 
   // 🆕 Hook pour les retards dispatch (refresh toutes les 2 minutes)
   const { delayCount, hasCriticalDelays, hasDelays } = useDispatchDelays(dispatchDay, 120000);
+
+  // ✅ 3.4.2: Hook pour dashboard temps réel dispatch (refresh toutes les 2 minutes)
+  const {
+    loading: loadingRealtimeDashboard,
+    qualityMetrics,
+    opportunities,
+  } = useRealtimeDashboard(dispatchDay, 120000);
 
   // queryClient pour invalidation
   const queryClient = useQueryClient();
@@ -557,6 +566,7 @@ const CompanyDashboard = () => {
             assignedReservations={assignedReservations}
             driver={driver}
             day={dispatchDay}
+            qualityMetrics={qualityMetrics}
           />
 
           {/* ======= Layout 2 colonnes ======= */}
@@ -608,6 +618,13 @@ const CompanyDashboard = () => {
                   </span>
                 </button>
               </div>
+
+              {/* ✅ 3.4.2: Section opportunités d'optimisation */}
+              <OpportunitiesSection
+                opportunities={opportunities}
+                companyPublicId={company?.public_id}
+                loading={loadingRealtimeDashboard}
+              />
 
               {/* Graphique (collapsible) */}
               <section className={styles.compactSection}>

@@ -392,6 +392,9 @@ def create_app(config_name: str | None = None):
             max_http_buffer_size=10_000_000,  # int
             allow_upgrades=allow_ws_upgrades,
             cors_credentials=True,
+            # ✅ Note: La compression Socket.IO est gérée automatiquement
+            # par le protocole lors de la négociation client/serveur.
+            # Pas besoin de paramètre explicite dans Flask-SocketIO.
         )
         app.logger.info(
             "✅ Socket.IO initialisé: async_mode=%s, cors=%s, allow_upgrades=%s",
@@ -838,10 +841,12 @@ def create_app(config_name: str | None = None):
         import models
 
         # ✅ D2: Importer AuditLog pour qu'Alembic le détecte lors des migrations
+        from models import EtaAccuracyLog
         from security.audit_log import AuditLog
 
         _ = models  # Force l'import pour enregistrer les mappers
         _ = AuditLog  # Force l'import pour qu'Alembic le détecte
+        _ = EtaAccuracyLog  # Force l'import pour qu'Alembic le détecte
 
         configure_mappers()
 
@@ -857,7 +862,8 @@ def create_app(config_name: str | None = None):
             from routes.ml_monitoring import ml_monitoring_bp
             from routes.proactive_alerts import register_proactive_alerts_routes
 
-            app.register_blueprint(healthcheck_bp)
+            # ✅ Enregistrer healthcheck avec préfixe /api/v1
+            app.register_blueprint(healthcheck_bp, url_prefix="/api/v1")
             app.register_blueprint(feature_flags_bp)
             app.register_blueprint(ml_monitoring_bp)
 

@@ -25,6 +25,7 @@ from .base import (
 from .booking import Booking
 from .client import Client
 from .company import Company
+from .delay_event import DelayEvent
 from .dispatch import (
     Assignment,
     DailyStats,
@@ -67,6 +68,7 @@ from .enums import (
     UserRole,
     VacationType,
 )
+from .eta_accuracy_log import EtaAccuracyLog
 from .invoice import (
     CompanyBillingSettings,
     Invoice,
@@ -87,8 +89,8 @@ from .rl_suggestion_metric import RLSuggestionMetric
 # A3: TaskFailure pour DLQ
 from .secret_rotation import SecretRotation
 from .task_failure import TaskFailure
-
-# ========== ÉTAPE 2 : Import models extraits ==========
+from .trip_tracking import TripTracking
+from .trip_tracking_archive import TripTrackingArchive
 from .user import User
 from .vehicle import Vehicle
 
@@ -107,12 +109,11 @@ __all__ = [
     "CompanyBillingSettings",
     "CompanyPlanningSettings",
     "DailyStats",
+    "DelayEvent",  # ✅ 3.5.1: Historique événements retards
     "DispatchMetrics",
     "DispatchMode",
-    # Models Dispatch & Temps Réel
     "DispatchRun",
     "DispatchStatus",
-    # Models Driver & Planning
     "Driver",
     "DriverBreak",
     "DriverPreference",
@@ -124,9 +125,9 @@ __all__ = [
     "DriverVacation",
     "DriverWeeklyTemplate",
     "DriverWorkingConfig",
+    "EtaAccuracyLog",
     "FavoritePlace",
     "GenderEnum",
-    # Models Facturation
     "Invoice",
     "InvoiceLine",
     "InvoiceLineType",
@@ -134,36 +135,33 @@ __all__ = [
     "InvoiceReminder",
     "InvoiceSequence",
     "InvoiceStatus",
-    # Models ML & Autonomous
     "MLPrediction",
     "MedicalEstablishment",
     "MedicalService",
-    # Models Communication & Lieux
     "Message",
     "Payment",
     "PaymentMethod",
     "PaymentStatus",
-    "ProfilingMetrics",  # ✅ 3.4: Profiling automatique
+    "ProfilingMetrics",
     "RLFeedback",
     "RLSuggestion",
     "RLSuggestionMetric",
     "RealtimeEntityType",
     "RealtimeEvent",
     "RealtimeEventType",
-    "SecretRotation",  # Monitoring rotations de secrets
+    "SecretRotation",
     "SenderRole",
     "ShiftStatus",
     "ShiftType",
-    "TaskFailure",  # A3: DLQ model
+    "TaskFailure",
+    "TripTracking",  # ✅ 3.3.3: Historique trajets
+    "TripTrackingArchive",  # ✅ 3.5.2: Archive positions (partitionnée)
     "UnavailabilityReason",
-    # Models principaux
     "User",
-    # Enums
     "UserRole",
     "VacationType",
     "Vehicle",
     "_as_bool",
-    # Helpers
     "_as_dt",
     "_as_float",
     "_as_int",
@@ -172,6 +170,5 @@ __all__ = [
     "_encryption_key",
     "_encryption_key_str",
     "_iso",
-    # Core
     "db",
 ]

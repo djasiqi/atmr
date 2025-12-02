@@ -41,7 +41,8 @@ services:
   api:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.production
+      target: development # Utiliser le stage development de Dockerfile.production
     # ✅ 3.5: Si nginx est activé, l'API n'a pas besoin d'exposer le port 5000 publiquement
     # expose:
     #   - "5000"
@@ -55,6 +56,8 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    # En développement, on peut surcharger la commande par défaut
+    # Le docker-entrypoint.sh sera utilisé si aucune commande n'est spécifiée
     command: >
       gunicorn wsgi:app
       --bind 0.0.0.0:5000
@@ -85,11 +88,26 @@ services:
       - SOCKETIO_CORS_ORIGINS=${SOCKETIO_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       - FLASK_CONFIG=${FLASK_CONFIG:-development}
       - FLASK_ENV=${FLASK_ENV:-development}
+      - FLASK_APP=app.py
       - TZ=Europe/Zurich
       - PDF_BASE_URL=${PDF_BASE_URL:-http://localhost:5000}
       - UPLOADS_PUBLIC_BASE=${UPLOADS_PUBLIC_BASE:-/uploads}
       - API_DOCS=${API_DOCS:-off}
       - API_LEGACY_ENABLED=${API_LEGACY_ENABLED:-false}
+      # Sécurité - Clé de chiffrement (doit être dans backend/.env)
+      - APP_ENCRYPTION_KEY_B64=${APP_ENCRYPTION_KEY_B64}
+      # Optimisations PyTorch (même que production)
+      - OMP_NUM_THREADS=2
+      - MKL_NUM_THREADS=2
+      - OPENBLAS_NUM_THREADS=2
+      - NUMEXPR_NUM_THREADS=2
+      # ML/RL Models paths (même que production)
+      - ML_MODELS_PATH=/app/data/ml
+      - RL_MODELS_PATH=/app/data/rl
+      # Worker RL Configuration (pour communication avec docker-compose.rl.yml)
+      - RL_WORKER_URL=${RL_WORKER_URL:-http://atmr-rl-worker:5000}
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
       # ✅ D3: Variables de chaos (NE JAMAIS activer en production)
       - CHAOS_ENABLED=${CHAOS_ENABLED:-false}
       - CHAOS_OSRM_DOWN=${CHAOS_OSRM_DOWN:-false}
@@ -117,6 +135,8 @@ services:
   celery-worker:
     build:
       context: ./backend
+      dockerfile: Dockerfile.production
+      target: development
     healthcheck:
       test:
         [
@@ -154,8 +174,21 @@ services:
       - UD_OSRM_URL=${UD_OSRM_URL:-http://osrm:5000}
       - FLASK_CONFIG=${FLASK_CONFIG:-development}
       - FLASK_ENV=${FLASK_ENV:-development}
+      - FLASK_APP=app.py
       - PDF_BASE_URL=${PDF_BASE_URL:-http://localhost:5000}
       - TZ=Europe/Zurich
+      # Sécurité - Clé de chiffrement (doit être dans backend/.env)
+      - APP_ENCRYPTION_KEY_B64=${APP_ENCRYPTION_KEY_B64}
+      # Optimisations PyTorch (même que production)
+      - OMP_NUM_THREADS=1
+      - MKL_NUM_THREADS=1
+      - OPENBLAS_NUM_THREADS=1
+      - NUMEXPR_NUM_THREADS=1
+      # ML/RL Models paths (même que production)
+      - ML_MODELS_PATH=/app/data/ml
+      - RL_MODELS_PATH=/app/data/rl
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
     volumes:
       - ./backend:/app
     depends_on:
@@ -179,6 +212,8 @@ services:
   celery-beat:
     build:
       context: ./backend
+      dockerfile: Dockerfile.production
+      target: development
     healthcheck:
       test:
         [
@@ -239,6 +274,8 @@ services:
   flower:
     build:
       context: ./backend
+      dockerfile: Dockerfile.production
+      target: development
     healthcheck:
       test:
         [
@@ -258,7 +295,22 @@ services:
     environment:
       - DATABASE_URL=postgresql+psycopg://atmr:atmr@postgres:5432/atmr
       - PYTHONPATH=/app
+      - FLASK_CONFIG=${FLASK_CONFIG:-development}
+      - FLASK_ENV=${FLASK_ENV:-development}
+      - FLASK_APP=app.py
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      # Sécurité - Clé de chiffrement (doit être dans backend/.env)
+      - APP_ENCRYPTION_KEY_B64=${APP_ENCRYPTION_KEY_B64}
+      # Optimisations PyTorch (même que production)
+      - OMP_NUM_THREADS=1
+      - MKL_NUM_THREADS=1
+      - OPENBLAS_NUM_THREADS=1
+      - NUMEXPR_NUM_THREADS=1
+      # ML/RL Models paths (même que production)
+      - ML_MODELS_PATH=/app/data/ml
+      - RL_MODELS_PATH=/app/data/rl
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
     volumes:
       - ./backend:/app
     depends_on:

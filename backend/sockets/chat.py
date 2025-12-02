@@ -9,9 +9,8 @@ et appelées par le framework.
 """
 
 import logging
-from collections import defaultdict
 from contextlib import suppress
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Dict, cast
 from typing import cast as tcast
 
@@ -22,8 +21,10 @@ from flask_socketio import SocketIO, emit, join_room
 
 from ext import db, redis_client
 from models import Company, Driver, Message, SenderRole, User, UserRole
+from services.location_service import get_location_service
 from services.spam_protection import can_send_message
 from services.websocket_metrics import ws_metrics
+from services.websocket_rate_limiter import ws_rate_limiter
 
 # Constantes pour éviter les valeurs magiques
 RECEIVER_ID_ZERO = 0
@@ -39,11 +40,8 @@ logger = logging.getLogger("socketio")
 # Petit index en mémoire pour le debug/nettoyage : sid -> infos
 _SID_INDEX: Dict[str, Dict[str, Any]] = {}
 
-# Rate limiting connexions : compteur par IP
-_connection_rate_limit: Dict[str, list[datetime]] = defaultdict(list)
-MAX_CONNECTIONS_PER_MINUTE = 5
-
 # Les handlers Socket.IO sont enregistrés par @socketio.on()
+# Note: Rate limiting géré par WebSocketRateLimiter (backend/services/websocket_rate_limiter.py)
 
 
 def _get_sid(fallback_request=None) -> str:
@@ -85,34 +83,32 @@ def init_chat_socket(socketio: SocketIO):
         trace_id = request.headers.get("X-Trace-ID") or request.headers.get("Trace-Id")
         now = datetime.now(UTC)
 
-        # ✅ Rate limiting : nettoyer anciennes tentatives (>1 min)
-        _connection_rate_limit[client_ip] = [
-            ts
-            for ts in _connection_rate_limit[client_ip]
-            if (now - ts) < timedelta(minutes=1)
-        ]
-
-        # ✅ Vérifier limite de connexions par IP
-        if len(_connection_rate_limit[client_ip]) >= MAX_CONNECTIONS_PER_MINUTE:
+        # ✅ Rate limiting : utiliser WebSocketRateLimiter (remplace ancien système)
+        allowed, retry_after = ws_rate_limiter.check_rate_limit(
+            "connect",
+            client_ip=client_ip,
+        )
+        if not allowed:
             logger.warning(
                 "socket_rate_limit_exceeded",
                 extra={
                     "event": "rate_limit_exceeded",
                     "ip": client_ip,
-                    "attempts": len(_connection_rate_limit[client_ip]),
+                    "retry_after": retry_after or 0,
                     "timestamp": now.isoformat(),
                     "request_trace_id": trace_id,
                 },
             )
             emit(
                 "error",
-                {"error": "Trop de tentatives de connexion. Réessayez dans 1 minute."},
+                {
+                    "error": f"Trop de tentatives de connexion. Réessayez dans {retry_after or 60} secondes.",
+                    "retry_after": retry_after or 60,
+                },
             )
             ws_metrics.on_error("rate_limit_exceeded")
+            ws_metrics.on_rate_limit_hit("connect")
             return False
-
-        # Enregistrer tentative
-        _connection_rate_limit[client_ip].append(now)
 
         logger.info(
             "socket_connect_attempt",
@@ -415,9 +411,35 @@ def init_chat_socket(socketio: SocketIO):
                 emit("error", {"error": "Utilisateur non reconnu."})
                 return
 
-            # ✅ Anti-spam: vérifier le taux d'envoi (1 message/seconde)
-            allowed, spam_error = can_send_message(user.id)
+            # ✅ Rate limiting: vérifier avant anti-spam (plus restrictif)
+            client_ip = request.environ.get("REMOTE_ADDR", "unknown")
+            allowed, retry_after = ws_rate_limiter.check_rate_limit(
+                "team_chat_message",
+                user_id=user.id,
+                client_ip=client_ip,
+            )
             if not allowed:
+                logger.warning(
+                    "🚫 Rate limit team_chat_message dépassé pour user_id=%s, retry_after=%d",
+                    user.id,
+                    retry_after or 0,
+                )
+                emit(
+                    "rate_limit_exceeded",
+                    {
+                        "event": "rate_limit_exceeded",
+                        "message": f"Trop de messages. Réessayez dans {retry_after} secondes.",
+                        "attempts": 1,
+                        "retry_after_seconds": retry_after,
+                    },
+                )
+                ws_metrics.on_error("rate_limit_exceeded")
+                ws_metrics.on_rate_limit_hit("team_chat_message")
+                return
+
+            # ✅ Anti-spam: vérifier le taux d'envoi (1 message/seconde) - garde pour compatibilité
+            allowed_spam, spam_error = can_send_message(user.id)
+            if not allowed_spam:
                 logger.warning(
                     "🚫 [CHAT] Anti-spam: Utilisateur %s - %s", user.id, spam_error
                 )
@@ -682,6 +704,41 @@ def init_chat_socket(socketio: SocketIO):
             if not user_public_id or not company_id:
                 return
 
+            # ✅ Rate limiting: vérifier avant émission
+            client_ip = request.environ.get("REMOTE_ADDR", "unknown")
+            # Récupérer user_id depuis la DB si nécessaire pour le rate limiting
+            user_id = None
+            try:
+                from models import User
+
+                user = User.query.filter_by(public_id=user_public_id).first()
+                if user:
+                    user_id = user.id
+            except Exception:
+                pass  # Si User non disponible, utiliser seulement IP
+
+            allowed, retry_after = ws_rate_limiter.check_rate_limit(
+                "typing_start",
+                user_id=user_id,
+                client_ip=client_ip,
+            )
+            if not allowed:
+                logger.warning(
+                    "🚫 Rate limit typing_start dépassé pour user_id=%s, retry_after=%d",
+                    user_id or user_public_id,
+                    retry_after or 0,
+                )
+                emit(
+                    "rate_limit_exceeded",
+                    {
+                        "event": "rate_limit_exceeded",
+                        "message": f"Trop de requêtes. Réessayez dans {retry_after} secondes.",
+                        "retry_after": retry_after or 0,
+                    },
+                )
+                ws_metrics.on_rate_limit_hit("typing_start")
+                return
+
             # Diffuser l'indicateur de frappe à la room de l'entreprise
             room = f"company_{company_id}"
             cast("Any", emit)(
@@ -702,6 +759,41 @@ def init_chat_socket(socketio: SocketIO):
             company_id = sid_data.get("company_id")
 
             if not user_public_id or not company_id:
+                return
+
+            # ✅ Rate limiting: vérifier avant émission
+            client_ip = request.environ.get("REMOTE_ADDR", "unknown")
+            # Récupérer user_id depuis la DB si nécessaire pour le rate limiting
+            user_id = None
+            try:
+                from models import User
+
+                user = User.query.filter_by(public_id=user_public_id).first()
+                if user:
+                    user_id = user.id
+            except Exception:
+                pass  # Si User non disponible, utiliser seulement IP
+
+            allowed, retry_after = ws_rate_limiter.check_rate_limit(
+                "typing_stop",
+                user_id=user_id,
+                client_ip=client_ip,
+            )
+            if not allowed:
+                logger.warning(
+                    "🚫 Rate limit typing_stop dépassé pour user_id=%s, retry_after=%d",
+                    user_id or user_public_id,
+                    retry_after or 0,
+                )
+                emit(
+                    "rate_limit_exceeded",
+                    {
+                        "event": "rate_limit_exceeded",
+                        "message": f"Trop de requêtes. Réessayez dans {retry_after} secondes.",
+                        "retry_after": retry_after or 0,
+                    },
+                )
+                ws_metrics.on_rate_limit_hit("typing_stop")
                 return
 
             # Diffuser l'arrêt de frappe à la room de l'entreprise
@@ -759,9 +851,12 @@ def init_chat_socket(socketio: SocketIO):
             emit("error", {"error": str(e)})
 
     @socketio.on("driver_location")
-    def handle_driver_location(data):
+    def handle_driver_location(data):  # noqa: PLR0911
         """Handler pour la réception de la localisation du chauffeur.
         ✅ FIX: Accepte driver_id dans payload + fallback robuste par user_id.
+
+        Note: PLR0911 (too many returns) ignoré car les returns sont nécessaires
+        pour la validation et la gestion d'erreurs (sécurité, rate limiting, etc.).
         """
         try:
             # 1. Récupération du SID pour le debug
@@ -789,6 +884,43 @@ def init_chat_socket(socketio: SocketIO):
 
             # 4. Nouvelle approche: extraire driver_id du payload si disponible
             payload_driver_id = data.get("driver_id")
+
+            # ✅ Rate limiting: vérifier après avoir récupéré user_id et driver_id
+            client_ip = request.environ.get("REMOTE_ADDR", "unknown")
+
+            # Déterminer driver_id pour rate limiting
+            driver_id_for_rate_limit = payload_driver_id
+            if not driver_id_for_rate_limit:
+                # Fallback: chercher via user_id
+                driver = Driver.query.filter_by(user_id=user_id).first()
+                if driver:
+                    driver_id_for_rate_limit = driver.id
+
+            if driver_id_for_rate_limit:
+                allowed, retry_after = ws_rate_limiter.check_rate_limit(
+                    "driver_location",
+                    user_id=user_id,
+                    driver_id=int(driver_id_for_rate_limit),
+                    client_ip=client_ip,
+                )
+                if not allowed:
+                    logger.warning(
+                        "🚫 Rate limit driver_location dépassé pour driver_id=%s, retry_after=%d",
+                        driver_id_for_rate_limit,
+                        retry_after or 0,
+                    )
+                    emit(
+                        "rate_limit_exceeded",
+                        {
+                            "event": "rate_limit_exceeded",
+                            "message": f"Trop de mises à jour de position. Réessayez dans {retry_after} secondes.",
+                            "attempts": 1,
+                            "retry_after_seconds": retry_after,
+                        },
+                    )
+                    ws_metrics.on_error("rate_limit_exceeded")
+                    ws_metrics.on_rate_limit_hit("driver_location")
+                    return
 
             # 5. Déterminer le driver à utiliser
             driver: Driver | None = None
@@ -861,45 +993,59 @@ def init_chat_socket(socketio: SocketIO):
 
             latitude, longitude = lat, lon
 
-            # 6. Persister la dernière position (Redis + DB)
-            now_iso = datetime.now(UTC).isoformat()
+            # ✅ 3.3.1: Utiliser LocationService pour centraliser la logique
+            speed = data.get("speed")
+            heading = data.get("heading")
+            accuracy = data.get("accuracy")
+            timestamp_str = data.get("timestamp")
+            timestamp = (
+                datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+                if timestamp_str
+                else datetime.now(UTC)
+            )
+
+            snapped_lat, snapped_lon = latitude, longitude
             try:
-                # 🔹 Redis: clé courte pour get_driver_locations()
-                if redis_client:  # ✅ Vérification explicite pour satisfaire le linter
-                    key = f"driver:{driver.id}:loc"
-                    redis_client.hset(
-                        key,
-                        mapping={
-                            "lat": str(latitude),
-                            "lon": str(longitude),
-                            "ts": now_iso,
-                        },
-                    )
-                    # TTL raisonnable (par ex. 24h) pour éviter d'accumuler les clés mortes
-                    with suppress(Exception):
-                        redis_client.expire(key, 24 * 3600)
-            except Exception as e_redis:
-                logger.exception(
-                    "❌ Erreur écriture Redis driver_location pour driver %s: %s",
-                    driver.id,
-                    e_redis,
+                location_service = get_location_service()
+                result = location_service.update_driver_location(
+                    driver_id=driver.id,
+                    latitude=latitude,
+                    longitude=longitude,
+                    speed=float(speed) if speed is not None else None,
+                    heading=float(heading) if heading is not None else None,
+                    accuracy=float(accuracy) if accuracy is not None else None,
+                    source="gps",
+                    timestamp=timestamp,
                 )
 
-            try:
-                # 🔹 DB: stocker aussi sur le modèle Driver (fallback si Redis down)
-                driver.latitude = latitude
-                driver.longitude = longitude
-                db.session.add(driver)
-                db.session.commit()
-            except Exception as e_db:
-                db.session.rollback()
-                logger.exception(
-                    "❌ Erreur mise à jour DB driver_location pour driver %s: %s",
+                # Utiliser position snapée
+                snapped_lat = result.snapped_lat
+                snapped_lon = result.snapped_lon
+
+                # Émettre events geofencing si détectés
+                for event in result.geofence_events:
+                    if event == "arrived_at_pickup":
+                        emit("driver:arrived_at_pickup", {"driver_id": driver.id})
+                    elif event == "arrived_at_dropoff":
+                        emit("driver:arrived_at_dropoff", {"driver_id": driver.id})
+
+                logger.info(
+                    "[LocationService] Position updated: driver=%d source=%s geofence_events=%s trip_logged=%s",
                     driver.id,
-                    e_db,
+                    result.source,
+                    result.geofence_events,
+                    result.trip_logged,
                 )
+
+            except Exception as e_loc:
+                logger.exception(
+                    "❌ Erreur LocationService pour driver %s: %s", driver.id, e_loc
+                )
+                # Fallback: utiliser position brute
+                snapped_lat, snapped_lon = latitude, longitude
 
             # 7. Diffuser la position aux rooms de l'entreprise
+            now_iso = datetime.now(UTC).isoformat()
             company_room = f"company_{company_id_val}"
             cast("Any", emit)(
                 "driver_location_update",
@@ -908,8 +1054,8 @@ def init_chat_socket(socketio: SocketIO):
                     "first_name": getattr(
                         getattr(driver, "user", None), "first_name", None
                     ),
-                    "latitude": latitude,
-                    "longitude": longitude,
+                    "latitude": snapped_lat,
+                    "longitude": snapped_lon,
                     "timestamp": now_iso,
                 },
                 room=company_room,
@@ -918,8 +1064,8 @@ def init_chat_socket(socketio: SocketIO):
                 "📡 Loc -> %s (driver %s) %s,%s",
                 company_room,
                 driver.id,
-                latitude,
-                longitude,
+                snapped_lat,
+                snapped_lon,
             )
 
         except Exception as e:
@@ -939,6 +1085,7 @@ def init_chat_socket(socketio: SocketIO):
                 len(data.get("positions", [])),
             )
 
+            # ✅ SECURITY: Utiliser JWT depuis _SID_INDEX uniquement
             sid_info = _SID_INDEX.get(current_sid, {})
             user_public_id = sid_info.get("user_public_id")
             user_role = sid_info.get("role")
@@ -955,6 +1102,46 @@ def init_chat_socket(socketio: SocketIO):
             if not user:
                 emit("error", {"error": "Utilisateur introuvable"})
                 return
+            user_id = user.id
+
+            payload_driver_id = data.get("driver_id")
+
+            # ✅ Rate limiting: vérifier après avoir récupéré user_id et driver_id
+            client_ip = request.environ.get("REMOTE_ADDR", "unknown")
+
+            # Déterminer driver_id pour rate limiting
+            driver_id_for_rate_limit = payload_driver_id
+            if not driver_id_for_rate_limit:
+                # Fallback: chercher via user_id
+                driver = Driver.query.filter_by(user_id=user_id).first()
+                if driver:
+                    driver_id_for_rate_limit = driver.id
+
+            if driver_id_for_rate_limit:
+                allowed, retry_after = ws_rate_limiter.check_rate_limit(
+                    "driver_location_batch",
+                    user_id=user_id,
+                    driver_id=int(driver_id_for_rate_limit),
+                    client_ip=client_ip,
+                )
+                if not allowed:
+                    logger.warning(
+                        "🚫 Rate limit driver_location_batch dépassé pour driver_id=%s, retry_after=%d",
+                        driver_id_for_rate_limit,
+                        retry_after or 0,
+                    )
+                    emit(
+                        "rate_limit_exceeded",
+                        {
+                            "event": "rate_limit_exceeded",
+                            "message": f"Trop de mises à jour batch. Réessayez dans {retry_after} secondes.",
+                            "attempts": 1,
+                            "retry_after_seconds": retry_after,
+                        },
+                    )
+                    ws_metrics.on_error("rate_limit_exceeded")
+                    ws_metrics.on_rate_limit_hit("driver_location_batch")
+                    return
 
             payload_driver_id = data.get("driver_id")
             driver: Driver | None = None
@@ -1017,44 +1204,56 @@ def init_chat_socket(socketio: SocketIO):
                     if not (-LON_THRESHOLD <= longitude <= LON_THRESHOLD):
                         continue
 
-                    # Persister dans Redis
+                    # ✅ 3.3.1: Utiliser LocationService pour chaque position du batch
+                    speed = pos.get("speed")
+                    heading = pos.get("heading")
+                    accuracy = pos.get("accuracy")
+                    timestamp_str = pos.get("timestamp")
+                    timestamp = (
+                        datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+                        if timestamp_str
+                        else datetime.now(UTC)
+                    )
+
+                    snapped_lat, snapped_lon = latitude, longitude
                     try:
-                        if (
-                            redis_client
-                        ):  # ✅ Vérification explicite pour satisfaire le linter
-                            key = f"driver:{driver.id}:loc"
-                            redis_client.hset(
-                                key,
-                                mapping={
-                                    "lat": str(latitude),
-                                    "lon": str(longitude),
-                                    "ts": now_iso,
-                                },
-                            )
-                            redis_client.expire(key, 24 * 3600)
-                    except Exception as e_redis:
-                        logger.exception(
-                            "❌ Erreur Redis driver_location_batch pour driver %s: %s",
-                            driver.id,
-                            e_redis,
+                        location_service = get_location_service()
+                        result = location_service.update_driver_location(
+                            driver_id=driver.id,
+                            latitude=latitude,
+                            longitude=longitude,
+                            speed=float(speed) if speed is not None else None,
+                            heading=float(heading) if heading is not None else None,
+                            accuracy=float(accuracy) if accuracy is not None else None,
+                            source="gps",
+                            timestamp=timestamp,
                         )
 
-                    # Persister dans DB (seulement la dernière position du batch)
-                    if pos == positions[-1]:
-                        try:
-                            driver.latitude = latitude
-                            driver.longitude = longitude
-                            db.session.add(driver)
-                            db.session.commit()
-                        except Exception as e_db:
-                            db.session.rollback()
-                            logger.exception(
-                                "❌ Erreur DB driver_location_batch pour driver %s: %s",
-                                driver.id,
-                                e_db,
-                            )
+                        # Utiliser position snapée
+                        snapped_lat = result.snapped_lat
+                        snapped_lon = result.snapped_lon
 
-                    # Diffuser chaque position
+                        # Émettre events geofencing si détectés (seulement pour dernière position)
+                        if pos == positions[-1]:
+                            for event in result.geofence_events:
+                                if event == "arrived_at_pickup":
+                                    emit(
+                                        "driver:arrived_at_pickup",
+                                        {"driver_id": driver.id},
+                                    )
+                                elif event == "arrived_at_dropoff":
+                                    emit(
+                                        "driver:arrived_at_dropoff",
+                                        {"driver_id": driver.id},
+                                    )
+                    except Exception as e_loc:
+                        logger.debug(
+                            "[LocationService] Batch position failed: %s", str(e_loc)
+                        )
+                        # Fallback: utiliser position brute
+                        snapped_lat, snapped_lon = latitude, longitude
+
+                    # Diffuser chaque position (snapée)
                     cast("Any", emit)(
                         "driver_location_update",
                         {
@@ -1062,9 +1261,9 @@ def init_chat_socket(socketio: SocketIO):
                             "first_name": getattr(
                                 getattr(driver, "user", None), "first_name", None
                             ),
-                            "latitude": latitude,
-                            "longitude": longitude,
-                            "timestamp": pos.get("timestamp") or now_iso,
+                            "latitude": snapped_lat,
+                            "longitude": snapped_lon,
+                            "timestamp": timestamp_str or now_iso,
                         },
                         room=company_room,
                     )

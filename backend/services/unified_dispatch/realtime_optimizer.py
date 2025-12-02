@@ -15,7 +15,8 @@ from flask import current_app
 from sqlalchemy import or_
 
 from ext import db
-from models import Assignment, Booking, BookingStatus, Driver
+from models import Assignment, Booking, BookingStatus, DelayEvent, Driver
+from services.auto_reassignment_service import get_auto_reassignment_service
 from services.ml.eta_delay_model import get_eta_delay_model
 from services.notification_service import notify_dispatcher_optimization_opportunity
 from services.unified_dispatch.data import calculate_eta
@@ -31,6 +32,11 @@ MIN_DETECTION_THRESHOLD = 5
 OVERLOADED_DRIVER_THRESHOLD = 2
 DEFAULT_CONFIDENCE_THRESHOLD = (
     0.6  # Epic 4.1 - Seuil P(retard) pour notification/reassign
+)
+# ✅ 3.5.1: Constantes pour inférence cause retard
+HIGH_DELAY_TRAFFIC_THRESHOLD = 30  # Retard > 30 min = probablement trafic
+BOOKING_TIME_DIFF_THRESHOLD = (
+    5  # Booking créé/modifié dans les ±5 min = probablement retard booking
 )
 
 """Système d'optimisation en temps réel pour le dispatch.
@@ -88,6 +94,7 @@ class RealtimeOptimizer:
         self.eta_delay_model = (
             get_eta_delay_model()
         )  # Epic 4.1 - Modèle ML prédiction retard
+        self.auto_reassignment_service = get_auto_reassignment_service()  # ✅ 3.4.1
         self._running = False
         self._thread: threading.Thread | None = None
         self._last_check: datetime | None = None
@@ -294,6 +301,33 @@ class RealtimeOptimizer:
 
             # Déterminer la sévérité
             severity = self._determine_severity(delay_minutes, booking)
+
+            # ✅ 3.5.1: Logger événement retard dans table delay_events
+            try:
+                # Créer instance DelayEvent avec attributs (SQLAlchemy accepte attributs directement)
+                delay_event = DelayEvent()
+                delay_event.assignment_id = int(tcast("Any", assignment.id))
+                delay_event.booking_id = int(tcast("Any", booking.id))
+                delay_event.delay_minutes = delay_minutes
+                delay_event.severity = severity
+                delay_event.detected_at = now_local()
+                delay_event.cause = self._infer_delay_cause(
+                    assignment, booking, driver, delay_minutes
+                )
+                db.session.add(delay_event)
+                db.session.commit()
+                logger.debug(
+                    "[RealtimeOptimizer] Logged delay event %s for assignment %s",
+                    delay_event.id,
+                    assignment.id,
+                )
+            except Exception as e:
+                logger.warning(
+                    "[RealtimeOptimizer] Failed to log delay event for assignment %s: %s",
+                    assignment.id,
+                    e,
+                )
+                db.session.rollback()
 
             # Vérifier si auto-applicable (toutes les suggestions sont
             # auto-applicables)
@@ -557,6 +591,56 @@ class RealtimeOptimizer:
             )
 
         return opportunities
+
+    def _infer_delay_cause(
+        self,
+        assignment: Assignment,
+        booking: Booking,
+        driver: Driver,  # noqa: ARG002
+        delay_minutes: int,
+    ) -> str | None:
+        """Infère la cause probable du retard.
+
+        Args:
+            assignment: Assignment concerné
+            booking: Booking concerné
+            driver: Driver concerné
+            delay_minutes: Retard en minutes
+
+        Returns:
+            Cause probable ("traffic", "driver_late", "booking_delay", etc.) ou None
+        """
+        # Heuristique simple : si le retard est très élevé, probablement trafic
+        if delay_minutes > HIGH_DELAY_TRAFFIC_THRESHOLD:
+            return "traffic"
+
+        # Si le chauffeur a plusieurs assignments en retard, probablement surchargé
+        # (vérification simplifiée, pourrait être améliorée)
+        if hasattr(assignment, "driver_id") and assignment.driver_id:
+            try:
+                other_assignments = Assignment.query.filter(
+                    Assignment.driver_id == assignment.driver_id,
+                    Assignment.id != assignment.id,
+                    Assignment.status.in_(["assigned", "in_progress"]),
+                ).count()
+                if other_assignments >= OVERLOADED_DRIVER_THRESHOLD:
+                    return "driver_overloaded"
+            except Exception:
+                pass
+
+        # Si l'heure prévue est très proche de maintenant, probablement retard booking
+        if booking.scheduled_time:
+            time_diff = (booking.scheduled_time - now_local()).total_seconds() / 60
+            if (
+                -BOOKING_TIME_DIFF_THRESHOLD <= time_diff <= BOOKING_TIME_DIFF_THRESHOLD
+            ):  # Booking créé/modifié très récemment
+                return "booking_delay"
+
+        # Par défaut, considérer comme retard chauffeur
+        if delay_minutes > 0:
+            return "driver_late"
+
+        return None
 
     def _determine_severity(self, delay_minutes: int, booking: Booking) -> str:
         """Détermine la sévérité basée sur le retard et le type de booking."""

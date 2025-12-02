@@ -1,8 +1,18 @@
 # backend/services/websocket_metrics.py
 
+"""Métriques WebSocket avec export Prometheus."""
+
 from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional
+
+try:
+    from prometheus_client import Counter, Gauge, Histogram
+except ImportError:
+    # Prometheus client non disponible (tests, dev sans prometheus)
+    Counter = None
+    Gauge = None
+    Histogram = None
 
 
 class WebSocketMetrics:
@@ -24,6 +34,57 @@ class WebSocketMetrics:
         # Tracking des rooms : room_name -> nombre de clients connectés
         self.rooms_active: Dict[str, int] = defaultdict(int)
 
+        # ✅ Métriques Prometheus (si disponible)
+        if Counter and Gauge and Histogram:
+            self._prom_connections_active = Gauge(
+                "socketio_connections_active",
+                "Connexions Socket.IO actives",
+                ["company_id"],
+            )
+            self._prom_connections_total = Counter(
+                "socketio_connections_total",
+                "Total connexions Socket.IO",
+            )
+            self._prom_disconnections_total = Counter(
+                "socketio_disconnections_total",
+                "Total déconnexions Socket.IO",
+            )
+            self._prom_reconnections_total = Counter(
+                "socketio_reconnections_total",
+                "Total reconnexions Socket.IO",
+                ["reason"],
+            )
+            self._prom_events_total = Counter(
+                "socketio_events_total",
+                "Total events Socket.IO émis",
+                ["event", "room"],
+            )
+            self._prom_heartbeat_latency = Histogram(
+                "socketio_heartbeat_latency_ms",
+                "Latence heartbeat Socket.IO (ms)",
+                buckets=[10, 50, 100, 200, 500, 1000, 2000, 5000],
+            )
+            self._prom_rate_limit_hits = Counter(
+                "socketio_rate_limit_hits_total",
+                "Total hits de rate limiting",
+                ["event"],
+            )
+            self._prom_errors_total = Counter(
+                "socketio_errors_total",
+                "Total erreurs Socket.IO",
+                ["error_type"],
+            )
+        else:
+            # Pas de Prometheus disponible
+            self._prom_connections_active = None
+            self._prom_connections_total = None
+            self._prom_disconnections_total = None
+            self._prom_reconnections_total = None
+            self._prom_events_total = None
+            self._prom_heartbeat_latency = None
+            self._prom_rate_limit_hits = None
+            self._prom_errors_total = None
+
     def on_connect(
         self,
         company_id: Optional[int] = None,
@@ -39,6 +100,12 @@ class WebSocketMetrics:
         if company_id:
             self.connections_active[company_id] += 1
 
+        # ✅ Métriques Prometheus
+        if self._prom_connections_total:
+            self._prom_connections_total.inc()
+        if self._prom_connections_active and company_id:
+            self._prom_connections_active.labels(company_id=str(company_id)).inc()
+
     def on_disconnect(self, company_id: Optional[int] = None):
         """Enregistre une déconnexion."""
         self.disconnections_total += 1
@@ -47,10 +114,25 @@ class WebSocketMetrics:
                 0, self.connections_active[company_id] - 1
             )
 
-    def on_reconnect(self, user_id: Optional[int] = None):
-        """Enregistre une reconnexion."""
+        # ✅ Métriques Prometheus
+        if self._prom_disconnections_total:
+            self._prom_disconnections_total.inc()
+        if self._prom_connections_active and company_id:
+            self._prom_connections_active.labels(company_id=str(company_id)).dec()
+
+    def on_reconnect(self, user_id: Optional[int] = None, reason: Optional[str] = None):
+        """Enregistre une reconnexion.
+
+        Args:
+            user_id: ID de l'utilisateur (optionnel)
+            reason: Raison de la reconnexion (optionnel, pour Prometheus)
+        """
         if user_id:
             self.reconnections_count[user_id] += 1
+
+        # ✅ Métriques Prometheus
+        if self._prom_reconnections_total:
+            self._prom_reconnections_total.labels(reason=reason or "unknown").inc()
 
     def on_heartbeat_pong(self, latency_ms: float):
         """Enregistre la latence d'un heartbeat pong."""
@@ -61,9 +143,17 @@ class WebSocketMetrics:
                 -self._max_latency_samples :
             ]
 
+        # ✅ Métriques Prometheus
+        if self._prom_heartbeat_latency:
+            self._prom_heartbeat_latency.observe(latency_ms)
+
     def on_error(self, error_type: str):
         """Enregistre une erreur."""
         self.errors_count[error_type] += 1
+
+        # ✅ Métriques Prometheus
+        if self._prom_errors_total:
+            self._prom_errors_total.labels(error_type=error_type).inc()
 
     def on_room_join(self, room_name: str):
         """Enregistre qu'un client a rejoint une room.
@@ -72,6 +162,25 @@ class WebSocketMetrics:
             room_name: Nom de la room (ex: "company_1", "driver_10")
         """
         self.rooms_active[room_name] += 1
+
+    def on_event_emit(self, event: str, room: Optional[str] = None):
+        """Enregistre l'émission d'un event (pour Prometheus).
+
+        Args:
+            event: Nom de l'event
+            room: Room concernée (optionnel)
+        """
+        if self._prom_events_total:
+            self._prom_events_total.labels(event=event, room=room or "broadcast").inc()
+
+    def on_rate_limit_hit(self, event: str):
+        """Enregistre un hit de rate limiting (pour Prometheus).
+
+        Args:
+            event: Nom de l'event
+        """
+        if self._prom_rate_limit_hits:
+            self._prom_rate_limit_hits.labels(event=event).inc()
 
     def on_room_leave(self, room_name: str):
         """Enregistre qu'un client a quitté une room.
