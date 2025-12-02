@@ -12,6 +12,7 @@ import ReservationActions from '../../../../components/reservations/ReservationA
 const DispatchTable = ({
   reservations = [],
   dispatches,
+  delays = [], // ✅ Retards détectés pour affichage visuel
   onRowClick,
   onAccept,
   onReject,
@@ -28,6 +29,28 @@ const DispatchTable = ({
 
   // Support des deux noms de prop pour compatibilité
   const data = dispatches || reservations || [];
+
+  // ✅ Fonction helper pour trouver le retard d'une course
+  const getDelayForBooking = (bookingId) => {
+    if (!delays || delays.length === 0 || !bookingId) return null;
+    // Gérer les cas où booking_id pourrait être string ou number
+    return delays.find(d => 
+      d.booking_id === bookingId || 
+      Number(d.booking_id) === Number(bookingId)
+    );
+  };
+
+  // ✅ Fonction pour déterminer le type de retard
+  const getDelayStatus = (delayInfo) => {
+    if (!delayInfo) return null;
+    const delayMinutes = delayInfo.delay_minutes || 
+                         delayInfo.pickup_delay_minutes || 
+                         delayInfo.dropoff_delay_minutes || 
+                         0;
+    if (delayMinutes <= 0) return null;
+    if (delayMinutes >= 10) return 'critical'; // Retard critique
+    return 'slight'; // Retard léger
+  };
 
   return (
     <div className={styles.tableContainer}>
@@ -65,9 +88,30 @@ const DispatchTable = ({
             const _needsTimeConfirmation =
               isReturn && (r.time_confirmed === false || !r.scheduled_time);
 
+            // ✅ Obtenir les infos de retard pour cette course
+            const delayInfo = getDelayForBooking(r.id);
+            const delayStatus = getDelayStatus(delayInfo);
+            const delayMinutes = delayInfo 
+              ? Math.round(delayInfo.delay_minutes || delayInfo.pickup_delay_minutes || delayInfo.dropoff_delay_minutes || 0)
+              : 0;
+
             return (
-              <tr key={r.id} onClick={() => onRowClick?.(r)} className={styles.tableRow}>
-                <td className={styles.clientCell}>{r.client?.full_name || r.customer_name}</td>
+              <tr 
+                key={r.id} 
+                onClick={() => onRowClick?.(r)} 
+                className={`${styles.tableRow} ${
+                  delayStatus === 'critical' ? styles.rowDelayed : 
+                  delayStatus === 'slight' ? styles.rowSlightDelay : ''
+                }`}
+              >
+                <td className={styles.clientCell}>
+                  {r.client?.full_name || r.customer_name}
+                  {delayInfo && delayMinutes > 0 && (
+                    <span className={styles.delayBadge} title={`Retard de ${delayMinutes} minutes`}>
+                      ⚠️ {delayMinutes} min
+                    </span>
+                  )}
+                </td>
                 <td>{renderBookingDateTime(r)}</td>
                 <td className={styles.locationCell}>
                   <div>
@@ -89,6 +133,11 @@ const DispatchTable = ({
                   <span className={`${styles.statusBadge} ${styles[status] || ''}`}>
                     {(r.status || '').replace('_', ' ') || status}
                   </span>
+                  {delayInfo && delayMinutes > 0 && (
+                    <div className={styles.delayIndicator}>
+                      ⚠️ Retard: {delayMinutes} min
+                    </div>
+                  )}
                 </td>
                 <td
                   className={styles.actionsCell}

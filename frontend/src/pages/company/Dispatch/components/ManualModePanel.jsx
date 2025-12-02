@@ -13,6 +13,7 @@ import RLSuggestionCard from '../../../../components/RL/RLSuggestionCard';
  */
 const ManualModePanel = ({
   dispatches = [],
+  delays = [], // ✅ Retards détectés pour affichage dans le tableau
   loading,
   error,
   sortBy,
@@ -124,6 +125,7 @@ const ManualModePanel = ({
       ) : (
         <DispatchTable
           dispatches={sortedDispatches}
+          delays={delays}
           onAssign={
             setSelectedReservationForAssignment
               ? (reservationId) => {
