@@ -350,6 +350,17 @@ jobs:
           source: "docker-compose.production.yml,docker-compose.monitoring.yml"
           target: "/srv/atmr"
 
+      - name: Copy monitoring directory to server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ env.SSH_KEY }}
+          port: ${{ env.SSH_PORT }}
+          source: "monitoring/"
+          target: "/srv/atmr/"
+          strip_components: 0
+
       - name: Copy smoke tests script to server
         uses: appleboy/scp-action@master
         with:
@@ -539,6 +550,28 @@ jobs:
             echo "📊 Démarrage du monitoring..."
             if [ -f "docker-compose.monitoring.yml" ]; then
               echo "✅ docker-compose.monitoring.yml trouvé, démarrage du monitoring..."
+              
+              # Vérifier que le répertoire monitoring existe
+              if [ -d "monitoring" ]; then
+                echo "✅ Répertoire monitoring trouvé"
+                
+                # Donner les permissions d'exécution au script d'entrypoint d'Alertmanager
+                if [ -f "monitoring/alertmanager/docker-entrypoint.sh" ]; then
+                  echo "🔧 Configuration des permissions pour docker-entrypoint.sh..."
+                  chmod +x monitoring/alertmanager/docker-entrypoint.sh || true
+                fi
+                
+                # Reconstruire Alertmanager si le Dockerfile existe (pour inclure le script d'entrypoint)
+                if [ -f "monitoring/alertmanager/Dockerfile" ]; then
+                  echo "🔨 Reconstruction d'Alertmanager avec le nouveau Dockerfile..."
+                  docker compose -f docker-compose.monitoring.yml build alertmanager || {
+                    echo "⚠️  Erreur lors de la reconstruction d'Alertmanager, continuation avec l'image existante..."
+                  }
+                fi
+              else
+                echo "⚠️  Répertoire monitoring non trouvé, certains services peuvent ne pas fonctionner correctement"
+              fi
+              
               docker compose -f docker-compose.monitoring.yml up -d || {
                 echo "⚠️  Erreur lors du démarrage du monitoring, vérification des logs..."
                 docker compose -f docker-compose.monitoring.yml logs --tail 50 || true

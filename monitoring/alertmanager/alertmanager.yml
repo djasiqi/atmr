@@ -1,23 +1,28 @@
 # alertmanager.yml
 # Configuration Alertmanager production pour ATMR
+# ⚠️ IMPORTANT: Les variables d'environnement doivent être définies dans .env.production
+# Si SMTP_HOST ou SLACK_WEBHOOK_URL sont vides, les notifications correspondantes seront désactivées
 
 global:
   resolve_timeout: 5m
   # ✅ Slack webhook - Configurer SLACK_WEBHOOK_URL dans .env.production
   # Format: https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+  # Si vide, la ligne sera commentée par le script d'entrypoint
   slack_api_url: '${SLACK_WEBHOOK_URL}'
   
   # ✅ Email SMTP - Configurer les variables dans .env.production
-  # Format: ${SMTP_HOST}:${SMTP_PORT:-587}
+  # Format: ${SMTP_HOST}:${SMTP_PORT}
   # Exemple Gmail: smtp.gmail.com:587
   # Exemple SendGrid: smtp.sendgrid.net:587
   # Exemple GoDaddy: smtpout.secureserver.net:465 (SSL)
-  # Le port par défaut est 587 (TLS), mais peut être surchargé via SMTP_PORT
-  smtp_smarthost: '${SMTP_HOST}:${SMTP_PORT:-587}'
+  # Les valeurs par défaut sont gérées par le script d'entrypoint
+  # ⚠️ Si SMTP_HOST n'est pas défini, utiliser localhost (emails ne fonctionneront pas mais Alertmanager démarrera)
+  smtp_smarthost: '${SMTP_HOST}:${SMTP_PORT}'
   smtp_from: '${ALERTMANAGER_FROM_EMAIL}'
   smtp_auth_username: '${SMTP_USERNAME}'
   smtp_auth_password: '${SMTP_PASSWORD}'
-  smtp_require_tls: true
+  # Désactiver TLS si SMTP_HOST est localhost (pas de vrai serveur SMTP)
+  smtp_require_tls: false
 
 # Templates pour notifications personnalisées
 templates:
@@ -113,6 +118,8 @@ inhibit_rules:
 # Receivers (destinations des alertes)
 receivers:
   # Receiver par défaut → Slack + Email (alertes non critiques)
+  # ⚠️ Si SLACK_WEBHOOK_URL est vide, slack_configs sera ignoré
+  # ⚠️ Si SMTP_HOST est localhost ou ALERT_EMAIL_TO est vide, email ne fonctionnera pas
   - name: 'default-receiver'
     slack_configs:
       - channel: '#atmr-alerts'
@@ -120,7 +127,7 @@ receivers:
         text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
         send_resolved: true
     email_configs:
-      - to: '${ALERT_EMAIL_TO}'
+      - to: '${ALERT_EMAIL_TO:-noreply@atmr.local}'
         headers:
           Subject: '⚠️ ATMR Alert: {{ .GroupLabels.alertname }}'
         html: '{{ range .Alerts }}<h2>{{ .Annotations.summary }}</h2><p>{{ .Annotations.description }}</p>{{ end }}'
@@ -140,7 +147,7 @@ receivers:
         send_resolved: true
     
     email_configs:
-      - to: '${ALERT_EMAIL_TO}'
+      - to: '${ALERT_EMAIL_TO:-noreply@atmr.local}'
         headers:
           Subject: '🚨 ATMR Critical Alert: {{ .GroupLabels.alertname }}'
         html: |
@@ -152,12 +159,6 @@ receivers:
           <hr>
           {{ end }}
         send_resolved: true
-    
-    # ⚠️ Webhook backend désactivé par défaut (endpoint n'existe pas)
-    # Décommenter et créer l'endpoint /api/v1/alerts/webhook si nécessaire
-    # webhook_configs:
-    #   - url: 'http://backend:5000/api/v1/alerts/webhook'
-    #     send_resolved: true
 
   # WebSocket critiques
   - name: 'websocket-critical'
@@ -167,7 +168,7 @@ receivers:
         text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
         send_resolved: true
     email_configs:
-      - to: '${ALERT_EMAIL_TO}'
+      - to: '${ALERT_EMAIL_TO:-noreply@atmr.local}'
         headers:
           Subject: '🔌 WebSocket Critical: {{ .GroupLabels.alertname }}'
         html: '{{ range .Alerts }}<h2>{{ .Annotations.summary }}</h2><p>{{ .Annotations.description }}</p>{{ end }}'
@@ -181,7 +182,7 @@ receivers:
         text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
         send_resolved: true
     email_configs:
-      - to: '${ALERT_EMAIL_TO}'
+      - to: '${ALERT_EMAIL_TO:-noreply@atmr.local}'
         headers:
           Subject: '🗺️ OSRM Critical: {{ .GroupLabels.alertname }}'
         html: '{{ range .Alerts }}<h2>{{ .Annotations.summary }}</h2><p>{{ .Annotations.description }}</p>{{ end }}'
@@ -195,7 +196,7 @@ receivers:
         text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
         send_resolved: true
     email_configs:
-      - to: '${ALERT_EMAIL_TO}'
+      - to: '${ALERT_EMAIL_TO:-noreply@atmr.local}'
         headers:
           Subject: '🚗 Dispatch Critical: {{ .GroupLabels.alertname }}'
         html: '{{ range .Alerts }}<h2>{{ .Annotations.summary }}</h2><p>{{ .Annotations.description }}</p>{{ end }}'
@@ -209,7 +210,7 @@ receivers:
         text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
         send_resolved: true
     email_configs:
-      - to: '${ALERT_EMAIL_TO}'
+      - to: '${ALERT_EMAIL_TO:-noreply@atmr.local}'
         headers:
           Subject: '🖥️ Infrastructure Critical: {{ .GroupLabels.alertname }}'
         html: '{{ range .Alerts }}<h2>{{ .Annotations.summary }}</h2><p>{{ .Annotations.description }}</p>{{ end }}'
@@ -223,7 +224,7 @@ receivers:
         text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
         send_resolved: true
     email_configs:
-      - to: '${ALERT_EMAIL_TO}'
+      - to: '${ALERT_EMAIL_TO:-noreply@atmr.local}'
         headers:
           Subject: '🗄️ Database Critical: {{ .GroupLabels.alertname }}'
         html: '{{ range .Alerts }}<h2>{{ .Annotations.summary }}</h2><p>{{ .Annotations.description }}</p>{{ end }}'
@@ -237,9 +238,8 @@ receivers:
         text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
         send_resolved: true
     email_configs:
-      - to: '${ALERT_EMAIL_TO}'
+      - to: '${ALERT_EMAIL_TO:-noreply@atmr.local}'
         headers:
           Subject: '⚠️ ATMR Warning: {{ .GroupLabels.alertname }}'
         html: '{{ range .Alerts }}<h2>{{ .Annotations.summary }}</h2><p>{{ .Annotations.description }}</p>{{ end }}'
         send_resolved: true
-
