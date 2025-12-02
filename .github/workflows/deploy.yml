@@ -534,6 +534,23 @@ jobs:
               sleep 2
             done
             [ "$POSTGRES_READY" = "false" ] && { docker compose -f docker-compose.production.yml logs postgres | tail -100; exit 1; }
+
+            # ✅ Démarrer le monitoring (Prometheus + Grafana + Alertmanager)
+            echo "📊 Démarrage du monitoring..."
+            if [ -f "docker-compose.monitoring.yml" ]; then
+              echo "✅ docker-compose.monitoring.yml trouvé, démarrage du monitoring..."
+              docker compose -f docker-compose.monitoring.yml up -d || {
+                echo "⚠️  Erreur lors du démarrage du monitoring, vérification des logs..."
+                docker compose -f docker-compose.monitoring.yml logs --tail 50 || true
+                echo "⚠️  Le monitoring n'a pas pu démarrer, mais le déploiement continue..."
+              }
+              echo "⏳ Attente du démarrage du monitoring (10 secondes)..."
+              sleep 10
+              docker compose -f docker-compose.monitoring.yml ps || true
+            else
+              echo "⚠️  docker-compose.monitoring.yml non trouvé, monitoring non démarré"
+            fi
+
             export DATABASE_URL="${SQLALCHEMY_DATABASE_URI}"
             echo "📋 État des migrations avant upgrade:"
             docker_exec flask db current || true
