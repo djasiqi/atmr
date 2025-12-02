@@ -58,6 +58,9 @@ services:
     image: grafana/grafana:10.2.0
     container_name: atmr-grafana
     restart: unless-stopped
+    # Charger les variables depuis .env.production (créé par le workflow GitHub Actions)
+    env_file:
+      - .env.production
     # ⚠️ SÉCURITÉ: Ne pas exposer le port publiquement en production
     # Utiliser Traefik ou Nginx comme reverse proxy avec HTTPS
     # Pour développement local uniquement, décommenter la ligne suivante:
@@ -139,6 +142,9 @@ services:
     image: prom/alertmanager:v0.26.0
     container_name: atmr-alertmanager
     restart: unless-stopped
+    # Charger les variables depuis .env.production (créé par le workflow GitHub Actions)
+    env_file:
+      - .env.production
     command:
       - "--config.file=/etc/alertmanager/alertmanager.yml"
       - "--storage.path=/alertmanager"
@@ -261,6 +267,9 @@ services:
     image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
     container_name: atmr-postgres-exporter
     restart: unless-stopped
+    # Charger les variables depuis .env.production (créé par le workflow GitHub Actions)
+    env_file:
+      - .env.production
     environment:
       DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-atmr_user}:${POSTGRES_PASSWORD:-atmr_password}@postgres:5432/${POSTGRES_DB:-atmr_db}?sslmode=disable"
     ports:
@@ -268,9 +277,9 @@ services:
     networks:
       - monitoring
       - atmr-network
-    depends_on:
-      postgres:
-        condition: service_healthy
+    # Note: postgres est dans docker-compose.production.yml (conteneur atmr-postgres)
+    # La communication se fait via le réseau externe atmr-network
+    # depends_on supprimé car le service n'est pas dans ce fichier
     healthcheck:
       test:
         [
@@ -295,6 +304,9 @@ services:
     image: oliver006/redis_exporter:v1.55.0
     container_name: atmr-redis-exporter
     restart: unless-stopped
+    # Charger les variables depuis .env.production (créé par le workflow GitHub Actions)
+    env_file:
+      - .env.production
     environment:
       REDIS_ADDR: "redis:6379"
       REDIS_PASSWORD: "${REDIS_PASSWORD}"
@@ -303,9 +315,9 @@ services:
     networks:
       - monitoring
       - atmr-network
-    depends_on:
-      redis:
-        condition: service_healthy
+    # Note: redis est dans docker-compose.production.yml (conteneur atmr-redis)
+    # La communication se fait via le réseau externe atmr-network
+    # depends_on supprimé car le service n'est pas dans ce fichier
     healthcheck:
       test:
         [
