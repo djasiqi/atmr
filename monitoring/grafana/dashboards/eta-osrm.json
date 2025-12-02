@@ -1,10 +1,17 @@
 {
-  "dashboard": {
-    "title": "ETA & OSRM Performance - ATMR",
-    "tags": ["eta", "osrm", "routing", "atmr"],
-    "timezone": "browser",
-    "refresh": "15s",
-    "panels": [
+  "id": null,
+  "uid": "eta-osrm-atmr",
+  "title": "ETA & OSRM Performance - ATMR",
+  "tags": ["eta", "osrm", "routing", "atmr"],
+  "timezone": "browser",
+  "refresh": "15s",
+  "editable": true,
+  "graphTooltip": 0,
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "panels": [
       {
         "id": 1,
         "title": "Latence OSRM (Route/Matrix) - p95",
@@ -187,9 +194,8 @@
           }
         }
       }
-    ],
-    "schemaVersion": 38,
-    "version": 1
-  }
+  ],
+  "schemaVersion": 38,
+  "version": 1
 }
 

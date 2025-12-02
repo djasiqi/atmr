@@ -21,8 +21,12 @@ global:
   smtp_from: '${ALERTMANAGER_FROM_EMAIL}'
   smtp_auth_username: '${SMTP_USERNAME}'
   smtp_auth_password: '${SMTP_PASSWORD}'
-  # Désactiver TLS si SMTP_HOST est localhost (pas de vrai serveur SMTP)
-  smtp_require_tls: false
+  # TLS requis selon le port (géré automatiquement par le script d'entrypoint)
+  # Port 465 = SSL implicite (non supporté, utiliser 587)
+  # Port 587 = STARTTLS (recommandé, TLS requis)
+  # Port 25 = Pas de TLS (non recommandé)
+  # ⚠️ La valeur sera remplacée par le script d'entrypoint selon SMTP_PORT
+  smtp_require_tls: true
 
 # Templates pour notifications personnalisées
 templates:
