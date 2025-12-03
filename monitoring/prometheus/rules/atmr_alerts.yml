@@ -97,13 +97,16 @@ groups:
       - alert: OSRMLowCacheHitRate
         expr: |
           osrm_cache_hit_rate < 0.70
+          AND
+          (osrm_cache_hits_total + osrm_cache_misses_total) > 100
         for: 10m
         labels:
           severity: warning
           component: osrm
         annotations:
           summary: "Cache hit rate OSRM < 70%"
-          description: "Hit rate actuel: {{ $value | humanizePercentage }}"
+          description: "Hit rate actuel: {{ $value | humanizePercentage }} ({{ $labels.instance }})"
+          action: "Vérifier si le cache Redis OSRM fonctionne correctement et si les requêtes sont fréquentes"
 
       - alert: OSRMCacheBypassHigh
         expr: |

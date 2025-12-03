@@ -131,7 +131,7 @@ receivers:
         text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
         send_resolved: true
     email_configs:
-      - to: '${ALERT_EMAIL_TO:-noreply@atmr.local}'
+      - to: ${ALERT_EMAIL_TO}
         headers:
           Subject: '⚠️ ATMR Alert: {{ .GroupLabels.alertname }}'
         html: '{{ range .Alerts }}<h2>{{ .Annotations.summary }}</h2><p>{{ .Annotations.description }}</p>{{ end }}'
@@ -151,7 +151,7 @@ receivers:
         send_resolved: true
     
     email_configs:
-      - to: '${ALERT_EMAIL_TO:-noreply@atmr.local}'
+      - to: ${ALERT_EMAIL_TO}
         headers:
           Subject: '🚨 ATMR Critical Alert: {{ .GroupLabels.alertname }}'
         html: |
@@ -172,7 +172,7 @@ receivers:
         text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
         send_resolved: true
     email_configs:
-      - to: '${ALERT_EMAIL_TO:-noreply@atmr.local}'
+      - to: ${ALERT_EMAIL_TO}
         headers:
           Subject: '🔌 WebSocket Critical: {{ .GroupLabels.alertname }}'
         html: '{{ range .Alerts }}<h2>{{ .Annotations.summary }}</h2><p>{{ .Annotations.description }}</p>{{ end }}'
@@ -186,7 +186,7 @@ receivers:
         text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
         send_resolved: true
     email_configs:
-      - to: '${ALERT_EMAIL_TO:-noreply@atmr.local}'
+      - to: ${ALERT_EMAIL_TO}
         headers:
           Subject: '🗺️ OSRM Critical: {{ .GroupLabels.alertname }}'
         html: '{{ range .Alerts }}<h2>{{ .Annotations.summary }}</h2><p>{{ .Annotations.description }}</p>{{ end }}'
@@ -200,7 +200,7 @@ receivers:
         text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
         send_resolved: true
     email_configs:
-      - to: '${ALERT_EMAIL_TO:-noreply@atmr.local}'
+      - to: ${ALERT_EMAIL_TO}
         headers:
           Subject: '🚗 Dispatch Critical: {{ .GroupLabels.alertname }}'
         html: '{{ range .Alerts }}<h2>{{ .Annotations.summary }}</h2><p>{{ .Annotations.description }}</p>{{ end }}'
@@ -214,7 +214,7 @@ receivers:
         text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
         send_resolved: true
     email_configs:
-      - to: '${ALERT_EMAIL_TO:-noreply@atmr.local}'
+      - to: ${ALERT_EMAIL_TO}
         headers:
           Subject: '🖥️ Infrastructure Critical: {{ .GroupLabels.alertname }}'
         html: '{{ range .Alerts }}<h2>{{ .Annotations.summary }}</h2><p>{{ .Annotations.description }}</p>{{ end }}'
@@ -228,7 +228,7 @@ receivers:
         text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
         send_resolved: true
     email_configs:
-      - to: '${ALERT_EMAIL_TO:-noreply@atmr.local}'
+      - to: ${ALERT_EMAIL_TO}
         headers:
           Subject: '🗄️ Database Critical: {{ .GroupLabels.alertname }}'
         html: '{{ range .Alerts }}<h2>{{ .Annotations.summary }}</h2><p>{{ .Annotations.description }}</p>{{ end }}'
@@ -242,7 +242,7 @@ receivers:
         text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
         send_resolved: true
     email_configs:
-      - to: '${ALERT_EMAIL_TO:-noreply@atmr.local}'
+      - to: ${ALERT_EMAIL_TO}
         headers:
           Subject: '⚠️ ATMR Warning: {{ .GroupLabels.alertname }}'
         html: '{{ range .Alerts }}<h2>{{ .Annotations.summary }}</h2><p>{{ .Annotations.description }}</p>{{ end }}'

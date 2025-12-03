@@ -7,7 +7,7 @@ import {
   configureNotifications,
   initNotifications,
 } from "@/services/notification";
-import { Platform } from "react-native";
+import { Platform, View, Text, ActivityIndicator, StyleSheet } from "react-native";
 import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { registerPushToken } from "@/services/api"; // si l'alias '@' n'est pas configuré: ../services/api
@@ -247,6 +247,16 @@ function RootNav() {
     };
   }, [driver, isDriverAuthenticated, loading]);
 
+  // ✅ UX : Afficher un écran de chargement pendant l'auto-login
+  if (loading || versionLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={styles.loadingText}>Reconnexion en cours…</Text>
+      </View>
+    );
+  }
+
   return (
     <>
       <Slot />
@@ -255,3 +265,17 @@ function RootNav() {
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: "#666666",
+  },
+});

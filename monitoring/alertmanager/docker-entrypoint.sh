@@ -93,14 +93,26 @@ else
   echo "⚠️  envsubst non disponible, utilisation de sed simple..."
 
   # Substitution basique des variables connues
+  # Gérer les valeurs par défaut dans le script (pas dans le YAML)
+  ALERT_EMAIL_TO_VALUE="${ALERT_EMAIL_TO:-noreply@atmr.local}"
+  ALERTMANAGER_FROM_EMAIL_VALUE="${ALERTMANAGER_FROM_EMAIL:-alerts@atmr.local}"
+  
+  # Remplacer toutes les variables (gérer les guillemets simples dans le YAML)
   sed -i \
+    -e "s|'\${SMTP_HOST}'|'$SMTP_HOST'|g" \
     -e "s|\${SMTP_HOST}|$SMTP_HOST|g" \
+    -e "s|'\${SMTP_PORT}'|'$SMTP_PORT'|g" \
     -e "s|\${SMTP_PORT}|$SMTP_PORT|g" \
-    -e "s|\${ALERTMANAGER_FROM_EMAIL}|$ALERTMANAGER_FROM_EMAIL|g" \
+    -e "s|'\${ALERTMANAGER_FROM_EMAIL}'|'$ALERTMANAGER_FROM_EMAIL_VALUE'|g" \
+    -e "s|\${ALERTMANAGER_FROM_EMAIL}|$ALERTMANAGER_FROM_EMAIL_VALUE|g" \
+    -e "s|'\${SMTP_USERNAME}'|'$SMTP_USERNAME'|g" \
     -e "s|\${SMTP_USERNAME}|$SMTP_USERNAME|g" \
+    -e "s|'\${SMTP_PASSWORD}'|'$SMTP_PASSWORD'|g" \
     -e "s|\${SMTP_PASSWORD}|$SMTP_PASSWORD|g" \
-    -e "s|\${ALERT_EMAIL_TO}|$ALERT_EMAIL_TO|g" \
+    -e "s|\${ALERT_EMAIL_TO}|$ALERT_EMAIL_TO_VALUE|g" \
+    -e "s|'\${ALERTMANAGER_EXTERNAL_URL}'|'$ALERTMANAGER_EXTERNAL_URL'|g" \
     -e "s|\${ALERTMANAGER_EXTERNAL_URL}|$ALERTMANAGER_EXTERNAL_URL|g" \
+    -e "s|'\${SMTP_REQUIRE_TLS}'|'$SMTP_REQUIRE_TLS'|g" \
     -e "s|\${SMTP_REQUIRE_TLS}|$SMTP_REQUIRE_TLS|g" \
     "$CONFIG_DST"
 

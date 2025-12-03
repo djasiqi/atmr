@@ -111,14 +111,21 @@ groups:
 
       - alert: PostgreSQLHighCacheMissRate
         expr: |
-          (1 - (pg_stat_database_blks_hit / (pg_stat_database_blks_hit + pg_stat_database_blks_read))) < 0.90
+          (
+            pg_stat_database_blks_hit 
+            / 
+            (pg_stat_database_blks_hit + pg_stat_database_blks_read)
+          ) < 0.90
+          AND
+          (pg_stat_database_blks_hit + pg_stat_database_blks_read) > 1000
         for: 10m
         labels:
           severity: warning
           component: database
         annotations:
           summary: "Cache hit rate PostgreSQL < 90%"
-          description: "Hit rate: {{ $value | humanizePercentage }}"
+          description: "Hit rate: {{ $value | humanizePercentage }} pour la base {{ $labels.datname }}"
+          action: "Vérifier la configuration shared_buffers et les requêtes fréquentes. Un hit rate bas indique que PostgreSQL lit trop souvent depuis le disque."
 
   # ==================== Redis Alerts ====================
   - name: redis
