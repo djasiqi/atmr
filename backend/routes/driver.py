@@ -641,8 +641,9 @@ class DriverLocation(Resource):
                         # 5) Diffusion temps réel à la room entreprise
                         try:
                             room = f"company_{driver.company_id}"
+                            # ✅ FIX: Émettre "driver_location_update" pour correspondre au frontend
                             socketio.emit(
-                                "driver_location",
+                                "driver_location_update",
                                 {
                                     "driver_id": driver.id,
                                     "company_id": driver.company_id,

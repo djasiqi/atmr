@@ -2,10 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import { connectSocket, getSocket } from "@/services/socket";
 import * as Notifications from "expo-notifications";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { secureStorage } from "@/services/storage";
 import type { Socket } from "socket.io-client";
-
-const TOKEN_KEY = "token";
 
 export const useSocket = (
   onNewBooking?: (data: any) => void,
@@ -155,7 +153,7 @@ export const useSocket = (
           timestamp: new Date().toISOString()
         }));
         // Option : purger le token si tu veux forcer un relogin
-        // await AsyncStorage.removeItem(TOKEN_KEY);
+        // await secureStorage.removeAccessToken();
         scheduleReconnection();
       });
     };
@@ -174,7 +172,8 @@ export const useSocket = (
         reconnectTimerRef.current = null;
         if (!isMountedRef.current) return;
 
-        const token = await AsyncStorage.getItem(TOKEN_KEY);
+        // ✅ FIX: Utiliser secureStorage.getAccessToken() au lieu d'AsyncStorage
+        const token = await secureStorage.getAccessToken();
         if (!token) {
           console.warn(JSON.stringify({
             event: "socket_reconnect_aborted",
@@ -206,7 +205,8 @@ export const useSocket = (
 
     // Initialisation
     (async () => {
-      const token = await AsyncStorage.getItem(TOKEN_KEY);
+      // ✅ FIX: Utiliser secureStorage.getAccessToken() au lieu d'AsyncStorage
+      const token = await secureStorage.getAccessToken();
       if (!token) {
         console.warn(JSON.stringify({
           event: "socket_init_aborted",
