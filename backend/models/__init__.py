@@ -83,6 +83,7 @@ from .message import Message
 from .ml_prediction import MLPrediction
 from .payment import Payment
 from .profiling_metrics import ProfilingMetrics  # ✅ 3.4: Profiling automatique
+from .refresh_token import RefreshToken
 from .rl_feedback import RLFeedback
 from .rl_suggestion import RLSuggestion
 from .rl_suggestion_metric import RLSuggestionMetric
@@ -151,6 +152,7 @@ __all__ = [
     "RealtimeEntityType",
     "RealtimeEvent",
     "RealtimeEventType",
+    "RefreshToken",
     "SecretRotation",
     "SenderRole",
     "ShiftStatus",

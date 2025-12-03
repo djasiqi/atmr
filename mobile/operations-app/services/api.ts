@@ -2,6 +2,7 @@
 import Constants from "expo-constants";
 import axios, { isAxiosError } from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { secureStorage, asyncStorage } from "./storage";
 
 // --- Config base URL (inclut /api pour matcher le backend) ---
 const expoExtra = Constants.expoConfig?.extra || {};
@@ -52,9 +53,6 @@ try {
   // ignore
 }
 
-// --- clés stockage ---
-const TOKEN_KEY = "token";
-
 // --- instance axios ---
 export const api = axios.create({
   baseURL,
@@ -62,21 +60,110 @@ export const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-// --- Authorization bearer ---
+// --- Authorization bearer + Device ID ---
 api.interceptors.request.use(
   async (config) => {
-    const token = await AsyncStorage.getItem(TOKEN_KEY);
+    const token = await secureStorage.getAccessToken();
     if (token) config.headers.Authorization = `Bearer ${token}`;
+    
+    // ✅ Envoyer X-Device-ID pour tracking des sessions
+    const deviceId = await AsyncStorage.getItem("enterprise.device_id");
+    if (deviceId) {
+      config.headers["X-Device-ID"] = deviceId;
+    }
+    
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// --- (Optionnel) log d’erreurs sans refresh automatique ---
+// --- Gestion refresh token automatique sur 401 ---
+// Flag pour éviter plusieurs refresh simultanés
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (value: string) => void;
+  reject: (error: any) => void;
+}> = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else if (token) {
+      prom.resolve(token);
+    } else {
+      prom.reject(new Error("Token manquant après refresh"));
+    }
+  });
+  failedQueue = [];
+};
+
+// Interceptor response avec refresh automatique
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
-    // simple log ; pas de refresh token car le backend n'en fournit pas
+    const originalRequest = error.config;
+
+    // Si erreur 401 et pas déjà en train de refresh
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      // Si c'est la requête de refresh elle-même qui a échoué → déconnecter
+      if (originalRequest.url?.includes("/auth/refresh-token")) {
+        await secureStorage.clearAll();
+        await asyncStorage.clearAuth();
+        return Promise.reject(error);
+      }
+
+      // Si déjà en train de refresh, mettre en queue
+      if (isRefreshing) {
+        return new Promise<string>((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then((token) => {
+            originalRequest.headers.Authorization = `Bearer ${token}`;
+            return api(originalRequest);
+          })
+          .catch((err) => Promise.reject(err));
+      }
+
+      // Premier 401 → tenter refresh
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        const refreshToken = await secureStorage.getRefreshToken();
+        if (!refreshToken) {
+          throw new Error("Pas de refresh token disponible");
+        }
+
+        const refreshResponse = await refreshAccessToken(refreshToken);
+        const newAccessToken = refreshResponse.access_token;
+
+        // Stocker le nouveau token dans SecureStore
+        await secureStorage.setAccessToken(newAccessToken);
+
+        // Mettre à jour refresh_token si rotation
+        if (refreshResponse.refresh_token) {
+          await secureStorage.setRefreshToken(refreshResponse.refresh_token);
+        }
+
+        // Traiter la queue
+        processQueue(null, newAccessToken);
+
+        // Rejouer la requête originale
+        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        return api(originalRequest);
+      } catch (refreshError) {
+        // Refresh échoué → déconnecter
+        processQueue(refreshError, null);
+        await secureStorage.clearAll();
+        await asyncStorage.clearAuth();
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
+    // Autres erreurs → log et rejeter
     if (isAxiosError(error)) {
       console.warn("API Error", {
         url: error.config?.url,
@@ -87,7 +174,9 @@ api.interceptors.response.use(
         message: error.message,
       });
       if ((error as any)?.code === "ECONNABORTED") {
-        console.warn("API Timeout (augmenté à 30s). Vérifiez la latence réseau/serveur.");
+        console.warn(
+          "API Timeout (augmenté à 30s). Vérifiez la latence réseau/serveur."
+        );
       }
     }
     return Promise.reject(error);
@@ -142,7 +231,8 @@ export const registerPushToken = async (payload: {
 
 export type AuthResponse = {
   message: string;
-  token: string; // <-- ton backend renvoie "token"
+  token: string; // <-- access token (renommé "token" par le backend)
+  refresh_token?: string; // <-- refresh token (optionnel, mais toujours présent en pratique)
   user: {
     id: number;
     public_id: string;
@@ -165,7 +255,22 @@ export const loginDriver = async (
       password,
     });
     const data = response.data;
-    if (data?.token) await AsyncStorage.setItem(TOKEN_KEY, data.token);
+    
+    // ✅ Stocker le token d'accès dans AsyncStorage
+    if (data?.token) {
+      await secureStorage.setAccessToken(data.token);
+    }
+    
+    // ✅ Stocker le refresh_token dans SecureStore (sécurisé)
+    if (data?.refresh_token) {
+      await secureStorage.setRefreshToken(data.refresh_token);
+    }
+    
+    // ✅ Stocker le public_id pour auto-login (optionnel)
+    if (data?.user?.public_id) {
+      await secureStorage.setUserPublicId(data.user.public_id);
+    }
+    
     return data;
   } catch (err: unknown) {
     // Repli: si "Network Error", retenter immédiatement via fetch (RN), même endpoint
@@ -194,7 +299,18 @@ export const loginDriver = async (
         throw new Error(`Login via fetch a échoué (${res.status}): ${text}`);
       }
       const data = JSON.parse(text) as AuthResponse;
-      if (data?.token) await AsyncStorage.setItem(TOKEN_KEY, data.token);
+      
+      // ✅ Stocker les tokens dans SecureStore (même logique que pour Axios)
+      if (data?.token) {
+        await secureStorage.setAccessToken(data.token);
+      }
+      if (data?.refresh_token) {
+        await secureStorage.setRefreshToken(data.refresh_token);
+      }
+      if (data?.user?.public_id) {
+        await secureStorage.setUserPublicId(data.user.public_id);
+      }
+      
       return data;
     } catch (fallbackError) {
       console.warn("Login fallback (fetch) échec:", fallbackError);
@@ -212,6 +328,27 @@ export const fetchUserInfo = async (): Promise<{
 }> => {
   const res = await api.get("/auth/me");
   return res.data;
+};
+
+// ========== Refresh Token ==========
+export type RefreshTokenResponse = {
+  access_token: string;
+  refresh_token?: string; // Optionnel (rotation)
+  user: {
+    public_id: string;
+    role: string;
+    company_id?: number;
+    driver_id?: number;
+  };
+};
+
+export const refreshAccessToken = async (
+  refreshToken: string
+): Promise<RefreshTokenResponse> => {
+  const response = await api.post<RefreshTokenResponse>("/auth/refresh-token", {
+    refresh_token: refreshToken,
+  });
+  return response.data;
 };
 
 // ========== Driver ==========

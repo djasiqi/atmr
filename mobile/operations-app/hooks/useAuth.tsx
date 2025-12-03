@@ -11,11 +11,14 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Crypto from "expo-crypto";
 
 import {
+  api,
   AuthResponse,
   Driver,
   fetchDriverProfile,
   loginDriver,
+  refreshAccessToken,
 } from "@/services/api";
+import { secureStorage, asyncStorage } from "@/services/storage";
 import {
   ENTERPRISE_REFRESH_KEY,
   ENTERPRISE_SESSION_KEY,
@@ -30,8 +33,6 @@ import {
   verifyEnterpriseMfa,
 } from "@/services/enterpriseAuth";
 
-const DRIVER_TOKEN_KEY = "token";
-const DRIVER_ID_KEY = "driver_id";
 const MODE_KEY = "auth.mode";
 const ENTERPRISE_DEVICE_KEY = "enterprise.device_id";
 
@@ -150,8 +151,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [deviceId]);
 
   const clearDriverStorage = useCallback(async () => {
-    await AsyncStorage.removeItem(DRIVER_TOKEN_KEY);
-    await AsyncStorage.removeItem(DRIVER_ID_KEY);
+    await secureStorage.clearAll();
+    await asyncStorage.clearAuth();
   }, []);
 
   const clearEnterpriseStorage = useCallback(async () => {
@@ -164,13 +165,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const handleDriverLoginSuccess = useCallback(
     async (response: AuthResponse) => {
+      // ✅ Les tokens sont déjà stockés dans loginDriver() (SecureStore + AsyncStorage)
       setDriverToken(response.token);
-      await AsyncStorage.setItem(DRIVER_TOKEN_KEY, response.token);
       await storeMode("driver");
       try {
         const profile = await fetchDriverProfile();
         setDriver(profile);
-        await AsyncStorage.setItem(DRIVER_ID_KEY, String(profile.id));
+        // ✅ Stocker driver_id pour navigation rapide
+        await asyncStorage.setDriverId(profile.id);
       } catch (error) {
         console.warn("Impossible de récupérer le profil chauffeur :", error);
         await clearDriverStorage();
@@ -217,18 +219,70 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const storedDevice = await AsyncStorage.getItem(ENTERPRISE_DEVICE_KEY);
         if (storedDevice) setDeviceId(storedDevice);
 
-        const storedDriverToken = await AsyncStorage.getItem(DRIVER_TOKEN_KEY);
-        if (storedDriverToken && (storedMode === "driver" || !storedMode)) {
-          setDriverToken(storedDriverToken);
+        // ✅ Auto-login avec refresh token (priorité)
+        // Ne se déclenche que si on est en mode "driver" ou si le mode n'est pas encore défini
+        const refreshToken = await secureStorage.getRefreshToken();
+        if (
+          refreshToken &&
+          (storedMode === "driver" || !storedMode || storedMode === null)
+        ) {
           try {
+            const refreshResponse = await refreshAccessToken(refreshToken);
+
+            // Stocker le nouveau access_token dans SecureStore
+            if (refreshResponse.access_token) {
+              await secureStorage.setAccessToken(refreshResponse.access_token);
+              setDriverToken(refreshResponse.access_token);
+            }
+
+            // Mettre à jour refresh_token si rotation activée
+            if (refreshResponse.refresh_token) {
+              await secureStorage.setRefreshToken(refreshResponse.refresh_token);
+            }
+
+            // S'assurer qu'on est en mode driver
+            await storeMode("driver");
+
+            // Charger le profil driver
             const profile = await fetchDriverProfile();
-            if (isMounted) setDriver(profile);
-          } catch (error) {
-            console.warn("Token chauffeur invalide :", error);
-            await clearDriverStorage();
+            if (isMounted) {
+              setDriver(profile);
+              await asyncStorage.setDriverId(profile.id);
+            }
+          } catch (refreshError) {
+            console.warn(
+              "Auto-login échoué (refresh token invalide) :",
+              refreshError
+            );
+            // Nettoyer tout
+            await secureStorage.clearAll();
+            await asyncStorage.clearAuth();
             if (isMounted) {
               setDriver(null);
               setDriverToken(null);
+            }
+          }
+        } else {
+          // Pas de refresh token → vérifier si un ancien token existe (migration/rétrocompatibilité)
+          const storedDriverToken = await secureStorage.getAccessToken();
+          if (
+            storedDriverToken &&
+            (storedMode === "driver" || !storedMode)
+          ) {
+            setDriverToken(storedDriverToken);
+            try {
+              const profile = await fetchDriverProfile();
+              if (isMounted) {
+                setDriver(profile);
+                await asyncStorage.setDriverId(profile.id);
+              }
+            } catch (error) {
+              console.warn("Token chauffeur invalide :", error);
+              await clearDriverStorage();
+              if (isMounted) {
+                setDriver(null);
+                setDriverToken(null);
+              }
             }
           }
         }
@@ -278,7 +332,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       isMounted = false;
     };
-  }, [clearDriverStorage, clearEnterpriseStorage]);
+  }, [clearDriverStorage, clearEnterpriseStorage, storeMode]);
 
   const login = useCallback(
     async (email: string, password: string) => {
@@ -294,10 +348,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   );
 
   const logout = useCallback(async () => {
-    await clearDriverStorage();
-    setDriver(null);
-    setDriverToken(null);
-  }, [clearDriverStorage]);
+    setDriverLoading(true);
+    try {
+      // Appeler /auth/logout pour invalider server-side
+      const accessToken = await secureStorage.getAccessToken();
+      const refreshToken = await secureStorage.getRefreshToken();
+
+      if (accessToken) {
+        try {
+          await api.post(
+            "/auth/logout",
+            { refresh_token: refreshToken ?? null }, // ✅ Envoyer refresh_token si disponible
+            {
+              headers: { Authorization: `Bearer ${accessToken}` },
+            }
+          );
+        } catch (error) {
+          // Ignorer les erreurs de logout (token peut être déjà expiré)
+          console.warn("Erreur lors du logout server-side:", error);
+        }
+      }
+
+      // Nettoyer tout le stockage
+      await secureStorage.clearAll();
+      await asyncStorage.clearAuth();
+
+      // Reset state
+      setDriver(null);
+      setDriverToken(null);
+    } finally {
+      setDriverLoading(false);
+    }
+  }, []);
 
   const refreshProfile = useCallback(async () => {
     if (!driverToken) return;
@@ -305,7 +387,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const profile = await fetchDriverProfile();
       setDriver(profile);
-      await AsyncStorage.setItem(DRIVER_ID_KEY, String(profile.id));
+      await asyncStorage.setDriverId(profile.id);
     } catch (error) {
       console.warn("Erreur rafraîchissement profil chauffeur :", error);
       await logout();
