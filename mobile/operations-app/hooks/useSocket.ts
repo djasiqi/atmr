@@ -12,7 +12,8 @@ export const useSocket = (
   const [socketInstance, setSocketInstance] = useState<Socket | null>(null);
   const isMountedRef = useRef(true);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const backoffRef = useRef<number>(2000); // 2s -> 4s -> 8s ... (max 30s)
+  const backoffRef = useRef<number>(5000); // ✅ Augmenté de 2s à 5s -> 10s -> 20s ... (max 60s)
+  const lastReconnectAttemptRef = useRef<number>(0); // ✅ Cooldown entre reconnexions
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -34,7 +35,7 @@ export const useSocket = (
           event: "socket_connect",
           timestamp: new Date().toISOString()
         }));
-        backoffRef.current = 2000;
+        backoffRef.current = 5000; // ✅ Reset à 5s au lieu de 2s
         if (reconnectTimerRef.current) {
           clearTimeout(reconnectTimerRef.current);
           reconnectTimerRef.current = null;
@@ -161,7 +162,26 @@ export const useSocket = (
     const scheduleReconnection = () => {
       if (reconnectTimerRef.current || !isMountedRef.current) return;
 
-      const delay = Math.min(backoffRef.current, 30000);
+      // ✅ Cooldown minimum de 5s entre tentatives de reconnexion
+      const now = Date.now();
+      const timeSinceLastAttempt = now - lastReconnectAttemptRef.current;
+      const cooldownMs = 5000;
+      
+      if (timeSinceLastAttempt < cooldownMs) {
+        const waitTime = cooldownMs - timeSinceLastAttempt;
+        console.log(JSON.stringify({
+          event: "socket_reconnect_cooldown",
+          wait_ms: waitTime,
+          timestamp: new Date().toISOString()
+        }));
+        reconnectTimerRef.current = setTimeout(() => {
+          reconnectTimerRef.current = null;
+          scheduleReconnection();
+        }, waitTime);
+        return;
+      }
+
+      const delay = Math.min(backoffRef.current, 60000); // ✅ Augmenté max de 30s à 60s
       console.log(JSON.stringify({
         event: "socket_reconnect_scheduled",
         delay_ms: delay,
@@ -170,6 +190,7 @@ export const useSocket = (
 
       reconnectTimerRef.current = setTimeout(async () => {
         reconnectTimerRef.current = null;
+        lastReconnectAttemptRef.current = Date.now(); // ✅ Enregistrer la tentative
         if (!isMountedRef.current) return;
 
         // ✅ FIX: Utiliser secureStorage.getAccessToken() au lieu d'AsyncStorage
@@ -188,16 +209,16 @@ export const useSocket = (
           if (fresh && isMountedRef.current) {
             setSocketInstance(fresh);
             bindHandlers(fresh);
-            backoffRef.current = 2000; // reset si succès
+            backoffRef.current = 5000; // ✅ Reset à 5s si succès (au lieu de 2s)
           }
         } catch (e) {
           console.warn(JSON.stringify({
             event: "socket_reconnect_failed",
             error: e instanceof Error ? e.message : String(e),
-            next_attempt_ms: Math.min(backoffRef.current * 2, 30000),
+            next_attempt_ms: Math.min(backoffRef.current * 2, 60000),
             timestamp: new Date().toISOString()
           }));
-          backoffRef.current = Math.min(backoffRef.current * 2, 30000);
+          backoffRef.current = Math.min(backoffRef.current * 2, 60000); // ✅ Max 60s (au lieu de 30s)
           scheduleReconnection();
         }
       }, delay);

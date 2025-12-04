@@ -28,8 +28,8 @@ const IS_DEV = __DEV__;
 
 function buildOptions(token: string) {
   // ✅ Jitter anti-storm: ajouter variation aléatoire pour éviter reconnexions simultanées
-  const jitterDelay = Math.random() * 100; // 0-100ms
-  const jitterMax = Math.random() * 500; // 0-500ms
+  const jitterDelay = Math.random() * 1000; // 0-1000ms (augmenté)
+  const jitterMax = Math.random() * 2000; // 0-2000ms (augmenté)
   
   const base = {
     path: "/socket.io", // ⚠️ sans slash final
@@ -37,8 +37,8 @@ function buildOptions(token: string) {
     extraHeaders: { Authorization: `Bearer ${token}` },
     reconnection: true,
     reconnectionAttempts: Infinity,
-    reconnectionDelay: 1000 + jitterDelay,  // ✅ Jitter: 1000-1100ms
-    reconnectionDelayMax: 10000 + jitterMax,  // ✅ Jitter: 10000-10500ms
+    reconnectionDelay: 5000 + jitterDelay,  // ✅ Augmenté de 1s à 5s + jitter (5000-6000ms)
+    reconnectionDelayMax: 30000 + jitterMax,  // ✅ Augmenté de 10s à 30s + jitter (30000-32000ms)
     timeout: 20000,
     forceNew: true,
     transports: IS_SECURE ? ["websocket"] : ["websocket", "polling"],
