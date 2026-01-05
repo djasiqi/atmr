@@ -147,6 +147,19 @@ services:
       SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-jwt-secret-key-change-in-production}
       APP_ENCRYPTION_KEY_B64: ${APP_ENCRYPTION_KEY_B64}
+      # ✅ D2: Clé d'encryption maître pour chiffrement IBAN et données sensibles (AES-256)
+      # Format: hexadécimal (64 caractères pour 32 bytes)
+      # Générer avec: python -m scripts.generate_encryption_key
+      MASTER_ENCRYPTION_KEY: ${MASTER_ENCRYPTION_KEY}
+
+      # ✅ Configuration des cookies (sécurité)
+      # En production, les cookies doivent être sécurisés (HTTPS uniquement)
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      COOKIE_SAME_SITE: ${COOKIE_SAME_SITE:-Strict}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
+      SESSION_COOKIE_SAMESITE: ${SESSION_COOKIE_SAMESITE:-Lax}
+      REMEMBER_COOKIE_SECURE: ${REMEMBER_COOKIE_SECURE:-true}
+      REMEMBER_COOKIE_SAMESITE: ${REMEMBER_COOKIE_SAMESITE:-Lax}
 
       # Logging
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
