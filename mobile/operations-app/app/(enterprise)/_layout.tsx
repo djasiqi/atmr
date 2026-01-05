@@ -21,7 +21,7 @@ export default function EnterpriseLayout() {
 
   return (
     <EnterpriseProvider initialMode={initialMode}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <View style={styles.container}>
         <Tabs
           screenOptions={{
@@ -88,7 +88,7 @@ export default function EnterpriseLayout() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#07130E",
+    backgroundColor: "#F5F7F6",
   },
 });
 

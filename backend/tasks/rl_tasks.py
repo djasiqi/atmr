@@ -31,8 +31,16 @@ Comprend :
 logger = logging.getLogger(__name__)
 
 
-@celery.task(name="tasks.rl_retrain_model")
-def retrain_dqn_model_task():
+@celery.task(
+    name="tasks.rl_retrain_model",
+    bind=True,
+    acks_late=True,
+    task_time_limit=7200,  # ✅ P3: 2 heures max (7200 secondes) pour éviter tasks infinies
+    task_soft_time_limit=6600,  # ✅ P3: 1h50 soft limit (6600 secondes)
+    max_retries=1,  # 1 retry en cas d'échec transitoire
+    autoretry_for=(TimeoutError, ConnectionError),
+)
+def retrain_dqn_model_task(self):  # noqa: ARG001
     """Tâche Celery : Ré-entraînement hebdomadaire du modèle DQN.
 
     Exécutée automatiquement chaque dimanche à 3h du matin.

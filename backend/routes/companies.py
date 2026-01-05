@@ -1,44 +1,41 @@
 import logging
-import random
-import string
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
-from uuid import uuid4
 
-import sentry_sdk
-from flask import current_app, request
-from flask_jwt_extended import get_jwt_identity, jwt_required
-from flask_restx import Namespace, Resource, fields, inputs, reqparse
-from sqlalchemy import or_
+import sentry_sdk  # pyright: ignore[reportMissingImports]
+from flask import (  # pyright: ignore[reportMissingImports]
+    current_app,
+    request,
+)
+from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
+    get_jwt_identity,
+    jwt_required,
+)
+from flask_restx import (  # pyright: ignore[reportMissingImports]
+    Namespace,
+    Resource,
+    fields,
+    inputs,
+    reqparse,
+)
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import joinedload
-from werkzeug.utils import secure_filename
 
 from ext import db, limiter, role_required
-from models import (
-    Assignment,
-    AssignmentStatus,
-    Booking,
-    BookingStatus,
-    Client,
-    ClientType,
-    Company,
-    DelayEvent,
-    DispatchRun,
-    Driver,
-    DriverType,
-    Invoice,
-    InvoiceStatus,
-    User,
-    UserRole,
-    Vehicle,
-)
-from models.enums import DispatchStatus as DispatchStatusEnum
-from services.unified_dispatch import queue
-from services.vacation_service import create_vacation
-from shared.notifications import notify_booking_update, notify_driver_new_booking
-from shared.time_utils import now_utc, parse_local_naive, to_geneva_local, to_utc
+
+# Enums - à conserver
+from models.enums import BookingStatus, ClientType, PartnershipStatus, UserRole
+
+# Modèles - utilisés pour types/annotations et requêtes complexes
+# TODO: Migrer vers repositories quand les méthodes nécessaires seront disponibles
+from models import Booking, Company, DelayEvent
+from models.partnership import Partnership
+from routes.db_error_utils import format_integrity_error
+from infrastructure.dispatch import queue_adapter as queue
+from shared.error_handlers import APIErrorHandler
+from shared.notifications import notify_booking_update
+from shared.response_helpers import paginated_response, success_response
+from shared.time_utils import parse_local_naive
 from shared.upload_validation import (
     ALLOWED_LOGO_EXT,
     validate_file_upload,
@@ -55,9 +52,12 @@ EVENING_RUSH_START = 17
 LUNCH_START = 12
 INVOICE_COUNT_ZERO = 0
 SVG_THRESHOLD = 2
+PARTNERSHIP_PERCENT_CHANGE_THRESHOLD = (
+    0.01  # Seuil pour détecter un changement de pourcentage
+)
 
 # Configuration du logger
-app_logger = logging.getLogger("companies")
+logger = logging.getLogger(__name__)
 companies_ns = Namespace(
     "companies",
     description="Opérations liées aux entreprises et à la gestion des réservations",
@@ -65,15 +65,6 @@ companies_ns = Namespace(
 
 MAX_LOGO_MB = 2  # taille max
 MAX_LOGO_BYTES = MAX_LOGO_MB * 1024 * 1024
-
-
-def _remove_existing_logos(company_id: int, logos_dir: Path):
-    """Supprime les anciens logos de l'entreprise (si l'extension change, etc.)."""
-    import contextlib
-
-    for p in logos_dir.glob(f"company_{company_id}.*"):
-        with contextlib.suppress(OSError):
-            p.unlink()
 
 
 # Dans routes/companies.py, en haut du fichier
@@ -311,118 +302,150 @@ manual_booking_model = companies_ns.model(
 def get_company_from_token() -> tuple[
     Company | None, dict[str, str] | None, int | None
 ]:
-    """Récupère (ou crée au besoin) l'entreprise associée à l'utilisateur courant."""
-    user_public_id = get_jwt_identity()
-    app_logger.debug("🔍 JWT Identity récupérée: %s", user_public_id)
+    """Récupère (ou crée au besoin) l'entreprise associée à l'utilisateur courant.
 
-    user_opt: User | None = (
-        User.query.options(joinedload(User.company))
-        .filter_by(public_id=user_public_id)
-        .one_or_none()
+    ✅ REFACTORING: Délègue à GetCurrentCompanyOrCreateUseCase pour la logique métier.
+    Cette fonction est conservée pour compatibilité avec les routes existantes.
+    """
+    from application.companies.get_current_company_or_create import (
+        GetCurrentCompanyOrCreateUseCase,
     )
-    if user_opt is None:
-        app_logger.error("❌ User not found for public_id: %s", user_public_id)
-        return None, {"error": "User not found"}, 404
+    from repositories.user_repository import UserRepository
+    from shared.infrastructure.adapters.auth_adapter import (
+        get_current_user_via_use_case,
+    )
 
-    user = cast("User", user_opt)
+    # Créer le use case avec les dépendances nécessaires
+    def _is_company_user(u: object) -> bool:
+        from models.enums import UserRole
 
-    # Si l'utilisateur est de rôle company mais n'a pas encore d'objet Company,
-    # on le crée.
-    # ⚠️ ne jamais faire "if user.company" (truthiness interdit sur relationships)
-    company_rel: Company | None = cast("Company | None", getattr(user, "company", None))
-    # Pylance peut inférer ColumnElement[bool] sur l'égalité -> on cast côté
-    # type checker
-    is_company: bool = cast("bool", (getattr(user, "role", None) == UserRole.company))
-    if is_company and company_rel is None:
-        app_logger.warning(
-            "⚠️ Aucun objet Company associé à l'utilisateur %s - tentative de création",
-            getattr(user, "username", user.public_id),
-        )
+        return hasattr(u, "role") and getattr(u, "role", None) == UserRole.company
+
+    def _create_company_for_user(
+        user: object,
+    ) -> tuple[Company | None, dict[str, str] | None, int | None]:
+        """Crée une entreprise pour un utilisateur de rôle company."""
+        from ext import db
+        from models import Company
+
         try:
-            company_kwargs: dict[str, Any] = {
-                "name": getattr(user, "username", "Company"),
-                "user_id": user.id,
+            user_id = getattr(user, "id", None) if hasattr(user, "id") else None
+            username = (
+                getattr(user, "username", "Company")
+                if hasattr(user, "username")
+                else "Company"
+            )
+            email = getattr(user, "email", None) if hasattr(user, "email") else None
+            company_kwargs = {
+                "name": username,
+                "user_id": user_id,
                 "address": "",
                 "latitude": None,
                 "longitude": None,
-                "contact_email": getattr(user, "email", None),
+                "contact_email": email,
                 "contact_phone": "",
                 "service_area": "",
                 "max_daily_bookings": 50,
                 "is_approved": False,
             }
-            # Construction tolérante pour l'analyseur de types
-            new_company: Company = Company(**company_kwargs)
+            new_company = Company(**company_kwargs)
             db.session.add(new_company)
             db.session.commit()
 
             # Recharger l'utilisateur avec la relation mise à jour
-            user_refetched: User | None = (
-                User.query.options(joinedload(User.company))
-                .filter_by(public_id=user_public_id)
-                .one_or_none()
-            )
+            user_repo = UserRepository()
+            user_refetched = user_repo.find_model_by_id(user_id) if user_id else None
             if user_refetched is None:
-                app_logger.error("❌ User disappeared after company creation")
                 return (
                     None,
                     {"error": "Failed to load user after company creation"},
                     500,
                 )
-            user = cast("User", user_refetched)
 
-        except Exception as e:
-            app_logger.exception(
-                "❌ Erreur lors de la création automatique de Company : %s", e
+            company_rel = (
+                user_refetched.company if hasattr(user_refetched, "company") else None
             )
+            if company_rel is None:
+                return None, {"error": "Failed to create company"}, 500
+
+            return company_rel, None, None
+        except Exception:
+            db.session.rollback()
+            logger.exception("Erreur lors de la création automatique de Company")
             return None, {"error": "Failed to create default company"}, 500
 
-    company_obj: Company | None = cast("Company | None", getattr(user, "company", None))
-    if company_obj is None:
-        app_logger.error("❌ Company is None for user %s", user.public_id)
-        return None, {"error": "No company associated with this user."}, 404
-
-    company = company_obj
-    app_logger.debug(
-        "✅ Company found: %s (ID: %s) for user %s",
-        getattr(company, "name", "?"),
-        getattr(company, "id", "?"),
-        getattr(user, "username", user.public_id),
+    uc = GetCurrentCompanyOrCreateUseCase(
+        get_current_company_fn=lambda: _get_current_company_via_use_case(),
+        get_current_user_fn=get_current_user_via_use_case,
+        is_company_user_fn=_is_company_user,
+        user_repo=UserRepository(),
+        create_company_for_user_fn=_create_company_for_user,
+        handle_user_not_found_fn=lambda user_id: (
+            APIErrorHandler.handle_not_found("User", user_id, logger)
+        ),
     )
-    return company, None, None
+    result = uc.execute()
+    # Le use case retourne _CompanyLike, mais on sait que c'est Company dans notre cas
+    company = result.company
+    return (
+        (company if isinstance(company, Company) else None),
+        result.error,
+        result.status_code,
+    )
+
+
+def _get_current_company_via_use_case() -> tuple[
+    Company | None, dict[str, str] | None, int | None
+]:
+    """Récupère l'entreprise courante via use-case (DDD).
+
+    Returns:
+        Tuple (Company, error_dict, status_code) où error_dict et status_code sont None si OK
+    """
+    from application.users.get_current_company import GetCurrentCompanyUseCase
+
+    # ✅ DDD: Utilisation de GetCurrentCompanyUseCase
+    uc = GetCurrentCompanyUseCase()
+    result = uc.execute()
+
+    if result.error or result.status_code:
+        return (
+            None,
+            result.error or {"error": "Entreprise non trouvée"},
+            result.status_code or 500,
+        )
+
+    if not result.company:
+        return None, {"error": "Entreprise non trouvée"}, 404
+
+    # Le use case retourne déjà le modèle SQLAlchemy Company
+    # result.company est déjà un modèle SQLAlchemy Company, pas besoin de le requêter à nouveau
+    # Correction: on retourne directement result.company au lieu d'essayer de le re-quérir
+    return result.company, None, None
 
 
 def _maybe_trigger_dispatch(company_id: int, action: str = "update") -> None:
     """Déclenche le dispatch si activé pour la société
     (compatible avec plusieurs APIs queue).
     """
-    company = Company.query.get(company_id)
-    if not company or not bool(getattr(company, "dispatch_enabled", False)):
-        return
+    # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+    from application.companies.request_dispatch import (
+        RequestDispatchCommand,
+        RequestDispatchUseCase,
+    )
+    from application.events.event_bus import publish_event
+    from repositories.company_repository import CompanyRepository
 
-    try:
-        from services.unified_dispatch import queue as _queue
-    except Exception as e:
-        app_logger.warning(
-            "⚠️ Impossible d'importer services.unified_dispatch.queue: %s", e
+    uc = RequestDispatchUseCase(
+        company_repo=CompanyRepository(),
+        publish_event_fn=publish_event,
+    )
+    uc.execute(
+        RequestDispatchCommand(
+            company_id=company_id,
+            action=action,
+            reason=f"booking_{action}",
         )
-        return
-
-    # 1) API moderne: trigger_on_booking_change(company_id, action=...)
-    trigger1: Any = getattr(_queue, "trigger_on_booking_change", None)
-    if callable(trigger1):
-        trigger1(company_id, action=action)
-        return
-
-    # 2) API alternative: trigger(company_id, reason=..., mode=...)
-    trigger2: Any = getattr(_queue, "trigger", None)
-    if callable(trigger2):
-        # reason informatif pour compatibilité
-        trigger2(company_id, reason=f"booking_{action}", mode="auto")
-        return
-
-    app_logger.warning(
-        "⚠️ Aucun trigger compatible trouvé dans services.unified_dispatch.queue"
     )
 
 
@@ -430,157 +453,689 @@ def _driver_trigger(company: Company, action: str) -> None:
     """Déclenche un événement de dispatch lié à un chauffeur
     si le dispatch est activé.
     """
-    if not company or not bool(getattr(company, "dispatch_enabled", False)):
-        return
+    from application.companies.request_dispatch import RequestDispatchUseCase
+    from application.events.event_bus import publish_event
+    from repositories.company_repository import CompanyRepository
 
-    try:
-        from services.unified_dispatch import queue as _queue
-    except Exception as e:
-        app_logger.warning(
-            "⚠️ Impossible d'importer services.unified_dispatch.queue: %s", e
-        )
-        return
-
-    # Récupère l'id sans typer statiquement (évite Column[int] -> int pour
-    # Pylance)
-    company_id_obj = getattr(company, "id", None)
-    try:
-        company_id = int(company_id_obj) if company_id_obj is not None else None
-    except Exception:
-        app_logger.warning("⚠️ company.id non convertible en int: %r", company_id_obj)
-        return
-    if company_id is None:
-        app_logger.warning("⚠️ company.id est None")
-        return
-
-    # API 1 : trigger_on_driver_status(company_id, action=...)
-    trigger1 = getattr(queue, "trigger_on_driver_status", None)
-    if callable(trigger1):
-        trigger1(company_id, action=action)
-        return
-
-    # API 2 : trigger(company_id, reason=..., mode=...)
-    trigger2 = getattr(_queue, "trigger", None)
-    if callable(trigger2):
-        trigger2(company_id, reason=f"driver_{action}", mode="auto")
-        return
-
-    app_logger.warning(
-        "⚠️ Aucun trigger compatible trouvé dans services.unified_dispatch.queue"
+    uc = RequestDispatchUseCase(
+        company_repo=CompanyRepository(),
+        publish_event_fn=publish_event,
     )
+    uc.execute_for_driver_change(company, action=action)
 
 
 @companies_ns.route("/me")
 class CompanyMe(Resource):
     @jwt_required()
     def get(self):
-        company, error_response, status_code = get_company_from_token()
-        if error_response:
-            return error_response, status_code
-        if company:
-            return company.serialize, 200
-        return {"error": "Company not found"}, 404
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        from application.users.get_current_company import GetCurrentCompanyUseCase
 
-    @jwt_required()
+        # Exécuter le use-case (retourne directement le modèle SQLAlchemy)
+        uc = GetCurrentCompanyUseCase()
+        result = uc.execute()
+
+        if result.error or result.status_code:
+            return APIErrorHandler.handle_not_found(
+                "Company",
+                logger_instance=logger,
+            )
+
+        if not result.company:
+            return APIErrorHandler.handle_not_found("Company", None, logger)
+
+        # Le use case retourne déjà le modèle SQLAlchemy Company
+        return success_response(data=result.company.serialize)
+
+    # ✅ S2: Fresh token requis pour modification données sensibles (IBAN, UID, emails, etc.)
+    @jwt_required(fresh=True)
     @role_required(UserRole.company)
     @companies_ns.expect(company_update_model, validate=False)
     def put(self):
         """Met à jour le profil entreprise (légal, facturation, domiciliation, contact).
         Les validateurs du modèle (IBAN/UID/Email/Tel) lèveront ValueError si invalide.
+
+        ✅ S2: Nécessite un token "fresh" (reconnexion récente) pour modifier des données sensibles.
         """
-        company, error_response, status_code = get_company_from_token()
+        result = None
+        status_code = 200
+
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, error_response, status_code = _get_current_company_via_use_case()
         if error_response:
-            return error_response, status_code
+            result = error_response
+        else:
+            if not company:
+                return APIErrorHandler.handle_not_found("Company", None, logger)
+            data = request.get_json(silent=True) or {}
 
-        data = request.get_json(silent=True) or {}
+            # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
+            from marshmallow import (  # pyright: ignore[reportMissingImports]
+                ValidationError,
+            )
 
-        # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-        from marshmallow import ValidationError
+            from schemas.company_schemas import CompanyUpdateSchema
+            from schemas.validation_utils import (
+                handle_validation_error,
+                validate_request,
+            )
 
-        from schemas.company_schemas import CompanyUpdateSchema
-        from schemas.validation_utils import handle_validation_error, validate_request
+            try:
+                validated_data = validate_request(
+                    CompanyUpdateSchema(), data, strict=False
+                )
+            except ValidationError as e:
+                return handle_validation_error(e)
 
-        try:
-            validated_data = validate_request(CompanyUpdateSchema(), data, strict=False)
-        except ValidationError as e:
-            return handle_validation_error(e)
-
-        # Géocodage automatique de l'adresse si fournie et coordonnées absentes
-        address = validated_data.get("address")
-        if address:
-            # Si les coordonnées ne sont pas fournies dans le payload,
-            # géocoder l'adresse
-            if not validated_data.get("latitude") or not validated_data.get(
-                "longitude"
-            ):
-                try:
-                    from services.maps import geocode_address
-
-                    coords = geocode_address(validated_data["address"], country="CH")
-                    if coords:
-                        validated_data["latitude"] = coords.get("lat")
-                        validated_data["longitude"] = coords.get("lon")
-                        app_logger.info(
-                            "[Company] Geocoded company address: %s -> (%s, %s)",
-                            validated_data["address"],
-                            validated_data["latitude"],
-                            validated_data["longitude"],
-                        )
-                except Exception as e:
-                    app_logger.warning(
-                        "[Company] Failed to geocode company address: %s", e
-                    )
-            # Si les coordonnées sont déjà fournies (depuis AddressAutocomplete),
-            # les utiliser directement
-            elif validated_data.get("latitude") and validated_data.get("longitude"):
-                app_logger.info(
-                    "[Company] Using provided coordinates for address: (%s, %s)",
-                    validated_data["latitude"],
-                    validated_data["longitude"],
+            try:
+                # ✅ Clean step: règles métier (whitelist + géocodage) dans le use-case Application
+                from application.companies.update_company_profile import (
+                    UpdateCompanyProfileUseCase,
                 )
 
-        # Liste blanche des champs modifiables
-        allowed = {
-            "name",
-            "address",
-            "latitude",
-            "longitude",
-            "contact_email",
-            "contact_phone",
-            "billing_email",
-            "billing_notes",
-            "iban",
-            "uid_ide",
-            "domicile_address_line1",
-            "domicile_address_line2",
-            "domicile_zip",
-            "domicile_city",
-            "domicile_country",
-            "logo_url",  # Permettre la mise à jour du logo_url
-        }
+                def _geocode_fn(address: str):
+                    from services.maps import geocode_address
+
+                    return geocode_address(address, country="CH")
+
+                uc = UpdateCompanyProfileUseCase(geocode_fn=_geocode_fn)
+                uc_result = uc.execute(company, validated_data=validated_data)
+                if uc_result.geocoded:
+                    logger.info(
+                        "[Company] Geocoded company address -> (%s, %s)",
+                        uc_result.geocoded_lat,
+                        uc_result.geocoded_lon,
+                    )
+                db.session.commit()
+                if company:
+                    result = company.serialize
+                    status_code = 200
+                else:
+                    result = {"error": "Company not found"}
+                    status_code = 404
+            except ValueError as e:
+                db.session.rollback()
+                result = {"error": str(e)}
+                status_code = 400
+            except IntegrityError as e:
+                db.session.rollback()
+                result, status_code = format_integrity_error(e)
+            except Exception as e:
+                db.session.rollback()
+                sentry_sdk.capture_exception(e)
+                result = {"error": "Erreur interne"}
+                status_code = 500
+        return result, status_code
+
+
+@companies_ns.route("/me/partnerships")
+class CompanyPartnerships(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        """Récupère tous les partenariats de l'entreprise (actifs et en attente)."""
         try:
-            for k, v in validated_data.items():
-                if k in allowed:
-                    setattr(company, k, v)
-            db.session.commit()
-            if company:
-                return company.serialize, 200
-            return {"error": "Company not found"}, 404
-        except (ValueError, IntegrityError) as e:
-            db.session.rollback()
-            return {"error": str(e)}, 400
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                return error_response or APIErrorHandler.handle_not_found(
+                    "Company", None, logger
+                ), status_code or 404
+
+            # Récupérer tous les partenariats (actifs et en attente)
+            # - Partenariats où l'entreprise est propriétaire OU partenaire
+            all_partnerships = (
+                db.session.query(Partnership)
+                .filter(
+                    (Partnership.owner_company_id == company.id)
+                    | (Partnership.partner_company_id == company.id)
+                )
+                .all()
+            )
+
+            # ✅ Dédupliquer par paire d'entreprises (peu importe qui est owner/partner)
+            # On garde le partenariat le plus récent ou celui avec le meilleur statut
+            from services.partnership_stats_service import PartnershipStatsService
+
+            # Créer un dictionnaire pour dédupliquer par paire d'entreprises
+            partnerships_by_pair = {}
+            for p in all_partnerships:
+                # Créer une clé unique pour la paire d'entreprises (toujours dans le même ordre)
+                company_a = min(p.owner_company_id, p.partner_company_id)
+                company_b = max(p.owner_company_id, p.partner_company_id)
+                pair_key = (company_a, company_b)
+
+                # Si on a déjà un partenariat pour cette paire, garder le meilleur
+                if pair_key in partnerships_by_pair:
+                    existing = partnerships_by_pair[pair_key]
+                    # Priorité: ACCEPTED > PENDING > autres, puis le plus récent, puis ID le plus élevé
+                    keep_new = (
+                        (
+                            p.status.value == "ACCEPTED"
+                            and existing.status.value != "ACCEPTED"
+                        )
+                        or (
+                            p.status.value == existing.status.value
+                            and p.created_at is not None
+                            and existing.created_at is not None
+                            and p.created_at > existing.created_at
+                        )
+                        or (
+                            p.status.value == existing.status.value
+                            and (
+                                (
+                                    p.created_at is None
+                                    and existing.created_at is not None
+                                )
+                                or (
+                                    p.created_at == existing.created_at
+                                    and p.id > existing.id
+                                )
+                                or (p.id > existing.id)
+                            )
+                        )
+                    )
+
+                    if keep_new:
+                        partnerships_by_pair[pair_key] = p
+                        logger.info(
+                            "[Partnerships] Dedup: Keeping partnership %s (status=%s, created=%s) over %s (status=%s, created=%s) for pair (%s, %s)",
+                            p.id,
+                            p.status.value,
+                            p.created_at,
+                            existing.id,
+                            existing.status.value,
+                            existing.created_at,
+                            company_a,
+                            company_b,
+                        )
+                    else:
+                        logger.info(
+                            "[Partnerships] Dedup: Keeping existing partnership %s (status=%s, created=%s) over %s (status=%s, created=%s) for pair (%s, %s)",
+                            existing.id,
+                            existing.status.value,
+                            existing.created_at,
+                            p.id,
+                            p.status.value,
+                            p.created_at,
+                            company_a,
+                            company_b,
+                        )
+                else:
+                    partnerships_by_pair[pair_key] = p
+
+            logger.info(
+                "[Partnerships] Company %s: Found %s partnerships, after dedup: %s unique pairs",
+                company.id,
+                len(all_partnerships),
+                len(partnerships_by_pair),
+            )
+
+            # Vérifier qu'on n'a pas de doublons après déduplication
+            seen_partner_ids = set()
+            for p in partnerships_by_pair.values():
+                partner_id = (
+                    p.partner_company_id
+                    if p.owner_company_id == company.id
+                    else p.owner_company_id
+                )
+                if partner_id in seen_partner_ids:
+                    logger.warning(
+                        "[Partnerships] ⚠️ Duplicate partner detected after dedup: partner_id=%s",
+                        partner_id,
+                    )
+                seen_partner_ids.add(partner_id)
+
+            # Sérialiser les partenariats dédupliqués avec enrichissement
+            enriched_data = []
+            for p in partnerships_by_pair.values():
+                p_dict = p.to_dict()
+
+                # ✅ Déterminer quelle entreprise est le partenaire (l'autre que celle qui consulte)
+                if p.owner_company_id == company.id:
+                    # L'entreprise actuelle est propriétaire, le partenaire est partner_company
+                    p_dict["current_company_id"] = company.id
+                    p_dict["partner_company_id_display"] = p.partner_company_id
+                    p_dict["partner_company_name_display"] = (
+                        p.partner_company.name if p.partner_company else None
+                    )
+                    p_dict["is_owner"] = True
+                else:
+                    # L'entreprise actuelle est partenaire, le partenaire est owner_company
+                    p_dict["current_company_id"] = company.id
+                    p_dict["partner_company_id_display"] = p.owner_company_id
+                    p_dict["partner_company_name_display"] = (
+                        p.owner_company.name if p.owner_company else None
+                    )
+                    p_dict["is_owner"] = False
+
+                # Enrichir avec les statistiques
+                stats = PartnershipStatsService.get_partnership_stats(p, company.id)
+                p_dict["stats"] = stats
+
+                enriched_data.append(p_dict)
+
+            return success_response(data=enriched_data)
         except Exception as e:
+            logger.exception("Erreur lors de la récupération des partenariats")
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@companies_ns.route("/me/partnerships/<int:partnership_id>")
+class CompanyPartnership(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def put(self, partnership_id: int):  # noqa: PLR0911
+        """Met à jour un partenariat."""
+        try:
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                return error_response or APIErrorHandler.handle_not_found(
+                    "Company", None, logger
+                ), status_code or 404
+
+            # Vérifier que le partenariat existe et que l'entreprise y est liée
+            partnership = Partnership.query.get(partnership_id)
+            if not partnership:
+                return APIErrorHandler.handle_not_found(
+                    "Partnership", partnership_id, logger
+                )
+
+            if company.id not in {
+                partnership.owner_company_id,
+                partnership.partner_company_id,
+            }:
+                return APIErrorHandler.handle_permission_error(
+                    "Vous n'êtes pas autorisé à modifier ce partenariat",
+                    logger_instance=logger,
+                )
+
+            # Récupérer les données de la requête
+            data = request.get_json(silent=True) or {}
+
+            # Valider et mettre à jour via le service
+            from services.partnership_service import PartnershipService
+            from models.enums import TransferModel
+
+            update_data = {}
+            percent_changed = False
+
+            # Si le pourcentage change, cela nécessite une validation des deux côtés
+            if "default_partner_tariff_percent" in data:
+                new_percent = float(data["default_partner_tariff_percent"])
+                old_percent = (
+                    float(partnership.default_partner_tariff_percent)
+                    if partnership.default_partner_tariff_percent is not None
+                    else None
+                )
+                if (
+                    old_percent is None
+                    or abs(new_percent - old_percent)
+                    > PARTNERSHIP_PERCENT_CHANGE_THRESHOLD
+                ):
+                    percent_changed = True
+                    # Si le pourcentage change, le partenariat passe en PENDING
+                    # et nécessite l'acceptation de l'autre entreprise
+                    update_data["default_partner_tariff_percent"] = new_percent
+                    update_data["status"] = PartnershipStatus.PENDING
+                    logger.info(
+                        "Partenariat %s: Pourcentage changé de %s à %s, passage en PENDING",
+                        partnership_id,
+                        old_percent,
+                        new_percent,
+                    )
+                else:
+                    update_data["default_partner_tariff_percent"] = new_percent
+
+            if "default_margin_percent" in data:
+                update_data["default_margin_percent"] = float(
+                    data["default_margin_percent"]
+                )
+            # payment_terms_days retiré car géré dans l'onglet facturation
+            if "auto_accept" in data:
+                update_data["auto_accept"] = bool(data["auto_accept"])
+            if "auto_invoice" in data:
+                update_data["auto_invoice"] = bool(data["auto_invoice"])
+            if "default_transfer_model" in data:
+                try:
+                    update_data["default_transfer_model"] = TransferModel[
+                        data["default_transfer_model"].upper()
+                    ]
+                except (KeyError, AttributeError):
+                    return APIErrorHandler.handle_validation_error(
+                        f"Modèle de transfert invalide: {data.get('default_transfer_model')}",
+                        logger_instance=logger,
+                    )
+
+            # Mettre à jour le partenariat
+            updated_partnership = PartnershipService.update_partnership(
+                partnership_id=partnership_id, **update_data
+            )
+
+            # Sérialiser le partenariat mis à jour
+            result = updated_partnership.to_dict()
+
+            # Enrichir avec les informations de partenaire (comme dans GET)
+            if updated_partnership.owner_company_id == company.id:
+                result["current_company_id"] = company.id
+                result["partner_company_id_display"] = (
+                    updated_partnership.partner_company_id
+                )
+                result["partner_company_name_display"] = (
+                    updated_partnership.partner_company.name
+                    if updated_partnership.partner_company
+                    else None
+                )
+                result["is_owner"] = True
+            else:
+                result["current_company_id"] = company.id
+                result["partner_company_id_display"] = (
+                    updated_partnership.owner_company_id
+                )
+                result["partner_company_name_display"] = (
+                    updated_partnership.owner_company.name
+                    if updated_partnership.owner_company
+                    else None
+                )
+                result["is_owner"] = False
+
+            message = "Partenariat mis à jour avec succès"
+            if percent_changed:
+                message = (
+                    "Partenariat mis à jour. Le changement de pourcentage nécessite "
+                    "l'acceptation de l'autre entreprise. Le partenariat est maintenant en attente."
+                )
+
+            return success_response(data=result, message=message)
+        except ValueError as e:
+            return APIErrorHandler.handle_validation_error(
+                str(e), logger_instance=logger
+            )
+        except Exception as e:
+            logger.exception("Erreur lors de la mise à jour du partenariat")
+            return APIErrorHandler.handle_exception(e, logger)
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    def delete(self, partnership_id: int):
+        """Supprime complètement un partenariat."""
+        try:
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                result = error_response or APIErrorHandler.handle_not_found(
+                    "Company", None, logger
+                )
+                return result, status_code or 404
+
+            logger.info(
+                "Tentative de suppression du partenariat %s par company_id=%s",
+                partnership_id,
+                company.id,
+            )
+
+            # Supprimer le partenariat via le service
+            from services.partnership_service import PartnershipService
+
+            PartnershipService.delete_partnership(partnership_id, company.id)
+
+            logger.info(
+                "Partenariat %s supprimé avec succès par company_id=%s",
+                partnership_id,
+                company.id,
+            )
+            return success_response(message="Partenariat supprimé avec succès")
+        except ValueError as e:
+            logger.warning(
+                "Erreur de validation lors de la suppression du partenariat %s: %s",
+                partnership_id,
+                str(e),
+            )
+            return APIErrorHandler.handle_validation_error(
+                str(e), logger_instance=logger
+            )
+        except IntegrityError as e:
             db.session.rollback()
-            sentry_sdk.capture_exception(e)
-            return {"error": "Erreur interne"}, 500
+            logger.exception(
+                "Erreur d'intégrité lors de la suppression du partenariat %s: %s",
+                partnership_id,
+                e,
+            )
+            return APIErrorHandler.handle_validation_error(
+                "Impossible de supprimer ce partenariat car il est utilisé par d'autres enregistrements.",
+                logger_instance=logger,
+            )
+        except Exception as e:
+            logger.exception(
+                "Erreur lors de la suppression du partenariat %s: %s", partnership_id, e
+            )
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@companies_ns.route("/me/partnerships/statements/generate")
+class CompanyPartnershipsStatement(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self):  # noqa: PLR0911
+        """Génère un décompte consolidé de tous les partenaires."""
+        try:
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                result = error_response or APIErrorHandler.handle_not_found(
+                    "Company", None, logger
+                )
+                return result, status_code or 404
+
+            data = request.get_json(silent=True) or {}
+            logger.info("Génération décompte consolidé - Données reçues: %s", data)
+            period_type = data.get("period_type", "monthly")
+            year = data.get("year")
+            month = data.get("month")
+            start_date_str = data.get("start_date")
+            end_date_str = data.get("end_date")
+
+            # Convertir year et month en int si présents
+            if year is not None:
+                try:
+                    year = int(year)
+                except (ValueError, TypeError):
+                    return APIErrorHandler.handle_validation_error(
+                        "L'année doit être un nombre entier",
+                        logger_instance=logger,
+                    )
+            if month is not None:
+                try:
+                    month = int(month)
+                except (ValueError, TypeError):
+                    return APIErrorHandler.handle_validation_error(
+                        "Le mois doit être un nombre entier",
+                        logger_instance=logger,
+                    )
+
+            # Parser les dates si fournies
+            start_date = None
+            end_date = None
+            if start_date_str:
+                try:
+                    start_date = datetime.fromisoformat(
+                        start_date_str.replace("Z", "+00:00")
+                    )
+                except (ValueError, AttributeError):
+                    return APIErrorHandler.handle_validation_error(
+                        "Format de date de début invalide (attendu: ISO 8601)",
+                        logger_instance=logger,
+                    )
+            if end_date_str:
+                try:
+                    end_date = datetime.fromisoformat(
+                        end_date_str.replace("Z", "+00:00")
+                    )
+                except (ValueError, AttributeError):
+                    return APIErrorHandler.handle_validation_error(
+                        "Format de date de fin invalide (attendu: ISO 8601)",
+                        logger_instance=logger,
+                    )
+
+            # Générer le décompte
+            from services.partnership_statement_service import (
+                PartnershipStatementService,
+            )
+
+            statement_service = PartnershipStatementService()
+            pdf_url = statement_service.generate_consolidated_statement(
+                company_id=company.id,
+                period_type=period_type,
+                year=year,
+                month=month,
+                start_date=start_date,
+                end_date=end_date,
+            )
+
+            return success_response(
+                data={"pdf_url": pdf_url}, message="Décompte généré avec succès"
+            )
+        except ValueError as e:
+            return APIErrorHandler.handle_validation_error(
+                str(e), logger_instance=logger
+            )
+        except Exception as e:
+            logger.exception("Erreur lors de la génération du décompte consolidé")
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@companies_ns.route("/me/partnerships/<int:partnership_id>/statements/generate")
+class CompanyPartnershipStatement(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self, partnership_id: int):  # noqa: PLR0911
+        """Génère un décompte pour un partenariat spécifique."""
+        try:
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                result = error_response or APIErrorHandler.handle_not_found(
+                    "Company", None, logger
+                )
+                return result, status_code or 404
+
+            data = request.get_json(silent=True) or {}
+            logger.info(
+                "Génération décompte partenariat %s - Données reçues: %s",
+                partnership_id,
+                data,
+            )
+            period_type = data.get("period_type", "monthly")
+            year = data.get("year")
+            month = data.get("month")
+            start_date_str = data.get("start_date")
+            end_date_str = data.get("end_date")
+
+            # Convertir year et month en int si présents
+            if year is not None:
+                try:
+                    year = int(year)
+                except (ValueError, TypeError):
+                    return APIErrorHandler.handle_validation_error(
+                        "L'année doit être un nombre entier",
+                        logger_instance=logger,
+                    )
+            if month is not None:
+                try:
+                    month = int(month)
+                except (ValueError, TypeError):
+                    return APIErrorHandler.handle_validation_error(
+                        "Le mois doit être un nombre entier",
+                        logger_instance=logger,
+                    )
+
+            # Parser les dates si fournies
+            start_date = None
+            end_date = None
+            if start_date_str:
+                try:
+                    start_date = datetime.fromisoformat(
+                        start_date_str.replace("Z", "+00:00")
+                    )
+                except (ValueError, AttributeError):
+                    return APIErrorHandler.handle_validation_error(
+                        "Format de date de début invalide (attendu: ISO 8601)",
+                        logger_instance=logger,
+                    )
+            if end_date_str:
+                try:
+                    end_date = datetime.fromisoformat(
+                        end_date_str.replace("Z", "+00:00")
+                    )
+                except (ValueError, AttributeError):
+                    return APIErrorHandler.handle_validation_error(
+                        "Format de date de fin invalide (attendu: ISO 8601)",
+                        logger_instance=logger,
+                    )
+
+            # Générer le décompte
+            from services.partnership_statement_service import (
+                PartnershipStatementService,
+            )
+
+            statement_service = PartnershipStatementService()
+            try:
+                pdf_url = statement_service.generate_partnership_statement(
+                    partnership_id=partnership_id,
+                    company_id=company.id,
+                    period_type=period_type,
+                    year=year,
+                    month=month,
+                    start_date=start_date,
+                    end_date=end_date,
+                )
+            except ValueError:
+                raise
+
+            return success_response(
+                data={"pdf_url": pdf_url}, message="Décompte généré avec succès"
+            )
+        except ValueError as e:
+            return APIErrorHandler.handle_validation_error(
+                str(e), logger_instance=logger
+            )
+        except Exception as e:
+            logger.exception("Erreur lors de la génération du décompte")
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@companies_ns.route("/me/partnerships/stats")
+class CompanyPartnershipsStats(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        """Récupère les statistiques globales de partenariats (KPI)."""
+        try:
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                return error_response or APIErrorHandler.handle_not_found(
+                    "Company", None, logger
+                ), status_code or 404
+
+            from services.partnership_stats_service import PartnershipStatsService
+
+            # Récupérer les paramètres de période (optionnels)
+            month = request.args.get("month", type=int)
+            year = request.args.get("year", type=int)
+
+            stats = PartnershipStatsService.get_global_stats(company.id, month, year)
+
+            return success_response(data=stats)
+        except Exception as e:
+            logger.exception(
+                "Erreur lors de la récupération des statistiques partenariats"
+            )
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 @companies_ns.route("/me/reservations", strict_slashes=False)
 class CompanyReservations(Resource):
     @jwt_required()
     @role_required(UserRole.company)
-    def get(self):  # noqa: PLR0911
-        company, error_response, status_code = get_company_from_token()
+    def get(self):
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, error_response, status_code = _get_current_company_via_use_case()
         if error_response:
             return error_response, status_code
 
@@ -592,7 +1147,10 @@ class CompanyReservations(Resource):
         except Exception:
             company_id = None
         if company_id is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
 
         flat = request.args.get("flat", "false").lower() == "true"
         day_str = (request.args.get("date") or "").strip()
@@ -607,16 +1165,12 @@ class CompanyReservations(Resource):
 
         status_filter = request.args.get("status")
 
-        # Base query avec company_id uniquement
-        query = Booking.query.filter(Booking.company_id == company_id)
-
-        # Ajouter le filtre de date SEULEMENT si une date est spécifiée
+        # Vérifier la plage de dates si spécifiée
         if day_str:
             from shared.time_utils import day_local_bounds
 
             try:
                 start_local, end_local = day_local_bounds(day_str)
-                # Vérifier que la plage de dates n'est pas trop large
                 days_diff = (end_local - start_local).days
                 if days_diff > max_days_range:
                     return {
@@ -625,45 +1179,47 @@ class CompanyReservations(Resource):
                             f"Maximum {max_days_range} jours autorisés"
                         )
                     }, 400
-                # Appliquer le filtre de date
-                query = query.filter(
-                    Booking.scheduled_time >= start_local,
-                    Booking.scheduled_time < end_local,
-                )
             except ValueError:
-                return {"error": "Format de date invalide. Utilisez YYYY-MM-DD"}, 400
-        # Si day_str est vide → pas de filtre de date = TOUTES les réservations
-        if status_filter:
-            try:
-                status_enum = BookingStatus[status_filter.upper()]
-                query = query.filter_by(status=status_enum)
-            except KeyError:
-                return {"error": "Invalid status filter"}, 400
+                return APIErrorHandler.handle_validation_error(
+                    "Format de date invalide. Utilisez YYYY-MM-DD",
+                    field="date",
+                    logger_instance=logger,
+                )
 
-        # Ajouter des options de chargement pour éviter les requêtes N+1
-        # Tri par défaut : plus récentes en premier
-        reservations_q = query.options(
-            joinedload(Booking.client).joinedload(Client.user),
-            joinedload(Booking.driver),
-        ).order_by(Booking.scheduled_time.desc())
+        # Utiliser le repository pour récupérer les bookings avec filtres, eager loading et pagination
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from repositories.booking_repository import BookingRepository
 
-        # Appliquer la pagination
-        total = reservations_q.count()
-        reservations = (
-            reservations_q.offset((page - 1) * per_page).limit(per_page).all()
+        booking_repo = BookingRepository()
+        # Utiliser la méthode existante et ajouter la pagination manuellement
+        all_reservations = booking_repo.find_models_by_company_with_filters(
+            company_id,
+            day_str=day_str,
+            status=status_filter,
         )
+        total = len(all_reservations)
+        # Pagination manuelle
+        start_idx = (page - 1) * per_page
+        end_idx = start_idx + per_page
+        reservations = all_reservations[start_idx:end_idx]
 
         # Retourner les données dans le format attendu par le frontend
+        try:
+            serialized_reservations = []
+            for b in reservations:
+                serialized_reservations.append(b.serialize)
+        except Exception:
+            raise
         if flat:
             return {
-                "reservations": [b.serialize for b in reservations],
+                "reservations": serialized_reservations,
                 "total": total,
                 "page": page,
                 "per_page": per_page,
                 "total_pages": (total + per_page - 1) // per_page,
             }, 200
         return {
-            "reservations": [b.serialize for b in reservations],
+            "reservations": serialized_reservations,
             "total": total,
             "page": page,
             "per_page": per_page,
@@ -682,15 +1238,44 @@ class AcceptReservation(Resource):
     @role_required(UserRole.company)
     @limiter.limit("200 per hour")  # ✅ 2.8: Rate limiting acceptation réservation
     def post(self, reservation_id):
-        # Utiliser la fonction helper pour récupérer l'entreprise depuis le
-        # token
-        company, error_response, status_code = get_company_from_token()
+        from repositories.booking_repository import BookingRepository
+
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, error_response, status_code = _get_current_company_via_use_case()
         if error_response:
             return error_response, status_code
 
-        booking = Booking.query.filter_by(id=reservation_id).one_or_none()
-        if not booking or booking.status != BookingStatus.PENDING:
-            return {"error": "Reservation not found or cannot be accepted"}, 400
+        booking_repo = BookingRepository()
+        booking_dto = booking_repo.find_by_id(reservation_id)
+        if not booking_dto:
+            booking = None
+        else:
+            # Utiliser le repository pour récupérer le modèle SQLAlchemy
+            booking = booking_repo.find_model_by_id(booking_dto.id)
+        if not booking:
+            return APIErrorHandler.handle_validation_error(
+                "Reservation not found",
+                logger_instance=logger,
+            )
+
+        # ✅ FIX: Vérifier s'il y a un transfert actif AVANT de vérifier le statut
+        # Si l'entreprise propriétaire accepte une réservation en cours de transfert,
+        # on permet l'acceptation même si le statut n'est pas PENDING (ex: ACCEPTED si auto-accept)
+        from models.booking_transfer import BookingTransfer
+        from models.enums import TransferStatus
+
+        # Réutiliser active_transfer déjà trouvé dans les logs précédents si disponible
+        active_transfer_check = None
+        if booking:
+            active_transfer_check = (
+                BookingTransfer.query.filter_by(booking_id=reservation_id)
+                .filter(
+                    BookingTransfer.status.in_(
+                        [TransferStatus.PENDING, TransferStatus.ACCEPTED]
+                    )
+                )
+                .first()
+            )
 
         # 🔒 Sécurise l'ID (évite Column[int] -> bool dans les expressions
         # / casts Pylance)
@@ -700,10 +1285,98 @@ class AcceptReservation(Resource):
         except Exception:
             company_id = None
         if company_id is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
 
-        booking.company_id = company_id
-        booking.status = BookingStatus.ACCEPTED
+        # Si pas de transfert actif, vérifier que le statut est PENDING
+        if not active_transfer_check and booking.status != BookingStatus.PENDING:
+            return APIErrorHandler.handle_validation_error(
+                f"Cette réservation ne peut pas être acceptée. Statut actuel: {booking.status.value if hasattr(booking.status, 'value') else booking.status}",
+                logger_instance=logger,
+            )
+
+        # ✅ FIX: Gérer l'acceptation selon le rôle de l'entreprise dans le transfert
+        if active_transfer_check and booking:
+            # Cas 1: Entreprise propriétaire accepte → annuler le transfert et accepter normalement
+            booking_company_id_obj = getattr(booking, "company_id", None)
+            try:
+                booking_company_id = (
+                    int(booking_company_id_obj)
+                    if booking_company_id_obj is not None
+                    else None
+                )
+            except Exception:
+                booking_company_id = None
+            if booking_company_id == company_id:
+                # Annuler le transfert en le marquant comme REJECTED
+                active_transfer_check.status = TransferStatus.REJECTED
+                logger.info(
+                    "Transfert %s annulé car l'entreprise propriétaire accepte la réservation %s",
+                    active_transfer_check.id,
+                    reservation_id,
+                )
+                # S'assurer que le statut de la réservation est PENDING avant l'acceptation
+                if booking.status != BookingStatus.PENDING:
+                    old_status = (
+                        booking.status.value
+                        if hasattr(booking.status, "value")
+                        else str(booking.status)
+                    )
+                    booking.status = BookingStatus.PENDING
+                    logger.info(
+                        "Statut de la réservation %s remis à PENDING avant acceptation (était %s)",
+                        reservation_id,
+                        old_status,
+                    )
+            # Cas 2: Entreprise assignée accepte → accepter le transfert (ce qui accepte aussi la réservation)
+            elif active_transfer_check.executing_company_id == company_id:
+                # Accepter le transfert via le service (ce qui accepte aussi la réservation)
+                from services.booking_transfer_service import BookingTransferService
+
+                try:
+                    accepted_transfer = BookingTransferService.accept_transfer(
+                        active_transfer_check.id, company_id
+                    )
+                    db.session.commit()
+                    _maybe_trigger_dispatch(company_id, "update")
+                    return {
+                        "message": "Transfert accepté et réservation acceptée",
+                        "reservation": cast("Any", booking).serialize,
+                        "transfer": accepted_transfer.to_dict(),
+                    }, 200
+                except ValueError as e:
+                    db.session.rollback()
+                    return APIErrorHandler.handle_validation_error(
+                        str(e),
+                        logger_instance=logger,
+                    )
+                except Exception as e:
+                    db.session.rollback()
+                    sentry_sdk.capture_exception(e)
+                    return APIErrorHandler.handle_exception(
+                        e,
+                        logger,
+                    )
+            # Cas 3: Ni propriétaire ni assignée → refuser
+            else:
+                return APIErrorHandler.handle_validation_error(
+                    "Vous n'êtes pas autorisé à accepter cette réservation. Seules l'entreprise propriétaire ou l'entreprise assignée peuvent l'accepter.",
+                    logger_instance=logger,
+                )
+
+        from application.companies.accept_reservation import AcceptReservationUseCase
+
+        uc = AcceptReservationUseCase()
+        uc_result = uc.execute(booking, company_id=company_id)
+        if not uc_result.ok:
+            return APIErrorHandler.handle_validation_error(
+                (uc_result.error or {}).get(
+                    "error", "Reservation not found or cannot be accepted"
+                ),
+                logger_instance=logger,
+            )
 
         try:
             db.session.commit()
@@ -716,8 +1389,7 @@ class AcceptReservation(Resource):
             sentry_sdk.capture_exception(e)
             db.session.rollback()
 
-            app_logger.error("❌ ERREUR accept_reservation: %s", str(e))
-            return {"error": "Une erreur interne est survenue."}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 # ======================================================
@@ -730,13 +1402,25 @@ class RejectReservation(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def post(self, reservation_id):
-        company, error_response, status_code = get_company_from_token()
+        from repositories.booking_repository import BookingRepository
+
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, error_response, status_code = _get_current_company_via_use_case()
         if error_response:
             return error_response, status_code
 
-        booking = Booking.query.filter_by(id=reservation_id).one_or_none()
+        booking_repo = BookingRepository()
+        booking_dto = booking_repo.find_by_id(reservation_id)
+        if not booking_dto:
+            booking = None
+        else:
+            # Utiliser le repository pour récupérer le modèle SQLAlchemy
+            booking = booking_repo.find_model_by_id(booking_dto.id)
         if not booking or booking.status != BookingStatus.PENDING:
-            return {"error": "Reservation not found or cannot be rejected"}, 400
+            return APIErrorHandler.handle_validation_error(
+                "Reservation not found or cannot be rejected",
+                logger_instance=logger,
+            )
 
         # 🔒 Company ID → int sûr (élimine Column[int] / Optional)
         company_id_obj = getattr(company, "id", None)
@@ -745,15 +1429,22 @@ class RejectReservation(Resource):
         except Exception:
             company_id = None
         if company_id is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
 
-        # 🛡️ rejected_by peut être None / JSON / ARRAY → on normalise en list
-        rb = getattr(booking, "rejected_by", None)
-        if rb is None:
-            rb = []
-            booking.rejected_by = rb
-        if company_id not in rb:
-            rb.append(company_id)
+        from application.companies.reject_reservation import RejectReservationUseCase
+
+        uc = RejectReservationUseCase()
+        uc_result = uc.execute(booking, company_id=company_id)
+        if not uc_result.ok:
+            return APIErrorHandler.handle_validation_error(
+                (uc_result.error or {}).get(
+                    "error", "Reservation not found or cannot be rejected"
+                ),
+                logger_instance=logger,
+            )
 
         try:
             db.session.commit()
@@ -765,8 +1456,7 @@ class RejectReservation(Resource):
             sentry_sdk.capture_exception(e)
             db.session.rollback()
 
-            app_logger.error("❌ ERREUR reject_reservation: %s", str(e))
-            return {"error": "Une erreur interne est survenue."}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 # ======================================================
@@ -780,7 +1470,11 @@ class AssignDriver(Resource):
     @role_required(UserRole.company)
     @limiter.limit("200 per hour")  # ✅ 2.8: Rate limiting assignation chauffeur
     def post(self, reservation_id):  # noqa: PLR0911
-        company, error_response, status_code = get_company_from_token()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from repositories.booking_repository import BookingRepository
+
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, error_response, status_code = _get_current_company_via_use_case()
         if error_response:
             return error_response, status_code
 
@@ -791,22 +1485,42 @@ class AssignDriver(Resource):
         except Exception:
             company_id = None
         if company_id is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
 
-        booking = Booking.query.filter_by(
-            id=reservation_id, company_id=company_id
-        ).one_or_none()
+        booking_repo = BookingRepository()
+        booking_dto = booking_repo.find_by_id(reservation_id)
+        # ✅ Vérifier si la course appartient à l'entreprise (company_id) OU si elle est transférée à l'entreprise (executing_company_id)
+        if not booking_dto or company_id not in {
+            booking_dto.company_id,
+            booking_dto.executing_company_id,
+        }:
+            booking = None
+        else:
+            # Utiliser le repository pour récupérer le modèle SQLAlchemy
+            booking = booking_repo.find_model_by_id(booking_dto.id)
 
         if not booking:
-            app_logger.warning(
-                "❌ Booking ID %s introuvable ou non lié à la société ID %s",
+            logger.warning(
+                "❌ Booking ID %s introuvable ou non lié à la société ID %s (company_id=%s, executing_company_id=%s)",
                 reservation_id,
                 company_id,
+                booking_dto.company_id if booking_dto else None,
+                booking_dto.executing_company_id if booking_dto else None,
             )
-            return {"error": "Reservation not found"}, 400
+            return APIErrorHandler.handle_validation_error(
+                "Reservation not found",
+                logger_instance=logger,
+            )
 
-        app_logger.info(
-            "🔍 Booking trouvé : id=%s, statut=%s", booking.id, booking.status
+        logger.info(
+            "🔍 Booking trouvé : id=%s, statut=%s, company_id=%s, executing_company_id=%s",
+            booking.id,
+            booking.status,
+            booking.company_id,
+            booking.executing_company_id,
         )
 
         # Autoriser seulement les statuts ACCEPTED et ASSIGNED
@@ -815,74 +1529,90 @@ class AssignDriver(Resource):
                 "❌ Statut invalide pour assignation : %s. "
                 + "Doit être ACCEPTED ou ASSIGNED."
             )
-            app_logger.warning(
+            logger.warning(
                 warning_msg,
                 booking.status,
             )
-            return {"error": "Reservation cannot be assigned in current state"}, 400
+            return APIErrorHandler.handle_validation_error(
+                "Reservation cannot be assigned in current state",
+                logger_instance=logger,
+            )
 
         data = request.get_json(silent=True) or {}
         driver_id = data.get("driver_id")
         if not driver_id:
-            return {"error": "Missing driver_id"}, 400
+            return APIErrorHandler.handle_validation_error(
+                "Missing driver_id",
+                field="driver_id",
+                logger_instance=logger,
+            )
         try:
             driver_id = int(driver_id)
         except (TypeError, ValueError):
-            return {"error": "driver_id doit être un entier."}, 400
+            return APIErrorHandler.handle_validation_error(
+                "driver_id doit être un entier.",
+                field="driver_id",
+                logger_instance=logger,
+            )
 
-        driver = Driver.query.filter_by(
-            id=driver_id, company_id=company_id
-        ).one_or_none()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from repositories.driver_repository import DriverRepository
+
+        driver_repo = DriverRepository()
+        driver = driver_repo.find_model_by_id_and_company(driver_id, company_id)
         if not driver:
-            return {"error": "Driver not found for this company"}, 404
+            return APIErrorHandler.handle_not_found(
+                "Driver",
+                driver_id,
+                logger,
+            )
 
-        # Si déjà assigné au même chauffeur → log mais OK
-        if booking.driver_id == driver.id and booking.status == BookingStatus.ASSIGNED:
-            app_logger.info("... déjà assignée ...")
-        else:
-            booking.driver_id = driver.id
-            booking.status = BookingStatus.ASSIGNED
+        # ✅ Clean step: règles métier d'assignation + création/MAJ Assignment dans use-case + adaptateur infra
+        from application.companies.assign_driver_to_reservation import (
+            AssignDriverToReservationUseCase,
+        )
+        from infrastructure.persistence.dispatch.assignment_writer import (
+            SqlAlchemyAssignmentWriter,
+        )
+        from repositories.assignment_repository import AssignmentRepository
+        from repositories.dispatch_run_repository import DispatchRunRepository
 
-            # Get or create a DispatchRun for today
-            # ⚙️ Pylance : protège .date() quand scheduled_time ou le retour
-            # de to_geneva_local peuvent être None
-            st = getattr(booking, "scheduled_time", None)
-            if st is None:
-                day_local = datetime.now(UTC).date()
-            else:
-                # Certains stubs typent to_geneva_local -> Optional[datetime]
-                dt_local_any = to_geneva_local(st)
-                day_local = st.date() if dt_local_any is None else dt_local_any.date()
-            dispatch_run = DispatchRun.query.filter_by(
-                company_id=company_id, day=day_local
-            ).first()
-            if not dispatch_run:
-                # 🛠️ Constructeur SQLAlchemy dynamique → cast(Any, ...) pour Pylance
-                dispatch_run = DispatchRun()
-                dispatch_run.company_id = company_id
-                dispatch_run.day = day_local
-                dispatch_run.status = DispatchStatusEnum.COMPLETED
-                db.session.add(dispatch_run)
-                db.session.flush()  # Get the ID
-
-            # Check if an Assignment already exists
-            assignment = Assignment.query.filter_by(booking_id=booking.id).first()
-            if not assignment:
-                # Create new Assignment
-                assignment = Assignment()
-                assignment.booking_id = booking.id
-                assignment.driver_id = driver.id
-                assignment.dispatch_run_id = dispatch_run.id
-                assignment.status = AssignmentStatus.SCHEDULED
-                db.session.add(assignment)
-            else:
-                # Update existing Assignment
-                assignment.driver_id = driver.id
-                assignment.dispatch_run_id = dispatch_run.id
-                assignment.status = AssignmentStatus.SCHEDULED
+        writer = SqlAlchemyAssignmentWriter(
+            dispatch_run_repo=DispatchRunRepository(),
+            assignment_repo=AssignmentRepository(),
+        )
+        uc = AssignDriverToReservationUseCase(assignment_writer=writer)
+        uc_result = uc.execute(booking=booking, driver=driver, company_id=company_id)
+        if not uc_result.ok:
+            return APIErrorHandler.handle_validation_error(
+                (uc_result.error or {}).get(
+                    "error", "Reservation cannot be assigned in current state"
+                ),
+                logger_instance=logger,
+            )
 
         db.session.commit()
-        notify_driver_new_booking(driver.id, booking)
+        # ✅ Clean Architecture: Publier événement au lieu d'appel direct
+        try:
+            from application.events.event_bus import publish_event
+            from domain.events.events import DriverNewBookingEvent
+
+            publish_event(
+                DriverNewBookingEvent(
+                    booking_id=booking.id,
+                    driver_id=driver.id,
+                    company_id=company_id,
+                )
+            )
+        except Exception as e:
+            # Fallback vers notification directe si événement échoue
+            logger.warning(
+                "[AssignDriver] Event publish failed, using direct notification: %s",
+                e,
+            )
+            from shared.notifications import notify_driver_new_booking
+
+            notify_driver_new_booking(driver.id, booking)
         _maybe_trigger_dispatch(company_id, "update")
         return {
             "message": "Driver assigned successfully",
@@ -900,7 +1630,11 @@ class CompleteReservation(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def post(self, reservation_id):
-        company, error_response, status_code = get_company_from_token()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from repositories.booking_repository import BookingRepository
+
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, error_response, status_code = _get_current_company_via_use_case()
         if error_response:
             return error_response, status_code
 
@@ -911,27 +1645,62 @@ class CompleteReservation(Resource):
         except Exception:
             company_id = None
         if company_id is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
 
-        booking = Booking.query.filter_by(
-            id=reservation_id, company_id=company_id
-        ).one_or_none()
-        if not booking or booking.status != BookingStatus.IN_PROGRESS:
-            return {"error": "Réservation introuvable ou pas en cours"}, 400
-
-        # Gestion aller ou retour
-        if booking.is_return:
-            booking.status = BookingStatus.RETURN_COMPLETED
+        booking_repo = BookingRepository()
+        booking_dto = booking_repo.find_by_id(reservation_id)
+        if not booking_dto or booking_dto.company_id != company_id:
+            booking = None
         else:
-            booking.status = BookingStatus.COMPLETED
+            # Utiliser le repository pour récupérer le modèle SQLAlchemy
+            booking = booking_repo.find_model_by_id(booking_dto.id)
+        from application.companies.reservations.complete_reservation import (
+            CompleteCompanyReservationUseCase,
+        )
 
-        booking.completed_at = now_utc()  # Optionnel : enregistrer l'heure de fin
+        if not booking:
+            return APIErrorHandler.handle_validation_error(
+                "Réservation introuvable ou pas en cours",
+                logger_instance=logger,
+            )
+
+        uc = CompleteCompanyReservationUseCase()
+        uc_result = uc.execute(booking)
+        if not uc_result.ok:
+            return APIErrorHandler.handle_validation_error(
+                (uc_result.error or {}).get(
+                    "error", "Réservation introuvable ou pas en cours"
+                ),
+                logger_instance=logger,
+            )
 
         try:
             db.session.commit()
             # ✅ 3.5.1: Résoudre retards lors complétion
             DelayEvent.resolve_delays_for_booking(booking.id, booking.completed_at)
-            notify_booking_update(booking.driver_id, booking)
+            # ✅ Clean Architecture: Publier événement au lieu d'appel direct
+            if booking.driver_id:
+                try:
+                    from application.events.event_bus import publish_event
+                    from domain.events.events import BookingUpdatedEvent
+
+                    publish_event(
+                        BookingUpdatedEvent(
+                            booking_id=booking.id,
+                            driver_id=booking.driver_id,
+                            company_id=cast(int, booking.company_id),
+                        )
+                    )
+                except Exception as e:
+                    # Fallback vers notification directe si événement échoue
+                    logger.warning(
+                        "[CompleteReservation] Event publish failed, using direct notification: %s",
+                        e,
+                    )
+                    notify_booking_update(booking.driver_id, booking)
 
             return {
                 "message": "Réservation complétée avec succès",
@@ -941,8 +1710,7 @@ class CompleteReservation(Resource):
             # sentry_sdk.capture_exception(e)  # Si tu as Sentry
             db.session.rollback()
 
-            app_logger.error("❌ ERREUR complete_reservation: %s", str(e))
-            return {"error": "Une erreur interne est survenue."}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 # ======================================================
@@ -955,7 +1723,11 @@ class CompanyDriversList(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def get(self):
-        company, err, code = get_company_from_token()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from repositories.driver_repository import DriverRepository
+
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, err, code = _get_current_company_via_use_case()
         if err:
             return err, code
         # 🔒 company.id → int sûr (évite Column[int]/Optional)
@@ -965,17 +1737,18 @@ class CompanyDriversList(Resource):
         except Exception:
             cid = None
         if cid is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
-        # ✅ Eager load user + vacations pour éviter N+1
-        drivers = (
-            Driver.query.options(joinedload(Driver.user), joinedload(Driver.vacations))
-            .filter_by(company_id=cid)
-            .all()
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
+        driver_repo = DriverRepository()
+        from application.companies.drivers.list_company_drivers import (
+            ListCompanyDriversUseCase,
         )
-        return {
-            "drivers": [cast("Any", d).serialize for d in drivers],
-            "total": len(drivers),
-        }, 200
+
+        uc = ListCompanyDriversUseCase(driver_repo=driver_repo)
+        result = uc.execute(company_id=cid)
+        return result.payload, 200
 
 
 # Route dupliquée supprimée - utiliser /me/drivers à la place
@@ -986,10 +1759,15 @@ class CompanyDriversList(Resource):
 # ======================================================
 @companies_ns.route("/me/drivers/<int:driver_id>")
 class DriverItem(Resource):
-    @jwt_required()
+    # ✅ S2: Fresh token requis pour modification données sensibles (email, etc.)
+    @jwt_required(fresh=True)
     @role_required(UserRole.company)
     def put(self, driver_id):
-        company, error_response, status_code = get_company_from_token()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from repositories.driver_repository import DriverRepository
+
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, error_response, status_code = _get_current_company_via_use_case()
         if error_response:
             return error_response, status_code
 
@@ -1000,89 +1778,38 @@ class DriverItem(Resource):
         except Exception:
             cid = None
         if cid is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
 
-        driver = (
-            Driver.query.options(joinedload(Driver.user))
-            .filter_by(id=driver_id, company_id=cid)
-            .one_or_none()
-        )
-        if not driver:
-            return {"error": "Driver not found for this company"}, 404
+        # ✅ Utiliser le repository pour vérifier l'existence et récupérer avec eager loading
+        driver_repo = DriverRepository()
+        driver_dto = driver_repo.find_by_id(driver_id)
+        # Récupérer le modèle SQLAlchemy avec eager loading
+        driver = driver_repo.find_model_by_id_with_user(driver_id, cid)
+        # Vérifier que le driver existe et appartient à la company (combine les deux vérifications)
+        if not driver_dto or driver_dto.company_id != cid or not driver:
+            return APIErrorHandler.handle_not_found(
+                "Driver",
+                driver_id,
+                logger,
+            )
 
         data = request.get_json(silent=True) or {}
-        validation_error = None
-        validation_status = None
+        from repositories.user_repository import UserRepository
+        from repositories.vehicle_repository import VehicleRepository
+        from application.companies.drivers.update_company_driver import (
+            UpdateCompanyDriverUseCase,
+        )
 
-        # ✅ Mise à jour des informations utilisateur
-        user = driver.user
-        if user:
-            if "first_name" in data:
-                user.first_name = (
-                    str(data["first_name"]).strip() if data["first_name"] else None
-                )
-            if "last_name" in data:
-                user.last_name = (
-                    str(data["last_name"]).strip() if data["last_name"] else None
-                )
-            if "email" in data:
-                email = str(data["email"]).strip() if data["email"] else None
-                # Vérifier que l'email n'est pas déjà utilisé par un autre utilisateur
-                if email:
-                    existing_user = User.query.filter(
-                        User.email == email, User.id != user.id
-                    ).first()
-                    if existing_user:
-                        validation_error = {
-                            "error": "Cet email est déjà utilisé par un autre utilisateur"
-                        }
-                        validation_status = 400
-
-                if not validation_error:
-                    user.email = email
-            if "address" in data:
-                user.address = str(data["address"]).strip() if data["address"] else None
-
-        # ✅ Mise à jour des informations du chauffeur
-        if not validation_error and "is_active" in data:
-            driver.is_active = bool(data["is_active"])
-
-        if not validation_error and "driver_type" in data:
-            try:
-                driver.driver_type = DriverType[str(data["driver_type"]).upper()]
-            except KeyError:
-                validation_error = {
-                    "error": "Type de chauffeur invalide: REGULAR | EMERGENCY"
-                }
-                validation_status = 400
-
-        # ✅ Mise à jour du véhicule assigné
-        if not validation_error and "vehicle_id" in data:
-            vehicle_id = data["vehicle_id"]
-            if vehicle_id is None or vehicle_id == "":
-                driver.vehicle_id = None
-            else:
-                try:
-                    vehicle_id_int = int(vehicle_id)
-                    # Vérifier que le véhicule appartient bien à l'entreprise
-                    vehicle = Vehicle.query.filter_by(
-                        id=vehicle_id_int, company_id=cid
-                    ).first()
-                    if vehicle:
-                        driver.vehicle_id = vehicle_id_int
-                    else:
-                        validation_error = {
-                            "error": f"Véhicule {vehicle_id_int} non trouvé ou n'appartient pas à cette entreprise"
-                        }
-                        validation_status = 400
-                except (ValueError, TypeError):
-                    validation_error = {
-                        "error": "vehicle_id doit être un nombre entier valide"
-                    }
-                    validation_status = 400
-
-        if validation_error:
-            return validation_error, validation_status
+        uc = UpdateCompanyDriverUseCase(
+            user_repo=UserRepository(),
+            vehicle_repo=VehicleRepository(),
+        )
+        uc_result = uc.execute(driver=cast("Any", driver), company_id=cid, data=data)
+        if not uc_result.ok:
+            return uc_result.error, uc_result.status_code or 400
 
         try:
             db.session.commit()
@@ -1097,13 +1824,18 @@ class DriverItem(Resource):
         except Exception as e:
             sentry_sdk.capture_exception(e)
             db.session.rollback()
-            app_logger.error("❌ Erreur mise à jour chauffeur: %s", str(e))
-            return {"error": "Une erreur interne est survenue."}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
+    # ✅ S2: Protection CSRF + rôle requis pour suppression chauffeur
+    # Note: fresh=True retiré car la protection CSRF et le rôle sont suffisants
     @jwt_required()
     @role_required(UserRole.company)
     def delete(self, driver_id):
-        company, error_response, status_code = get_company_from_token()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from repositories.driver_repository import DriverRepository
+
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, error_response, status_code = _get_current_company_via_use_case()
         if error_response:
             return error_response, status_code
 
@@ -1113,13 +1845,40 @@ class DriverItem(Resource):
         except Exception:
             cid = None
         if cid is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
 
-        driver = Driver.query.filter_by(id=driver_id, company_id=cid).one_or_none()
+        # ✅ Utiliser le repository pour vérifier l'existence
+        driver_repo = DriverRepository()
+        driver_dto = driver_repo.find_by_id(driver_id)
+        if not driver_dto or driver_dto.company_id != cid:
+            return APIErrorHandler.handle_not_found(
+                "Driver",
+                driver_id,
+                logger,
+            )
+        # Utiliser le repository pour récupérer le modèle SQLAlchemy
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from repositories.driver_repository import DriverRepository
+
+        driver_repo = DriverRepository()
+        driver = driver_repo.find_model_by_id_and_company(driver_id, cid)
         if not driver:
-            return {"error": "Driver not found for this company"}, 404
+            return APIErrorHandler.handle_not_found(
+                "Driver",
+                driver_id,
+                logger,
+            )
+
+        from application.companies.drivers.delete_company_driver import (
+            DeleteCompanyDriverUseCase,
+        )
 
         try:
+            uc = DeleteCompanyDriverUseCase()
+            _ = uc.execute(driver)
             db.session.delete(driver)
             db.session.commit()
             if company:
@@ -1128,17 +1887,20 @@ class DriverItem(Resource):
         except Exception as e:
             sentry_sdk.capture_exception(e)
             db.session.rollback()
-            return {"error": "Une erreur interne est survenue."}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 @companies_ns.route("/me/drivers/<int:driver_id>/reset-password")
 class ResetDriverPassword(Resource):
-    @jwt_required()
+    # ✅ S2: Fresh token requis pour réinitialisation mot de passe chauffeur (action sensible)
+    @jwt_required(fresh=True)
     @role_required(UserRole.company)
     @limiter.limit("10 per hour")  # ✅ 2.8: Rate limiting réinitialisation mot de passe
     def post(self, driver_id):
         """Réinitialise le mot de passe d'un chauffeur."""
-        company, error_response, status_code = get_company_from_token()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, error_response, status_code = _get_current_company_via_use_case()
         if error_response:
             return error_response, status_code
 
@@ -1149,53 +1911,61 @@ class ResetDriverPassword(Resource):
         except Exception:
             cid = None
         if cid is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
 
-        driver = (
-            Driver.query.options(joinedload(Driver.user))
-            .filter_by(id=driver_id, company_id=cid)
-            .one_or_none()
-        )
+        # Utiliser le repository pour récupérer le modèle SQLAlchemy avec eager loading
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from repositories.driver_repository import DriverRepository
+
+        driver_repo = DriverRepository()
+        driver = driver_repo.find_model_by_id_with_user(driver_id, cid)
         if not driver:
-            return {"error": "Driver not found for this company"}, 404
+            return APIErrorHandler.handle_not_found(
+                "Driver",
+                driver_id,
+                logger,
+            )
 
         user = driver.user
         if not user:
-            return {"error": "Utilisateur associé au chauffeur introuvable"}, 404
+            return APIErrorHandler.handle_not_found(
+                "Utilisateur associé au chauffeur",
+                driver.id if driver else None,
+                logger,
+            )
 
         try:
-            # Générer un nouveau mot de passe aléatoire
-            new_password = "".join(
-                random.choices(string.ascii_letters + string.digits, k=12)
+            from application.companies.drivers.reset_driver_password import (
+                ResetDriverPasswordUseCase,
             )
-            # Validation explicite du mot de passe avant set_password
-            from routes.utils import validate_password
+            from infrastructure.drivers.password_policy_adapter import (
+                PasswordPolicyAdapter,
+            )
 
-            if not validate_password(new_password):
-                error_response = {
-                    "error": "Le mot de passe généré ne respecte pas les critères de sécurité"
-                }
-                error_status = 500
-            else:
-                user.set_password(new_password)  # nosem
-                user.force_password_change = True
-                db.session.commit()
+            uc = ResetDriverPasswordUseCase(password_policy=PasswordPolicyAdapter())
+            uc_result = uc.execute(user)
+            if not uc_result.ok:
+                return uc_result.error, uc_result.status_code or 400
 
-                app_logger.info(
-                    "✅ Mot de passe réinitialisé pour chauffeur ID %d (user_id: %d)",
-                    driver_id,
-                    user.id,
-                )
-                error_response = {
-                    "message": "Mot de passe réinitialisé avec succès",
-                    "new_password": new_password,
-                    "force_password_change": True,
-                }
-                error_status = 200
+            db.session.commit()
+            logger.info(
+                "✅ Mot de passe réinitialisé pour chauffeur ID %d (user_id: %d)",
+                driver_id,
+                user.id,
+            )
+            error_response = {
+                "message": "Mot de passe réinitialisé avec succès",
+                "new_password": uc_result.new_password,
+                "force_password_change": True,
+            }
+            error_status = 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
             db.session.rollback()
-            app_logger.exception("❌ ERREUR reset_password driver: %s", str(e))
+            logger.exception("❌ ERREUR reset_password driver: %s", str(e))
             error_response = {"error": "Une erreur interne est survenue."}
             error_status = 500
 
@@ -1213,14 +1983,29 @@ class ListCompanies(Resource):
     @role_required(UserRole.admin)
     def get(self):
         try:
-            companies = Company.query.order_by(Company.name.asc()).all()
+            from repositories.company_repository import CompanyRepository
+            from application.companies.admin import (
+                ListCompaniesInput,
+                ListCompaniesUseCase,
+            )
+
+            company_repo = CompanyRepository()
+            uc = ListCompaniesUseCase(company_repo=company_repo)
+            input_data = ListCompaniesInput()
+            result = uc.execute(input_data)
+            if not result.success:
+                return APIErrorHandler.handle_validation_error(
+                    result.error.get("message", "Erreur inconnue")
+                    if result.error
+                    else "Erreur inconnue",
+                    logger_instance=logger,
+                )
             # Renvoie une liste (même si vide) pour ne pas casser le front
-            return [c.to_dict() for c in companies], 200
+            return success_response(data=result.companies or [])
         except Exception as e:
             sentry_sdk.capture_exception(e)
 
-            app_logger.error("❌ ERREUR list_companies: %s", str(e))
-            return {"error": "Une erreur interne est survenue."}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 # ======================================================
@@ -1233,7 +2018,9 @@ class ListInvoices(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def get(self):
-        company, error_response, status_code = get_company_from_token()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, error_response, status_code = _get_current_company_via_use_case()
         if error_response:
             return error_response, status_code
         # 🔒 company.id → int sûr
@@ -1243,18 +2030,21 @@ class ListInvoices(Resource):
         except Exception:
             cid = None
         if cid is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
 
-        invoices = (
-            Invoice.query.options(joinedload(Invoice.lines))
-            .join(Booking)
-            .filter(Booking.company_id == cid)
-            .all()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from repositories.invoice_repository import InvoiceRepository
+        from application.companies.billing.list_company_invoices import (
+            ListCompanyInvoicesUseCase,
         )
-        return {
-            "invoices": [invoice.serialize for invoice in invoices],
-            "total": len(invoices),
-        }, 200
+
+        invoice_repo = InvoiceRepository()
+        uc = ListCompanyInvoicesUseCase(invoice_repo=invoice_repo)
+        result = uc.execute(company_id=cid)
+        return result.payload, 200
 
 
 # ======================================================
@@ -1268,7 +2058,9 @@ class DispatchStatusResource(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def get(self):
-        company, err, code = get_company_from_token()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, err, code = _get_current_company_via_use_case()
         if err:
             return err, code
         return {
@@ -1286,31 +2078,31 @@ class CompanyDispatchActivate(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def post(self):
-        company, err, code = get_company_from_token()
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, err, code = _get_current_company_via_use_case()
         if err:
             return err, code
+        if not company:
+            return APIErrorHandler.handle_not_found("Company", None, logger)
 
         body = request.get_json(silent=True) or {}
         enabled = bool(body.get("enabled", True))
+        from application.companies.set_dispatch_enabled import SetDispatchEnabledUseCase
 
-        if not hasattr(company, "dispatch_enabled"):
-            return {
-                "error": "Le champ 'dispatch_enabled' n'existe pas sur Company"
-            }, 400
+        uc = SetDispatchEnabledUseCase()
+        uc_result = uc.execute(company, enabled=enabled, reason="activate_dispatch")
+        if not uc_result.ok:
+            return uc_result.error or {
+                "error": "Bad request"
+            }, uc_result.status_code or 400
 
-        if company:
-            company.dispatch_enabled = enabled
-            db.session.commit()
-
-        if enabled:
-            # 🔒 Sécurise l'ID pour éviter Column[int] → int
-            cid_obj = getattr(company, "id", None)
-            try:
-                cid = int(cid_obj) if cid_obj is not None else None
-            except Exception:
-                cid = None
-            if cid is not None:
-                queue.trigger(cid, reason="activate_dispatch", mode="auto")
+        db.session.commit()
+        if uc_result.should_trigger_dispatch:
+            queue.trigger(
+                uc_result.company_id,
+                reason=uc_result.trigger_reason or "activate_dispatch",
+                mode="auto",
+            )
 
         return {
             "dispatch_enabled": bool(getattr(company, "dispatch_enabled", False))
@@ -1327,27 +2119,30 @@ class DeactivateDispatch(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def post(self):
-        company, error_response, status_code = get_company_from_token()
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, error_response, status_code = _get_current_company_via_use_case()
         if error_response:
             return error_response, status_code
+        if not company:
+            return APIErrorHandler.handle_not_found("Company", None, logger)
 
-        # 🔒 Sécurise l'ID pour logs / appels éventuels
-        cid_obj = getattr(company, "id", None)
-        try:
-            cid = int(cid_obj) if cid_obj is not None else None
-        except Exception:
-            cid = None
+        from application.companies.set_dispatch_enabled import SetDispatchEnabledUseCase
 
-        # ⚙️ Pylance + SQLAlchemy : éviter l'assign direct sur une Column
-        # -> utiliser setattr
-        if company:
-            company.dispatch_enabled = False
-            db.session.commit()
+        uc = SetDispatchEnabledUseCase()
+        uc_result = uc.execute(company, enabled=False, reason="deactivate_dispatch")
+        if not uc_result.ok:
+            return uc_result.error or {
+                "error": "Bad request"
+            }, uc_result.status_code or 400
 
-        if cid is not None:
-            app_logger.info("⛔ Dispatch désactivé pour la company %s", cid)
+        db.session.commit()
+
+        if uc_result.company_id is not None:
+            logger.info(
+                "⛔ Dispatch désactivé pour la company %s", uc_result.company_id
+            )
         else:
-            app_logger.info("⛔ Dispatch désactivé pour company (ID inconnu)")
+            logger.info("⛔ Dispatch désactivé pour company (ID inconnu)")
 
         return {"message": "Dispatch automatique désactivé."}, 200
 
@@ -1366,7 +2161,9 @@ class AssignedReservations(Resource):
         """Retourne les réservations dispatchées
         (status ASSIGNED ou IN_PROGRESS) de l'entreprise connectée.
         """
-        company, error_response, status_code = get_company_from_token()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, error_response, status_code = _get_current_company_via_use_case()
         if error_response:
             return error_response, status_code
 
@@ -1378,35 +2175,31 @@ class AssignedReservations(Resource):
             except Exception:
                 cid = None
             if cid is None:
-                return {"error": "Entreprise introuvable (ID invalide)."}, 500
+                return APIErrorHandler.handle_exception(
+                    Exception("Entreprise introuvable (ID invalide)."),
+                    logger,
+                )
 
-            # 🧭 Pylance : typer explicitement la colonne status
-            # pour autoriser .in_(...)
+            # Utiliser le repository pour récupérer les bookings avec eager loading
+            # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+            from repositories.booking_repository import BookingRepository
 
+            booking_repo = BookingRepository()
             assigned_reservations = (
-                Booking.query.options(
-                    joinedload(Booking.driver).joinedload(Driver.user)
+                booking_repo.find_models_by_company_with_driver_and_user(
+                    cid,
+                    statuses=[
+                        BookingStatus.ASSIGNED,
+                        BookingStatus.IN_PROGRESS,
+                    ],
                 )
-                .filter(Booking.company_id == cid)
-                .filter(
-                    Booking.status.in_(
-                        [
-                            BookingStatus.ASSIGNED,
-                            BookingStatus.IN_PROGRESS,
-                        ]
-                    )
-                )
-                .all()
             )
             reservations_list = [
                 cast("Any", booking).serialize for booking in assigned_reservations
             ]
             return {"reservations": reservations_list}, 200
         except Exception as e:
-            app_logger.error(
-                "❌ Erreur lors de la récupération des réservations dispatchées : %s", e
-            )
-            return {"error": "Erreur serveur."}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 # ======================================================
@@ -1428,7 +2221,9 @@ class DriverVacationsResource(Resource):
         data = request.get_json(silent=True) or {}
 
         # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-        from marshmallow import ValidationError
+        from marshmallow import (  # pyright: ignore[reportMissingImports]
+            ValidationError,
+        )
 
         from schemas.company_schemas import DriverVacationCreateSchema
         from schemas.validation_utils import handle_validation_error, validate_request
@@ -1446,41 +2241,70 @@ class DriverVacationsResource(Resource):
             end_date = date.fromisoformat(validated_data["end_date"])
             vac_type = validated_data.get("vacation_type", "VACANCES")
         except Exception as e:
-            return {"error": f"Format de date invalide: {e!s}"}, 400
+            return APIErrorHandler.handle_validation_error(
+                f"Format de date invalide: {e!s}",
+                field="date",
+                logger_instance=logger,
+            )
 
         # Récupérer le chauffeur
-        driver = Driver.query.get_or_404(driver_id)
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from repositories.driver_repository import DriverRepository
+
+        driver_repo = DriverRepository()
+        driver = driver_repo.find_model_by_id(driver_id)
+        if not driver:
+            companies_ns.abort(404, "Driver not found")
+        assert driver is not None
         # Optionnel : vérifier que driver.company_id == la company de l'utilisateur
         # (pour ne pas modifier un chauffeur d'une autre entreprise)
 
-        # Appeler le service
-        success = create_vacation(driver, start_date, end_date, vac_type)
-        if not success:
-            return {"error": "Quota vacances dépassé ou autre contrainte."}, 400
+        from application.companies.drivers.create_driver_vacation import (
+            CreateDriverVacationUseCase,
+        )
+        from infrastructure.drivers.vacation_service_adapter import (
+            VacationServiceAdapter,
+        )
+
+        uc = CreateDriverVacationUseCase(vacation_service=VacationServiceAdapter())
+        uc_result = uc.execute(
+            driver=cast("Any", driver),
+            start_date=start_date,
+            end_date=end_date,
+            vacation_type=vac_type,
+        )
+        if not uc_result.ok:
+            return APIErrorHandler.handle_validation_error(
+                (uc_result.error or {}).get("error", "Erreur"),
+                logger_instance=logger,
+            )
+
         db.session.commit()
         # 🔔 Notifie via le helper qui gère plusieurs APIs de queue
-        company_obj = Company.query.get(getattr(driver, "company_id", None))
-        if company_obj is not None:
-            _driver_trigger(company_obj, "availability")
+        from repositories.company_repository import CompanyRepository
+
+        company_repo = CompanyRepository()
+        driver_company_id = getattr(driver, "company_id", None)
+        if driver_company_id is not None:
+            company_obj = company_repo.find_model_by_id(
+                company_id=int(driver_company_id)
+            )
+            if company_obj is not None:
+                _driver_trigger(company_obj, "availability")
         return {"message": "Congés créés avec succès."}, 201
 
     @jwt_required()
     def get(self, driver_id):
         """Liste les congés déjà enregistrés pour ce chauffeur."""
-        from models import DriverVacation
+        from repositories.driver_vacation_repository import DriverVacationRepository
+        from application.companies.drivers.list_driver_vacations import (
+            ListDriverVacationsUseCase,
+        )
 
-        # Récupérer les congés
-        vacations = DriverVacation.query.filter_by(driver_id=driver_id).all()
-        # On renvoie la liste en JSON
-        return [
-            {
-                "id": v.id,
-                "start_date": v.start_date.isoformat(),
-                "end_date": v.end_date.isoformat(),
-                "vacation_type": v.vacation_type,
-            }
-            for v in vacations
-        ], 200
+        vacation_repo = DriverVacationRepository()
+        uc = ListDriverVacationsUseCase(vacation_repo=vacation_repo)
+        result = uc.execute(driver_id=int(driver_id))
+        return result.vacations, 200
 
 
 # ======================================================
@@ -1497,7 +2321,9 @@ class CreateManualReservation(Resource):
     )  # ✅ 2.8: Rate limiting création réservation manuelle
     @companies_ns.expect(manual_booking_model, validate=True)
     def post(self):  # noqa: PLR0911
-        company, err, code = get_company_from_token()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, err, code = _get_current_company_via_use_case()
         if err:
             return err, code
         # 🔒 company.id → int sûr pour éviter Column[int]/Optional
@@ -1507,12 +2333,17 @@ class CreateManualReservation(Resource):
         except Exception:
             cid = None
         if cid is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
 
         data = request.get_json() or {}
 
         # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-        from marshmallow import ValidationError
+        from marshmallow import (  # pyright: ignore[reportMissingImports]
+            ValidationError,
+        )
 
         from schemas.company_schemas import ManualBookingCreateSchema
         from schemas.validation_utils import handle_validation_error, validate_request
@@ -1525,9 +2356,17 @@ class CreateManualReservation(Resource):
             return handle_validation_error(e)
 
         client_id = validated_data["client_id"]
-        client = Client.query.filter_by(id=client_id, company_id=cid).first()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from repositories.client_repository import ClientRepository
+
+        client_repo = ClientRepository()
+        client = client_repo.find_model_by_id_and_company(client_id, cid)
         if not client:
-            return {"error": "Client non trouvé."}, 404
+            return APIErrorHandler.handle_not_found(
+                "Client",
+                client_id,
+                logger,
+            )
         user = client.user
 
         # ---------- 0) Résolution du payeur
@@ -1574,12 +2413,23 @@ class CreateManualReservation(Resource):
             try:
                 billed_to_company_id = int(billed_to_company_id)
             except (TypeError, ValueError):
-                return {"error": "billed_to_company_id doit être un entier."}, 400
+                return APIErrorHandler.handle_validation_error(
+                    "billed_to_company_id doit être un entier.",
+                    field="billed_to_company_id",
+                    logger_instance=logger,
+                )
 
             # (optionnel) vérifier que la société payeuse existe
-            payer = Company.query.filter_by(id=billed_to_company_id).first()
+            from repositories.company_repository import CompanyRepository
+
+            company_repo = CompanyRepository()
+            payer = company_repo.find_model_by_id(company_id=billed_to_company_id)
             if not payer:
-                return {"error": "Société payeuse introuvable."}, 404
+                return APIErrorHandler.handle_not_found(
+                    "Société payeuse",
+                    billed_to_company_id,
+                    logger,
+                )
 
         # ---------- 1) Parse des dates + Récurrence ----------
         # (utilise données validées)
@@ -1588,7 +2438,11 @@ class CreateManualReservation(Resource):
                 validated_data["scheduled_time"]
             )  # Naive Europe/Zurich
         except Exception as e:
-            return {"error": f"scheduled_time invalide: {e}"}, 400
+            return APIErrorHandler.handle_validation_error(
+                f"scheduled_time invalide: {e}",
+                field="scheduled_time",
+                logger_instance=logger,
+            )
 
         is_rt = bool(validated_data.get("is_round_trip", False))
 
@@ -1618,7 +2472,7 @@ class CreateManualReservation(Resource):
                             # (supprimer les secondes si présentes)
                             time_only = time_only.split(":")[:2]
                             time_only = ":".join(time_only)
-                            app_logger.debug(
+                            logger.debug(
                                 "📅 Extrait heure '%s' du datetime '%s'",
                                 time_only,
                                 return_time_str,
@@ -1631,7 +2485,7 @@ class CreateManualReservation(Resource):
                         combined = f"{combined}:00"
                     return_dt = parse_local_naive(combined)
                     return_time_confirmed = True
-                    app_logger.info("📅 Retour programmé : %s", combined)
+                    logger.info("📅 Retour programmé : %s", combined)
                 else:
                     # Date sans heure : mettre à 00:00 + time_confirmed = False
                     combined = f"{return_date_str}T00:00:00"
@@ -1641,12 +2495,16 @@ class CreateManualReservation(Resource):
                         "📅 Retour avec date %s mais heure à confirmer "
                         + "(time_confirmed=False)"
                     )
-                    app_logger.info(
+                    logger.info(
                         log_msg,
                         return_date_str,
                     )
             except Exception as e:
-                return {"error": f"return_date/return_time invalide: {e}"}, 400
+                return APIErrorHandler.handle_validation_error(
+                    f"return_date/return_time invalide: {e}",
+                    field="return_date",
+                    logger_instance=logger,
+                )
 
         # 🔄 Gestion de la récurrence
         is_recurring = bool(validated_data.get("is_recurring", False))
@@ -1662,11 +2520,11 @@ class CreateManualReservation(Resource):
             )  # Pour type "custom"
             recurrence_end_date_str = validated_data.get("recurrence_end_date")
 
-            app_logger.info("🔄 Récurrence détectée")
-            app_logger.info("  - Type: %s", recurrence_type)
-            app_logger.info("  - Occurrences: %s", occurrences)
-            app_logger.info("  - Jours sélectionnés: %s", recurrence_days)
-            app_logger.info("  - Date de fin: %s", recurrence_end_date_str)
+            logger.info("🔄 Récurrence détectée")
+            logger.info("  - Type: %s", recurrence_type)
+            logger.info("  - Occurrences: %s", occurrences)
+            logger.info("  - Jours sélectionnés: %s", recurrence_days)
+            logger.info("  - Date de fin: %s", recurrence_end_date_str)
 
             # Calculer toutes les dates de récurrence
             recurrence_dates = [scheduled]
@@ -1701,10 +2559,10 @@ class CreateManualReservation(Resource):
             elif recurrence_type == "custom" and recurrence_days and base_date:
                 # Jours personnalisés (ex: lundi, mercredi, vendredi)
                 # Pour ce mode, "occurrences" signifie X fois CHAQUE jour
-                app_logger.info(
+                logger.info(
                     "🗓️ Mode jours personnalisés - Jours demandés: %s", recurrence_days
                 )
-                app_logger.info(
+                logger.info(
                     "🔢 Créera %s occurrences pour CHAQUE jour sélectionné", occurrences
                 )
 
@@ -1729,7 +2587,7 @@ class CreateManualReservation(Resource):
                                         log_msg = (
                                             "  ⛔ Date de fin atteinte pour jour %s: %s"
                                         )
-                                        app_logger.info(
+                                        logger.info(
                                             log_msg,
                                             target_weekday,
                                             end_date,
@@ -1745,7 +2603,7 @@ class CreateManualReservation(Resource):
                             ):
                                 if current_date not in recurrence_dates:
                                     recurrence_dates.append(current_date)
-                                    app_logger.info(
+                                    logger.info(
                                         "  ✅ Date ajoutée: %s (%s)",
                                         current_date.strftime("%d/%m/%Y"),
                                         target_weekday,
@@ -1760,7 +2618,7 @@ class CreateManualReservation(Resource):
             # d'abord)
             recurrence_dates = [d for d in recurrence_dates if d is not None]
             recurrence_dates.sort()
-            app_logger.info(
+            logger.info(
                 "✅ %s dates de récurrence générées: %s",
                 len(recurrence_dates),
                 [d.strftime("%d/%m/%Y") for d in recurrence_dates],
@@ -1771,7 +2629,7 @@ class CreateManualReservation(Resource):
         final_dropoff_coords = None
 
         try:
-            import requests
+            import requests  # pyright: ignore[reportMissingModuleSource]
 
             from config import Config
 
@@ -1794,7 +2652,7 @@ class CreateManualReservation(Resource):
                         return (float(data[0]["lat"]), float(data[0]["lon"]))
                     return None
                 except Exception as e:
-                    app_logger.warning(
+                    logger.warning(
                         "Nominatim geocoding failed for '%s': %s", address, e
                     )
                     return None
@@ -1807,7 +2665,7 @@ class CreateManualReservation(Resource):
             if not validated_data.get("pickup_lat") or not validated_data.get(
                 "pickup_lon"
             ):
-                app_logger.info(
+                logger.info(
                     "🔍 Géocodage pickup nécessaire: %s",
                     validated_data["pickup_location"],
                 )
@@ -1815,9 +2673,9 @@ class CreateManualReservation(Resource):
                     validated_data["pickup_location"]
                 )
                 if pickup_coords:
-                    app_logger.info("✅ Pickup géocodé: %s", pickup_coords)
+                    logger.info("✅ Pickup géocodé: %s", pickup_coords)
                 else:
-                    app_logger.warning(
+                    logger.warning(
                         "❌ Échec géocodage pickup: %s",
                         validated_data["pickup_location"],
                     )
@@ -1825,7 +2683,7 @@ class CreateManualReservation(Resource):
             if not validated_data.get("dropoff_lat") or not validated_data.get(
                 "dropoff_lon"
             ):
-                app_logger.info(
+                logger.info(
                     "🔍 Géocodage dropoff nécessaire: %s",
                     validated_data["dropoff_location"],
                 )
@@ -1833,9 +2691,9 @@ class CreateManualReservation(Resource):
                     validated_data["dropoff_location"]
                 )
                 if dropoff_coords:
-                    app_logger.info("✅ Dropoff géocodé: %s", dropoff_coords)
+                    logger.info("✅ Dropoff géocodé: %s", dropoff_coords)
                 else:
-                    app_logger.warning(
+                    logger.warning(
                         "❌ Échec géocodage dropoff: %s",
                         validated_data["dropoff_location"],
                     )
@@ -1848,9 +2706,7 @@ class CreateManualReservation(Resource):
                     float(validated_data["pickup_lat"]),
                     float(validated_data["pickup_lon"]),
                 )
-                app_logger.info(
-                    "📍 Pickup coords depuis frontend: %s", final_pickup_coords
-                )
+                logger.info("📍 Pickup coords depuis frontend: %s", final_pickup_coords)
             elif pickup_coords:
                 final_pickup_coords = pickup_coords
 
@@ -1859,7 +2715,7 @@ class CreateManualReservation(Resource):
                     float(validated_data["dropoff_lat"]),
                     float(validated_data["dropoff_lon"]),
                 )
-                app_logger.info(
+                logger.info(
                     "📍 Dropoff coords depuis frontend: %s", final_dropoff_coords
                 )
             elif dropoff_coords:
@@ -1904,7 +2760,7 @@ class CreateManualReservation(Resource):
                         "⚠️ OSRM timeout/erreur (timeout=2s), "
                         + "utilisation fallback haversine: %s"
                     )
-                    app_logger.warning(
+                    logger.warning(
                         warning_msg,
                         osrm_error,
                     )
@@ -1922,7 +2778,7 @@ class CreateManualReservation(Resource):
                     # Heures de pointe du matin (7h-9h) : +30%
                     if MORNING_RUSH_START <= scheduled_hour < SCHEDULED_HOUR_THRESHOLD:
                         rush_hour_factor = 1.3
-                        app_logger.info(
+                        logger.info(
                             "🚦 Rush hour matinal détecté (%sh) : +30%", scheduled_hour
                         )
                     # Heures de pointe du soir (17h-19h) : +30%
@@ -1930,13 +2786,13 @@ class CreateManualReservation(Resource):
                         EVENING_RUSH_START <= scheduled_hour < SCHEDULED_HOUR_THRESHOLD
                     ):
                         rush_hour_factor = 1.3
-                        app_logger.info(
+                        logger.info(
                             "🚦 Rush hour soir détecté (%sh) : +30%", scheduled_hour
                         )
                     # Midi (12h-13h) : +15%
                     elif LUNCH_START <= scheduled_hour < SCHEDULED_HOUR_THRESHOLD:
                         rush_hour_factor = 1.15
-                        app_logger.info(
+                        logger.info(
                             "🚦 Heure de midi détectée (%sh) : +15%", scheduled_hour
                         )
 
@@ -1950,7 +2806,7 @@ class CreateManualReservation(Resource):
                             "✅ Durée/distance calculée via OSRM : "
                             + "%ss → %ss (%smin) / %sm (%.1fkm)"
                         )
-                        app_logger.info(
+                        logger.info(
                             log_msg,
                             base_dur_s,
                             dur_s,
@@ -1963,7 +2819,7 @@ class CreateManualReservation(Resource):
                             "✅ Durée calculée via OSRM : "
                             + "%ss → %ss (%smin) / distance non disponible"
                         )
-                        app_logger.info(
+                        logger.info(
                             log_msg,
                             base_dur_s,
                             dur_s,
@@ -1976,15 +2832,15 @@ class CreateManualReservation(Resource):
                         "⚠️ Durée/distance non calculée (OSRM indisponible), "
                         + "réservation créée sans ces informations"
                     )
-                    app_logger.info(log_msg)
+                    logger.info(log_msg)
             else:
-                app_logger.warning(
+                logger.warning(
                     "⚠️ Géocodage échoué pour pickup=%s ou dropoff=%s",
                     validated_data["pickup_location"],
                     validated_data["dropoff_location"],
                 )
         except Exception as e:
-            app_logger.error("❌ Calcul durée/distance OSRM échoué : %s", e)
+            logger.error("❌ Calcul durée/distance OSRM échoué : %s", e)
 
         # ---------- 3) Création des réservations
         # (avec récurrence) ----------
@@ -1995,9 +2851,9 @@ class CreateManualReservation(Resource):
 
             # 🏥 Utiliser le nom de l'institution si c'est une institution,
             # sinon le nom de la personne
-            if client.is_institution and client.institution_name:
+            if bool(client.is_institution) and client.institution_name:
                 display_name = client.institution_name
-                app_logger.info(
+                logger.info(
                     "🏥 Institution détectée: %s (contact: %s)", display_name, full_name
                 )
             else:
@@ -2011,7 +2867,7 @@ class CreateManualReservation(Resource):
                 and client.preferential_rate > PREFERENTIAL_RATE_ZERO
             ):
                 amount_to_use = float(client.preferential_rate)
-                app_logger.info(
+                logger.info(
                     "💰 Tarif préférentiel appliqué pour %s: %s CHF",
                     display_name,
                     amount_to_use,
@@ -2040,7 +2896,7 @@ class CreateManualReservation(Resource):
                             "📅 Retour sans horaire précis : scheduled_time = None "
                             + "(à confirmer plus tard)"
                         )
-                        app_logger.info(log_msg)
+                        logger.info(log_msg)
 
                 # Créer la réservation aller
                 outbound = Booking()
@@ -2150,15 +3006,15 @@ class CreateManualReservation(Resource):
             # ---------- 4) Commit unique ----------
             db.session.commit()
 
-            app_logger.info(
+            logger.info(
                 "✅ %s réservation(s) créée(s) avec succès", len(created_outbounds)
             )
 
         except Exception as e:
             db.session.rollback()
 
-            app_logger.error("Erreur lors de la création de la réservation : %s", e)
-            return {"error": "Une erreur interne est survenue."}, 500
+            logger.error("Erreur lors de la création de la réservation : %s", e)
+            return APIErrorHandler.handle_exception(e, logger)
 
         # ---------- 5) Déclencher la queue si dispatch actif ----------
         _maybe_trigger_dispatch(cid, "create")
@@ -2187,7 +3043,9 @@ class ClientReservations(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def get(self, client_id):
-        company, error_response, status_code = get_company_from_token()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, error_response, status_code = _get_current_company_via_use_case()
         if error_response:
             return error_response, status_code
 
@@ -2198,63 +3056,32 @@ class ClientReservations(Resource):
         except Exception:
             cid = None
         if cid is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
-
-        client = (
-            Client.query.options(joinedload(Client.user))
-            .filter_by(id=client_id, company_id=cid)
-            .first()
-        )
-        if not client:
-            return {"error": "Client introuvable."}, 404
-
-        user = client.user
-        client_info = {
-            "id": client.id,
-            "first_name": getattr(user, "first_name", "") if user else "",
-            "last_name": getattr(user, "last_name", "") if user else "",
-            "email": getattr(user, "email", "") if user else "",
-            "phone": getattr(user, "phone", "") if user else "",
-            "is_active": client.is_active,
-            "created_at": client.created_at.isoformat() if client.created_at else None,
-        }
-
-        bookings = (
-            Booking.query.filter_by(client_id=client.id, company_id=cid)
-            .order_by(Booking.scheduled_time.desc())
-            .all()
-        )
-
-        total_pending_amount = 0
-        enriched_bookings = []
-        for booking in bookings:
-            invoice = getattr(booking, "invoice", None)
-            booking_data = booking.serialize
-            if invoice:
-                booking_data["invoice"] = invoice.serialize
-                if getattr(invoice, "status", None) != InvoiceStatus.PAID:
-                    total_pending_amount += getattr(booking, "amount", 0) or 0
-            else:
-                total_pending_amount += booking.amount or 0
-            enriched_bookings.append(booking_data)
-
-        # 🧾 Invoices: filtrer par client au lieu de user_id
-        if client_id is not None:
-            invoices = (
-                Invoice.query.filter_by(client_id=client_id, company_id=cid)
-                .order_by(Invoice.created_at.desc())
-                .all()
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
             )
-        else:
-            invoices = []
-        invoice_list = [inv.serialize for inv in invoices]
 
-        return {
-            "client": client_info,
-            "reservations": enriched_bookings,
-            "invoices": invoice_list,
-            "total_pending_amount": round(total_pending_amount, 2),
-        }, 200
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from application.companies.clients.aggregate_client_reservations_and_invoices import (
+            AggregateClientReservationsAndInvoicesUseCase,
+        )
+        from repositories.booking_repository import BookingRepository
+        from repositories.client_repository import ClientRepository
+        from repositories.invoice_repository import InvoiceRepository
+
+        uc = AggregateClientReservationsAndInvoicesUseCase(
+            client_repo=ClientRepository(),
+            booking_repo=BookingRepository(),
+            invoice_repo=InvoiceRepository(),
+        )
+        result = uc.execute(company_id=cid, client_id=int(client_id))
+        if not result.ok:
+            return APIErrorHandler.handle_not_found(
+                "Client",
+                client_id if "client_id" in locals() else None,
+                logger,
+            )
+        return result.payload or {}, 200
 
 
 # ======================================================
@@ -2265,7 +3092,9 @@ class TriggerReturnBooking(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def post(self, booking_id):
-        company, err, code = get_company_from_token()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, err, code = _get_current_company_via_use_case()
         if err:
             return err, code
         # 🔒 company.id → int sûr
@@ -2275,73 +3104,91 @@ class TriggerReturnBooking(Resource):
         except Exception:
             cid = None
         if cid is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
 
         data = request.get_json() or {}
         rt = data.get("return_time")
         urgent = bool(data.get("urgent", False))
         minutes_offset = int(data.get("minutes_offset", 15))
 
-        # 1) Calcul de l'heure de retour (UTC) - par défaut +15 min
-        now = now_utc()
-
-        return_time: datetime | None
-        if urgent or not rt:
-            return_time = now + timedelta(minutes=minutes_offset)
-        else:
-            try:
-                dt_utc = to_utc(rt)  # central helper
-            except Exception as e:
-                return {"error": f"Format de date invalide : {e}"}, 400
-            # Pylance peut typer to_utc -> Optional[datetime]
-            return_time = dt_utc
-
-        if return_time is None or return_time <= now:
-            return {"error": "L'heure de retour doit être dans le futur."}, 400
-
         # 2) Récupérer la réservation "aller" (ou un retour existant)
-        booking = Booking.query.filter_by(id=booking_id, company_id=cid).first()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from repositories.booking_repository import BookingRepository
+
+        booking_repo = BookingRepository()
+        booking = booking_repo.find_model_by_id_and_company(booking_id, cid)
         if not booking:
-            return {"error": "Réservation introuvable."}, 404
+            return APIErrorHandler.handle_not_found(
+                "Réservation",
+                booking_id,
+                logger,
+            )
+
+        from application.companies.reservations.trigger_return_booking import (
+            TriggerReturnBookingUseCase,
+        )
+
+        # check existing return
+        existing = None
+        if not bool(booking.is_return):
+            existing = booking_repo.find_model_by_parent_booking_id_and_company(
+                booking.id, cid, is_return=True
+            )
+
+        uc = TriggerReturnBookingUseCase()
+        uc_result = uc.execute(
+            booking,
+            return_time_raw=rt,
+            urgent=urgent,
+            minutes_offset=minutes_offset,
+            has_existing_return=bool(existing),
+        )
+        if not uc_result.ok or not uc_result.decision:
+            return APIErrorHandler.handle_validation_error(
+                (uc_result.error or {}).get("error", "Bad request"),
+                field="return_time",
+                logger_instance=logger,
+            )
+
+        return_time = uc_result.decision.return_time
 
         # 3) Créer / mettre à jour le retour (toujours ACCEPTED ici)
-        if booking.is_return:
-            # On modifie une réservation de retour existante
+        if uc_result.decision.action == "modify_current":
             booking.scheduled_time = return_time
             booking.status = BookingStatus.ACCEPTED
             return_booking = booking
             action = "modifié"
+        elif (
+            uc_result.decision.action == "modify_existing_return"
+            and existing is not None
+        ):
+            booking.is_round_trip = True
+            existing.scheduled_time = return_time
+            existing.status = BookingStatus.ACCEPTED
+            return_booking = existing
+            action = "modifié"
         else:
             booking.is_round_trip = True
-            existing = Booking.query.filter_by(
-                parent_booking_id=booking.id, is_return=True, company_id=cid
-            ).first()
-
-            if existing:
-                existing.scheduled_time = return_time
-                existing.status = BookingStatus.ACCEPTED
-                return_booking = existing
-                action = "modifié"
-            else:
-                # 💰 Utiliser le même tarif que l'aller
-                # (peut être un tarif préférentiel)
-                return_booking = Booking()
-                return_booking.customer_name = booking.customer_name
-                return_booking.pickup_location = booking.dropoff_location
-                return_booking.dropoff_location = booking.pickup_location
-                return_booking.scheduled_time = return_time
-                return_booking.amount = booking.amount  # Même tarif que l'aller
-                return_booking.status = (
-                    BookingStatus.ACCEPTED
-                )  # ✅ le moteur choisira le chauffeur
-                return_booking.booking_type = "manual"
-                return_booking.is_return = True
-                return_booking.parent_booking_id = booking.id
-                return_booking.user_id = booking.user_id
-                return_booking.client_id = booking.client_id
-                return_booking.company_id = cid
-                db.session.add(return_booking)
-                action = "créé"
+            return_booking = Booking()
+            return_booking.customer_name = booking.customer_name
+            return_booking.pickup_location = booking.dropoff_location
+            return_booking.dropoff_location = booking.pickup_location
+            return_booking.scheduled_time = return_time
+            return_booking.amount = booking.amount  # Même tarif que l'aller
+            return_booking.status = (
+                BookingStatus.ACCEPTED
+            )  # ✅ le moteur choisira le chauffeur
+            return_booking.booking_type = "manual"
+            return_booking.is_return = True
+            return_booking.parent_booking_id = booking.id
+            return_booking.user_id = booking.user_id
+            return_booking.client_id = booking.client_id
+            return_booking.company_id = cid
+            db.session.add(return_booking)
+            action = "créé"
 
         # 4) Un seul commit + déclenchement de la queue
         db.session.add(booking)
@@ -2423,7 +3270,9 @@ class CompanyClients(Resource):
         Retourne les clients manuels (PRIVATE ou CORPORATE) de l'entreprise courante,
         éventuellement filtrés par prénom ou nom (paginés).
         """
-        company, err, code = get_company_from_token()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, err, code = _get_current_company_via_use_case()
         if err:
             return err, code
         # 🔒 company.id → int sûr
@@ -2433,33 +3282,58 @@ class CompanyClients(Resource):
         except Exception:
             cid = None
         if cid is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
 
         # Pagination
         page = int(request.args.get("page", 1))
         per_page = min(int(request.args.get("per_page", 100)), 1000)
 
         q = request.args.get("search", "").strip()
-        # On ne prend que les clients rattachés à cette entreprise,
-        # et dont le client_type n'est pas SELF_SERVICE
-        query = Client.query.options(joinedload(Client.user)).filter(
-            Client.company_id == cid, Client.client_type != ClientType.SELF_SERVICE
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from application.companies.clients.list_company_clients import (
+            ListCompanyClientsUseCase,
         )
+        from repositories.client_repository import ClientRepository
 
-        if q:
-            pattern = f"%{q}%"
-            # on filtre sur User.first_name et User.last_name
-            query = query.filter(
-                or_(
-                    Client.user.has(User.first_name.ilike(pattern)),
-                    Client.user.has(User.last_name.ilike(pattern)),
-                )
+        from application.companies.clients import ListCompanyClientsInput
+
+        uc = ListCompanyClientsUseCase(client_repo=ClientRepository())
+        input_data = ListCompanyClientsInput(
+            company_id=cid,
+            search=q if q else None,
+            page=page,
+            per_page=per_page,
+        )
+        list_result = uc.execute(input_data)
+        if not list_result.success:
+            return APIErrorHandler.handle_validation_error(
+                list_result.error.get("message", "Erreur lors de la liste des clients")
+                if list_result.error
+                else "Erreur lors de la liste des clients",
+                logger_instance=logger,
             )
+        total = list_result.total or 0
+        clients = list_result.clients or []
 
-        # Paginer
-        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
-        total = pagination.total or 0
-        clients = pagination.items
+        # Construire liens de pagination
+        links = {}
+        if total > 0:
+            total_pages = (total + per_page - 1) // per_page
+            if page < total_pages:
+                links["next"] = (
+                    f"/api/companies/me/clients?page={page + 1}&per_page={per_page}"
+                )
+            if page > 1:
+                links["prev"] = (
+                    f"/api/companies/me/clients?page={page - 1}&per_page={per_page}"
+                )
+            links["first"] = f"/api/companies/me/clients?page=1&per_page={per_page}"
+            links["last"] = (
+                f"/api/companies/me/clients?page={total_pages}&per_page={per_page}"
+            )
 
         # Construire headers pagination (optionnel - liens de navigation)
         # Note: Flask-RESTx génère les noms d'endpoints avec underscores
@@ -2473,19 +3347,28 @@ class CompanyClients(Resource):
             # Si la génération des liens échoue, continuer sans headers
             headers = {}
 
-        # Chaque c.serialize retournera aussi c.user.serialize
-        return {"clients": [c.serialize for c in clients], "total": total}, 200, headers
+        response_data = paginated_response(
+            items=clients,
+            total=total,
+            page=page,
+            per_page=per_page,
+            links=links if links else None,
+        )
+        # Flask-RESTx nécessite un tuple avec headers en 3ème position
+        return response_data[0], response_data[1], headers
 
     @jwt_required()
     @role_required(UserRole.company)
     @limiter.limit("50 per hour")  # ✅ 2.8: Rate limiting création client
     @companies_ns.expect(client_create_model, validate=False)
-    def post(self):  # noqa: PLR0911
+    def post(self):
         """POST /companies/me/clients
         Crée un nouveau client (SELF_SERVICE, PRIVATE ou CORPORATE)
         pour l'entreprise courante, avec date de naissance optionnelle.
         """
-        company, err, code = get_company_from_token()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, err, code = _get_current_company_via_use_case()
         if err:
             return err, code
         # 🔒 company.id → int sûr
@@ -2495,12 +3378,17 @@ class CompanyClients(Resource):
         except Exception:
             cid = None
         if cid is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
 
         data = request.get_json() or {}
 
         # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-        from marshmallow import ValidationError
+        from marshmallow import (  # pyright: ignore[reportMissingImports]
+            ValidationError,
+        )
 
         from schemas.company_schemas import ClientCreateSchema
         from schemas.validation_utils import handle_validation_error, validate_request
@@ -2510,151 +3398,48 @@ class CompanyClients(Resource):
         except ValidationError as e:
             return handle_validation_error(e)
 
-        # Utilise données validées
-        ct_str = validated_data["client_type"].upper()
-        if ct_str not in ClientType.__members__:
-            return {
-                "error": (
-                    "client_type invalide. "
-                    "Valeurs possibles: SELF_SERVICE, PRIVATE, CORPORATE"
-                )
-            }, 400
-        ctype = ClientType[ct_str]
+        from application.companies.clients.create_company_client import (
+            CreateCompanyClientUseCase,
+        )
+        from infrastructure.persistence.companies.client_writer import (
+            SqlAlchemyClientWriter,
+        )
 
-        # Normalisation email
-        email = validated_data.get("email")
-        if email:
-            email = email.strip()
+        import uuid as _uuid
 
-        # Validation selon type (déjà validé par le schema, mais double sécurité)
-        if ctype == ClientType.SELF_SERVICE and not email:
-            return {"error": "email requis pour self-service"}, 400
-        if ctype != ClientType.SELF_SERVICE:
-            missing = [
-                f
-                for f in ("first_name", "last_name", "address")
-                if not validated_data.get(f)
-            ]
-            if missing:
-                return {
-                    "error": f"Champs manquants pour facturation : {', '.join(missing)}"
-                }, 400
+        def _make_public_id() -> str:
+            return str(_uuid.uuid4())
 
-        # Date de naissance (déjà validée par Marshmallow comme Date)
-        birth_date = validated_data.get("birth_date")
+        uc = CreateCompanyClientUseCase(
+            client_writer=SqlAlchemyClientWriter(),
+            make_public_id_fn=_make_public_id,
+        )
+        from application.companies.clients import CreateCompanyClientInput
 
-        # Génération du username
-        if email:
-            username = email.split("@")[0]
-        else:
-            fn = (validated_data.get("first_name") or "").strip().lower()
-            ln = (validated_data.get("last_name") or "").strip().lower()
-            username = f"{fn}.{ln}-{uuid4().hex[:6]}"
+        input_data = CreateCompanyClientInput(
+            company_id=cid, validated_data=validated_data
+        )
+        uc_result = uc.execute(input_data)
+        if not uc_result.success:
+            return APIErrorHandler.handle_validation_error(
+                uc_result.error.get("message", "Erreur de validation")
+                if uc_result.error
+                else "Erreur de validation",
+                logger_instance=logger,
+            )
 
-        # Création du User - utilise données validées
-        user = User()
-        user.public_id = str(uuid4())
-        user.username = username
-        user.first_name = validated_data.get("first_name") or ""
-        user.last_name = validated_data.get("last_name") or ""
-        user.email = email
-        user.phone = validated_data.get("phone")
-        user.address = validated_data.get("address")
-        user.birth_date = birth_date
-        user.role = UserRole.client
-
-        # Mot de passe
-        from routes.utils import validate_password
-
-        pwd = None  # Initialiser pwd
-        if ctype == ClientType.SELF_SERVICE:
-            pwd = uuid4().hex[:12]
-            # Validation explicite du mot de passe auto-généré avant
-            # set_password (sécurité)
-            # (imite django.contrib.auth.password_validation.validate_password)
-            if not validate_password(pwd):
-                # Si le mot de passe généré ne respecte pas les critères,
-                # générer un nouveau
-                pwd = "".join(
-                    random.choices(string.ascii_letters + string.digits, k=12)
-                )
-                if not validate_password(pwd):
-                    companies_ns.abort(
-                        500,
-                        "Erreur lors de la génération du mot de passe sécurisé",
-                    )
-            # Le mot de passe est validé explicitement par validate_password()
-            # avant set_password() - satisfait les exigences de sécurité
-            user.set_password(pwd)  # nosem
-        else:
-            generated_pwd = uuid4().hex
-            # Validation explicite du mot de passe auto-généré avant
-            # set_password (sécurité)
-            # (imite django.contrib.auth.password_validation.validate_password)
-            if not validate_password(generated_pwd):
-                # Si le mot de passe généré ne respecte pas les critères,
-                # générer un nouveau
-                generated_pwd = "".join(
-                    random.choices(string.ascii_letters + string.digits, k=16)
-                )
-                if not validate_password(generated_pwd):
-                    companies_ns.abort(
-                        500,
-                        "Erreur lors de la génération du mot de passe sécurisé",
-                    )
-            # Le mot de passe est validé explicitement par validate_password()
-            # avant set_password() - satisfait les exigences de sécurité
-            user.set_password(generated_pwd)  # nosem
-
-        db.session.add(user)
-        db.session.flush()  # pour récupérer user.id
-
-        # Création du profil Client - utilise données validées
-        is_inst = bool(validated_data.get("is_institution", False))
-        inst_name = validated_data.get("institution_name") if is_inst else None
-
-        # Tarif préférentiel (non dans schema pour l'instant, garde compatibilité)
-        preferential_rate = validated_data.get("preferential_rate")
-        if preferential_rate:
-            try:
-                from decimal import Decimal
-
-                preferential_rate = Decimal(str(preferential_rate))
-            except (ValueError, TypeError):
-                preferential_rate = None
-
-        client = Client()
-        client.user_id = user.id
-        client.company_id = cid
-        client.client_type = ctype
-        client.billing_address = validated_data.get(
-            "billing_address"
-        ) or validated_data.get("address")
-        client.billing_lat = validated_data.get("billing_lat")
-        client.billing_lon = validated_data.get("billing_lon")
-        client.contact_email = validated_data.get("contact_email") or email
-        client.contact_phone = validated_data.get(
-            "contact_phone"
-        ) or validated_data.get("phone")
-        client.is_institution = is_inst
-        client.institution_name = inst_name
-        # Adresse de domicile
-        client.domicile_address = validated_data.get("domicile_address")
-        client.domicile_zip = validated_data.get("domicile_zip")
-        client.domicile_city = validated_data.get("domicile_city")
-        client.domicile_lat = validated_data.get("domicile_lat")
-        client.domicile_lon = validated_data.get("domicile_lon")
-        # Tarif préférentiel
-        client.preferential_rate = preferential_rate
-        # Notes
-        client.notes = validated_data.get("notes")
-        db.session.add(client)
+        user = uc_result.user
+        client = uc_result.client
+        generated_pwd = uc_result.generated_password
+        assert user is not None
+        assert client is not None
 
         try:
             db.session.commit()
-        except IntegrityError:
+        except IntegrityError as e:
             db.session.rollback()
-            return {"error": "Conflit de données, vérifiez vos champs."}, 400
+            result, status_code = format_integrity_error(e)
+            return result, status_code
 
         # ✅ Priorité 7: Audit logging et métriques pour création utilisateur (client)
         try:
@@ -2663,7 +3448,10 @@ class CompanyClients(Resource):
             from shared.logging_utils import mask_email
 
             current_user_id = get_jwt_identity()
-            current_user = User.query.filter_by(public_id=current_user_id).first()
+            from repositories.user_repository import UserRepository
+
+            user_repo = UserRepository()
+            current_user = user_repo.find_by_public_id(public_id=current_user_id)
 
             AuditLogger.log_action(
                 action_type="user_created",
@@ -2674,12 +3462,12 @@ class CompanyClients(Resource):
                 else "unknown",
                 result_status="success",
                 action_details={
-                    "created_user_id": user.id,
-                    "created_user_email": mask_email(email) if email else None,
+                    "created_user_id": getattr(user, "id", None),
+                    "created_user_email": mask_email(str(getattr(user, "email", "")))
+                    if getattr(user, "email", None)
+                    else None,
                     "created_user_role": "client",
-                    "client_type": ctype.value
-                    if hasattr(ctype, "value")
-                    else str(ctype),
+                    "client_type": str(validated_data.get("client_type") or "").upper(),
                 },
                 company_id=cid,
                 ip_address=request.remote_addr,
@@ -2689,10 +3477,11 @@ class CompanyClients(Resource):
             security_sensitive_actions_total.labels(action_type="user_created").inc()
         except Exception as audit_error:
             # Ne pas bloquer la création si l'audit logging échoue
-            app_logger.warning("Échec audit logging user_created: %s", audit_error)
+            logger.warning("Échec audit logging user_created: %s", audit_error)
 
         # TODO: Implémenter l'envoi d'email de bienvenue
-        # send_welcome_email(str(user.email), pwd)
+        # send_welcome_email(str(user.email), generated_pwd)
+        _ = generated_pwd
 
         return client.serialize, 201
 
@@ -2701,116 +3490,59 @@ class CompanyClients(Resource):
 class CompanyClientDetail(Resource):
     @jwt_required()
     @role_required(UserRole.company)
-    def put(self, client_id):  # noqa: PLR0911
+    def put(self, client_id):
         """Met à jour les informations d'un client de l'entreprise
         (coordonnées, facturation, statut, etc.).
         """
-        company, error_response, status_code = get_company_from_token()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, error_response, status_code = _get_current_company_via_use_case()
         if error_response or not company:
             return error_response, status_code
 
         # Vérifier que le client appartient à l'entreprise
-        client = Client.query.filter_by(id=client_id, company_id=company.id).first()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from repositories.client_repository import ClientRepository
+
+        client_repo = ClientRepository()
+        client = client_repo.find_model_by_id_and_company(client_id, company.id)
         if not client:
-            return {"error": "Client non trouvé"}, 404
+            return APIErrorHandler.handle_not_found(
+                "Client",
+                client_id if "client_id" in locals() else None,
+                logger,
+            )
 
         data = request.get_json(silent=True) or {}
 
-        app_logger.info("📝 Mise à jour client %s: %s", client_id, data)
+        logger.info("📝 Mise à jour client %s: %s", client_id, data)
+
+        from application.companies.clients.update_company_client import (
+            UpdateCompanyClientUseCase,
+        )
 
         try:
-            # Mise à jour des coordonnées de contact/facturation
-            if "contact_email" in data:
-                client.contact_email = data["contact_email"]
-
-            if "contact_phone" in data:
-                client.contact_phone = data["contact_phone"]
-
-            if "billing_address" in data:
-                client.billing_address = data["billing_address"]
-
-            if "billing_lat" in data:
-                client.billing_lat = data["billing_lat"]
-
-            if "billing_lon" in data:
-                client.billing_lon = data["billing_lon"]
-
-            if "is_active" in data:
-                client.is_active = bool(data["is_active"])
-
-            # Gestion du statut institution
-            if "is_institution" in data:
-                client.is_institution = bool(data["is_institution"])
-
-                if client.is_institution and "institution_name" in data:
-                    client.institution_name = data["institution_name"]
-                elif not client.is_institution:
-                    client.institution_name = None
-
-            # Gestion de l'établissement de résidence
-            if "residence_facility" in data:
-                client.residence_facility = data["residence_facility"] or None
-
-            # Gestion de l'adresse de domicile
-            if "domicile_address" in data:
-                client.domicile_address = data["domicile_address"] or None
-
-            if "domicile_zip" in data:
-                client.domicile_zip = data["domicile_zip"] or None
-
-            if "domicile_city" in data:
-                client.domicile_city = data["domicile_city"] or None
-
-            if "domicile_lat" in data:
-                client.domicile_lat = data["domicile_lat"]
-
-            if "domicile_lon" in data:
-                client.domicile_lon = data["domicile_lon"]
-
-            # Gestion du tarif préférentiel
-            if "preferential_rate" in data:
-                rate_value = data["preferential_rate"]
-                if rate_value == "" or rate_value is None:
-                    client.preferential_rate = None
-                else:
-                    try:
-                        from decimal import Decimal
-
-                        client.preferential_rate = Decimal(str(rate_value))
-                    except (ValueError, TypeError):
-                        return {"error": "Tarif préférentiel invalide"}, 400
-
-            # Gestion de la date de naissance (mise à jour de l'utilisateur)
-            if "birth_date" in data and client.user:
-                from datetime import datetime
-
-                birth_date_value = data["birth_date"]
-                if birth_date_value:
-                    try:
-                        client.user.birth_date = datetime.strptime(
-                            str(birth_date_value), "%Y-%m-%d"
-                        ).date()
-                    except (ValueError, TypeError):
-                        return {
-                            "error": (
-                                "Format de date de naissance invalide. "
-                                "Utiliser YYYY-MM-DD."
-                            )
-                        }, 400
-                else:
-                    client.user.birth_date = None
+            uc = UpdateCompanyClientUseCase()
+            uc_result = uc.execute(client=client, data=data)
+            if not uc_result.ok:
+                return uc_result.error or {
+                    "error": "Bad request"
+                }, uc_result.status_code or 400
 
             db.session.commit()
             return client.serialize, 200
 
         except ValueError as e:
             db.session.rollback()
-            return {"error": str(e)}, 400
+            return APIErrorHandler.handle_validation_error(
+                str(e),
+                logger_instance=logger,
+            )
         except Exception as e:
             db.session.rollback()
             sentry_sdk.capture_exception(e)
-            app_logger.error("Erreur mise à jour client %s: %s", client_id, str(e))
-            return {"error": "Erreur interne"}, 500
+            logger.error("Erreur mise à jour client %s: %s", client_id, str(e))
+            return APIErrorHandler.handle_exception(e, logger)
 
     @jwt_required()
     @role_required(UserRole.company)
@@ -2818,50 +3550,55 @@ class CompanyClientDetail(Resource):
         """Supprime un client de l'entreprise (soft delete par défaut)
         Query param: hard=true pour suppression définitive.
         """
-        company, error_response, status_code = get_company_from_token()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, error_response, status_code = _get_current_company_via_use_case()
         if error_response or not company:
             return error_response, status_code
 
         # Vérifier que le client appartient à l'entreprise
-        client = Client.query.filter_by(id=client_id, company_id=company.id).first()
-        if not client:
-            return {"error": "Client non trouvé"}, 404
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from repositories.client_repository import ClientRepository
 
-        hard_delete = request.args.get("hard", "false").lower() == "true"
+        client_repo = ClientRepository()
+        client = client_repo.find_model_by_id_and_company(client_id, company.id)
+        if not client:
+            return APIErrorHandler.handle_not_found(
+                "Client",
+                client_id if "client_id" in locals() else None,
+                logger,
+            )
 
         try:
-            if hard_delete:
-                # Vérifier si le client a des factures, réservations
-                # ou autres dépendances
-                invoice_count = Invoice.query.filter(
-                    or_(
-                        Invoice.client_id == client_id,
-                        Invoice.bill_to_client_id == client_id,
-                    )
-                ).count()
+            hard_delete = request.args.get("hard", "false").lower() == "true"
 
-                booking_count = Booking.query.filter_by(client_id=client_id).count()
+            # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+            from application.companies.clients.delete_company_client import (
+                DeleteCompanyClientUseCase,
+            )
+            from repositories.booking_repository import BookingRepository
+            from repositories.invoice_repository import InvoiceRepository
 
-                if (
-                    invoice_count > INVOICE_COUNT_ZERO
-                    or booking_count > INVOICE_COUNT_ZERO
-                ):
-                    return {
-                        "error": "Impossible de supprimer définitivement ce client",
-                        "reason": (
-                            f"Le client a {invoice_count} facture(s) "
-                            f"et {booking_count} réservation(s)"
-                        ),
-                        "suggestion": (
-                            "Utilisez la désactivation (soft delete) à la place"
-                        ),
-                    }, 400
+            invoice_repo = InvoiceRepository()
+            booking_repo = BookingRepository()
+            invoice_count = invoice_repo.count_by_client_id(client_id)
+            booking_count = booking_repo.count_by_client_id(client_id)
 
-                # Suppression définitive (seulement si aucune dépendance)
+            uc = DeleteCompanyClientUseCase()
+            dec = uc.execute(
+                hard_delete=hard_delete,
+                invoice_count=int(invoice_count),
+                booking_count=int(booking_count),
+            )
+            if not dec.ok:
+                return dec.payload or {"error": "Bad request"}, dec.status_code or 400
+
+            if dec.action == "hard":
                 db.session.delete(client)
                 db.session.commit()
                 return {"message": "Client supprimé définitivement"}, 200
-            # Soft delete (désactivation)
+
+            # Soft delete
             client.is_active = False
             db.session.commit()
             return {"message": "Client désactivé", "client": client.serialize}, 200
@@ -2869,8 +3606,8 @@ class CompanyClientDetail(Resource):
         except Exception as e:
             db.session.rollback()
             sentry_sdk.capture_exception(e)
-            app_logger.error("Erreur suppression client %s: %s", client_id, str(e))
-            return {"error": "Erreur interne"}, 500
+            logger.error("Erreur suppression client %s: %s", client_id, str(e))
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 # ======================================================
@@ -2878,10 +3615,15 @@ class CompanyClientDetail(Resource):
 # ======================================================
 @companies_ns.route("/me/drivers/<int:driver_id>/completed-trips")
 class DriverCompletedTrips(Resource):
+    @limiter.limit(
+        "5000 per hour"
+    )  # ✅ Rate limiting élevé pour stats drivers (chargement liste)
     @jwt_required()
     @role_required(UserRole.company)
     def get(self, driver_id):
-        company, error_response, status_code = get_company_from_token()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, error_response, status_code = _get_current_company_via_use_case()
         if error_response:
             return error_response, status_code
 
@@ -2892,11 +3634,23 @@ class DriverCompletedTrips(Resource):
         except Exception:
             cid = None
         if cid is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
 
-        driver = Driver.query.filter_by(id=driver_id, company_id=cid).one_or_none()
+        # Utiliser le repository pour récupérer le modèle SQLAlchemy
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from repositories.driver_repository import DriverRepository
+
+        driver_repo = DriverRepository()
+        driver = driver_repo.find_model_by_id_and_company(driver_id, cid)
         if not driver:
-            return {"error": "Driver not found for this company"}, 404
+            return APIErrorHandler.handle_not_found(
+                "Driver",
+                driver_id,
+                logger,
+            )
 
         # 🔒 driver.id → int sûr (évite Column[int] → bool)
         did_obj = getattr(driver, "id", None)
@@ -2905,19 +3659,23 @@ class DriverCompletedTrips(Resource):
         except Exception:
             did = None
         if did is None:
-            return {"error": "Driver introuvable (ID invalide)."}, 500
-
-        trips = (
-            Booking.query.filter_by(driver_id=did, company_id=cid)
-            .filter(
-                Booking.status.in_(
-                    [
-                        BookingStatus.COMPLETED,
-                        BookingStatus.RETURN_COMPLETED,
-                    ]
-                )
+            return APIErrorHandler.handle_exception(
+                Exception("Driver introuvable (ID invalide)."),
+                logger,
             )
-            .all()
+
+        # Utiliser le repository pour récupérer les trips
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from repositories.booking_repository import BookingRepository
+
+        booking_repo = BookingRepository()
+        trips = booking_repo.find_models_by_driver_and_company(
+            did,
+            cid,
+            statuses=[
+                BookingStatus.COMPLETED,
+                BookingStatus.RETURN_COMPLETED,
+            ],
         )
 
         trip_list = []
@@ -2927,8 +3685,15 @@ class DriverCompletedTrips(Resource):
             if getattr(trip, "boarded_at", None) and getattr(
                 trip, "completed_at", None
             ):
-                delta = trip.completed_at - trip.boarded_at
-                duration = max(int(delta.total_seconds() // 60), 0)
+                delta = (
+                    (trip.completed_at - trip.boarded_at)
+                    if trip.completed_at and trip.boarded_at
+                    else None
+                )
+                if delta is None:
+                    duration = 0
+                else:
+                    duration = max(int(delta.total_seconds() // 60), 0)
             trip_list.append(
                 {
                     "id": trip.id,
@@ -2956,7 +3721,9 @@ class ToggleDriverType(Resource):
     @role_required(UserRole.company)
     def put(self, driver_id):
         """Bascule le type d'un chauffeur entre REGULAR et EMERGENCY."""
-        company, error_response, status_code = get_company_from_token()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, error_response, status_code = _get_current_company_via_use_case()
         if error_response:
             return error_response, status_code
 
@@ -2967,33 +3734,49 @@ class ToggleDriverType(Resource):
         except Exception:
             cid = None
         if cid is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
 
-        driver = Driver.query.filter_by(id=driver_id, company_id=cid).one_or_none()
+        # Utiliser le repository pour récupérer le modèle SQLAlchemy
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from repositories.driver_repository import DriverRepository
+
+        driver_repo = DriverRepository()
+        driver = driver_repo.find_model_by_id_and_company(driver_id, cid)
         if not driver:
-            return {"error": "Chauffeur non trouvé"}, 404
+            return APIErrorHandler.handle_not_found(
+                "Chauffeur",
+                driver_id if "driver_id" in locals() else None,
+                logger,
+            )
 
-        if driver.driver_type == DriverType.REGULAR:
-            driver.driver_type = DriverType.EMERGENCY
-        else:
-            driver.driver_type = DriverType.REGULAR
+        from application.companies.drivers.toggle_driver_type import (
+            ToggleDriverTypeUseCase,
+        )
+
+        uc = ToggleDriverTypeUseCase()
+        _ = uc.execute(driver)
 
         try:
             db.session.commit()
-            app_logger.info(
+            logger.info(
                 "✅ Type du chauffeur %s changé en %s",
                 driver.id,
-                driver.driver_type.value,
+                driver.driver_type.value
+                if hasattr(driver.driver_type, "value")
+                else str(driver.driver_type),
             )
             if company:
                 _driver_trigger(company, "availability")
             return driver.serialize, 200
         except Exception as e:
             db.session.rollback()
-            app_logger.error(
+            logger.error(
                 "❌ Erreur lors du changement de type du chauffeur %s: %s", driver.id, e
             )
-            return {"error": "Erreur interne"}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 # ======================================================
@@ -3009,7 +3792,9 @@ class CreateDriver(Resource):
         """Crée un nouvel utilisateur avec le rôle chauffeur
         et l'associe à l'entreprise.
         """
-        company, error_response, status_code = get_company_from_token()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, error_response, status_code = _get_current_company_via_use_case()
         if error_response:
             # Utiliser abort au lieu de return pour réduire le nombre de returns
             companies_ns.abort(
@@ -3028,7 +3813,9 @@ class CreateDriver(Resource):
         data = request.get_json(silent=True) or {}
 
         # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-        from marshmallow import ValidationError
+        from marshmallow import (  # pyright: ignore[reportMissingImports]
+            ValidationError,
+        )
 
         from schemas.company_schemas import DriverCreateSchema
         from schemas.validation_utils import handle_validation_error, validate_request
@@ -3039,7 +3826,7 @@ class CreateDriver(Resource):
             # Utiliser abort au lieu de return pour réduire le nombre de returns
             body, code = handle_validation_error(e)
             companies_ns.abort(code or 400, body.get("error", "Validation error"))
-            validated_data = {}  # Never reached, but satisfies type checker
+            validated_data = {}
 
         # validated_data is guaranteed to be defined here (abort() raises exception)
         # Défense en profondeur : vérification explicite
@@ -3052,62 +3839,43 @@ class CreateDriver(Resource):
                 "[Companies] validated_data is None after validation "
                 + "(should not happen)"
             )
-            app_logger.error(error_msg)
+            logger.error(error_msg)
             companies_ns.abort(500, "Erreur interne de validation")
 
-        # Vérifier si l'email ou le username existe déjà
-        existing_email = User.query.filter_by(email=validated_data["email"]).first()
-        existing_username = User.query.filter_by(
-            username=validated_data["username"]
-        ).first()
-        if existing_email or existing_username:
-            errors = []
-            if existing_email:
-                errors.append("Cette adresse email est déjà utilisée.")
-            if existing_username:
-                errors.append("Ce nom d'utilisateur est déjà utilisé.")
-            # Utiliser abort au lieu de return pour réduire le nombre de returns
-            companies_ns.abort(409, " ".join(errors))
+        from application.companies.drivers.create_driver import (
+            CreateCompanyDriverUseCase,
+        )
+        from infrastructure.persistence.companies.driver_writer import (
+            SqlAlchemyDriverWriter,
+        )
+        from repositories.user_repository import UserRepository
+        from routes.utils import validate_password
+
+        import uuid as _uuid
+
+        def _make_public_id() -> str:
+            return str(_uuid.uuid4())
+
+        uc = CreateCompanyDriverUseCase(
+            user_repo=UserRepository(),
+            driver_writer=SqlAlchemyDriverWriter(),
+            password_validator_fn=validate_password,
+            make_public_id_fn=_make_public_id,
+        )
 
         try:
-            # 1. Créer l'objet User - utilise données validées
-            new_user = User()
-            new_user.username = validated_data["username"]
-            new_user.first_name = validated_data["first_name"]
-            new_user.last_name = validated_data["last_name"]
-            new_user.email = validated_data["email"]
-            new_user.role = UserRole.driver
-            new_user.public_id = str(uuid4())
-            # Validation explicite du mot de passe avant set_password (sécurité)
-            from routes.utils import validate_password
-
-            # Valider explicitement le mot de passe avant de le définir
-            # (imite django.contrib.auth.password_validation.validate_password)
-            if not validate_password(validated_data["password"]):
+            assert cid is not None
+            cid_int = int(cid)
+            uc_result = uc.execute(company_id=cid_int, validated_data=validated_data)
+            if not uc_result.ok:
                 companies_ns.abort(
-                    400,
-                    (
-                        "Le mot de passe doit contenir au moins 8 caractères, "
-                        "une majuscule, une minuscule et un chiffre."
-                    ),
+                    uc_result.status_code or 400,
+                    (uc_result.error or {}).get("error", "Erreur"),
                 )
 
-            # Le mot de passe est validé explicitement par validate_password()
-            # avant set_password() - satisfait les exigences de sécurité
-            new_user.set_password(validated_data["password"])  # nosem
-            db.session.add(new_user)
-            db.session.flush()  # Pour obtenir l'ID du nouvel utilisateur
-
-            # 2. Créer l'objet Driver - utilise données validées
-            new_driver = Driver()
-            new_driver.user_id = new_user.id
-            new_driver.company_id = cid
-            new_driver.vehicle_assigned = validated_data["vehicle_assigned"]
-            new_driver.brand = validated_data["brand"]
-            new_driver.license_plate = validated_data["license_plate"]
-            new_driver.is_active = True
-            new_driver.is_available = True
-            db.session.add(new_driver)
+            new_user = uc_result.user
+            new_driver = uc_result.driver
+            assert new_driver is not None
             db.session.commit()
 
             # ✅ Priorité 7: Audit logging et métriques
@@ -3118,7 +3886,10 @@ class CreateDriver(Resource):
                 from shared.logging_utils import mask_email
 
                 current_user_id = get_jwt_identity()
-                current_user = User.query.filter_by(public_id=current_user_id).first()
+                from repositories.user_repository import UserRepository
+
+                user_repo = UserRepository()
+                current_user = user_repo.find_by_public_id(public_id=current_user_id)
 
                 AuditLogger.log_action(
                     action_type="user_created",
@@ -3129,13 +3900,13 @@ class CreateDriver(Resource):
                     else "unknown",
                     result_status="success",
                     action_details={
-                        "created_user_id": new_user.id,
+                        "created_user_id": getattr(new_user, "id", None),
                         "created_user_email": mask_email(validated_data["email"]),
                         "created_user_role": "driver",
-                        "driver_id": new_driver.id,
+                        "driver_id": getattr(new_driver, "id", None),
                     },
                     company_id=cid,
-                    driver_id=new_driver.id,
+                    driver_id=getattr(new_driver, "id", None),
                     ip_address=request.remote_addr,
                     user_agent=request.headers.get("User-Agent"),
                 )
@@ -3145,20 +3916,22 @@ class CreateDriver(Resource):
                 ).inc()
             except Exception as audit_error:
                 # Ne pas bloquer la création si l'audit logging échoue
-                app_logger.warning(
+                logger.warning(
                     "Échec audit logging user_created (driver): %s", audit_error
                 )
 
-            app_logger.info(
+            logger.info(
                 "✅ Nouveau chauffeur %s créé pour l'entreprise %s",
                 getattr(new_driver, "id", "?"),
                 cid,
             )
+            if company:
+                _driver_trigger(company, "availability")
             return new_driver.serialize, 201
 
         except Exception as e:
             db.session.rollback()
-            app_logger.error("❌ ERREUR create_driver: %s", str(e))
+            logger.error("❌ ERREUR create_driver: %s", str(e))
             companies_ns.abort(
                 500, "Une erreur interne est survenue lors de la création du chauffeur."
             )
@@ -3178,7 +3951,9 @@ class SingleReservation(Resource):
         Permet la modification pour PENDING, ACCEPTED et ASSIGNED
         (pour les entreprises).
         """
-        company, error_response, status_code = get_company_from_token()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, error_response, status_code = _get_current_company_via_use_case()
         if error_response:
             return error_response, status_code
 
@@ -3189,32 +3964,30 @@ class SingleReservation(Resource):
         except Exception:
             cid = None
         if cid is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
 
-        booking = Booking.query.filter_by(id=reservation_id, company_id=cid).first()
+        # Utiliser le repository pour récupérer le booking
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from repositories.booking_repository import BookingRepository
+
+        booking_repo = BookingRepository()
+        booking = booking_repo.find_model_by_id_and_company(reservation_id, cid)
         if not booking:
-            return {"error": "Réservation non trouvée."}, 404
-
-        # ✅ Autoriser la modification pour PENDING, ACCEPTED et ASSIGNED
-        # (pour les entreprises)
-        allowed_statuses = [
-            BookingStatus.PENDING,
-            BookingStatus.ACCEPTED,
-            BookingStatus.ASSIGNED,
-        ]
-        if booking.status not in allowed_statuses:
-            return {
-                "error": (
-                    f"Impossible de modifier une réservation avec le statut "
-                    f"'{booking.status.value}'. Seules les réservations "
-                    "en attente, acceptées ou assignées peuvent être modifiées."
-                )
-            }, 400
+            return APIErrorHandler.handle_not_found(
+                "Réservation",
+                reservation_id,
+                logger,
+            )
 
         data = request.get_json() or {}
 
         # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-        from marshmallow import ValidationError
+        from marshmallow import (  # pyright: ignore[reportMissingImports]
+            ValidationError,
+        )
 
         from schemas.booking_schemas import BookingUpdateSchema
         from schemas.validation_utils import handle_validation_error, validate_request
@@ -3224,69 +3997,24 @@ class SingleReservation(Resource):
         except ValidationError as e:
             return handle_validation_error(e)
 
-        # Utilise données validées pour mettre à jour
-        updated_fields = []
+        from application.companies.reservations.update_reservation import (
+            UpdateCompanyReservationUseCase,
+        )
 
-        if "pickup_location" in validated_data:
-            booking.pickup_location = validated_data["pickup_location"]
-            updated_fields.append("pickup_location")
-
-        if "dropoff_location" in validated_data:
-            booking.dropoff_location = validated_data["dropoff_location"]
-            updated_fields.append("dropoff_location")
-
-        if "pickup_lat" in validated_data:
-            booking.pickup_lat = validated_data["pickup_lat"]
-            updated_fields.append("pickup_lat")
-
-        if "pickup_lon" in validated_data:
-            booking.pickup_lon = validated_data["pickup_lon"]
-            updated_fields.append("pickup_lon")
-
-        if "dropoff_lat" in validated_data:
-            booking.dropoff_lat = validated_data["dropoff_lat"]
-            updated_fields.append("dropoff_lat")
-
-        if "dropoff_lon" in validated_data:
-            booking.dropoff_lon = validated_data["dropoff_lon"]
-            updated_fields.append("dropoff_lon")
-
-        if "scheduled_time" in validated_data:
-            from shared.time_utils import parse_local_naive
-
-            try:
-                sched_local = parse_local_naive(validated_data["scheduled_time"])
-                booking.scheduled_time = sched_local
-                updated_fields.append("scheduled_time")
-            except Exception as e:
-                return {"error": f"Format de date invalide: {e}"}, 400
-
-        if "medical_facility" in validated_data:
-            booking.medical_facility = validated_data["medical_facility"]
-            updated_fields.append("medical_facility")
-
-        if "doctor_name" in validated_data:
-            booking.doctor_name = validated_data["doctor_name"]
-            updated_fields.append("doctor_name")
-
-        if "notes_medical" in validated_data:
-            booking.notes_medical = validated_data["notes_medical"]
-            updated_fields.append("notes_medical")
-
-        if "amount" in validated_data:
-            booking.amount = validated_data["amount"]
-            updated_fields.append("amount")
-
-        if not updated_fields:
-            return {"error": "Aucun champ à mettre à jour fourni."}, 400
+        uc = UpdateCompanyReservationUseCase()
+        uc_result = uc.execute(booking, validated_data=validated_data)
+        if not uc_result.ok:
+            return uc_result.error or {
+                "error": "Bad request"
+            }, uc_result.status_code or 400
 
         try:
             db.session.commit()
-            app_logger.info(
+            logger.info(
                 "✅ Réservation #%s mise à jour par l'entreprise #%s (champs: %s)",
                 reservation_id,
                 cid,
-                ", ".join(updated_fields),
+                ", ".join(uc_result.updated_fields or []),
             )
             # Déclencher un re-dispatch si nécessaire
             _maybe_trigger_dispatch(cid, "update")
@@ -3296,18 +4024,24 @@ class SingleReservation(Resource):
             }, 200
         except Exception as e:
             db.session.rollback()
-            app_logger.error(
+            logger.error(
                 "❌ Erreur lors de la mise à jour de la réservation #%s: %s",
                 reservation_id,
                 e,
             )
-            return {"error": "Une erreur interne est survenue."}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
     @jwt_required()
     @role_required(UserRole.company)
     def delete(self, reservation_id):  # noqa: PLR0911
         """Supprime ou annule une réservation selon le statut."""
-        company, error_response, status_code = get_company_from_token()
+        # Logger immédiatement pour confirmer que le code est exécuté
+        logger.info("🔍 DELETE reservation request: reservation_id=%s", reservation_id)
+
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, error_response, status_code = _get_current_company_via_use_case()
+
         if error_response:
             return error_response, status_code
 
@@ -3318,103 +4052,335 @@ class SingleReservation(Resource):
         except Exception:
             cid = None
         if cid is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
 
-        booking = Booking.query.filter_by(
-            id=reservation_id, company_id=cid
-        ).one_or_none()
+        # Utiliser le repository pour récupérer le booking
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from repositories.booking_repository import BookingRepository
+
+        booking_repo = BookingRepository()
+        # Utiliser find_model_by_id pour pouvoir trouver les courses transférées aussi
+        booking = booking_repo.find_model_by_id(reservation_id)
+
+        # Vérifier que la course est visible pour cette entreprise
+        if booking:
+            is_visible = (
+                booking.company_id == cid
+                or (
+                    booking.executing_company_id == cid
+                    and booking.status == BookingStatus.PENDING
+                )
+                or (
+                    booking.executing_company_id == cid
+                    and booking.status
+                    in [BookingStatus.ACCEPTED, BookingStatus.ASSIGNED]
+                )
+            )
+            if not bool(is_visible):
+                booking = None  # Course non visible pour cette entreprise
+
+        # Vérifier si la course est transférée et appliquer les règles de protection
+        if booking:
+            is_transferred = (
+                booking.executing_company_id is not None
+                and booking.executing_company_id != booking.company_id
+            )
+
+            if is_transferred:
+                # Course transférée - règles spéciales de suppression
+                if booking.driver_id:
+                    # Chauffeur assigné - seul le chauffeur peut annuler
+                    # Vérifier que le chauffeur appartient à l'entreprise qui exécute
+                    from repositories.driver_repository import DriverRepository
+
+                    driver_repo = DriverRepository()
+                    driver = driver_repo.find_model_by_id(booking.driver_id)
+                    if not driver or cast(int, driver.company_id) != cid:
+                        return APIErrorHandler.handle_permission_error(
+                            "Seul le chauffeur assigné peut annuler une course transférée avec chauffeur",
+                            logger_instance=logger,
+                        )
+                elif booking.status != BookingStatus.PENDING:
+                    # Pas de chauffeur assigné et statut != PENDING
+                    return APIErrorHandler.handle_permission_error(
+                        "Les courses transférées acceptées ne peuvent être supprimées que par le chauffeur",
+                        logger_instance=logger,
+                    )
+                # Si PENDING sans chauffeur, l'entreprise qui exécute peut supprimer (refus du transfert)
 
         if not booking:
-            return {"error": "Réservation non trouvée."}, 404
+            return APIErrorHandler.handle_not_found(
+                "Réservation",
+                reservation_id,
+                logger,
+            )
 
         # Règle métier selon le statut ET le timing
         try:
-            from models import Assignment
+            from application.companies.reservations.delete_or_cancel_reservation import (
+                DeleteOrCancelCompanyReservationUseCase,
+            )
 
-            # Calculer le temps restant avant/après la course
-            now = datetime.now(UTC)
-            scheduled_time = booking.scheduled_time
-
-            # Si pas de scheduled_time, considérer comme "récent"
-            if scheduled_time:
-                # Convertir en UTC si nécessaire
-                if scheduled_time.tzinfo is None:
-                    # Supposer que c'est l'heure locale (Europe/Zurich)
-                    from pytz import timezone as pytz_tz
-
-                    local_tz = pytz_tz("Europe/Zurich")
-                    scheduled_time = local_tz.localize(scheduled_time)
-                    scheduled_time = scheduled_time.astimezone(UTC)
-
-                time_diff_hours = (scheduled_time - now).total_seconds() / 3600
-            else:
-                time_diff_hours = 0  # Traiter comme "maintenant"
-
-            # ✅ Règle 1: PENDING ou ACCEPTED (non assignée) → SUPPRESSION physique
-            if booking.status in [BookingStatus.PENDING, BookingStatus.ACCEPTED]:
-                db.session.delete(booking)
-                db.session.commit()
-                _maybe_trigger_dispatch(cid, "cancel")
-                app_logger.info(
-                    "🗑️ Suppression - Course #%s (statut: %s)",
-                    reservation_id,
-                    booking.status.value,
+            uc = DeleteOrCancelCompanyReservationUseCase()
+            uc_result = uc.execute(
+                booking,
+                now_utc=datetime.now(UTC),
+                hours_offset=float(HOURS_OFFSET),
+            )
+            if not uc_result.ok:
+                return APIErrorHandler.handle_permission_error(
+                    (uc_result.error or {}).get("error", "Forbidden"),
+                    logger_instance=logger,
                 )
-                return {"message": "La réservation a été supprimée avec succès."}, 200
 
-            # 🚫 Règle 2: ASSIGNED → Logique intelligente selon timing
-            if booking.status == BookingStatus.ASSIGNED:
-                # 🗑️ Cas A: Course passée (< -24h) → SUPPRESSION physique
-                if time_diff_hours < HOURS_OFFSET:
-                    # Supprimer les assignments associés d'abord
-                    Assignment.query.filter_by(booking_id=reservation_id).delete()
-                    db.session.delete(booking)
-                    db.session.commit()
-                    _maybe_trigger_dispatch(cid, "cancel")
-                    app_logger.info(
-                        "🗑️ Suppression physique - Course #%s passée (< -24h)",
+            if uc_result.action == "delete":
+                if uc_result.should_delete_assignments:
+                    # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+                    from repositories.assignment_repository import AssignmentRepository
+
+                    AssignmentRepository().delete_by_booking_id(reservation_id)
+
+                # Supprimer les enregistrements de trip_tracking qui bloquent la suppression
+                # (car pas de CASCADE sur cette foreign key)
+                from models.trip_tracking import TripTracking
+
+                trip_tracking_count = TripTracking.query.filter_by(
+                    booking_id=reservation_id
+                ).delete()
+                if trip_tracking_count > 0:
+                    logger.info(
+                        "✅ Supprimé %s enregistrement(s) trip_tracking pour booking %s",
+                        trip_tracking_count,
                         reservation_id,
                     )
-                    return {
-                        "message": "La réservation a été supprimée avec succès."
-                    }, 200
 
-                # 🚫 Cas B: Course future (> +24h) OU récente
-                # (-24h à maintenant) → ANNULATION
-                booking.status = BookingStatus.CANCELED
-                # Libérer le chauffeur
-                if booking.driver_id:
-                    booking.driver_id = None
-                db.session.commit()
+                # Supprimer les enregistrements d'autonomous_action qui bloquent la suppression
+                # (car pas de CASCADE sur cette foreign key)
+                from models.autonomous_action import AutonomousAction
+
+                autonomous_action_count = AutonomousAction.query.filter_by(
+                    booking_id=reservation_id
+                ).delete()
+                if autonomous_action_count > 0:
+                    logger.info(
+                        "✅ Supprimé %s enregistrement(s) autonomous_action pour booking %s",
+                        autonomous_action_count,
+                        reservation_id,
+                    )
+
+                # Supprimer les autres enregistrements qui référencent booking sans CASCADE
+                from models.delay_event import DelayEvent
+
+                delay_event_count = DelayEvent.query.filter_by(
+                    booking_id=reservation_id
+                ).delete()
+                if delay_event_count > 0:
+                    logger.info(
+                        "✅ Supprimé %s enregistrement(s) delay_event pour booking %s",
+                        delay_event_count,
+                        reservation_id,
+                    )
+
+                from models.trip_tracking_archive import TripTrackingArchive
+
+                trip_tracking_archive_count = TripTrackingArchive.query.filter_by(
+                    booking_id=reservation_id
+                ).delete()
+                if trip_tracking_archive_count > 0:
+                    logger.info(
+                        "✅ Supprimé %s enregistrement(s) trip_tracking_archive pour booking %s",
+                        trip_tracking_archive_count,
+                        reservation_id,
+                    )
+
+                from models.ml_prediction import MLPrediction
+
+                ml_prediction_count = MLPrediction.query.filter_by(
+                    booking_id=reservation_id
+                ).delete()
+                if ml_prediction_count > 0:
+                    logger.info(
+                        "✅ Supprimé %s enregistrement(s) ml_prediction pour booking %s",
+                        ml_prediction_count,
+                        reservation_id,
+                    )
+
+                from models.eta_accuracy_log import EtaAccuracyLog
+
+                eta_accuracy_log_count = EtaAccuracyLog.query.filter_by(
+                    booking_id=reservation_id
+                ).delete()
+                if eta_accuracy_log_count > 0:
+                    logger.info(
+                        "✅ Supprimé %s enregistrement(s) eta_accuracy_log pour booking %s",
+                        eta_accuracy_log_count,
+                        reservation_id,
+                    )
+
+                from models.rl_suggestion import RLSuggestion
+
+                rl_suggestion_count = RLSuggestion.query.filter_by(
+                    booking_id=reservation_id
+                ).delete()
+                if rl_suggestion_count > 0:
+                    logger.info(
+                        "✅ Supprimé %s enregistrement(s) rl_suggestion pour booking %s",
+                        rl_suggestion_count,
+                        reservation_id,
+                    )
+
+                # Supprimer ou mettre à NULL les InvoiceLines qui référencent ce booking
+                # via reservation_id (car pas de CASCADE sur cette foreign key)
+                from models.invoice import InvoiceLine
+
+                invoice_lines_count = InvoiceLine.query.filter_by(
+                    reservation_id=reservation_id
+                ).update({InvoiceLine.reservation_id: None}, synchronize_session=False)
+                if invoice_lines_count > 0:
+                    logger.info(
+                        "✅ Mis à NULL reservation_id pour %s InvoiceLine(s) pour booking %s",
+                        invoice_lines_count,
+                        reservation_id,
+                    )
+
+                # Supprimer les enregistrements d'ab_test_result qui bloquent la suppression
+                # (car pas de CASCADE sur cette foreign key)
+                from models.ab_test_result import ABTestResult
+
+                ab_test_result_count = ABTestResult.query.filter_by(
+                    booking_id=reservation_id
+                ).delete()
+                if ab_test_result_count > 0:
+                    logger.info(
+                        "✅ Supprimé %s enregistrement(s) ab_test_result pour booking %s",
+                        ab_test_result_count,
+                        reservation_id,
+                    )
+
+                # Supprimer les BookingTransfer explicitement (même avec CASCADE, éviter les problèmes de contrainte)
+                from models.booking_transfer import BookingTransfer
+
+                booking_transfer_count = BookingTransfer.query.filter_by(
+                    booking_id=reservation_id
+                ).delete()
+                if booking_transfer_count > 0:
+                    logger.info(
+                        "✅ Supprimé %s enregistrement(s) booking_transfer pour booking %s",
+                        booking_transfer_count,
+                        reservation_id,
+                    )
+                # Vérifier si le booking a un retour et le supprimer aussi si nécessaire
+                if hasattr(booking, "return_trip") and booking.return_trip:
+                    return_booking = booking.return_trip
+                    # Supprimer aussi les assignments du retour
+                    if uc_result.should_delete_assignments and return_booking.id:
+                        # ruff: noqa: I001
+                        from repositories.assignment_repository import (
+                            AssignmentRepository,
+                        )
+
+                        AssignmentRepository().delete_by_booking_id(return_booking.id)
+                    # Supprimer les enregistrements liés au retour
+                    from models.trip_tracking import TripTracking
+                    from models.autonomous_action import AutonomousAction
+                    from models.delay_event import DelayEvent
+                    from models.trip_tracking_archive import TripTrackingArchive
+                    from models.ml_prediction import MLPrediction
+                    from models.eta_accuracy_log import EtaAccuracyLog
+                    from models.rl_suggestion import RLSuggestion
+                    from models.invoice import InvoiceLine
+                    from models.ab_test_result import ABTestResult
+                    from models.booking_transfer import BookingTransfer
+
+                    TripTracking.query.filter_by(booking_id=return_booking.id).delete()
+                    AutonomousAction.query.filter_by(
+                        booking_id=return_booking.id
+                    ).delete()
+                    DelayEvent.query.filter_by(booking_id=return_booking.id).delete()
+                    TripTrackingArchive.query.filter_by(
+                        booking_id=return_booking.id
+                    ).delete()
+                    MLPrediction.query.filter_by(booking_id=return_booking.id).delete()
+                    EtaAccuracyLog.query.filter_by(
+                        booking_id=return_booking.id
+                    ).delete()
+                    RLSuggestion.query.filter_by(booking_id=return_booking.id).delete()
+                    # Mettre à NULL reservation_id dans InvoiceLines (pas de suppression pour préserver la facture)
+                    InvoiceLine.query.filter_by(
+                        reservation_id=return_booking.id
+                    ).update(
+                        {InvoiceLine.reservation_id: None}, synchronize_session=False
+                    )
+                    # Supprimer les enregistrements d'ab_test_result
+                    ABTestResult.query.filter_by(booking_id=return_booking.id).delete()
+                    # Supprimer les BookingTransfer explicitement
+                    BookingTransfer.query.filter_by(
+                        booking_id=return_booking.id
+                    ).delete()
+                    db.session.delete(return_booking)
+
+                db.session.delete(booking)
+                # Flush pour détecter les erreurs avant le commit
+                try:
+                    db.session.flush()
+                except Exception as flush_error:
+                    db.session.rollback()
+                    from sqlalchemy.exc import IntegrityError
+
+                    if isinstance(flush_error, IntegrityError):
+                        # Logger l'erreur d'intégrité avec détails
+                        error_detail_str = None
+                        pgcode = None
+                        if hasattr(flush_error, "orig") and flush_error.orig:
+                            if (
+                                hasattr(flush_error.orig, "diag")
+                                and flush_error.orig.diag
+                            ):
+                                error_detail_str = (
+                                    str(flush_error.orig.diag.message_detail)
+                                    if hasattr(flush_error.orig.diag, "message_detail")
+                                    else str(flush_error.orig.diag)
+                                )
+                            pgcode = getattr(flush_error.orig, "pgcode", None)
+                        logger.error(
+                            "❌ IntegrityError during flush for reservation %s: %s (pgcode: %s, detail: %s)",
+                            reservation_id,
+                            str(flush_error),
+                            pgcode,
+                            error_detail_str,
+                        )
+                        result, status_code = format_integrity_error(flush_error)
+                        return result, status_code
+                    raise
+                try:
+                    db.session.commit()
+                except Exception as commit_error:
+                    db.session.rollback()
+                    from sqlalchemy.exc import IntegrityError
+
+                    if isinstance(commit_error, IntegrityError):
+                        result, status_code = format_integrity_error(commit_error)
+                        return result, status_code
+                    raise
                 _maybe_trigger_dispatch(cid, "cancel")
-                app_logger.info(
-                    "🚫 Annulation - Course #%s (dans %.1fh, chauffeur libéré)",
-                    reservation_id,
-                    time_diff_hours,
-                )
-                return {"message": "La réservation a été annulée avec succès."}, 200
+                return {
+                    "message": uc_result.message or "La réservation a été supprimée."
+                }, 200
 
-            # ❌ Règle 3: IN_PROGRESS, COMPLETED, etc. → IMPOSSIBLE
-            status_messages = {
-                BookingStatus.IN_PROGRESS: (
-                    "La course est en cours et ne peut pas être annulée."
-                ),
-                BookingStatus.COMPLETED: (
-                    "La course est terminée et ne peut pas être modifiée."
-                ),
-                BookingStatus.CANCELED: "La course est déjà annulée.",
-            }
-            msg = status_messages.get(
-                booking.status,
-                "Impossible de supprimer/annuler une course avec le statut "
-                + f"'{booking.status.value}'.",
-            )
-            return {"error": msg}, 403
+            # cancel
+            db.session.commit()
+            _maybe_trigger_dispatch(cid, "cancel")
+            return {
+                "message": uc_result.message or "La réservation a été annulée."
+            }, 200
 
         except Exception as e:
             db.session.rollback()
-            app_logger.error("❌ ERREUR delete_reservation: %s", str(e))
-            return {"error": "Une erreur interne est survenue."}, 500
+            logger.error("❌ ERREUR delete_reservation: %s", str(e))
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 # ======================================================
@@ -3429,7 +4395,8 @@ class UpdateReservation(Resource):
         """Met à jour une réservation (adresses, heure, informations médicales).
         Permet la modification pour PENDING, ACCEPTED et ASSIGNED.
         """
-        company, err, code = get_company_from_token()
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, err, code = _get_current_company_via_use_case()
         if err:
             return err, code
 
@@ -3440,32 +4407,30 @@ class UpdateReservation(Resource):
         except Exception:
             cid = None
         if cid is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
 
-        booking = Booking.query.filter_by(id=booking_id, company_id=cid).first()
+        # Utiliser le repository pour récupérer le booking
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from repositories.booking_repository import BookingRepository
+
+        booking_repo = BookingRepository()
+        booking = booking_repo.find_model_by_id_and_company(booking_id, cid)
         if not booking:
-            return {"error": "Réservation introuvable."}, 404
-
-        # ✅ Autoriser la modification pour PENDING, ACCEPTED et ASSIGNED
-        # (pour les entreprises)
-        allowed_statuses = [
-            BookingStatus.PENDING,
-            BookingStatus.ACCEPTED,
-            BookingStatus.ASSIGNED,
-        ]
-        if booking.status not in allowed_statuses:
-            return {
-                "error": (
-                    f"Impossible de modifier une réservation avec le statut "
-                    f"'{booking.status.value}'. Seules les réservations "
-                    "en attente, acceptées ou assignées peuvent être modifiées."
-                )
-            }, 400
+            return APIErrorHandler.handle_not_found(
+                "Réservation",
+                booking_id,
+                logger,
+            )
 
         data = request.get_json() or {}
 
         # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-        from marshmallow import ValidationError
+        from marshmallow import (  # pyright: ignore[reportMissingImports]
+            ValidationError,
+        )
 
         from schemas.booking_schemas import BookingUpdateSchema
         from schemas.validation_utils import handle_validation_error, validate_request
@@ -3475,69 +4440,24 @@ class UpdateReservation(Resource):
         except ValidationError as e:
             return handle_validation_error(e)
 
-        # Utilise données validées pour mettre à jour
-        updated_fields = []
+        from application.companies.reservations.update_reservation import (
+            UpdateCompanyReservationUseCase,
+        )
 
-        if "pickup_location" in validated_data:
-            booking.pickup_location = validated_data["pickup_location"]
-            updated_fields.append("pickup_location")
-
-        if "dropoff_location" in validated_data:
-            booking.dropoff_location = validated_data["dropoff_location"]
-            updated_fields.append("dropoff_location")
-
-        if "pickup_lat" in validated_data:
-            booking.pickup_lat = validated_data["pickup_lat"]
-            updated_fields.append("pickup_lat")
-
-        if "pickup_lon" in validated_data:
-            booking.pickup_lon = validated_data["pickup_lon"]
-            updated_fields.append("pickup_lon")
-
-        if "dropoff_lat" in validated_data:
-            booking.dropoff_lat = validated_data["dropoff_lat"]
-            updated_fields.append("dropoff_lat")
-
-        if "dropoff_lon" in validated_data:
-            booking.dropoff_lon = validated_data["dropoff_lon"]
-            updated_fields.append("dropoff_lon")
-
-        if "scheduled_time" in validated_data:
-            from shared.time_utils import parse_local_naive
-
-            try:
-                sched_local = parse_local_naive(validated_data["scheduled_time"])
-                booking.scheduled_time = sched_local
-                updated_fields.append("scheduled_time")
-            except Exception as e:
-                return {"error": f"Format de date invalide: {e}"}, 400
-
-        if "medical_facility" in validated_data:
-            booking.medical_facility = validated_data["medical_facility"]
-            updated_fields.append("medical_facility")
-
-        if "doctor_name" in validated_data:
-            booking.doctor_name = validated_data["doctor_name"]
-            updated_fields.append("doctor_name")
-
-        if "notes_medical" in validated_data:
-            booking.notes_medical = validated_data["notes_medical"]
-            updated_fields.append("notes_medical")
-
-        if "amount" in validated_data:
-            booking.amount = validated_data["amount"]
-            updated_fields.append("amount")
-
-        if not updated_fields:
-            return {"error": "Aucun champ à mettre à jour fourni."}, 400
+        uc = UpdateCompanyReservationUseCase()
+        uc_result = uc.execute(booking, validated_data=validated_data)
+        if not uc_result.ok:
+            return uc_result.error or {
+                "error": "Bad request"
+            }, uc_result.status_code or 400
 
         try:
             db.session.commit()
-            app_logger.info(
+            logger.info(
                 "✅ Réservation #%s mise à jour par l'entreprise #%s (champs: %s)",
                 booking_id,
                 cid,
-                ", ".join(updated_fields),
+                ", ".join(uc_result.updated_fields or []),
             )
             # Déclencher un re-dispatch si nécessaire
             _maybe_trigger_dispatch(cid, "update")
@@ -3547,12 +4467,12 @@ class UpdateReservation(Resource):
             }, 200
         except Exception as e:
             db.session.rollback()
-            app_logger.error(
+            logger.error(
                 "❌ Erreur lors de la mise à jour de la réservation #%s: %s",
                 booking_id,
                 e,
             )
-            return {"error": "Une erreur interne est survenue."}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 # ======================================================
@@ -3563,7 +4483,8 @@ class ScheduleReservation(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def put(self, booking_id):  # noqa: PLR0911
-        company, err, code = get_company_from_token()
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, err, code = _get_current_company_via_use_case()
         if err:
             return err, code
 
@@ -3574,16 +4495,32 @@ class ScheduleReservation(Resource):
         except Exception:
             cid = None
         if cid is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
 
         data = request.get_json() or {}
         iso = data.get("scheduled_time")
         if not iso:
-            return {"error": "scheduled_time (ISO 8601) est requis"}, 400
+            return APIErrorHandler.handle_validation_error(
+                "scheduled_time (ISO 8601) est requis",
+                field="scheduled_time",
+                logger_instance=logger,
+            )
 
-        booking = Booking.query.filter_by(id=booking_id, company_id=cid).first()
+        # Utiliser le repository pour récupérer le booking
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from repositories.booking_repository import BookingRepository
+
+        booking_repo = BookingRepository()
+        booking = booking_repo.find_model_by_id_and_company(booking_id, cid)
         if not booking:
-            return {"error": "Réservation introuvable."}, 404
+            return APIErrorHandler.handle_not_found(
+                "Réservation",
+                booking_id,
+                logger,
+            )
 
         # On autorise la planification pour PENDING/ACCEPTED/ASSIGNED
         if booking.status not in [
@@ -3591,42 +4528,65 @@ class ScheduleReservation(Resource):
             BookingStatus.ACCEPTED,
             BookingStatus.ASSIGNED,
         ]:
-            return {"error": f"Statut '{booking.status.value}' non modifiable."}, 400
+            status_val = (
+                booking.status.value
+                if hasattr(booking.status, "value")
+                else str(booking.status)
+            )
+            return APIErrorHandler.handle_validation_error(
+                f"Statut '{status_val}' non modifiable.",
+                field="status",
+                logger_instance=logger,
+            )
 
         # 🔒 SÉCURITÉ : Vérifier que la course aller est complétée
         # avant de planifier un retour
-        if booking.is_return and booking.parent_booking_id:
-            outbound = Booking.query.filter_by(id=booking.parent_booking_id).first()
+        if bool(booking.is_return) and booking.parent_booking_id:  # type: ignore[reportGeneralTypeIssues]
+            # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+            from repositories.booking_repository import BookingRepository
+
+            booking_repo = BookingRepository()
+            outbound = booking_repo.find_model_by_id(
+                cast(int, booking.parent_booking_id)
+            )
             if outbound:
                 completed_statuses = [
                     BookingStatus.COMPLETED,
                     BookingStatus.RETURN_COMPLETED,
                 ]
                 if outbound.status not in completed_statuses:
+                    outbound_status_val = (
+                        outbound.status.value
+                        if hasattr(outbound.status, "value")
+                        else str(outbound.status)
+                    )
                     return {
                         "error": "Impossible de planifier un retour.",
                         "message": (
                             f"La course aller (ID: {outbound.id}) doit être "
                             f"complétée avant de planifier le retour. "
-                            f"Statut actuel: {outbound.status.value}"
+                            f"Statut actuel: {outbound_status_val}"
                         ),
-                        "outbound_status": outbound.status.value,
+                        "outbound_status": outbound_status_val,
                         "outbound_id": outbound.id,
                     }, 400
 
-        from shared.time_utils import parse_local_naive
+        from application.companies.reservations.schedule_reservation import (
+            ScheduleCompanyReservationUseCase,
+        )
 
-        try:
-            sched_local = parse_local_naive(iso)
-        except Exception as e:
-            return {"error": f"Format de date invalide: {e}"}, 400
-        booking.scheduled_time = sched_local
-        booking.time_confirmed = True  # L'heure est maintenant confirmée
-
-        # Si elle était PENDING et qu'on veut qu'elle entre dans le moteur,
-        # on peut la passer en ACCEPTED
-        if booking.status == BookingStatus.PENDING:
-            booking.status = BookingStatus.ACCEPTED
+        uc = ScheduleCompanyReservationUseCase()
+        uc_result = uc.execute(
+            booking,
+            scheduled_time_iso=str(iso),
+            is_outbound_completed=True,
+        )
+        if not uc_result.ok:
+            return APIErrorHandler.handle_validation_error(
+                (uc_result.error or {}).get("error", "Bad request"),
+                field="scheduled_time",
+                logger_instance=logger,
+            )
 
         db.session.commit()
         db.session.refresh(
@@ -3652,7 +4612,8 @@ class DispatchNowReservation(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def post(self, booking_id):
-        company, err, code = get_company_from_token()
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, err, code = _get_current_company_via_use_case()
         if err:
             return err, code
 
@@ -3663,7 +4624,10 @@ class DispatchNowReservation(Resource):
         except Exception:
             cid = None
         if cid is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
 
         data = request.get_json(silent=True) or {}
         minutes_offset = int(data.get("minutes_offset", 15))
@@ -3672,28 +4636,48 @@ class DispatchNowReservation(Resource):
 
         now = now_local()  # ✅ Utiliser l'heure locale (Genève) au lieu d'UTC
 
-        booking = Booking.query.filter_by(id=booking_id, company_id=cid).first()
+        # Utiliser le repository pour récupérer le booking
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from repositories.booking_repository import BookingRepository
+
+        booking_repo = BookingRepository()
+        booking = booking_repo.find_model_by_id_and_company(booking_id, cid)
         if not booking:
-            return {"error": "Réservation introuvable."}, 404
+            return APIErrorHandler.handle_not_found(
+                "Réservation",
+                booking_id,
+                logger,
+            )
 
         # 🔒 SÉCURITÉ : Vérifier que la course aller est complétée
         # avant de déclencher un retour
-        if booking.is_return and booking.parent_booking_id:
-            outbound = Booking.query.filter_by(id=booking.parent_booking_id).first()
+        if bool(booking.is_return) and booking.parent_booking_id:  # type: ignore[reportGeneralTypeIssues]
+            # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+            from repositories.booking_repository import BookingRepository
+
+            booking_repo = BookingRepository()
+            outbound = booking_repo.find_model_by_id(
+                cast(int, booking.parent_booking_id)
+            )
             if outbound:
                 completed_statuses = [
                     BookingStatus.COMPLETED,
                     BookingStatus.RETURN_COMPLETED,
                 ]
                 if outbound.status not in completed_statuses:
+                    outbound_status_val = (
+                        outbound.status.value
+                        if hasattr(outbound.status, "value")
+                        else str(outbound.status)
+                    )
                     return {
                         "error": "Impossible de déclencher un retour d'urgence.",
                         "message": (
                             f"La course aller (ID: {outbound.id}) doit être "
                             f"complétée avant de déclencher le retour. "
-                            f"Statut actuel: {outbound.status.value}"
+                            f"Statut actuel: {outbound_status_val}"
                         ),
-                        "outbound_status": outbound.status.value,
+                        "outbound_status": outbound_status_val,
                         "outbound_id": outbound.id,
                     }, 400
 
@@ -3714,141 +4698,42 @@ class DispatchNowReservation(Resource):
             booking
         )  # ✅ Rafraîchir l'objet pour obtenir les valeurs à jour
 
-        # ⚡ Assignation automatique immédiate pour retours urgents
-        # (au lieu de déclencher un dispatch complet
-        # qui prendrait du temps)
+        # ⚡ Assignation automatique immédiate (use-case + ports) + fallback dispatch classique
         assigned_driver = None
         if bool(getattr(company, "dispatch_enabled", True)):
-            try:
-                from models import Driver
-                from services.unified_dispatch.apply import apply_assignments
-                from services.unified_dispatch.data import build_problem_data
-                from services.unified_dispatch.heuristics import assign_urgent
-                from services.unified_dispatch.settings import Settings
+            from application.companies.reservations.dispatch_now import (
+                DispatchNowUseCase,
+            )
+            from infrastructure.dispatch.dispatch_now_adapters import (
+                DispatchNowAssignmentsApplierAdapter,
+                DispatchNowProblemBuilderAdapter,
+                DispatchNowUrgentAssignerAdapter,
+            )
+            from infrastructure.dispatch.settings_adapter import Settings
 
-                # ⚡ Construire un problème minimal pour cette seule booking urgente
-                # Utiliser for_date=None pour récupérer toutes les bookings actives
-                # de la journée (nécessaire pour calculer les conflits temporels
-                # avec les autres bookings)
-                from shared.time_utils import now_local
+            today_str = now_local().strftime("%Y-%m-%d")
+            uc = DispatchNowUseCase(
+                builder=DispatchNowProblemBuilderAdapter(),
+                assigner=DispatchNowUrgentAssignerAdapter(),
+                applier=DispatchNowAssignmentsApplierAdapter(),
+            )
+            uc_result = uc.execute(
+                company_id=cid,
+                booking_id=int(booking_id),
+                today_str=today_str,
+                settings=Settings(),
+            )
 
-                today_str = now_local().strftime("%Y-%m-%d")
-
-                problem = build_problem_data(
-                    company_id=cid,
-                    settings=Settings(),
-                    # ⚡ Utiliser la date d'aujourd'hui pour le contexte
-                    for_date=today_str,
-                    regular_first=True,
-                    allow_emergency=True,
-                    overrides=None,
-                )
-
-                # Filtrer les bookings pour ne garder que celle-ci
-                # (mais garder les autres pour le contexte
-                # de calcul des conflits)
-                urgent_booking = next(
-                    (b for b in problem["bookings"] if int(b.id) == booking_id), None
-                )
-
-                if not urgent_booking:
-                    warning_msg = (
-                        "⚠️ [Dispatch-Now] Booking #%s introuvable "
-                        + "dans build_problem_data"
-                    )
-                    app_logger.warning(
-                        warning_msg,
-                        booking_id,
-                    )
-                    # Fallback : déclencher le dispatch classique
-                    _maybe_trigger_dispatch(cid, "update")
-                    return {
-                        "message": "Dispatch urgent déclenché.",
-                        "reservation": booking.serialize,
-                    }, 200
-
-                if problem["bookings"] and problem["drivers"]:
-                    # Utiliser assign_urgent pour trouver le meilleur chauffeur
-                    result = assign_urgent(
-                        problem=problem,
-                        urgent_booking_ids=[booking_id],
-                        settings=Settings(),
-                    )
-
-                    if result.assignments:
-                        # Appliquer l'assignation immédiatement
-                        apply_result = apply_assignments(
-                            company_id=cid,
-                            assignments=result.assignments,
-                            allow_reassign=True,
-                            # ⚡ Permettre réassignation pour urgent
-                            respect_existing=False,
-                        )
-
-                        if apply_result.get("applied"):
-                            applied = (
-                                apply_result["applied"][0]
-                                if apply_result["applied"]
-                                else None
-                            )
-                            if applied:
-                                driver_id = applied.get("driver_id")
-                                if driver_id:
-                                    assigned_driver = Driver.query.get(driver_id)
-                                    log_msg = (
-                                        "✅ [Dispatch-Now] Chauffeur #%s assigné "
-                                        + "automatiquement à la réservation #%s"
-                                    )
-                                    app_logger.info(
-                                        log_msg,
-                                        driver_id,
-                                        booking_id,
-                                    )
-                                else:
-                                    warning_msg = (
-                                        "⚠️ [Dispatch-Now] Assignation appliquée "
-                                        + "mais driver_id manquant"
-                                    )
-                                    app_logger.warning(warning_msg)
-                        else:
-                            warning_msg = (
-                                "⚠️ [Dispatch-Now] Aucune assignation appliquée "
-                                + "(conflicts: %s)"
-                            )
-                            app_logger.warning(
-                                warning_msg,
-                                apply_result.get("conflicts", []),
-                            )
-                    else:
-                        warning_msg = (
-                            "⚠️ [Dispatch-Now] Aucun chauffeur disponible "
-                            + "pour la réservation #%s"
-                        )
-                        app_logger.warning(
-                            warning_msg,
-                            booking_id,
-                        )
-                else:
-                    warning_msg = (
-                        "⚠️ [Dispatch-Now] Problème incomplet "
-                        + "(bookings: %d, drivers: %d)"
-                    )
-                    app_logger.warning(
-                        warning_msg,
-                        len(problem.get("bookings", [])),
-                        len(problem.get("drivers", [])),
-                    )
-                    # Fallback : déclencher le dispatch classique
-                    _maybe_trigger_dispatch(cid, "update")
-            except Exception as e:
-                app_logger.exception(
-                    "❌ [Dispatch-Now] Erreur lors de l'assignation automatique: %s", e
-                )
-                # Fallback : déclencher le dispatch classique en cas d'erreur
+            if uc_result.should_fallback_trigger_dispatch:
                 _maybe_trigger_dispatch(cid, "update")
-        else:
-            # Si dispatch désactivé, ne rien faire
-            pass
+
+            if uc_result.assigned_driver_id:
+                # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+                from repositories.driver_repository import DriverRepository
+
+                assigned_driver = DriverRepository().find_model_by_id(
+                    uc_result.assigned_driver_id
+                )
 
         # Rafraîchir pour obtenir les données à jour (notamment driver si assigné)
         db.session.refresh(booking)
@@ -3864,10 +4749,18 @@ class DispatchNowReservation(Resource):
                 "username": getattr(assigned_driver, "username", None),
                 "full_name": getattr(assigned_driver, "full_name", None),
             }
+            driver_name = (
+                getattr(assigned_driver.user, "username", None)
+                if assigned_driver.user
+                else None
+            ) or (
+                f"{getattr(assigned_driver.user, 'first_name', '')} {getattr(assigned_driver.user, 'last_name', '')}".strip()
+                if assigned_driver.user
+                else None
+            )
             response_data["message"] = (
                 f"Dispatch urgent déclenché. "
-                f"Chauffeur {assigned_driver.username or assigned_driver.full_name} "
-                f"assigné automatiquement."
+                f"Chauffeur {driver_name} assigné automatiquement."
             )
 
         return response_data, 200
@@ -3881,36 +4774,49 @@ class MyVehicles(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def get(self):
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        # ✅ DDD: Utilise use-case au lieu de service directement
         try:
-            company, err, code = get_company_from_token()
+            company, err, code = _get_current_company_via_use_case()
             if err:
-                app_logger.warning(
-                    "GET /me/vehicles: get_company_from_token error: %s", err
-                )
+                logger.warning("GET /me/vehicles: get_current_company error: %s", err)
                 return err, code
             # 🔒 company.id → int sûr
             cid_obj = getattr(company, "id", None)
             try:
                 cid = int(cid_obj) if cid_obj is not None else None
             except Exception as e:
-                app_logger.error("GET /me/vehicles: Error converting company.id: %s", e)
+                logger.error("GET /me/vehicles: Error converting company.id: %s", e)
                 cid = None
             if cid is None:
-                app_logger.error("GET /me/vehicles: company.id is None")
-                return {"error": "Entreprise introuvable (ID invalide)."}, 500
-            vehicles = Vehicle.query.filter_by(company_id=cid).all()
-            app_logger.info(
-                "GET /me/vehicles: Found %d vehicles for company %d", len(vehicles), cid
+                logger.error("GET /me/vehicles: company.id is None")
+                return APIErrorHandler.handle_exception(
+                    Exception("Entreprise introuvable (ID invalide)."),
+                    logger,
+                )
+            # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+            from repositories.vehicle_repository import VehicleRepository
+            from application.companies.vehicles.list_company_vehicles import (
+                ListCompanyVehiclesUseCase,
             )
-            result = [v.serialize for v in vehicles]
-            return result, 200
+
+            vehicle_repo = VehicleRepository()
+            uc = ListCompanyVehiclesUseCase(vehicle_repo=vehicle_repo)
+            result = uc.execute(company_id=cid)
+            logger.info(
+                "GET /me/vehicles: Found %d vehicles for company %d",
+                len(result.vehicles),
+                cid,
+            )
+            return result.vehicles, 200
         except Exception as e:
-            app_logger.exception("GET /me/vehicles: Unexpected error: %s", e)
+            logger.exception("GET /me/vehicles: Unexpected error: %s", e)
             sentry_sdk.capture_exception(e)
-            error_msg = "Erreur lors de la récupération des véhicules: {}".format(
-                str(e)
+            error_msg = f"Erreur lors de la récupération des véhicules: {e}"
+            return APIErrorHandler.handle_exception(
+                Exception(error_msg),
+                logger,
             )
-            return {"error": error_msg}, 500
 
     @jwt_required()
     @role_required(UserRole.company)
@@ -3918,91 +4824,69 @@ class MyVehicles(Resource):
         vehicle_create_model, validate=False
     )  # ✅ validate=False pour accepter champs optionnels omis
     def post(self):
-        company, err, code = get_company_from_token()
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        result = None
+        status_code = 200
+        company, err, code = _get_current_company_via_use_case()
         if err:
-            return err, code
-        # 🔒 company.id → int sûr
-        cid_obj = getattr(company, "id", None)
-        try:
-            cid = int(cid_obj) if cid_obj is not None else None
-        except Exception:
-            cid = None
-        if cid is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+            result = err
+            status_code = code
+        else:
+            # 🔒 company.id → int sûr
+            cid_obj = getattr(company, "id", None)
+            try:
+                cid = int(cid_obj) if cid_obj is not None else None
+            except Exception:
+                cid = None
+            if cid is None:
+                result = {"error": "Entreprise introuvable (ID invalide)."}
+                status_code = 500
+            else:
+                data = request.get_json() or {}
 
-        data = request.get_json() or {}
+                # ✅ Log du payload reçu pour débogage
+                logger.info("POST /me/vehicles: Received payload: %s", data)
 
-        # ✅ Log du payload reçu pour débogage
-        app_logger.info("POST /me/vehicles: Received payload: %s", data)
+                try:
+                    from application.companies.vehicles.create_company_vehicle import (
+                        CreateCompanyVehicleUseCase,
+                    )
+                    from infrastructure.persistence.companies.vehicle_writer import (
+                        SqlAlchemyVehicleWriter,
+                    )
 
-        # Validation des champs requis (consolidée)
-        validation_error = None
-        if not data.get("model"):
-            validation_error = {"error": "Le modèle est requis"}, 400
-        elif not data.get("license_plate"):
-            validation_error = {"error": "La plaque d'immatriculation est requise"}, 400
-
-        if validation_error:
-            app_logger.warning(
-                "POST /me/vehicles: Validation error: %s", validation_error
-            )
-            return validation_error
-
-        try:
-
-            def parse_dt(s):
-                if not s:
-                    return None
-                return datetime.fromisoformat(s.replace("Z", "+00:00"))
-
-            v = Vehicle()
-            v.company_id = cid
-            v.model = data["model"]
-            v.license_plate = data["license_plate"]
-            # ✅ Convertir year en int si présent, sinon None
-            year_val = data.get("year")
-            v.year = (
-                int(year_val)
-                if year_val is not None and str(year_val).strip()
-                else None
-            )
-            # ✅ VIN: seulement si présent et non vide
-            vin_val = data.get("vin")
-            v.vin = str(vin_val).strip() if vin_val and str(vin_val).strip() else None
-            # ✅ Seats: convertir en int si présent, sinon None
-            seats_val = data.get("seats")
-            v.seats = (
-                int(seats_val)
-                if seats_val is not None and str(seats_val).strip()
-                else None
-            )
-            v.wheelchair_accessible = bool(data.get("wheelchair_accessible", False))
-            v.is_active = bool(
-                data.get("is_active", True)
-            )  # Par défaut actif lors de la création
-            v.insurance_expires_at = parse_dt(data.get("insurance_expires_at"))
-            v.inspection_expires_at = parse_dt(data.get("inspection_expires_at"))
-            db.session.add(v)
-            db.session.commit()
-            app_logger.info(
-                "POST /me/vehicles: Vehicle created successfully for company %d: %s (%s)",
-                cid,
-                v.model,
-                v.license_plate,
-            )
-            return v.serialize, 201
-        except (KeyError, ValueError, IntegrityError) as e:
-            db.session.rollback()
-            error_msg = (
-                f"Champ requis manquant: {e}" if isinstance(e, KeyError) else str(e)
-            )
-            app_logger.warning("POST /me/vehicles: Validation/Integrity error: %s", e)
-            return {"error": error_msg}, 400
-        except Exception as e:
-            db.session.rollback()
-            app_logger.exception("POST /me/vehicles: Unexpected error: %s", e)
-            sentry_sdk.capture_exception(e)
-            return {"error": "Erreur interne lors de la création du véhicule"}, 500
+                    uc = CreateCompanyVehicleUseCase(
+                        vehicle_writer=SqlAlchemyVehicleWriter()
+                    )
+                    uc_result = uc.execute(company_id=cid, data=data)
+                    if not uc_result.ok:
+                        logger.warning(
+                            "POST /me/vehicles: Validation error: %s",
+                            uc_result.error,
+                        )
+                        result = uc_result.error or {"error": "Bad request"}
+                        status_code = uc_result.status_code or 400
+                    else:
+                        db.session.commit()
+                        v = uc_result.vehicle
+                        result = getattr(v, "serialize", {"id": getattr(v, "id", None)})
+                        status_code = 201
+                except ValueError as e:
+                    db.session.rollback()
+                    logger.warning("POST /me/vehicles: Validation error: %s", e)
+                    result = {"error": str(e)}
+                    status_code = 400
+                except IntegrityError as e:
+                    db.session.rollback()
+                    logger.warning("POST /me/vehicles: Integrity error: %s", e)
+                    result, status_code = format_integrity_error(e)
+                except Exception as e:
+                    db.session.rollback()
+                    logger.exception("POST /me/vehicles: Unexpected error: %s", e)
+                    sentry_sdk.capture_exception(e)
+                    result = {"error": "Erreur interne lors de la création du véhicule"}
+                    status_code = 500
+        return result, status_code
 
 
 # ======================================================
@@ -4013,7 +4897,9 @@ class MyVehicle(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def get(self, vehicle_id):
-        company, err, code = get_company_from_token()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, err, code = _get_current_company_via_use_case()
         if err:
             return err, code
         # 🔒 company.id → int sûr
@@ -4023,17 +4909,30 @@ class MyVehicle(Resource):
         except Exception:
             cid = None
         if cid is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
-        v = Vehicle.query.filter_by(id=vehicle_id, company_id=cid).first()
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from repositories.vehicle_repository import VehicleRepository
+
+        vehicle_repo = VehicleRepository()
+        v = vehicle_repo.find_by_id_and_company(vehicle_id, cid)
         if not v:
-            return {"error": "Véhicule introuvable."}, 404
+            return APIErrorHandler.handle_not_found(
+                "Véhicule",
+                vehicle_id if "vehicle_id" in locals() else None,
+                logger,
+            )
         return v.serialize, 200
 
     @jwt_required()
     @role_required(UserRole.company)
     @companies_ns.expect(vehicle_update_model, validate=False)
     def put(self, vehicle_id):  # noqa: PLR0911
-        company, err, code = get_company_from_token()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, err, code = _get_current_company_via_use_case()
         if err:
             return err, code
         # 🔒 company.id → int sûr
@@ -4043,15 +4942,28 @@ class MyVehicle(Resource):
         except Exception:
             cid = None
         if cid is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
-        v = Vehicle.query.filter_by(id=vehicle_id, company_id=cid).first()
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from repositories.vehicle_repository import VehicleRepository
+
+        vehicle_repo = VehicleRepository()
+        v = vehicle_repo.find_by_id_and_company(vehicle_id, cid)
         if not v:
-            return {"error": "Véhicule introuvable."}, 404
+            return APIErrorHandler.handle_not_found(
+                "Véhicule",
+                vehicle_id if "vehicle_id" in locals() else None,
+                logger,
+            )
 
         data = request.get_json(silent=True) or {}
 
         # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-        from marshmallow import ValidationError
+        from marshmallow import (  # pyright: ignore[reportMissingImports]
+            ValidationError,
+        )
 
         from schemas.company_schemas import VehicleUpdateSchema
         from schemas.validation_utils import handle_validation_error, validate_request
@@ -4062,48 +4974,35 @@ class MyVehicle(Resource):
             return handle_validation_error(e)
 
         try:
+            from application.companies.vehicles.update_company_vehicle import (
+                UpdateCompanyVehicleUseCase,
+            )
 
-            def parse_dt(s):
-                if not s:
-                    return None
-                return datetime.fromisoformat(s.replace("Z", "+00:00"))
-
-            # Utiliser les données validées
-            if "brand" in validated_data:
-                v.brand = validated_data["brand"]
-            if "model" in validated_data:
-                v.model = validated_data["model"]
-            if "license_plate" in validated_data:
-                v.license_plate = validated_data["license_plate"]
-            if "color" in validated_data:
-                v.color = validated_data["color"]
-            if "year" in validated_data:
-                v.year = validated_data["year"]
-            if "seats" in validated_data:
-                v.seats = validated_data["seats"]
-            if "is_wheelchair_accessible" in validated_data:
-                v.is_wheelchair_accessible = validated_data["is_wheelchair_accessible"]
-            if "is_active" in validated_data:
-                v.is_active = validated_data["is_active"]
-            if "notes" in validated_data:
-                v.notes = validated_data["notes"]
-            # Les champs dates ne sont pas dans le schéma de validation
-            # mais on les garde pour compatibilité
-            if "insurance_expires_at" in data:
-                v.insurance_expires_at = parse_dt(data["insurance_expires_at"])
-            if "inspection_expires_at" in data:
-                v.inspection_expires_at = parse_dt(data["inspection_expires_at"])
+            uc = UpdateCompanyVehicleUseCase()
+            uc_result = uc.execute(v, validated_data=validated_data, raw_data=data)
+            if not uc_result.ok:
+                return (
+                    uc_result.error or {"error": "Bad request"},
+                    uc_result.status_code or 400,
+                )
 
             db.session.commit()
             return v.serialize, 200
 
-        except (ValueError, IntegrityError) as e:
+        except ValueError as e:
             db.session.rollback()
-            return {"error": str(e)}, 400
+            return APIErrorHandler.handle_validation_error(
+                str(e),
+                logger_instance=logger,
+            )
+        except IntegrityError as e:
+            db.session.rollback()
+            result, status_code = format_integrity_error(e)
+            return result, status_code
         except Exception as e:
             db.session.rollback()
             sentry_sdk.capture_exception(e)
-            return {"error": "Erreur interne"}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
     @jwt_required()
     @role_required(UserRole.company)
@@ -4111,7 +5010,9 @@ class MyVehicle(Resource):
         """Suppression douce par défaut (is_active=False).
         Hard delete si query param ?hard=true.
         """
-        company, err, code = get_company_from_token()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, err, code = _get_current_company_via_use_case()
         if err:
             return err, code
         # 🔒 company.id → int sûr
@@ -4121,26 +5022,39 @@ class MyVehicle(Resource):
         except Exception:
             cid = None
         if cid is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
-        v = Vehicle.query.filter_by(id=vehicle_id, company_id=cid).first()
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from repositories.vehicle_repository import VehicleRepository
+
+        vehicle_repo = VehicleRepository()
+        v = vehicle_repo.find_by_id_and_company(vehicle_id, cid)
         if not v:
-            return {"error": "Véhicule introuvable."}, 404
+            return APIErrorHandler.handle_not_found(
+                "Véhicule",
+                vehicle_id if "vehicle_id" in locals() else None,
+                logger,
+            )
 
         hard = request.args.get("hard", "false").lower() == "true"
         try:
-            if hard:
+            from application.companies.vehicles.delete_company_vehicle import (
+                DeleteCompanyVehicleUseCase,
+            )
+
+            uc = DeleteCompanyVehicleUseCase()
+            uc_result = uc.execute(v, hard=hard)
+
+            if uc_result.hard:
                 db.session.delete(v)
-            else:
-                v.is_active = False
             db.session.commit()
-            return {
-                "message": "Véhicule supprimé"
-                + (" définitivement" if hard else " (inactif)")
-            }, 200
+            return {"message": uc_result.message}, 200
         except Exception as e:
             db.session.rollback()
             sentry_sdk.capture_exception(e)
-            return {"error": "Erreur interne"}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 # ======================================================
@@ -4152,7 +5066,9 @@ class CompanyLogo(Resource):
     @role_required(UserRole.company)
     def get(self):
         """Retourne l'URL du logo actuel (ou None)."""
-        company, err, code = get_company_from_token()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, err, code = _get_current_company_via_use_case()
         if err:
             return err, code
         return {"logo_url": getattr(company, "logo_url", None)}, 200
@@ -4163,7 +5079,9 @@ class CompanyLogo(Resource):
         """Upload d'un logo (PNG/JPG/JPEG/SVG <= SVG_THRESHOLD Mo).
         Écrase l'ancien si présent.
         """
-        company, err, code = get_company_from_token()
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, err, code = _get_current_company_via_use_case()
         if err:
             return err, code
         # 🔒 company.id → int sûr
@@ -4173,11 +5091,18 @@ class CompanyLogo(Resource):
         except Exception:
             cid = None
         if cid is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
 
         file = request.files.get("file")
         if not file or not file.filename:
-            return {"error": "Fichier vide."}, 400
+            return APIErrorHandler.handle_validation_error(
+                "Fichier vide.",
+                field="file",
+                logger_instance=logger,
+            )
 
         # Validation complète du fichier (extension, taille, contenu)
         is_valid, error_msg = validate_file_upload(
@@ -4188,66 +5113,174 @@ class CompanyLogo(Resource):
             validate_content=True,  # Valider magic bytes
         )
         if not is_valid:
-            return {"error": error_msg or "Fichier invalide."}, 400
+            return APIErrorHandler.handle_validation_error(
+                error_msg or "Fichier invalide.",
+                field="file",
+                logger_instance=logger,
+            )
 
-        # Obtenir la taille pour la réponse
-        file.stream.seek(0, 2)  # SEEK_END
-        size_bytes = file.stream.tell()
-        file.stream.seek(0)
+        # Lire le contenu (valide, taille OK via validate_file_upload)
+        content = file.read()
 
-        # Dossier uploads + sous-dossier logos
-        upload_root = current_app.config.get(
-            "UPLOADS_DIR", str(Path(current_app.root_path) / "uploads")
-        )
-        logos_dir = Path(upload_root) / "company_logos"
-        logos_dir.mkdir(parents=True, exist_ok=True)
-
-        # On supprime les anciens logos pour éviter des reliquats
-        # quand l'extension change
-        _remove_existing_logos(cid, logos_dir)
-
-        # Nom stable: company_<id>.<ext>
-        # à ce stade, _allowed_logo True ⇒ il y a bien un point et une extension
-        ext = (file.filename or "").rsplit(".", 1)[1].lower()
-        fname = secure_filename(f"company_{cid}.{ext}")
-        fpath = logos_dir / fname
-        file.save(fpath)
-
-        # URL publique (via /uploads/…)
+        upload_root = Path(
+            current_app.config.get(
+                "UPLOADS_DIR", str(Path(current_app.root_path) / "uploads")
+            )
+        ).resolve()
         public_base = current_app.config.get("UPLOADS_PUBLIC_BASE", "/uploads")
-        if company:
-            company.logo_url = f"{public_base}/company_logos/{fname}"
-        db.session.commit()
 
+        # Extension (déjà validée via validate_file_upload)
+        ext = (file.filename or "").rsplit(".", 1)[1].lower()
+
+        from application.companies.logo.upload_company_logo import (
+            UploadCompanyLogoUseCase,
+        )
+        from infrastructure.files.company_logo_storage import (
+            FileSystemCompanyLogoStorage,
+        )
+
+        assert company is not None
+        storage = FileSystemCompanyLogoStorage(base_uploads_dir=upload_root)
+        uc = UploadCompanyLogoUseCase(storage=storage, public_base=public_base)
+        result = uc.execute(
+            company=company,
+            company_id=int(cid),
+            extension=ext,
+            content=content,
+        )
+        if not result.ok:
+            return result.error or {"error": "Bad request"}, result.status_code or 400
+
+        db.session.commit()
         return {
             "logo_url": getattr(company, "logo_url", None),
-            "size_bytes": size_bytes,
+            "size_bytes": result.size_bytes,
         }, 200
 
     @jwt_required()
     @role_required(UserRole.company)
     def delete(self):
         """Supprime le logo (fichier + champ DB)."""
-        company, err, code = get_company_from_token()
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        company, err, code = _get_current_company_via_use_case()
         if err:
             return err, code
 
-        logo_url = getattr(company, "logo_url", None)
-        if logo_url:
-            # On mappe l'URL publique vers le chemin disque
-            upload_root = current_app.config.get(
+        upload_root = Path(
+            current_app.config.get(
                 "UPLOADS_DIR", str(Path(current_app.root_path) / "uploads")
             )
-            if logo_url.startswith("/uploads/"):
-                rel_path = logo_url[len("/uploads/") :]
-                abs_path = Path(upload_root) / rel_path
-                try:
-                    if abs_path.is_file():
-                        abs_path.unlink()
-                except OSError:
-                    pass
+        ).resolve()
 
-        if company:
-            company.logo_url = None
+        from application.companies.logo.delete_company_logo import (
+            DeleteCompanyLogoUseCase,
+        )
+        from infrastructure.files.company_logo_storage import (
+            FileSystemCompanyLogoStorage,
+        )
+
+        assert company is not None
+        storage = FileSystemCompanyLogoStorage(base_uploads_dir=upload_root)
+        uc = DeleteCompanyLogoUseCase(storage=storage)
+        _ = uc.execute(company=company, company_id=int(getattr(company, "id", 0) or 0))
         db.session.commit()
         return {"message": "Logo supprimé."}, 200
+
+
+@companies_ns.route("/debug/booking/<int:booking_id>/transfer")
+class DebugBookingTransfer(Resource):
+    """Endpoint temporaire pour vérifier les informations de transfert d'une réservation."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def get(self, booking_id: int):
+        """Récupère les informations de transfert pour une réservation."""
+        from models.booking_transfer import BookingTransfer
+        from models.enums import TransferModel
+
+        booking = Booking.query.get(booking_id)
+        if not booking:
+            return {"error": f"Réservation #{booking_id} non trouvée"}, 404
+
+        owner_company = (
+            Company.query.get(booking.company_id) if booking.company_id else None
+        )
+        executing_company = (
+            Company.query.get(booking.executing_company_id)
+            if getattr(booking, "executing_company_id", None)
+            else None
+        )
+
+        transfers = BookingTransfer.query.filter_by(booking_id=booking_id).all()
+
+        result = {
+            "booking": {
+                "id": booking.id,
+                "status": booking.status.value
+                if hasattr(booking.status, "value")
+                else str(booking.status),
+                "client_id": booking.client_id,
+                "company_id": booking.company_id,
+                "executing_company_id": getattr(booking, "executing_company_id", None),
+                "invoice_line_id": getattr(booking, "invoice_line_id", None),
+                "amount": float(getattr(booking, "amount", 0))
+                if hasattr(booking, "amount")
+                else None,
+                "scheduled_time": booking.scheduled_time.isoformat()
+                if hasattr(booking, "scheduled_time") and booking.scheduled_time
+                else None,
+            },
+            "companies": {
+                "owner": {
+                    "id": owner_company.id,
+                    "name": owner_company.name,
+                }
+                if owner_company
+                else None,
+                "executing": {
+                    "id": executing_company.id,
+                    "name": executing_company.name,
+                }
+                if executing_company
+                else None,
+            },
+            "transfers": [
+                {
+                    "id": transfer.id,
+                    "transfer_model": transfer.transfer_model.value,
+                    "status": transfer.status.value,
+                    "is_validated": transfer.is_validated,
+                    "validated_at": transfer.validated_at.isoformat()
+                    if transfer.validated_at
+                    else None,
+                    "owner_company_id": transfer.owner_company_id,
+                    "executing_company_id": transfer.executing_company_id,
+                    "client_price": float(transfer.client_price),
+                    "partner_cost": float(transfer.partner_cost)
+                    if transfer.partner_cost
+                    else None,
+                    "currency": transfer.currency,
+                    "vat_rate": float(transfer.vat_rate),
+                    "billing_info": {
+                        "subcontract": {
+                            "company_a_can_invoice_client": transfer.transfer_model
+                            == TransferModel.SUBCONTRACT
+                            and booking.company_id == transfer.owner_company_id,
+                            "company_b_must_invoice_a": transfer.transfer_model
+                            == TransferModel.SUBCONTRACT
+                            and transfer.is_validated,
+                        },
+                        "assign_to_partner": {
+                            "company_b_can_invoice_client": transfer.transfer_model
+                            == TransferModel.ASSIGN_TO_PARTNER
+                            and transfer.is_validated
+                            and booking.executing_company_id
+                            == transfer.executing_company_id,
+                        },
+                    },
+                }
+                for transfer in transfers
+            ],
+        }
+
+        return result, 200

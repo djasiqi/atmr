@@ -93,20 +93,16 @@ def test_settings_update():
             )
         else:
             print(
-                (
-                    f"   ❌ emergency_penalty NON récupéré: "
-                    f"attendu {new_emergency}, obtenu {emergency_penalty2}"
-                )
+                f"   ❌ emergency_penalty NON récupéré: "
+                f"attendu {new_emergency}, obtenu {emergency_penalty2}"
             )
 
         if proximity2 == new_proximity:
             print(f"   ✅ proximity correctement récupéré: {proximity2}")
         else:
             print(
-                (
-                    f"   ❌ proximity NON récupéré: "
-                    f"attendu {new_proximity}, obtenu {proximity2}"
-                )
+                f"   ❌ proximity NON récupéré: "
+                f"attendu {new_proximity}, obtenu {proximity2}"
             )
 
         # 5. Restaurer les valeurs originales

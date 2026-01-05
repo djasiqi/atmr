@@ -48,6 +48,10 @@ def _sample_rotations(app, db_session):
         record_rotation(
             "encryption", "success", "dev", metadata={"legacy_keys_count": 2}
         )
+        # Important: les endpoints sont appelés via le client Flask (request context)
+        # et peuvent utiliser une autre connexion DB. On commit pour garantir la
+        # visibilité des enregistrements pendant la requête.
+        db.session.commit()
 
 
 class TestRotationHistoryEndpoint:
@@ -69,7 +73,15 @@ class TestRotationHistoryEndpoint:
             public_id = (
                 getattr(admin_user, "_cached_public_id", None) or admin_user.public_id
             )
-            token = create_access_token(identity=str(public_id))
+            token = create_access_token(
+                identity=str(public_id),
+                additional_claims={
+                    "role": UserRole.admin.value,
+                    "company_id": None,
+                    "driver_id": None,
+                    "aud": "atmr-api",
+                },
+            )
 
             response = client.get(
                 "/api/v1/admin/secret-rotations/history",
@@ -98,7 +110,15 @@ class TestRotationHistoryEndpoint:
             public_id = (
                 getattr(admin_user, "_cached_public_id", None) or admin_user.public_id
             )
-            token = create_access_token(identity=str(public_id))
+            token = create_access_token(
+                identity=str(public_id),
+                additional_claims={
+                    "role": UserRole.admin.value,
+                    "company_id": None,
+                    "driver_id": None,
+                    "aud": "atmr-api",
+                },
+            )
 
             response = client.get(
                 "/api/v1/admin/secret-rotations/history?secret_type=jwt",
@@ -121,12 +141,22 @@ class TestRotationHistoryEndpoint:
             # Créer plusieurs rotations
             for _ in range(5):
                 record_rotation("jwt", "success", "prod")
+            # Voir commentaire dans _sample_rotations: commit pour visibilité cross-connexion
+            db.session.commit()
 
             # ✅ FIX: Utiliser _cached_public_id ou recharger l'objet dans le contexte
             public_id = (
                 getattr(admin_user, "_cached_public_id", None) or admin_user.public_id
             )
-            token = create_access_token(identity=str(public_id))
+            token = create_access_token(
+                identity=str(public_id),
+                additional_claims={
+                    "role": UserRole.admin.value,
+                    "company_id": None,
+                    "driver_id": None,
+                    "aud": "atmr-api",
+                },
+            )
 
             response = client.get(
                 "/api/v1/admin/secret-rotations/history?limit=2&offset=0",
@@ -161,7 +191,15 @@ class TestRotationStatsEndpoint:
             public_id = (
                 getattr(admin_user, "_cached_public_id", None) or admin_user.public_id
             )
-            token = create_access_token(identity=str(public_id))
+            token = create_access_token(
+                identity=str(public_id),
+                additional_claims={
+                    "role": UserRole.admin.value,
+                    "company_id": None,
+                    "driver_id": None,
+                    "aud": "atmr-api",
+                },
+            )
 
             response = client.get(
                 "/api/v1/admin/secret-rotations/stats",
@@ -186,11 +224,25 @@ class TestRotationStatsEndpoint:
         with app.app_context():
             from flask_jwt_extended import create_access_token
 
+            from models.secret_rotation import SecretRotation
+
+            # Assurer une base vide (la DB de tests peut être persistée en local)
+            db.session.query(SecretRotation).delete(synchronize_session=False)
+            db.session.flush()
+
             # ✅ FIX: Utiliser _cached_public_id ou recharger l'objet dans le contexte
             public_id = (
                 getattr(admin_user, "_cached_public_id", None) or admin_user.public_id
             )
-            token = create_access_token(identity=str(public_id))
+            token = create_access_token(
+                identity=str(public_id),
+                additional_claims={
+                    "role": UserRole.admin.value,
+                    "company_id": None,
+                    "driver_id": None,
+                    "aud": "atmr-api",
+                },
+            )
 
             response = client.get(
                 "/api/v1/admin/secret-rotations/stats",
@@ -225,7 +277,15 @@ class TestLastRotationEndpoint:
             public_id = (
                 getattr(admin_user, "_cached_public_id", None) or admin_user.public_id
             )
-            token = create_access_token(identity=str(public_id))
+            token = create_access_token(
+                identity=str(public_id),
+                additional_claims={
+                    "role": UserRole.admin.value,
+                    "company_id": None,
+                    "driver_id": None,
+                    "aud": "atmr-api",
+                },
+            )
 
             response = client.get(
                 "/api/v1/admin/secret-rotations/last",
@@ -254,7 +314,15 @@ class TestLastRotationEndpoint:
             public_id = (
                 getattr(admin_user, "_cached_public_id", None) or admin_user.public_id
             )
-            token = create_access_token(identity=str(public_id))
+            token = create_access_token(
+                identity=str(public_id),
+                additional_claims={
+                    "role": UserRole.admin.value,
+                    "company_id": None,
+                    "driver_id": None,
+                    "aud": "atmr-api",
+                },
+            )
 
             response = client.get(
                 "/api/v1/admin/secret-rotations/last?secret_type=jwt",
@@ -278,12 +346,22 @@ class TestLastRotationEndpoint:
 
             record_rotation("jwt", "success", "prod")
             record_rotation("jwt", "success", "dev")
+            # Commit pour garantir la visibilité dans la requête HTTP
+            db.session.commit()
 
             # ✅ FIX: Utiliser _cached_public_id ou recharger l'objet dans le contexte
             public_id = (
                 getattr(admin_user, "_cached_public_id", None) or admin_user.public_id
             )
-            token = create_access_token(identity=str(public_id))
+            token = create_access_token(
+                identity=str(public_id),
+                additional_claims={
+                    "role": UserRole.admin.value,
+                    "company_id": None,
+                    "driver_id": None,
+                    "aud": "atmr-api",
+                },
+            )
 
             response = client.get(
                 "/api/v1/admin/secret-rotations/last?secret_type=jwt&environment=prod",

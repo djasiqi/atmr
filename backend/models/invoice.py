@@ -1,4 +1,8 @@
 # models/invoice.py
+# pyright: reportRedeclaration=false
+# Le linter détecte un conflit entre Column(name="iban"/"qr_iban") et @hybrid_property iban/qr_iban,
+# mais c'est un faux positif : Column avec name ne crée pas d'attribut Python.
+
 """Models Invoice et tous ses modèles liés (lignes, paiements, rappels, etc.).
 Extrait depuis models.py (lignes ~1763-3258).
 """
@@ -7,7 +11,6 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     JSON,
@@ -26,10 +29,12 @@ from sqlalchemy import (
 )
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing_extensions import override
 
 from ext import db
+from security.crypto import get_encryption_service
 
 from .base import _as_bool, _iso
 from .enums import InvoiceLineType, InvoiceStatus, PaymentMethod
@@ -49,7 +54,7 @@ class Invoice(db.Model):
     )
 
     # Facturation tierce (Third-Party Billing)
-    bill_to_client_id: Mapped[Optional[int]] = mapped_column(
+    bill_to_client_id: Mapped[int | None] = mapped_column(
         ForeignKey("client.id"), nullable=True, index=True
     )
 
@@ -87,16 +92,16 @@ class Invoice(db.Model):
 
     # Dates clés
     issued_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
-    due_date: Mapped[Optional[datetime]] = mapped_column(
+    due_date: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
-    sent_at: Mapped[Optional[datetime]] = mapped_column(
+    sent_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    paid_at: Mapped[Optional[datetime]] = mapped_column(
+    paid_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    cancelled_at: Mapped[Optional[datetime]] = mapped_column(
+    cancelled_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     created_at = Column(
@@ -118,7 +123,7 @@ class Invoice(db.Model):
 
     # Rappels
     reminder_level = Column(Integer, nullable=False, default=0)  # 0 = aucun, 1, 2, 3
-    last_reminder_at: Mapped[Optional[datetime]] = mapped_column(
+    last_reminder_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
@@ -229,7 +234,9 @@ class Invoice(db.Model):
             "cancelled_at": _iso(self.cancelled_at),
             "created_at": _iso(self.created_at),
             "updated_at": _iso(self.updated_at),
-            "status": self.status.value,
+            "status": (
+                self.status.value if hasattr(self.status, "value") else str(self.status)
+            ),
             "reminder_level": self.reminder_level,
             "last_reminder_at": _iso(self.last_reminder_at),
             "pdf_url": self.pdf_url,
@@ -300,14 +307,14 @@ class InvoiceLine(db.Model):
     qty: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=1)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     line_total: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
-    vat_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2), nullable=True)
+    vat_rate: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
     vat_amount: Mapped[Decimal] = mapped_column(
         Numeric(10, 2), nullable=False, default=0
     )
     total_with_vat: Mapped[Decimal] = mapped_column(
         Numeric(10, 2), nullable=False, default=0
     )
-    adjustment_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    adjustment_note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Optionnel : tracer la source (réservation)
     reservation_id = Column(
@@ -398,11 +405,11 @@ class InvoiceReminder(db.Model):
         Numeric(10, 2), nullable=False, default=0
     )
     generated_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
-    sent_at: Mapped[Optional[datetime]] = mapped_column(
+    sent_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     pdf_url: Mapped[str] = mapped_column(String(500), nullable=True)
-    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relations
     invoice = relationship("Invoice", back_populates="reminders")
@@ -436,27 +443,27 @@ class CompanyBillingSettings(db.Model):
     )
 
     # Délais et frais
-    payment_terms_days: Mapped[Optional[int]] = mapped_column(
+    payment_terms_days: Mapped[int | None] = mapped_column(
         Integer, nullable=True, default=10
     )
-    overdue_fee: Mapped[Optional[Decimal]] = mapped_column(
+    overdue_fee: Mapped[Decimal | None] = mapped_column(
         Numeric(10, 2), nullable=True, default=15
     )
-    reminder1_fee: Mapped[Optional[Decimal]] = mapped_column(
+    reminder1_fee: Mapped[Decimal | None] = mapped_column(
         Numeric(10, 2), nullable=True, default=0
     )
-    reminder2_fee: Mapped[Optional[Decimal]] = mapped_column(
+    reminder2_fee: Mapped[Decimal | None] = mapped_column(
         Numeric(10, 2), nullable=True, default=40
     )
-    reminder3_fee: Mapped[Optional[Decimal]] = mapped_column(
+    reminder3_fee: Mapped[Decimal | None] = mapped_column(
         Numeric(10, 2), nullable=True, default=0
     )
     vat_applicable = Column(Boolean, nullable=False, default=True)
-    vat_rate: Mapped[Optional[Decimal]] = mapped_column(
+    vat_rate: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2), nullable=True, default=Decimal("7.7")
     )
-    vat_label: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    vat_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    vat_label: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    vat_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Planning des rappels (en jours)
     reminder_schedule_days = Column(
@@ -480,18 +487,25 @@ class CompanyBillingSettings(db.Model):
     invoice_prefix = Column(String(10), nullable=False, default="EM")
 
     # Informations bancaires
-    iban: Mapped[str] = mapped_column(String(50), nullable=True)
-    qr_iban: Mapped[str] = mapped_column(String(50), nullable=True)
+    # ✅ S2: IBAN et QR-IBAN chiffrés en base de données (conformité RGPD)
+    # Les champs _iban_raw et _qr_iban_raw stockent le texte chiffré (base64)
+    # Utilisation de Column avec name pour garder les noms de colonnes en base
+    _iban_raw = Column(
+        String(200), nullable=True, name="iban"
+    )  # Augmenté à 200 pour stocker le texte chiffré
+    _qr_iban_raw = Column(
+        String(200), nullable=True, name="qr_iban"
+    )  # Augmenté à 200 pour stocker le texte chiffré
     esr_ref_base: Mapped[str] = mapped_column(String(50), nullable=True)
 
     # Templates de messages
-    invoice_message_template: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    reminder1_template: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    reminder2_template: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    reminder3_template: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    invoice_message_template: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reminder1_template: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reminder2_template: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reminder3_template: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Pied de page légal
-    legal_footer: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    legal_footer: Mapped[str | None] = mapped_column(Text, nullable=True)
     pdf_template_variant = Column(String(20), nullable=False, default="default")
 
     # Relations
@@ -538,6 +552,108 @@ class CompanyBillingSettings(db.Model):
             "vat_label": self.vat_label,
             "vat_number": self.vat_number,
         }
+
+    @hybrid_property  # Le linter détecte un conflit mais c'est intentionnel : _iban_raw mappe la colonne "iban" et iban est la propriété Python
+    def iban(self) -> str | None:
+        """✅ S2: Propriété hybride pour déchiffrer automatiquement l'IBAN.
+
+        Returns:
+            IBAN en clair ou None si vide
+        """
+        if not bool(getattr(self, "_iban_raw", None)):
+            return None
+        try:
+            encryption_service = get_encryption_service()
+            return encryption_service.decrypt_field(
+                str(getattr(self, "_iban_raw", None))
+            )
+        except Exception as e:
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.error(
+                "[CompanyBillingSettings] Erreur déchiffrement IBAN pour company_id=%s: %s",
+                self.company_id,
+                e,
+            )
+            return None
+
+    @iban.setter
+    def iban(self, value: str | None) -> None:
+        """✅ S2: Setter pour chiffrer automatiquement l'IBAN avant stockage.
+
+        Args:
+            value: IBAN en clair ou None
+        """
+        if not value:
+            self._iban_raw = None
+            return
+
+        # Chiffrer l'IBAN
+        try:
+            encryption_service = get_encryption_service()
+            self._iban_raw = encryption_service.encrypt_field(value.strip().upper())
+        except Exception as e:
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.error(
+                "[CompanyBillingSettings] Erreur chiffrement IBAN pour company_id=%s: %s",
+                self.company_id,
+                e,
+            )
+            raise
+
+    @hybrid_property
+    def qr_iban(self) -> str | None:
+        """✅ S2: Propriété hybride pour déchiffrer automatiquement le QR-IBAN.
+
+        Returns:
+            QR-IBAN en clair ou None si vide
+        """
+        if not bool(getattr(self, "_qr_iban_raw", None)):
+            return None
+        try:
+            encryption_service = get_encryption_service()
+            return encryption_service.decrypt_field(
+                str(getattr(self, "_qr_iban_raw", None))
+            )
+        except Exception as e:
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.error(
+                "[CompanyBillingSettings] Erreur déchiffrement QR-IBAN pour company_id=%s: %s",
+                self.company_id,
+                e,
+            )
+            return None
+
+    @qr_iban.setter
+    def qr_iban(self, value: str | None) -> None:
+        """✅ S2: Setter pour chiffrer automatiquement le QR-IBAN avant stockage.
+
+        Args:
+            value: QR-IBAN en clair ou None
+        """
+        if not value:
+            self._qr_iban_raw = None
+            return
+
+        # Chiffrer le QR-IBAN
+        try:
+            encryption_service = get_encryption_service()
+            self._qr_iban_raw = encryption_service.encrypt_field(value.strip().upper())
+        except Exception as e:
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.error(
+                "[CompanyBillingSettings] Erreur chiffrement QR-IBAN pour company_id=%s: %s",
+                self.company_id,
+                e,
+            )
+            raise
 
 
 class InvoiceSequence(db.Model):

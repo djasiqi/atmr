@@ -1,6 +1,6 @@
 // styles/tripCardStyles.ts
 
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Platform } from 'react-native';
 
 // ✅ Palette épurée et élégante (cohérente avec le login et mission)
 const palette = {
@@ -13,6 +13,17 @@ const palette = {
   placeholder: "#91A59D",
 };
 
+// Styles shadow conditionnels pour éviter l'avertissement de dépréciation
+const cardContainerShadow = Platform.OS === 'web'
+  ? { boxShadow: '0 6px 20px rgba(16,39,30,0.12)' }
+  : {
+      shadowColor: "rgba(16,39,30,0.12)",
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.14,
+      shadowRadius: 20,
+      elevation: 8,
+    };
+
 export const tripCardStyles = StyleSheet.create({
   // ✅ Style global de la carte de course avec design épuré (inspiré du login)
   cardContainer: {
@@ -21,11 +32,7 @@ export const tripCardStyles = StyleSheet.create({
     padding: 24,
     marginHorizontal: 20,
     marginVertical: 8,
-    shadowColor: "rgba(16,39,30,0.12)",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.14,
-    shadowRadius: 20,
-    elevation: 8,
+    ...cardContainerShadow,
     borderWidth: 1,
     borderColor: palette.border,
   },

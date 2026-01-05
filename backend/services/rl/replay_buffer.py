@@ -9,7 +9,7 @@ import random
 from collections import deque
 from typing import Any, List, Tuple
 
-import numpy as np
+import numpy as np  # pyright: ignore[reportMissingImports]
 
 
 class PrioritizedReplayBuffer:

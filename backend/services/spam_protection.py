@@ -4,7 +4,7 @@
 import logging
 import os
 import time
-from typing import Optional, cast
+from typing import cast
 
 from ext import redis_client
 
@@ -18,7 +18,7 @@ SPAM_REDIS_KEY_PREFIX = "user_msg_ts:"
 SPAM_REDIS_TTL = int(os.getenv("SPAM_REDIS_TTL", "2"))  # TTL de 2 secondes
 
 
-def can_send_message(user_id: int) -> tuple[bool, Optional[str]]:
+def can_send_message(user_id: int) -> tuple[bool, str | None]:
     """
     Vérifie si un utilisateur peut envoyer un message (anti-spam).
 

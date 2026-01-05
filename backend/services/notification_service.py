@@ -1,115 +1,119 @@
 # backend/services/notification_service.py
 from __future__ import annotations
 
-import json
-from typing import TYPE_CHECKING, Any, Dict, cast  # <-- ajout de cast
+from typing import TYPE_CHECKING, Any, Dict
 
-import requests
-
-from ext import app_logger, socketio
-from services.socketio_service import emit_company_event, emit_date_event
+from ext import app_logger
+from repositories.dispatch_run_repository import DispatchRunRepository
+from services.event_fanout import (
+    fanout_booking_assigned_to_company,
+    fanout_booking_assigned_to_driver,
+    fanout_booking_cancelled,
+    fanout_booking_updated,
+    fanout_dispatch_run_completed,
+    fanout_urgent_alert,
+)
+from services.socketio_service import emit_company_event
 
 if TYPE_CHECKING:
     from models import Booking
 
 
-# ---------- Helper d'émission compatible v4/v5 ----------
-def _emit_room(
-    event: str, payload: Dict[str, Any], room: str, *, namespace: str = "/"
-) -> None:
-    """Émet un event vers une room en essayant d'abord `to=`, puis fallback `room=`."""
-    try:
-        socketio.emit(
-            event, payload, to=room, namespace=namespace
-        )  # Flask-SocketIO >= 5
-    except TypeError:
-        try:
-            sio_any = cast("Any", socketio)  # <-- cast pour calmer Pylance
-            sio_any.emit(event, payload, room=room, namespace=namespace)  # compat v4
-            # (alternativement: socketio.emit(..., room=..., namespace=...)
-        except Exception as e:
-            app_logger.error(
-                "[notify] emit (compat) failed event=%s room=%s err=%s", event, room, e
-            )
-    except Exception as e:
-        app_logger.error("[notify] emit failed event=%s room=%s err=%s", event, room, e)
+# Note: _emit_room() a été supprimée car elle n'est plus utilisée.
+# Le code utilise maintenant les fonctions de event_fanout.py qui appellent
+# directement emit_driver_event() et emit_company_event() depuis socketio_service.py
 
 
 # ---------- 1) Notification PUSH Expo ----------
-def send_push_message(
-    token: str, title: str, body: str, *, timeout: int = 5
-) -> Dict[str, Any]:
-    message = {
-        "to": token,
-        "sound": "default",
-        "title": title,
-        "body": body,
-    }
-    try:
-        resp = requests.post(
-            "https://exp.host/--/api/v2/push/send", json=message, timeout=timeout
-        )
-        resp.raise_for_status()
-        return cast(Dict[str, Any], resp.json())
-    except Exception as e:
-        app_logger.warning("[notify] Expo push failed: %s", e)
-        return {"ok": False, "error": str(e)}
+# ✅ send_push_message est maintenant importé depuis push_service (ligne 11)
+# pour éviter les cycles d'import avec socketio_service
 
 
 # ---------- 2) WebSocket - nouvelle course ----------
 def notify_driver_new_booking(driver_id: int, booking: Booking) -> None:
-    room = f"driver_{driver_id}"
+    """Notifie un chauffeur d'une nouvelle mission assignée.
+
+    Fan-out hybride:
+    1. Socket.IO (foreground)
+    2. Push notification (background)
+    """
+    booking_id = getattr(booking, "id", None)
+    booking_data: Dict[str, Any] | None = None
     try:
-        payload: Dict[str, Any] = (
-            booking.to_dict()
-            if hasattr(booking, "to_dict")
-            else {"id": getattr(booking, "id", None)}
+        booking_data = (
+            booking.to_dict() if hasattr(booking, "to_dict") else {"id": booking_id}
         )
-        _emit_room("new_booking", payload, room)
-    except Exception as e:
-        app_logger.error("[notify_driver_new_booking] failed: %s", e)
+    except (ValueError, TypeError, AttributeError):
+        booking_data = {"id": booking_id}
+
+    # ✅ Utiliser le service centralisé de fan-out
+    fanout_booking_assigned_to_driver(
+        driver_id=driver_id,
+        booking_id=booking_id or 0,
+        booking_data=booking_data,
+    )
 
 
 # ---------- 3) WebSocket - mise à jour de mission ----------
 def notify_booking_update(driver_id: int, booking: Booking) -> None:
-    room = f"driver_{driver_id}"
+    """Notifie un chauffeur d'une mise à jour de mission.
+
+    Fan-out hybride:
+    1. Socket.IO (foreground)
+    2. Push notification (si changement critique)
+    """
+    booking_id = getattr(booking, "id", None)
+    booking_data: Dict[str, Any] | None = None
     try:
-        payload: Dict[str, Any] = (
-            booking.to_dict()
-            if hasattr(booking, "to_dict")
-            else {"id": getattr(booking, "id", None)}
+        booking_data = (
+            booking.to_dict() if hasattr(booking, "to_dict") else {"id": booking_id}
         )
-        _emit_room("booking_updated", payload, room)
-    except Exception as e:
-        app_logger.error("[notify_booking_update] failed: %s", e)
+    except (ValueError, TypeError, AttributeError):
+        booking_data = {"id": booking_id}
+
+    # Envoyer push seulement pour certains statuts importants
+    status = getattr(booking, "status", None)
+    critical_statuses = ["cancelled", "urgent", "delayed"]
+    should_send_push = status in critical_statuses
+
+    # ✅ Utiliser le service centralisé de fan-out
+    fanout_booking_updated(
+        driver_id=driver_id,
+        booking_id=booking_id or 0,
+        booking_data=booking_data,
+        send_push=should_send_push,
+    )
 
 
 # ---------- 4) WebSocket - annulation de mission ----------
 def notify_booking_cancelled(driver_id: int, booking_id: int) -> None:
-    room = f"driver_{driver_id}"
-    try:
-        _emit_room("booking_cancelled", {"id": booking_id}, room)
-    except Exception as e:
-        app_logger.error("[notify_booking_cancelled] failed: %s", e)
+    """Notifie un chauffeur de l'annulation d'une mission.
+
+    Fan-out hybride:
+    1. Socket.IO (foreground)
+    2. Push notification (background)
+    """
+    # ✅ Utiliser le service centralisé de fan-out
+    fanout_booking_cancelled(driver_id=driver_id, booking_id=booking_id)
 
 
 def notify_booking_assigned(booking: Booking) -> None:
     """Notification unifiée quand une réservation est assignée.
-    - Émet un événement SocketIO côté entreprise.
+
+    Fan-out hybride:
+    1. Socket.IO (foreground)
+    2. Push notification (background) - pour les dispatchers de l'entreprise
     """
-    try:
-        payload = {
-            "booking_id": getattr(booking, "id", None),
-            "driver_id": getattr(booking, "driver_id", None),
-            "status": str(getattr(booking, "status", ""))
-            if hasattr(booking, "status")
-            else None,
-        }
-        emit_company_event(
-            int(getattr(booking, "company_id", 0) or 0), "booking_assigned", payload
-        )
-    except Exception as e:
-        app_logger.error("[notify_booking_assigned] emit failed: %s", e)
+    company_id = int(getattr(booking, "company_id", 0) or 0)
+    booking_id = getattr(booking, "id", None)
+    driver_id = getattr(booking, "driver_id", None)
+
+    # ✅ Utiliser le service centralisé de fan-out
+    fanout_booking_assigned_to_company(
+        company_id=company_id,
+        booking_id=booking_id or 0,
+        driver_id=driver_id,
+    )
 
 
 def notify_dispatch_run_completed(
@@ -118,60 +122,60 @@ def notify_dispatch_run_completed(
     assignments_count: int,
     date_str: str | None = None,
 ) -> None:
-    """Notification unifiée quand un run de dispatch est terminé."""
-    try:
-        # Si la date n'est pas fournie, on tente de la récupérer depuis la DB
-        if not date_str:
-            try:
-                from models import DispatchRun
+    """Notifie qu'un dispatch run est terminé.
 
-                dr = DispatchRun.query.get(dispatch_run_id)
-                if dr and getattr(dr, "day", None):
-                    d = dr.day
-                    date_str = d.isoformat() if hasattr(d, "isoformat") else str(d)
-                    app_logger.info(
-                        (
-                            "[notify_dispatch_run_completed] Retrieved date_str=%s "
-                            "from dispatch_run_id=%s"
-                        ),
-                        date_str,
-                        dispatch_run_id,
-                    )
-            except Exception as e:
-                app_logger.warning(
+    Fan-out hybride:
+    1. Socket.IO (foreground)
+    2. Push notification (background) - conditionnelle si urgent
+    """
+    # Si la date n'est pas fournie, on tente de la récupérer depuis la DB
+    if not date_str:
+        try:
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            dispatch_run_repo = DispatchRunRepository()
+            # Convertir en int si nécessaire
+            run_id = (
+                int(dispatch_run_id)
+                if isinstance(dispatch_run_id, str)
+                else dispatch_run_id
+            )
+            dispatch_run_dto = dispatch_run_repo.find_by_id(run_id)
+            if dispatch_run_dto and dispatch_run_dto.day:
+                d = dispatch_run_dto.day
+                date_str = d.isoformat() if hasattr(d, "isoformat") else str(d)
+                app_logger.info(
                     (
-                        "[notify_dispatch_run_completed] Failed to get day_str "
-                        "from DispatchRun: %s"
+                        "[notify_dispatch_run_completed] Retrieved date_str=%s "
+                        "from dispatch_run_id=%s"
                     ),
-                    e,
+                    date_str,
+                    dispatch_run_id,
                 )
+        except (ValueError, TypeError, AttributeError) as e:
+            # Erreurs de validation attendues : conversion de types, attributs manquants
+            app_logger.warning(
+                (
+                    "[notify_dispatch_run_completed] Failed to get day_str "
+                    "from DispatchRun (validation error: %s): %s"
+                ),
+                type(e).__name__,
+                e,
+            )
+        except Exception:
+            # Erreur inattendue lors de la récupération de date_str
+            app_logger.exception(
+                "[notify_dispatch_run_completed] Failed to get day_str from DispatchRun"
+            )
 
-        payload: Dict[str, Any] = {
-            "dispatch_run_id": dispatch_run_id,
-            "assignments_count": int(assignments_count),
-            "date": date_str,
-        }
-        # ✅ Utiliser json.dumps pour éviter les erreurs de formatage
-        # si payload contient des %
-        app_logger.info(
-            "[notify_dispatch_run_completed] Emitting payload: %s", json.dumps(payload)
-        )
-
-        emit_company_event(company_id, "dispatch_run_completed", payload)
-        if date_str:
-            emit_date_event(date_str, "dispatch_run_completed", payload)
-    except Exception as e:
-        # ✅ FIX RC5: Utiliser json.dumps pour éviter les erreurs de formatage
-        # (le message d'exception peut contenir des % qui interfèrent avec %s)
-        error_info = {
-            "company_id": company_id,
-            "dispatch_run_id": dispatch_run_id,
-            "error": str(e),
-        }
-        app_logger.exception(
-            "[notify_dispatch_run_completed] emit failed: %s",
-            json.dumps(error_info),
-        )
+    # ✅ Utiliser le service centralisé de fan-out
+    fanout_dispatch_run_completed(
+        company_id=company_id,
+        dispatch_run_id=dispatch_run_id,
+        assignments_count=assignments_count,
+        date_str=date_str,
+        send_push_if_urgent=True,
+        urgent_threshold=10,
+    )
 
 
 def notify_dispatcher_optimization_opportunity(
@@ -223,7 +227,57 @@ def notify_dispatcher_optimization_opportunity(
         )
 
         emit_company_event(company_id, "optimization_opportunity", payload)
-    except Exception as e:
+    except (ValueError, TypeError, AttributeError) as e:
+        # Erreurs de validation attendues : conversion de types, attributs manquants
         app_logger.error(
-            "[notify_dispatcher_optimization_opportunity] emit failed: %s", e
+            "[notify_dispatcher_optimization_opportunity] emit failed (validation error: %s): %s",
+            type(e).__name__,
+            e,
         )
+    except (ConnectionError, OSError) as e:
+        # Erreurs réseau attendues : Socket.IO indisponible
+        app_logger.error(
+            "[notify_dispatcher_optimization_opportunity] emit failed (network error: %s): %s",
+            type(e).__name__,
+            e,
+        )
+    except Exception:
+        # Erreur inattendue : logger avec trace complète
+        app_logger.exception("[notify_dispatcher_optimization_opportunity] emit failed")
+
+
+def notify_urgent_alert(
+    company_id: int,
+    alert_id: int | str,
+    alert_type: str,
+    message: str,
+    booking_id: int | None = None,
+    driver_id: int | None = None,
+    severity: str = "high",
+) -> None:
+    """Notifie une alerte urgente avec fan-out hybride.
+
+    Fan-out hybride:
+    1. Socket.IO (foreground)
+    2. Push notification (background)
+    3. Deep link pour navigation
+
+    Args:
+        company_id: ID de l'entreprise
+        alert_id: ID unique de l'alerte
+        alert_type: Type d'alerte (ex: "delay", "driver_unavailable", "booking_conflict")
+        message: Message de l'alerte
+        booking_id: ID du booking concerné (optionnel)
+        driver_id: ID du chauffeur concerné (optionnel)
+        severity: Niveau de sévérité ("low", "medium", "high", "critical")
+    """
+    # ✅ Utiliser le service centralisé de fan-out
+    fanout_urgent_alert(
+        company_id=company_id,
+        alert_id=alert_id,
+        alert_type=alert_type,
+        message=message,
+        severity=severity,
+        booking_id=booking_id,
+        driver_id=driver_id,
+    )

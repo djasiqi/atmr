@@ -14,22 +14,21 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
-import numpy as np
-import pandas as pd
+import numpy as np  # pyright: ignore[reportMissingImports]
+import pandas as pd  # pyright: ignore[reportMissingImports]
 
 logger = logging.getLogger(__name__)
 
 # Import dynamique
 try:
-    from sklearn.preprocessing import StandardScaler
+    from sklearn.preprocessing import (  # pyright: ignore[reportMissingImports]
+        StandardScaler,
+    )
 
     SKLEARN_AVAILABLE = True
 except ImportError:
     logger.error(
-        (
-            "[DemandPrediction] scikit-learn requis. "
-            "Installer avec: pip install scikit-learn"
-        )
+        "[DemandPrediction] scikit-learn requis. Installer avec: pip install scikit-learn"
     )
     SKLEARN_AVAILABLE = False
 
@@ -255,19 +254,14 @@ class DemandPredictor:
         try:
             from datetime import timedelta
 
-            from models import Booking, BookingStatus
+            from repositories.booking_repository import BookingRepository
 
             # Charger 90 derniers jours
             cutoff_date = datetime.now() - timedelta(days=90)
 
-            from sqlalchemy import and_
-
-            bookings = Booking.query.filter(
-                and_(
-                    Booking.status == BookingStatus.COMPLETED,
-                    Booking.completed_at >= cutoff_date,
-                )
-            ).all()
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            booking_repo = BookingRepository()
+            bookings = booking_repo.find_completed_after_date(cutoff_date)
 
             if not bookings:
                 return None

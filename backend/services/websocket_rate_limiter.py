@@ -9,7 +9,6 @@ Utilise Redis sliding window si disponible, sinon cache mémoire.
 import logging
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
-from typing import Optional
 
 from ext import redis_client
 
@@ -17,7 +16,10 @@ logger = logging.getLogger(__name__)
 
 # Limites par event (event_name -> (limit, window_seconds))
 RATE_LIMITS = {
-    "connect": (20, 60),  # ✅ 20 req/min par IP (augmenté de 5 à 20 pour supporter NAT/multi-drivers)
+    "connect": (
+        20,
+        60,
+    ),  # ✅ 20 req/min par IP (augmenté de 5 à 20 pour supporter NAT/multi-drivers)
     "driver_location": (1, 1),  # 1 req/s par driver
     "driver_location_batch": (1, 5),  # 1 req/5s par driver
     "team_chat_message": (10, 60),  # 10 req/min par user
@@ -42,10 +44,10 @@ class WebSocketRateLimiter:
     def check_rate_limit(
         self,
         event: str,
-        user_id: Optional[int] = None,
-        driver_id: Optional[int] = None,
-        client_ip: Optional[str] = None,
-    ) -> tuple[bool, Optional[int]]:
+        user_id: int | None = None,
+        driver_id: int | None = None,
+        client_ip: str | None = None,
+    ) -> tuple[bool, int | None]:
         """Vérifie si un event respecte le rate limit.
 
         Args:
@@ -98,7 +100,7 @@ class WebSocketRateLimiter:
 
     def _check_redis(
         self, key: str, limit: int, window_seconds: int
-    ) -> tuple[bool, Optional[int]]:
+    ) -> tuple[bool, int | None]:
         """Vérifie le rate limit avec Redis (sliding window).
 
         Args:
@@ -176,7 +178,7 @@ class WebSocketRateLimiter:
 
     def _check_memory(
         self, key: str, identifier: str, limit: int, window_seconds: int
-    ) -> tuple[bool, Optional[int]]:
+    ) -> tuple[bool, int | None]:
         """Vérifie le rate limit avec cache mémoire (fallback).
 
         Args:

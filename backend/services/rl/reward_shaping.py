@@ -2,7 +2,7 @@
 import logging
 from typing import Any, ClassVar, Dict
 
-import numpy as np
+import numpy as np  # pyright: ignore[reportMissingImports]
 
 COURTE_THRESHOLD = 5
 MIN_DRIVERS_FOR_EQUITY = 2

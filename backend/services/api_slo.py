@@ -13,11 +13,14 @@ Usage:
 """
 
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict
 
 # Import optionnel prometheus_client (peut ne pas être installé en dev)
 try:
-    from prometheus_client import Counter, Histogram
+    from prometheus_client import (  # pyright: ignore[reportMissingImports]
+        Counter,
+        Histogram,
+    )
 
     PROMETHEUS_AVAILABLE = True
 except ImportError:
@@ -42,7 +45,7 @@ class APISLOTarget:
     latency_p95_max_ms: int
     error_rate_max: float
     availability_min: float
-    method: Optional[str] = None
+    method: str | None = None
 
 
 # SLO par endpoint critique
@@ -116,9 +119,7 @@ API_SLOS: Dict[str, APISLOTarget] = {
 }
 
 
-def get_slo_target(
-    endpoint: str, method: Optional[str] = None
-) -> Optional[APISLOTarget]:
+def get_slo_target(endpoint: str, method: str | None = None) -> APISLOTarget | None:
     """Récupère la définition SLO pour un endpoint.
 
     Args:

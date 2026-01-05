@@ -1,0 +1,129 @@
+.transferModal {
+  padding: 20px;
+}
+
+.bookingInfo {
+  background: #f8f9fa;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.bookingInfo h3 {
+  margin-top: 0;
+  margin-bottom: 12px;
+  font-size: 1.1rem;
+  color: #2d3748;
+}
+
+.bookingInfo p {
+  margin: 8px 0;
+  color: #4a5568;
+}
+
+.partnershipSelection {
+  margin-bottom: 20px;
+}
+
+.partnershipSelection label {
+  display: block;
+  margin-bottom: 8px;
+  color: #2d3748;
+  font-weight: 500;
+}
+
+.select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  font-size: 1rem;
+  background: white;
+  cursor: pointer;
+}
+
+.select:focus {
+  outline: none;
+  border-color: #4299e1;
+  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+}
+
+.noPartnerships {
+  padding: 12px;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 6px;
+  color: #856404;
+  margin-top: 8px;
+}
+
+.transferInfo {
+  background: #e6f7ff;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  border-left: 4px solid #1890ff;
+}
+
+.transferInfo h4 {
+  margin-top: 0;
+  margin-bottom: 12px;
+  color: #2d3748;
+}
+
+.transferInfo p {
+  margin: 6px 0;
+  color: #4a5568;
+}
+
+.error {
+  padding: 12px;
+  background: #fee;
+  border: 1px solid #fcc;
+  border-radius: 6px;
+  color: #c33;
+  margin-bottom: 20px;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+
+.cancelButton,
+.transferButton {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancelButton {
+  background: #e2e8f0;
+  color: #2d3748;
+}
+
+.cancelButton:hover:not(:disabled) {
+  background: #cbd5e0;
+}
+
+.transferButton {
+  background: #4299e1;
+  color: white;
+}
+
+.transferButton:hover:not(:disabled) {
+  background: #3182ce;
+}
+
+.transferButton:disabled,
+.cancelButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+

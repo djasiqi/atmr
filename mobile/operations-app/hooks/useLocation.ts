@@ -21,8 +21,11 @@ const BATCH_INTERVAL_MS = 10000;  // Flush toutes les 10s (réduit de 15s)
 const HEARTBEAT_INTERVAL_MS = 30000;  // Heartbeat GPS toutes les 30s même si immobile
 
 export const useLocation = () => {
-  const { driver } = useAuth();
+  const { driver, authMode } = useAuth();
   const socket = useSocket();
+  
+  // Vérifier que l'utilisateur est bien un chauffeur avant d'envoyer la position
+  const isDriverMode = authMode === "driver" && !!driver;
 
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const locationSubscription = useRef<Location.LocationSubscription | number | null>(null);
@@ -208,8 +211,9 @@ export const useLocation = () => {
       console.log("[useLocation] ⚠️ Buffer vide, pas d'envoi");
       return;
     }
-    if (!driver) {
-      console.log("[useLocation] ⚠️ Driver non défini, pas d'envoi");
+    if (!isDriverMode) {
+      console.log("[useLocation] ⚠️ Utilisateur n'est pas un chauffeur, pas d'envoi");
+      positionBuffer.current = []; // Vider le buffer
       return;
     }
     if (!socket || !socket.connected) {
@@ -253,7 +257,10 @@ export const useLocation = () => {
 
   const handleLocationUpdate = async (loc: Location.LocationObject) => {
       const { latitude, longitude } = loc.coords;
-      if (!driver) return;
+      if (!isDriverMode) {
+        console.debug("[useLocation] ⚠️ Utilisateur n'est pas un chauffeur, position ignorée");
+        return;
+      }
 
       // ✅ Toujours stocker la dernière position reçue (pour forcer l'envoi périodique)
       lastReceivedLocation.current = loc;
@@ -300,7 +307,7 @@ export const useLocation = () => {
     // ✅ Heartbeat GPS : forcer l'envoi de la position toutes les 30s même si immobile
     // Cela garantit que le serveur reçoit régulièrement des positions même sans mouvement
     const heartbeatInterval = setInterval(() => {
-      if (lastReceivedLocation.current && driver && socket?.connected) {
+      if (lastReceivedLocation.current && isDriverMode && socket?.connected) {
         console.log(`💓 [useLocation] Heartbeat GPS - forcer envoi dernière position`);
         // Ajouter la dernière position au buffer si elle n'y est pas déjà
         const lastPos = lastReceivedLocation.current;

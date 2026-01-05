@@ -34,7 +34,7 @@ def migrate_users(dry_run: bool = False, batch_size: int = 100):
 
     # Compter le total d'utilisateurs à migrer
     total_count = User.query.filter(
-        User.encryption_migrated == False  # noqa: E712
+        User.encryption_migrated.is_(False)  # type: ignore[attr-defined]
     ).count()
     logger.info("Migration de %d utilisateurs vers le chiffrement...", total_count)
 
@@ -48,7 +48,7 @@ def migrate_users(dry_run: bool = False, batch_size: int = 100):
     while offset < total_count:
         # Charger un chunk d'utilisateurs
         users = (
-            User.query.filter(User.encryption_migrated.is_(False))
+            User.query.filter(User.encryption_migrated.is_(False))  # type: ignore[attr-defined]
             .offset(offset)
             .limit(chunk_size)
             .all()
@@ -181,7 +181,7 @@ def migrate_clients(dry_run: bool = False, batch_size: int = 100):
 
     # Compter le total de clients à migrer
     total_count = Client.query.filter(
-        Client.encryption_migrated == False  # noqa: E712
+        Client.encryption_migrated.is_(False)  # type: ignore[attr-defined]
     ).count()
     logger.info("Migration de %d clients vers le chiffrement...", total_count)
 
@@ -195,7 +195,7 @@ def migrate_clients(dry_run: bool = False, batch_size: int = 100):
     while offset < total_count:
         # Charger un chunk de clients
         clients = (
-            Client.query.filter(Client.encryption_migrated.is_(False))
+            Client.query.filter(Client.encryption_migrated.is_(False))  # type: ignore[attr-defined]
             .offset(offset)
             .limit(chunk_size)
             .all()

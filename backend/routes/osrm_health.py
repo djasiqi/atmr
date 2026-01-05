@@ -1,15 +1,15 @@
 # backend/routes/osrm_health.py
 """✅ Endpoint de santé OSRM avec métriques cache et circuit breaker."""
 
+# ruff: noqa: I001
+
 import logging
 from typing import Any, Dict, Tuple
 
-from flask_restx import Namespace, Resource
+from flask_restx import Namespace, Resource  # pyright: ignore[reportMissingImports]
 
 from services.osrm_client import _osrm_circuit_breaker
-from services.unified_dispatch.osrm_cache_metrics import (
-    get_cache_metrics_dict,
-)
+from infrastructure.dispatch.osrm_cache_metrics_adapter import get_cache_metrics_dict
 
 logger = logging.getLogger(__name__)
 

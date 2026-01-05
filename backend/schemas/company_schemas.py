@@ -1,6 +1,10 @@
 """✅ Schemas Marshmallow pour validation des endpoints company."""
 
-from marshmallow import Schema, fields, validate
+from marshmallow import (  # pyright: ignore[reportMissingImports]
+    Schema,
+    fields,
+    validate,
+)
 
 from schemas.validation_utils import (
     EMAIL_VALIDATOR,
@@ -9,6 +13,7 @@ from schemas.validation_utils import (
     PASSWORD_VALIDATOR,
     USERNAME_VALIDATOR,
 )
+from schemas.validators import validate_latitude, validate_longitude
 
 
 class ManualBookingCreateSchema(Schema):
@@ -72,10 +77,13 @@ class ManualBookingCreateSchema(Schema):
     medical_service_id = fields.Int(validate=validate.Range(min=1))
 
     # Coordonnées GPS
-    pickup_lat = fields.Float(validate=validate.Range(min=-90, max=90))
-    pickup_lon = fields.Float(validate=validate.Range(min=-180, max=180))
-    dropoff_lat = fields.Float(validate=validate.Range(min=-90, max=90))
-    dropoff_lon = fields.Float(validate=validate.Range(min=-180, max=180))
+    # ✅ Refactoring: Utilise validateurs centralisés de schemas/validators.py
+    from schemas.validators import validate_latitude, validate_longitude
+
+    pickup_lat = fields.Float(validate=validate_latitude)
+    pickup_lon = fields.Float(validate=validate_longitude)
+    dropoff_lat = fields.Float(validate=validate_latitude)
+    dropoff_lon = fields.Float(validate=validate_longitude)
 
     # Récurrence
     is_recurring = fields.Bool(load_default=False)
@@ -90,7 +98,7 @@ class ManualBookingCreateSchema(Schema):
     )
     occurrences = fields.Int(validate=validate.Range(min=1), allow_none=True)
 
-    class Meta:  # type: ignore
+    class Meta:
         unknown = "INCLUDE"  # Permettre des champs supplémentaires pour compatibilité
 
 
@@ -119,12 +127,8 @@ class ClientCreateSchema(Schema):
 
     # Champs facturation/contact
     billing_address = fields.Str(validate=validate.Length(max=500), allow_none=True)
-    billing_lat = fields.Float(
-        validate=validate.Range(min=-90, max=90), allow_none=True
-    )
-    billing_lon = fields.Float(
-        validate=validate.Range(min=-180, max=180), allow_none=True
-    )
+    billing_lat = fields.Float(validate=validate_latitude, allow_none=True)
+    billing_lon = fields.Float(validate=validate_longitude, allow_none=True)
     contact_email = fields.Email(validate=validate.Length(max=254), allow_none=True)
     contact_phone = fields.Str(validate=validate.Length(max=20), allow_none=True)
 
@@ -132,17 +136,13 @@ class ClientCreateSchema(Schema):
     domicile_address = fields.Str(validate=validate.Length(max=500), allow_none=True)
     domicile_zip = fields.Str(validate=validate.Length(max=20), allow_none=True)
     domicile_city = fields.Str(validate=validate.Length(max=100), allow_none=True)
-    domicile_lat = fields.Float(
-        validate=validate.Range(min=-90, max=90), allow_none=True
-    )
-    domicile_lon = fields.Float(
-        validate=validate.Range(min=-180, max=180), allow_none=True
-    )
+    domicile_lat = fields.Float(validate=validate_latitude, allow_none=True)
+    domicile_lon = fields.Float(validate=validate_longitude, allow_none=True)
 
     # Tarif préférentiel
     preferential_rate = fields.Decimal(places=2, allow_none=True)
 
-    class Meta:  # type: ignore
+    class Meta:
         unknown = "INCLUDE"  # Permettre champs additionnels
 
 
@@ -151,10 +151,8 @@ class CompanyUpdateSchema(Schema):
 
     name = fields.Str(validate=validate.Length(min=1, max=200))
     address = fields.Str(validate=validate.Length(max=500))
-    latitude = fields.Float(validate=validate.Range(min=-90, max=90), allow_none=True)
-    longitude = fields.Float(
-        validate=validate.Range(min=-180, max=180), allow_none=True
-    )
+    latitude = fields.Float(validate=validate_latitude, allow_none=True)
+    longitude = fields.Float(validate=validate_longitude, allow_none=True)
     contact_email = fields.Email(validate=validate.Length(max=254))
     contact_phone = fields.Str(validate=validate.Length(max=20))
     billing_email = fields.Email(validate=validate.Length(max=254))
@@ -190,7 +188,7 @@ class CompanyUpdateSchema(Schema):
 
     logo_url = fields.Str(validate=validate.Length(max=500), allow_none=True)
 
-    class Meta:  # type: ignore
+    class Meta:
         unknown = "INCLUDE"  # Permettre des champs supplémentaires
 
 
@@ -246,5 +244,5 @@ class VehicleUpdateSchema(Schema):
     is_active = fields.Bool()
     notes = fields.Str(validate=validate.Length(max=1000), allow_none=True)
 
-    class Meta:  # type: ignore
+    class Meta:
         unknown = "INCLUDE"  # Permettre des champs supplémentaires

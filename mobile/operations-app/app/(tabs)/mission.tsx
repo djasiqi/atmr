@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { ScrollView, Alert, Linking, View, RefreshControl } from "react-native";
 import { useAuth } from "@/hooks/useAuth";
 import { useSocket } from "@/hooks/useSocket";
@@ -6,6 +6,7 @@ import { useLocation } from "@/hooks/useLocation";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useDynamicETA } from "@/hooks/useDynamicETA";
 import MissionCard from "@/components/dashboard/MissionCard";
+import MissionGroupHeader from "@/components/dashboard/MissionGroupHeader";
 import MissionHeader from "@/components/dashboard/MissionHeader";
 import MissionMap from "@/components/dashboard/MissionMap";
 import ConfirmCompletionModal from "@/components/dashboard/ConfirmCompletionModal";
@@ -18,7 +19,12 @@ import {
   Booking,
   BookingStatus,
 } from "@/services/api";
-import { sendDriverHeartbeat } from "@/services/socket";
+import { sendDriverHeartbeat, onBookingsResync } from "@/services/socket";
+import {
+  organizeMissionsForDisplay,
+  getNextDestination,
+  type DisplayMission,
+} from "@/utils/missionGrouping";
 
 /**
  * Détecte si la mission est un retour, quel que soit le type de donnée reçu (bool, int, string, etc.)
@@ -57,14 +63,23 @@ export default function MissionScreen() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [missions, setMissions] = useState<Booking[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
   const [modalVisible, setModalVisible] = useState(false);
+  const [completingMissionId, setCompletingMissionId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<number>(Date.now()); // Track last update time
 
-  const currentMission = missions[currentIndex] || null;
   const MISSIONS_CACHE_KEY = "missions_cache_v1";
+
+  // Organiser les missions pour l'affichage avec groupement
+  const displayMissions = useMemo(() => {
+    return organizeMissionsForDisplay(missions);
+  }, [missions]);
+
+  // Trouver la prochaine destination pour la carte
+  const nextDestination = useMemo(() => {
+    return getNextDestination(missions);
+  }, [missions]);
 
   // Charger missions actives depuis le cache au démarrage
   useEffect(() => {
@@ -89,7 +104,6 @@ export default function MissionScreen() {
                 new Date(b.scheduled_time).getTime()
             );
             setMissions(sorted);
-            setCurrentIndex(0);
           }
         }
       } catch { }
@@ -117,7 +131,6 @@ export default function MissionScreen() {
       );
 
       setMissions(sorted);
-      setCurrentIndex(0);
       setLastUpdate(Date.now()); // Mettre à jour le timestamp de dernière mise à jour
     } catch {
       Alert.alert("Erreur", "Impossible de charger les missions.");
@@ -164,8 +177,7 @@ export default function MissionScreen() {
         );
         return sorted;
       });
-      // Réinitialiser l'index pour afficher la mission la plus proche (première dans la liste triée)
-      setCurrentIndex(0);
+      // Pas besoin de réinitialiser l'index, toutes les missions sont affichées
     };
 
     const onUpdate = (data: Booking) => {
@@ -182,13 +194,7 @@ export default function MissionScreen() {
               new Date(a.scheduled_time).getTime() -
               new Date(b.scheduled_time).getTime()
           );
-        // recalcul de l'index pour éviter l'affichage d'une mission terminée
-        if (updated.length === 0) {
-          setCurrentIndex(0);
-        } else {
-          // Réinitialiser à 0 pour toujours afficher la mission la plus proche
-          setCurrentIndex(0);
-        }
+        // Pas besoin de gérer l'index, toutes les missions sont affichées
         AsyncStorage.setItem(MISSIONS_CACHE_KEY, JSON.stringify(updated)).catch(
           () => { }
         );
@@ -214,9 +220,10 @@ export default function MissionScreen() {
         );
         return next;
       });
-      if (currentMission?.id === id) {
-        Alert.alert("❌ Mission annulée", "La mission en cours a été annulée.");
-        setCurrentIndex(0); // Tu peux l'améliorer plus tard si besoin
+      // Vérifier si une mission visible a été annulée
+      const cancelledMission = missions.find((m) => m.id === id);
+      if (cancelledMission) {
+        Alert.alert("❌ Mission annulée", "Une mission a été annulée.");
       }
       setLastUpdate(Date.now()); // Mettre à jour le timestamp
     };
@@ -239,14 +246,31 @@ export default function MissionScreen() {
     socket.on("booking_cancelled", onCancel);
     socket.on("disconnect", onDisconnect);
     socket.on("reconnect", onReconnect);
+
+    // ✅ Écouter l'événement de resync pour mettre à jour les missions
+    const unsubscribeResync = onBookingsResync((bookings) => {
+      const sorted = bookings.sort(
+        (a, b) =>
+          new Date(a.scheduled_time).getTime() -
+          new Date(b.scheduled_time).getTime()
+      );
+      setMissions(sorted);
+      setLastUpdate(Date.now());
+      // Mettre à jour le cache
+      AsyncStorage.setItem(MISSIONS_CACHE_KEY, JSON.stringify(sorted)).catch(
+        () => { }
+      );
+    });
+
     return () => {
       socket.off("new_booking", onNew);
       socket.off("booking_updated", onUpdate);
       socket.off("booking_cancelled", onCancel);
       socket.off("disconnect", onDisconnect);
       socket.off("reconnect", onReconnect);
+      unsubscribeResync();
     };
-  }, [socket, currentMission?.id, loadMissions]);
+  }, [socket, loadMissions]);
 
   // ✅ Polling de secours : actualiser toutes les 60s si socket déconnecté ou si pas de missions depuis >60s
   useEffect(() => {
@@ -268,12 +292,14 @@ export default function MissionScreen() {
 
   // ✅ Heartbeat métier : envoyer métadonnées toutes les 60s si socket connecté et mission active
   useEffect(() => {
-    if (!socket?.connected || !currentMission) return;
+    if (!socket?.connected || missions.length === 0) return;
 
     const heartbeatInterval = setInterval(() => {
-      if (socket?.connected && currentMission) {
+      if (socket?.connected && missions.length > 0) {
+        // Utiliser la première mission active pour le heartbeat
+        const firstMission = missions[0];
         sendDriverHeartbeat({
-          last_mission_id: currentMission.id,
+          last_mission_id: firstMission.id,
           location: location?.coords ? {
             lat: location.coords.latitude,
             lon: location.coords.longitude
@@ -289,39 +315,45 @@ export default function MissionScreen() {
     }, 60000); // Toutes les 60s
 
     return () => clearInterval(heartbeatInterval);
-  }, [socket, currentMission, location]);
+  }, [socket, missions, location]);
 
   const openNavigation = (destination: string) => {
     const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
     Linking.openURL(url);
   };
 
-  const handleOpenModal = () => {
+  const handleOpenModal = useCallback((missionId: number) => {
+    setCompletingMissionId(missionId);
     setModalVisible(true);
-  };
+  }, []);
 
   const confirmCompletion = useCallback(async () => {
-    console.log("Confirmer la fin de mission");
-    if (!currentMission || isSubmitting) return;
+    if (!completingMissionId || isSubmitting) return;
+
+    const mission = missions.find((m) => m.id === completingMissionId);
+    if (!mission) {
+      setModalVisible(false);
+      return;
+    }
 
     // Bloquer les doubles clics
     setIsSubmitting(true);
 
     try {
-      const isReturn = !!currentMission.is_return;
+      const isReturn = !!mission.is_return;
       const statusToSend: BookingStatus = isReturn
         ? "return_completed"
         : "completed";
 
-      console.log("[Mission] Mise à jour du statut:", statusToSend, "pour booking", currentMission.id);
+      console.log("[Mission] Mise à jour du statut:", statusToSend, "pour booking", mission.id);
 
-      await updateTripStatus(currentMission.id, statusToSend);
+      await updateTripStatus(mission.id, statusToSend);
 
       // Mettre à jour la liste des missions (retirer la mission terminée)
       setMissions((prev) =>
         prev
           .map((m) =>
-            m.id === currentMission.id ? { ...m, status: statusToSend } : m
+            m.id === mission.id ? { ...m, status: statusToSend } : m
           )
           .filter(
             (m) => {
@@ -331,11 +363,9 @@ export default function MissionScreen() {
           )
       );
 
-      // Passer à la prochaine mission
-      setCurrentIndex(0);
-
       // Fermer le modal après succès
       setModalVisible(false);
+      setCompletingMissionId(null);
 
       console.log("✅ Mission terminée avec succès");
     } catch (error: any) {
@@ -349,7 +379,7 @@ export default function MissionScreen() {
       // Toujours débloquer le bouton
       setIsSubmitting(false);
     }
-  }, [currentMission, isSubmitting]);
+  }, [completingMissionId, missions, isSubmitting]);
 
   if (!driver || isLoading) {
     return (
@@ -387,38 +417,71 @@ export default function MissionScreen() {
           date={new Date().toLocaleDateString()}
         />
 
-        {location && currentMission && (
+        {location && nextDestination && (
           <MissionMap
             location={location}
-            destination={
-              currentMission.status === "in_progress"
-                ? currentMission.dropoff_location!
-                : currentMission.pickup_location!
-            }
+            destination={nextDestination}
           />
         )}
 
-        {currentMission ? (
+        {displayMissions.length > 0 ? (
           <View className="px-4 pt-4">
-            <MissionCard
-              mission={{
-                ...currentMission,
-                // Utiliser la durée dynamique si disponible, sinon la durée statique
-                duration_seconds: getDuration(currentMission.id) || currentMission.duration_seconds
-              }}
-              onComplete={handleOpenModal}
-              onCall={() =>
-                currentMission.client_phone &&
-                Linking.openURL(`tel:${currentMission.client_phone}`)
-              }
-              onNavigate={() => {
-                const dest =
-                  currentMission.status === "in_progress"
-                    ? currentMission.dropoff_location!
-                    : currentMission.pickup_location!;
-                openNavigation(dest);
-              }}
-            />
+            {displayMissions.map((displayMission, index) => {
+              const { mission, missionNumber, groupInfo } = displayMission;
+              const previousMission = index > 0 ? displayMissions[index - 1] : null;
+              const showGroupHeader =
+                groupInfo.isGrouped &&
+                groupInfo.isFirstInGroup &&
+                (!previousMission ||
+                  previousMission.groupInfo.groupId !== groupInfo.groupId);
+
+              return (
+                <React.Fragment key={mission.id}>
+                  {showGroupHeader && (
+                    <MissionGroupHeader
+                      location={groupInfo.groupLocationDisplay}
+                      count={groupInfo.groupSize}
+                      type={groupInfo.groupType}
+                    />
+                  )}
+                  <MissionCard
+                    mission={{
+                      ...mission,
+                      // Utiliser la durée dynamique si disponible, sinon la durée statique
+                      duration_seconds:
+                        getDuration(mission.id) || mission.duration_seconds,
+                    }}
+                    missionNumber={missionNumber}
+                    isGrouped={groupInfo.isGrouped}
+                    onComplete={() => handleOpenModal(mission.id)}
+                    onCall={() =>
+                      mission.client_phone &&
+                      Linking.openURL(`tel:${mission.client_phone}`)
+                    }
+                    onNavigate={() => {
+                      const dest =
+                        mission.status === "in_progress"
+                          ? mission.dropoff_location!
+                          : mission.pickup_location!;
+                      openNavigation(dest);
+                    }}
+                    onStatusChange={(missionId, newStatus) => {
+                      setMissions((prev) => {
+                        const updated = prev.map((m) =>
+                          m.id === missionId ? { ...m, status: newStatus } : m
+                        );
+                        // Mettre à jour le cache pour que le statut soit persistant
+                        AsyncStorage.setItem(
+                          MISSIONS_CACHE_KEY,
+                          JSON.stringify(updated)
+                        ).catch(() => {});
+                        return updated;
+                      });
+                    }}
+                  />
+                </React.Fragment>
+              );
+            })}
           </View>
         ) : (
           <View className="flex-1 items-center justify-center py-10 px-4">

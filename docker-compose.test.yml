@@ -1,0 +1,35 @@
+services:
+  postgres_test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: atmr_test
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+      TZ: Europe/Zurich
+    ports:
+      - "5433:5432" # Port différent pour éviter conflit avec postgres de dev
+    volumes:
+      - pg_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test -d atmr_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: "no"
+
+  redis_test:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379" # Port différent pour éviter conflit avec redis de dev
+    volumes:
+      - redis_test_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: "no"
+
+volumes:
+  pg_test_data:
+  redis_test_data:

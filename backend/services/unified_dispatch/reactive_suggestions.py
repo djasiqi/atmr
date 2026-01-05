@@ -9,7 +9,7 @@ from datetime import timedelta
 from typing import Any, Dict, List, Tuple
 
 from ext import db
-from models import Assignment, Booking, BookingStatus, Driver
+from models import Assignment, Booking, Driver
 from services.unified_dispatch.data import haversine_minutes
 from services.unified_dispatch.settings import Settings
 from shared.time_utils import now_local
@@ -105,10 +105,10 @@ class SuggestionEngine:
 
         # Récupérer le booking et le driver
         booking_id = (
-            int(assignment.booking_id) if assignment.booking_id is not None else None
+            int(assignment.booking_id) if assignment.booking_id is not None else None  # type: ignore[reportArgumentType]
         )
         driver_id = (
-            int(assignment.driver_id) if assignment.driver_id is not None else None
+            int(assignment.driver_id) if assignment.driver_id is not None else None  # type: ignore[reportArgumentType]
         )
 
         booking = db.session.get(Booking, booking_id) if booking_id else None
@@ -436,17 +436,25 @@ class SuggestionEngine:
 
             pickup_pos = (float(pickup_lat), float(pickup_lon))
 
-            # Récupérer les chauffeurs actifs et disponibles
-            query = Driver.query.filter(
-                Driver.company_id == company_id,
-                Driver.is_active.is_(True),
-                Driver.is_available.is_(True),
-            )
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            from repositories.driver_repository import DriverRepository
 
+            driver_repo = DriverRepository()
+            driver_dtos = driver_repo.find_by_company_id(company_id, active_only=True)
+            # Filtrer par is_available en mémoire
+            available_driver_dtos = [dto for dto in driver_dtos if dto.is_available]
+            # Filtrer exclude_driver_id en mémoire
             if exclude_driver_id:
-                query = query.filter(Driver.id != exclude_driver_id)
-
-            drivers = query.all()
+                available_driver_dtos = [
+                    dto for dto in available_driver_dtos if dto.id != exclude_driver_id
+                ]
+            # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs pour la compatibilité
+            driver_ids = [dto.id for dto in available_driver_dtos]
+            drivers = (
+                Driver.query.filter(Driver.id.in_(driver_ids)).all()
+                if driver_ids
+                else []
+            )
 
             # Calculer distance et ETA pour chaque chauffeur
             results = []
@@ -511,19 +519,16 @@ class SuggestionEngine:
             now = now_local()
             time_window_end = now + timedelta(minutes=time_window_minutes)
 
-            # Bookings en attente
-            from typing import cast as tcast
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            from repositories.booking_repository import BookingRepository
 
-            pending_bookings = Booking.query.filter(
-                Booking.company_id == company_id,
-                tcast("Any", Booking.status).in_(
-                    [BookingStatus.PENDING, BookingStatus.ACCEPTED]
-                ),
-                Booking.scheduled_time >= now,
-                Booking.scheduled_time <= time_window_end,
-                # Exclure le booking actuel
-                tcast("Any", Booking.id) != int(tcast("Any", booking.id)),
-            ).all()
+            booking_repo = BookingRepository()
+            pending_bookings = booking_repo.find_pending_by_company_and_time_window(
+                company_id=company_id,
+                now=now,
+                time_window_end=time_window_end,
+                exclude_booking_id=int(booking.id) if booking.id else None,
+            )
 
             results = []
             for pending_booking in pending_bookings:
@@ -648,7 +653,7 @@ def _apply_customer_notification(
         return {"success": False, "error": "Booking ID manquant"}
 
     booking = db.session.get(Booking, booking_id)
-    if not booking or booking.company_id != company_id:
+    if not booking or bool(booking.company_id != company_id):
         return {"success": False, "error": "Booking introuvable"}
 
     auto_message = (

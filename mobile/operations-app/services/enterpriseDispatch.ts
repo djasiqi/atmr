@@ -13,11 +13,20 @@ import {
   ScheduleRidePayload,
   MarkUrgentPayload,
   DispatchMessage,
+  RideEditPayload,
+  RideCreatePayload,
+  AddressSuggestion,
+  ClientOption,
 } from "@/types/enterpriseDispatch";
 
-export const getDispatchStatus = async (): Promise<DispatchStatus> => {
+export const getDispatchStatus = async (date?: string): Promise<DispatchStatus> => {
+  const params: { date?: string } = {};
+  if (date) {
+    params.date = date;
+  }
   const response = await enterpriseApi.get<DispatchStatus>(
-    "/dispatch/v1/status"
+    "/dispatch/v1/status",
+    { params }
   );
   return response.data;
 };
@@ -167,6 +176,64 @@ export const getDispatchSettings = async (): Promise<DispatchSettings> => {
   return response.data;
 };
 
+export interface DriverAccountInfo {
+  has_driver_account: boolean;
+  driver_id?: number;
+  driver_type?: "REGULAR" | "EMERGENCY";
+  is_active?: boolean;
+  is_available?: boolean;
+}
+
+export const getMyDriverAccount = async (): Promise<DriverAccountInfo> => {
+  console.log("[getMyDriverAccount] Appel de l'endpoint /auth/me/driver-account");
+  try {
+    const response = await enterpriseApi.get<DriverAccountInfo>(
+      "/auth/me/driver-account"
+    );
+    console.log("[getMyDriverAccount] Réponse reçue:", response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error("[getMyDriverAccount] Erreur:", {
+      message: error?.message,
+      status: error?.response?.status,
+      data: error?.response?.data,
+      url: error?.config?.url,
+    });
+    throw error;
+  }
+};
+
+export interface SwitchToDriverResponse {
+  token: string;
+  refresh_token: string;
+  user: {
+    public_id: string;
+    email: string;
+    first_name?: string;
+    last_name?: string;
+  };
+  driver: {
+    id: number;
+    driver_type: "REGULAR" | "EMERGENCY";
+  };
+}
+
+export const switchToDriverToken = async (): Promise<SwitchToDriverResponse> => {
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'enterpriseDispatch.ts:switchToDriverToken',message:'switchToDriverToken entry',data:{url:'/auth/me/switch-to-driver'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
+  // #endregion
+  
+  const response = await enterpriseApi.post<SwitchToDriverResponse>(
+    "/auth/me/switch-to-driver"
+  );
+  
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'enterpriseDispatch.ts:switchToDriverToken',message:'switchToDriverToken success',data:{hasToken:!!response.data.token,hasRefreshToken:!!response.data.refresh_token,status:response.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
+  // #endregion
+  
+  return response.data;
+};
+
 export const updateDispatchSettings = async (
   payload: DispatchSettingsUpdate
 ) => {
@@ -273,7 +340,7 @@ export const fetchRealtimeDashboard = async (
     params.date = date;
   }
   const response = await enterpriseApi.get<RealtimeDashboardData>(
-    "/company_dispatch/dashboard/realtime",
+    "/dispatch/v1/dashboard/realtime",
     { params }
   );
   return response.data;
@@ -285,4 +352,111 @@ export const sendDispatchMessage = async (content: string) => {
     { content }
   );
   return normalizeDispatchMessage(response.data);
+};
+
+// ✅ Endpoints pour l'édition et la création de courses
+export const updateRide = async (
+  rideId: string,
+  payload: RideEditPayload
+): Promise<RideDetail> => {
+  const response = await enterpriseApi.put<RideDetail>(
+    `/dispatch/v1/rides/${rideId}`,
+    payload
+  );
+  return response.data;
+};
+
+export const createRide = async (
+  payload: RideCreatePayload
+): Promise<RideDetail> => {
+  console.log("[createRide] Envoi payload:", JSON.stringify(payload, null, 2));
+  try {
+    const response = await enterpriseApi.post<{ summary: RideDetail; return_summary?: RideDetail }>(
+      "/dispatch/v1/rides",
+      payload
+    );
+    console.log("[createRide] Réponse complète:", response.data);
+    // Le backend retourne {summary: RideDetail, return_summary?: RideDetail}, on extrait summary
+    const rideDetail = response.data.summary || response.data;
+    console.log("[createRide] RideDetail extrait:", rideDetail);
+    if (response.data.return_summary) {
+      console.log("[createRide] Course retour créée:", response.data.return_summary);
+    }
+    return rideDetail as RideDetail;
+  } catch (error: any) {
+    console.error("[createRide] Erreur:", error);
+    console.error("[createRide] Erreur response:", error?.response?.data);
+    console.error("[createRide] Erreur status:", error?.response?.status);
+    throw error;
+  }
+};
+
+export const searchAddresses = async (
+  query: string
+): Promise<AddressSuggestion[]> => {
+  const response = await enterpriseApi.get<AddressSuggestion[]>(
+    "/dispatch/v1/addresses/search",
+    {
+      params: { q: query },
+    }
+  );
+  return response.data;
+};
+
+export const searchClients = async (
+  query: string
+): Promise<ClientOption[]> => {
+  const response = await enterpriseApi.get<ClientOption[]>(
+    "/dispatch/v1/clients/search",
+    {
+      params: { q: query },
+    }
+  );
+  return response.data;
+};
+
+export interface AvailableDriver {
+  driver_id: string;
+  driver_name: string;
+  is_emergency: boolean;
+  driver_type: string;
+}
+
+export const getAvailableDrivers = async (): Promise<AvailableDriver[]> => {
+  const response = await enterpriseApi.get<{ drivers: AvailableDriver[] }>(
+    "/dispatch/v1/drivers/available"
+  );
+  return response.data.drivers || [];
+};
+
+/**
+ * Applique une opportunité d'optimisation en réassignant un chauffeur
+ * @param opportunity - L'opportunité à appliquer depuis le dashboard temps réel
+ * @param newDriverId - ID du nouveau chauffeur (optionnel, extrait de la suggestion si non fourni)
+ */
+export const applyOpportunity = async (
+  opportunity: {
+    assignment_id: number;
+    booking_id: number;
+    driver_id: number;
+    suggestions?: Array<{
+      action: string;
+      priority: string;
+      message: string;
+      estimated_gain_minutes?: number;
+    }>;
+  },
+  newDriverId?: string
+) => {
+  const suggestion = opportunity.suggestions?.[0];
+  const targetDriverId =
+    newDriverId || String(opportunity.driver_id);
+
+  await reassignRide(String(opportunity.booking_id), {
+    driver_id: targetDriverId,
+    reason: suggestion?.message || "Application d'opportunité d'optimisation",
+    allow_emergency: false,
+    respect_preferences: true,
+    idempotency_key: `${Date.now()}-${opportunity.assignment_id}`,
+  });
 };

@@ -62,7 +62,7 @@ checks = [
     ("Priorité", merged_settings.heuristic.priority, 0.06),
     ("Temps limite solveur", merged_settings.solver.time_limit_sec, 60),
     ("Courses max par chauffeur", merged_settings.solver.max_bookings_per_driver, 10),
-    ("Pénalité non-assigné", merged_settings.solver.unassigned_penalty, 10000),
+    ("Pénalité non-assigné", merged_settings.solver.unassigned_penalty, 10000),  # type: ignore[attr-defined]
     ("Pickup service (min)", merged_settings.service_times.pickup_service_min, 5),
     ("Dropoff service (min)", merged_settings.service_times.dropoff_service_min, 10),
     (
@@ -73,8 +73,8 @@ checks = [
     ("Pooling activé", merged_settings.pooling.enabled, True),
     ("Tolérance temporelle pooling", merged_settings.pooling.time_tolerance_min, 10),
     ("Distance pickup pooling", merged_settings.pooling.pickup_distance_m, 500),
-    ("Équité activée", merged_settings.fairness.enabled, True),
-    ("Fenêtre équité (jours)", merged_settings.fairness.window_days, 2),
+    ("Équité activée", merged_settings.fairness.enabled, True),  # type: ignore[attr-defined]
+    ("Fenêtre équité (jours)", merged_settings.fairness.window_days, 2),  # type: ignore[attr-defined]
     ("Poids équité", merged_settings.fairness.fairness_weight, 0.7),
     (
         "Chauffeurs d'urgence autorisés",
@@ -93,10 +93,8 @@ for name, actual, expected in checks:
     print(f"{status} {name}: {actual} (attendu: {expected})")
 
 print(
-    (
-        "\n=== Paramètres non gérés par merge_overrides "
-        "(passés directement dans problem) ===\n"
-    )
+    "\n=== Paramètres non gérés par merge_overrides "
+    "(passés directement dans problem) ===\n"
 )
 print("✅ preferred_driver_id: Passé dans problem['preferred_driver_id']")
 print("✅ driver_load_multipliers: Passé dans problem['driver_load_multipliers']")

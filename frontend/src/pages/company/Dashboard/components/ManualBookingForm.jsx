@@ -333,16 +333,49 @@ export default function ManualBookingForm({ onSuccess }) {
 
         const options = clients.map((c) => {
           // 🏥 Pour les institutions, afficher le nom de l'institution
-          let label;
+          let label = `Client #${c.id}`; // Par défaut
+          
+          // #region agent log
+          if (c.id === clients[0]?.id) {
+            console.log('🔍 [ManualBookingForm] loadDefaultClients - Construction du label pour client:', {
+              id: c.id,
+              is_institution: c.is_institution,
+              institution_name: c.institution_name,
+              user_first_name: c.user_first_name,
+              user_last_name: c.user_last_name,
+            });
+          }
+          // #endregion
+          
           if (c.is_institution && c.institution_name) {
             label = `🏥 ${c.institution_name}`;
           } else {
-            // Pour les clients normaux, afficher nom + prénom
-            label =
-              `${c.user?.first_name ?? c.first_name ?? ''} ${
-                c.user?.last_name ?? c.last_name ?? ''
-              }`.trim() || `Client #${c.id}`;
+            // Pour les clients normaux, utiliser user_first_name et user_last_name
+            // (le backend retourne ces champs depuis ClientDTO.to_dict())
+            const firstName = c.user_first_name || '';
+            const lastName = c.user_last_name || '';
+            
+            // #region agent log
+            if (c.id === clients[0]?.id) {
+              console.log('🔍 [ManualBookingForm] loadDefaultClients - Valeurs extraites:', {
+                firstName,
+                lastName,
+                combined: `${firstName} ${lastName}`.trim(),
+                will_use_combined: !!(firstName || lastName),
+              });
+            }
+            // #endregion
+            
+            if (firstName || lastName) {
+              label = `${firstName} ${lastName}`.trim();
+            }
           }
+          
+          // #region agent log
+          if (c.id === clients[0]?.id) {
+            console.log('🔍 [ManualBookingForm] loadDefaultClients - Label final:', label);
+          }
+          // #endregion
 
           return {
             value: c.id,
@@ -434,19 +467,76 @@ export default function ManualBookingForm({ onSuccess }) {
       const clients = q ? await searchClients(q) : await searchClients('');
 
       console.log('✅ Clients trouvés:', clients.length);
+      
+      // #region agent log
+      if (clients.length > 0) {
+        console.log('🔍 [ManualBookingForm] Structure complète du premier client:', clients[0]);
+        console.log('🔍 [ManualBookingForm] Toutes les clés:', Object.keys(clients[0]));
+        console.log('🔍 [ManualBookingForm] Valeurs des champs de nom:', {
+          full_name: clients[0].full_name,
+          first_name: clients[0].first_name,
+          last_name: clients[0].last_name,
+          user: clients[0].user,
+          user_first_name: clients[0].user?.first_name,
+          user_last_name: clients[0].user?.last_name,
+          user_username: clients[0].user?.username,
+          is_institution: clients[0].is_institution,
+          institution_name: clients[0].institution_name,
+        });
+      }
+      // #endregion
 
       const options = clients.map((c) => {
         // 🏥 Pour les institutions, afficher le nom de l'institution
-        let label;
+        let label = `Client #${c.id}`; // Par défaut
+        
+        // #region agent log
+        if (c.id === clients[0]?.id) {
+          console.log('🔍 [ManualBookingForm] Construction du label pour client:', {
+            id: c.id,
+            is_institution: c.is_institution,
+            institution_name: c.institution_name,
+            user_first_name: c.user_first_name,
+            user_last_name: c.user_last_name,
+            user_first_name_type: typeof c.user_first_name,
+            user_last_name_type: typeof c.user_last_name,
+            user_first_name_truthy: !!c.user_first_name,
+            user_last_name_truthy: !!c.user_last_name,
+          });
+        }
+        // #endregion
+        
         if (c.is_institution && c.institution_name) {
           label = `🏥 ${c.institution_name}`;
         } else {
-          // Pour les clients normaux, afficher nom + prénom
-          label =
-            `${c.user?.first_name ?? c.first_name ?? ''} ${
-              c.user?.last_name ?? c.last_name ?? ''
-            }`.trim() || `Client #${c.id}`;
+          // Pour les clients normaux, utiliser user_first_name et user_last_name
+          // (le backend retourne ces champs depuis ClientDTO.to_dict())
+          const firstName = c.user_first_name || '';
+          const lastName = c.user_last_name || '';
+          
+          // #region agent log
+          if (c.id === clients[0]?.id) {
+            console.log('🔍 [ManualBookingForm] Valeurs extraites:', {
+              firstName,
+              lastName,
+              firstName_trimmed: firstName.trim(),
+              lastName_trimmed: lastName.trim(),
+              combined: `${firstName} ${lastName}`.trim(),
+              will_use_combined: !!(firstName || lastName),
+            });
+          }
+          // #endregion
+          
+          if (firstName || lastName) {
+            label = `${firstName} ${lastName}`.trim();
+          }
         }
+        
+        // #region agent log
+        if (c.id === clients[0]?.id) {
+          console.log('🔍 [ManualBookingForm] Label final:', label);
+        }
+        // #endregion
 
         return {
           value: c.id,

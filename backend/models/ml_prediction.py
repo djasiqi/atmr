@@ -1,5 +1,5 @@
 # Constantes pour éviter les valeurs magiques
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import Float, Integer, String, Text
@@ -65,14 +65,14 @@ class MLPrediction(db.Model):
     # Métadonnées
     created_at = db.Column(
         db.DateTime,
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
         index=True,
     )
     updated_at = db.Column(
         db.DateTime,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
 

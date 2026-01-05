@@ -82,9 +82,7 @@ class Payment(db.Model):
             "amount": amt,
             "method": str(self.method),
             "status": (
-                self.status.value
-                if isinstance(self.status, PaymentStatus)
-                else str(self.status)
+                self.status.value if hasattr(self.status, "value") else str(self.status)
             ),
             "date": _iso(self.date),
             "updated_at": _iso(self.updated_at),

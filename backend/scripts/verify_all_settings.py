@@ -286,10 +286,8 @@ def verify_all_settings(company_id: int = 1):
 
     print("   Chauffeur préféré:")
     print(
-        (
-            f"     DB: {preferred_driver_db} "
-            f"{'✅' if preferred_driver_db else '⚠️  Non configuré'}"
-        )
+        f"     DB: {preferred_driver_db} "
+        f"{'✅' if preferred_driver_db else '⚠️  Non configuré'}"
     )
     if preferred_driver_db and preferred_driver_db in driver_load_multipliers_db:
         multiplier = driver_load_multipliers_db[preferred_driver_db]

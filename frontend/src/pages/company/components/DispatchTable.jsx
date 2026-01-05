@@ -22,6 +22,9 @@ import { renderBookingDateTime } from '../../../utils/formatDate';
 
 import useCompanySocket from '../../../hooks/useCompanySocket';
 import useDispatchStatus from '../../../hooks/useDispatchStatus';
+import { useHybridDataSync } from '../../../hooks/useHybridDataSync';
+import { useSocketInvalidation } from '../../../hooks/useSocketInvalidation';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   runDispatchForDay,
   fetchDispatchRunById,
@@ -59,6 +62,7 @@ const DispatchTable = ({
 }) => {
   // --- État moteur via WebSocket et polling ---
   const socket = useCompanySocket();
+  const queryClient = useQueryClient();
   const {
     label,
     progress,
@@ -214,6 +218,10 @@ const DispatchTable = ({
       // Verify that the structure is as expected
       if (data && (data.dispatch_run_id || data.date)) {
         handleDispatchCompleted(data);
+        // ✅ Invalider React Query pour forcer le refetch des données
+        queryClient.invalidateQueries(['assigned-reservations', dispatchDay]);
+        queryClient.invalidateQueries(['dispatch-delays', dispatchDay]);
+        queryClient.invalidateQueries(['reservations']);
       } else {
         console.error("Structure d'événement dispatch_run_completed invalide:", data);
       }
@@ -224,11 +232,10 @@ const DispatchTable = ({
     return () => {
       socket.off('dispatch_run_completed', onDispatchRunCompleted);
     };
-  }, [socket, reload, dispatchDay]);
+  }, [socket, reload, dispatchDay, queryClient]);
 
   // --- "dernière mise à jour" ---
   const [updatedAt, setUpdatedAt] = useState(Date.now());
-  const [lastDelayUpdate, setLastDelayUpdate] = useState(Date.now()); // Track last delay update
   const [relativeNow, setRelativeNow] = useState(Date.now());
   useEffect(() => {
     const id = setInterval(() => setRelativeNow(Date.now()), 60_000);
@@ -261,94 +268,66 @@ const DispatchTable = ({
     setRows(normalizeAndSort(dispatches));
   }, [dispatches]);
 
-  // Charger les retards calculés par le backend pour la journée sélectionnée
+  // ✅ Fonction helper pour traiter les données de retards
+  const processDelayData = React.useCallback((data) => {
+    const map = {};
+    for (const d of data || []) {
+      const bid = d.booking_id;
+      if (!bid) continue;
+      const prev = map[bid]?.delay_minutes ?? 0;
+      const cur = Number(
+        d.delay_minutes ?? d.pickup_delay_minutes ?? d.dropoff_delay_minutes ?? 0
+      );
+      if (!map[bid] || cur > prev) {
+        map[bid] = {
+          booking_id: bid,
+          delay_minutes: cur,
+          is_dropoff: d.is_dropoff || false,
+          estimated_arrival: d.estimated_arrival || d.pickup_eta || d.dropoff_eta || null,
+          scheduled_time: d.scheduled_time || null,
+        };
+      }
+    }
+    setDelays(map);
+  }, []);
+
+  // ✅ Charger les retards calculés par le backend pour la journée sélectionnée (chargement initial)
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       try {
         const data = await fetchDispatchDelays(dispatchDay);
         if (cancelled) return;
-        const map = {};
-        for (const d of data || []) {
-          const bid = d.booking_id;
-          if (!bid) continue;
-          const prev = map[bid]?.delay_minutes ?? 0;
-          const cur = Number(
-            d.delay_minutes ?? d.pickup_delay_minutes ?? d.dropoff_delay_minutes ?? 0
-          );
-          if (!map[bid] || cur > prev) {
-            map[bid] = {
-              booking_id: bid,
-              delay_minutes: cur,
-              is_dropoff: d.is_dropoff || false,
-              estimated_arrival: d.estimated_arrival || d.pickup_eta || d.dropoff_eta || null,
-              scheduled_time: d.scheduled_time || null,
-            };
-          }
-        }
-        setDelays(map);
-        setLastDelayUpdate(Date.now()); // ✅ Track last delay update
+        processDelayData(data);
       } catch {}
     };
     load();
-    const id = setInterval(load, 30000);
     return () => {
       cancelled = true;
-      clearInterval(id);
     };
-  }, [dispatchDay]);
+  }, [dispatchDay, processDelayData]);
   
-  // ✅ Polling de secours : actualiser toutes les 60s si socket déconnecté ou données stale
-  useEffect(() => {
-    const pollingInterval = setInterval(() => {
-      const socketDead = !socket?.connected;
-      const delaysStale = Date.now() - lastDelayUpdate > 60000; // >60s sans mise à jour
-      
-      if (socketDead || delaysStale) {
-        console.log(JSON.stringify({
-          event: 'dispatch_polling_fallback',
-          reason: socketDead ? 'socket_disconnected' : 'data_stale',
-          socket_connected: socket?.connected || false,
-          time_since_last_update_ms: Date.now() - lastDelayUpdate,
-          timestamp: new Date().toISOString()
-        }));
-        
-        // Recharger les retards
-        fetchDispatchDelays(dispatchDay)
-          .then((data) => {
-            const map = {};
-            for (const d of data || []) {
-              const bid = d.booking_id;
-              if (!bid) continue;
-              const prev = map[bid]?.delay_minutes ?? 0;
-              const cur = Number(
-                d.delay_minutes ?? d.pickup_delay_minutes ?? d.dropoff_delay_minutes ?? 0
-              );
-              if (!map[bid] || cur > prev) {
-                map[bid] = {
-                  booking_id: bid,
-                  delay_minutes: cur,
-                  is_dropoff: d.is_dropoff || false,
-                  estimated_arrival: d.estimated_arrival || d.pickup_eta || d.dropoff_eta || null,
-                  scheduled_time: d.scheduled_time || null,
-                };
-              }
-            }
-            setDelays(map);
-            setLastDelayUpdate(Date.now());
-          })
-          .catch((err) => {
-            console.warn(JSON.stringify({
-              event: 'dispatch_polling_error',
-              error: err?.message || String(err),
-              timestamp: new Date().toISOString()
-            }));
-          });
-      }
-    }, 60000); // Toutes les 60s
-    
-    return () => clearInterval(pollingInterval);
-  }, [socket, lastDelayUpdate, dispatchDay]);
+  // ✅ Polling hybride : Socket.IO (primary) + Polling (fallback/safety net)
+  useHybridDataSync({
+    fetchFn: async () => {
+      const data = await fetchDispatchDelays(dispatchDay);
+      processDelayData(data);
+      return data;
+    },
+    socket,
+    staleThreshold: 120000, // 2 minutes
+    pollIntervalConnected: 180000, // 3 minutes quand socket connecté
+    pollIntervalDisconnected: 45000, // 45 secondes quand socket déconnecté
+    onUpdate: (timestamp) => {
+      // Mise à jour effectuée via processDelayData dans fetchFn
+      console.log(JSON.stringify({
+        event: 'hybrid_poll_update',
+        timestamp: new Date(timestamp).toISOString(),
+        socket_connected: socket?.connected || false,
+      }));
+    },
+    dependencies: [dispatchDay],
+  });
 
   // --- Abonnement Socket pour la date sélectionnée + évènements temps réel ---
   useEffect(() => {
@@ -376,6 +355,7 @@ const DispatchTable = ({
             : b
         )
       );
+      // Note: L'invalidation React Query est gérée par useSocketInvalidation
     };
 
     const onAssignmentUpdated = (data) => {
@@ -386,12 +366,14 @@ const DispatchTable = ({
             : b
         )
       );
+      // Note: L'invalidation React Query est gérée par useSocketInvalidation
     };
 
     const onAssignmentCancelled = (data) => {
       setRows((prev) =>
         prev.map((b) => (b.id === data.booking_id ? { ...b, assignment: null } : b))
       );
+      // Note: L'invalidation React Query est gérée par useSocketInvalidation
     };
 
     const onDelayDetected = (data) => {
@@ -415,6 +397,7 @@ const DispatchTable = ({
           driver_id: data.driver_id,
         },
       }));
+      // Note: L'invalidation React Query est gérée par useSocketInvalidation
     };
 
     const onBookingStatusChanged = (data) => {
@@ -428,6 +411,7 @@ const DispatchTable = ({
           return cp;
         });
       }
+      // Note: L'invalidation React Query est gérée par useSocketInvalidation
     };
 
     // NB : on écoute aussi si tu souhaites ajuster visuellement les ETAs
@@ -480,6 +464,35 @@ const DispatchTable = ({
       } catch (_) {}
     };
   }, [socket, dispatchDay]);
+
+  // ✅ Utiliser le hook réutilisable pour invalider React Query sur événements Socket.IO
+  useSocketInvalidation(
+    socket,
+    {
+      'dispatch_run_completed': [
+        ['assigned-reservations', dispatchDay],
+        ['dispatch-delays', dispatchDay],
+        ['reservations'],
+      ],
+      'dispatch:assignment:created': [
+        ['assigned-reservations', dispatchDay],
+        ['reservations'],
+      ],
+      'dispatch:assignment:updated': [['assigned-reservations', dispatchDay]],
+      'dispatch:assignment:cancelled': [
+        ['assigned-reservations', dispatchDay],
+        ['reservations'],
+      ],
+      'dispatch:delay:detected': [['dispatch-delays', dispatchDay]],
+      'booking:status:changed': [
+        ['reservations'],
+        ['assigned-reservations', dispatchDay],
+      ],
+    },
+    {
+      dependencies: [dispatchDay],
+    }
+  );
 
   // --- Réassignation ---
   const [reModalOpen, setReModalOpen] = useState(false);
@@ -541,6 +554,15 @@ const DispatchTable = ({
     return Math.round((a.getTime() - b.getTime()) / 60000);
   };
   const timingStatus = (b) => {
+    // ✅ Vérifier d'abord si la course est terminée - ne pas calculer de retard
+    const st = (b.status || '').toLowerCase();
+    const isDone = st === 'completed' || st === 'return_completed' || st === 'cancelled';
+    
+    // Si la course est terminée, retourner "À l'heure" (pas de retard)
+    if (isDone) {
+      return { kind: 'on_time', minutes: 0, label: "À l'heure" };
+    }
+    
     // 1) signalements temps réel (prend le pas)
     const d = delays[b.id];
     if (d && typeof d.delay_minutes === 'number') {
@@ -572,8 +594,6 @@ const DispatchTable = ({
       }
     }
     // 3) impossibilité: pas d'assignation et statut actif/à venir
-    const st = (b.status || '').toLowerCase();
-    const isDone = st === 'completed' || st === 'cancelled';
     if (!b.assignment && !isDone) {
       return {
         kind: 'impossible',

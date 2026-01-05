@@ -8,24 +8,37 @@ const ProtectedRoute = ({ allowedRoles, children }) => {
   const rawUser = localStorage.getItem('user');
   const user = rawUser ? JSON.parse(rawUser) : null;
 
-  // Pas de token → login
-  if (!token) {
+  // ✅ Vérifier l'authentification : soit token dans localStorage (mobile), soit infos utilisateur (web avec cookies)
+  // Si on utilise des cookies httpOnly, le token n'est pas dans localStorage, mais les infos utilisateur sont stockées
+  if (!token && !user) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
-  // Vérif expiration & rôle depuis le token (source de vérité)
+  // ✅ Si on a un token dans localStorage (mode mobile), vérifier son expiration
+  // Si on utilise des cookies (pas de token), on compte sur le backend pour vérifier l'authentification
   let role = null;
-  try {
-    const payload = jwtDecode(token);
-    const now = Math.floor(Date.now() / 1000);
-    if (typeof payload.exp === 'number' && payload.exp <= now) {
+  if (token) {
+    try {
+      const payload = jwtDecode(token);
+      const now = Math.floor(Date.now() / 1000);
+      if (typeof payload.exp === 'number' && payload.exp <= now) {
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('user');
+        return <Navigate to="/login" replace state={{ from: location }} />;
+      }
+      role = String(payload?.role ?? user?.role ?? '').toLowerCase();
+    } catch {
+      // Token invalide, supprimer et rediriger
       localStorage.removeItem('authToken');
       localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
       return <Navigate to="/login" replace state={{ from: location }} />;
     }
-    role = String(payload?.role ?? user?.role ?? '').toLowerCase();
-  } catch {
-    return <Navigate to="/login" replace state={{ from: location }} />;
+  } else {
+    // ✅ Mode cookies httpOnly : utiliser les infos utilisateur stockées
+    // Le backend vérifiera l'authentification via les cookies
+    role = String(user?.role ?? '').toLowerCase();
   }
 
   // Si des rôles sont exigés, comparer en lowercase

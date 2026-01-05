@@ -31,10 +31,17 @@ class ReportGenerator:
 
         """
         from models import Company
+        from repositories.company_repository import CompanyRepository
         from services.analytics.aggregator import get_period_analytics
         from services.analytics.insights import generate_insights
 
-        company = Company.query.get(company_id)
+        # ✅ Utilisation du repository pour découpler de SQLAlchemy
+        company_repo = CompanyRepository()
+        company_dto = company_repo.find_by_id(company_id)
+        if not company_dto:
+            return {"error": "Company not found"}
+        # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+        company = Company.query.get(company_dto.id)
         if not company:
             return {"error": "Company not found"}
 
@@ -75,10 +82,17 @@ class ReportGenerator:
 
         """
         from models import Company
+        from repositories.company_repository import CompanyRepository
         from services.analytics.aggregator import get_weekly_summary
         from services.analytics.insights import generate_insights
 
-        company = Company.query.get(company_id)
+        # ✅ Utilisation du repository pour découpler de SQLAlchemy
+        company_repo = CompanyRepository()
+        company_dto = company_repo.find_by_id(company_id)
+        if not company_dto:
+            return {"error": "Company not found"}
+        # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+        company = Company.query.get(company_dto.id)
         if not company:
             return {"error": "Company not found"}
 

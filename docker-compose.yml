@@ -9,6 +9,13 @@ services:
     ports: ["5432:5432"] # pratique en dev
     volumes:
       - pg_data:/var/lib/postgresql/data
+      # ✅ P1: Configuration PostgreSQL pour monitoring des performances
+      - ./backend/config/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./backend/config/postgres/init-postgres-monitoring.sql:/docker-entrypoint-initdb.d/01-monitoring.sql:ro
+    command:
+      - postgres
+      - -c
+      - config_file=/etc/postgresql/postgresql.conf
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U atmr -d atmr"]
       interval: 5s
@@ -38,6 +45,29 @@ services:
   #   networks:
   #     - default
 
+  migrations:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.production
+      target: development
+    command: alembic upgrade head
+    env_file:
+      - backend/.env
+    environment:
+      - PYTHONPATH=/app
+      - DATABASE_URL=postgresql+psycopg://atmr:atmr@postgres:5432/atmr
+      - FLASK_CONFIG=${FLASK_CONFIG:-development}
+      - FLASK_ENV=${FLASK_ENV:-development}
+      - FLASK_APP=app.py
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    profiles:
+      - migrations # Service optionnel, activer avec: docker-compose --profile migrations up migrations
+
   api:
     build:
       context: ./backend
@@ -62,7 +92,7 @@ services:
       gunicorn wsgi:app
       --bind 0.0.0.0:5000
       --worker-class eventlet
-      --workers ${GUNICORN_WORKERS:-2}
+      --workers ${GUNICORN_WORKERS:-1}
       --timeout 120
       --access-logfile -
       --error-logfile -
@@ -87,6 +117,7 @@ services:
       - UD_OSRM_URL=${UD_OSRM_URL:-http://osrm:5000}
       - SOCKETIO_CORS_ORIGINS=${SOCKETIO_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       - FLASK_CONFIG=${FLASK_CONFIG:-development}
+      - DEBUG_LOG_PATH=/app/.cursor/debug.log
       - FLASK_ENV=${FLASK_ENV:-development}
       - FLASK_APP=app.py
       - TZ=Europe/Zurich

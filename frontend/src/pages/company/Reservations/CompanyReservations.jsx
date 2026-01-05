@@ -19,6 +19,8 @@ import ReservationMapView from './components/ReservationMapView';
 import ReservationAlerts from './components/ReservationAlerts';
 import TopClients from './components/TopClients';
 import ReservationModals from '../../../components/reservations/ReservationModals';
+import TransferBookingModal from '../../../components/reservations/TransferBookingModal';
+import { toast } from 'sonner';
 import styles from './CompanyReservations.module.css';
 
 const CompanyReservations = () => {
@@ -37,6 +39,8 @@ const CompanyReservations = () => {
   const [reservationToDelete, setReservationToDelete] = useState(null);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [scheduleModalReservation, setScheduleModalReservation] = useState(null);
+  const [transferModalOpen, setTransferModalOpen] = useState(false);
+  const [transferModalReservation, setTransferModalReservation] = useState(null);
 
   // Nouveaux états pour les améliorations
   const [activeTab, setActiveTab] = useState('all');
@@ -58,6 +62,29 @@ const CompanyReservations = () => {
       setViewMode('table');
     }
   }, [selectedDay, viewMode]);
+
+  // ✅ Fonction helper pour vérifier si une réservation est terminée (cohérent avec OverviewCards)
+  const isCompletedStatus = useCallback((status) => {
+    const normStatus = String(status || '').toLowerCase();
+    return ['completed', 'return_completed', 'done', 'finished'].includes(normStatus);
+  }, []);
+
+  // Calculer les statistiques
+  const calculateStats = useCallback((reservationsData) => {
+    const newStats = {
+      total: reservationsData.length,
+      pending: reservationsData.filter((r) => r.status === 'pending').length,
+      inProgress: reservationsData.filter((r) =>
+        ['accepted', 'assigned', 'in_progress'].includes(r.status)
+      ).length,
+      completed: reservationsData.filter((r) => isCompletedStatus(r.status)).length,
+      canceled: reservationsData.filter((r) => r.status === 'canceled').length,
+      revenue: reservationsData
+        .filter((r) => isCompletedStatus(r.status))
+        .reduce((sum, r) => sum + (Number(r.amount) || 0), 0),
+    };
+    setStats(newStats);
+  }, [isCompletedStatus]);
 
   // Chargement des réservations avec calculs des statistiques et alertes
   const loadReservations = useCallback(async () => {
@@ -95,30 +122,7 @@ const CompanyReservations = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedDay]);
-
-  // ✅ Fonction helper pour vérifier si une réservation est terminée (cohérent avec OverviewCards)
-  const isCompletedStatus = useCallback((status) => {
-    const normStatus = String(status || '').toLowerCase();
-    return ['completed', 'return_completed', 'done', 'finished'].includes(normStatus);
-  }, []);
-
-  // Calculer les statistiques
-  const calculateStats = useCallback((reservationsData) => {
-    const newStats = {
-      total: reservationsData.length,
-      pending: reservationsData.filter((r) => r.status === 'pending').length,
-      inProgress: reservationsData.filter((r) =>
-        ['accepted', 'assigned', 'in_progress'].includes(r.status)
-      ).length,
-      completed: reservationsData.filter((r) => isCompletedStatus(r.status)).length,
-      canceled: reservationsData.filter((r) => r.status === 'canceled').length,
-      revenue: reservationsData
-        .filter((r) => isCompletedStatus(r.status))
-        .reduce((sum, r) => sum + (Number(r.amount) || 0), 0),
-    };
-    setStats(newStats);
-  }, [isCompletedStatus]);
+  }, [selectedDay, calculateStats]);
 
   // Générer les alertes
   const generateAlerts = (reservationsData) => {
@@ -279,6 +283,23 @@ const CompanyReservations = () => {
       setScheduleModalReservation(null);
       throw err; // Laisser le modal afficher l'erreur
     }
+  };
+
+  // Handler pour ouvrir le modal de transfert
+  const handleOpenTransferModal = (reservation) => {
+    const resObj =
+      typeof reservation === 'object'
+        ? reservation
+        : reservations.find((r) => r.id === reservation);
+    if (!resObj) return;
+    setTransferModalReservation(resObj);
+    setTransferModalOpen(true);
+  };
+
+  // Callback après transfert réussi
+  const handleTransferSuccess = () => {
+    loadReservations();
+    toast.success('Course transférée avec succès');
   };
 
   const handleDispatchNow = async (reservation) => {
@@ -588,6 +609,7 @@ const CompanyReservations = () => {
                     onAccept={handleAccept}
                     onReject={handleReject}
                     onEdit={handleEdit}
+                    onTransfer={handleOpenTransferModal}
                     onSchedule={handleSchedule}
                     onDispatchNow={handleDispatchNow}
                     hideAssign={true}
@@ -758,6 +780,17 @@ const CompanyReservations = () => {
             deleteModalReservation={null}
             onDeleteConfirm={() => {}}
             onDeleteClose={() => {}}
+          />
+
+          {/* Modal de transfert */}
+          <TransferBookingModal
+            isOpen={transferModalOpen}
+            onClose={() => {
+              setTransferModalOpen(false);
+              setTransferModalReservation(null);
+            }}
+            reservation={transferModalReservation}
+            onSuccess={handleTransferSuccess}
           />
         </main>
       </div>

@@ -15,7 +15,11 @@ from typing import Any, Dict
 
 # Import optionnel prometheus_client (peut ne pas être installé en dev)
 try:
-    from prometheus_client import Counter, Gauge, Histogram
+    from prometheus_client import (  # pyright: ignore[reportMissingImports]
+        Counter,
+        Gauge,
+        Histogram,
+    )
 
     PROMETHEUS_AVAILABLE = True
 except ImportError:
@@ -121,7 +125,7 @@ else:
 class OSrmCacheMetricsCounter:
     """Compteur thread-safe pour hits/misses cache OSRM."""
 
-    _instance: "OSrmCacheMetricsCounter | None" = None
+    _instance: OSrmCacheMetricsCounter | None = None
     _lock = RLock()
 
     def __init__(self) -> None:  # type: ignore[override]
@@ -135,7 +139,7 @@ class OSrmCacheMetricsCounter:
         )  # RLock pour éviter deadlock dans _update_hit_rate_gauge()
 
     @classmethod
-    def get_instance(cls) -> "OSrmCacheMetricsCounter":
+    def get_instance(cls) -> OSrmCacheMetricsCounter:
         """Retourne l'instance singleton."""
         if cls._instance is None:
             with cls._lock:
@@ -325,6 +329,11 @@ def get_top_misses(n: int = 10) -> Dict[str, int]:
 def get_cache_metrics_dict() -> Dict[str, Any]:
     """Retourne les métriques en dictionnaire."""
     return OSrmCacheMetricsCounter.get_instance().to_dict()
+
+
+def get_osrm_cache_metrics() -> Dict[str, Any]:
+    """Retourne les métriques OSRM (alias pour compatibilité)."""
+    return get_cache_metrics_dict()
 
 
 # ==================== Alerts ====================

@@ -6,10 +6,10 @@ Vérifie les limites de sécurité avant actions.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, Tuple
 
-from flask import current_app
+from flask import current_app  # pyright: ignore[reportMissingImports]
 
 from models import Booking, Client
 from models.autonomous_action import AutonomousAction
@@ -148,8 +148,16 @@ class SafetyPolicy:
         """
         with current_app.app_context():
             try:
-                booking = Booking.query.get(booking_id)
-                if not booking or not booking.client_id:
+                # ✅ Utilisation du repository pour découpler de SQLAlchemy
+                from repositories.booking_repository import BookingRepository
+
+                booking_repo = BookingRepository()
+                booking_dto = booking_repo.find_by_id(booking_id)
+                if not booking_dto or not booking_dto.client_id:
+                    return True, "OK"
+                # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+                booking = Booking.query.get(booking_dto.id)
+                if not booking:
                     return True, "OK"
 
                 client = Client.query.get(booking.client_id)
@@ -193,12 +201,20 @@ class SafetyPolicy:
 
         with current_app.app_context():
             try:
-                booking = Booking.query.get(booking_id)
-                if not booking or not booking.client_id:
+                # ✅ Utilisation du repository pour découpler de SQLAlchemy
+                from repositories.booking_repository import BookingRepository
+
+                booking_repo = BookingRepository()
+                booking_dto = booking_repo.find_by_id(booking_id)
+                if not booking_dto or not booking_dto.client_id:
+                    return True, "OK"
+                # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+                booking = Booking.query.get(booking_dto.id)
+                if not booking:
                     return True, "OK"
 
                 # Compter réassignations pour ce client dans les 30 dernières minutes
-                thirty_min_ago = datetime.now(timezone.utc) - timedelta(minutes=30)
+                thirty_min_ago = datetime.now(UTC) - timedelta(minutes=30)
 
                 recent_reassignments = AutonomousAction.query.filter(
                     AutonomousAction.company_id == self.company_id,

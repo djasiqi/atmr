@@ -261,6 +261,8 @@ jobs:
       SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
       ALERTMANAGER_FROM_EMAIL: ${{ secrets.ALERTMANAGER_FROM_EMAIL }}
       ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+      # ✅ S1: CORS - Origines autorisées pour production (requis)
+      SOCKETIO_CORS_ORIGINS: ${{ secrets.SOCKETIO_CORS_ORIGINS }}
 
     steps:
       - name: Checkout code
@@ -282,6 +284,7 @@ jobs:
             "REDIS_PASSWORD"
             "DOCKER_IMAGE"
             "DOCKER_TAG"
+            "SOCKETIO_CORS_ORIGINS"
           )
           MISSING_SECRETS=()
           for secret in "${REQUIRED_SECRETS[@]}"; do
@@ -378,7 +381,7 @@ jobs:
           username: ${{ env.SSH_USER }}
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
-          envs: APP_ENCRYPTION_KEY_B64,SECRET_KEY,JWT_SECRET_KEY,POSTGRES_PASSWORD,POSTGRES_USER,POSTGRES_DB,REDIS_PASSWORD,REDIS_URL,MAIL_PASSWORD,SENTRY_DSN,PDF_BASE_URL,GOOGLE_MAPS_API_KEY,DOCKER_IMAGE,DOCKER_TAG,DATABASE_URL,SQLALCHEMY_DATABASE_URI,GRAFANA_ADMIN_USER,GRAFANA_ADMIN_PASSWORD,GRAFANA_ROOT_URL,SLACK_WEBHOOK_URL,SMTP_HOST,SMTP_PORT,SMTP_USERNAME,SMTP_PASSWORD,ALERTMANAGER_FROM_EMAIL,ALERT_EMAIL_TO
+          envs: APP_ENCRYPTION_KEY_B64,SECRET_KEY,JWT_SECRET_KEY,POSTGRES_PASSWORD,POSTGRES_USER,POSTGRES_DB,REDIS_PASSWORD,REDIS_URL,MAIL_PASSWORD,SENTRY_DSN,PDF_BASE_URL,GOOGLE_MAPS_API_KEY,DOCKER_IMAGE,DOCKER_TAG,DATABASE_URL,SQLALCHEMY_DATABASE_URI,GRAFANA_ADMIN_USER,GRAFANA_ADMIN_PASSWORD,GRAFANA_ROOT_URL,SLACK_WEBHOOK_URL,SMTP_HOST,SMTP_PORT,SMTP_USERNAME,SMTP_PASSWORD,ALERTMANAGER_FROM_EMAIL,ALERT_EMAIL_TO,SOCKETIO_CORS_ORIGINS
           script: |
             cd /srv/atmr
             set -o errexit -o nounset -o pipefail
@@ -439,6 +442,8 @@ jobs:
             export SMTP_PASSWORD="${{ secrets.SMTP_PASSWORD }}"
             export ALERTMANAGER_FROM_EMAIL="${{ secrets.ALERTMANAGER_FROM_EMAIL }}"
             export ALERT_EMAIL_TO="${{ secrets.ALERT_EMAIL_TO }}"
+            # ✅ S1: CORS - Origines autorisées pour production
+            export SOCKETIO_CORS_ORIGINS="${{ secrets.SOCKETIO_CORS_ORIGINS }}"
 
             MISSING_SECRETS=()
             [ -z "${APP_ENCRYPTION_KEY_B64:-}" ] && MISSING_SECRETS+=("APP_ENCRYPTION_KEY_B64")
@@ -450,6 +455,7 @@ jobs:
             [ -z "${REDIS_PASSWORD:-}" ] && MISSING_SECRETS+=("REDIS_PASSWORD")
             [ -z "${DOCKER_IMAGE:-}" ] && MISSING_SECRETS+=("DOCKER_IMAGE")
             [ -z "${DOCKER_TAG:-}" ] && MISSING_SECRETS+=("DOCKER_TAG")
+            [ -z "${SOCKETIO_CORS_ORIGINS:-}" ] && MISSING_SECRETS+=("SOCKETIO_CORS_ORIGINS")
             [ ${#MISSING_SECRETS[@]} -ne 0 ] && { echo "❌ Secrets manquants: ${MISSING_SECRETS[*]}"; exit 1; }
 
             ESCAPED_PASSWORD=$(python3 -c "from urllib.parse import quote_plus; import sys; print(quote_plus(sys.argv[1]))" "${POSTGRES_PASSWORD}")
@@ -512,6 +518,8 @@ jobs:
               echo "SMTP_PASSWORD=${SMTP_PASSWORD:-}"
               echo "ALERTMANAGER_FROM_EMAIL=${ALERTMANAGER_FROM_EMAIL:-}"
               echo "ALERT_EMAIL_TO=${ALERT_EMAIL_TO:-}"
+              # ✅ S1: CORS - Origines autorisées pour production
+              echo "SOCKETIO_CORS_ORIGINS=${SOCKETIO_CORS_ORIGINS:-}"
             } > .env.production && chmod 600 .env.production
             cp .env.production .env && chmod 600 .env
             mkdir -p data/rl/shadow_mode data/ml data/rl data/ml/models && chmod -R 755 data && chown -R 999:999 data 2>/dev/null || true

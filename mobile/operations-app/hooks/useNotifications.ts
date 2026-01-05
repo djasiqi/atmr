@@ -6,9 +6,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Device from "expo-device";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
+import * as Linking from "expo-linking";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/services/api";
 import { getErrorMessage, logError } from "@/utils/errorHandler";
+import { validateDeepLink } from "@/services/deepLinkHandler";
 
 // Détecter si on est en dev/local
 const isDevLocal = __DEV__ === true || Constants.executionEnvironment === "bare";
@@ -139,7 +141,34 @@ export const useNotifications = () => {
           "📲 L'utilisateur a interagi avec une notification:",
           response
         );
-        // TODO: Ajouter la logique de navigation ici (ex: rediriger vers un écran)
+        
+        // ✅ Extract deep link from notification data
+        const notificationData = response.notification.request.content.data;
+        const deepLink = notificationData?.deepLink;
+        
+        if (deepLink) {
+          console.log("🔗 Deep link détecté:", deepLink);
+          
+          // ✅ Valider le deep link (sécurité: anti-injection, anti-open-redirect)
+          if (typeof deepLink === "string") {
+            const validation = validateDeepLink(deepLink);
+            
+            if (validation.valid) {
+              // Use expo-linking to handle the deep link
+              // This will trigger the router to navigate
+              Linking.openURL(deepLink).catch((error) => {
+                console.warn("❌ Failed to open deep link:", error);
+                logError("Deep link navigation failed", error);
+              });
+            } else {
+              console.warn("⚠️ Deep link invalide:", validation.error, deepLink);
+            }
+          } else {
+            console.warn("⚠️ Deep link n'est pas une chaîne:", typeof deepLink);
+          }
+        } else {
+          console.log("ℹ️ Aucun deep link dans la notification");
+        }
       });
 
     // Étape 3 : Nettoyer les écouteurs quand le composant est démonté

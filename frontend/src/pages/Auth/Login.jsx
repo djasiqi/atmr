@@ -54,22 +54,42 @@ const Login = () => {
       const response = await apiClient.post('/auth/login', formData);
       const { token, user, refresh_token } = response.data;
 
+      // #region agent log
+      console.log('[Login] Réponse API:', { hasToken: !!token, tokenType: typeof token, tokenValue: token, hasUser: !!user, responseData: response.data, cookies: document.cookie });
+      // #endregion
+
       if (!user || !user.role || !user.public_id) {
         throw new Error('Aucune information utilisateur reçue.');
       }
 
       console.log('✅ Connexion réussie :', user);
 
-      // Stocker les infos utilisateur
-      localStorage.setItem('authToken', token);
-      if (refresh_token) localStorage.setItem('refreshToken', refresh_token);
-      localStorage.setItem('public_id', user.public_id);
-
-      // Décoder le token pour vérifier les informations (notamment le rôle)
-      const decodedToken = jwtDecode(token);
-      const roleSegment = String(decodedToken.role || user.role || '').toLowerCase();
+      // ✅ Le backend utilise des cookies httpOnly pour l'authentification web
+      // Le token peut être dans la réponse JSON (pour mobile) ou dans un cookie (pour web)
+      // Si le token est présent dans la réponse, on le stocke dans localStorage (pour compatibilité mobile)
+      // Sinon, on utilise les cookies httpOnly (pour web)
+      let roleSegment;
+      if (token && typeof token === 'string') {
+        // Token présent dans la réponse JSON (mode mobile/compatibilité)
+        localStorage.setItem('authToken', token);
+        if (refresh_token) localStorage.setItem('refreshToken', refresh_token);
+        
+        // Décoder le token pour vérifier les informations (notamment le rôle)
+        // #region agent log
+        console.log('[Login] Token dans réponse JSON, décodage:', { token, tokenType: typeof token, tokenLength: token?.length });
+        // #endregion
+        const decodedToken = jwtDecode(token);
+        roleSegment = String(decodedToken.role || user.role || '').toLowerCase();
+      } else {
+        // ✅ Mode web avec cookies httpOnly : le token est dans un cookie, pas besoin de le décoder
+        // Le backend a déjà défini les cookies httpOnly, on utilise juste les infos utilisateur
+        console.log('[Login] Mode cookies httpOnly, pas de token dans la réponse JSON');
+        roleSegment = String(user.role || '').toLowerCase();
+      }
+      
       // Normaliser le rôle stocké (cohérent avec ProtectedRoute)
       localStorage.setItem('user', JSON.stringify({ ...user, role: roleSegment }));
+      localStorage.setItem('public_id', user.public_id);
 
       // Vérification si l'utilisateur doit réinitialiser son mot de passe
       if (user.force_password_change) {

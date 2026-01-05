@@ -4,7 +4,11 @@ Note: Les endpoints medical sont principalement GET avec query params.
 Ces schemas sont prêts pour validation si nécessaire à l'avenir.
 """
 
-from marshmallow import Schema, fields, validate
+from marshmallow import (  # pyright: ignore[reportMissingImports]
+    Schema,
+    fields,
+    validate,
+)
 
 
 class MedicalEstablishmentQuerySchema(Schema):

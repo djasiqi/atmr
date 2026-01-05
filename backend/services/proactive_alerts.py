@@ -14,7 +14,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, cast
 
-import numpy as np
+import numpy as np  # pyright: ignore[reportMissingImports]
 
 # Constantes pour éviter les valeurs magiques
 PREDICTED_DELAY_MINUTES_ZERO = 0
@@ -108,10 +108,7 @@ class ProactiveAlertsService:
 
             if self.delay_predictor.is_trained:
                 logger.info(
-                    (
-                        "[ProactiveAlerts] ✅ Modèle delay_predictor chargé via "
-                        "DelayMLPredictor"
-                    )
+                    "[ProactiveAlerts] ✅ Modèle delay_predictor chargé via DelayMLPredictor"
                 )
             else:
                 logger.warning(

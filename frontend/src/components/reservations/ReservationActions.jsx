@@ -1,6 +1,6 @@
 // src/components/reservations/ReservationActions.jsx
 import React from 'react';
-import { FiClock, FiZap, FiUserPlus, FiTrash2, FiEdit } from 'react-icons/fi';
+import { FiClock, FiZap, FiUserPlus, FiTrash2, FiEdit, FiShare2 } from 'react-icons/fi';
 import styles from './ReservationActions.module.css';
 
 /**
@@ -11,6 +11,7 @@ import styles from './ReservationActions.module.css';
  * - onSchedule(reservation) : Ouvre la modal de planification
  * - onDispatchNow(reservation) : Action directe (pas de modal)
  * - onAssign(reservation) : Ouvre la modal d'assignation
+ * - onTransfer(reservation) : Ouvre la modal de transfert à un partenaire
  * - onDelete(reservation) : Ouvre la modal de confirmation de suppression
  */
 const ReservationActions = ({
@@ -19,11 +20,13 @@ const ReservationActions = ({
   onDispatchNow,
   onAssign,
   onEdit, // 🆕 Action pour éditer la réservation
+  onTransfer, // 🆕 Action pour transférer à un partenaire
   onDelete,
   hideAssign = false, // Si true, cache le bouton assigner
   hideSchedule = false, // Si true, cache le bouton planifier l'heure
   hideUrgent = false, // Si true, cache le bouton urgent
   hideEdit = false, // Si true, cache le bouton éditer
+  hideTransfer = false, // Si true, cache le bouton transférer
   hideDelete = false, // Si true, cache le bouton supprimer
   showAll = false, // Si true, affiche toutes les actions disponibles
   className = '',
@@ -72,6 +75,9 @@ const ReservationActions = ({
   // Éditer : pour les statuts modifiables (pending, accepted, assigned)
   const editableStatuses = ['pending', 'accepted', 'assigned'];
   const showEdit = !hideEdit && editableStatuses.includes(status) && !!onEdit;
+  // Transférer : pour les statuts transférables (pending, accepted, assigned)
+  const transferableStatuses = ['pending', 'accepted', 'assigned'];
+  const showTransfer = !hideTransfer && transferableStatuses.includes(status) && !!onTransfer;
   // Supprimer : pour les retours à confirmer OU pour les statuts supprimables
   const showDelete = !hideDelete && (needsTimeConfirmation || isDeletable) && !!onDelete;
 
@@ -91,7 +97,7 @@ const ReservationActions = ({
   }
 
   // Si aucune action à afficher
-  if (!showSchedule && !showUrgent && !showAssign && !showEdit && !showDelete && !showAll) {
+  if (!showSchedule && !showUrgent && !showAssign && !showEdit && !showTransfer && !showDelete && !showAll) {
     return null;
   }
 
@@ -144,6 +150,17 @@ const ReservationActions = ({
           className={styles.actionButton}
         >
           <FiEdit />
+        </button>
+      )}
+
+      {/* Transférer à un partenaire */}
+      {showTransfer && (
+        <button
+          onClick={() => onTransfer?.(reservation)}
+          title="Transférer à un partenaire"
+          className={styles.actionButton}
+        >
+          <FiShare2 />
         </button>
       )}
 

@@ -10,11 +10,17 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from flask import request
-from flask_restx import Namespace, Resource, fields
-from werkzeug.exceptions import BadRequest
+from flask import request  # pyright: ignore[reportMissingImports]
+from flask_restx import (  # pyright: ignore[reportMissingImports]
+    Namespace,
+    Resource,
+    fields,
+)
+from werkzeug.exceptions import BadRequest  # pyright: ignore[reportMissingImports]
 
+from ext import limiter
 from services.version_check import check_app_version
+from shared.error_handlers import APIErrorHandler
 
 logger = logging.getLogger(__name__)
 
@@ -74,8 +80,17 @@ version_check_response = app_version_ns.model(
 class VersionCheck(Resource):
     """Endpoint pour vérifier si une mise à jour est requise ou recommandée."""
 
+    def options(self) -> tuple[dict[str, Any], int]:
+        """Gère les requêtes CORS preflight (OPTIONS)."""
+        # Flask-CORS devrait gérer cela automatiquement, mais cette méthode
+        # garantit que les requêtes preflight sont toujours gérées correctement
+        return {}, 200
+
     @app_version_ns.expect(version_check_request)
     @app_version_ns.marshal_with(version_check_response)
+    @limiter.limit(
+        "100 per minute"
+    )  # ✅ SECURITY: Rate limiting pour prévenir abus (endpoint public)
     @app_version_ns.doc(
         description=(
             "Vérifie la version de l'application et retourne le statut de mise à jour.\n\n"
@@ -127,10 +142,16 @@ class VersionCheck(Resource):
 
         except BadRequest as e:
             logger.warning("Version check - requête invalide: %s", e)
-            return {"error": str(e)}, 400
+            return APIErrorHandler.handle_validation_error(
+                str(e),
+                logger_instance=logger,
+            )
         except ValueError as e:
             logger.warning("Version check - erreur de validation: %s", e)
-            return {"error": str(e)}, 400
+            return APIErrorHandler.handle_validation_error(
+                str(e),
+                logger_instance=logger,
+            )
         except Exception as e:
             logger.exception("Version check - erreur serveur: %s", e)
-            return {"error": "Erreur serveur lors de la vérification de version"}, 500
+            return APIErrorHandler.handle_exception(e, logger)

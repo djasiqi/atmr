@@ -1,15 +1,18 @@
 """Enhanced healthcheck endpoint with DB and Redis checks."""
 
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify  # pyright: ignore[reportMissingImports]
 from sqlalchemy import text
 
-from ext import db, redis_client
+from ext import db, limiter, redis_client
 from services.websocket_healthcheck import check_websocket_health
 
 healthcheck_bp = Blueprint("healthcheck", __name__)
 
 
 @healthcheck_bp.route("/ready")
+@limiter.limit(
+    "1000 per minute"
+)  # ✅ SECURITY: Rate limiting élevé pour healthchecks (Kubernetes)
 def readiness():
     """Kubernetes readiness probe - vérifie dépendances critiques.
 
@@ -47,6 +50,7 @@ def readiness():
 
 
 @healthcheck_bp.route("/health/detailed")
+@limiter.limit("500 per minute")  # ✅ SECURITY: Rate limiting pour healthcheck détaillé
 def detailed_health():
     """Detailed healthcheck with component status
 
@@ -79,6 +83,9 @@ def detailed_health():
 
 
 @healthcheck_bp.route("/health/websocket")
+@limiter.limit(
+    "500 per minute"
+)  # ✅ SECURITY: Rate limiting pour healthcheck WebSocket
 def websocket_health():
     """Health check spécifique pour Socket.IO.
 

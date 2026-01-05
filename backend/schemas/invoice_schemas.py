@@ -1,6 +1,10 @@
 """✅ Schemas Marshmallow pour validation des endpoints invoices."""
 
-from marshmallow import Schema, fields, validate
+from marshmallow import (  # pyright: ignore[reportMissingImports]
+    Schema,
+    fields,
+    validate,
+)
 
 # ISO8601_DATE_REGEX et ISO8601_DATETIME_REGEX non nécessaires pour ces schemas
 
@@ -66,7 +70,7 @@ class BillingSettingsUpdateSchema(Schema):
     vat_label = fields.Str(validate=validate.Length(max=50), allow_none=True)
     vat_number = fields.Str(validate=validate.Length(max=50), allow_none=True)
 
-    class Meta:  # type: ignore
+    class Meta:
         unknown = "INCLUDE"
 
 

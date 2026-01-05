@@ -1,14 +1,15 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import styles from './NewInvoiceModal.module.css';
 import { generateInvoice, invoiceService } from '../../../../../services/invoiceService';
 import ReservationSelector from './ReservationSelector';
 
 const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initialDraft = null }) => {
-  const [billingType, setBillingType] = useState('direct'); // 'direct' ou 'third_party'
+  const [billingType, setBillingType] = useState('direct'); // 'direct', 'third_party' ou 'partner'
   const [formData, setFormData] = useState({
     client_id: '',
     client_ids: [],
     bill_to_client_id: '',
+    partnership_id: '',
     period_year: new Date().getFullYear(),
     period_month: new Date().getMonth() + 1,
   });
@@ -17,7 +18,12 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
   const [clientSearch, setClientSearch] = useState('');
   const [clientsLoading, setClientsLoading] = useState(false);
   const [clientsError, setClientsError] = useState(null);
+  // ✅ Référence pour garder le focus sur l'input de recherche
+  const clientSearchInputRef = useRef(null);
+  const wasInputFocusedRef = useRef(false);
   const [institutions, setInstitutions] = useState([]);
+  const [partners, setPartners] = useState([]);
+  const [partnersLoading, setPartnersLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
@@ -31,7 +37,11 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
     if (!open) return;
 
     if (initialDraft) {
-      const billing = initialDraft.billing_type === 'third_party' ? 'third_party' : 'direct';
+      const billing = initialDraft.billing_type === 'partner'
+        ? 'partner'
+        : initialDraft.billing_type === 'third_party'
+          ? 'third_party'
+          : 'direct';
       setBillingType(billing);
 
       setFormData({
@@ -42,6 +52,9 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
             : [],
         bill_to_client_id: initialDraft.bill_to_client_id
           ? String(initialDraft.bill_to_client_id)
+          : '',
+        partnership_id: initialDraft.partnership_id
+          ? String(initialDraft.partnership_id)
           : '',
         period_year: initialDraft.period_year ?? new Date().getFullYear(),
         period_month: initialDraft.period_month ?? new Date().getMonth() + 1,
@@ -129,6 +142,59 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
     };
   }, [companyId, open]);
 
+  // Charger la liste des partenaires facturables quand le type est "partner"
+  useEffect(() => {
+    if (!open || !companyId || billingType !== 'partner') return;
+
+    let isMounted = true;
+
+    const loadPartners = async () => {
+      try {
+        setPartnersLoading(true);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NewInvoiceModal.jsx:loadPartners',message:'Loading partners entry',data:{companyId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+        // #endregion
+        let response;
+        try {
+          response = await invoiceService.fetchBillablePartners(companyId);
+        } catch (err) {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NewInvoiceModal.jsx:loadPartners',message:'Error fetching partners',data:{errorMessage:err?.message,errorStatus:err?.response?.status,errorData:err?.response?.data,fullError:JSON.stringify(err)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+          // #endregion
+          throw err;
+        }
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NewInvoiceModal.jsx:loadPartners',message:'Response received',data:{hasResponse:!!response,responseType:typeof response,responseKeys:response ? Object.keys(response) : [],responseData:response?.data,responseDataData:response?.data?.data,responseDataType:typeof response?.data,partnersCount:response?.data?.data?.length||0,partners:response?.data?.data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+        // #endregion
+        if (!isMounted) return;
+        // La réponse est {data: [...]}, donc on accède à response.data.data
+        const partnersList = response?.data?.data || response?.data || [];
+        setPartners(partnersList);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NewInvoiceModal.jsx:loadPartners',message:'Partners set in state',data:{partnersCount:partnersList.length,partnersList},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+        // #endregion
+      } catch (err) {
+        console.error('Erreur lors du chargement des partenaires:', err);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NewInvoiceModal.jsx:loadPartners',message:'Error loading partners',data:{errorMessage:err?.message,errorStatus:err?.response?.status,errorData:err?.response?.data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+        // #endregion
+        if (isMounted) {
+          setError('Erreur lors du chargement des partenaires');
+        }
+      } finally {
+        if (isMounted) {
+          setPartnersLoading(false);
+        }
+      }
+    };
+
+    loadPartners();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [companyId, open, billingType]);
+
   useEffect(() => {
     if (!open || !companyId) return;
     let cancelled = false;
@@ -177,11 +243,37 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
         setClientsError(null);
         const query = clientSearch.trim();
 
+        console.log('🔍 [NewInvoiceModal] fetchEligibleClients appelé avec:', {
+          companyId,
+          search: query || undefined,
+          limit: 120,
+          year: formData.period_year,
+          month: formData.period_month,
+        });
+
         const response = await invoiceService.fetchEligibleClients(companyId, {
           search: query || undefined,
           limit: 120,
+          year: formData.period_year,
+          month: formData.period_month,
         });
-        const list = Array.isArray(response?.clients) ? response.clients : [];
+
+        console.log('🔍 [NewInvoiceModal] Réponse reçue:', {
+          response,
+          responseData: response?.data,
+          hasClients: !!(response?.data?.clients),
+          clientsType: typeof response?.data?.clients,
+          clientsLength: Array.isArray(response?.data?.clients) ? response.data.clients.length : 'N/A',
+          clients: response?.data?.clients,
+        });
+
+        // Le service retourne response.data, donc response est déjà {clients: [...], total: ...}
+        // Mais axios peut avoir une structure imbriquée, donc on vérifie les deux
+        const list = Array.isArray(response?.clients) 
+          ? response.clients 
+          : Array.isArray(response?.data?.clients) 
+            ? response.data.clients 
+            : [];
 
         if (!list.length) {
           setClientsError(
@@ -214,6 +306,16 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
       } finally {
         if (!cancelled) {
           setClientsLoading(false);
+          // ✅ Refocuser l'input après la mise à jour de la liste pour permettre la saisie continue
+          // Utiliser requestAnimationFrame pour s'assurer que le DOM est mis à jour
+          requestAnimationFrame(() => {
+            if (clientSearchInputRef.current && wasInputFocusedRef.current) {
+              clientSearchInputRef.current.focus();
+              // ✅ Restaurer la position du curseur à la fin du texte
+              const length = clientSearchInputRef.current.value.length;
+              clientSearchInputRef.current.setSelectionRange(length, length);
+            }
+          });
         }
       }
     };
@@ -224,7 +326,7 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [companyId, open, clientSearch]);
+  }, [companyId, open, clientSearch, formData.period_year, formData.period_month]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -502,6 +604,13 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
       }
     }
 
+    if (billingType === 'partner') {
+      if (!formData.partnership_id) {
+        setError('Veuillez sélectionner un partenaire');
+        return;
+      }
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -529,15 +638,39 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
           payload.overrides = overridePayload;
         }
 
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NewInvoiceModal.jsx:handleSubmit',message:'Appel generateInvoice',data:{companyId,payload:{client_id:payload.client_id,period_year:payload.period_year,period_month:payload.period_month,has_reservation_ids:!!payload.reservation_ids}},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
+
         result = await generateInvoice(companyId, payload);
 
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NewInvoiceModal.jsx:handleSubmit',message:'Réponse generateInvoice reçue',data:{has_result:!!result,result_type:result ? typeof result : 'null',result_keys:result ? Object.keys(result) : [],has_pdf_url:!!result?.pdf_url,has_data:!!result?.data,has_data_pdf_url:!!result?.data?.pdf_url,has_id:!!result?.id,result_stringified:JSON.stringify(result).substring(0,500)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
+
         // Ouvrir le PDF dans un nouvel onglet
-        if (result.pdf_url) {
+        if (result?.pdf_url) {
           window.open(result.pdf_url, '_blank');
+        } else if (result?.data?.pdf_url) {
+          // Si la structure est {data: {pdf_url: ...}}
+          window.open(result.data.pdf_url, '_blank');
         }
 
+        // Vérifier la structure de la réponse avant de notifier le parent
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NewInvoiceModal.jsx:handleSubmit',message:'Avant onInvoiceGenerated',data:{has_result_data:!!result?.data,has_result:!!result,will_call_with_data:!!result?.data,will_call_with_result:!result?.data && !!result,result_id:result?.id || result?.data?.id,result_period_year:result?.period_year || result?.data?.period_year,result_period_month:result?.period_month || result?.data?.period_month},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
+
+        if (result?.data) {
+          onInvoiceGenerated(result.data);
+        } else if (result) {
         onInvoiceGenerated(result);
-      } else {
+        }
+        
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NewInvoiceModal.jsx:handleSubmit',message:'Après onInvoiceGenerated',data:{called:true},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
+      } else if (billingType === 'third_party') {
         // Facturation tierce (consolidée)
         // NOUVEAU: Préparer le mapping des réservations par client
         const clientReservations = {};
@@ -583,16 +716,38 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
           result.invoices.forEach((inv) => onInvoiceGenerated(inv));
         }
 
-        if (result.errors && result.errors.length > 0) {
+        if (result?.errors && result.errors.length > 0) {
           const errorMessages = result.errors
             .map((e) => `Client ${e.client_id}: ${e.error}`)
             .join('\n');
           setError(`Erreurs:\n${errorMessages}`);
         }
+      } else if (billingType === 'partner') {
+        // Facturation partenaire
+        const payload = {
+          partnership_id: parseInt(formData.partnership_id),
+          period_year: formData.period_year,
+          period_month: formData.period_month,
+        };
+
+        result = await invoiceService.generatePartnerInvoice(companyId, payload);
+
+        // Ouvrir le PDF dans un nouvel onglet
+        if (result?.data?.pdf_url) {
+          window.open(result.data.pdf_url, '_blank');
+        }
+
+        // Vérifier que result.data existe avant de notifier le parent
+        if (result?.data) {
+        onInvoiceGenerated(result.data);
+        } else if (result) {
+          // Si result.data n'existe pas mais result existe, utiliser result directement
+          onInvoiceGenerated(result);
+        }
       }
 
       // Fermer le modal si tout s'est bien passé et pas d'erreurs
-      if (!result.errors || result.errors.length === 0) {
+      if (!result || !result.errors || result.errors.length === 0) {
         setTimeout(() => {
           onClose();
         }, 2000);
@@ -680,6 +835,16 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
                 />
                 Facturation tierce (clinique)
               </label>
+              <label className={styles.radioLabel}>
+                <input
+                  type="radio"
+                  value="partner"
+                  checked={billingType === 'partner'}
+                  onChange={(e) => setBillingType(e.target.value)}
+                  disabled={loading}
+                />
+                Facturation partenaire
+              </label>
             </div>
           </div>
 
@@ -691,12 +856,19 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
                   Recherche client
                 </label>
                 <input
+                  ref={clientSearchInputRef}
                   id="clientSearch"
                   type="search"
                   className={styles.searchInput}
                   placeholder="Nom, prénom ou email"
                   value={clientSearch}
                   onChange={(e) => setClientSearch(e.target.value)}
+                  onFocus={() => {
+                    wasInputFocusedRef.current = true;
+                  }}
+                  onBlur={() => {
+                    wasInputFocusedRef.current = false;
+                  }}
                   disabled={clientsLoading}
                 />
                 <small className={styles.hint}>
@@ -927,6 +1099,39 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
                 )}{' '}
                 transport(s) au total
               </small>
+            </>
+          )}
+
+          {/* Facturation partenaire */}
+          {billingType === 'partner' && (
+            <>
+              <div className={styles.formGroup}>
+                <label htmlFor="partnership_id" className={styles.label}>
+                  Partenaire *
+                </label>
+                <select
+                  id="partnership_id"
+                  name="partnership_id"
+                  value={formData.partnership_id}
+                  onChange={handleInputChange}
+                  className={styles.select}
+                  required
+                  disabled={loading || partnersLoading}
+                >
+                  <option value="">Sélectionner un partenaire</option>
+                  {partners.map((partner) => (
+                    <option key={partner.partnership_id} value={partner.partnership_id}>
+                      {partner.partner_company_name} ({partner.unbilled_transfers_count} transfert{partner.unbilled_transfers_count > 1 ? 's' : ''} • {formatCurrency(partner.total_amount)} {partner.currency})
+                    </option>
+                  ))}
+                </select>
+                {partnersLoading && <small className={styles.hint}>Chargement des partenaires…</small>}
+                {!partnersLoading && partners.length === 0 && (
+                  <small className={styles.hint}>
+                    Aucun partenaire avec transferts facturables pour le moment.
+                  </small>
+                )}
+              </div>
             </>
           )}
 

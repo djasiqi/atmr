@@ -114,11 +114,9 @@ def sanitize_email(email: str | None) -> str | None:
 
     # Pattern basique pour email (RFC 5322 simplifié)
     email_pattern = re.compile(
-        (
-            r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9]"
-            r"(?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?"
-            r"(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
-        )
+        r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9]"
+        + r"(?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?"
+        + r"(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
     )
 
     if not email_pattern.match(email_str):

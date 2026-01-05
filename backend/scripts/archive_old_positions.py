@@ -151,7 +151,7 @@ def archive_positions_older_than(
                     position_ids.append(position.id)
 
                 # Insérer dans archive (bulk insert pour performance)
-                db.session.bulk_insert_mappings(TripTrackingArchive, archive_mappings)
+                db.session.bulk_insert_mappings(TripTrackingArchive, archive_mappings)  # type: ignore[reportArgumentType]
 
                 # Supprimer de la table principale
                 TripTracking.query.filter(TripTracking.id.in_(position_ids)).delete(

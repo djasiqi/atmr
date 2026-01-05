@@ -10,12 +10,22 @@ from __future__ import annotations
 import base64
 import logging
 import os
-from typing import Optional
 
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes, padding
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.backends import (  # pyright: ignore[reportMissingImports]
+    default_backend,
+)
+from cryptography.hazmat.primitives import (  # pyright: ignore[reportMissingImports]
+    hashes,
+    padding,
+)
+from cryptography.hazmat.primitives.ciphers import (  # pyright: ignore[reportMissingImports]
+    Cipher,
+    algorithms,
+    modes,
+)
+from cryptography.hazmat.primitives.kdf.pbkdf2 import (  # pyright: ignore[reportMissingImports]
+    PBKDF2HMAC,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +43,8 @@ class EncryptionService:
 
     def __init__(
         self,
-        master_key: Optional[bytes] = None,
-        legacy_keys: Optional[list[bytes]] = None,
+        master_key: bytes | None = None,
+        legacy_keys: list[bytes] | None = None,
         key_rotation_interval: int = 90,  # jours
     ):
         """Initialise le service de chiffrement.
@@ -224,7 +234,7 @@ def rotate_to_new_key(service: EncryptionService, new_key: bytes) -> bytes:
 
 
 # Singleton global
-_encryption_service: Optional[EncryptionService] = None
+_encryption_service: EncryptionService | None = None
 
 
 def get_encryption_service() -> EncryptionService:

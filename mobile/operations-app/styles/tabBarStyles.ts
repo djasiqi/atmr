@@ -23,6 +23,16 @@ const palette = {
   labelInactive: "#5F7369",
 };
 
+const tabBarShadow = Platform.OS === 'web'
+  ? { boxShadow: '0 -4px 12px rgba(16,39,30,0.08)' }
+  : {
+      shadowColor: palette.shadow,
+      shadowOpacity: 0.1,
+      shadowOffset: { width: 0, height: -4 },
+      shadowRadius: 12,
+      elevation: 8,
+    };
+
 export const tabBarStyles = {
   tabBarStyle: {
     position: "absolute",
@@ -31,11 +41,7 @@ export const tabBarStyles = {
     borderTopRightRadius: 20,
     borderTopWidth: 1,
     borderColor: palette.border,
-    elevation: 8,
-    shadowColor: palette.shadow,
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: -4 },
-    shadowRadius: 12,
+    ...tabBarShadow,
     height: Platform.OS === "ios" ? 78 : 68,
     paddingBottom: Platform.OS === "ios" ? 22 : 14,
     paddingTop: 0, // ✅ Réduit pour monter un peu le contenu

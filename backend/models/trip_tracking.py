@@ -58,7 +58,9 @@ class TripTracking(db.Model):
             "speed": self.speed,
             "heading": self.heading,
             "accuracy": self.accuracy,
-            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "timestamp": self.timestamp.isoformat()
+            if bool(self.timestamp)
+            else None,
         }
 
     @override

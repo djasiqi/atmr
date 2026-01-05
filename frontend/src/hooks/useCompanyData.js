@@ -11,19 +11,49 @@ const useCompanyData = ({ day } = {}) => {
   const [driver, setDriver] = useState([]);
   const [loadingReservations, setLoadingReservations] = useState(true);
   const [loadingDriver, setLoadingDriver] = useState(true);
+  const [loadingCompany, setLoadingCompany] = useState(true);
   const [error, setError] = useState(null);
   const [company, setCompany] = useState(null);
 
   const loadCompany = useCallback(async () => {
     try {
+      setLoadingCompany(true);
+      setError(null);
+      
+      // ✅ Vérifier l'authentification : soit token dans localStorage (mobile), soit infos utilisateur (web avec cookies httpOnly)
+      // Si on utilise des cookies httpOnly, le token n'est pas dans localStorage, mais les infos utilisateur sont stockées
+      // Dans ce cas, on peut quand même faire la requête car les cookies seront envoyés automatiquement avec withCredentials: true
       const token = getAccessToken();
-      if (!token) return;
-
+      const hasToken = !!token;
+      const hasUser = !!localStorage.getItem('user');
+      
+      if (!hasToken && !hasUser) {
+        setError("Authentification manquante. Veuillez vous reconnecter.");
+        setLoadingCompany(false);
+        return;
+      }
+      
+      // Si on a un token OU des infos utilisateur, on peut faire la requête
+      // (les cookies httpOnly seront envoyés automatiquement si pas de token)
       const data = await fetchCompanyInfo();
-      setCompany(data);
+      
+      // Vérifier si fetchCompanyInfo a retourné un objet d'erreur
+      if (data?.error === true) {
+        setError("Erreur lors du chargement de l'entreprise.");
+        setCompany(null);
+      } else {
+        setCompany(data);
+      }
     } catch (err) {
-      console.error("❌ Erreur lors du chargement de l'entreprise :", err);
+      // Ne pas logger les erreurs 403/404/401 comme des erreurs critiques (permissions manquantes ou company non trouvée)
+      const status = err?.response?.status;
+      if (status !== 403 && status !== 404 && status !== 401) {
+        console.error("❌ Erreur lors du chargement de l'entreprise :", err);
+      }
       setError("Erreur lors du chargement de l'entreprise.");
+      setCompany(null);
+    } finally {
+      setLoadingCompany(false);
     }
   }, []);
 
@@ -39,7 +69,11 @@ const useCompanyData = ({ day } = {}) => {
       if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
         setError('La récupération des réservations a pris trop de temps. Veuillez réessayer.');
       } else {
-        console.error('❌ Erreur lors du chargement des réservations :', err);
+        // Ne pas logger les erreurs 403/404/401 comme des erreurs critiques
+        const status = err?.response?.status;
+        if (status !== 403 && status !== 404 && status !== 401) {
+          console.error('❌ Erreur lors du chargement des réservations :', err);
+        }
         setError('Erreur lors du chargement des réservations.');
       }
     } finally {
@@ -59,7 +93,11 @@ const useCompanyData = ({ day } = {}) => {
       if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
         setError('La récupération des chauffeurs a pris trop de temps. Veuillez réessayer.');
       } else {
-        console.error('❌ Erreur lors du chargement des chauffeurs :', err);
+        // Ne pas logger les erreurs 403/404/401 comme des erreurs critiques
+        const status = err?.response?.status;
+        if (status !== 403 && status !== 404 && status !== 401) {
+          console.error('❌ Erreur lors du chargement des chauffeurs :', err);
+        }
         setError('Erreur lors du chargement des chauffeurs.');
       }
     } finally {
@@ -78,6 +116,7 @@ const useCompanyData = ({ day } = {}) => {
     company,
     reservations,
     driver,
+    loadingCompany,
     loadingReservations,
     loadingDriver,
     error,

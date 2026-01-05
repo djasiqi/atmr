@@ -1,0 +1,24 @@
+/* KPIs Component Styles */
+
+.kpisContainer {
+  display: flex;
+  gap: 12px;
+}
+
+.badge {
+  padding: 8px;
+  background: #f3f4f6;
+  border-radius: 6px;
+  min-width: 80px;
+  text-align: center;
+}
+
+.badgeLabel {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.badgeValue {
+  font-weight: 700;
+}
+

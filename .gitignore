@@ -138,3 +138,18 @@ coverage/
 **/cypress/screenshots/
 
 # Note: backend/tests/ et pytest.ini sont maintenant suivis dans Git
+
+# ===== Cursor IDE =====
+.cursor/
+.cursor-server/
+backend/.cursor/
+backend/.cursor-server/
+**/.cursor/
+**/.cursor-server/
+
+# ===== Fichiers système et locaux =====
+backend/.local/
+backend/.bash_history
+backend/.gitconfig
+backend/.ssh/
+backend/.devcontainer/ 

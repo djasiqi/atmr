@@ -6,7 +6,7 @@ Permet l'amélioration continue du modèle DQN via apprentissage supervisé.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from sqlalchemy import JSON, Boolean, Column, DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -43,14 +43,14 @@ class RLFeedback(db.Model):
     # "applied", "rejected", "ignored"
     action: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     # Raison du rejet (optionnel)
-    feedback_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    user_id: Mapped[Optional[int]] = mapped_column(
+    feedback_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    user_id: Mapped[int | None] = mapped_column(
         Integer, nullable=True
     )  # Qui a donné le feedback
 
     # Dates
     created_at = Column(DateTime, nullable=False, default=func.now(), index=True)
-    suggestion_generated_at: Mapped[Optional[datetime]] = mapped_column(
+    suggestion_generated_at: Mapped[datetime | None] = mapped_column(
         DateTime, nullable=True
     )
 
@@ -58,12 +58,12 @@ class RLFeedback(db.Model):
     # {gain_minutes, was_better, satisfaction}
     actual_outcome = Column(JSON, nullable=True)
     was_successful: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    actual_gain_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    actual_gain_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Contexte pour ré-entraînement
     # État DQN au moment de la suggestion
     suggestion_state = Column(JSON, nullable=True)
-    suggestion_action: Mapped[Optional[int]] = mapped_column(
+    suggestion_action: Mapped[int | None] = mapped_column(
         Integer, nullable=True
     )  # Action DQN choisie
     suggestion_confidence = Column(Float, nullable=True)  # Confiance de la suggestion

@@ -16,6 +16,7 @@ const SemiAutoPanel = ({
   error: _error,
   onDeleteReservation,
   onDispatchNow,
+  onAssign, // 🆕 Ajouter onAssign pour permettre l'assignation manuelle
   currentDate,
   styles = {},
 }) => {
@@ -136,11 +137,12 @@ const SemiAutoPanel = ({
             dispatches={sortedDispatches}
             onDelete={onDeleteReservation}
             onDispatchNow={onDispatchNow}
+            onAssign={onAssign} // 🆕 Permettre l'assignation manuelle pour les courses transférées
             hideSchedule={true}
             hideUrgent={false}
             hideEdit={true}
             hideDelete={false}
-            hideAssign={true}
+            hideAssign={false} // 🆕 Afficher le bouton d'assignation pour les courses transférées
             formatTime={formatTime}
             showSuggestions={false}
           />

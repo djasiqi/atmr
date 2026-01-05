@@ -87,3 +87,24 @@ export const resetPassword = async (newPassword) => {
     throw error;
   }
 };
+
+// ✅ Obtenir un token "fresh" en vérifiant le mot de passe
+export const getFreshToken = async (password) => {
+  try {
+    const response = await apiClient.post('/auth/fresh-token', {
+      password,
+    });
+
+    const { access_token } = response.data;
+    if (access_token) {
+      // Mettre à jour le token dans localStorage (pour mode mobile/compatibilité)
+      localStorage.setItem('authToken', access_token);
+      console.log('✅ Token fresh obtenu avec succès');
+    }
+
+    return response.data;
+  } catch (error) {
+    console.error('❌ Erreur lors de l\'obtention du token fresh :', error);
+    throw error;
+  }
+};

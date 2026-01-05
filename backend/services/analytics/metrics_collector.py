@@ -5,7 +5,9 @@ import logging
 from datetime import date
 
 from ext import db
-from models import Assignment, Booking, BookingStatus, DispatchMetrics, Driver
+from models import Assignment, Booking, BookingStatus, DispatchMetrics
+from repositories.assignment_repository import AssignmentRepository
+from repositories.driver_repository import DriverRepository
 
 ACTIVE_DRIVERS_ZERO = 0
 TOTAL_BOOKINGS_ZERO = 0
@@ -39,10 +41,16 @@ class MetricsCollector:
 
         """
         try:
-            # Récupérer toutes les assignations du dispatch
-            assignments = Assignment.query.filter_by(
-                dispatch_run_id=dispatch_run_id
-            ).all()
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            assignment_repo = AssignmentRepository()
+            assignment_dtos = assignment_repo.find_by_dispatch_run_id(dispatch_run_id)
+            # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs pour la compatibilité
+            assignment_ids = [dto.id for dto in assignment_dtos]
+            assignments = (
+                Assignment.query.filter(Assignment.id.in_(assignment_ids)).all()
+                if assignment_ids
+                else []
+            )
 
             if not assignments:
                 logger.warning(
@@ -74,9 +82,12 @@ class MetricsCollector:
 
             # Métriques chauffeurs
             drivers_in_assignments = {a.driver_id for a in assignments if a.driver_id}
-            total_drivers = Driver.query.filter_by(
-                company_id=company_id, is_active=True
-            ).count()
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            driver_repo = DriverRepository()
+            active_driver_dtos = driver_repo.find_by_company_id(
+                company_id, active_only=True
+            )
+            total_drivers = len(active_driver_dtos)
             active_drivers = len(drivers_in_assignments)
             avg_per_driver = (
                 total_bookings / active_drivers

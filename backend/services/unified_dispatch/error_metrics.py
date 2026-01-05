@@ -19,7 +19,9 @@ PROMETHEUS_AVAILABLE = False
 _CounterType: Any = None
 
 try:
-    from prometheus_client import Counter as _Counter
+    from prometheus_client import (  # pyright: ignore[reportMissingImports]
+        Counter as _Counter,
+    )
 
     _CounterType = _Counter
     PROMETHEUS_AVAILABLE = True

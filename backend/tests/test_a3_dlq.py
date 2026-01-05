@@ -6,6 +6,7 @@ Teste que les tâches échouées sont stockées en DLQ et qu'on peut les consult
 """
 
 import logging
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -19,8 +20,9 @@ logger = logging.getLogger(__name__)
 @pytest.fixture
 def sample_task_failure():
     """Créer un exemple de tâche échouée."""
+    task_id = f"test-task-{uuid.uuid4().hex}"
     return TaskFailure(
-        task_id="test-task-123",
+        task_id=task_id,
         task_name="tasks.dispatch_tasks.run_dispatch_task",
         exception="ValueError: Sample exception",
         traceback="Traceback...",
@@ -44,7 +46,9 @@ class TestDLQ:
         db_session.session.commit()
 
         # Vérifier qu'elle existe
-        stored = TaskFailure.query.filter_by(task_id="test-task-123").first()
+        stored = TaskFailure.query.filter_by(
+            task_id=sample_task_failure.task_id
+        ).first()
         assert stored is not None
         assert stored.task_name == "tasks.dispatch_tasks.run_dispatch_task"
         assert stored.failure_count == 3
@@ -54,10 +58,11 @@ class TestDLQ:
 
     def test_update_task_failure_on_retry(self, app_context, db_session):
         """Test: mettre à jour le compteur lors d'un nouvel échec."""
+        task_id = f"test-task-{uuid.uuid4().hex}"
 
         # Créer une tâche échouée
         failure = TaskFailure(
-            task_id="test-task-456",
+            task_id=task_id,
             task_name="tasks.test_task",
             exception="ConnectionError",
             first_seen=datetime.now(UTC),
@@ -70,24 +75,25 @@ class TestDLQ:
         initial_count = failure.failure_count
 
         # Simuler un nouvel échec (simuler ce que fait _store_task_failure_in_db)
-        existing = TaskFailure.query.filter_by(task_id="test-task-456").first()
+        existing = TaskFailure.query.filter_by(task_id=task_id).first()
         existing.failure_count += 1
         existing.last_seen = datetime.now(UTC)
         db_session.session.commit()
 
         # Vérifier que le compteur a été incrémenté
-        updated = TaskFailure.query.filter_by(task_id="test-task-456").first()
+        updated = TaskFailure.query.filter_by(task_id=task_id).first()
         assert updated.failure_count == initial_count + 1
 
         logger.info("✅ Test: Compteur échec incrémenté")
 
     def test_dlq_backlog_query(self, app_context, db_session):
         """Test: requête pour backlog DLQ."""
+        prefix = f"test-task-{uuid.uuid4().hex}"
 
         # Créer plusieurs tâches échouées
         for i in range(15):  # Plus que le seuil de 10
             failure = TaskFailure(
-                task_id=f"test-task-{i}",
+                task_id=f"{prefix}-{i}",
                 task_name="tasks.test_task",
                 exception=f"Error #{i}",
                 first_seen=datetime.now(UTC) - timedelta(minutes=30),
@@ -112,7 +118,7 @@ class TestDLQ:
 
         # Créer une tâche très ancienne (> 5 min)
         old_failure = TaskFailure(
-            task_id="test-old-task",
+            task_id=f"test-old-task-{uuid.uuid4().hex}",
             task_name="tasks.old_task",
             exception="Old error",
             first_seen=datetime.now(UTC) - timedelta(hours=1),
@@ -148,7 +154,7 @@ class TestDLQ:
         dans la DLQ avec alerte.
         """
 
-        task_id = "celery-test-task-789"
+        task_id = f"celery-test-task-{uuid.uuid4().hex}"
 
         # Simuler 3 échecs consécutifs (avec doublons détectés)
         for attempt in range(3):
@@ -194,9 +200,10 @@ class TestDLQ:
         # Créer quelques tâches échouées
         from datetime import UTC, datetime, timedelta
 
+        prefix = f"endpoint-test-{uuid.uuid4().hex}"
         for i in range(5):
             failure = TaskFailure(
-                task_id=f"endpoint-test-{i}",
+                task_id=f"{prefix}-{i}",
                 task_name="tasks.test_task",
                 exception=f"Error {i}",
                 first_seen=datetime.now(UTC) - timedelta(minutes=10),
@@ -230,8 +237,9 @@ class TestDLQ:
         from datetime import UTC, datetime, timedelta
 
         # Créer une tâche très ancienne (> 7 jours)
+        task_id = f"old-cleanup-test-{uuid.uuid4().hex}"
         old_failure = TaskFailure(
-            task_id="old-cleanup-test",
+            task_id=task_id,
             task_name="tasks.old_task",
             exception="Very old error",
             first_seen=datetime.now(UTC) - timedelta(days=10),
@@ -248,7 +256,7 @@ class TestDLQ:
         db.session.commit()
 
         # Vérifier que la tâche ancienne a été supprimée
-        remaining = TaskFailure.query.filter_by(task_id="old-cleanup-test").first()
+        remaining = TaskFailure.query.filter_by(task_id=task_id).first()
         assert remaining is None
 
         logger.info("✅ Test: Nettoyage auto des tâches anciennes")

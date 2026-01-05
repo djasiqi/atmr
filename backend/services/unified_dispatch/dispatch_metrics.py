@@ -9,7 +9,10 @@ from typing import Any, Dict, List, Tuple
 
 from ext import db
 from models import Assignment, Booking, BookingStatus, DispatchRun, Driver
-from shared.time_utils import day_local_bounds, now_local
+from repositories.assignment_repository import AssignmentRepository
+from repositories.booking_repository import BookingRepository
+from repositories.dispatch_run_repository import DispatchRunRepository
+from shared.time_utils import now_local
 
 DELAY_MINUTES_THRESHOLD = 5
 DELAYED_ZERO = 0
@@ -140,20 +143,34 @@ class DispatchMetricsCollector:
 
             run_date = run.day
 
-            # Récupérer toutes les assignations de ce run
-            assignments = Assignment.query.filter_by(
-                dispatch_run_id=dispatch_run_id
-            ).all()
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            assignment_repo = AssignmentRepository()
+            assignment_dtos = assignment_repo.find_by_dispatch_run_id(dispatch_run_id)
+            # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs pour la compatibilité
+            assignment_ids = [dto.id for dto in assignment_dtos]
+            assignments = (
+                Assignment.query.filter(Assignment.id.in_(assignment_ids)).all()
+                if assignment_ids
+                else []
+            )
 
-            # Récupérer tous les bookings du jour (pour calculer le taux
-            # d'assignation)
-            d0, d1 = day_local_bounds(run_date.strftime("%Y-%m-%d"))
-            all_bookings = Booking.query.filter(
-                Booking.company_id == self.company_id,
-                Booking.scheduled_time >= d0,
-                Booking.scheduled_time < d1,
-                Booking.status.in_([BookingStatus.ACCEPTED, BookingStatus.ASSIGNED]),
-            ).all()
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            booking_repo = BookingRepository()
+            booking_dtos = booking_repo.find_for_day(
+                self.company_id, run_date.strftime("%Y-%m-%d")
+            )
+            # Filtrer par statuts en mémoire
+            valid_statuses = [BookingStatus.ACCEPTED, BookingStatus.ASSIGNED]
+            filtered_booking_dtos = [
+                dto for dto in booking_dtos if dto.status in valid_statuses
+            ]
+            # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs pour la compatibilité
+            booking_ids = [dto.id for dto in filtered_booking_dtos]
+            all_bookings = (
+                Booking.query.filter(Booking.id.in_(booking_ids)).all()
+                if booking_ids
+                else []
+            )
 
             # Calculer les métriques
             return self._calculate_metrics(
@@ -185,12 +202,16 @@ class DispatchMetricsCollector:
         if isinstance(target_date, str):
             target_date = date.fromisoformat(target_date)
 
-        # Trouver le dernier DispatchRun de cette journée
-        run = (
-            DispatchRun.query.filter_by(company_id=self.company_id, day=target_date)
-            .order_by(DispatchRun.completed_at.desc())
-            .first()
+        # ✅ Utilisation du repository pour découpler de SQLAlchemy
+        dispatch_run_repo = DispatchRunRepository()
+        dispatch_run_dto = dispatch_run_repo.find_by_company_and_day(
+            self.company_id, target_date
         )
+        if not dispatch_run_dto:
+            msg = f"No DispatchRun found for company {self.company_id} on {target_date}"
+            raise ValueError(msg)
+        # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+        run = DispatchRun.query.get(dispatch_run_dto.id)
 
         if not run:
             msg = f"No DispatchRun found for company {self.company_id} on {target_date}"
@@ -282,7 +303,7 @@ class DispatchMetricsCollector:
 
         for assignment in assignments:
             # Récupérer l'ID du chauffeur
-            driver_id = int(assignment.driver_id)
+            driver_id = int(assignment.driver_id)  # type: ignore[reportArgumentType]
 
             booking = db.session.get(Booking, assignment.booking_id)
             if not booking:
@@ -324,12 +345,20 @@ class DispatchMetricsCollector:
         max_delay = 0
 
         # ✅ PERF: Charger tous les bookings en une seule query (évite N+1)
-        booking_ids = [a.booking_id for a in assignments]
-        bookings_map = (
-            {b.id: b for b in Booking.query.filter(Booking.id.in_(booking_ids)).all()}
-            if booking_ids
-            else {}
-        )
+        # ✅ Utilisation du repository pour découpler de SQLAlchemy
+        booking_ids = [int(a.booking_id) for a in assignments]  # type: ignore[reportArgumentType]
+        bookings_map = {}
+        if booking_ids:
+            booking_repo = BookingRepository()
+            booking_dtos = booking_repo.find_by_ids(booking_ids)
+            # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs pour la compatibilité
+            booking_model_ids = [dto.id for dto in booking_dtos]
+            bookings = (
+                Booking.query.filter(Booking.id.in_(booking_model_ids)).all()
+                if booking_model_ids
+                else []
+            )
+            bookings_map = {b.id: b for b in bookings}
 
         for assignment in assignments:
             booking = bookings_map.get(assignment.booking_id)
@@ -370,7 +399,7 @@ class DispatchMetricsCollector:
         driver_counts: Dict[int, int] = {}
 
         for assignment in assignments:
-            driver_id = int(assignment.driver_id)
+            driver_id = int(assignment.driver_id)  # type: ignore[reportArgumentType]
             driver_counts[driver_id] = driver_counts.get(driver_id, 0) + 1
 
         if not driver_counts:
@@ -451,7 +480,7 @@ class DispatchMetricsCollector:
         bookings_map = {b.id: b for b in all_bookings}
 
         for assignment in assignments:
-            booking = bookings_map.get(int(assignment.booking_id))
+            booking = bookings_map.get(int(assignment.booking_id))  # type: ignore[reportArgumentType]
             if booking:
                 # Distance en km
                 distance_m = float(getattr(booking, "distance_meters", 0) or 0)

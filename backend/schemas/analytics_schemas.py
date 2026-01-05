@@ -1,6 +1,10 @@
 """✅ Schemas Marshmallow pour validation des query params des endpoints analytics."""
 
-from marshmallow import Schema, fields, validate
+from marshmallow import (  # pyright: ignore[reportMissingImports]
+    Schema,
+    fields,
+    validate,
+)
 
 from schemas.validation_utils import ISO8601_DATE_REGEX
 

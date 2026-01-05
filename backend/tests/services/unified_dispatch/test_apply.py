@@ -1,7 +1,9 @@
 # backend/tests/services/unified_dispatch/test_apply.py
 """Tests pour apply_assignments avec rollback transactionnel complet."""
 
+import logging
 from datetime import date
+from unittest.mock import patch
 
 import pytest
 from flask import Flask

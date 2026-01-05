@@ -49,22 +49,28 @@ const CompanyDriver = () => {
   useEffect(() => {
     async function loadStats() {
       const mappedData = [];
-      for (const drv of drivers) {
-        // <-- Utilise "drivers"
-        let trips = [];
-        try {
-          trips = await fetchDriverCompletedTrips(drv.id);
-        } catch (e) {
-          trips = [];
-        }
-        const count = trips.length;
-        const totalMinutes = trips.reduce((sum, trip) => sum + (trip.duration_in_minutes || 0), 0);
-        mappedData.push({
-          driverId: drv.id,
-          driverName: drv.username,
-          count,
-          totalMinutes,
+      // ✅ Optimisation: Requêtes en parallèle par batch de 10 pour éviter rate limiting
+      const BATCH_SIZE = 10;
+      for (let i = 0; i < drivers.length; i += BATCH_SIZE) {
+        const batch = drivers.slice(i, i + BATCH_SIZE);
+        const batchPromises = batch.map(async (drv) => {
+          let trips = [];
+          try {
+            trips = await fetchDriverCompletedTrips(drv.id);
+          } catch (e) {
+            trips = [];
+          }
+          const count = trips.length;
+          const totalMinutes = trips.reduce((sum, trip) => sum + (trip.duration_in_minutes || 0), 0);
+          return {
+            driverId: drv.id,
+            driverName: drv.username,
+            count,
+            totalMinutes,
+          };
         });
+        const batchResults = await Promise.all(batchPromises);
+        mappedData.push(...batchResults);
       }
       setDriverHoursData(mappedData);
     }

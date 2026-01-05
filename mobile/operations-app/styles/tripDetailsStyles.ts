@@ -1,5 +1,26 @@
 // src/styles/tripDetailsStyles.ts
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Platform } from 'react-native';
+
+// Styles shadow conditionnels pour éviter l'avertissement de dépréciation
+const containerShadow = Platform.OS === 'web'
+  ? { boxShadow: '0 2px 6px rgba(0,0,0,0.10)' }
+  : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.10,
+      shadowRadius: 6,
+      elevation: 4,
+    };
+
+const actionButtonShadow = Platform.OS === 'web'
+  ? { boxShadow: '0 2px 4px rgba(0,121,107,0.12)' }
+  : {
+      shadowColor: '#00796B',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.12,
+      shadowRadius: 4,
+      elevation: 2,
+    };
 
 export const styles = StyleSheet.create({
   container: {
@@ -8,11 +29,7 @@ export const styles = StyleSheet.create({
     padding: 18,
     marginHorizontal: 12,
     marginVertical: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.10,
-    shadowRadius: 6,
-    elevation: 4,
+    ...containerShadow,
     borderWidth: 1,
     borderColor: '#E0E0E0',
   },
@@ -89,11 +106,7 @@ export const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     alignItems: 'center',
-    shadowColor: '#00796B',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 2,
+    ...actionButtonShadow,
     marginVertical: 4,
   },
 

@@ -55,7 +55,8 @@ const ReminderModal = ({ open, invoice, onClose, onReminder }) => {
             <p>
               Client:{' '}
               {invoice.client
-                ? `${invoice.client.first_name || ''} ${invoice.client.last_name || ''}`.trim() ||
+                ? invoice.client.institution_name ||
+                  `${invoice.client.first_name || ''} ${invoice.client.last_name || ''}`.trim() ||
                   invoice.client.username
                 : 'Client inconnu'}
             </p>

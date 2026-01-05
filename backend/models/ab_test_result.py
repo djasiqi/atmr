@@ -1,6 +1,6 @@
 """Modèle pour stocker les résultats des tests A/B (ML vs Heuristique)."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import Float, Integer, String
@@ -24,7 +24,7 @@ class ABTestResult(db.Model):
     test_timestamp = db.Column(
         db.DateTime,
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         index=True,
     )
 
@@ -51,13 +51,13 @@ class ABTestResult(db.Model):
     ml_winner = db.Column(db.Boolean, nullable=True)
 
     created_at = db.Column(
-        db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc)
+        db.DateTime, nullable=False, default=lambda: datetime.now(UTC)
     )
     updated_at = db.Column(
         db.DateTime,
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
 
     booking = db.relationship("Booking", backref="ab_test_results", lazy=True)
@@ -116,4 +116,4 @@ class ABTestResult(db.Model):
         self.ml_error = abs(self.ml_delay_minutes - actual_delay_minutes)
         self.heuristic_error = abs(self.heuristic_delay_minutes - actual_delay_minutes)
         self.ml_winner = self.ml_error < self.heuristic_error
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)

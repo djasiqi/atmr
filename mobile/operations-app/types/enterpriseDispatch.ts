@@ -12,6 +12,7 @@ export interface DispatchStatus {
   optimizer: {
     active: boolean;
     next_window_start: string | null;
+    running?: boolean;
   };
   kpis: {
     date: string;
@@ -20,6 +21,17 @@ export interface DispatchStatus {
     assignment_rate: number;
     at_risk: number;
   };
+  dispatch_run?: {
+    id: number;
+    status: string;
+    assignments_count: number;
+    day: string | null;
+    created_at: string | null;
+    started_at: string | null;
+    completed_at: string | null;
+  } | null;
+  celery_state?: string;
+  is_running?: boolean;
 }
 
 export interface RideSummary {
@@ -34,13 +46,18 @@ export interface RideSummary {
     id: string;
     name: string;
     priority: "LOW" | "NORMAL" | "HIGH";
+    first_name?: string;
+    last_name?: string;
+    birth_date?: string;
+    phone?: string;
+    home_address?: string;
   };
   route: {
     pickup_address: string;
     dropoff_address: string;
     distance_km?: number | null;
   };
-  status: "assigned" | "unassigned" | "completed" | "cancelled";
+  status: "assigned" | "unassigned" | "completed" | "return_completed" | "in_progress" | "en_route" | "cancelled";
   driver: {
     id?: string | null;
     name?: string | null;
@@ -76,6 +93,7 @@ export interface RideEvent {
   event: string;
   actor: string;
   details?: Record<string, unknown>;
+  details_formatted?: string;
 }
 
 export interface RideConflict {
@@ -173,4 +191,62 @@ export interface DispatchMessage {
   sender_name?: string | null;
   content: string;
   created_at: string;
+}
+
+// ✅ Types pour l'édition et la création de courses
+export interface RideEditPayload {
+  pickup_address?: string;
+  dropoff_address?: string;
+  pickup_lat?: number;
+  pickup_lon?: number;
+  dropoff_lat?: number;
+  dropoff_lon?: number;
+  scheduled_time?: string;
+  customer_name?: string;
+  notes?: string;
+  priority?: "LOW" | "NORMAL" | "HIGH";
+  amount?: number;
+  is_return?: boolean;
+}
+
+export interface RideCreatePayload {
+  client_id?: string;
+  customer_name?: string;
+  pickup_address: string;
+  dropoff_address: string;
+  pickup_lat?: number;
+  pickup_lon?: number;
+  dropoff_lat?: number;
+  dropoff_lon?: number;
+  scheduled_time?: string;
+  notes?: string;
+  priority?: "LOW" | "NORMAL" | "HIGH";
+  amount?: number;
+  is_return?: boolean;
+  return_time?: string;
+  assign_driver_id?: string;
+  wheelchair_client_has?: boolean;
+  wheelchair_need?: boolean;
+}
+
+export interface AddressSuggestion {
+  label?: string;
+  address: string;
+  lat?: number;
+  lon?: number;
+  place_id?: string;
+}
+
+export interface ClientOption {
+  id: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  contact_phone?: string;
+  contact_email?: string;
+  domicile_address?: string | null;
+  domicile_zip?: string | null; // ✅ Code postal
+  domicile_city?: string | null; // ✅ Ville
+  domicile_lat?: number | null;
+  domicile_lon?: number | null;
 }

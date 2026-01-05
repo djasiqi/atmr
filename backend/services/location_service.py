@@ -20,11 +20,20 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Tuple
 
-import requests
+import requests  # pyright: ignore[reportMissingModuleSource]
+from requests import (  # pyright: ignore[reportMissingModuleSource]
+    RequestException,
+    Timeout,
+)
+from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.orm import Session
 
+from application.events.event_bus import publish_event
+from domain.events.events import DriverLocationUpdatedEvent
 from ext import db, redis_client
 from models import Assignment, AssignmentStatus, Driver, TripTracking
+from repositories.assignment_repository import AssignmentRepository
+from repositories.driver_repository import DriverRepository
 from services.geofencing_service import get_geofencing_service
 
 logger = logging.getLogger(__name__)
@@ -90,7 +99,7 @@ class LocationService:
         timestamp: datetime | None = None,
         db_session: Session | None = None,
     ) -> LocationUpdateResult:
-        """Met à jour position avec snap + map-matching.
+        """Met à jour la position d'un chauffeur (snap OSRM + map-matching + stockage).
 
         Args:
             driver_id: ID du chauffeur
@@ -105,6 +114,15 @@ class LocationService:
 
         Returns:
             LocationUpdateResult avec position snapée et métadonnées
+
+        Raises:
+            ValueError: si les coordonnées sont hors bornes ([-90, 90], [-180, 180]).
+
+        Exemple:
+            >>> service = LocationService(redis_client_instance=None)  # doctest: +SKIP
+            >>> res = service.update_driver_location(driver_id=1, latitude=46.2, longitude=6.1)  # doctest: +SKIP
+            >>> res.success  # doctest: +SKIP
+            True
         """
         if timestamp is None:
             timestamp = datetime.now(UTC)
@@ -124,8 +142,23 @@ class LocationService:
             if snapped:
                 snapped_lon, snapped_lat = snapped
                 snap_source = "osrm_nearest"
-        except Exception as e:
-            logger.debug("[LocationService] Snap OSRM failed: %s", str(e))
+        except (RequestException, Timeout, ConnectionError, OSError) as e:
+            # Erreurs réseau attendues : OSRM indisponible, timeout
+            logger.debug(
+                "[LocationService] Snap OSRM failed (network error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+        except (ValueError, TypeError, KeyError) as e:
+            # Erreurs de validation attendues : réponse JSON invalide
+            logger.debug(
+                "[LocationService] Snap OSRM failed (validation error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+        except Exception:
+            # Erreur inattendue lors du snap OSRM
+            logger.debug("[LocationService] Snap OSRM failed")
 
         # 3. Map-matching si ring buffer suffisant
         try:
@@ -133,8 +166,23 @@ class LocationService:
             if matched:
                 snapped_lon, snapped_lat = matched
                 snap_source = "osrm_match"
-        except Exception as e:
-            logger.debug("[LocationService] Map-matching failed: %s", str(e))
+        except (RequestException, Timeout, ConnectionError, OSError) as e:
+            # Erreurs réseau attendues : OSRM indisponible, timeout
+            logger.debug(
+                "[LocationService] Map-matching failed (network error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+        except (ValueError, TypeError, KeyError) as e:
+            # Erreurs de validation attendues : réponse JSON invalide
+            logger.debug(
+                "[LocationService] Map-matching failed (validation error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+        except Exception:
+            # Erreur inattendue lors du map-matching
+            logger.debug("[LocationService] Map-matching failed")
 
         # 4. Stockage Redis + DB
         self._store_location(
@@ -169,6 +217,25 @@ class LocationService:
             db_session=db_session,
         )
 
+        # Event métier (consommable par d'autres services) - sans changer le comportement actuel
+        try:
+            driver_repo = DriverRepository()
+            driver_dto = driver_repo.find_by_id(driver_id)
+            publish_event(
+                DriverLocationUpdatedEvent(
+                    driver_id=driver_id,
+                    company_id=driver_dto.company_id if driver_dto else None,
+                )
+            )
+        except (ValueError, TypeError, AttributeError, KeyError):
+            # Erreurs de validation attendues : données invalides
+            # Ne pas faire échouer l'endpoint de localisation pour un event
+            pass
+        except Exception:
+            # Erreur inattendue lors de la publication d'événement
+            # Ne pas faire échouer l'endpoint de localisation pour un event
+            logger.debug("[LocationService] Event publish failed (ignored)")
+
         return LocationUpdateResult(
             success=True,
             snapped_lat=snapped_lat,
@@ -199,8 +266,23 @@ class LocationService:
                 if waypoints and waypoints[0].get("location"):
                     loc = waypoints[0]["location"]
                     return (float(loc[0]), float(loc[1]))  # (lon, lat)
-        except Exception as e:
-            logger.debug("[LocationService] OSRM nearest failed: %s", str(e))
+        except (RequestException, Timeout, ConnectionError, OSError) as e:
+            # Erreurs réseau attendues : OSRM indisponible, timeout
+            logger.debug(
+                "[LocationService] OSRM nearest failed (network error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+        except (ValueError, TypeError, KeyError) as e:
+            # Erreurs de validation attendues : réponse JSON invalide
+            logger.debug(
+                "[LocationService] OSRM nearest failed (validation error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+        except Exception:
+            # Erreur inattendue lors de l'appel OSRM nearest
+            logger.debug("[LocationService] OSRM nearest failed")
         return None
 
     def _map_match(
@@ -277,8 +359,23 @@ class LocationService:
                     if tp and tp.get("location"):
                         loc = tp["location"]
                         return (float(loc[0]), float(loc[1]))  # (lon, lat)
-        except Exception as e:
-            logger.debug("[LocationService] Map-matching failed: %s", str(e))
+        except (RequestException, Timeout, ConnectionError, OSError) as e:
+            # Erreurs réseau attendues : OSRM indisponible, timeout
+            logger.debug(
+                "[LocationService] Map-matching failed (network error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+        except (ValueError, TypeError, KeyError) as e:
+            # Erreurs de validation attendues : réponse JSON invalide
+            logger.debug(
+                "[LocationService] Map-matching failed (validation error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+        except Exception:
+            # Erreur inattendue lors du map-matching
+            logger.debug("[LocationService] Map-matching failed")
         return None
 
     def _store_location(
@@ -312,8 +409,10 @@ class LocationService:
         if self.redis_client:
             try:
                 key = f"driver:{driver_id}:loc"
-                driver = Driver.query.get(driver_id)
-                company_id = driver.company_id if driver else None
+                # ✅ Utilisation du repository pour découpler de SQLAlchemy
+                driver_repo = DriverRepository()
+                driver_dto = driver_repo.find_by_id(driver_id)
+                company_id = driver_dto.company_id if driver_dto else None
 
                 self.redis_client.hset(
                     key,
@@ -329,24 +428,63 @@ class LocationService:
                     },
                 )
                 self.redis_client.expire(key, DEFAULT_DRIVER_LOC_TTL_SEC)
-            except Exception as e:
-                logger.warning("[LocationService] Redis store failed: %s", str(e))
+            except (ConnectionError, OSError, TimeoutError) as e:
+                # Erreurs réseau attendues : Redis indisponible, timeout
+                logger.warning(
+                    "[LocationService] Redis store failed (network error: %s): %s",
+                    type(e).__name__,
+                    str(e),
+                )
+            except (ValueError, TypeError) as e:
+                # Erreurs de validation attendues : données non sérialisables
+                logger.warning(
+                    "[LocationService] Redis store failed (validation error: %s): %s",
+                    type(e).__name__,
+                    str(e),
+                )
+            except Exception:
+                # Erreur inattendue lors du stockage Redis
+                logger.warning("[LocationService] Redis store failed")
 
         # DB
         session = db_session or db.session
         try:
-            driver = Driver.query.get(driver_id)
-            if driver:
-                driver.latitude = latitude
-                driver.longitude = longitude
-                driver.last_position_update = timestamp
-                session.add(driver)
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            driver_repo = DriverRepository()
+            driver_dto = driver_repo.find_by_id(driver_id)
+            if driver_dto:
+                # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+                driver = Driver.query.get(driver_dto.id)
+                if driver:
+                    driver.latitude = latitude
+                    driver.longitude = longitude
+                    driver.last_position_update = timestamp
+                    session.add(driver)
                 if not db_session:
                     session.commit()
-        except Exception as e:
+        except (OperationalError, DBAPIError) as e:
+            # Erreurs DB attendues : connexion, timeout
             if not db_session:
                 session.rollback()
-            logger.warning("[LocationService] DB store failed: %s", str(e))
+            logger.warning(
+                "[LocationService] DB store failed (DB error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+        except (ValueError, TypeError, AttributeError) as e:
+            # Erreurs de validation attendues : données invalides
+            if not db_session:
+                session.rollback()
+            logger.warning(
+                "[LocationService] DB store failed (validation error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+        except Exception:
+            # Erreur inattendue lors du stockage DB
+            if not db_session:
+                session.rollback()
+            logger.warning("[LocationService] DB store failed")
 
     def _log_trip_tracking(
         self,
@@ -375,11 +513,18 @@ class LocationService:
             True si position loggée, False sinon
         """
         try:
-            # Récupérer assignment actif
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            assignment_repo = AssignmentRepository()
+            assignment_dtos = assignment_repo.find_by_driver_id(driver_id)
+            # Filtrer par statut IN_PROGRESS en mémoire
+            in_progress_dtos = [
+                dto for dto in assignment_dtos if dto.status == AssignmentStatus.ONBOARD
+            ]
+            # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
             assignment = (
-                Assignment.query.filter_by(driver_id=driver_id)
-                .filter(Assignment.status == AssignmentStatus.IN_PROGRESS)
-                .first()
+                Assignment.query.get(in_progress_dtos[0].id)
+                if in_progress_dtos
+                else None
             )
 
             if not assignment:
@@ -416,8 +561,29 @@ class LocationService:
                 session.commit()
 
             return True
-        except Exception as e:
-            logger.debug("[LocationService] Trip tracking log failed: %s", str(e))
+        except (OperationalError, DBAPIError) as e:
+            # Erreurs DB attendues : connexion, timeout
+            logger.debug(
+                "[LocationService] Trip tracking log failed (DB error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+            if not db_session:
+                db.session.rollback()
+            return False
+        except (ValueError, TypeError, AttributeError) as e:
+            # Erreurs de validation attendues : données invalides
+            logger.debug(
+                "[LocationService] Trip tracking log failed (validation error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+            if not db_session:
+                db.session.rollback()
+            return False
+        except Exception:
+            # Erreur inattendue lors du log trip tracking
+            logger.debug("[LocationService] Trip tracking log failed")
             if not db_session:
                 db.session.rollback()
             return False

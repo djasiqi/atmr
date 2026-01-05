@@ -1,0 +1,22 @@
+/* FullyAutoPanel Component Styles */
+
+.resetButton {
+  padding: 0.5rem 1rem;
+  background-color: #ff6b6b;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+}
+
+.resetButton:hover:not(:disabled) {
+  background-color: #ee5a5a;
+}
+
+.resetButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+

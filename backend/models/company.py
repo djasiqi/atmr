@@ -1,4 +1,7 @@
 # models/company.py
+# pyright: reportRedeclaration=false
+# Le linter détecte un conflit entre Column(name="iban") et @hybrid_property iban,
+# mais c'est un faux positif : Column avec name ne crée pas d'attribut Python.
 
 # Constantes pour éviter les valeurs magiques
 from __future__ import annotations
@@ -7,7 +10,7 @@ import json
 import logging
 import re
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from sqlalchemy import (
     Boolean,
@@ -21,10 +24,12 @@ from sqlalchemy import (
     Text,
     func,
 )
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from typing_extensions import override
 
 from ext import db
+from security.crypto import get_encryption_service
 
 from .base import _as_bool, _as_dt
 from .enums import DispatchMode
@@ -70,10 +75,15 @@ class Company(db.Model):
     contact_phone: Mapped[str] = mapped_column(String(20), nullable=True)
 
     # Légal & Facturation
-    iban: Mapped[str] = mapped_column(String(34), nullable=True, index=True)
+    # ✅ S2: IBAN chiffré en base de données (conformité RGPD)
+    # Le champ _iban_raw stocke le texte chiffré (base64), peut être plus long que l'IBAN original
+    # Utilisation de Column avec name="iban" pour garder le nom de colonne en base
+    _iban_raw = Column(
+        String(200), nullable=True, name="iban"
+    )  # Augmenté à 200 pour stocker le texte chiffré
     uid_ide: Mapped[str] = mapped_column(String(20), nullable=True, index=True)
     billing_email: Mapped[str] = mapped_column(String(100), nullable=True)
-    billing_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    billing_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     user_id = Column(
         Integer,
@@ -88,10 +98,10 @@ class Company(db.Model):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     service_area: Mapped[str] = mapped_column(String(200), nullable=True)
-    max_daily_bookings: Mapped[Optional[int]] = mapped_column(
+    max_daily_bookings: Mapped[int | None] = mapped_column(
         Integer, nullable=True, server_default="50"
     )
-    accepted_at: Mapped[Optional[datetime]] = mapped_column(
+    accepted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     dispatch_enabled: Mapped[bool] = mapped_column(
@@ -109,7 +119,7 @@ class Company(db.Model):
         index=True,
         comment="Mode de fonctionnement du dispatch: manual, semi_auto, fully_auto",
     )
-    autonomous_config: Mapped[Optional[str]] = mapped_column(
+    autonomous_config: Mapped[str | None] = mapped_column(
         Text, nullable=True, comment="Configuration JSON pour le dispatch autonome"
     )
 
@@ -220,10 +230,38 @@ class Company(db.Model):
             raise ValueError(msg)
         return v
 
-    @validates("iban")
-    def validate_iban(self, _key, value):
+    @hybrid_property
+    def iban(self) -> str | None:
+        """✅ S2: Propriété hybride pour déchiffrer automatiquement l'IBAN.
+
+        Returns:
+            IBAN en clair ou None si vide
+        """
+        if not bool(getattr(self, "_iban_raw", None)):
+            return None
+        try:
+            encryption_service = get_encryption_service()
+            return encryption_service.decrypt_field(str(getattr(self, "_iban_raw", None)))
+        except Exception as e:
+            logger.error(
+                "[Company] Erreur déchiffrement IBAN pour company_id=%s: %s", self.id, e
+            )
+            # En cas d'erreur, retourner None plutôt que de lever une exception
+            # pour éviter de casser l'application si des données sont corrompues
+            return None
+
+    @iban.setter
+    def iban(self, value: str | None) -> None:
+        """✅ S2: Setter pour chiffrer automatiquement l'IBAN avant stockage.
+
+        Args:
+            value: IBAN en clair ou None
+        """
         if not value:
-            return value
+            self._iban_raw = None
+            return
+
+        # Valider l'IBAN avant chiffrement
         v = value.replace(" ", "").upper()
         if (
             len(v) < IBAN_MIN_LENGTH
@@ -245,7 +283,16 @@ class Company(db.Model):
         if remainder != REMAINDER_ONE:
             msg = "IBAN invalide (checksum)."
             raise ValueError(msg)
-        return v
+
+        # Chiffrer l'IBAN validé
+        try:
+            encryption_service = get_encryption_service()
+            self._iban_raw = encryption_service.encrypt_field(v)
+        except Exception as e:
+            logger.error(
+                "[Company] Erreur chiffrement IBAN pour company_id=%s: %s", self.id, e
+            )
+            raise
 
     @validates("uid_ide")
     def validate_uid_ide(self, _key, value):

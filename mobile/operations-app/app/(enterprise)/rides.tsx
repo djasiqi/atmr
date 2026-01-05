@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   Pressable,
   RefreshControl,
@@ -13,87 +14,82 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
 import dayjs from "dayjs";
 import "dayjs/locale/fr";
 
 import { useAuth } from "@/hooks/useAuth";
 import { useEnterpriseContext } from "@/context/EnterpriseContext";
 import { RideSnippetCard } from "@/components/enterprise/cards/RideSnippetCard";
+import { RideEditModal } from "@/components/enterprise/rides/RideEditModal";
+import { RideCreateModal } from "@/components/enterprise/rides/RideCreateModal";
+import { TimeDatePicker } from "@/components/enterprise/rides/TimeDatePicker";
 import {
   getDispatchRides,
-  markRideUrgent,
   scheduleRide,
+  cancelRide,
 } from "@/services/enterpriseDispatch";
 import { RideSummary } from "@/types/enterpriseDispatch";
+import { useRideActions } from "@/hooks/useRideActions";
+import { router } from "expo-router";
 
 dayjs.locale("fr");
 
-type TabValue = "unassigned" | "assigned" | "urgent";
 
-const TABS: { label: string; value: TabValue }[] = [
-  { label: "Non assignées", value: "unassigned" },
-  { label: "Assignées", value: "assigned" },
-  { label: "Urgences", value: "urgent" },
-];
-const TAB_ACCESSIBILITY: Record<TabValue, string> = {
-  unassigned: "Courses non assignées",
-  assigned: "Courses assignées",
-  urgent: "Courses urgentes",
-};
-
+// ✅ Palette professionnelle cohérente avec le dashboard driver
 const palette = {
-  background: "#07130E",
-  heroGradient: ["#11412F", "#07130E"] as [string, string],
-  heroBorder: "rgba(46,128,94,0.36)",
-  heroText: "#E6F2EA",
-  heroMeta: "rgba(184,214,198,0.72)",
-  searchBackground: "rgba(10,34,26,0.82)",
-  searchBorder: "rgba(59,143,105,0.28)",
-  searchPlaceholder: "rgba(184,214,198,0.55)",
-  tabBackground: "rgba(10,34,26,0.82)",
-  tabBorder: "rgba(59,143,105,0.28)",
-  tabActive: "#1EB980",
-  tabActiveShadow: "rgba(30,185,128,0.25)",
-  tabText: "rgba(184,214,198,0.65)",
-  tabTextActive: "#052015",
+  background: "#F5F7F6",
+  heroGradient: ["#0A7F59", "#0D5F3F"] as [string, string],
+  heroBorder: "rgba(15,54,43,0.08)",
+  heroText: "#FFFFFF",
+  heroMeta: "rgba(255,255,255,0.9)",
+  searchBackground: "#FFFFFF",
+  searchBorder: "rgba(15,54,43,0.08)",
+  searchPlaceholder: "#91A59D",
+  tabBackground: "#FFFFFF",
+  tabBorder: "rgba(15,54,43,0.08)",
+  tabActive: "#0A7F59",
+  tabActiveShadow: "rgba(10,127,89,0.2)",
+  tabText: "#5F7369",
+  tabTextActive: "#FFFFFF",
   listGap: 18,
-  emptyState: "rgba(184,214,198,0.7)",
-  error: "#F87171",
-  modalOverlay: "rgba(5,22,16,0.82)",
-  modalBackground: "#08211A",
-  modalBorder: "rgba(46,128,94,0.4)",
-  modalTitle: "#E6F2EA",
-  modalText: "rgba(184,214,198,0.8)",
-  modalButton: "#1EB980",
-  modalButtonText: "#052015",
-  modalCancelText: "rgba(184,214,198,0.75)",
-  divider: "rgba(46,128,94,0.2)",
-  countPillBg: "rgba(30,185,128,0.12)",
-  countPillText: "#1EB980",
-  loadingText: "rgba(184,214,198,0.7)",
+  emptyState: "#91A59D",
+  error: "#EF4444",
+  modalOverlay: "rgba(21,54,43,0.75)",
+  modalBackground: "#FFFFFF",
+  modalBorder: "rgba(15,54,43,0.12)",
+  modalTitle: "#15362B",
+  modalText: "#5F7369",
+  modalButton: "#0A7F59",
+  modalButtonText: "#FFFFFF",
+  modalCancelText: "#5F7369",
+  divider: "rgba(15,54,43,0.08)",
+  countPillBg: "rgba(10,127,89,0.12)",
+  countPillText: "#0A7F59",
+  loadingText: "#91A59D",
 };
 
 export default function EnterpriseRidesScreen() {
   const { enterpriseSession } = useAuth();
   const { selectedDate } = useEnterpriseContext();
 
-  const [selectedTab, setSelectedTab] = useState<TabValue>("unassigned");
   const [rides, setRides] = useState<RideSummary[]>([]);
-  const [tabCounts, setTabCounts] = useState<Record<TabValue, number>>({
-    unassigned: 0,
-    assigned: 0,
-    urgent: 0,
-  });
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [selectedRideForEdit, setSelectedRideForEdit] = useState<RideSummary | null>(null);
+  const [expandedRideId, setExpandedRideId] = useState<string | null>(null);
   const [scheduleModal, setScheduleModal] = useState<{
     rideId: string | null;
-    value: string;
+    scheduledTime: Date | null;
     label?: string;
-  }>({ rideId: null, value: "", label: undefined });
+  }>({ rideId: null, scheduledTime: null, label: undefined });
   const [actionLoading, setActionLoading] = useState(false);
+  const [cancelModal, setCancelModal] = useState<{
+    ride: RideSummary | null;
+    shouldBill: boolean;
+  }>({ ride: null, shouldBill: false });
 
   const currentDate = useMemo(() => {
     return selectedDate ?? dayjs().format("YYYY-MM-DD");
@@ -104,22 +100,47 @@ export default function EnterpriseRidesScreen() {
     return base.format("dddd D MMMM");
   }, [currentDate]);
 
+  // ✅ Trier les courses : d'abord celles avec horaire (plus proche à plus éloignée), puis celles à définir
+  const sortedRides = useMemo(() => {
+    const withTime: RideSummary[] = [];
+    const withoutTime: RideSummary[] = [];
+
+    rides.forEach((ride) => {
+      if (ride.time.pickup_at) {
+        const moment = dayjs(ride.time.pickup_at);
+        // Si l'heure est à minuit (00:00), c'est une heure non définie
+        if (moment.hour() === 0 && moment.minute() === 0) {
+          withoutTime.push(ride);
+        } else {
+          withTime.push(ride);
+        }
+      } else {
+        withoutTime.push(ride);
+      }
+    });
+
+    // Trier les courses avec heure de la plus proche à la plus éloignée
+    withTime.sort(
+      (a, b) =>
+        dayjs(a.time.pickup_at!).valueOf() - dayjs(b.time.pickup_at!).valueOf()
+    );
+
+    return [...withTime, ...withoutTime];
+  }, [rides]);
+
   const loadRides = useCallback(async () => {
     if (!enterpriseSession) return;
     setLoading(true);
     setErrorMessage(null);
     try {
+      console.log("[rides.tsx] Chargement courses pour date:", currentDate);
       const response = await getDispatchRides({
         date: currentDate,
-        status: selectedTab,
         query: search || undefined,
         page_size: 120,
       });
+      console.log("[rides.tsx] Courses reçues:", response.items.length, "courses");
       setRides(response.items);
-      setTabCounts((prev) => ({
-        ...prev,
-        [selectedTab]: response.total ?? response.items.length,
-      }));
     } catch (error: any) {
       const message =
         error?.response?.data?.error ??
@@ -129,94 +150,71 @@ export default function EnterpriseRidesScreen() {
     } finally {
       setLoading(false);
     }
-  }, [currentDate, enterpriseSession, search, selectedTab]);
-
-  const refreshTabCounts = useCallback(async () => {
-    if (!enterpriseSession) return;
-    try {
-      const responses = await Promise.all(
-        TABS.map((tab) =>
-          getDispatchRides({
-            date: currentDate,
-            status: tab.value,
-            page_size: 1,
-          })
-        )
-      );
-      setTabCounts({
-        unassigned: responses[0]?.total ?? 0,
-        assigned: responses[1]?.total ?? 0,
-        urgent: responses[2]?.total ?? 0,
-      });
-    } catch (error) {
-      console.warn("Impossible de rafraîchir les compteurs de courses", error);
-    }
-  }, [currentDate, enterpriseSession]);
+  }, [currentDate, enterpriseSession, search]);
 
   useEffect(() => {
     loadRides();
   }, [loadRides]);
 
-  useEffect(() => {
-    refreshTabCounts();
-  }, [refreshTabCounts]);
+
+  // ✅ Utiliser le hook partagé pour les actions sur les courses
+  const refreshData = useCallback(async () => {
+    await loadRides();
+  }, [loadRides]);
+  const rideActions = useRideActions(refreshData);
 
   const handleUrgent = useCallback(
-    async (rideId: string) => {
+    async (ride: RideSummary) => {
+      // Planifier la course pour l'heure actuelle + 15 minutes
+      const now = dayjs();
+      const urgentTime = now.add(15, "minute");
+      const localISO = urgentTime.format("YYYY-MM-DDTHH:mm:ss");
+
       setActionLoading(true);
       try {
-        await markRideUrgent(rideId, { extra_delay_minutes: 15 });
-        await refreshTabCounts();
+        await scheduleRide(ride.id, { pickup_at: localISO });
         await loadRides();
+        Alert.alert("Urgent", `La course a été planifiée pour ${urgentTime.format("HH:mm")} (dans 15 minutes).`);
       } catch (error: any) {
         const message =
           error?.response?.data?.error ??
           error?.message ??
-          "Impossible de marquer la course en urgence.";
-        setErrorMessage(message);
+          "Impossible de planifier la course en urgence.";
+        Alert.alert("Erreur", message);
       } finally {
         setActionLoading(false);
       }
     },
-    [loadRides, refreshTabCounts]
+    [loadRides]
   );
 
   const confirmSchedule = useCallback(async () => {
-    if (!scheduleModal.rideId) return;
-    const raw = scheduleModal.value.trim();
-    if (!raw) {
-      setScheduleModal({ rideId: null, value: "", label: undefined });
-      return;
-    }
-    const [hour, minute] = raw.split(":");
-    if (
-      hour === undefined ||
-      minute === undefined ||
-      Number.isNaN(Number(hour)) ||
-      Number.isNaN(Number(minute))
-    ) {
-      setErrorMessage("Format horaire invalide (HH:mm).");
-      return;
-    }
-    const isoDate = dayjs(
-      `${currentDate}T${hour.padStart(2, "0")}:${minute.padStart(2, "0")}:00`
-    ).toISOString();
+    if (!scheduleModal.rideId || !scheduleModal.scheduledTime) return;
+
+    // Combiner la date actuelle (currentDate) avec l'heure sélectionnée
+    // Utiliser format() au lieu de toISOString() pour préserver l'heure locale
+    // Le backend utilise parse_local_naive qui attend un format ISO sans timezone
+    const selectedTime = dayjs(scheduleModal.scheduledTime);
+    const dateWithTime = dayjs(currentDate)
+      .hour(selectedTime.hour())
+      .minute(selectedTime.minute())
+      .second(0);
+    const localISO = dateWithTime.format("YYYY-MM-DDTHH:mm:ss");
     setActionLoading(true);
     try {
-      await scheduleRide(scheduleModal.rideId, { pickup_at: isoDate });
-      await refreshTabCounts();
+      await scheduleRide(scheduleModal.rideId, { pickup_at: localISO });
       await loadRides();
     } catch (error: any) {
       const message =
         error?.response?.data?.error ??
         error?.message ??
-        "Impossible de planifier l’horaire.";
+        "Impossible de planifier l'horaire.";
       setErrorMessage(message);
     } finally {
       setActionLoading(false);
-      setScheduleModal({ rideId: null, value: "", label: undefined });
+      setScheduleModal({ rideId: null, scheduledTime: null, label: undefined });
     }
-  }, [currentDate, loadRides, refreshTabCounts, scheduleModal]);
+  }, [currentDate, loadRides, scheduleModal]);
 
   const handleOpenDetails = useCallback((rideId: string) => {
     router.push({
@@ -229,81 +227,56 @@ export default function EnterpriseRidesScreen() {
     loadRides();
   }, [loadRides]);
 
-  const renderRideCard = (ride: RideSummary) => {
-    const pickupTime = ride.time.pickup_at
-      ? dayjs(ride.time.pickup_at).format("HH[h]mm")
-      : "À définir";
-    const badges =
-      ride.client.priority === "HIGH"
-        ? [{ label: "Priorité", tone: "danger" as const }]
-        : ride.client.priority === "LOW"
-          ? [{ label: "Confort", tone: "info" as const }]
-          : undefined;
+  const handleEdit = useCallback((ride: RideSummary) => {
+    setSelectedRideForEdit(ride);
+    setEditModalVisible(true);
+  }, []);
 
-    return (
-      <RideSnippetCard
-        key={ride.id}
-        ride={{
-          id: ride.id,
-          time: pickupTime,
-          showUndefinedIcon: !ride.time.pickup_at,
-          client: ride.client.name,
-          pickup: ride.route.pickup_address,
-          dropoff: ride.route.dropoff_address,
-          assignedTo: ride.driver?.name ?? null,
-          badges,
-          footerActions: (
-            <View style={styles.cardActions}>
-              <TouchableOpacity
-                style={styles.actionButtonPrimary}
-                onPress={() =>
-                  setScheduleModal({
-                    rideId: ride.id,
-                    value: ride.time.pickup_at
-                      ? dayjs(ride.time.pickup_at).format("HH:mm")
-                      : "",
-                    label: ride.client.name,
-                  })
-                }
-              >
-                <Ionicons
-                  name="time-outline"
-                  size={16}
-                  color={palette.modalButtonText}
-                />
-                <Text style={styles.actionButtonPrimaryText}>Planifier</Text>
-              </TouchableOpacity>
-              {selectedTab !== "urgent" && (
-                <TouchableOpacity
-                  style={styles.actionButtonGhost}
-                  onPress={() => handleUrgent(ride.id)}
-                  disabled={actionLoading}
-                >
-                  <Ionicons
-                    name="flame-outline"
-                    size={16}
-                    color={palette.tabActive}
-                  />
-                  <Text style={styles.actionButtonGhostText}>Urgent +15</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={styles.actionButtonGhost}
-                onPress={() => handleOpenDetails(ride.id)}
-              >
-                <Ionicons
-                  name="open-outline"
-                  size={16}
-                  color={palette.heroText}
-                />
-                <Text style={styles.actionButtonGhostText}>Voir la fiche</Text>
-              </TouchableOpacity>
-            </View>
-          ),
-        }}
-      />
-    );
-  };
+  const handleSchedule = useCallback((ride: RideSummary) => {
+    // Si la course a déjà une heure, l'utiliser, sinon utiliser l'heure actuelle
+    let initialTime: Date | null = null;
+    if (ride.time.pickup_at) {
+      initialTime = dayjs(ride.time.pickup_at).toDate();
+    } else {
+      // Utiliser la date actuelle avec l'heure actuelle comme valeur par défaut
+      initialTime = dayjs().toDate();
+    }
+    setScheduleModal({
+      rideId: ride.id,
+      scheduledTime: initialTime,
+      label: ride.client.name,
+    });
+  }, []);
+
+  const handleCancel = useCallback(
+    (ride: RideSummary) => {
+      // Ouvrir le modal de confirmation avec option de facturation
+      setCancelModal({ ride, shouldBill: false });
+    },
+    []
+  );
+
+  const confirmCancel = useCallback(async () => {
+    if (!cancelModal.ride) return;
+
+    setActionLoading(true);
+    try {
+      const reason = cancelModal.shouldBill
+        ? "Annulée depuis l'application mobile - À facturer"
+        : "Annulée depuis l'application mobile - Non facturée";
+      await cancelRide(cancelModal.ride.id, "manual", reason);
+      await refreshData();
+      setCancelModal({ ride: null, shouldBill: false });
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.error ??
+        error?.message ??
+        "Impossible d'annuler la course.";
+      setErrorMessage(message);
+    } finally {
+      setActionLoading(false);
+    }
+  }, [cancelModal, refreshData]);
 
   return (
     <View style={styles.container}>
@@ -324,58 +297,18 @@ export default function EnterpriseRidesScreen() {
             <Text style={styles.heroKicker}>Plan de transport</Text>
             <Text style={styles.heroTitle}>{formattedDay}</Text>
             <Text style={styles.heroSubtitle}>
-              {tabCounts[selectedTab] ?? rides.length} course
-              {((tabCounts[selectedTab] ?? rides.length) || 0) > 1
-                ? "s"
-                : ""}{" "}
-              {selectedTab === "unassigned"
-                ? "à traiter"
-                : selectedTab === "assigned"
-                  ? "en cours"
-                  : "à prioriser"}
+              {sortedRides.length} course{sortedRides.length !== 1 ? "s" : ""} planifiée
+              {sortedRides.length !== 1 ? "s" : ""}
             </Text>
           </View>
-          <View style={styles.heroCountPill}>
-            <Ionicons
-              name="clipboard-outline"
-              size={18}
-              color="#052015"
-            />
-            <Text style={styles.heroCount}>
-              {tabCounts.unassigned + tabCounts.assigned + tabCounts.urgent}
-            </Text>
-          </View>
+          <TouchableOpacity
+            style={styles.heroFab}
+            onPress={() => setCreateModalVisible(true)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="add" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
         </LinearGradient>
-
-        <View style={styles.tabs}>
-          {TABS.map((tab) => {
-            const isActive = selectedTab === tab.value;
-            return (
-              <TouchableOpacity
-                key={tab.value}
-                style={[styles.tabButton, isActive && styles.tabButtonActive]}
-                onPress={() => setSelectedTab(tab.value)}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel={TAB_ACCESSIBILITY[tab.value]}
-                accessibilityState={{ selected: isActive }}
-              >
-                <Text
-                  style={[styles.tabCount, isActive && styles.tabCountActive]}
-                >
-                  {tabCounts[tab.value]}
-                </Text>
-                <Text
-                  style={[styles.tabText, isActive && styles.tabTextActive]}
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                >
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
 
         <View style={styles.searchBar}>
           <Ionicons
@@ -408,7 +341,7 @@ export default function EnterpriseRidesScreen() {
             <ActivityIndicator color={palette.tabActive} />
             <Text style={styles.loadingText}>Préparation des courses…</Text>
           </View>
-        ) : rides.length === 0 ? (
+        ) : sortedRides.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons
               name="leaf-outline"
@@ -417,12 +350,121 @@ export default function EnterpriseRidesScreen() {
             />
             <Text style={styles.emptyStateTitle}>Pas de course ici</Text>
             <Text style={styles.emptyStateText}>
-              Ajuste la date ou change d’onglet pour consulter d’autres trajets.
+              Ajuste la date ou change d'onglet pour consulter d'autres trajets.
             </Text>
           </View>
         ) : (
           <View style={{ gap: palette.listGap }}>
-            {rides.map((ride) => renderRideCard(ride))}
+            {sortedRides.map((ride, index) => {
+              const isLast = index === sortedRides.length - 1;
+              const isExpanded = expandedRideId === ride.id;
+              const needsBottomMargin = isLast && isExpanded;
+
+              // ✅ Calculer l'heure de pickup (identique au dashboard)
+              let pickupTime: string | null = null;
+              if (ride.time.pickup_at) {
+                const pickupMoment = dayjs(ride.time.pickup_at);
+                // Si l'heure est à minuit (00:00), c'est probablement une heure non définie
+                pickupTime =
+                  pickupMoment.hour() === 0 && pickupMoment.minute() === 0
+                    ? null
+                    : pickupMoment.format("HH[h]mm");
+              }
+
+              // ✅ Normaliser le statut en minuscules pour éviter les problèmes de casse
+              const normalizedStatus = ride.status ? String(ride.status).toLowerCase().trim() : undefined;
+
+              // ✅ Calcul du retard : uniquement si la course est assignée, l'heure prévue est passée, ET la course n'est pas terminée
+              let delayMinutes: number | null = null;
+              const isCompleted = normalizedStatus === "completed" || normalizedStatus === "return_completed";
+              if (!isCompleted && ride.driver?.name && ride.time.pickup_at) {
+                const scheduledTime = dayjs(ride.time.pickup_at);
+                const now = dayjs();
+                if (scheduledTime.isValid() && scheduledTime.isBefore(now)) {
+                  delayMinutes = Math.max(0, now.diff(scheduledTime, "minute"));
+                }
+              }
+
+              const priorityBadge =
+                ride.client.priority === "HIGH"
+                  ? { label: "Priorité", tone: "danger" as const }
+                  : ride.client.priority === "LOW"
+                    ? { label: "Basse", tone: "info" as const }
+                    : undefined;
+
+              return (
+                <RideSnippetCard
+                  key={ride.id}
+                  ride={{
+                    id: ride.id,
+                    time: pickupTime ?? "",
+                    showUndefinedIcon: pickupTime === null,
+                    client: ride.client.name,
+                    pickup: ride.route.pickup_address,
+                    dropoff: ride.route.dropoff_address,
+                    assignedTo: ride.driver?.name ?? null,
+                    status: normalizedStatus as "unassigned" | "assigned" | "completed" | "return_completed" | "in_progress" | "en_route" | undefined,
+                    delayMinutes: delayMinutes,
+                    badges: priorityBadge ? [priorityBadge] : undefined,
+                    onPress: () => handleOpenDetails(ride.id),
+                    onQuickAction: isCompleted ? undefined : () => handleUrgent(ride),
+                    onPrimaryAction: isCompleted ? undefined : () => rideActions.handleOpenAssignModal(ride),
+                    footerActions: (
+                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                        {isCompleted ? (
+                          // ✅ Si la course est terminée, afficher uniquement "Détails"
+                          <TouchableOpacity
+                            style={[styles.actionButtonGhost, { flexBasis: "30%" }]}
+                            onPress={() => handleOpenDetails(ride.id)}
+                          >
+                            <Ionicons name="open-outline" size={16} color={palette.modalText} />
+                            <Text style={[styles.actionButtonGhostText, { color: palette.modalText }]}>Détails</Text>
+                          </TouchableOpacity>
+                        ) : (
+                          // ✅ Sinon, afficher toutes les actions
+                          <>
+                            <TouchableOpacity
+                              style={[styles.actionButtonGhost, { flexBasis: "30%" }]}
+                              onPress={() => handleEdit(ride)}
+                            >
+                              <Ionicons name="create-outline" size={16} color={palette.modalButton} />
+                              <Text style={[styles.actionButtonGhostText, { color: palette.modalButton }]}>Éditer</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.actionButtonGhost, { flexBasis: "30%" }]}
+                              onPress={() => handleSchedule(ride)}
+                            >
+                              <Ionicons name="time-outline" size={16} color={palette.modalButton} />
+                              <Text style={[styles.actionButtonGhostText, { color: palette.modalButton }]}>Planifier</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.actionButtonGhost, { flexBasis: "30%" }]}
+                              onPress={() => handleOpenDetails(ride.id)}
+                            >
+                              <Ionicons name="open-outline" size={16} color={palette.modalText} />
+                              <Text style={[styles.actionButtonGhostText, { color: palette.modalText }]}>Détails</Text>
+                            </TouchableOpacity>
+                            {ride.status !== "cancelled" && (
+                              <TouchableOpacity
+                                style={[styles.actionButtonGhost, { flexBasis: "30%" }]}
+                                onPress={() => handleCancel(ride)}
+                              >
+                                <Ionicons name="close-circle-outline" size={16} color="#EF4444" />
+                                <Text style={[styles.actionButtonGhostText, { color: "#EF4444" }]}>Annuler</Text>
+                              </TouchableOpacity>
+                            )}
+                          </>
+                        )}
+                      </View>
+                    ),
+                  }}
+                  expanded={isExpanded}
+                  onToggle={() => {
+                    setExpandedRideId(expandedRideId === ride.id ? null : ride.id);
+                  }}
+                />
+              );
+            })}
           </View>
         )}
 
@@ -434,48 +476,148 @@ export default function EnterpriseRidesScreen() {
         )}
       </ScrollView>
 
-      <Modal visible={!!scheduleModal.rideId} transparent animationType="fade">
+      {/* Modal d'édition */}
+      <RideEditModal
+        visible={editModalVisible}
+        ride={selectedRideForEdit}
+        onClose={() => {
+          setEditModalVisible(false);
+          setSelectedRideForEdit(null);
+        }}
+        onSuccess={refreshData}
+      />
+
+      {/* Modal de création */}
+      <RideCreateModal
+        visible={createModalVisible}
+        onClose={() => setCreateModalVisible(false)}
+        onSuccess={refreshData}
+      />
+
+      {/* Modal de confirmation d'annulation avec option de facturation */}
+      <Modal visible={!!cancelModal.ride} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Planifier la course</Text>
-            {scheduleModal.label ? (
-              <Text style={styles.modalSubtitle}>{scheduleModal.label}</Text>
-            ) : null}
-            <TextInput
-              style={styles.modalInput}
-              value={scheduleModal.value}
-              onChangeText={(text) =>
-                setScheduleModal((prev) => ({ ...prev, value: text }))
-              }
-              placeholder="HH:mm"
-              placeholderTextColor={palette.modalText}
-              keyboardType="numeric"
-              autoFocus
-            />
-            <View style={styles.modalActions}>
-              <Pressable
-                style={styles.modalCancel}
-                onPress={() =>
-                  setScheduleModal({
-                    rideId: null,
-                    value: "",
-                    label: undefined,
-                  })
-                }
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Annuler la course</Text>
+                {cancelModal.ride && (
+                  <Text style={styles.modalSubtitle}>
+                    Course #{cancelModal.ride.id.slice(-4)} • {cancelModal.ride.client.name}
+                  </Text>
+                )}
+              </View>
+              <TouchableOpacity
+                onPress={() => setCancelModal({ ride: null, shouldBill: false })}
+                style={styles.closeButton}
               >
-                <Text style={styles.modalCancelText}>Annuler</Text>
-              </Pressable>
-              <Pressable
-                style={styles.modalConfirm}
-                onPress={confirmSchedule}
+                <Ionicons name="close" size={24} color={palette.modalText} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalText}>
+                Voulez-vous vraiment annuler cette course ?
+              </Text>
+              <View style={styles.billingSection}>
+                <Text style={styles.billingLabel}>Facturation</Text>
+                <View style={styles.billingOptions}>
+                  <TouchableOpacity
+                    style={[
+                      styles.billingOption,
+                      !cancelModal.shouldBill && styles.billingOptionActive,
+                    ]}
+                    onPress={() => setCancelModal((prev) => ({ ...prev, shouldBill: false }))}
+                  >
+                    <View style={styles.radioButton}>
+                      {!cancelModal.shouldBill && (
+                        <View style={styles.radioButtonInner} />
+                      )}
+                    </View>
+                    <Text style={styles.billingOptionText}>Non facturée</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.billingOption,
+                      cancelModal.shouldBill && styles.billingOptionActive,
+                    ]}
+                    onPress={() => setCancelModal((prev) => ({ ...prev, shouldBill: true }))}
+                  >
+                    <View style={styles.radioButton}>
+                      {cancelModal.shouldBill && (
+                        <View style={styles.radioButtonInner} />
+                      )}
+                    </View>
+                    <Text style={styles.billingOptionText}>À facturer</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancel}
+                onPress={() => setCancelModal({ ride: null, shouldBill: false })}
                 disabled={actionLoading}
               >
-                <Text style={styles.modalConfirmText}>Enregistrer</Text>
-              </Pressable>
+                <Text style={styles.modalCancelText}>Retour</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalConfirm, actionLoading && styles.modalConfirmDisabled]}
+                onPress={confirmCancel}
+                disabled={actionLoading}
+              >
+                {actionLoading ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={styles.modalConfirmText}>Confirmer l'annulation</Text>
+                )}
+              </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
+
+      {/* Sélecteur d'heure pour planification (TimeDatePicker a son propre modal) */}
+      {scheduleModal.rideId && (
+        <View style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 0, height: 0 }}>
+          <TimeDatePicker
+            label="Heure de prise en charge"
+            value={scheduleModal.scheduledTime}
+            onChange={(date) => {
+              if (date) {
+                // Quand l'heure est sélectionnée, enregistrer automatiquement
+                const selectedTime = dayjs(date);
+                const dateWithTime = dayjs(currentDate)
+                  .hour(selectedTime.hour())
+                  .minute(selectedTime.minute())
+                  .second(0);
+                const localISO = dateWithTime.format("YYYY-MM-DDTHH:mm:ss");
+
+                setActionLoading(true);
+                scheduleRide(scheduleModal.rideId!, { pickup_at: localISO })
+                  .then(() => {
+                    loadRides();
+                    setScheduleModal({ rideId: null, scheduledTime: null, label: undefined });
+                  })
+                  .catch((error: any) => {
+                    const message =
+                      error?.response?.data?.error ??
+                      error?.message ??
+                      "Impossible de planifier l'horaire.";
+                    setErrorMessage(message);
+                  })
+                  .finally(() => {
+                    setActionLoading(false);
+                  });
+              } else {
+                // Si l'utilisateur annule, fermer le modal
+                setScheduleModal({ rideId: null, scheduledTime: null, label: undefined });
+              }
+            }}
+            mode="time"
+            autoOpen={true}
+          />
+        </View>
+      )}
     </View>
   );
 }
@@ -495,108 +637,65 @@ const styles = StyleSheet.create({
   },
   hero: {
     borderRadius: 24,
-    padding: 22,
+    padding: 20,
+    height: 150,
     flexDirection: "row",
     alignItems: "center",
     gap: 18,
     borderWidth: 1,
     borderColor: palette.heroBorder,
+    shadowColor: "rgba(10,127,89,0.15)",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 1,
+    shadowRadius: 24,
+    elevation: 8,
   },
   heroKicker: {
     color: palette.heroMeta,
     textTransform: "uppercase",
     letterSpacing: 3,
-    fontSize: 12,
-    marginBottom: 6,
+    fontSize: 11,
+    marginBottom: 4,
   },
   heroTitle: {
     color: palette.heroText,
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: "700",
     letterSpacing: 0.3,
     textTransform: "capitalize",
   },
   heroSubtitle: {
     color: palette.heroMeta,
-    fontSize: 14,
-    marginTop: 6,
-  },
-  heroCountPill: {
-    backgroundColor: palette.tabActive, // palette.primary équivalent
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: palette.tabBorder,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  heroCount: {
-    color: "#052015", // palette.primaryText équivalent
-    fontWeight: "700",
     fontSize: 13,
+    marginTop: 4,
   },
-  tabs: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  tabButton: {
-    flex: 1,
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    minWidth: 0,
-    backgroundColor: palette.tabBackground,
-    borderWidth: 1,
-    borderColor: palette.tabBorder,
-    flexDirection: "column",
+  heroFab: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: palette.modalButton,
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-  },
-  tabButtonActive: {
-    backgroundColor: palette.tabActive,
-    borderColor: palette.tabActive,
-    shadowColor: palette.tabActiveShadow,
-    shadowOpacity: 0.45,
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 14,
-    elevation: 8,
-  },
-  tabText: {
-    color: palette.tabText,
-    fontWeight: "600",
-    fontSize: 11,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    textAlign: "center",
-    flexShrink: 1,
-  },
-  tabTextActive: {
-    color: palette.tabTextActive,
-  },
-  tabCount: {
-    color: palette.tabText,
-    fontWeight: "600",
-    fontSize: 12,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 999,
-    backgroundColor: "rgba(10,34,26,0.55)",
-  },
-  tabCountActive: {
-    color: palette.tabTextActive,
-    backgroundColor: "rgba(5,32,22,0.22)",
+    shadowColor: "rgba(10,127,89,0.3)",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 12,
+    elevation: 6,
   },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: palette.searchBackground,
-    borderRadius: 16,
-    paddingHorizontal: 16,
+    borderRadius: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 4,
     borderWidth: 1,
     borderColor: palette.searchBorder,
+    shadowColor: "rgba(15,54,43,0.06)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    elevation: 2,
   },
   searchInput: {
     flex: 1,
@@ -661,12 +760,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: palette.tabBorder,
-    backgroundColor: "rgba(10,34,26,0.6)",
+    backgroundColor: "#FFFFFF",
+    shadowColor: "rgba(15,54,43,0.06)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    elevation: 1,
   },
   actionButtonGhostText: {
     color: palette.heroText,
@@ -746,5 +850,75 @@ const styles = StyleSheet.create({
   modalConfirmText: {
     color: palette.modalButtonText,
     fontWeight: "700",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    padding: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: palette.divider,
+  },
+  closeButton: {
+    padding: 4,
+  },
+  modalContent: {
+    padding: 24,
+    gap: 20,
+  },
+  modalConfirmDisabled: {
+    opacity: 0.5,
+  },
+  modalText: {
+    color: palette.modalText,
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 20,
+  },
+  billingSection: {
+    gap: 12,
+  },
+  billingLabel: {
+    color: palette.modalTitle,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  billingOptions: {
+    gap: 10,
+  },
+  billingOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: palette.divider,
+    backgroundColor: palette.background,
+  },
+  billingOptionActive: {
+    borderColor: palette.modalButton,
+    backgroundColor: "rgba(10,127,89,0.06)",
+  },
+  radioButton: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: palette.modalButton,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  radioButtonInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: palette.modalButton,
+  },
+  billingOptionText: {
+    color: palette.modalTitle,
+    fontSize: 15,
+    fontWeight: "500",
   },
 });

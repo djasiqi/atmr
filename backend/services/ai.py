@@ -2,9 +2,9 @@
 import logging
 import os
 
-import requests
-from dotenv import load_dotenv
-from geopy.distance import geodesic
+import requests  # pyright: ignore[reportMissingModuleSource]
+from dotenv import load_dotenv  # pyright: ignore[reportMissingImports]
+from geopy.distance import geodesic  # pyright: ignore[reportMissingImports]
 
 from ext import db
 from models import Booking, BookingStatus, Company, Driver

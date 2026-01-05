@@ -65,24 +65,27 @@ def setup_opentelemetry(
         service_version: Version du service
     """
     if not OPENTELEMETRY_AVAILABLE or Resource is None:
-        logger.warning(
-            (
-                "[2.9] OpenTelemetry non installé - installer avec: "
-                "pip install -r requirements-otel.txt"
+        # Ne pas logger le warning en mode test (évite le bruit dans les tests)
+        flask_env = os.getenv("FLASK_ENV", "")
+        flask_config = os.getenv("FLASK_CONFIG", "")
+        if flask_env != "testing" and flask_config != "testing":
+            logger.warning(
+                "[2.9] OpenTelemetry non installé - installer avec: pip install -r requirements-otel.txt"
             )
-        )
         return
     # Créer resource avec métadonnées service
     if Resource is None or TracerProvider is None:
         return
-    resource = Resource(
-        attributes={
-            SERVICE_NAME: service_name,
-            SERVICE_VERSION: service_version,
-            "environment": os.getenv("ENVIRONMENT", "development"),
-            "deployment.version": os.getenv("DEPLOYMENT_VERSION", "unknown"),
-        }
-    )
+    # Filtrer les valeurs None pour éviter les erreurs de type
+    attributes: dict[str, str] = {
+        "environment": os.getenv("ENVIRONMENT", "development"),
+        "deployment.version": os.getenv("DEPLOYMENT_VERSION", "unknown"),
+    }
+    if service_name and SERVICE_NAME is not None:
+        attributes[SERVICE_NAME] = service_name
+    if service_version and SERVICE_VERSION is not None:
+        attributes[SERVICE_VERSION] = service_version
+    resource = Resource(attributes=attributes)
 
     # Configurer provider de traces
     provider = TracerProvider(resource=resource)
@@ -213,6 +216,12 @@ class MockSpan:
         pass
 
     def set_attribute(self, key: str, value: Any):
+        pass
+
+    # Certaines intégrations (ex: OSRM client) appellent record_exception()
+    # pour enrichir les traces. En mode mock, on doit fournir la méthode
+    # pour éviter les AttributeError en tests.
+    def record_exception(self, exception: Exception):
         pass
 
 

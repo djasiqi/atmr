@@ -81,6 +81,9 @@ class TestLogoutEndpointIntegration:
         # Mock Redis
         # @patch remplace directement redis_client, donc mock_redis EST le redis_client
         mock_redis.setex = MagicMock()
+        # Important: le callback JWT token_in_blocklist_loader vérifie `exists()`
+        # sur redis_client. Sans ce mock, MagicMock est truthy -> token vu comme blacklisté.
+        mock_redis.exists = MagicMock(return_value=0)
 
         # Mock JWT data
         future_exp = int((datetime.now(UTC) + timedelta(hours=1)).timestamp())
@@ -281,7 +284,7 @@ class TestTokenBlacklistWithJWT:
         # Tester le callback
         from ext import check_if_token_revoked
 
-        jwt_payload = {"jti": "test-jti-callback"}
+        jwt_payload = {"jti": "test-jti-callback", "aud": "atmr-api"}
         is_revoked = check_if_token_revoked({}, jwt_payload)
 
         assert is_revoked is True
@@ -299,7 +302,7 @@ class TestTokenBlacklistWithJWT:
         # redis_client.exists(key)
         from ext import check_if_token_revoked
 
-        jwt_payload = {"jti": "test-jti-not-revoked"}
+        jwt_payload = {"jti": "test-jti-not-revoked", "aud": "atmr-api"}
 
         # S'assurer que le mock est bien appliqué avant l'appel
         with app.app_context():

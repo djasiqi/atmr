@@ -214,10 +214,7 @@ class DBProfiler:
         # Avertissement si trop de requêtes
         if stats["query_count"] > N_PLUS_1_REPORT_THRESHOLD:
             lines.append(
-                (
-                    f"⚠️ ATTENTION: {stats['query_count']} requêtes détectées "
-                    "(suspect N+1?)"
-                )
+                f"⚠️ ATTENTION: {stats['query_count']} requêtes détectées (suspect N+1?)"
             )
 
         # Avertissement si requêtes lentes

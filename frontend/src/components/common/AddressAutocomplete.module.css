@@ -1,0 +1,67 @@
+/* AddressAutocomplete Component Styles */
+
+.input {
+  width: 100%;
+  border: 1px solid #e6e6e6;
+  border-radius: 8px;
+  padding: 10px 12px;
+  outline: none;
+}
+
+.dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: #fff;
+  border: 1px solid #e6e6e6;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  max-height: 280px;
+  overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.sectionHeader {
+  padding: 6px 12px;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+.sectionHeaderGoogle {
+  padding: 6px 12px;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #4285F4;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.optionItem {
+  padding: 10px 12px;
+  cursor: pointer;
+  background: #fff;
+}
+
+.optionItemActive {
+  background: #f5f7fb;
+}
+
+.optionItemGoogle {
+  border-left: 3px solid #4285F4;
+}
+
+.optionLabel {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.optionSecondary {
+  color: #666;
+  font-size: 12px;
+  margin-top: 2px;
+}
+

@@ -1,0 +1,36 @@
+/**
+ * VirtualizedDispatchTable.module.css
+ *
+ * Styles pour le composant VirtualizedDispatchTable.
+ *
+ * Ces styles sont adaptés depuis DispatchTable.module.css pour
+ * fonctionner avec la virtualisation react-window.
+ */
+
+/* Conteneur pour le tableau virtualisé */
+.virtualizedTableWrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* Ligne virtualisée */
+.virtualizedRow {
+  display: table-row;
+  width: 100%;
+}
+
+.virtualizedRow:hover {
+  background-color: var(--bg-hover);
+}
+
+/* Header pour les colonnes virtualisées (alignement avec le header HTML) */
+.tableHeader {
+  background-color: var(--bg-secondary);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: left;
+  border-bottom: 2px solid var(--border-primary);
+}
+

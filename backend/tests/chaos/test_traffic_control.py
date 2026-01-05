@@ -37,8 +37,8 @@ class TestTrafficControlValidations:
         assert (
             TrafficControlManager._validate_interface("eth0" * 5) is False
         )  # Trop long
-        assert TrafficControlManager._validate_interface(None) is False
-        assert TrafficControlManager._validate_interface(123) is False
+        assert TrafficControlManager._validate_interface(None) is False  # type: ignore[reportArgumentType]
+        assert TrafficControlManager._validate_interface(123) is False  # type: ignore[reportArgumentType]
 
     def test_validate_latency_ms_valid(self):
         """Test validation de latence valide."""
@@ -51,8 +51,8 @@ class TestTrafficControlValidations:
         assert TrafficControlManager._validate_latency_ms(0) is False
         assert TrafficControlManager._validate_latency_ms(-1) is False
         assert TrafficControlManager._validate_latency_ms(MAX_LATENCY_MS + 1) is False
-        assert TrafficControlManager._validate_latency_ms(None) is False
-        assert TrafficControlManager._validate_latency_ms("100") is False
+        assert TrafficControlManager._validate_latency_ms(None) is False  # type: ignore[reportArgumentType]
+        assert TrafficControlManager._validate_latency_ms("100") is False  # type: ignore[reportArgumentType]
 
     def test_validate_jitter_ms_valid(self):
         """Test validation de jitter valide."""
@@ -79,8 +79,8 @@ class TestTrafficControlValidations:
         """Test validation de pourcentage invalide."""
         assert TrafficControlManager._validate_percent(-0.1) is False
         assert TrafficControlManager._validate_percent(100.1) is False
-        assert TrafficControlManager._validate_percent(None) is False
-        assert TrafficControlManager._validate_percent("50") is False
+        assert TrafficControlManager._validate_percent(None) is False  # type: ignore[reportArgumentType]
+        assert TrafficControlManager._validate_percent("50") is False  # type: ignore[reportArgumentType]
 
 
 class TestTrafficControlManager:

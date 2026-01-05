@@ -24,6 +24,7 @@ from .base import (
     _iso,
 )
 from .booking import Booking
+from .booking_transfer import BookingTransfer
 from .client import Client
 from .company import Company
 from .delay_event import DelayEvent
@@ -58,6 +59,7 @@ from .enums import (
     GenderEnum,
     InvoiceLineType,
     InvoiceStatus,
+    PartnershipStatus,
     PaymentMethod,
     PaymentStatus,
     RealtimeEntityType,
@@ -81,14 +83,15 @@ from .invoice import (
 from .medical import FavoritePlace, MedicalEstablishment, MedicalService
 from .message import Message
 from .ml_prediction import MLPrediction
+from .partner_invoice import PartnerInvoice
+from .partnership import Partnership
+from .password_history import PasswordHistory  # ✅ S3: Historique mots de passe
 from .payment import Payment
 from .profiling_metrics import ProfilingMetrics  # ✅ 3.4: Profiling automatique
 from .refresh_token import RefreshToken
 from .rl_feedback import RLFeedback
 from .rl_suggestion import RLSuggestion
 from .rl_suggestion_metric import RLSuggestionMetric
-
-# A3: TaskFailure pour DLQ
 from .secret_rotation import SecretRotation
 from .task_failure import TaskFailure
 from .trip_tracking import TripTracking
@@ -105,6 +108,7 @@ __all__ = [
     "AutonomousAction",
     "Booking",
     "BookingStatus",
+    "BookingTransfer",
     "BreakType",
     "Client",
     "ClientType",
@@ -142,6 +146,10 @@ __all__ = [
     "MedicalEstablishment",
     "MedicalService",
     "Message",
+    "PartnerInvoice",
+    "Partnership",
+    "PartnershipStatus",
+    "PasswordHistory",  # ✅ S3: Historique mots de passe
     "Payment",
     "PaymentMethod",
     "PaymentStatus",

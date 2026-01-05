@@ -192,10 +192,8 @@ def test_dispatch_metrics() -> str:
         print("✅ Métriques validées:")
         for item in validation["validated"]:
             print(
-                (
-                    f"   - {item['metric']}: {item['before']} → {item['after']} "
-                    f"(+{item['increment']})"
-                )
+                f"   - {item['metric']}: {item['before']} → {item['after']} "
+                f"(+{item['increment']})"
             )
 
     if validation["missing"]:

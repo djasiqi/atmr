@@ -6,7 +6,10 @@ Utilise Redis pour stocker les tokens révoqués avec expiration automatique (TT
 import logging
 from datetime import UTC, datetime
 
-from flask_jwt_extended import decode_token, get_jwt
+from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
+    decode_token,
+    get_jwt,
+)
 
 from ext import redis_client
 
@@ -56,15 +59,24 @@ def add_to_blacklist(jwt_token: str, ttl_seconds: int | None = None) -> bool:
             ttl = ttl_seconds or (24 * 3600)
 
         # Créer une clé unique pour ce token (jti si disponible, sinon hash du token)
+        # ✅ SECURITY: Flask-JWT-Extended génère automatiquement un jti pour chaque token
+        # Le fallback hash est uniquement pour rétrocompatibilité avec d'anciens tokens
+        # qui pourraient ne pas avoir de jti (cas théorique, ne devrait pas arriver en pratique)
         jti = decoded.get("jti")
         if jti:
             key = f"{BLACKLIST_PREFIX}{jti}"
         else:
-            # Fallback: utiliser un hash du token
+            # ⚠️ FALLBACK: Utiliser un hash du token uniquement pour rétrocompatibilité
+            # Ce cas ne devrait jamais se produire avec Flask-JWT-Extended moderne
+            # car tous les tokens générés via create_access_token/create_refresh_token
+            # ont automatiquement un jti unique
             import hashlib
 
             token_hash = hashlib.sha256(jwt_token.encode()).hexdigest()
             key = f"{BLACKLIST_PREFIX}{token_hash}"
+            logger.warning(
+                "[Token Blacklist] Token sans jti détecté, utilisation du fallback hash. Ce cas ne devrait pas se produire avec Flask-JWT-Extended moderne."
+            )
 
         # Stocker dans Redis avec TTL
         redis_client.setex(key, ttl, "1")
@@ -94,6 +106,7 @@ def is_token_blacklisted(jwt_token: str | None = None, jti: str | None = None) -
 
     try:
         # Utiliser jti si fourni, sinon extraire du token
+        # ✅ SECURITY: Flask-JWT-Extended génère automatiquement un jti pour chaque token
         if jti:
             key = f"{BLACKLIST_PREFIX}{jti}"
         elif jwt_token:
@@ -102,11 +115,15 @@ def is_token_blacklisted(jwt_token: str | None = None, jti: str | None = None) -
             if jti:
                 key = f"{BLACKLIST_PREFIX}{jti}"
             else:
-                # Fallback: hash du token
+                # ⚠️ FALLBACK: Hash du token uniquement pour rétrocompatibilité
+                # Ce cas ne devrait jamais se produire avec Flask-JWT-Extended moderne
                 import hashlib
 
                 token_hash = hashlib.sha256(jwt_token.encode()).hexdigest()
                 key = f"{BLACKLIST_PREFIX}{token_hash}"
+                logger.warning(
+                    "[Token Blacklist] Token sans jti détecté lors de la vérification, utilisation du fallback hash. Ce cas ne devrait pas se produire."
+                )
         else:
             return False
 

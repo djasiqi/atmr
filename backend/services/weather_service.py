@@ -20,6 +20,12 @@ import os
 from datetime import datetime, timedelta
 from typing import Any, cast
 
+import requests  # pyright: ignore[reportMissingModuleSource]
+from requests import (  # pyright: ignore[reportMissingModuleSource]
+    RequestException,
+    Timeout,
+)
+
 # Constantes pour éviter les valeurs magiques
 SNOW_ZERO = 0
 RAIN_ZERO = 0
@@ -38,9 +44,13 @@ logger = logging.getLogger(__name__)
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "")
 OPENWEATHER_BASE_URL = "https://api.openweathermap.org/data/2.5/weather"
 
-# Cache simple en mémoire (amélioration future: Redis)
-_weather_cache: dict[str, dict[str, Any]] = {}
-_cache_ttl_seconds = 3600  # 1 heure
+# ✅ P1: Cache Redis pour partage entre instances + cache local LRU
+_weather_cache: dict[
+    str, dict[str, Any]
+] = {}  # Cache local (L1) pour accès ultra-rapide
+_cache_ttl_seconds = int(
+    os.getenv("OPENWEATHER_CACHE_TTL", "21600")
+)  # 6 heures par défaut (météo change lentement)
 
 
 class WeatherService:
@@ -70,8 +80,6 @@ class WeatherService:
 
         # Appeler API
         try:
-            import requests
-
             # Typer correctement params pour satisfaire mypy
             params: dict[str, str | float] = {
                 "lat": lat,
@@ -108,8 +116,25 @@ class WeatherService:
 
             return weather_data
 
-        except Exception as e:
-            logger.error("[Weather] API call failed: %s", e)
+        except (RequestException, Timeout, ConnectionError, OSError) as e:
+            # Erreurs réseau attendues : OpenWeatherMap indisponible, timeout
+            logger.error(
+                "[Weather] API call failed (network error: %s): %s",
+                type(e).__name__,
+                e,
+            )
+            return WeatherService._get_default_weather()
+        except (ValueError, TypeError, KeyError) as e:
+            # Erreurs de validation attendues : réponse JSON invalide
+            logger.error(
+                "[Weather] API call failed (validation error: %s): %s",
+                type(e).__name__,
+                e,
+            )
+            return WeatherService._get_default_weather()
+        except Exception:
+            # Erreur inattendue lors de l'appel API
+            logger.exception("[Weather] API call failed")
             return WeatherService._get_default_weather()
 
     @staticmethod
@@ -144,8 +169,17 @@ class WeatherService:
                 "clouds": data.get("clouds", {}).get("all", 0),  # %
                 "timestamp": datetime.now().isoformat(),
             }
-        except Exception as e:
-            logger.error("[Weather] Failed to parse response: %s", e)
+        except (KeyError, TypeError, ValueError, AttributeError) as e:
+            # Erreurs de validation attendues : clés manquantes, types incorrects
+            logger.error(
+                "[Weather] Failed to parse response (validation error: %s): %s",
+                type(e).__name__,
+                e,
+            )
+            return WeatherService._get_default_weather()
+        except Exception:
+            # Erreur inattendue lors du parsing de la réponse
+            logger.exception("[Weather] Failed to parse response")
             return WeatherService._get_default_weather()
 
     @staticmethod
@@ -230,8 +264,53 @@ class WeatherService:
         }
 
     @staticmethod
+    def _get_redis_for_weather() -> Any | None:
+        """Récupère un client Redis pour le cache météo."""
+        try:
+            from ext import redis_client as ext_redis_client
+
+            if ext_redis_client is not None:
+                ext_redis_client.ping()
+                return ext_redis_client
+        except (ConnectionError, OSError, TimeoutError):
+            # Erreurs réseau attendues : Redis indisponible, timeout
+            pass
+        except Exception:
+            # Erreur inattendue lors du ping Redis (ignorée silencieusement)
+            pass
+
+        # Fallback : essayer de créer depuis REDIS_URL
+        try:
+            redis_url = os.getenv("REDIS_URL", None)
+            if redis_url:
+                import redis  # pyright: ignore[reportMissingImports]
+
+                socket_timeout = int(os.getenv("REDIS_SOCKET_TIMEOUT", "5"))
+                socket_connect_timeout = int(
+                    os.getenv("REDIS_SOCKET_CONNECT_TIMEOUT", "5")
+                )
+                client = redis.from_url(
+                    redis_url,
+                    decode_responses=False,
+                    socket_timeout=socket_timeout,
+                    socket_connect_timeout=socket_connect_timeout,
+                )
+                client.ping()
+                return client
+        except (ConnectionError, OSError, TimeoutError, ValueError):
+            # Erreurs réseau/validation attendues : Redis indisponible, URL invalide
+            pass
+        except Exception:
+            # Erreur inattendue lors de la création du client Redis (ignorée silencieusement)
+            pass
+
+        return None
+
+    @staticmethod
     def _get_from_cache(key: str) -> dict[str, Any] | None:
-        """Récupère depuis le cache si valide.
+        """Récupère depuis le cache si valide (L1 local puis L2 Redis).
+
+        ✅ P1: Vérifie d'abord cache local (ultra-rapide), puis Redis (partagé).
 
         Args:
             key: Clé du cache (lat,lon)
@@ -240,32 +319,122 @@ class WeatherService:
             Dict avec données ou None si expiré
 
         """
-        if key not in _weather_cache:
-            return None
+        # ✅ P1: Vérifier cache local (L1 cache) - ultra-rapide
+        if key in _weather_cache:
+            cached_data = _weather_cache[key]
+            cached_at = datetime.fromisoformat(cached_data["cached_at"])
 
-        cached_data = _weather_cache[key]
-        cached_at = datetime.fromisoformat(cached_data["cached_at"])
-
-        # Vérifier expiration (1h)
-        if datetime.now() - cached_at > timedelta(seconds=_cache_ttl_seconds):
+            # Vérifier expiration
+            if datetime.now() - cached_at <= timedelta(seconds=_cache_ttl_seconds):
+                logger.debug("[Weather] ✅ L1 cache hit (local) for %s", key)
+                return cast(dict[str, Any], cached_data["data"])
+            # Expiré, supprimer du cache local
             del _weather_cache[key]
-            return None
 
-        return cast(dict[str, Any], cached_data["data"])
+        # ✅ P1: Vérifier cache Redis (L2 cache) - partagé entre instances
+        redis_client = WeatherService._get_redis_for_weather()
+        if redis_client:
+            try:
+                import json
+
+                redis_cache_key = f"weather:{key}"
+                cached_data = redis_client.get(redis_cache_key)
+                if cached_data:
+                    try:
+                        cached_str: str | None = None
+                        if isinstance(cached_data, (bytes, bytearray)):
+                            cached_str = cached_data.decode("utf-8", errors="ignore")
+                        elif isinstance(cached_data, str):
+                            cached_str = cached_data
+
+                        if cached_str:
+                            cached_dict = json.loads(cached_str)
+                            if isinstance(cached_dict, dict) and "data" in cached_dict:
+                                cached_at = datetime.fromisoformat(
+                                    cached_dict["cached_at"]
+                                )
+                                # Vérifier expiration
+                                if datetime.now() - cached_at <= timedelta(
+                                    seconds=_cache_ttl_seconds
+                                ):
+                                    result = cast(dict[str, Any], cached_dict["data"])
+                                    # Stocker dans cache local pour accès ultérieur
+                                    _weather_cache[key] = {
+                                        "data": result,
+                                        "cached_at": cached_dict["cached_at"],
+                                    }
+                                    logger.debug(
+                                        "[Weather] ✅ L2 cache hit (Redis) for %s", key
+                                    )
+                                    return result
+                    except (
+                        json.JSONDecodeError,
+                        UnicodeDecodeError,
+                        ValueError,
+                        KeyError,
+                        TypeError,
+                    ) as e:
+                        logger.debug("[Weather] Failed to decode cached data: %s", e)
+            except (ConnectionError, OSError, TimeoutError) as e:
+                # Erreurs réseau attendues : Redis indisponible, timeout
+                logger.debug(
+                    "[Weather] Redis cache check failed (network error: %s): %s",
+                    type(e).__name__,
+                    e,
+                )
+            except Exception:
+                # Erreur inattendue lors de la vérification du cache Redis
+                logger.debug("[Weather] Redis cache check failed")
+
+        return None
 
     @staticmethod
     def _put_in_cache(key: str, data: dict[str, Any]) -> None:
-        """Met en cache les données météo.
+        """Met en cache les données météo (L1 local + L2 Redis).
+
+        ✅ P1: Stocke dans cache local ET Redis pour partage entre instances.
 
         Args:
             key: Clé du cache (lat,lon)
             data: Données à cacher
 
         """
-        _weather_cache[key] = {
+        cached_at = datetime.now().isoformat()
+        cache_entry = {
             "data": data,
-            "cached_at": datetime.now().isoformat(),
+            "cached_at": cached_at,
         }
+
+        # ✅ P1: Mettre en cache local (L1 cache) - ultra-rapide
+        _weather_cache[key] = cache_entry
+
+        # ✅ P1: Mettre en cache Redis (L2 cache) - partagé entre instances
+        redis_client = WeatherService._get_redis_for_weather()
+        if redis_client:
+            try:
+                import json
+
+                redis_cache_key = f"weather:{key}"
+                cache_value = json.dumps(cache_entry)
+                redis_client.setex(redis_cache_key, _cache_ttl_seconds, cache_value)
+                logger.debug("[Weather] ✅ L2 cache write (Redis) for %s", key)
+            except (ConnectionError, OSError, TimeoutError) as e:
+                # Erreurs réseau attendues : Redis indisponible, timeout
+                logger.debug(
+                    "[Weather] Failed to write to Redis cache (network error: %s): %s",
+                    type(e).__name__,
+                    e,
+                )
+            except (ValueError, TypeError) as e:
+                # Erreurs de validation attendues : JSON invalide
+                logger.debug(
+                    "[Weather] Failed to write to Redis cache (validation error: %s): %s",
+                    type(e).__name__,
+                    e,
+                )
+            except Exception:
+                # Erreur inattendue lors de l'écriture dans le cache Redis
+                logger.debug("[Weather] Failed to write to Redis cache")
 
     @staticmethod
     def clear_cache() -> None:

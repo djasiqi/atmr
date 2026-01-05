@@ -1,7 +1,6 @@
 # backend/services/unified_dispatch/data.py
 from __future__ import annotations
 
-import contextlib
 import json
 import logging
 import math
@@ -12,46 +11,49 @@ from datetime import datetime, timedelta
 from functools import lru_cache
 from typing import Any, Dict, List, Tuple, cast
 
-import pytz
+import pytz  # pyright: ignore[reportMissingModuleSource]
 
 # (optionnel) peut \u00eatre nettoy\u00e9 si non utilis\u00e9s
 from sqlalchemy import and_, func, or_
+from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.orm import joinedload
 
-from models import Booking, BookingStatus, Company, Driver
+from models import Booking, Company, Driver
 from services.dispatch_utils import count_assigned_bookings_for_day
-from services.maps import geocode_address
-from services.osrm_client import (
-    build_distance_matrix_osrm_with_cb as build_distance_matrix_osrm,
-)
-from services.osrm_client import eta_seconds as osrm_eta_seconds
+from services.interfaces.geocoding_interface import get_geocoding_service
+from services.interfaces.routing_interface import get_routing_service
 from services.unified_dispatch.heuristics import (
     baseline_and_cap_loads,
     haversine_minutes,
 )
 from services.unified_dispatch.settings import Settings, driver_work_window_from_config
-from shared import safe_execute
+from shared.constants import DispatchDataConstants, GeoConstants
+from shared.error_handling import safe_execute
 from shared.time_utils import day_local_bounds, now_local, parse_local_naive
 
-# Constantes pour éviter les valeurs magiques
-SI_THRESHOLD = 5
-LAT_FLOAT_THRESHOLD = 90
-LON_MIN_THRESHOLD = -180
-LON_MAX_THRESHOLD = 180
-N_ZERO = 0
-N_ONE = 1
-W_ZERO = 0
-W_ONE = 1
-N_THRESHOLD = 2
-TW_THRESHOLD = 2
-SERVICE_TIMES_THRESHOLD = 2
-DELAY_SECONDS_ZERO = 0
-MAX_DRIVER_IDS_IN_LOG = 10  # Limite le nombre de driver IDs affichés dans les logs
-FAIRNESS_SLOW_QUERY_THRESHOLD_MS = 5000  # Seuil pour warning si fairness_counts > 5s
-BUILD_MATRIX_SLOW_THRESHOLD_MS = 30000  # Seuil pour warning si build_time_matrix > 30s
-MIN_TRAVEL_MINUTES = 2
-LARGE_MATRIX_THRESHOLD = 999
-LOW_COORD_QUALITY_THRESHOLD = 0.65
+# ✅ REFACTORING: Utilisation de constantes centralisées
+
+# Alias pour compatibilité avec le code existant
+SI_THRESHOLD = DispatchDataConstants.SI_THRESHOLD
+LAT_FLOAT_THRESHOLD = DispatchDataConstants.LAT_FLOAT_THRESHOLD
+LON_MIN_THRESHOLD = DispatchDataConstants.LON_MIN_THRESHOLD
+LON_MAX_THRESHOLD = DispatchDataConstants.LON_MAX_THRESHOLD
+N_ZERO = DispatchDataConstants.N_ZERO
+N_ONE = DispatchDataConstants.N_ONE
+W_ZERO = DispatchDataConstants.W_ZERO
+W_ONE = DispatchDataConstants.W_ONE
+N_THRESHOLD = DispatchDataConstants.N_THRESHOLD
+TW_THRESHOLD = DispatchDataConstants.TW_THRESHOLD
+SERVICE_TIMES_THRESHOLD = DispatchDataConstants.SERVICE_TIMES_THRESHOLD
+DELAY_SECONDS_ZERO = DispatchDataConstants.DELAY_SECONDS_ZERO
+MAX_DRIVER_IDS_IN_LOG = DispatchDataConstants.MAX_DRIVER_IDS_IN_LOG
+FAIRNESS_SLOW_QUERY_THRESHOLD_MS = (
+    DispatchDataConstants.FAIRNESS_SLOW_QUERY_THRESHOLD_MS
+)
+BUILD_MATRIX_SLOW_THRESHOLD_MS = DispatchDataConstants.BUILD_MATRIX_SLOW_THRESHOLD_MS
+MIN_TRAVEL_MINUTES = DispatchDataConstants.MIN_TRAVEL_MINUTES
+LARGE_MATRIX_THRESHOLD = DispatchDataConstants.LARGE_MATRIX_THRESHOLD
+LOW_COORD_QUALITY_THRESHOLD = GeoConstants.LOW_COORD_QUALITY_THRESHOLD
 
 logger = logging.getLogger(__name__)
 DEFAULT_SETTINGS = Settings()
@@ -100,8 +102,14 @@ def _get_redis_from_settings(settings) -> Any | None:
         rc = getattr(getattr(settings, "matrix", None), "redis_client", None)
         if rc is not None:
             return rc
-    except Exception:
+    except (AttributeError, TypeError) as e:
+        # Erreur d'attribut attendue si settings.matrix n'existe pas
+        logger.debug("Redis client non disponible via settings: %s", e)
         pass
+    except Exception:
+        # Erreur inattendue : logger et re-lever
+        logger.exception("Erreur inattendue lors de la récupération du client Redis")
+        raise
     try:
         url = os.getenv("REDIS_URL", None) or getattr(
             getattr(settings, "matrix", None), "redis_url", None
@@ -109,13 +117,33 @@ def _get_redis_from_settings(settings) -> Any | None:
         if url:
             # Lazy import pour compat Windows, pas d'obligation de
             # d\u00e9pendance
-            import redis
+            import redis  # pyright: ignore[reportMissingImports]
 
-            return redis.from_url(url, decode_responses=False)
-    except Exception:
+            # ✅ P1: Ajouter timeouts Redis pour éviter blocages
+            socket_timeout = int(os.getenv("REDIS_SOCKET_TIMEOUT", "5"))
+            socket_connect_timeout = int(os.getenv("REDIS_SOCKET_CONNECT_TIMEOUT", "5"))
+            return redis.from_url(
+                url,
+                decode_responses=False,
+                socket_timeout=socket_timeout,
+                socket_connect_timeout=socket_connect_timeout,
+            )
+    except (ConnectionError, TimeoutError, OSError) as e:
+        # Erreurs réseau attendues : Redis indisponible
         logger.warning(
-            "[Dispatch] Redis unavailable; continuing without cache.", exc_info=True
+            "[Dispatch] Redis unavailable (%s): %s; continuing without cache.",
+            type(e).__name__,
+            e,
         )
+        return None
+    except (ValueError, TypeError) as e:
+        # Erreurs de configuration (URL invalide, etc.)
+        logger.error("[Dispatch] Configuration Redis invalide: %s", e)
+        return None
+    except Exception:
+        # Erreur inattendue : logger et re-lever
+        logger.exception("[Dispatch] Erreur inattendue lors de la connexion Redis")
+        raise
     return None
 
 
@@ -129,8 +157,23 @@ def _canonical_coords(
     for lat, lon in coords:
         try:
             out.append((round(float(lat), prec), round(float(lon), prec)))
-        except Exception:
+        except (ValueError, TypeError) as e:
+            # Erreurs de conversion attendues (coords invalides)
+            logger.debug(
+                "Coordonnées invalides (%s, %s), utilisation coordonnées par défaut: %s",
+                lat,
+                lon,
+                e,
+            )
             out.append((round(46.2044, prec), round(6.1432, prec)))
+        except Exception:
+            # Erreur inattendue : logger et re-lever
+            logger.exception(
+                "Erreur inattendue lors de la conversion des coordonnées (%s, %s)",
+                lat,
+                lon,
+            )
+            raise
     return out
 
 
@@ -146,8 +189,15 @@ def _haversine_matrix_cached(
     """
     try:
         coords = json.loads(coords_key_json)
-    except Exception as e:
+    except (json.JSONDecodeError, TypeError) as e:
+        # Erreurs de parsing JSON attendues
         logger.warning("[Dispatch] Failed to parse coords_key_json: %s", e)
+        # En dernier recours, on utilise des coordonnées par défaut
+        # Genève par défaut
+        coords = [(46.2044, 6.1432), (46.2044, 6.1432)]
+    except Exception as e:
+        # Erreur inattendue : logger et utiliser fallback
+        logger.exception("[Dispatch] Unexpected error parsing coords_key_json: %s", e)
         # En dernier recours, on utilise des coordonn\u00e9es par d\u00e9faut
         # Gen\u00e8ve par d\u00e9faut
         coords = [(46.2044, 6.1432), (46.2044, 6.1432)]
@@ -210,70 +260,47 @@ def _haversine_matrix_cached(
 
 @safe_execute(default_return=[], log_error=True)
 def get_bookings_for_dispatch(company_id: int, horizon_minutes: int) -> List[Booking]:
-    now_ts = now_local()
-    horizon_local = now_ts + timedelta(minutes=horizon_minutes)
+    """Récupère les bookings éligibles pour le dispatch.
 
+    ✅ Refactoré pour utiliser BookingRepository (découplage des modèles SQLAlchemy).
+    Retourne toujours des modèles SQLAlchemy pour la compatibilité avec le code existant.
+
+    Args:
+        company_id: ID de l'entreprise
+        horizon_minutes: Horizon temporel en minutes
+
+    Returns:
+        Liste de modèles Booking SQLAlchemy (pour compatibilité)
+    """
+    from repositories.booking_repository import BookingRepository
+
+    # ✅ Utilisation du repository pour découpler de SQLAlchemy
+    booking_repo = BookingRepository()
+    booking_dtos = booking_repo.find_for_dispatch(company_id, horizon_minutes)
+
+    if not booking_dtos:
+        return []
+
+    # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs
+    # (nécessaire pour la compatibilité avec le code existant)
+    booking_ids = [dto.id for dto in booking_dtos]
     bookings = (
-        Booking.query
-        # évite les soucis de typage Pylance sur RelationshipProperty
-        .options(joinedload(Booking.driver))
-        .filter(
-            Booking.company_id == company_id,
-            # caster la colonne pour éviter les bool Python
-            or_(
-                cast("Any", Booking.status) == BookingStatus.ACCEPTED,
-                cast("Any", Booking.status) == BookingStatus.ASSIGNED,
-            ),
-            Booking.scheduled_time.isnot(None),
-            Booking.scheduled_time <= horizon_local,
-        )
+        Booking.query.options(joinedload(Booking.driver))
+        .filter(Booking.id.in_(booking_ids))
         .order_by(Booking.scheduled_time.asc())
         .all()
     )
 
-    # Ici, **aucune** conversion : on laisse les datetimes NA\u00cfFS tels quels
-    # 🚫 Exclure les retours avec heure à confirmer (00:00)
-    # Les retours avec scheduled_time = NULL sont déjà exclus par le filtre
-    # SQL ci-dessus
-    # 🚫 Exclure les retours avec heure à confirmer (time_confirmed = False)
-    filtered_bookings = []
-    excluded_count = 0
+    # S'assurer que l'ordre correspond aux DTOs (qui sont déjà triés)
+    booking_dict = {b.id: b for b in bookings}
+    filtered_bookings = [
+        booking_dict[dto.id] for dto in booking_dtos if dto.id in booking_dict
+    ]
 
-    logger.warning("[DATA] 🔍 Filtrage de %s courses...", len(bookings))
-
-    for b in bookings:
-        scheduled = getattr(b, "scheduled_time", None)
-        if scheduled is None:
-            logger.warning("⏸️ Course #%s EXCLUE : scheduled_time est NULL", b.id)
-            continue
-
-        # Si c'est un retour avec time_confirmed = False → exclure du dispatch
-        is_return = bool(getattr(b, "is_return", False))
-        time_confirmed = bool(getattr(b, "time_confirmed", True))
-
-        logger.info(
-            "[DATA] Course #%s: is_return=%s, time_confirmed=%s",
-            b.id,
-            is_return,
-            time_confirmed,
-        )
-
-        if is_return and not time_confirmed:
-            excluded_count += 1
-            logger.error(
-                "⏸️ Course #%s (%s) EXCLUE du dispatch : retour avec heure à confirmer",
-                b.id,
-                getattr(b, "customer_name", "N/A"),
-            )
-            continue
-
-        logger.info("[DATA] ✅ Course #%s INCLUSE dans le dispatch", b.id)
-        filtered_bookings.append(b)
-
-    logger.error(
-        "[DATA] ✅ %s courses après filtrage (%s retours exclus)",
+    logger.info(
+        "[DATA] ✅ %s courses récupérées via repository (sur %s DTOs)",
         len(filtered_bookings),
-        excluded_count,
+        len(booking_dtos),
     )
     return filtered_bookings
 
@@ -367,21 +394,43 @@ def get_bookings_for_day(company_id, day_str, Booking=None, BookingStatus=None):
         if hasattr(BookingStatus, "PENDING"):
             status_filters.append(cast("Any", Booking.status) == BookingStatus.PENDING)
 
-        bookings = Booking.query.filter(
-            Booking.company_id == company_id,
-            or_(*status_filters),
-            time_expr.isnot(None),
-            # Use OR condition to match both timezone-aware and naive
-            # datetimes
-            or_(
-                # For timezone-aware datetimes (UTC)
-                and_(time_expr >= start_utc, time_expr <= end_utc),
-                # For naive datetimes (local)
-                and_(time_expr >= start_local, time_expr <= end_local),
-                # For date-only comparison (SQLite)
-                func.date(time_expr) == func.date(start_local),
-            ),
-        ).order_by(time_expr.asc())
+        # ✅ Phase 2 N+1: Eager loading pour éviter requêtes N+1
+        # Problème N+1 : Sans joinedload(), accéder à booking.driver, booking.client ou
+        # booking.company déclencherait une requête SQL par booking (N requêtes).
+        # Solution : Utiliser joinedload() pour charger toutes les relations en une seule
+        # requête avec JOIN, réduisant N requêtes à 1 seule requête.
+        # Relations chargées :
+        #   - Booking.driver : Chauffeur assigné au booking
+        #   - Booking.client : Client du booking
+        #   - Booking.company : Entreprise du booking
+        bookings = (
+            Booking.query.options(
+                joinedload(Booking.driver),
+                joinedload(Booking.client),
+                joinedload(Booking.company),
+            )
+            .filter(
+                # Inclure les courses de l'entreprise ET les courses transférées acceptées
+                # où cette entreprise est l'entreprise d'exécution
+                (
+                    (Booking.company_id == company_id)
+                    | (Booking.executing_company_id == company_id)
+                ),
+                or_(*status_filters),
+                time_expr.isnot(None),
+                # Use OR condition to match both timezone-aware and naive
+                # datetimes
+                or_(
+                    # For timezone-aware datetimes (UTC)
+                    and_(time_expr >= start_utc, time_expr <= end_utc),
+                    # For naive datetimes (local)
+                    and_(time_expr >= start_local, time_expr <= end_local),
+                    # For date-only comparison (SQLite)
+                    func.date(time_expr) == func.date(start_local),
+                ),
+            )
+            .order_by(time_expr.asc())
+        )
 
         result = bookings.all()
 
@@ -401,6 +450,9 @@ def get_bookings_for_day(company_id, day_str, Booking=None, BookingStatus=None):
 
         # 🚫 FILTRE PYTHON : Exclure les retours avec heure à confirmer
         # (time_confirmed = False)
+        # ⚠️ IMPORTANT : Les bookings avec time_confirmed=False sont exclus du dispatch
+        # car ils peuvent avoir des dates passées (imports historiques) ou des heures
+        # non confirmées (retours avec heure à confirmer).
         filtered_result = []
         excluded_count = 0
 
@@ -435,20 +487,75 @@ def get_bookings_for_day(company_id, day_str, Booking=None, BookingStatus=None):
             excluded_count,
         )
         return filtered_result
-    except Exception as e:
-        logger.error("[Dispatch] Error querying bookings for day: %s", e)
-        return []
+    except (OperationalError, DBAPIError) as e:
+        # Erreurs DB transitoires : connexion, timeout, etc.
+        logger.error(
+            "[Dispatch] Erreur DB lors de la requête bookings pour company %s, jour %s: %s",
+            company_id,
+            day_str,
+            e,
+        )
+        raise  # Re-lever pour permettre retry
+    except (AttributeError, TypeError) as e:
+        # Erreurs d'attribut/type : modèles ou attributs manquants
+        logger.error(
+            "[Dispatch] Erreur d'attribut/type lors de la requête bookings pour company %s: %s",
+            company_id,
+            e,
+        )
+        raise
+    except Exception:
+        # Erreur inattendue : logger et re-lever
+        logger.exception(
+            "[Dispatch] Erreur inattendue lors de la requête bookings pour company %s, jour %s",
+            company_id,
+            day_str,
+        )
+        raise
 
 
 def get_available_drivers(company_id: int) -> List[Driver]:
-    """R\u00e9cup\u00e8re les chauffeurs actifs & disponibles pour dispatch,
+    """Récupère les chauffeurs actifs & disponibles pour dispatch,
     et normalise last_position_update en UTC (tz-aware).
+
+    ✅ Refactoré pour utiliser DriverRepository (découplage des modèles SQLAlchemy).
+    Retourne toujours des modèles SQLAlchemy pour la compatibilité avec le code existant.
+
+    ✅ Phase 7 N+1: Cette fonction utilise `joinedload()` pour charger la relation
+    company en une seule requête SQL, évitant ainsi les requêtes N+1.
+
+    Relations chargées :
+        - Driver.company : Entreprise du chauffeur
+
+    Note : working_config est un attribut JSON (pas une relation), donc pas besoin
+    de joinedload() pour celui-ci.
     """
-    drivers = Driver.query.filter(
-        Driver.company_id == company_id,
-        Driver.is_active.is_(True),
-        Driver.is_available.is_(True),
-    ).all()
+    # ✅ Utilisation du repository pour découpler de SQLAlchemy
+    from repositories.driver_repository import DriverRepository
+
+    driver_repo = DriverRepository()
+    driver_dtos = driver_repo.find_available_by_company_id(company_id)
+
+    if not driver_dtos:
+        return []
+
+    # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs
+    # (nécessaire pour la compatibilité avec le code existant)
+    driver_ids = [dto.id for dto in driver_dtos]
+    # ✅ Phase 3 N+1: Eager loading pour éviter requêtes N+1
+    # Problème N+1 : Sans joinedload(), accéder à driver.company déclencherait une
+    # requête SQL par driver (N requêtes).
+    # Solution : Utiliser joinedload() pour charger la relation company en une seule
+    # requête avec JOIN, réduisant N requêtes à 1 seule requête.
+    # Relation chargée :
+    #   - Driver.company : Entreprise du chauffeur
+    # Note : working_config est un attribut JSON (pas une relation), donc pas besoin
+    # de joinedload() pour celui-ci.
+    drivers = (
+        Driver.query.options(joinedload(Driver.company))
+        .filter(Driver.id.in_(driver_ids))
+        .all()
+    )
 
     # \ud83d\udd27 Normalisation "en m\u00e9moire" (mode na\u00eff)
     for d in drivers:
@@ -462,8 +569,18 @@ def get_available_drivers(company_id: int) -> List[Driver]:
             if d.longitude is not None:
                 d_any = cast("Any", d)
                 d_any.longitude = float(cast("Any", d.longitude))
-        except Exception:
+        except (ValueError, TypeError) as e:
+            # Erreurs de conversion attendues : coordonnées invalides
             # on laisse l'enrichissement faire le fallback plus tard
+            logger.debug("Failed to convert driver coordinates: %s, using None", e)
+            d_any = cast("Any", d)
+            d_any.latitude = None
+            d_any.longitude = None
+        except Exception as e:
+            # Erreur inattendue : logger et faire le fallback
+            logger.warning(
+                "Unexpected error converting driver coordinates: %s, using None", e
+            )
             d_any = cast("Any", d)
             d_any.latitude = None
             d_any.longitude = None
@@ -517,10 +634,7 @@ def get_available_drivers_split(company_id: int) -> tuple[List[Driver], List[Dri
     # bloquer
     if not regs and not emgs and unknown:
         logger.warning(
-            (
-                "[Dispatch] All drivers have unknown driver_type → falling "
-                "back to REGULAR for all."
-            )
+            "[Dispatch] All drivers have unknown driver_type → falling back to REGULAR for all."
         )
         regs = unknown
         unknown = []
@@ -542,7 +656,14 @@ def _company_latlon_optional(company: Company) -> tuple[float, float] | None:
         if lat is not None and lon is not None:
             try:
                 return float(lat), float(lon)
-            except Exception:
+            except (ValueError, TypeError):
+                # Erreurs de conversion attendues : valeurs invalides
+                return None
+            except Exception as e:
+                # Erreur inattendue : logger et retourner None
+                logger.debug(
+                    "Unexpected error converting coordinates (%s, %s): %s", lat, lon, e
+                )
                 return None
     return None
 
@@ -553,7 +674,13 @@ def _configured_fallback_coords(company: Company) -> tuple[float, float] | None:
         return None
     try:
         config_raw: Any = company.get_autonomous_config() or {}
-    except Exception:
+    except (AttributeError, TypeError) as e:
+        # Erreurs attendues : méthode/attribut manquant
+        logger.debug("Failed to get autonomous_config: %s", e)
+        return None
+    except Exception as e:
+        # Erreur inattendue : logger et retourner None
+        logger.warning("Unexpected error getting autonomous_config: %s", e)
         return None
 
     if not isinstance(config_raw, dict):
@@ -618,7 +745,12 @@ def _coord_factor(quality: str) -> float:
 def _to_float_opt(x: Any) -> float | None:
     try:
         return None if x is None else float(x)
-    except Exception:
+    except (ValueError, TypeError):
+        # Erreurs de conversion attendues : valeur invalide
+        return None
+    except Exception as e:
+        # Erreur inattendue : logger et retourner None
+        logger.debug("Unexpected error converting to float: %s, returning None", e)
         return None
 
 
@@ -627,7 +759,9 @@ def _geocode_safe_cached(address: str) -> tuple[float, float] | None:
     if not address or not address.strip():
         return None
     try:
-        res = geocode_address(address)
+        # ✅ REFACTORING: Utilisation de l'interface pour découpler du service de géocodage
+        geocoding_service = get_geocoding_service()
+        res = geocoding_service.geocode_address(address)
         # attendu: dict {"lat": ..., "lon": ...} OU (lat, lon)
         if isinstance(res, dict) and "lat" in res and "lon" in res:
             res_d = cast("Dict[str, Any]", res)
@@ -644,9 +778,23 @@ def _geocode_safe_cached(address: str) -> tuple[float, float] | None:
             if lat is not None and lon is not None:
                 return lat, lon
             return None
-    except Exception:
+    except (ConnectionError, TimeoutError, OSError):
+        # Erreurs réseau attendues : service de géocodage indisponible
         logger.warning(
-            "[Dispatch] geocode_address failed for '%s'", address, exc_info=True
+            "[Dispatch] geocode_address failed (network error) for '%s'",
+            address,
+        )
+    except (ValueError, TypeError, AttributeError):
+        # Erreurs de validation : adresse invalide, réponse mal formée
+        logger.warning(
+            "[Dispatch] geocode_address failed (validation error) for '%s'",
+            address,
+        )
+    except Exception:
+        # Erreur inattendue : logger avec trace complète
+        logger.exception(
+            "[Dispatch] geocode_address failed (unexpected error) for '%s'",
+            address,
         )
     return None
 
@@ -660,7 +808,16 @@ def enrich_booking_coords(bookings: List[Booking], company: Company) -> None:
       - Sinon, fallback ordonné : coords de l'entreprise, centroïde du lot,
         coords configurées.
       - Un fallback ultime sur FALLBACK_COORD_DEFAULT est utilisé si nécessaire.
+
+    ✅ Phase 5 N+1: `company` est déjà chargé avant l'appel (via Company.query.get()
+    dans build_problem_data()). Les accès sont à des attributs directs (latitude,
+    longitude, get_autonomous_config() qui lit un attribut JSON). Aucun eager loading
+    nécessaire.
     """
+    # ✅ Phase 5 N+1: Assertion pour valider que company est chargé
+    assert company is not None, "company doit être chargé avant l'appel"
+    assert hasattr(company, "id"), "company doit être un objet Company chargé"
+
     company_coord = _company_latlon_optional(company)
     configured_coord = _configured_fallback_coords(company)
     centroid_coord = _compute_bookings_centroid(bookings)
@@ -697,7 +854,16 @@ def enrich_booking_coords(bookings: List[Booking], company: Company) -> None:
         try:
             b_any.pickup_lat = float(cast("Any", plat))
             b_any.pickup_lon = float(cast("Any", plon))
-        except Exception:
+        except (ValueError, TypeError) as e:
+            # Erreurs de conversion attendues : coordonnées invalides
+            logger.debug("Failed to convert pickup coordinates: %s, using fallback", e)
+            (plat, plon), pickup_quality = _resolve_fallback()
+            b_any.pickup_lat, b_any.pickup_lon = plat, plon
+        except Exception as e:
+            # Erreur inattendue : logger et utiliser fallback
+            logger.warning(
+                "Unexpected error converting pickup coordinates: %s, using fallback", e
+            )
             (plat, plon), pickup_quality = _resolve_fallback()
             b_any.pickup_lat, b_any.pickup_lon = plat, plon
         b_any._pickup_coord_quality = pickup_quality
@@ -726,7 +892,19 @@ def enrich_booking_coords(bookings: List[Booking], company: Company) -> None:
         try:
             b_any.dropoff_lat = float(cast("Any", dlat))
             b_any.dropoff_lon = float(cast("Any", dlon))
-        except Exception:
+        except (ValueError, TypeError) as e:
+            # Erreurs de conversion attendues : coordonnées invalides
+            logger.debug(
+                "Failed to convert dropoff coordinates: %s, using pickup coordinates", e
+            )
+            b_any.dropoff_lat, b_any.dropoff_lon = b_any.pickup_lat, b_any.pickup_lon
+            drop_quality = pickup_quality
+        except Exception as e:
+            # Erreur inattendue : logger et utiliser pickup coordinates
+            logger.warning(
+                "Unexpected error converting dropoff coordinates: %s, using pickup coordinates",
+                e,
+            )
             b_any.dropoff_lat, b_any.dropoff_lon = b_any.pickup_lat, b_any.pickup_lon
             drop_quality = pickup_quality
         b_any._dropoff_coord_quality = drop_quality
@@ -748,7 +926,16 @@ def enrich_booking_coords(bookings: List[Booking], company: Company) -> None:
 def enrich_driver_coords(drivers: List[Driver], company: Company) -> None:
     """Remplit d.current_lat / d.current_lon avec suivi de la qualité des
     coordonnées.
+
+    ✅ Phase 5 N+1: `company` est déjà chargé avant l'appel (via Company.query.get()
+    dans build_problem_data()). Les accès sont à des attributs directs (latitude,
+    longitude, get_autonomous_config() qui lit un attribut JSON). Aucun eager loading
+    nécessaire.
     """
+    # ✅ Phase 5 N+1: Assertion pour valider que company est chargé
+    assert company is not None, "company doit être chargé avant l'appel"
+    assert hasattr(company, "id"), "company doit être un objet Company chargé"
+
     now = now_local()
     company_coord = _company_latlon_optional(company)
     configured_coord = _configured_fallback_coords(company)
@@ -769,7 +956,15 @@ def enrich_driver_coords(drivers: List[Driver], company: Company) -> None:
                 ts_local = parse_local_naive(ts)
                 if ts_local is not None:
                     fresh = (now - ts_local) <= _POS_TTL
-            except Exception:
+            except (ValueError, TypeError, AttributeError):
+                # Erreurs de parsing attendues : format de date invalide
+                fresh = False
+            except Exception as e:
+                # Erreur inattendue : logger et considérer comme non-fresh
+                logger.debug(
+                    "Unexpected error parsing position timestamp: %s, considering non-fresh",
+                    e,
+                )
                 fresh = False
 
         if fresh and current_lat is not None and current_lon is not None:
@@ -828,7 +1023,15 @@ def build_time_matrix(
     def _safe_tuple(lat, lon) -> Tuple[float, float]:
         try:
             return (float(lat), float(lon))
-        except Exception:
+        except (ValueError, TypeError):
+            # Erreurs de conversion attendues : coordonnées invalides
+            return FALLBACK_COORD_DEFAULT  # Genève
+        except Exception as e:
+            # Erreur inattendue : logger et utiliser fallback
+            logger.debug(
+                "Unexpected error converting coordinates to tuple: %s, using fallback",
+                e,
+            )
             return FALLBACK_COORD_DEFAULT  # Genève
 
     # Points de d\u00e9part chauffeurs
@@ -887,7 +1090,12 @@ def build_time_matrix(
     coords_canon = _canonical_coords(coords, prec=coord_prec)
     try:
         coords_key = json.dumps(coords_canon, separators=(",", ":"))
-    except Exception:
+    except (TypeError, ValueError):
+        # Erreurs de sérialisation JSON attendues : objets non sérialisables
+        coords_key = str(coords_canon)
+    except Exception as e:
+        # Erreur inattendue : logger et utiliser str() comme fallback
+        logger.debug("Unexpected error serializing coords to JSON: %s, using str()", e)
         coords_key = str(coords_canon)
 
     if provider == "osrm":
@@ -904,7 +1112,8 @@ def build_time_matrix(
             osrm_max_retries,
         )
         try:
-            matrix_sec = build_distance_matrix_osrm(
+            routing_service = get_routing_service()
+            matrix_sec = routing_service.build_distance_matrix(
                 coords_canon,  # coords arrondies pour stabilité du cache OSRM
                 base_url=osrm_url,
                 profile=settings.matrix.osrm_profile,
@@ -915,6 +1124,9 @@ def build_time_matrix(
                 backoff_ms=int(settings.matrix.osrm_retry_backoff_ms),
                 redis_client=redis_client,
                 coord_precision=coord_prec,
+                avg_speed_kmh_fallback=float(
+                    getattr(getattr(settings, "matrix", None), "avg_speed_kmh", 25)
+                ),
             )
             # Validation de forme : OSRM doit renvoyer une matrice n x n
             if (
@@ -932,13 +1144,45 @@ def build_time_matrix(
                 len(matrix_sec),
                 len(matrix_sec[0]) if matrix_sec else 0,
             )
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError) as e:
+            # Erreurs réseau attendues : OSRM indisponible
             fallback_used = True
             logger.warning(
-                "[Dispatch] ⚠️ OSRM matrix failed → fallback haversine: %s (type=%s)",
-                str(e),
+                "[Dispatch] ⚠️ OSRM matrix failed (network error: %s) → fallback haversine: %s",
                 type(e).__name__,
-                exc_info=True,
+                e,
+            )
+            avg_kmh = float(
+                getattr(getattr(settings, "matrix", None), "avg_speed_kmh", 25)
+            )
+            matrix_sec = _haversine_matrix_cached(coords_key, avg_kmh)
+            logger.info(
+                "[Dispatch] ✅ Fallback haversine activated: avg_speed_kmh=%.1f",
+                avg_kmh,
+            )
+        except (ValueError, TypeError) as e:
+            # Erreurs de validation (matrice invalide, paramètres invalides)
+            fallback_used = True
+            logger.warning(
+                "[Dispatch] ⚠️ OSRM matrix failed (validation error: %s) → fallback haversine: %s",
+                type(e).__name__,
+                e,
+            )
+            avg_kmh = float(
+                getattr(getattr(settings, "matrix", None), "avg_speed_kmh", 25)
+            )
+            matrix_sec = _haversine_matrix_cached(coords_key, avg_kmh)
+            logger.info(
+                "[Dispatch] ✅ Fallback haversine activated: avg_speed_kmh=%.1f",
+                avg_kmh,
+            )
+        except Exception:
+            # Erreur inattendue : logger avec trace complète et continuer avec fallback
+            fallback_used = True
+            logger.exception(
+                "[Dispatch] ⚠️ OSRM matrix failed (unexpected error) → fallback haversine (n=%d, url=%s)",
+                n,
+                osrm_url,
             )
             avg_kmh = float(
                 getattr(getattr(settings, "matrix", None), "avg_speed_kmh", 25)
@@ -990,7 +1234,21 @@ def build_time_matrix(
             else:
                 try:
                     minutes = int(max(MIN_TRAVEL_MINUTES, math.ceil(float(t) / 60)))
-                except Exception:
+                except (ValueError, TypeError, OverflowError) as e:
+                    # Erreurs de conversion attendues : valeurs invalides
+                    logger.debug(
+                        "Failed to convert matrix value %s to minutes: %s, using MIN_TRAVEL_MINUTES",
+                        t,
+                        e,
+                    )
+                    minutes = MIN_TRAVEL_MINUTES
+                except Exception as e:
+                    # Erreur inattendue : logger et utiliser MIN_TRAVEL_MINUTES
+                    logger.warning(
+                        "Unexpected error converting matrix value %s to minutes: %s, using MIN_TRAVEL_MINUTES",
+                        t,
+                        e,
+                    )
                     minutes = MIN_TRAVEL_MINUTES
                 row_min.append(minutes)
         time_matrix_min.append(row_min)
@@ -1031,7 +1289,12 @@ def _to_minutes_window(win: Any, t0: datetime, horizon: int) -> tuple[int, int]:
         e = win[W_ONE]
         if isinstance(s, (int, float)) and isinstance(e, (int, float)):
             return int(s), int(e)
-    except Exception:
+    except (IndexError, TypeError, AttributeError):
+        # Erreurs attendues : index/manque, type incorrect
+        pass
+    except Exception as e:
+        # Erreur inattendue : logger et continuer
+        logger.debug("Unexpected error parsing window tuple: %s", e)
         pass
     if (
         isinstance(win, tuple)
@@ -1114,7 +1377,12 @@ def build_vrptw_problem(
     base_time=None,
     for_date: str | None = None,
 ) -> Dict[str, Any]:
-    """Construit le dict de donn\u00e9es pour OR-Tools (VRPTW), minutes partout."""
+    """Construit le dict de données pour OR-Tools (VRPTW), minutes partout.
+
+    ✅ Phase 4 N+1: Les bookings et drivers sont déjà chargés avec leurs relations
+    (driver, client, company pour bookings; company pour drivers) via les optimisations
+    des phases 2 et 3. Aucun eager loading supplémentaire n'est nécessaire ici.
+    """
 
     def _clamp_range(s: int | None, e: int | None, horizon: int) -> tuple[int, int]:
         s = 0 if s is None else int(s)
@@ -1132,9 +1400,21 @@ def build_vrptw_problem(
     # ⚡ CRITIQUE : Passer la date pour calculer fairness_counts sur la bonne journée
     day_for_fairness = None
     if for_date:
-        with contextlib.suppress(Exception):
+        try:
             # parse_local_naive est déjà importé en haut du fichier (ligne 28)
             day_for_fairness = parse_local_naive(f"{for_date} 00:00:00")
+        except (ValueError, TypeError) as e:
+            # Erreurs de parsing de date attendues
+            logger.debug(
+                "[Dispatch] Failed to parse for_date %s: %s, using None", for_date, e
+            )
+        except Exception as e:
+            # Erreur inattendue : logger et continuer avec None
+            logger.warning(
+                "[Dispatch] Unexpected error parsing for_date %s: %s, using None",
+                for_date,
+                e,
+            )
 
     logger.info(
         (
@@ -1174,17 +1454,48 @@ def build_vrptw_problem(
                 fairness_duration_ms,
                 FAIRNESS_SLOW_QUERY_THRESHOLD_MS,
             )
-    except Exception as e:
+    except (OperationalError, DBAPIError) as e:
+        # Erreurs DB transitoires : connexion, timeout, etc.
         fairness_duration_ms = int((time.time() - fairness_start) * 1000)
-        logger.exception(
-            "[Dispatch] ❌ fairness_counts FAILED after %d ms: %s (type=%s)",
+        logger.error(
+            "[Dispatch] ❌ fairness_counts FAILED (DB error) after %d ms: %s (type=%s)",
             fairness_duration_ms,
             str(e),
             type(e).__name__,
         )
         # Fallback: counts vides (pas de fairness)
         fairness_counts = {int(cast("Any", d.id)): 0 for d in drivers}
-        logger.warning("[Dispatch] Using fallback fairness_counts (all zeros)")
+        logger.warning(
+            "[Dispatch] Using fallback fairness_counts (all zeros) due to DB error"
+        )
+    except (ValueError, TypeError) as e:
+        # Erreurs de validation : IDs invalides, etc.
+        fairness_duration_ms = int((time.time() - fairness_start) * 1000)
+        logger.warning(
+            "[Dispatch] ❌ fairness_counts FAILED (validation error) after %d ms: %s (type=%s)",
+            fairness_duration_ms,
+            str(e),
+            type(e).__name__,
+        )
+        # Fallback: counts vides (pas de fairness)
+        fairness_counts = {int(cast("Any", d.id)): 0 for d in drivers}
+        logger.warning(
+            "[Dispatch] Using fallback fairness_counts (all zeros) due to validation error"
+        )
+    except Exception as e:
+        # Erreur inattendue : logger avec trace complète
+        fairness_duration_ms = int((time.time() - fairness_start) * 1000)
+        logger.exception(
+            "[Dispatch] ❌ fairness_counts FAILED (unexpected error) after %d ms: %s (type=%s)",
+            fairness_duration_ms,
+            str(e),
+            type(e).__name__,
+        )
+        # Fallback: counts vides (pas de fairness)
+        fairness_counts = {int(cast("Any", d.id)): 0 for d in drivers}
+        logger.warning(
+            "[Dispatch] Using fallback fairness_counts (all zeros) due to unexpected error"
+        )
     if not any(fairness_counts.values()):
         # ✅ FIX: Réduire le niveau de log en mode testing (normal, pas d'historique)
         # Vérifier si on est en mode testing via variable d'environnement ou current_app
@@ -1195,16 +1506,22 @@ def build_vrptw_problem(
             is_testing = os.getenv("FLASK_CONFIG") == "testing"
             # Si current_app est disponible, utiliser sa config (plus précis)
             try:
-                from flask import current_app
+                from flask import current_app  # pyright: ignore[reportMissingImports]
 
                 is_testing = is_testing or current_app.config.get("TESTING", False)
             except RuntimeError:
                 # current_app pas disponible (hors contexte Flask), utiliser
                 # seulement env var
                 pass
-        except Exception:
-            # En cas d'erreur, utiliser warning par défaut
-            pass
+        except (ValueError, TypeError, AttributeError) as e:
+            # Erreurs de validation/config attendues
+            logger.debug("[Dispatch] Error checking testing mode: %s, using warning", e)
+        except Exception as e:
+            # Erreur inattendue : logger et continuer
+            logger.warning(
+                "[Dispatch] Unexpected error checking testing mode: %s, using warning",
+                e,
+            )
 
         log_level = logger.debug if is_testing else logger.warning
         log_level(
@@ -1223,10 +1540,7 @@ def build_vrptw_problem(
 
     if getattr(settings.fairness, "reset_daily_load", False):
         logger.info(
-            (
-                "[Dispatch] 🧹 reset_daily_load activé – remise à zéro des "
-                "charges chauffeurs (run manuel)"
-            )
+            "[Dispatch] 🧹 reset_daily_load activé – remise à zéro des charges chauffeurs (run manuel)"
         )
         fairness_counts = {int(driver_id): 0 for driver_id in fairness_counts}
 
@@ -1275,10 +1589,31 @@ def build_vrptw_problem(
                 build_matrix_duration_ms,
                 BUILD_MATRIX_SLOW_THRESHOLD_MS,
             )
+    except (ConnectionError, TimeoutError, OSError) as e:
+        # Erreurs réseau attendues : OSRM indisponible, timeout
+        build_matrix_duration_ms = int((time.time() - build_matrix_start) * 1000)
+        logger.error(
+            "[Dispatch] ❌ build_time_matrix FAILED (network error: %s) after %d ms: %s",
+            type(e).__name__,
+            build_matrix_duration_ms,
+            str(e),
+        )
+        raise
+    except (ValueError, TypeError) as e:
+        # Erreurs de validation : coordonnées invalides, paramètres invalides
+        build_matrix_duration_ms = int((time.time() - build_matrix_start) * 1000)
+        logger.error(
+            "[Dispatch] ❌ build_time_matrix FAILED (validation error: %s) after %d ms: %s",
+            type(e).__name__,
+            build_matrix_duration_ms,
+            str(e),
+        )
+        raise
     except Exception as e:
+        # Erreur inattendue : logger avec trace complète et re-lever
         build_matrix_duration_ms = int((time.time() - build_matrix_start) * 1000)
         logger.exception(
-            "[Dispatch] ❌ build_time_matrix FAILED after %d ms: %s (type=%s)",
+            "[Dispatch] ❌ build_time_matrix FAILED (unexpected error) after %d ms: %s (type=%s)",
             build_matrix_duration_ms,
             str(e),
             type(e).__name__,
@@ -1341,7 +1676,7 @@ def build_vrptw_problem(
 
         # \ud83d\udd0d Debug utile: tracer le gap impos\u00e9 (trajet+buffer)
         # par booking
-        with contextlib.suppress(Exception):
+        try:
             logger.debug(
                 "[VRPTW] pair_min_gap booking_id=%s trip=%s buffer=%s -> min_gap=%s",
                 getattr(b, "id", None),
@@ -1349,6 +1684,12 @@ def build_vrptw_problem(
                 post_buf,
                 int(min_gap),
             )
+        except (AttributeError, TypeError, ValueError):
+            # Erreurs attendues lors du logging (attributs manquants, valeurs invalides)
+            pass
+        except Exception:
+            # Erreur inattendue : ignorer silencieusement (logging non-critique)
+            pass
 
         # Calcul des fen\u00eatres horaires (Time Windows)
         scheduled_local = (
@@ -1474,7 +1815,20 @@ def build_problem_data(
     - Construit le probl\u00e8me VRPTW (avec base_time ancr\u00e9 sur la
       journ\u00e9e planifi\u00e9e).
     """
-    company = Company.query.get(company_id)
+    # ✅ Utilisation du repository pour découpler de SQLAlchemy
+    from repositories.company_repository import CompanyRepository
+
+    company_repo = CompanyRepository()
+    company_dto = company_repo.find_by_id(company_id)
+    if not company_dto:
+        msg = f"Company {company_id} not found"
+        raise ValueError(msg)
+
+    # Récupérer le modèle Company depuis le DTO pour la compatibilité
+    # ✅ Phase 4 N+1: Pas besoin d'eager loading pour company car on accède seulement
+    # à des attributs directs (latitude, longitude, get_autonomous_config() qui lit
+    # un attribut JSON, pas une relation).
+    company = Company.query.get(company_dto.id)
     if not company:
         msg = f"Company {company_id} not found"
         raise ValueError(msg)
@@ -1578,8 +1932,14 @@ def build_problem_data(
             bookings = [
                 b for b in bookings if getattr(b, "status", None) not in completed_vals
             ]
-    except Exception:
+    except (ImportError, AttributeError, TypeError):
+        # Erreurs attendues : modèles/imports manquants, continuer sans filtrage
         pass
+    except Exception as e:
+        # Erreur inattendue : logger et continuer sans filtrage
+        logger.warning(
+            "[Dispatch] Unexpected error filtering completed bookings: %s", e
+        )
 
     if not bookings or not drivers:
         reason = "no_bookings" if not bookings else "no_drivers"
@@ -1631,10 +1991,31 @@ def build_problem_data(
             len(bookings),
             len(drivers),
         )
+    except (ValueError, TypeError) as e:
+        # Erreurs de validation : paramètres invalides, données incorrectes
+        build_vrptw_duration_ms = int((time.time() - build_vrptw_start) * 1000)
+        logger.error(
+            "[Dispatch] ❌ build_vrptw_problem FAILED (validation error: %s) after %d ms: %s",
+            type(e).__name__,
+            build_vrptw_duration_ms,
+            str(e),
+        )
+        raise
+    except (OperationalError, DBAPIError) as e:
+        # Erreurs DB transitoires : connexion, timeout, etc.
+        build_vrptw_duration_ms = int((time.time() - build_vrptw_start) * 1000)
+        logger.error(
+            "[Dispatch] ❌ build_vrptw_problem FAILED (DB error: %s) after %d ms: %s",
+            type(e).__name__,
+            build_vrptw_duration_ms,
+            str(e),
+        )
+        raise
     except Exception as e:
+        # Erreur inattendue : logger avec trace complète et re-lever
         build_vrptw_duration_ms = int((time.time() - build_vrptw_start) * 1000)
         logger.exception(
-            "[Dispatch] ❌ build_vrptw_problem FAILED after %d ms: %s (type=%s)",
+            "[Dispatch] ❌ build_vrptw_problem FAILED (unexpected error) after %d ms: %s (type=%s)",
             build_vrptw_duration_ms,
             str(e),
             type(e).__name__,
@@ -1649,7 +2030,14 @@ def build_problem_data(
                 getattr(getattr(settings, "time", None), "horizon_min", 480),
             )
         )
-    except Exception:
+    except (ValueError, TypeError, AttributeError):
+        # Erreurs attendues : valeur invalide, attribut manquant
+        problem["horizon_minutes"] = 480
+    except Exception as e:
+        # Erreur inattendue : logger et utiliser valeur par défaut
+        logger.debug(
+            "Unexpected error setting horizon_minutes: %s, using default 480", e
+        )
         problem["horizon_minutes"] = 480
     problem["regular_first"] = bool(regular_first)
     problem["allow_emergency"] = bool(allow_emergency)
@@ -1713,16 +2101,18 @@ def build_problem_data(
     preferred_driver_id = None
     if overrides and "preferred_driver_id" in overrides:
         # ⚡ DIAGNOSTIC: Afficher les IDs des drivers disponibles AVANT la vérification
-        driver_ids = [int(cast("Any", d.id)) for d in drivers]
+        # ✅ P1: Créer liste pour logging et set pour vérification O(1)
+        driver_ids_list = [int(cast("Any", d.id)) for d in drivers]
+        driver_ids_set = set(driver_ids_list)  # Pour vérification O(1)
         logger.info(
             (
                 "[Dispatch] 🔍 Drivers disponibles (%d): %s "
                 "(vérification preferred_driver_id)"
             ),
             len(drivers),
-            driver_ids[:MAX_DRIVER_IDS_IN_LOG]
-            if len(driver_ids) > MAX_DRIVER_IDS_IN_LOG
-            else driver_ids,
+            driver_ids_list[:MAX_DRIVER_IDS_IN_LOG]
+            if len(driver_ids_list) > MAX_DRIVER_IDS_IN_LOG
+            else driver_ids_list,
         )
         try:
             raw_value = overrides["preferred_driver_id"]
@@ -1740,7 +2130,7 @@ def build_problem_data(
                     ),
                     preferred_driver_id,
                     type(preferred_driver_id).__name__,
-                    driver_ids,
+                    driver_ids_list,
                 )
                 if preferred_driver_id <= 0:
                     logger.warning(
@@ -1752,7 +2142,8 @@ def build_problem_data(
                     )
                     preferred_driver_id = None
                 # ⚡ Vérifier que le driver existe dans la liste des drivers disponibles
-                elif preferred_driver_id not in driver_ids:
+                # ✅ P1: Utiliser set pour vérification O(1) au lieu de O(n)
+                elif preferred_driver_id not in driver_ids_set:
                     logger.warning(
                         (
                             "[Dispatch] ⚠️ Chauffeur préféré ignoré: ID %s "
@@ -1762,15 +2153,15 @@ def build_problem_data(
                         preferred_driver_id,
                         type(preferred_driver_id).__name__,
                         len(drivers),
-                        driver_ids[:MAX_DRIVER_IDS_IN_LOG]
-                        if len(driver_ids) > MAX_DRIVER_IDS_IN_LOG
-                        else driver_ids,
+                        driver_ids_list[:MAX_DRIVER_IDS_IN_LOG]
+                        if len(driver_ids_list) > MAX_DRIVER_IDS_IN_LOG
+                        else driver_ids_list,
                         [
                             type(did).__name__
-                            for did in driver_ids[:MAX_DRIVER_IDS_IN_LOG]
+                            for did in driver_ids_list[:MAX_DRIVER_IDS_IN_LOG]
                         ]
-                        if len(driver_ids) > MAX_DRIVER_IDS_IN_LOG
-                        else [type(did).__name__ for did in driver_ids],
+                        if len(driver_ids_list) > MAX_DRIVER_IDS_IN_LOG
+                        else [type(did).__name__ for did in driver_ids_list],
                     )
                     preferred_driver_id = None
                 else:
@@ -1827,7 +2218,15 @@ def pick_urgent_returns(
                 getattr(settings, "emergency", None), "return_urgent_threshold_min", 20
             )
         )
-    except Exception:
+    except (ValueError, TypeError, AttributeError):
+        # Erreurs attendues : valeur invalide, attribut manquant
+        threshold = 20
+    except Exception as e:
+        # Erreur inattendue : logger et utiliser valeur par défaut
+        logger.debug(
+            "Unexpected error getting return_urgent_threshold_min: %s, using default 20",
+            e,
+        )
         threshold = 20
 
     now = now_local()
@@ -1872,10 +2271,22 @@ def acquire_dispatch_lock(company_id: int, day_str: str, ttl_sec: int = 60) -> b
             if got:
                 _dispatch_locks[key] = lock
             return bool(got)
-        except Exception:
+        except (ConnectionError, TimeoutError, OSError) as e:
+            # Erreurs réseau attendues : Redis indisponible
             logger.warning(
-                "[Dispatch] Redis lock failed; falling back to in-process lock.",
-                exc_info=True,
+                "[Dispatch] Redis lock failed (network error: %s); falling back to in-process lock.",
+                type(e).__name__,
+            )
+        except (ValueError, TypeError) as e:
+            # Erreurs de validation : paramètres invalides
+            logger.warning(
+                "[Dispatch] Redis lock failed (validation error: %s); falling back to in-process lock.",
+                type(e).__name__,
+            )
+        except Exception:
+            # Erreur inattendue : logger avec trace et utiliser fallback
+            logger.exception(
+                "[Dispatch] Redis lock failed (unexpected error); falling back to in-process lock."
             )
 
     # Fallback in-process
@@ -1895,9 +2306,12 @@ def release_dispatch_lock(company_id: int, day_str: str) -> None:
     try:
         # Objet Redis Lock a aussi release(); idem pour threading.Lock
         lock.release()
+    except (RuntimeError, AttributeError):
+        # Erreurs attendues : lock déjà libéré, objet invalide
+        logger.debug("[Dispatch] lock release noop (already released or invalid lock).")
     except Exception:
-        # On ne veut jamais planter ici
-        logger.debug("[Dispatch] lock release noop.", exc_info=True)
+        # Erreur inattendue : logger mais ne pas planter (cleanup critique)
+        logger.debug("[Dispatch] lock release noop (unexpected error).")
 
 
 # ============================================================
@@ -1978,8 +2392,26 @@ def calculate_eta(
     except ImportError:
         # Fallback si EtaService non disponible (migration en cours)
         logger.warning("[ETA] EtaService non disponible, fallback méthode legacy")
+    except (ConnectionError, TimeoutError, OSError) as e:
+        # Erreurs réseau attendues : service indisponible, timeout
+        logger.warning(
+            "[ETA] Erreur EtaService (network error: %s), fallback méthode legacy: %s",
+            type(e).__name__,
+            e,
+        )
+    except (ValueError, TypeError, AttributeError) as e:
+        # Erreurs de validation : paramètres invalides
+        logger.warning(
+            "[ETA] Erreur EtaService (validation error: %s), fallback méthode legacy: %s",
+            type(e).__name__,
+            e,
+        )
     except Exception as e:
-        logger.warning("[ETA] Erreur EtaService, fallback méthode legacy: %s", e)
+        # Erreur inattendue : logger avec trace complète et continuer avec fallback
+        logger.exception(
+            "[ETA] Erreur EtaService (unexpected error), fallback méthode legacy: %s",
+            e,
+        )
 
     # ✅ FALLBACK: Méthode legacy (compatibilité)
     try:
@@ -1990,13 +2422,13 @@ def calculate_eta(
             # ✅ OPTIMISATION: Utiliser eta_seconds qui utilise route_info
             # (plus efficace pour 2 points)
             # Timeout réduit à 2-3s pour éviter les blocages dans /delays/live
-            eta_sec = osrm_eta_seconds(
-                origin=driver_position,
-                destination=destination,
+            routing_service = get_routing_service()
+            eta_sec = routing_service.eta_seconds(
+                driver_position,
+                destination,
                 base_url=getattr(settings.matrix, "osrm_url", "http://osrm:5000"),
                 profile=getattr(settings.matrix, "osrm_profile", "driving"),
-                timeout=1,  # ✅ Timeout très court pour éviter les blocages
-                # (1s au lieu de 2s)
+                timeout=1,  # ✅ Timeout très court pour éviter les blocages (1s)
                 redis_client=_get_redis_from_settings(settings),
                 coord_precision=int(getattr(settings.matrix, "coord_precision", 5)),
                 avg_speed_kmh_fallback=float(
@@ -2004,8 +2436,25 @@ def calculate_eta(
                 ),
             )
             return int(max(1, eta_sec))
+    except (ConnectionError, TimeoutError, OSError) as e:
+        # Erreurs réseau attendues : OSRM indisponible, timeout
+        logger.warning(
+            "[ETA] OSRM failed (network error: %s) → fallback haversine: %s",
+            type(e).__name__,
+            e,
+        )
+    except (ValueError, TypeError) as e:
+        # Erreurs de validation : coordonnées invalides, paramètres invalides
+        logger.warning(
+            "[ETA] OSRM failed (validation error: %s) → fallback haversine: %s",
+            type(e).__name__,
+            e,
+        )
     except Exception as e:
-        logger.warning("[ETA] OSRM failed → fallback haversine: %s", e)
+        # Erreur inattendue : logger avec trace complète et continuer avec fallback
+        logger.exception(
+            "[ETA] OSRM failed (unexpected error) → fallback haversine: %s", e
+        )
 
     # Fallback Haversine
     avg_kmh = float(getattr(getattr(settings, "matrix", None), "avg_speed_kmh", 25))
@@ -2033,7 +2482,12 @@ def detect_delay(
             buffer_minutes = int(
                 getattr(getattr(settings, "time", None), "buffer_min", 5)
             )
-        except Exception:
+        except (ValueError, TypeError, AttributeError):
+            # Erreurs attendues : valeur invalide, attribut manquant
+            buffer_minutes = 5
+        except Exception as e:
+            # Erreur inattendue : logger et utiliser valeur par défaut
+            logger.debug("Unexpected error getting buffer_min: %s, using default 5", e)
             buffer_minutes = 5
 
     now = now_local()
@@ -2061,6 +2515,13 @@ def get_next_free_at(dropoff_time: datetime, settings=DEFAULT_SETTINGS) -> datet
     """
     try:
         buf = int(getattr(getattr(settings, "time", None), "post_trip_buffer_min", 15))
-    except Exception:
+    except (ValueError, TypeError, AttributeError):
+        # Erreurs attendues : valeur invalide, attribut manquant
+        buf = 15
+    except Exception as e:
+        # Erreur inattendue : logger et utiliser valeur par défaut
+        logger.debug(
+            "Unexpected error getting post_trip_buffer_min: %s, using default 15", e
+        )
         buf = 15
     return dropoff_time + timedelta(minutes=buf)

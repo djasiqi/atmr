@@ -1,0 +1,40 @@
+name: Check Broad Exceptions
+
+on:
+    pull_request:
+        paths:
+            - "backend/**/*.py"
+    push:
+        branches:
+            - main
+            - develop
+        paths:
+            - "backend/**/*.py"
+
+jobs:
+    check-exceptions:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.11"
+
+            - name: Check for broad exceptions
+              run: |
+                  python scripts/detect_broad_exceptions.py --path backend
+              continue-on-error: true # Ne pas bloquer les PR, juste avertir
+
+            - name: Comment PR
+              if: failure() && github.event_name == 'pull_request'
+              uses: actions/github-script@v7
+              with:
+                  script: |
+                      github.rest.issues.createComment({
+                        issue_number: context.issue.number,
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        body: '⚠️ Des exceptions trop larges (`except Exception:` ou `except:`) ont été détectées.\n\nVeuillez consulter le [plan de correction](docs/En%20cours/PLAN_CORRECTION_EXCEPTIONS_LARGES.md) et remplacer par des exceptions spécifiques.'
+                      })

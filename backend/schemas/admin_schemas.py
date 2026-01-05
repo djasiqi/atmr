@@ -1,6 +1,10 @@
 """✅ Schemas Marshmallow pour validation des endpoints admin."""
 
-from marshmallow import Schema, fields, validate
+from marshmallow import (  # pyright: ignore[reportMissingImports]
+    Schema,
+    fields,
+    validate,
+)
 
 from schemas.query_schemas import (
     DateRangeQuerySchema,
@@ -73,5 +77,5 @@ class AutonomousActionsListQuerySchema(
         allow_none=True,
     )
 
-    class Meta:  # type: ignore
+    class Meta:
         unknown = "INCLUDE"  # Permettre des champs supplémentaires pour compatibilité

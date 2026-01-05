@@ -1,4 +1,5 @@
 // components/dashboard/MissionMap.tsx
+// Version native (iOS/Android) - le fichier .web.tsx sera utilisé automatiquement sur le web
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Alert } from 'react-native';
 import MapView, { Marker, LatLng } from 'react-native-maps';
@@ -109,7 +110,7 @@ const MissionMap: React.FC<Props> = ({ location, destination }) => {
             onError={(e) => {
               console.warn('Directions error:', e);
               // Message fréquent si mauvaise clé / restrictions
-              // => activer "Directions API" et vérifier que la clé HTTP n’est pas restreinte à Android apps.
+              // => activer "Directions API" et vérifier que la clé HTTP n'est pas restreinte à Android apps.
             }}
           />
         )}

@@ -1,0 +1,18 @@
+/* Badge de statut véhicule */
+.statusBadge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: var(--font-weight-medium);
+}
+
+.statusBadgeActive {
+  background-color: var(--success-light);
+  color: var(--success);
+}
+
+.statusBadgeInactive {
+  background-color: var(--error-light);
+  color: var(--error);
+}
+

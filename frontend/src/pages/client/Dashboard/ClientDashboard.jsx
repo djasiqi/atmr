@@ -20,7 +20,18 @@ import 'slick-carousel/slick/slick-theme.css';
 const FitBounds = ({ bounds }) => {
   const map = useMap();
   useEffect(() => {
-    if (bounds) map.fitBounds(bounds, { padding: [24, 24] });
+    if (!bounds || !map) return;
+    
+    // Vérifier que la carte est prête
+    if (!map.getContainer()) return;
+    
+    try {
+      // Utiliser animate: false pour éviter les transitions qui causent des erreurs
+      map.fitBounds(bounds, { padding: [24, 24], animate: false });
+    } catch (error) {
+      // Ignorer les erreurs si la carte est en train d'être détruite
+      console.warn('FitBounds error:', error);
+    }
   }, [bounds, map]);
   return null;
 };
@@ -56,8 +67,10 @@ const ClientDashboard = () => {
 
   // Profil client
   useEffect(() => {
+    // ✅ Vérifier l'authentification : soit token dans localStorage (mobile), soit infos utilisateur (web avec cookies)
     const token = localStorage.getItem('authToken');
-    if (!token) {
+    const user = localStorage.getItem('user');
+    if (!token && !user) {
       navigate('/login');
       return;
     }
@@ -67,10 +80,9 @@ const ClientDashboard = () => {
       return;
     }
     setLoadingProfile(true);
+    // ✅ apiClient gère automatiquement l'authentification (token dans localStorage ou cookies httpOnly)
     apiClient
-      .get(`/clients/${effectiveClientId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      .get(`/clients/${effectiveClientId}`)
       .then((response) => setProfile(response.data))
       .catch((err) => {
         console.error('Erreur profil :', err);

@@ -78,6 +78,7 @@ class TestJWTExpirationConfig:
         response = client.post(
             "/api/auth/login",
             json={"email": sample_user.email, "password": "password123"},
+            headers={"X-Requested-With": "Expo"},
         )
 
         assert response.status_code == 200
@@ -125,7 +126,7 @@ class TestJWTAudienceValidation:
                 "sub": "test-user",
                 "exp": int(time.time()) + 3600,
             }
-            assert validate_jwt_audience(payload) is True
+            assert validate_jwt_audience(payload)[0] is True
 
     def test_validate_jwt_audience_invalid(self, app):
         """Vérifie que validate_jwt_audience rejette un token avec audience invalide."""
@@ -135,13 +136,13 @@ class TestJWTAudienceValidation:
                 "sub": "test-user",
                 "exp": int(time.time()) + 3600,
             }
-            assert validate_jwt_audience(payload) is False
+            assert validate_jwt_audience(payload)[0] is False
 
     def test_validate_jwt_audience_missing(self, app):
         """Vérifie que validate_jwt_audience rejette un token sans audience."""
         with app.app_context():
             payload = {"sub": "test-user", "exp": int(time.time()) + 3600}
-            assert validate_jwt_audience(payload) is False
+            assert validate_jwt_audience(payload)[0] is False
 
     def test_token_with_valid_audience_accepted(self, client, sample_user):
         """Vérifie qu'un token avec audience valide est accepté."""
@@ -149,6 +150,7 @@ class TestJWTAudienceValidation:
         response = client.post(
             "/api/auth/login",
             json={"email": sample_user.email, "password": "password123"},
+            headers={"X-Requested-With": "Expo"},
         )
         assert response.status_code == 200
         token = response.get_json()["token"]
@@ -169,14 +171,9 @@ class TestJWTAudienceValidation:
                 expires_delta=timedelta(hours=1),
             )
 
-            # Essayer de décoder le token (Flask-JWT-Extended devrait rejeter)
-            # Note: Flask-JWT-Extended valide automatiquement l'audience
-            # si JWT_DECODE_AUDIENCE est configuré
-            # Flask-JWT-Extended lève InvalidTokenError ou JWTDecodeError
-            # pour tokens invalides
-            with pytest.raises((InvalidTokenError, pyjwt.InvalidTokenError)):
-                # Tenter d'utiliser le token devrait échouer
-                decode_token(token)
+            decoded = decode_token(token)
+            ok, _reason = validate_jwt_audience(decoded)
+            assert ok is False
 
 
 class TestJWTAlgorithm:
@@ -193,6 +190,7 @@ class TestJWTAlgorithm:
         response = client.post(
             "/api/auth/login",
             json={"email": sample_user.email, "password": "password123"},
+            headers={"X-Requested-With": "Expo"},
         )
         assert response.status_code == 200
         token = response.get_json()["token"]
@@ -218,6 +216,7 @@ class TestJWTAlgorithm:
         response = client.post(
             "/api/auth/login",
             json={"email": sample_user.email, "password": "password123"},
+            headers={"X-Requested-With": "Expo"},
         )
         assert response.status_code == 200
         token = response.get_json()["token"]
@@ -236,7 +235,8 @@ class TestJWTConfiguration:
     def test_jwt_decode_audience_config(self, app):
         """Vérifie que JWT_DECODE_AUDIENCE est configuré."""
         with app.app_context():
-            assert current_app.config.get("JWT_DECODE_AUDIENCE") == "atmr-api"
+            # La validation automatique est volontairement désactivée (validation manuelle via validate_jwt_audience)
+            assert current_app.config.get("JWT_DECODE_AUDIENCE") is None
 
     def test_jwt_access_token_expires_config(self, app):
         """Vérifie que JWT_ACCESS_TOKEN_EXPIRES est configuré."""

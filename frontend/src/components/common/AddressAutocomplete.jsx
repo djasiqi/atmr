@@ -66,19 +66,20 @@ export default function AddressAutocomplete({
       const lat = Number(coords[1]);
 
       // Construire l'adresse complète avec numéro et rue
+      // Format : "Rue, Numéro" (avec virgule)
       const street = props.street || '';
       const housenumber = props.housenumber || '';
-      const fullStreetAddress = street && housenumber ? `${street} ${housenumber}` : street || '';
+      const fullStreetAddress = street && housenumber ? `${street}, ${housenumber}` : street || '';
 
       const postcode = props.postcode || '';
       const city = props.city || props.locality || '';
-
-      // Construire le label : TOUJOURS inclure l'adresse complète avec numéro si disponible
-      let label = '';
       const placeName = props.name;
 
+      // Construire le label : FORCER le format "Rue, Numéro, Code Postal, Ville"
+      let label = '';
+
       if (placeName && fullStreetAddress) {
-        // Lieu nommé avec adresse complète : "Nom, Rue Numéro, CP, Ville"
+        // Lieu nommé avec adresse complète : "Nom, Rue, Numéro, CP, Ville"
         const addressParts = [fullStreetAddress];
         if (postcode) addressParts.push(postcode);
         if (city) addressParts.push(city);
@@ -95,24 +96,20 @@ export default function AddressAutocomplete({
         // Lieu nommé sans adresse : juste le nom (fallback)
         label = placeName;
       } else if (fullStreetAddress && city) {
-        // Format complet : "Rue Numéro, CP, Ville"
-        label = postcode
-          ? `${fullStreetAddress}, ${postcode}, ${city}`
-          : `${fullStreetAddress}, ${city}`;
-      } else if (fullStreetAddress) {
-        // Au moins la rue avec numéro
-        label = fullStreetAddress;
-      } else if (street) {
-        // Juste la rue sans numéro
-        label =
-          postcode && city
-            ? `${street}, ${postcode}, ${city}`
-            : city
-              ? `${street}, ${city}`
-              : street;
+        // Format complet : "Rue, Numéro, CP, Ville"
+        const parts = [fullStreetAddress];
+        if (postcode) parts.push(postcode);
+        if (city) parts.push(city);
+        label = parts.join(', ');
+      } else if (street && city) {
+        // Rue sans numéro : "Rue, CP, Ville"
+        const parts = [street];
+        if (postcode) parts.push(postcode);
+        if (city) parts.push(city);
+        label = parts.join(', ');
       } else if (city) {
         // Au moins la ville
-        label = postcode ? `${postcode} ${city}` : city;
+        label = postcode && city ? `${postcode} ${city}` : city;
       } else {
         // Dernier recours
         label = props.osm_value || 'Adresse';
@@ -134,6 +131,9 @@ export default function AddressAutocomplete({
 
   // Fetch proxy backend puis fallback Photon direct
   async function fetchSuggestions(queryText, signal) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:136',message:'fetchSuggestions entry',data:{queryText,signalAborted:signal?.aborted},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
     const q = (queryText || '').toString().trim();
 
     // 1) Proxy backend — mélange alias/favoris + Photon si ton backend le fait
@@ -150,6 +150,9 @@ export default function AddressAutocomplete({
       const url = `${apiBaseUrl}/geocode/autocomplete?q=${encodeURIComponent(q)}&lat=${encodeURIComponent(
         BIAS.lat
       )}&lon=${encodeURIComponent(BIAS.lon)}&limit=${encodeURIComponent(maxResults)}`;
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:153',message:'Before backend fetch',data:{url,signalAborted:signal?.aborted},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
       const res = await fetch(url, { signal });
       if (res.ok) {
         const data = await res.json().catch(() => []);
@@ -165,12 +168,21 @@ export default function AddressAutocomplete({
         console.warn(`[AddressAutocomplete] ⚠️ Erreur backend (${res.status}) pour "${q}"`);
       }
     } catch (error) {
+      // ✅ Ne pas logger les AbortError (annulation normale)
+      if (error?.name === 'AbortError') {
+        return [];
+      }
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:168',message:'Backend fetch error',data:{errorName:error?.name,errorMessage:error?.message,isAbortError:error?.name==='AbortError',signalAborted:signal?.aborted},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
       console.error(`[AddressAutocomplete] ❌ Erreur lors de l'appel backend:`, error);
-      // ignore -> fallback
     }
 
     // 2) Fallback Photon direct
     try {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:175',message:'Before Photon fallback',data:{queryText:q,signalAborted:signal?.aborted},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
       const url = new URL('/api', PHOTON_BASE);
       url.searchParams.set('q', q);
       url.searchParams.set('limit', String(maxResults));
@@ -178,6 +190,9 @@ export default function AddressAutocomplete({
       url.searchParams.set('lat', String(BIAS.lat));
       url.searchParams.set('lon', String(BIAS.lon));
 
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:182',message:'Before Photon fetch',data:{url:url.toString(),signalAborted:signal?.aborted},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
       const res = await fetch(url.toString(), { signal });
       if (!res.ok) throw new Error(`Photon error: ${res.status}`);
       const data = await res.json();
@@ -190,6 +205,13 @@ export default function AddressAutocomplete({
       }
       return normalized;
     } catch (error) {
+      // ✅ Ne pas logger les AbortError (annulation normale)
+      if (error?.name === 'AbortError') {
+        return [];
+      }
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:193',message:'Photon fallback error',data:{errorName:error?.name,errorMessage:error?.message,isAbortError:error?.name==='AbortError',signalAborted:signal?.aborted},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
       console.error(`[AddressAutocomplete] ❌ Erreur Photon fallback:`, error);
       return [];
     }
@@ -197,14 +219,23 @@ export default function AddressAutocomplete({
 
   // Charger les suggestions (debounce + abort)
   useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:199',message:'useEffect triggered',data:{justSelected,deferredQuery,query,minChars},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     // Ne pas charger si on vient de sélectionner une adresse
     if (justSelected) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:203',message:'Early return: justSelected',data:{justSelected},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
       return;
     }
 
     // ✅ PERF: Utiliser deferredQuery pour réduire le travail urgent
     const queryToUse = deferredQuery;
     if (!queryToUse || (typeof queryToUse === 'string' ? queryToUse.trim().length : 0) < minChars) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:210',message:'Early return: query too short',data:{queryToUse,minChars},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
       startTransition(() => {
       setItems([]);
       setOpen(false);
@@ -214,14 +245,23 @@ export default function AddressAutocomplete({
     }
     debounce(async () => {
       try {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:217',message:'Before abort previous request',data:{hasPreviousController:!!abortRef.current,queryToUse},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         abortRef.current?.abort();
         const ctl = new AbortController();
         abortRef.current = ctl;
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:220',message:'New AbortController created',data:{queryToUse,signalAborted:ctl.signal.aborted},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         startTransition(() => {
         setLoading(true);
         });
 
         const queryStr = String(queryToUse || '');
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:225',message:'Before fetchSuggestions',data:{queryStr,signalAborted:ctl.signal.aborted},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         const next = await fetchSuggestions(queryStr, ctl.signal);
         let enriched = Array.isArray(next) ? next : [];
 
@@ -242,6 +282,9 @@ export default function AddressAutocomplete({
         }
 
         // ✅ PERF: Utiliser startTransition pour les mises à jour non-urgentes
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:245',message:'fetchSuggestions success',data:{queryStr,resultsCount:enriched.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         startTransition(() => {
         setItems(enriched);
         // Ne rouvrir le menu que si l'utilisateur tape activement
@@ -251,7 +294,17 @@ export default function AddressAutocomplete({
         setHighlight(enriched.length ? 0 : -1);
           setLoading(false);
         });
-      } catch {
+      } catch (error) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:255',message:'debounce catch error',data:{errorName:error?.name,errorMessage:error?.message,isAbortError:error?.name==='AbortError'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
+        // ✅ PHASE 3: Ignorer les AbortError (annulation normale lors de nouvelle saisie)
+        if (error?.name === 'AbortError') {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:259',message:'AbortError in debounce ignored',data:{queryToUse},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+          // #endregion
+          return; // Ne pas mettre à jour l'état si la requête a été annulée
+        }
         startTransition(() => {
         setItems([]);
         setOpen(false);
@@ -262,6 +315,14 @@ export default function AddressAutocomplete({
       }
     }, debounceMs);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+    // ✅ PHASE 3: Cleanup function pour annuler les requêtes en cours lors du démontage
+    return () => {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:268',message:'useEffect cleanup',data:{hasAbortController:!!abortRef.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+      // #endregion
+      abortRef.current?.abort();
+      abortRef.current = null;
+    };
   }, [query, minChars, debounceMs, BIAS.lat, BIAS.lon, PHOTON_BASE, maxResults, justSelected]);
 
   function handleInputChange(e) {

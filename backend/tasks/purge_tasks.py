@@ -13,7 +13,7 @@ import os
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from celery import Task
+from celery import Task  # pyright: ignore[reportMissingImports]
 
 from celery_app import celery, get_flask_app
 

@@ -3,13 +3,18 @@
 import logging
 from datetime import UTC, datetime, timedelta
 
-from flask import request
-from flask_jwt_extended import jwt_required
-from flask_restx import Namespace, Resource, fields
+from flask import request  # pyright: ignore[reportMissingImports]
+from flask_jwt_extended import jwt_required  # pyright: ignore[reportMissingImports]
+from flask_restx import (  # pyright: ignore[reportMissingImports]
+    Namespace,
+    Resource,
+    fields,
+)
 
 from ext import db, role_required
 from models import DispatchRun, UserRole
 from routes.companies import get_company_from_token
+from shared.error_handlers import APIErrorHandler
 
 logger = logging.getLogger(__name__)
 
@@ -73,15 +78,12 @@ class DLQResource(Resource):
         Returns:
             JSON avec backlog, âge max, détails des tâches échouées, alertes
         """
-        from models import TaskFailure
+        from repositories.task_failure_repository import TaskFailureRepository
 
         try:
             # Récupérer toutes les tâches échouées
-            failures = (
-                TaskFailure.query.order_by(TaskFailure.last_seen.desc())
-                .limit(100)
-                .all()
-            )
+            task_failure_repo = TaskFailureRepository()
+            failures = task_failure_repo.find_recent_ordered_by_last_seen(limit=100)
 
             # Calculer backlog et âge max
             backlog = len(failures)
@@ -110,7 +112,7 @@ class DLQResource(Resource):
                     by_task[task_name] = {
                         "count": 0,
                         "last_seen": failure.last_seen.isoformat()
-                        if failure.last_seen
+                        if bool(failure.last_seen)
                         else None,
                         "examples": [],
                     }
@@ -121,10 +123,10 @@ class DLQResource(Resource):
                             "task_id": failure.task_id,
                             "exception": failure.exception[:200],
                             "first_seen": failure.first_seen.isoformat()
-                            if failure.first_seen
+                            if bool(failure.first_seen)
                             else None,
                             "last_seen": failure.last_seen.isoformat()
-                            if failure.last_seen
+                            if bool(failure.last_seen)
                             else None,
                             "failure_count": failure.failure_count,
                         }
@@ -161,7 +163,7 @@ class DLQResource(Resource):
                     "task_id": oldest_task.task_id,
                     "task_name": oldest_task.task_name,
                     "last_seen": oldest_task.last_seen.isoformat()
-                    if oldest_task and oldest_task.last_seen
+                    if oldest_task and bool(oldest_task.last_seen)
                     else None,
                 }
                 if oldest_task
@@ -173,7 +175,7 @@ class DLQResource(Resource):
 
         except Exception as e:
             logger.exception("[DLQ] Error retrieving DLQ metrics: %s", e)
-            return {"error": str(e)}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 @dispatch_health_ns.route("/health")
@@ -183,9 +185,13 @@ class DispatchHealth(Resource):
     @dispatch_health_ns.marshal_with(health_response)
     def get(self):
         """Récupère les métriques de santé du dispatch pour l'entreprise courante."""
-        company, err, code = get_company_from_token()
+        company, err, _ = get_company_from_token()
         if err:
-            return {"error": err}, code
+            error_message = err.get("error", "Company not found")
+            return APIErrorHandler.handle_permission_error(
+                error_message,
+                logger_instance=logger,
+            )
 
         company_id = getattr(company, "id", None)
 
@@ -297,9 +303,13 @@ class DispatchTrends(Resource):
     @dispatch_health_ns.marshal_with(trends_response)
     def get(self):
         """Récupère les tendances de performance du dispatch sur plusieurs jours."""
-        company, err, code = get_company_from_token()
+        company, err, _ = get_company_from_token()
         if err:
-            return {"error": err}, code
+            error_message = err.get("error", "Company not found")
+            return APIErrorHandler.handle_permission_error(
+                error_message,
+                logger_instance=logger,
+            )
 
         company_id = getattr(company, "id", None)
 

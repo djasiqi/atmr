@@ -2,13 +2,19 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-# Configuration du logger
-# Constantes pour éviter les valeurs magiques
-from celery import Celery
-from celery.schedules import crontab
+from celery import Celery  # pyright: ignore[reportMissingImports]
+from celery.schedules import crontab  # pyright: ignore[reportMissingImports]
 
+from application.invoices.check_overdue_invoices import (
+    CheckOverdueInvoicesInput,
+    CheckOverdueInvoicesUseCase,
+)
+from application.invoices.generate_invoice import GenerateInvoiceUseCase
+from application.invoices.process_automatic_reminders import (
+    ProcessAutomaticRemindersInput,
+    ProcessAutomaticRemindersUseCase,
+)
 from models import Company, Invoice, InvoiceReminder, InvoiceStatus, db
-from services.invoice_service import InvoiceService
 
 Client: Any = None
 try:
@@ -24,6 +30,7 @@ except ImportError:
 NotificationService: Any = None
 
 MONTH_ONE = 1
+MONTH_DECEMBER = 12
 
 app_logger = logging.getLogger("billing_tasks")
 
@@ -44,16 +51,31 @@ def check_overdues_and_trigger_reminders():
     try:
         app_logger.info("Début de la vérification des factures en retard")
 
-        # Initialiser le service de facturation
-        invoice_service = InvoiceService()
+        # Initialiser les use cases
+        check_overdue_uc = CheckOverdueInvoicesUseCase()
+        process_reminders_uc = ProcessAutomaticRemindersUseCase()
 
         # Vérifier et marquer les factures en retard
-        invoice_service.check_overdue_invoices()
+        check_result = check_overdue_uc.execute(CheckOverdueInvoicesInput())
+        if not check_result.success:
+            app_logger.error(
+                "Erreur lors de la vérification des factures en retard: %s",
+                check_result.error,
+            )
 
         # Traiter les rappels automatiques
-        invoice_service.process_automatic_reminders()
+        process_result = process_reminders_uc.execute(ProcessAutomaticRemindersInput())
+        if not process_result.success:
+            app_logger.error(
+                "Erreur lors du traitement des rappels automatiques: %s",
+                process_result.error,
+            )
 
-        app_logger.info("Vérification des factures en retard terminée avec succès")
+        app_logger.info(
+            "Vérification des factures en retard terminée: %s factures mises à jour, %s rappels générés",
+            check_result.updated_count,
+            process_result.reminders_generated,
+        )
 
     except Exception as e:
         app_logger.error(
@@ -145,13 +167,13 @@ def generate_monthly_invoices():
     try:
         app_logger.info("Début de la génération mensuelle des factures")
 
-        invoice_service = InvoiceService()
+        generate_invoice_uc = GenerateInvoiceUseCase()
 
         # Calculer la période précédente
         now = datetime.now(UTC)
         if now.month == MONTH_ONE:
             period_year = now.year - 1
-            period_month = 12
+            period_month = MONTH_DECEMBER
         else:
             period_year = now.year
             period_month = now.month - 1
@@ -194,24 +216,58 @@ def generate_monthly_invoices():
                         if existing_invoice:
                             continue
 
-                        # Vérifier qu'il y a des réservations pour cette
-                        # période
-                        reservations = invoice_service._get_reservations_for_period(
-                            company.id, client.id, period_year, period_month
+                        # Vérifier qu'il y a des réservations pour cette période
+                        from datetime import datetime as dt
+
+                        start_date = dt(period_year, period_month, 1)
+                        end_date = (
+                            dt(period_year + 1, 1, 1)
+                            if period_month == MONTH_DECEMBER
+                            else dt(period_year, period_month + 1, 1)
                         )
+                        from repositories.booking_repository import BookingRepository
+
+                        booking_repo = BookingRepository()
+                        reservations = (
+                            booking_repo.find_by_company_and_client_and_period(
+                                company_id=company.id,
+                                client_id=client.id,
+                                start_date=start_date,
+                                end_date=end_date,
+                                statuses=["COMPLETED", "RETURN_COMPLETED"],
+                            )
+                        )
+                        # Filtrer celles déjà facturées
+                        reservations = [
+                            r
+                            for r in reservations
+                            if getattr(r, "invoice_line_id", None) is None
+                        ]
 
                         if reservations:
                             # Générer la facture
-                            invoice = invoice_service.generate_invoice(
-                                company.id, client.id, period_year, period_month
+                            from application.invoices.generate_invoice import (
+                                GenerateInvoiceInput,
                             )
-                            invoices_generated += 1
 
-                            app_logger.info(
-                                "Facture générée: %s pour client %s",
-                                invoice.invoice_number,
-                                client.id,
+                            generate_input = GenerateInvoiceInput(
+                                company_id=company.id,
+                                client_id=client.id,
+                                period_year=period_year,
+                                period_month=period_month,
                             )
+                            generate_result = generate_invoice_uc.execute(
+                                generate_input
+                            )
+                            if generate_result.success and generate_result.invoice:
+                                invoice = generate_result.invoice
+                                invoices_generated += 1
+
+                                app_logger.info(
+                                    "Facture générée: %s pour client %s",
+                                    invoice.invoice_number,
+                                    client.id,
+                                )
 
                     except Exception as e:
                         app_logger.error(
@@ -323,7 +379,7 @@ def send_invoice_summary() -> None:
         now = datetime.now(UTC)
         if now.month == MONTH_ONE:
             period_year = now.year - 1
-            period_month = 12
+            period_month = MONTH_DECEMBER
         else:
             period_year = now.year
             period_month = now.month - 1

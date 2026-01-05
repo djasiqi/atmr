@@ -48,10 +48,8 @@ def reset_bookings():
             )
 
             print(
-                (
-                    f"🔄 Réinitialisé {bookings_reset} bookings avec driver_id "
-                    f"(driver_id = None, status = ACCEPTED)"
-                )
+                f"🔄 Réinitialisé {bookings_reset} bookings avec driver_id "
+                f"(driver_id = None, status = ACCEPTED)"
             )
 
             # 4. Mettre à jour tous les bookings en PENDING vers ACCEPTED
@@ -62,10 +60,8 @@ def reset_bookings():
             )
 
             print(
-                (
-                    f"🔄 Mis à jour {bookings_pending_to_accepted} bookings "
-                    f"de PENDING vers ACCEPTED"
-                )
+                f"🔄 Mis à jour {bookings_pending_to_accepted} bookings "
+                f"de PENDING vers ACCEPTED"
             )
 
             # 5. Commit
@@ -81,16 +77,12 @@ def reset_bookings():
             ).count()
             print("✅ Vérification:")
             print(
-                (
-                    f"   - Bookings avec driver_id restants: {remaining_with_driver} "
-                    f"(devrait être 0)"
-                )
+                f"   - Bookings avec driver_id restants: {remaining_with_driver} "
+                f"(devrait être 0)"
             )
             print(
-                (
-                    f"   - Bookings en PENDING restants: {remaining_pending} "
-                    f"(devrait être 0)"
-                )
+                f"   - Bookings en PENDING restants: {remaining_pending} "
+                f"(devrait être 0)"
             )
 
         except Exception as e:

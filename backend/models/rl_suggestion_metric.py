@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from sqlalchemy import JSON, Boolean, Column, DateTime, Float, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
@@ -53,11 +53,11 @@ class RLSuggestionMetric(db.Model):
 
     # Événements
     generated_at = Column(DateTime, nullable=False, default=func.now(), index=True)
-    applied_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    rejected_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Résultats réels (si appliqué)
-    actual_gain_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    actual_gain_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     was_successful: Mapped[bool] = mapped_column(Boolean, nullable=True)
 
     # Données additionnelles (contexte, raisons, etc.)

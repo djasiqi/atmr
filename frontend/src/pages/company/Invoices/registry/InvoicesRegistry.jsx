@@ -57,9 +57,12 @@ const InvoicesRegistry = () => {
       setError(null);
 
       const response = await fetchInvoices(company.id, filters);
-      setInvoices(response.invoices);
-      setPagination(response.pagination);
-      setStats(response.stats);
+      // ✅ Le backend renvoie {"data": [...], "pagination": {...}, "stats": {...}}
+      // Correction: utiliser response.data au lieu de response.invoices
+      const invoicesData = response?.data || response?.invoices || [];
+      setInvoices(invoicesData);
+      setPagination(response?.pagination || {});
+      setStats(response?.stats || {});
     } catch (err) {
       setError(err.message || 'Erreur lors du chargement des factures');
     } finally {
@@ -166,6 +169,7 @@ const InvoicesRegistry = () => {
   const handleNewInvoiceGenerated = (invoice) => {
     // Recharger la liste des factures
     loadInvoices();
+    
     // Optionnel: afficher un message de succès
     // eslint-disable-next-line no-console
     console.log('Nouvelle facture générée:', invoice);
@@ -302,7 +306,7 @@ const InvoicesRegistry = () => {
               </tr>
             </thead>
             <tbody>
-              {invoices.map((invoice) => (
+              {(invoices || []).map((invoice) => (
                 <tr key={invoice.id}>
                   <td>{invoice.invoice_number}</td>
                   <td>
@@ -315,9 +319,11 @@ const InvoicesRegistry = () => {
                           invoice.bill_to_client.last_name || ''
                         }`.trim()
                       : invoice.client
-                        ? `${invoice.client.first_name || ''} ${
+                        ? invoice.client.institution_name ||
+                          `${invoice.client.first_name || ''} ${
                             invoice.client.last_name || ''
-                          }`.trim() || invoice.client.username
+                          }`.trim() ||
+                          invoice.client.username
                         : 'Client inconnu'}
                   </td>
                   <td>

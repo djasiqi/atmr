@@ -327,4 +327,3 @@ const MAP_STYLE = [
   },
 ];
 
-export default EnterpriseDriversMap;

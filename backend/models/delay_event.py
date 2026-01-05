@@ -60,8 +60,12 @@ class DelayEvent(db.Model):
             "booking_id": self.booking_id,
             "delay_minutes": self.delay_minutes,
             "severity": self.severity,
-            "detected_at": self.detected_at.isoformat() if self.detected_at else None,
-            "resolved_at": self.resolved_at.isoformat() if self.resolved_at else None,
+            "detected_at": self.detected_at.isoformat()
+            if bool(getattr(self, "detected_at", None))
+            else None,
+            "resolved_at": self.resolved_at.isoformat()
+            if bool(getattr(self, "resolved_at", None))
+            else None,
             "cause": self.cause,
         }
 

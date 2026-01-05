@@ -1,4 +1,4 @@
-import { StyleSheet } from "react-native";
+import { StyleSheet, Platform } from "react-native";
 
 // ✅ Palette épurée et élégante (cohérente avec le login)
 const palette = {
@@ -11,6 +11,28 @@ const palette = {
   placeholder: "#91A59D",
 };
 
+// Styles shadow conditionnels pour éviter l'avertissement de dépréciation
+// Ne jamais créer les propriétés shadow* sur le web
+const containerShadow = Platform.OS === 'web' 
+  ? { boxShadow: '0 8px 24px rgba(16,39,30,0.12)' }
+  : {
+      shadowColor: "rgba(16,39,30,0.12)",
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.14,
+      shadowRadius: 24,
+      elevation: 8,
+    };
+
+const actionItemShadow = Platform.OS === 'web'
+  ? { boxShadow: '0 4px 8px rgba(10,127,89,0.2)' }
+  : {
+      shadowColor: palette.accent,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      elevation: 4,
+    };
+
 export const styles = StyleSheet.create({
   // ✅ Container avec style épuré et élégant (inspiré du login)
   containerEnhanced: {
@@ -20,11 +42,7 @@ export const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginVertical: 16,
     marginBottom: 75, // Marge supplémentaire pour éviter que la barre d'onglets ne cache le contenu
-    shadowColor: "rgba(16,39,30,0.12)",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.14,
-    shadowRadius: 24,
-    elevation: 8,
+    ...containerShadow,
     borderWidth: 1,
     borderColor: palette.border,
   },
@@ -220,11 +238,7 @@ export const styles = StyleSheet.create({
     flexShrink: 1,
     marginVertical: 0,
     marginHorizontal: 0,
-    shadowColor: palette.accent,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    ...actionItemShadow,
   },
 
   // ✅ Label d'action avec typographie élégante - RÉDUIT

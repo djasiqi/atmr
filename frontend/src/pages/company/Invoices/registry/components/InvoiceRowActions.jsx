@@ -29,17 +29,6 @@ const InvoiceRowActions = ({
     action();
   };
 
-  const handleToggleMenu = () => {
-    if (!showMenu && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      setMenuPosition({
-        top: rect.bottom + window.scrollY,
-        left: rect.right - 220 + window.scrollX, // 220px = min-width du menu
-      });
-    }
-    setShowMenu(!showMenu);
-  };
-
   const actions = [
     {
       key: 'view',
@@ -101,30 +90,33 @@ const InvoiceRowActions = ({
 
   const visibleActions = actions.filter((action) => action.show);
 
+  const handleToggleMenu = () => {
+    if (!showMenu && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      
+      // Estimer la hauteur du menu : nombre d'actions * hauteur approximative d'un élément (~48px)
+      const estimatedMenuHeight = visibleActions.length * 48;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      
+      // Si pas assez d'espace en bas mais assez en haut, afficher au-dessus
+      const showAbove = spaceBelow < estimatedMenuHeight && spaceAbove > estimatedMenuHeight;
+      
+      setMenuPosition({
+        top: showAbove 
+          ? rect.top + window.scrollY - estimatedMenuHeight 
+          : rect.bottom + window.scrollY,
+        left: rect.right - 220 + window.scrollX, // 220px = min-width du menu
+      });
+    }
+    setShowMenu(!showMenu);
+  };
+
   if (visibleActions.length === 0) {
     return <span className={styles.noActions}>Aucune action</span>;
   }
 
-  if (visibleActions.length <= 3) {
-    // Afficher les actions directement
-    return (
-      <div className={styles.actions}>
-        {visibleActions.map((action) => (
-          <button
-            key={action.key}
-            className={`${styles.actionBtn} ${action.className}`}
-            onClick={action.onClick}
-            title={action.label}
-          >
-            <span className={styles.actionIcon}>{action.icon}</span>
-            <span className={styles.actionLabel}>{action.label}</span>
-          </button>
-        ))}
-      </div>
-    );
-  }
-
-  // Afficher un menu déroulant pour plus de 3 actions
+  // Toujours afficher le menu déroulant pour toutes les factures
   return (
     <div className={styles.actionMenu}>
       <button

@@ -105,7 +105,7 @@ class RLKPIMonitor:
         key = self.failure_count_key.format(company_id=company_id)
         failures = redis_client.get(key)
         # Type: ignore car redis_client.get() retourne un type générique
-        return int(failures) if failures else 0  # type: ignore[arg-type]
+        return int(failures) if failures else 0
 
     def _increment_failures(self, company_id: int) -> None:
         """Incrémente le compteur de failures."""
@@ -132,7 +132,7 @@ class RLKPIMonitor:
         try:
             failures = redis_client.get(key)
             # Type: ignore car redis_client.get() retourne un type générique
-            failure_count = int(failures) if failures else 0  # type: ignore[arg-type]
+            failure_count = int(failures) if failures else 0
 
             threshold = getattr(self.settings.rl, "consecutive_failures_threshold", 2)
 

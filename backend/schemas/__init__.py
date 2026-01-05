@@ -104,6 +104,11 @@ from schemas.medical_schemas import (
 )
 
 # ============================================================
+# OSRM Schemas
+# ============================================================
+from schemas.osrm_schemas import OSRMRouteQuerySchema
+
+# ============================================================
 # Payment Schemas
 # ============================================================
 from schemas.payment_schemas import (
@@ -189,6 +194,7 @@ __all__ = [  # noqa: RUF022
     "ManualBookingCreateSchema",
     "MedicalEstablishmentQuerySchema",
     "MedicalServiceQuerySchema",
+    "OSRMRouteQuerySchema",
     "PASSWORD_VALIDATOR",
     "PaymentCreateSchema",
     "PaymentStatusUpdateSchema",

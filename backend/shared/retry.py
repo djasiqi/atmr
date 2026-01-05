@@ -295,7 +295,7 @@ def retry_http_request(
             max_retries=5
         )
     """
-    import requests
+    import requests  # pyright: ignore[reportMissingModuleSource]
 
     if retryable_status_codes is None:
         retryable_status_codes = {429, 500, 502, 503, 504}

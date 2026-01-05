@@ -22,7 +22,7 @@ module.exports = withAndroidR8Enabled(
     url: "https://u.expo.dev/3be107c7-29d2-4987-91a0-8d7c31604891"
   },
   // sdkVersion: "53.0.0", // Supprimé : n'est plus nécessaire avec les SDKs récents
-  scheme: "liri",
+  scheme: "atmr",
   orientation: "portrait",
   userInterfaceStyle: "automatic",
 
@@ -126,8 +126,10 @@ module.exports = withAndroidR8Enabled(
     productionApiUrl: "https://api.lirie.ch",
     publicApiUrl: process.env.EXPO_PUBLIC_API_URL || "http://localhost:5000",
     backendPort: 5000,
-    SOCKET_HOST: process.env.SOCKET_HOST || "api.lirie.ch",
-    SOCKET_PORT: process.env.SOCKET_PORT || "5000",
+    // ✅ Socket.IO URL depuis variable d'environnement dédiée
+    // Dev: http://localhost:5000 ou http://10.0.2.2:5000 (Android emulator)
+    // Prod: https://api.lirie.ch (REQUIS)
+    socketUrl: process.env.EXPO_PUBLIC_SOCKET_URL || (isDevVariant ? "http://localhost:5000" : undefined),
     router: {},
     eas: { projectId: "3be107c7-29d2-4987-91a0-8d7c31604891" },
   },

@@ -1,6 +1,11 @@
-"""Module shared - Utilitaires partagés pour l'application ATMR."""
+"""Module partagé (shared kernel).
+
+Contient le code partagé entre tous les bounded contexts :
+- Événements
+- Utilitaires
+- Infrastructure partagée (cache, notifications, géolocalisation, etc.)
+"""
 
 from shared.error_handling import safe_execute
-from shared.timeouts import TimeoutError, timeout  # noqa: A004
 
-__all__ = ["TimeoutError", "safe_execute", "timeout"]
+__all__ = ["safe_execute"]

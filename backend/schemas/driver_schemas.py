@@ -1,6 +1,10 @@
 """✅ Schemas Marshmallow pour validation des endpoints drivers."""
 
-from marshmallow import Schema, fields, validate
+from marshmallow import (  # pyright: ignore[reportMissingImports]
+    Schema,
+    fields,
+    validate,
+)
 
 
 class DriverProfileUpdateSchema(Schema):

@@ -9,10 +9,12 @@ import math
 import os
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC
 from typing import TYPE_CHECKING, Any, Dict, List, Tuple, cast
 
-import requests
+import requests  # pyright: ignore[reportMissingModuleSource]
+from cachetools import LRUCache  # pyright: ignore[reportMissingModuleSource]
 
 from services.unified_dispatch.osrm_cache_metrics import (
     increment_cache_bypass,
@@ -86,6 +88,22 @@ CACHE_TTL_MEDIUM = int(
 CACHE_TTL_RARE = int(
     os.getenv("UD_OSRM_CACHE_TTL_RARE", "3600")
 )  # 1h pour routes rares
+
+# ✅ P1: TTL pour matrices OSRM (7 jours comme recommandé dans rapport performance)
+OSRM_MATRIX_CACHE_TTL = int(
+    os.getenv("UD_OSRM_MATRIX_CACHE_TTL", "604800")
+)  # 7 jours (604800 secondes)
+
+# ✅ P1: Cache local LRU pour matrices OSRM fréquentes (L1 cache)
+# Max 100 entrées pour éviter explosion mémoire
+_OSRM_MATRIX_LOCAL_CACHE: LRUCache[str, List[List[float]]] = LRUCache(maxsize=100)
+_OSRM_MATRIX_LOCAL_CACHE_LOCK = threading.Lock()
+
+# ✅ P1: Nombre max de workers pour parallélisation OSRM
+OSRM_MAX_PARALLEL_WORKERS = int(os.getenv("UD_OSRM_MAX_PARALLEL_WORKERS", "5"))
+
+# ✅ P1: Seuil pour activer parallélisation (si n > seuil et >1 chunk)
+OSRM_PARALLEL_THRESHOLD = 20
 
 # Seuils de fréquence pour classification
 FREQUENT_ROUTE_THRESHOLD = int(
@@ -278,7 +296,9 @@ def _table(
 
     # ✅ Gestion des erreurs DNS: NameResolutionError de urllib3
     try:
-        from urllib3.exceptions import NameResolutionError as Urllib3NameResolutionError
+        from urllib3.exceptions import (  # pyright: ignore[reportMissingImports]
+            NameResolutionError as Urllib3NameResolutionError,
+        )
     except ImportError:
         Urllib3NameResolutionError = None
 
@@ -382,7 +402,24 @@ def _table_single_request(
             "response_duration_ms", int(r.elapsed.total_seconds() * 1000)
         )
 
-        data: Any = r.json()
+        # ✅ P1: Protéger parsing JSON contre réponses malformées
+        try:
+            data: Any = r.json()
+        except json.JSONDecodeError as e:
+            logger.error(
+                (
+                    "[OSRM] JSON decode error for URL '%s': %s. Response status: %d, "
+                    "Response preview: %s"
+                ),
+                url,
+                e,
+                r.status_code,
+                r.text[:200] if r.text else "(empty)",
+            )
+            span.record_exception(e)
+            # Lever exception pour déclencher retry (si retryable) ou fallback
+            raise ValueError(f"OSRM returned invalid JSON: {e}") from e
+
         return cast("Dict[str, Any]", data)
 
 
@@ -471,7 +508,24 @@ def _route(
             "response_duration_ms", int(r.elapsed.total_seconds() * 1000)
         )
 
-        data: Any = r.json()
+        # ✅ P1: Protéger parsing JSON contre réponses malformées
+        try:
+            data: Any = r.json()
+        except json.JSONDecodeError as e:
+            logger.error(
+                (
+                    "[OSRM] JSON decode error for route URL '%s': %s. Response status: %d, "
+                    "Response preview: %s"
+                ),
+                url,
+                e,
+                r.status_code,
+                r.text[:200] if r.text else "(empty)",
+            )
+            span.record_exception(e)
+            # Lever exception pour déclencher retry (si retryable) ou fallback
+            raise ValueError(f"OSRM returned invalid JSON: {e}") from e
+
         return cast("Dict[str, Any]", data)
 
 
@@ -585,7 +639,7 @@ def _get_adaptive_ttl(
             )
 
             if freq_count >= FREQUENT_ROUTE_THRESHOLD:
-                OSRM_CACHE_FREQUENT_ROUTES_TOTAL.labels(cache_type=cache_type).inc()
+                OSRM_CACHE_FREQUENT_ROUTES_TOTAL.labels(cache_type=cache_type).inc()  # type: ignore[reportOptionalMemberAccess]
         except (ImportError, AttributeError):
             # Métrique non disponible (module non importé ou non défini)
             pass
@@ -652,6 +706,46 @@ def _canonical_key_route(
 # ============================================================
 
 
+def _get_redis_client_fallback() -> Any | None:
+    """Récupère un client Redis avec fallback vers ext.redis_client.
+
+    ✅ P1: S'assurer que redis_client est toujours disponible pour cache OSRM.
+
+    Returns:
+        Client Redis ou None si indisponible
+    """
+    try:
+        from ext import redis_client as ext_redis_client
+
+        if ext_redis_client is not None:
+            # Tester la connexion
+            ext_redis_client.ping()
+            return ext_redis_client
+    except Exception:
+        pass
+
+    # Fallback : essayer de créer depuis REDIS_URL
+    try:
+        redis_url = os.getenv("REDIS_URL", None)
+        if redis_url:
+            import redis  # pyright: ignore[reportMissingImports]
+
+            socket_timeout = int(os.getenv("REDIS_SOCKET_TIMEOUT", "5"))
+            socket_connect_timeout = int(os.getenv("REDIS_SOCKET_CONNECT_TIMEOUT", "5"))
+            client = redis.from_url(
+                redis_url,
+                decode_responses=False,
+                socket_timeout=socket_timeout,
+                socket_connect_timeout=socket_connect_timeout,
+            )
+            client.ping()
+            return client
+    except Exception:
+        pass
+
+    return None
+
+
 def build_distance_matrix_osrm(
     coords: List[Tuple[float, float]],
     *,
@@ -668,7 +762,18 @@ def build_distance_matrix_osrm(
 ) -> List[List[float]]:
     """Retourne une matrice de durées en SECONDES (float), shape NxN, diagonale = 0.0.
     Fallback haversine en cas d'échec.
+
+    ✅ P1: Optimisations performance :
+    - Cache Redis systématique (fallback si None passé)
+    - Cache local LRU (L1 cache) pour matrices fréquentes
+    - Parallélisation des appels OSRM avec ThreadPoolExecutor
+    - TTL de 7 jours pour cache Redis
     """
+    # ✅ P1: S'assurer que redis_client est toujours disponible
+    if redis_client is None:
+        redis_client = _get_redis_client_fallback()
+        if redis_client:
+            logger.debug("[OSRM] Using fallback Redis client for matrix cache")
     # ✅ Timeout adaptatif basé sur nombre de coordonnées (amélioré)
     if timeout is None:
         n = len(coords)
@@ -715,146 +820,133 @@ def build_distance_matrix_osrm(
         n,
     )
 
-    logger.info(
-        "[OSRM] Entering chunk loop: adaptive_chunk_size=%d", adaptive_chunk_size
-    )
-    for src_block in _chunks(range(n), max(1, int(adaptive_chunk_size))):
-        logger.info(
-            "[OSRM] Processing chunk: src_block=%s (len=%d)",
-            str(list(src_block)[:5]) + "...",
-            len(src_block),
-        )
-        # --- Cache key pour ce sous-bloc ---
-        logger.info("[OSRM] Creating cache key for chunk...")
-        cache_key = _canonical_key_table(
-            coords, list(src_block), all_dests, coord_precision=coord_precision
-        )
-        logger.info(
-            "[OSRM] Cache key created: %s",
-            cache_key[:CACHE_KEY_MAX_DISPLAY_LENGTH] + "..."
-            if len(cache_key) > CACHE_KEY_MAX_DISPLAY_LENGTH
-            else cache_key,
-        )
-        cached = None
-        redis_available = True
-        if redis_client is not None:
-            logger.info("[OSRM] Checking Redis cache...")
-            try:
-                raw = redis_client.get(f"osrm:table:{cache_key}")
-                logger.info(
-                    "[OSRM] Redis get completed: raw=%s",
-                    "found" if raw else "not found",
-                )
-                if raw:
-                    if isinstance(raw, (bytes, bytearray)):
-                        raw = raw.decode("utf-8", errors="ignore")
-                    cached = json.loads(raw)
-                    logger.info(
-                        "[OSRM] cache_hit block=%d len=%d",
-                        min(src_block),
-                        len(src_block),
-                    )
-                    # ✅ A5: Track cache hit
-                    increment_cache_hit(cache_type="table")
-                    # ✅ 3.2.4: Incrémenter compteur de fréquence à chaque accès
-                    _increment_frequency_counter(
-                        redis_client, f"osrm:table:{cache_key}", cache_type="table"
-                    )
-            except _RedisConnError:
-                # Redis HS -> on continue sans cache
-                redis_available = False
-                logger.warning(
-                    "[OSRM] Redis connection failed - continuing without cache"
-                )
-                # ✅ A5: Track bypass
-                increment_cache_bypass()
-            except Exception:
-                logger.warning("[OSRM] Redis get failed", exc_info=True)
-                increment_cache_bypass()
+    # ✅ P1: Créer clé de cache globale pour matrice complète (cache local L1)
+    full_matrix_cache_key = f"osrm:matrix:{hashlib.md5(json.dumps(coords, sort_keys=True).encode()).hexdigest()}:{n}"
 
-        logger.info(
-            "[OSRM] After Redis check: cached=%s", "present" if cached else "None"
-        )
-        if cached and "durations" in cached:
-            # ✅ A5: Track cache hit (déjà fait plus haut)
-            durs = cached["durations"]
-            for local_i, src_idx in enumerate(src_block):
-                row = durs[local_i]
-                for j in range(n):
-                    v = row[j]
-                    M[src_idx][j] = (
-                        999999.0 if (v is None or not math.isfinite(v)) else float(v)
-                    )
-            continue
+    # ✅ P1: Vérifier cache local LRU (L1 cache - ultra rapide)
+    with _OSRM_MATRIX_LOCAL_CACHE_LOCK:
+        if full_matrix_cache_key in _OSRM_MATRIX_LOCAL_CACHE:
+            logger.info("[OSRM] ✅ L1 cache hit (local LRU) for full matrix")
+            return _OSRM_MATRIX_LOCAL_CACHE[full_matrix_cache_key]
 
-        # ✅ A5: Track cache miss si pas de cache
-        logger.info("[OSRM] No cache found, incrementing cache miss counter...")
-        try:
-            increment_cache_miss(cache_key, cache_type="table")
-            logger.info("[OSRM] Cache miss counter incremented successfully")
-        except Exception as e:
-            logger.exception(
-                "[OSRM] ERROR in increment_cache_miss: %s (type=%s)",
-                str(e),
-                type(e).__name__,
-            )
-            # Continue même en cas d'erreur de métriques
-        logger.info("[OSRM] Preparing HTTP request to OSRM...")
+    # ✅ P1: Vérifier matrices pré-calculées pour zones fréquentes
+    # Note: Logique intégrée directement pour éviter cycle d'importation
+    try:
+        from ext import redis_client as ext_redis_client
 
-        def _do_request():
-            logger.info("[OSRM] _do_request() called, preparing retry logic...")
+        if ext_redis_client and len(coords) > N_ONE:
+            # Vérifier si toutes les coordonnées appartiennent à la même zone
+            PRECOMPUTE_GRID_SIZE = 0.1  # Grille de 0.1° ≈ 11km
+            PRECOMPUTE_CACHE_PREFIX = "osrm:precomputed:zone:"
 
-            # ✅ 2.3: Utiliser retry uniformisé
-            def _fetch_table_data():
-                logger.info(
-                    (
-                        "[OSRM] 🔵 Requesting table: sources=%d destinations=%d "
-                        "timeout=%ds base_url=%s"
-                    ),
-                    len(src_block),
-                    len(all_dests),
-                    timeout,
-                    base_url,
-                )
-                request_start = time.time()
-                _rate_limit(rate_limit_per_sec)
-                try:
-                    data = _table(
-                        base_url=base_url,
-                        profile=profile,
-                        coords=coords,
-                        sources=list(src_block),
-                        destinations=all_dests,
-                        timeout=timeout,
-                    )
-                    request_duration_ms = int((time.time() - request_start) * 1000)
-                    logger.info(
-                        (
-                            "[OSRM] ✅ Table request successful: duration_ms=%d "
-                            "sources=%d destinations=%d"
-                        ),
-                        request_duration_ms,
-                        len(src_block),
-                        len(all_dests),
-                    )
-                    if request_duration_ms > timeout * 1000 * 0.8:  # >80% du timeout
-                        logger.warning(
-                            (
-                                "[OSRM] ⚠️ Request took %d ms (close to timeout %ds) - "
-                                "consider increasing timeout"
-                            ),
-                            request_duration_ms,
-                            timeout,
+            def _round_to_grid(coord: Tuple[float, float]) -> Tuple[float, float]:
+                lat, lon = coord
+                rounded_lat = round(lat / PRECOMPUTE_GRID_SIZE) * PRECOMPUTE_GRID_SIZE
+                rounded_lon = round(lon / PRECOMPUTE_GRID_SIZE) * PRECOMPUTE_GRID_SIZE
+                return (rounded_lat, rounded_lon)
+
+            zones = {_round_to_grid(coord) for coord in coords}
+
+            # Si toutes les coordonnées sont dans la même zone, chercher la matrice
+            if len(zones) == 1:
+                zone = zones.pop()
+                zone_id = f"{zone[0]:.3f},{zone[1]:.3f}"
+                cache_key = f"{PRECOMPUTE_CACHE_PREFIX}{zone_id}:{profile}"
+
+                cached_data = ext_redis_client.get(cache_key)
+                if cached_data:
+                    try:
+                        precomputed_matrix = json.loads(
+                            cast(bytes, cached_data).decode("utf-8")
                         )
-                except Exception as req_e:
-                    request_duration_ms = int((time.time() - request_start) * 1000)
-                    logger.exception(
-                        "[OSRM] ❌ Table request FAILED after %d ms: %s (type=%s)",
-                        request_duration_ms,
-                        str(req_e),
-                        type(req_e).__name__,
+                        logger.info(
+                            "[OSRM] ✅ Using precomputed matrix for zone %s", zone_id
+                        )
+                        # Stocker dans cache local pour accès ultérieur
+                        with _OSRM_MATRIX_LOCAL_CACHE_LOCK:
+                            _OSRM_MATRIX_LOCAL_CACHE[full_matrix_cache_key] = (
+                                precomputed_matrix
+                            )
+                        return precomputed_matrix
+                    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                        logger.debug(
+                            "[OSRM] Failed to decode precomputed matrix: %s", e
+                        )
+    except Exception as e:
+        logger.debug("[OSRM] Error checking precomputed matrix: %s", e)
+
+    # ✅ P1: Préparer les chunks pour traitement (séquentiel ou parallèle)
+    chunks_list = list(_chunks(range(n), max(1, int(adaptive_chunk_size))))
+    total_chunks_count = len(chunks_list)
+
+    # ✅ P1: Décider si parallélisation (seulement si >1 chunk et n > seuil)
+    use_parallel = total_chunks_count > 1 and n > OSRM_PARALLEL_THRESHOLD
+
+    logger.info(
+        "[OSRM] Processing %d chunks: parallel=%s adaptive_chunk_size=%d n=%d",
+        total_chunks_count,
+        use_parallel,
+        adaptive_chunk_size,
+        n,
+    )
+
+    # ✅ P1: Fonction pour traiter un chunk (réutilisable pour séquentiel et parallèle)
+    def _process_chunk(
+        src_block: List[int],
+    ) -> Tuple[List[int], Dict[str, Any] | None, Exception | None]:
+        """Traite un chunk et retourne (src_block, data, error)."""
+        try:
+            # --- Cache key pour ce sous-bloc ---
+            cache_key = _canonical_key_table(
+                coords, src_block, all_dests, coord_precision=coord_precision
+            )
+
+            # ✅ P1: Vérifier cache Redis (L2 cache)
+            cached = None
+            redis_available = True
+            if redis_client is not None:
+                try:
+                    raw = redis_client.get(f"osrm:table:{cache_key}")
+                    if raw:
+                        if isinstance(raw, (bytes, bytearray)):
+                            raw = raw.decode("utf-8", errors="ignore")
+                        cached = json.loads(raw)
+                        increment_cache_hit(cache_type="table")
+                        _increment_frequency_counter(
+                            redis_client, f"osrm:table:{cache_key}", cache_type="table"
+                        )
+                        logger.debug(
+                            "[OSRM] L2 cache hit (Redis) for chunk %s", min(src_block)
+                        )
+                except _RedisConnError:
+                    redis_available = False
+                    logger.debug(
+                        "[OSRM] Redis unavailable for chunk %s", min(src_block)
                     )
-                    raise
+                except Exception:
+                    logger.debug(
+                        "[OSRM] Redis get failed for chunk %s",
+                        min(src_block),
+                        exc_info=True,
+                    )
+
+            # Si cache hit, retourner les données
+            if cached and "durations" in cached:
+                return (src_block, cached, None)
+
+            # Cache miss - faire la requête OSRM
+            increment_cache_miss(cache_key, cache_type="table")
+
+            def _fetch_table_data():
+                _rate_limit(rate_limit_per_sec)
+                data = _table(
+                    base_url=base_url,
+                    profile=profile,
+                    coords=coords,
+                    sources=src_block,
+                    destinations=all_dests,
+                    timeout=timeout,
+                )
                 durs = data.get("durations")
                 if not durs:
                     msg = "OSRM /table returned no durations"
@@ -864,109 +956,163 @@ def build_distance_matrix_osrm(
                     raise RuntimeError(msg)
                 return data
 
-            return retry_with_backoff(
-                _fetch_table_data,
-                max_retries=max_retries,
-                base_delay_ms=backoff_ms,
-                max_delay_ms=5000,  # 5s max
-                use_jitter=True,
-                logger_instance=logger,
+            # Utiliser singleflight pour éviter requêtes dupliquées
+            data_any = _singleflight_do(
+                cache_key,
+                lambda: retry_with_backoff(
+                    _fetch_table_data,
+                    max_retries=max_retries,
+                    base_delay_ms=backoff_ms,
+                    max_delay_ms=5000,
+                    use_jitter=True,
+                    logger_instance=logger,
+                ),
             )
 
-        # Déduplication in-flight sur la même clé
-        start = time.time()
-        try:
-            data_any: Any = _singleflight_do(cache_key, _do_request)
             if not isinstance(data_any, dict):
-                logger.warning("[OSRM] table_fetch returned non-dict -> fallback")
-                return _fallback_matrix(coords)
-            data: Dict[str, Any] = cast("Dict[str, Any]", data_any)
-        except Exception as e:
-            # 🚨 Fallback si toutes les tentatives ont échoué
-            error_type = type(e).__name__
-            error_msg = str(e)
+                raise RuntimeError("OSRM returned invalid data")
 
-            # ✅ Détecter spécifiquement les erreurs DNS
-            is_dns_error = (
-                "Failed to resolve" in error_msg
-                or "Name or service not known" in error_msg
-                or "NameResolutionError" in error_type
-            )
+            data = cast("Dict[str, Any]", data_any)
 
-            if is_dns_error:
-                logger.warning(
-                    "[OSRM] DNS resolution failed for OSRM service. OSRM appears to be unavailable (service not found on network). Using haversine fallback for distance calculation. Error: %s (type: %s)",
-                    error_msg,
-                    error_type,
-                )
-            else:
-                logger.warning(
-                    "[OSRM] All attempts failed, using haversine fallback: %s (type: %s)",
-                    error_msg,
-                    error_type,
-                )
-
-            # ✅ D3: Enregistrer l'utilisation du fallback haversine
-            try:
-                from chaos.metrics import get_chaos_metrics
-
-                metrics = get_chaos_metrics()
-                # Essayer le fallback et enregistrer le résultat
-                fallback_result = _fallback_matrix(coords)
-                metrics.record_fallback("haversine", success=True)
-                return fallback_result
-            except ImportError:
-                # Module chaos non disponible, continuer normalement
-                return _fallback_matrix(coords)
-        finally:
-            dur_ms = int((time.time() - start) * 1000)
-            logger.info(
-                "[OSRM] table_fetch block_start=%d size=%d duration_ms=%d",
-                min(src_block),
-                len(src_block),
-                dur_ms,
-            )
-
-        # Écrit dans le cache
-        try:
+            # ✅ P1: Écrire dans cache Redis avec TTL de 7 jours
             if redis_client is not None and redis_available:
-                table_cache_key = f"osrm:table:{cache_key}"
-                # ✅ 3.2.4: TTL adaptatif selon fréquence
-                _increment_frequency_counter(
-                    redis_client, table_cache_key, cache_type="table"
-                )
-                ttl = _get_adaptive_ttl(
-                    redis_client, table_cache_key, CACHE_TTL_SECONDS, cache_type="table"
-                )
-                redis_client.setex(table_cache_key, ttl, json.dumps(data))
-                logger.debug("OSRM cache SET key=%s ttl=%ss", cache_key, ttl)
-        except _RedisConnError:
-            # Redis HS -> log mais on continue
-            redis_available = False
+                try:
+                    table_cache_key = f"osrm:table:{cache_key}"
+                    _increment_frequency_counter(
+                        redis_client, table_cache_key, cache_type="table"
+                    )
+                    # ✅ P1: Utiliser TTL de 7 jours pour matrices (recommandation rapport)
+                    redis_client.setex(
+                        table_cache_key,
+                        OSRM_MATRIX_CACHE_TTL,  # 7 jours
+                        json.dumps(data),
+                    )
+                    logger.debug(
+                        "[OSRM] L2 cache write (Redis) for chunk %s", min(src_block)
+                    )
+                except Exception:
+                    logger.debug(
+                        "[OSRM] Redis setex failed for chunk %s",
+                        min(src_block),
+                        exc_info=True,
+                    )
+
+            return (src_block, data, None)
+
+        except Exception as e:
+            logger.warning("[OSRM] Error processing chunk %s: %s", min(src_block), e)
+            return (src_block, None, e)
+
+    # ✅ P1: Traitement parallèle ou séquentiel
+    chunk_results: Dict[int, Dict[str, Any]] = {}
+    chunk_errors: Dict[int, Exception] = {}
+
+    if use_parallel:
+        # ✅ P1: Parallélisation avec ThreadPoolExecutor
+        logger.info(
+            "[OSRM] 🔄 Parallel processing: %d chunks with max %d workers",
+            total_chunks_count,
+            OSRM_MAX_PARALLEL_WORKERS,
+        )
+        with ThreadPoolExecutor(max_workers=OSRM_MAX_PARALLEL_WORKERS) as executor:
+            futures = {
+                executor.submit(_process_chunk, list(chunk)): chunk
+                for chunk in chunks_list
+            }
+            for future in as_completed(futures):
+                chunk = futures[future]
+                try:
+                    src_block, data, error = future.result()
+                    if error:
+                        chunk_errors[min(src_block)] = error
+                    elif data:
+                        chunk_results[min(src_block)] = data
+                except Exception as e:
+                    chunk_errors[min(chunk)] = e
+                    logger.warning("[OSRM] Chunk %s failed: %s", min(chunk), e)
+    else:
+        # Traitement séquentiel (comportement original)
+        logger.info("[OSRM] Sequential processing: %d chunks", total_chunks_count)
+        for src_block in chunks_list:
+            src_block_list = list(src_block)
+            _, data, error = _process_chunk(src_block_list)
+            if error:
+                chunk_errors[min(src_block_list)] = error
+            elif data:
+                chunk_results[min(src_block_list)] = data
+
+    # ✅ P1: Vérifier si on a des erreurs critiques
+    if len(chunk_errors) > 0 and len(chunk_results) == 0:
+        # Toutes les requêtes ont échoué -> fallback
+        logger.warning(
+            "[OSRM] All chunks failed (%d errors), using haversine fallback",
+            len(chunk_errors),
+        )
+        return _fallback_matrix(coords)
+
+    # ✅ P1: Assembler la matrice depuis les résultats des chunks
+    logger.info(
+        "[OSRM] Assembling matrix from %d successful chunks (%d errors)",
+        len(chunk_results),
+        len(chunk_errors),
+    )
+
+    for src_block in chunks_list:
+        src_block_list = list(src_block)
+        data = chunk_results.get(min(src_block_list))
+
+        if not data:
+            # Chunk en erreur -> remplir avec valeurs de fallback
             logger.warning(
-                (
-                    "[OSRM] Redis connection failed when writing to cache - "
-                    "continuing without cache"
-                )
+                "[OSRM] Chunk %s missing, using fallback values", min(src_block_list)
             )
-        except Exception:
-            logger.warning("[OSRM] Redis setex failed", exc_info=True)
-            increment_cache_bypass()
+            for src_idx in src_block_list:
+                for j in range(n):
+                    if src_idx == j:
+                        M[src_idx][j] = 0.0
+                    else:
+                        # Utiliser haversine comme fallback pour ce chunk
+                        from shared.geo_utils import haversine_seconds
 
-        durs = data.get("durations")
-        if not isinstance(durs, list):
-            logger.warning("[OSRM] durations missing/invalid -> fallback matrix")
-            return _fallback_matrix(coords)
-        for local_i, src_idx in enumerate(src_block):
-            row = durs[local_i]
-            for j in range(n):
-                v = row[j]
-                M[src_idx][j] = (
-                    999999.0 if (v is None or not math.isfinite(v)) else float(v)
-                )
+                        lat1, lon1 = coords[src_idx]
+                        lat2, lon2 = coords[j]
+                        M[src_idx][j] = float(
+                            haversine_seconds(
+                                lat1, lon1, lat2, lon2, avg_speed_kmh=25.0
+                            )
+                        )
+            continue
 
+        # ✅ P1: Protéger accès dictionnaires pour éviter KeyError
+        durs = data.get("durations", [])
+        if durs:
+            for local_i, src_idx in enumerate(src_block_list):
+                if local_i >= len(durs):
+                    break
+                row = durs[local_i]
+                # ✅ P1: Protéger accès liste pour éviter IndexError
+                if len(row) < n:
+                    logger.warning(
+                        "[OSRM] Row length mismatch: expected %d, got %d",
+                        n,
+                        len(row),
+                    )
+                    continue
+                for j in range(n):
+                    v = row[j]
+                    M[src_idx][j] = (
+                        999999.0 if (v is None or not math.isfinite(v)) else float(v)
+                    )
+
+    # ✅ P1: Diagonale à 0
     for i in range(n):
         M[i][i] = 0.0
+
+    # ✅ P1: Mettre en cache local LRU (L1 cache) pour accès ultra-rapide
+    with _OSRM_MATRIX_LOCAL_CACHE_LOCK:
+        _OSRM_MATRIX_LOCAL_CACHE[full_matrix_cache_key] = M
+        logger.debug("[OSRM] ✅ L1 cache write (local LRU) for full matrix")
+
     return M
 
 
@@ -1048,7 +1194,11 @@ def route_info(
         if data.get("code") != "Ok" or not data.get("routes"):
             msg = f"OSRM /route bad response: {data.get('message')}"
             raise RuntimeError(msg)
-        r0 = data["routes"][0]
+        # ✅ P1: Protéger accès dictionnaires pour éviter KeyError
+        routes = data.get("routes", [])
+        if not routes:
+            raise RuntimeError("No routes in OSRM response")
+        r0 = routes[0]
         return {
             "duration": float(r0.get("duration", 0.0)),
             "distance": float(r0.get("distance", 0.0)),
@@ -1132,10 +1282,7 @@ def route_info(
                 logger.debug("OSRM cache SET key=%s ttl=%ss", cache_key, ttl)
     except _RedisConnError:
         logger.warning(
-            (
-                "[OSRM] Redis connection failed when writing to cache - "
-                "continuing without cache"
-            )
+            "[OSRM] Redis connection failed when writing to cache - continuing without cache"
         )
     except Exception:
         logger.warning("[OSRM] Redis setex failed (route)", exc_info=True)
@@ -1230,10 +1377,7 @@ class CircuitBreaker:
                     # Pas de last_failure_time mais état OPEN
                     # -> passer en HALF_OPEN pour test
                     logger.info(
-                        (
-                            "[CircuitBreaker] OPEN -> HALF_OPEN "
-                            "(no last_failure_time, resetting)"
-                        )
+                        "[CircuitBreaker] OPEN -> HALF_OPEN (no last_failure_time, resetting)"
                     )
                     self.state = "HALF_OPEN"
                     self.failure_count = 0

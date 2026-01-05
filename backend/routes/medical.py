@@ -2,8 +2,12 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from flask import current_app, request
-from flask_restx import Namespace, Resource, reqparse
+from flask import current_app, request  # pyright: ignore[reportMissingImports]
+from flask_restx import (  # pyright: ignore[reportMissingImports]
+    Namespace,
+    Resource,
+    reqparse,
+)
 from sqlalchemy import func, or_
 
 from models import MedicalEstablishment, MedicalService, db
@@ -121,7 +125,7 @@ class Services(Resource):
     def get(self):
         """Liste les services actifs d'un établissement, avec filtre optionnel."""
         # ✅ 2.4: Validation Marshmallow pour query params (optionnel mais recommandé)
-        from marshmallow import ValidationError
+        from marshmallow import ValidationError  # pyright: ignore[reportMissingImports]
 
         from schemas.medical_schemas import MedicalServiceQuerySchema
         from schemas.validation_utils import handle_validation_error, validate_request

@@ -16,17 +16,19 @@ import { switchDispatchMode } from "@/services/enterpriseDispatch";
 import { ModeSelectionModal } from "@/components/modals/ModeSelectionModal";
 import { DateSelectionModal } from "@/components/modals/DateSelectionModal";
 
+// ✅ Palette professionnelle cohérente avec le dashboard driver
 const headerPalette = {
-  background: "#07130E",
-  border: "rgba(42,121,86,0.32)",
-  dateBackground: "rgba(18,66,48,0.6)",
-  dateText: "#E6F7EF",
-  dateIcon: "#87D9AE",
-  modeBackground: "rgba(19,71,52,0.78)",
-  modeText: "#F4FFFA",
-  autoButton: "#1EB980",
-  autoButtonPaused: "#F5B83D",
-  autoText: "#052015",
+  background: "#FFFFFF",
+  border: "rgba(15,54,43,0.08)",
+  dateBackground: "#F5F7F6",
+  dateText: "#15362B",
+  dateIcon: "#0A7F59",
+  modeBackground: "#FFFFFF",
+  modeText: "#15362B",
+  modeBorder: "rgba(15,54,43,0.12)",
+  autoButton: "#0A7F59",
+  autoButtonPaused: "#F59E0B",
+  autoText: "#FFFFFF",
 };
 
 const MODES: Array<{
@@ -35,23 +37,23 @@ const MODES: Array<{
   subtitle: string;
   locked?: boolean;
 }> = [
-  {
-    value: "manual",
-    label: "Manuel",
-    subtitle: "Assignations 100% manuelles, aucune automatisation.",
-  },
-  {
-    value: "semi_auto",
-    label: "Semi-auto",
-    subtitle: "Optimisation assistée, validation opérateur requise.",
-  },
-  {
-    value: "fully_auto",
-    label: "Auto",
-    subtitle: "Mode autonome complet — bientôt disponible.",
-    locked: true,
-  },
-];
+    {
+      value: "manual",
+      label: "Manuel",
+      subtitle: "Assignations 100% manuelles, aucune automatisation.",
+    },
+    {
+      value: "semi_auto",
+      label: "Semi-auto",
+      subtitle: "Optimisation assistée, validation opérateur requise.",
+    },
+    {
+      value: "fully_auto",
+      label: "Auto",
+      subtitle: "Mode autonome complet — bientôt disponible.",
+      locked: true,
+    },
+  ];
 
 const modeLabel = (value: string | undefined) => {
   return MODES.find((m) => m.value === value)?.label ?? "—";
@@ -194,73 +196,102 @@ export const EnterpriseHeader: React.FC = () => {
 };
 
 const MODE_DOT: Record<string, { backgroundColor: string }> = {
-  manual: { backgroundColor: "#49D6B3" },
-  semi_auto: { backgroundColor: "#FDD66B" },
-  fully_auto: { backgroundColor: "#7FF6A8" },
+  manual: { backgroundColor: "#0A7F59" },
+  semi_auto: { backgroundColor: "#F59E0B" },
+  fully_auto: { backgroundColor: "#10B981" },
 };
 
 const styles = StyleSheet.create({
   container: {
     paddingTop: Platform.select({ ios: 52, android: 32, default: 24 }),
-    paddingBottom: 12,
+    paddingBottom: 16,
     paddingHorizontal: 20,
     backgroundColor: headerPalette.background,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 1,
     borderBottomColor: headerPalette.border,
+    shadowColor: "rgba(15,54,43,0.06)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    elevation: 2,
   },
   rightGroup: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 12,
   },
   dateButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: headerPalette.dateBackground,
-  },
-  dateText: {
-    color: headerPalette.dateText,
-    fontWeight: "600",
-    fontSize: 14,
-    textTransform: "capitalize",
-  },
-  modeBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 16,
+    backgroundColor: headerPalette.dateBackground,
+    borderWidth: 1,
+    borderColor: headerPalette.border,
+    shadowColor: "rgba(15,54,43,0.04)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  dateText: {
+    color: headerPalette.dateText,
+    fontWeight: "600",
+    fontSize: 14,
+    textTransform: "capitalize",
+    letterSpacing: 0.2,
+  },
+  modeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 18,
     backgroundColor: headerPalette.modeBackground,
+    borderWidth: 1,
+    borderColor: headerPalette.modeBorder,
+    shadowColor: "rgba(15,54,43,0.06)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    elevation: 1,
   },
   modeDot: {
     width: 10,
     height: 10,
     borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: "rgba(15,54,43,0.1)",
   },
   modeText: {
     color: headerPalette.modeText,
-    fontWeight: "600",
-    fontSize: 14,
+    fontWeight: "700",
+    fontSize: 13,
+    letterSpacing: 0.2,
   },
   autoButton: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 18,
     backgroundColor: headerPalette.autoButton,
+    shadowColor: headerPalette.autoButton,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
   },
   autoButtonPaused: {
     backgroundColor: headerPalette.autoButtonPaused,
+    shadowColor: headerPalette.autoButtonPaused,
   },
   autoButtonIcon: {
     marginTop: 1,
@@ -269,6 +300,7 @@ const styles = StyleSheet.create({
     color: headerPalette.autoText,
     fontWeight: "700",
     fontSize: 13,
+    letterSpacing: 0.2,
   },
 });
 

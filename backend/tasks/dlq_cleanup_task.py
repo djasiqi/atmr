@@ -4,7 +4,7 @@
 import logging
 from datetime import UTC, datetime, timedelta
 
-from celery import shared_task
+from celery import shared_task  # pyright: ignore[reportMissingImports]
 
 from ext import db
 from models import TaskFailure

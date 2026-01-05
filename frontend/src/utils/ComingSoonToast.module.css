@@ -1,0 +1,70 @@
+/* Coming Soon Toast Styles */
+
+.toastCard {
+  display: flex;
+  align-items: flex-start;
+  background: #0f172a;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 20px;
+  padding: 16px;
+  gap: 16px;
+  max-width: 360px;
+  width: calc(100vw - 32px);
+  color: #f8fafc;
+  box-shadow: 0 15px 35px rgba(15, 23, 42, 0.35);
+  transition: transform 0.2s ease, opacity 0.2s ease;
+  backdrop-filter: blur(6px);
+}
+
+.toastCardVisible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toastCardHidden {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.toastIcon {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.toastBody {
+  flex: 1;
+}
+
+.toastTitle {
+  font-weight: 600;
+  font-size: 16px;
+  margin: 0 0 4px 0;
+  color: #f8fafc;
+}
+
+.toastMessage {
+  margin: 0;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.toastLink {
+  color: #5eead4;
+  text-decoration: underline;
+}
+
+.toastClose {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 20px;
+  cursor: pointer;
+  margin-left: 8px;
+  line-height: 1;
+  transition: color 0.2s ease;
+}
+
+.toastClose:hover {
+  color: #f8fafc;
+}
+

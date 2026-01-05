@@ -1,5 +1,6 @@
 // services/api.ts
 import Constants from "expo-constants";
+import { Platform } from "react-native";
 import axios, { isAxiosError } from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { secureStorage, asyncStorage } from "./storage";
@@ -12,6 +13,12 @@ const PROD_API_URL =
 const DEV_API_URL = expoExtra.devApiUrl || expoExtra.publicApiUrl;
 
 const getDevHost = (): string => {
+  // Sur le web, toujours utiliser localhost (le navigateur tourne sur la même machine)
+  if (Platform.OS === 'web') {
+    return "localhost";
+  }
+  
+  // Sur mobile (iOS/Android), détecter l'IP locale de la machine de développement
   const legacyHost = (Constants as any)?.manifest?.debuggerHost?.split(":")[0]; // Expo < 49
   const newHost = (Constants as any)?.expoConfig?.hostUri?.split(":")[0]; // Expo 49+
   const detectedHost = newHost || legacyHost;
@@ -20,17 +27,78 @@ const getDevHost = (): string => {
     detectedHost === "localhost" ||
     detectedHost === "127.0.0.1"
   ) {
-    return "172.20.10.2"; // ← IP locale mise à jour
+    return "172.20.10.2"; // ← IP locale pour appareils mobiles
   }
   return detectedHost;
 };
 
 const ENV_PORT = process.env.EXPO_PUBLIC_BACKEND_PORT;
 const PORT = ENV_PORT || expoExtra.backendPort || "5000";
-export const baseURL = __DEV__
-  ? `${(DEV_API_URL || `http://${getDevHost()}:${PORT}`)
-      .replace(/\/$/, "")}/api/v1`
-  : `${(PROD_API_URL || "").replace(/\/$/, "")}/api/v1`;
+
+// En développement, forcer l'utilisation de getDevHost() pour éviter de pointer vers la production
+// Surtout important sur le web où on doit utiliser localhost
+const getDevBaseURL = () => {
+  if (Platform.OS === 'web') {
+    // Sur le web, toujours utiliser localhost en développement
+    return `http://localhost:${PORT}`;
+  }
+  // Sur mobile, utiliser getDevHost() pour détecter l'IP locale
+  return `http://${getDevHost()}:${PORT}`;
+};
+
+// Détecter le mode développement de manière plus fiable
+// En web bundled, __DEV__ peut être false même en développement local
+// On vérifie aussi l'origine de la page (localhost) et l'environnement d'exécution
+const isDevelopment = () => {
+  // Vérifier __DEV__ d'abord
+  if (__DEV__) {
+    return true;
+  }
+  
+  // En web, vérifier si on est sur localhost (développement local)
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    const hostname = window.location?.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname?.startsWith('192.168.') || hostname?.startsWith('10.0.') || hostname?.startsWith('172.16.')) {
+      return true;
+    }
+  }
+  
+  // Vérifier l'environnement d'exécution Expo
+  const executionEnv = Constants.executionEnvironment;
+  if (executionEnv === 'bare' || executionEnv === 'standalone') {
+    // En standalone, on est probablement en production
+    return false;
+  }
+  
+  // Si on a une URL de développement explicite différente de la prod, on est probablement en dev
+  if (DEV_API_URL && DEV_API_URL !== PROD_API_URL && !DEV_API_URL.includes('api.lirie.ch')) {
+    return true;
+  }
+  
+  return false;
+};
+
+// Déterminer l'URL de base à utiliser
+const getBaseURL = () => {
+  const isDev = isDevelopment();
+  
+  if (isDev) {
+    // En développement, sur le web, toujours utiliser localhost (ignorer DEV_API_URL si défini à la prod)
+    if (Platform.OS === 'web') {
+      return getDevBaseURL();
+    }
+    // Sur mobile, utiliser DEV_API_URL si défini et différent de la prod, sinon getDevBaseURL()
+    if (DEV_API_URL && DEV_API_URL !== PROD_API_URL && !DEV_API_URL.includes('api.lirie.ch')) {
+      return DEV_API_URL;
+    }
+    return getDevBaseURL();
+  }
+  
+  // En production, utiliser PROD_API_URL
+  return PROD_API_URL || "";
+};
+
+export const baseURL = `${getBaseURL().replace(/\/$/, "")}/api/v1`;
 
 // --- Debug: afficher la configuration résolue au démarrage (visible dans Metro/JS Inspector) ---
 try {
@@ -57,21 +125,153 @@ try {
 export const api = axios.create({
   baseURL,
   timeout: 30000,
-  headers: { "Content-Type": "application/json" },
+  // ✅ Sur le web, activer withCredentials pour envoyer/recevoir les cookies httpOnly
+  withCredentials: Platform.OS === "web",
+  headers: {
+    "Content-Type": "application/json",
+    // ✅ X-Requested-With seulement sur mobile (pas sur web pour éviter les problèmes CORS)
+    ...(Platform.OS !== "web" ? { "X-Requested-With": "Expo" } : {}),
+  },
 });
+
+// #region agent log
+// Log de la configuration des headers au démarrage
+try {
+  const hasXRequestedWith = Platform.OS !== "web";
+  console.log("[DEBUG] API instance created:", {
+    platform: Platform.OS,
+    hasXRequestedWith,
+    baseURL,
+  });
+  fetch("http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      location: "api.ts:axios.create",
+      message: "API instance created",
+      data: {
+        platform: Platform.OS,
+        hasXRequestedWith,
+        baseURL,
+      },
+      timestamp: Date.now(),
+      sessionId: "debug-session",
+      runId: "run1",
+      hypothesisId: "A",
+    }),
+  }).catch((e) => console.warn("[DEBUG] Log fetch failed:", e));
+} catch (e) {
+  // ignore
+}
+// #endregion
+
+// ⚡ Phase 3 : Cache partagé pour l'intercepteur request
+// Réduit les lectures SecureStore répétées lors de requêtes simultanées
+let interceptorTokenCache: string | null = null;
+let interceptorTokenCacheTime = 0;
+const INTERCEPTOR_CACHE_TTL = 30000; // 30 secondes
+
+// ⚡ Phase 4 : Métriques de performance pour l'intercepteur (dev uniquement)
+let interceptorCacheHitCount = 0;
+let interceptorCacheMissCount = 0;
+let interceptorRequestCount = 0;
+const INTERCEPTOR_METRICS_LOG_INTERVAL = 100; // Log toutes les 100 requêtes
+
+/**
+ * Invalide le cache de l'intercepteur (utile lors du logout ou changement de token)
+ */
+export const invalidateInterceptorCache = () => {
+  interceptorTokenCache = null;
+  interceptorTokenCacheTime = 0;
+  if (__DEV__) {
+    interceptorCacheHitCount = 0;
+    interceptorCacheMissCount = 0;
+    interceptorRequestCount = 0;
+  }
+};
 
 // --- Authorization bearer + Device ID ---
 api.interceptors.request.use(
   async (config) => {
-    const token = await secureStorage.getAccessToken();
-    if (token) config.headers.Authorization = `Bearer ${token}`;
-    
+    // #region agent log
+    const isLoginRequest = config.url === "/auth/login" || config.url?.endsWith("/auth/login");
+    // #endregion
+    const now = Date.now();
+
+    // ⚡ OPTIMISATION : Utiliser le cache si disponible et valide
+    // Évite les lectures SecureStore répétées lors de requêtes simultanées
+    let token = interceptorTokenCache;
+    if (!token || now - interceptorTokenCacheTime >= INTERCEPTOR_CACHE_TTL) {
+      // Cache invalide ou expiré → lire depuis SecureStore (qui utilise son propre cache)
+      token = await secureStorage.getAccessToken();
+      interceptorTokenCache = token;
+      interceptorTokenCacheTime = now;
+      if (__DEV__) {
+        interceptorCacheMissCount++;
+      }
+    } else {
+      if (__DEV__) {
+        interceptorCacheHitCount++;
+      }
+    }
+
+    // ⚡ Phase 4 : Métriques de performance (dev uniquement)
+    if (__DEV__) {
+      interceptorRequestCount++;
+      if (interceptorRequestCount % INTERCEPTOR_METRICS_LOG_INTERVAL === 0) {
+        const totalRequests =
+          interceptorCacheHitCount + interceptorCacheMissCount;
+        const cacheHitRate =
+          totalRequests > 0
+            ? (interceptorCacheHitCount / totalRequests) * 100
+            : 0;
+        console.log(
+          `[API Interceptor] Performance: cache=${cacheHitRate.toFixed(1)}%, hits=${interceptorCacheHitCount}, misses=${interceptorCacheMissCount}, total=${interceptorRequestCount}`
+        );
+      }
+    }
+
+    // #region agent log
+    const logData = {
+      location: "api.ts:interceptor:request",
+      message: "interceptor request entry",
+      data: {
+        url: config.url,
+        method: config.method,
+        isLoginRequest,
+        baseURL: config.baseURL,
+        hasToken: !!token,
+        platform: Platform.OS,
+        withCredentials: config.withCredentials,
+        headers: {
+          "X-Requested-With": config.headers?.["X-Requested-With"] || config.headers?.get?.("X-Requested-With"),
+          "Content-Type": config.headers?.["Content-Type"] || config.headers?.get?.("Content-Type"),
+        },
+      },
+      timestamp: Date.now(),
+      sessionId: "debug-session",
+      runId: "run1",
+      hypothesisId: "A",
+    };
+    console.log("[DEBUG] Driver API interceptor:", JSON.stringify(logData, null, 2));
+    fetch("http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(logData),
+    }).catch((e) => console.warn("[DEBUG] Log fetch failed:", e));
+    // #endregion
+
+    // ✅ Ne pas ajouter le token pour les requêtes de login/refresh
+    if (token && !isLoginRequest) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+
     // ✅ Envoyer X-Device-ID pour tracking des sessions
     const deviceId = await AsyncStorage.getItem("enterprise.device_id");
     if (deviceId) {
       config.headers["X-Device-ID"] = deviceId;
     }
-    
+
     return config;
   },
   (error) => Promise.reject(error)
@@ -110,6 +310,8 @@ api.interceptors.response.use(
       if (originalRequest.url?.includes("/auth/refresh-token")) {
         await secureStorage.clearAll();
         await asyncStorage.clearAuth();
+        // ⚡ OPTIMISATION : Invalider le cache de l'intercepteur lors du logout/échec
+        invalidateInterceptorCache();
         return Promise.reject(error);
       }
 
@@ -146,6 +348,15 @@ api.interceptors.response.use(
           await secureStorage.setRefreshToken(refreshResponse.refresh_token);
         }
 
+        // ⚡ OPTIMISATION : Mettre à jour le cache de l'intercepteur avec le nouveau token
+        interceptorTokenCache = newAccessToken;
+        interceptorTokenCacheTime = Date.now();
+        if (__DEV__) {
+          console.log(
+            `[API Interceptor] Token refreshed, cache updated. New token cached.`
+          );
+        }
+
         // Traiter la queue
         processQueue(null, newAccessToken);
 
@@ -157,6 +368,8 @@ api.interceptors.response.use(
         processQueue(refreshError, null);
         await secureStorage.clearAll();
         await asyncStorage.clearAuth();
+        // ⚡ OPTIMISATION : Invalider le cache de l'intercepteur lors de l'échec
+        invalidateInterceptorCache();
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
@@ -205,6 +418,7 @@ export type Driver = {
   company_name: string;
   is_active: boolean;
   is_available: boolean;
+  driver_type?: "REGULAR" | "EMERGENCY";
   vehicle_assigned: string;
   brand: string;
   license_plate: string;
@@ -249,16 +463,160 @@ export const loginDriver = async (
   password: string
 ): Promise<AuthResponse> => {
   try {
+    // #region agent log
+    const fullURL = `${baseURL}/auth/login`;
+    const logData = {
+      location: "api.ts:loginDriver",
+      message: "loginDriver entry",
+      data: {
+        baseURL,
+        fullURL,
+        hasEmail: Boolean(email),
+        hasPassword: Boolean(password),
+        platform: Platform.OS,
+        isDev: __DEV__,
+        executionEnv: Constants.executionEnvironment,
+      },
+      timestamp: Date.now(),
+      sessionId: "debug-session",
+      runId: "run1",
+      hypothesisId: "D",
+    };
+    console.log("[DEBUG] loginDriver entry:", JSON.stringify(logData, null, 2));
+    fetch("http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(logData),
+    }).catch((e) => console.warn("[DEBUG] Log fetch failed:", e));
+    // #endregion
+    // #region agent log
+    const requestHeaders = {
+      "X-Requested-With": api.defaults.headers.common["X-Requested-With"] || api.defaults.headers["X-Requested-With"] || "not set",
+      "Content-Type": api.defaults.headers.common["Content-Type"] || api.defaults.headers["Content-Type"],
+      platform: Platform.OS,
+    };
+    const preRequestLog = {
+      location: "api.ts:loginDriver",
+      message: "loginDriver before request",
+      data: {
+        url: "/auth/login",
+        headers: requestHeaders,
+        platform: Platform.OS,
+        willSendXRequestedWith: Platform.OS !== "web",
+      },
+      timestamp: Date.now(),
+      sessionId: "debug-session",
+      runId: "run1",
+      hypothesisId: "A",
+    };
+    console.log("[DEBUG] loginDriver before request:", JSON.stringify(preRequestLog, null, 2));
+    fetch("http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(preRequestLog),
+    }).catch((e) => console.warn("[DEBUG] Log fetch failed:", e));
+    // #endregion
     // Appel principal via Axios
     const response = await api.post<AuthResponse>("/auth/login", {
       email,
       password,
     });
+    // #region agent log
+    const successLogData = {
+      location: "api.ts:loginDriver",
+      message: "loginDriver success",
+      data: {
+        status: response.status,
+        hasToken: !!response.data?.token,
+        hasRefreshToken: !!response.data?.refresh_token,
+        responseKeys: response.data ? Object.keys(response.data) : [],
+        responseData: response.data ? {
+          hasMessage: !!response.data.message,
+          hasUser: !!response.data.user,
+          hasToken: !!response.data.token,
+          hasRefreshToken: !!response.data.refresh_token,
+          tokenLength: response.data.token ? response.data.token.length : 0,
+          refreshTokenLength: response.data.refresh_token ? response.data.refresh_token.length : 0,
+        } : null,
+        responseHeaders: {
+          "x-requested-with": response.headers?.["x-requested-with"] || response.headers?.["X-Requested-With"],
+        },
+        platform: Platform.OS,
+      },
+      timestamp: Date.now(),
+      sessionId: "debug-session",
+      runId: "run1",
+      hypothesisId: "B",
+    };
+    console.log("[DEBUG] loginDriver success:", JSON.stringify(successLogData, null, 2));
+    fetch("http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(successLogData),
+    }).catch((e) => console.warn("[DEBUG] Log fetch failed:", e));
+    // #endregion
     const data = response.data;
+    
+    // #region agent log
+    const storageLog = {
+      location: "api.ts:loginDriver",
+      message: "loginDriver storing tokens",
+      data: {
+        hasToken: !!data?.token,
+        hasRefreshToken: !!data?.refresh_token,
+        willStoreToken: !!data?.token,
+        willStoreRefreshToken: !!data?.refresh_token,
+        tokenValue: data?.token ? `${data.token.substring(0, 20)}...` : null,
+        platform: Platform.OS,
+      },
+      timestamp: Date.now(),
+      sessionId: "debug-session",
+      runId: "run1",
+      hypothesisId: "C",
+    };
+    console.log("[DEBUG] loginDriver storing tokens:", JSON.stringify(storageLog, null, 2));
+    fetch("http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(storageLog),
+    }).catch((e) => console.warn("[DEBUG] Log fetch failed:", e));
+    // #endregion
     
     // ✅ Stocker le token d'accès dans AsyncStorage
     if (data?.token) {
+      // #region agent log
+      const beforeStoreLog = {
+        location: "api.ts:loginDriver",
+        message: "before setAccessToken",
+        data: { hasToken: !!data.token, tokenLength: data.token.length },
+        timestamp: Date.now(),
+        sessionId: "debug-session",
+        runId: "run1",
+        hypothesisId: "D",
+      };
+      fetch("http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(beforeStoreLog),
+      }).catch(() => {});
+      // #endregion
       await secureStorage.setAccessToken(data.token);
+      // #region agent log
+      const afterStoreLog = {
+        location: "api.ts:loginDriver",
+        message: "after setAccessToken",
+        data: { stored: true },
+        timestamp: Date.now(),
+        sessionId: "debug-session",
+        runId: "run1",
+        hypothesisId: "D",
+      };
+      fetch("http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(afterStoreLog),
+      }).catch(() => {});
+      // #endregion
     }
     
     // ✅ Stocker le refresh_token dans SecureStore (sécurisé)
@@ -288,7 +646,13 @@ export const loginDriver = async (
       const timeout = setTimeout(() => controller.abort(), 30000);
       const res = await fetch(`${baseURL}/auth/login`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        // ✅ Sur le web, activer credentials pour envoyer/recevoir les cookies httpOnly
+        credentials: Platform.OS === "web" ? "include" : "omit",
+        headers: {
+          "Content-Type": "application/json",
+          // ✅ X-Requested-With seulement sur mobile (pas sur web pour éviter les problèmes CORS)
+          ...(Platform.OS !== "web" ? { "X-Requested-With": "Expo" } : {}),
+        },
         body: JSON.stringify({ email, password }),
         signal: controller.signal,
       });
@@ -395,6 +759,98 @@ export const updateDriverAvailability = async (
   return response.data;
 };
 
+export interface SwitchToEnterpriseResponse {
+  token: string;
+  refresh_token: string;
+  user: {
+    public_id: string;
+    email: string;
+    first_name?: string;
+    last_name?: string;
+  };
+  company: {
+    id: number;
+    name: string;
+  };
+}
+
+export const switchToEnterpriseToken = async (): Promise<SwitchToEnterpriseResponse> => {
+  // #region agent log
+  const logData = {
+    location: "api.ts:switchToEnterpriseToken",
+    message: "switchToEnterpriseToken entry",
+    data: {
+      url: "/driver/me/switch-to-enterprise",
+      platform: Platform.OS,
+    },
+    timestamp: Date.now(),
+    sessionId: "debug-session",
+    runId: "run1",
+    hypothesisId: "A",
+  };
+  console.log("[DEBUG] switchToEnterpriseToken entry:", JSON.stringify(logData, null, 2));
+  fetch("http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(logData),
+  }).catch((e) => console.warn("[DEBUG] Log fetch failed:", e));
+  // #endregion
+  try {
+    const response = await api.post<SwitchToEnterpriseResponse>(
+      "/driver/me/switch-to-enterprise"
+    );
+    // #region agent log
+    const successLogData = {
+      location: "api.ts:switchToEnterpriseToken",
+      message: "switchToEnterpriseToken success",
+      data: {
+        status: response.status,
+        hasToken: !!response.data?.token,
+        hasError: !!(response.data as any)?.error,
+        errorMessage: (response.data as any)?.error,
+      },
+      timestamp: Date.now(),
+      sessionId: "debug-session",
+      runId: "run1",
+      hypothesisId: "B",
+    };
+    console.log("[DEBUG] switchToEnterpriseToken success:", JSON.stringify(successLogData, null, 2));
+    fetch("http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(successLogData),
+    }).catch((e) => console.warn("[DEBUG] Log fetch failed:", e));
+    // #endregion
+    return response.data;
+  } catch (error: any) {
+    // #region agent log
+    const errorLogData = {
+      location: "api.ts:switchToEnterpriseToken",
+      message: "switchToEnterpriseToken error",
+      data: {
+        errorType: error?.constructor?.name || typeof error,
+        status: error?.response?.status,
+        statusText: error?.response?.statusText,
+        errorMessage: error?.message,
+        responseData: error?.response?.data,
+        hasResponse: !!error?.response,
+      },
+      timestamp: Date.now(),
+      sessionId: "debug-session",
+      runId: "run1",
+      hypothesisId: "E",
+    };
+    console.error("[DEBUG] switchToEnterpriseToken error:", JSON.stringify(errorLogData, null, 2));
+    fetch("http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(errorLogData),
+    }).catch((e) => console.warn("[DEBUG] Log fetch failed:", e));
+    // #endregion
+    throw error;
+  }
+};
+
 // ========== Localisation ==========
 export interface DriverLocationPayload {
   latitude: number;
@@ -442,6 +898,16 @@ export const updateDriverLocation = async (
     return response.data ?? {};
   } catch (error: unknown) {
     if (isAxiosError(error)) {
+      // Supprimer les erreurs 401/403/404 car elles sont attendues si l'utilisateur n'est pas un chauffeur
+      const status = error.response?.status;
+      if (status === 401 || status === 403 || status === 404) {
+        console.debug(
+          "[updateDriverLocation] Accès non autorisé (utilisateur n'est probablement pas un chauffeur):",
+          status
+        );
+        // Retourner une réponse vide au lieu de lancer une erreur
+        return { ok: false, message: "Accès non autorisé" };
+      }
       const msg =
         typeof error.response?.data === "string"
           ? error.response.data
@@ -493,9 +959,25 @@ export type Booking = {
   [key: string]: any;
 };
 
-export const getAssignedTrips = async (): Promise<Booking[]> => {
-  const response = await api.get<Booking[]>("/driver/me/bookings");
-  return response.data;
+export const getAssignedTrips = async (options?: { since?: string }): Promise<Booking[]> => {
+  try {
+    const params = options?.since ? { since: options.since } : {};
+    const response = await api.get<Booking[]>("/driver/me/bookings/since", { params });
+    return response.data;
+  } catch (error: any) {
+    // Supprimer les erreurs 401/403/404 car elles sont attendues si l'utilisateur n'est pas un chauffeur
+    const status = error?.response?.status;
+    if (status === 401 || status === 403 || status === 404) {
+      console.debug(
+        "[getAssignedTrips] Accès non autorisé (utilisateur n'est probablement pas un chauffeur):",
+        status
+      );
+      // Retourner un tableau vide au lieu de lancer une erreur
+      return [];
+    }
+    // Pour les autres erreurs, les relancer
+    throw error;
+  }
 };
 
 // ✅ FIX: Ajouter la fonction manquante getCompletedTrips
@@ -582,6 +1064,29 @@ export const getCompanyMessages = async (
 ): Promise<Message[]> => {
   const response = await api.get<Message[]>(`/messages/${companyId}`);
   return response.data;
+};
+
+/**
+ * ⚡ Phase 4 : Récupère les métriques de performance de l'intercepteur (dev uniquement)
+ * Utile pour le debugging et l'analyse des performances
+ */
+export const getInterceptorPerformanceMetrics = () => {
+  if (!__DEV__) {
+    return null;
+  }
+
+  const totalRequests = interceptorCacheHitCount + interceptorCacheMissCount;
+
+  return {
+    cacheHits: interceptorCacheHitCount,
+    cacheMisses: interceptorCacheMissCount,
+    totalRequests,
+    cacheHitRate:
+      totalRequests > 0
+        ? (interceptorCacheHitCount / totalRequests) * 100
+        : 0,
+    totalInterceptorRequests: interceptorRequestCount,
+  };
 };
 
 export default api;

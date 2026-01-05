@@ -3,7 +3,6 @@
   "pythonPlatform": "Linux",
   "typeCheckingMode": "standard",
   "extraPaths": [
-    "/usr/local/lib/python3.11/site-packages",
     "backend",
     "backend/services",
     "backend/models",

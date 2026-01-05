@@ -6,7 +6,7 @@ sur plusieurs semaines/mois.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import BigInteger, DateTime, Float, Integer, Text
@@ -33,7 +33,7 @@ class ProfilingMetrics(db.Model):
     profiling_date: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         index=True,
     )
 
@@ -93,7 +93,7 @@ class ProfilingMetrics(db.Model):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         server_default=func.now(),
     )
 

@@ -8,20 +8,35 @@ Les fonctions de handlers sont enregistrées via @socketio.on()
 et appelées par le framework.
 """
 
+import json
 import logging
+import os
+import traceback
+import urllib.request
 from contextlib import suppress
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, cast
 from typing import cast as tcast
 
-import jwt.exceptions as jwt_exceptions
-from flask import request, session
-from flask_jwt_extended import decode_token
-from flask_socketio import SocketIO, emit, join_room
+import jwt.exceptions as jwt_exceptions  # pyright: ignore[reportMissingImports]
+from flask import (  # pyright: ignore[reportMissingImports]
+    current_app,
+    request,
+    session,
+)
+from flask_jwt_extended import decode_token  # pyright: ignore[reportMissingImports]
+from flask_socketio import (  # pyright: ignore[reportMissingModuleSource]
+    SocketIO,
+    emit,
+    join_room,
+)
 
 from ext import db, redis_client
 from models import Company, Driver, Message, SenderRole, User, UserRole
+from schemas.socket_events import EVENT_VERSION, SocketEvent
 from services.location_service import get_location_service
+from services.push_service import send_push_message
 from services.spam_protection import can_send_message
 from services.websocket_metrics import ws_metrics
 from services.websocket_rate_limiter import ws_rate_limiter
@@ -31,6 +46,7 @@ RECEIVER_ID_ZERO = 0
 LAT_THRESHOLD = 90
 LON_THRESHOLD = 180
 MAX_MESSAGE_LENGTH = 1000
+MESSAGE_PREVIEW_LENGTH = 50
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -40,8 +56,110 @@ logger = logging.getLogger("socketio")
 # Petit index en mémoire pour le debug/nettoyage : sid -> infos
 _SID_INDEX: Dict[str, Dict[str, Any]] = {}
 
+
+def _log_socketio_exception(
+    exception: Exception,
+    event_name: str,
+    sid: str | None = None,
+    user_id: int | None = None,
+    company_id: int | None = None,
+    driver_id: int | None = None,
+    additional_context: Dict[str, Any] | None = None,
+) -> None:
+    """Helper pour logger les exceptions Socket.IO avec contexte complet.
+
+    Args:
+        exception: L'exception à logger
+        event_name: Nom de l'événement Socket.IO (ex: "team_chat_message")
+        sid: Socket ID (optionnel)
+        user_id: ID utilisateur (optionnel)
+        company_id: ID entreprise (optionnel)
+        driver_id: ID chauffeur (optionnel)
+        additional_context: Contexte additionnel à logger (optionnel)
+    """
+    # Récupérer le SID si non fourni
+    if sid is None:
+        sid = _get_sid()
+
+    # Récupérer les infos depuis _SID_INDEX si disponibles
+    sid_data = _SID_INDEX.get(sid, {}) if sid else {}
+    if user_id is None:
+        user_id = sid_data.get("user_id")
+    if company_id is None:
+        company_id = sid_data.get("company_id")
+    if driver_id is None:
+        driver_id = sid_data.get("driver_id")
+
+    # Récupérer trace_id depuis headers
+    trace_id = None
+    with suppress(Exception):
+        trace_id = request.headers.get("X-Trace-ID") or request.headers.get("Trace-Id")
+
+    # Récupérer IP client
+    client_ip = "unknown"
+    with suppress(Exception):
+        client_ip = request.environ.get("REMOTE_ADDR", "unknown")
+
+    # Construire le contexte de logging
+    log_context = {
+        "event": f"{event_name}_error",
+        "error": str(exception),
+        "error_type": type(exception).__name__,
+        "sid": sid or "unknown",
+        "user_id": user_id,
+        "company_id": company_id,
+        "driver_id": driver_id,
+        "ip": client_ip,
+        "timestamp": datetime.now(UTC).isoformat(),
+        "request_trace_id": trace_id,
+    }
+
+    # Ajouter contexte additionnel
+    if additional_context:
+        log_context.update(additional_context)
+
+    # Logger avec stack trace
+    logger.exception(
+        "[Socket.IO] ❌ Exception dans %s",
+        event_name,
+        extra=log_context,
+    )
+
+    # Enregistrer métrique d'erreur
+    ws_metrics.on_error(f"{event_name}_exception")
+
+
 # Les handlers Socket.IO sont enregistrés par @socketio.on()
 # Note: Rate limiting géré par WebSocketRateLimiter (backend/services/websocket_rate_limiter.py)
+
+
+def _parse_timestamp(timestamp_value: Any) -> datetime:
+    """Parse un timestamp qui peut être soit une chaîne ISO, soit un entier Unix (millisecondes).
+
+    Args:
+        timestamp_value: Timestamp sous forme de chaîne ISO (ex: "2025-12-07T12:34:56.789Z")
+                        ou entier Unix en millisecondes (ex: 1701950096789)
+
+    Returns:
+        datetime: Objet datetime avec timezone UTC
+    """
+    if not timestamp_value:
+        return datetime.now(UTC)
+
+    # Si c'est un entier (Unix timestamp en millisecondes)
+    if isinstance(timestamp_value, (int, float)):
+        # Convertir millisecondes en secondes pour fromtimestamp
+        timestamp_seconds = float(timestamp_value) / 1000.0
+        return datetime.fromtimestamp(timestamp_seconds, tz=UTC)
+
+    # Si c'est une chaîne, traiter comme ISO
+    if isinstance(timestamp_value, str):
+        # Remplacer "Z" par "+00:00" pour compatibilité avec fromisoformat
+        timestamp_str = timestamp_value.replace("Z", "+00:00")
+        return datetime.fromisoformat(timestamp_str)
+
+    # Fallback: utiliser maintenant
+    return datetime.now(UTC)
 
 
 def _get_sid(fallback_request=None) -> str:
@@ -55,22 +173,245 @@ def _get_sid(fallback_request=None) -> str:
     return str(sid) if sid is not None else ""
 
 
+def _enrich_payload_if_needed(
+    payload: Dict[str, Any], event_name: str
+) -> Dict[str, Any]:
+    """Enrichit un payload avec event_id, version, timestamp si absents.
+
+    Utilise le schéma centralisé SocketEvent pour garantir la cohérence.
+
+    Args:
+        payload: Payload d'événement (peut déjà contenir event_id)
+        event_name: Nom de l'événement Socket.IO (ex: "team_chat_message")
+
+    Returns:
+        Payload enrichi (nouveau dict si enrichissement nécessaire, sinon original)
+    """
+    # Si event_id déjà présent, ne pas enrichir (évite doublon)
+    if "event_id" in payload:
+        return payload
+
+    # ✅ Utiliser le schéma centralisé SocketEvent pour enrichir
+    return SocketEvent.create(
+        event_type=event_name, payload=payload, version=EVENT_VERSION
+    )
+
+
 def _extract_token(auth) -> str | None:
-    """Récupère le token JWT depuis Authorization, auth.token ou ?token=."""
-    # 1) Header Authorization: Bearer ...
+    """Récupère le token JWT depuis 3 sources dans l'ordre de priorité suivant :
+
+    ✅ S1: Support query string supprimé pour éviter fuite de tokens dans logs/URLs.
+    ✅ PROD: En production, rejeter payload auth si header/cookie présents (sécurité).
+
+    **Ordre de priorité :**
+    1. **Header Authorization** : `Authorization: Bearer <token>` (priorité la plus élevée)
+    2. **Cookie access_token** : Cookie httpOnly (✅ Migration localStorage → cookies)
+    3. **Payload auth** : `auth.token` ou `auth.accessToken` (envoyé par le client Socket.IO)
+
+    **Justification de l'ordre :**
+    - Header Authorization : Méthode standard HTTP, recommandée pour la sécurité
+    - Cookie access_token : ✅ Migration localStorage → cookies httpOnly (priorité après header)
+    - Payload auth : Supporte les clients Socket.IO qui envoient le token dans le payload de connexion
+
+    **Comportement en production :**
+    - Si header Authorization présent : ignorer cookie/payload (priorité stricte)
+    - Payload auth : rejeté en production (sécurité)
+
+    Args:
+        auth: Payload d'authentification Socket.IO (dict ou None)
+
+    Returns:
+        Token JWT (str) si trouvé, None sinon
+    """
+    token_result: str | None = None
+
+    # 1) Header Authorization: Bearer ... (PRIORITÉ 1 - Méthode standard HTTP)
     authz = request.headers.get("Authorization") or request.headers.get("AUTHORIZATION")
     if authz and authz.lower().startswith("bearer "):
-        return authz.split(" ", 1)[1].strip()
-    # 2) Payload auth envoyé par le client Socket.IO
-    if isinstance(auth, dict):
+        token = authz.split(" ", 1)[1].strip()
+        # ✅ PROD: En production, ignorer cookie/payload si header présent
+        try:
+            is_prod = current_app.config.get("ENV") == "production"
+        except RuntimeError:
+            is_prod = False
+        if is_prod and token:
+            logger.debug(
+                "socket_token_extracted",
+                extra={
+                    "event": "token_extracted",
+                    "source": "header_authorization",
+                    "has_token": bool(token),
+                    "ignored_other_sources": True,
+                },
+            )
+            token_result = token
+        else:
+            logger.debug(
+                "socket_token_extracted",
+                extra={
+                    "event": "token_extracted",
+                    "source": "header_authorization",
+                    "has_token": bool(token),
+                },
+            )
+            token_result = token
+
+    # 2) ✅ Cookie access_token (PRIORITÉ 2 - Migration localStorage → cookies httpOnly)
+    try:
+        cookie_name = current_app.config.get("COOKIE_ACCESS_TOKEN_NAME", "access_token")
+    except RuntimeError:
+        # current_app n'est pas disponible dans ce contexte
+        cookie_name = "access_token"
+        logger.debug(
+            "socket_token_current_app_unavailable",
+            extra={
+                "event": "current_app_unavailable",
+                "using_fallback": "access_token",
+            },
+        )
+
+    try:
+        all_cookies = list(request.cookies.keys()) if request.cookies else []
+        cookie_token = request.cookies.get(cookie_name)
+        # #region agent log
+        try:
+            log_data_cookie_check = {
+                "location": "chat.py:_extract_token",
+                "message": "Cookie check",
+                "data": {
+                    "cookie_name": cookie_name,
+                    "has_cookie": bool(cookie_token),
+                    "all_cookies": all_cookies,
+                    "has_cookies": bool(request.cookies),
+                },
+                "timestamp": int(datetime.now(UTC).timestamp() * 1000),
+                "sessionId": "debug-session",
+                "runId": "post-fix",
+                "hypothesisId": "G",
+            }
+            req = urllib.request.Request(
+                "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
+                data=json.dumps(log_data_cookie_check).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=0.1)
+        except Exception as log_err:
+            # Ne pas faire échouer l'extraction du token si le log échoue
+            logger.debug("Failed to send debug log: %s", log_err)
+        # #endregion
+        if cookie_token:
+            token = cookie_token.strip()
+            logger.info(
+                "socket_token_extracted",
+                extra={
+                    "event": "token_extracted",
+                    "source": "cookie",
+                    "has_token": bool(token),
+                    "cookie_name": cookie_name,
+                },
+            )
+            token_result = token
+        # ✅ Log pour debug : vérifier si les cookies sont présents
+        logger.debug(
+            "socket_token_cookie_not_found",
+            extra={
+                "event": "cookie_not_found",
+                "cookie_name": cookie_name,
+                "all_cookies": all_cookies,
+                "has_cookies": bool(request.cookies),
+            },
+        )
+    except Exception as e:
+        # ✅ Gérer toutes les exceptions pour éviter "server error"
+        logger.error(
+            "socket_token_cookie_error",
+            extra={
+                "event": "cookie_error",
+                "error": str(e),
+                "error_type": type(e).__name__,
+            },
+        )
+        # ✅ Fallback : essayer directement avec le nom du cookie
+        try:
+            cookie_token = request.cookies.get("access_token")
+            if cookie_token:
+                token = cookie_token.strip()
+                logger.info(
+                    "socket_token_extracted",
+                    extra={
+                        "event": "token_extracted",
+                        "source": "cookie_fallback",
+                        "has_token": bool(token),
+                    },
+                )
+                token_result = token
+        except Exception:
+            pass
+
+    # 3) Payload auth envoyé par le client Socket.IO (PRIORITÉ 3 - Uniquement si header/cookie absents)
+    if not token_result and isinstance(auth, dict):
         tok = auth.get("token") or auth.get("accessToken")
         if tok:
-            return str(tok).strip()
-    # 3) Paramètre de query string (secours)
-    qs_tok = request.args.get("token")
-    if qs_tok:
-        return qs_tok.strip()
-    return None
+            # ⚠️ Toujours logger un warning si payload auth utilisé (sécurité)
+            try:
+                is_prod = current_app.config.get("ENV") == "production"
+                env = current_app.config.get("ENV", "unknown")
+            except RuntimeError:
+                is_prod = False
+                env = "unknown"
+
+            logger.warning(
+                "socket_token_payload_auth_used",
+                extra={
+                    "event": "payload_auth_detected",
+                    "has_header": bool(authz),
+                    "has_cookie": bool(request.cookies.get("access_token")),
+                    "env": env,
+                    "is_production": is_prod,
+                },
+            )
+
+            # Rejeter en production, accepter en dev uniquement
+            if is_prod:
+                logger.warning(
+                    "socket_token_payload_auth_rejected",
+                    extra={
+                        "event": "payload_auth_rejected",
+                        "reason": "production_security",
+                        "env": env,
+                    },
+                )
+                token_result = None
+            else:
+                # Dev: autoriser payload auth (mais avec warning)
+                token = str(tok).strip()
+                logger.debug(
+                    "socket_token_extracted",
+                    extra={
+                        "event": "token_extracted",
+                        "source": "auth_payload",
+                        "has_token": bool(token),
+                        "env": env,
+                    },
+                )
+                token_result = token
+
+    # ✅ S1: Support query string supprimé pour éviter fuite de tokens dans logs/URLs
+    # Les clients doivent utiliser Header Authorization (mobile) ou Cookie (web)
+
+    # Aucun token trouvé
+    if not token_result:
+        logger.debug(
+            "socket_token_not_found",
+            extra={
+                "event": "token_not_found",
+                "has_auth": isinstance(auth, dict),
+                "has_authz_header": bool(authz),
+            },
+        )
+
+    return token_result
 
 
 def init_chat_socket(socketio: SocketIO):
@@ -78,70 +419,337 @@ def init_chat_socket(socketio: SocketIO):
 
     @socketio.on("connect", namespace="/")
     def handle_connect(auth: dict[str, Any] | None) -> bool:  # noqa: PLR0911
-        client_ip = request.environ.get("REMOTE_ADDR", "unknown")
-        ua = request.headers.get("User-Agent", "Unknown")
-        trace_id = request.headers.get("X-Trace-ID") or request.headers.get("Trace-Id")
-        now = datetime.now(UTC)
+        # ✅ Try-except global pour capturer TOUTES les exceptions, y compris celles du rate limiting
+        try:
+            client_ip = request.environ.get("REMOTE_ADDR", "unknown")
+            ua = request.headers.get("User-Agent", "Unknown")
+            trace_id = request.headers.get("X-Trace-ID") or request.headers.get(
+                "Trace-Id"
+            )
+            now = datetime.now(UTC)
 
-        # ✅ Rate limiting : utiliser WebSocketRateLimiter (remplace ancien système)
-        allowed, retry_after = ws_rate_limiter.check_rate_limit(
-            "connect",
-            client_ip=client_ip,
-        )
-        if not allowed:
-            logger.warning(
-                "socket_rate_limit_exceeded",
+            # ✅ Log origin pour debug CORS
+            origin = request.headers.get("Origin") or request.headers.get("ORIGIN")
+            # ✅ Log explicite pour diagnostic (toujours affiché)
+            print(
+                f"🔌 [SOCKET.IO] handle_connect appelé - IP: {client_ip}, Origin: {origin}"
+            )
+            # #region agent log
+            try:
+                sid = getattr(request, "sid", None) or request.environ.get(
+                    "socketio.sid", "unknown"
+                )
+                debug_log_path = os.getenv(
+                    "DEBUG_LOG_PATH", r"c:\Users\jasiq\atmr\.cursor\debug.log"
+                )
+                log_path = Path(debug_log_path)
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+                with log_path.open("a", encoding="utf-8") as f:
+                    log_data = {
+                        "id": f"log_{int(datetime.now(UTC).timestamp() * 1000)}_connect",
+                        "timestamp": int(datetime.now(UTC).timestamp() * 1000),
+                        "location": "chat.py:handle_connect",
+                        "message": "Socket.IO connect event",
+                        "data": {
+                            "sid": str(sid),
+                            "worker_pid": os.getpid(),
+                            "client_ip": client_ip,
+                            "origin": origin or "none",
+                        },
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "B",
+                    }
+                    f.write(json.dumps(log_data) + "\n")
+            except Exception:
+                pass
+            # #endregion
+            logger.info(
+                "socket_connect_attempt",
                 extra={
-                    "event": "rate_limit_exceeded",
+                    "event": "connect_attempt",
                     "ip": client_ip,
-                    "retry_after": retry_after or 0,
+                    "origin": origin,
+                    "user_agent": ua,
                     "timestamp": now.isoformat(),
                     "request_trace_id": trace_id,
                 },
             )
-            emit(
-                "error",
-                {
-                    "error": f"Trop de tentatives de connexion. Réessayez dans {retry_after or 60} secondes.",
-                    "retry_after": retry_after or 60,
+
+            # ✅ Rate limiting : utiliser WebSocketRateLimiter (remplace ancien système)
+            allowed, retry_after = ws_rate_limiter.check_rate_limit(
+                "connect",
+                client_ip=client_ip,
+            )
+            if not allowed:
+                # #region agent log
+                log_data_rate_limit = {
+                    "location": "chat.py:handle_connect",
+                    "message": "Rate limit exceeded",
+                    "data": {
+                        "reason": "rate_limit_exceeded",
+                        "ip": client_ip,
+                        "retry_after": retry_after or 0,
+                    },
+                    "timestamp": int(now.timestamp() * 1000),
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "E",
+                }
+                try:
+                    req = urllib.request.Request(
+                        "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
+                        data=json.dumps(log_data_rate_limit).encode("utf-8"),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    urllib.request.urlopen(req, timeout=0.1)
+                except Exception:
+                    pass
+                # #endregion
+                logger.warning(
+                    "socket_rate_limit_exceeded",
+                    extra={
+                        "event": "rate_limit_exceeded",
+                        "ip": client_ip,
+                        "retry_after": retry_after or 0,
+                        "timestamp": now.isoformat(),
+                        "request_trace_id": trace_id,
+                    },
+                )
+                emit(
+                    "error",
+                    {
+                        "error": f"Trop de tentatives de connexion. Réessayez dans {retry_after or 60} secondes.",
+                        "retry_after": retry_after or 60,
+                    },
+                )
+                ws_metrics.on_error("rate_limit_exceeded")
+                ws_metrics.on_rate_limit_hit("connect")
+                return False
+
+            # ✅ Logs conditionnels (désactiver en production)
+            is_prod = current_app.config.get("ENV") == "production"
+            if not is_prod:
+                print("🔌 [SOCKET.IO] ✅✅✅ HANDLE_CONNECT APPELÉ ! ✅✅✅")
+                print(f"🔌 [SOCKET.IO] Tentative de connexion depuis {client_ip}")
+                print(f"🔌 [SOCKET.IO] User-Agent: {ua}")
+
+            # ✅ Logger structuré (toujours activé mais niveau INFO en prod)
+            logger.info(
+                "socket_connect_attempt",
+                extra={
+                    "event": "connect_attempt",
+                    "ip": client_ip,
+                    "user_agent": ua,
+                    "timestamp": now.isoformat(),
+                    "request_trace_id": trace_id,
                 },
             )
-            ws_metrics.on_error("rate_limit_exceeded")
-            ws_metrics.on_rate_limit_hit("connect")
-            return False
+            # ✅ Log pour debug : vérifier les cookies reçus (uniquement en dev)
+            all_cookies = list(request.cookies.keys()) if request.cookies else []
+            if not is_prod:
+                print(f"🔌 [SOCKET.IO] Cookies reçus: {all_cookies}")
+                print(f"🔌 [SOCKET.IO] Has cookies: {bool(request.cookies)}")
+                print(f"🔌 [SOCKET.IO] Has auth payload: {isinstance(auth, dict)}")
+                print(
+                    f"🔌 [SOCKET.IO] Has Authorization header: {bool(request.headers.get('Authorization') or request.headers.get('AUTHORIZATION'))}"
+                )
+            logger.info(
+                "socket_connect_debug",
+                extra={
+                    "event": "connect_debug",
+                    "ip": client_ip,
+                    "has_cookies": bool(request.cookies),
+                    # ✅ Ne pas logger les cookies/tokens en production
+                    "cookie_keys": all_cookies if not is_prod else None,
+                    "has_auth": isinstance(auth, dict),
+                    "auth_keys": list(auth.keys())
+                    if isinstance(auth, dict) and not is_prod
+                    else [],
+                    "has_authz_header": bool(
+                        request.headers.get("Authorization")
+                        or request.headers.get("AUTHORIZATION")
+                    ),
+                    "timestamp": now.isoformat(),
+                    "request_trace_id": trace_id,
+                },
+            )
 
-        logger.info(
-            "socket_connect_attempt",
-            extra={
-                "event": "connect_attempt",
-                "ip": client_ip,
-                "user_agent": ua,
-                "timestamp": now.isoformat(),
-                "request_trace_id": trace_id,
-            },
-        )
-
-        try:
             token = _extract_token(auth)
+            # ✅ Log explicite pour diagnostic (toujours affiché)
+            print(
+                f"🔌 [SOCKET.IO] Token extrait: {bool(token)}, Cookies: {bool(request.cookies)}, Auth payload: {isinstance(auth, dict)}"
+            )
+            # #region agent log
+            log_data = {
+                "location": "chat.py:handle_connect",
+                "message": "Token extraction result",
+                "data": {
+                    "has_token": bool(token),
+                    "token_length": len(token) if token else 0,
+                    "has_cookies": bool(request.cookies),
+                    "cookie_keys": all_cookies,
+                    "has_auth_payload": isinstance(auth, dict),
+                    "auth_keys": list(auth.keys()) if isinstance(auth, dict) else [],
+                    "auth_token_key": "token" in auth
+                    if isinstance(auth, dict)
+                    else False,
+                    "auth_accessToken_key": "accessToken" in auth
+                    if isinstance(auth, dict)
+                    else False,
+                    "has_authz_header": bool(
+                        request.headers.get("Authorization")
+                        or request.headers.get("AUTHORIZATION")
+                    ),
+                },
+                "timestamp": int(now.timestamp() * 1000),
+                "sessionId": "debug-session",
+                "runId": "run1",
+                "hypothesisId": "A",
+            }
+            try:
+                req = urllib.request.Request(
+                    "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
+                    data=json.dumps(log_data).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                urllib.request.urlopen(req, timeout=0.1)
+            except Exception:
+                pass
+            # #endregion
             if not token:
-                logger.info(
+                # ✅ Log explicite pour diagnostic (toujours affiché)
+                print("❌ [SOCKET.IO] Token manquant - Connexion refusée")
+                print(f"   - Cookies présents: {bool(request.cookies)}")
+                print(f"   - Clés cookies: {all_cookies}")
+                print(f"   - Auth payload: {isinstance(auth, dict)}")
+                print(
+                    f"   - Auth keys: {list(auth.keys()) if isinstance(auth, dict) else []}"
+                )
+                print(
+                    f"   - Authorization header: {bool(request.headers.get('Authorization') or request.headers.get('AUTHORIZATION'))}"
+                )
+                # #region agent log
+                log_data_error = {
+                    "location": "chat.py:handle_connect",
+                    "message": "Token missing - connection refused",
+                    "data": {
+                        "reason": "token_missing",
+                        "has_cookies": bool(request.cookies),
+                        "cookie_keys": all_cookies,
+                        "ip": client_ip,
+                    },
+                    "timestamp": int(now.timestamp() * 1000),
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "B",
+                }
+                try:
+                    req = urllib.request.Request(
+                        "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
+                        data=json.dumps(log_data_error).encode("utf-8"),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    urllib.request.urlopen(req, timeout=0.1)
+                except Exception:
+                    pass
+                # #endregion
+                logger.warning(
                     "socket_connect_refused",
                     extra={
                         "event": "connect_refused",
                         "reason": "token_missing",
                         "ip": client_ip,
+                        "has_cookies": bool(request.cookies),
+                        "cookie_keys": all_cookies,
+                        "has_authz_header": bool(
+                            request.headers.get("Authorization")
+                            or request.headers.get("AUTHORIZATION")
+                        ),
+                        "has_auth_payload": isinstance(auth, dict),
+                        "auth_keys": list(auth.keys())
+                        if isinstance(auth, dict)
+                        else [],
                         "timestamp": now.isoformat(),
                         "request_trace_id": trace_id,
                     },
                 )
-                emit("unauthorized", {"error": "Token JWT manquant"})
+                emit(
+                    "unauthorized",
+                    {
+                        "error": "Token JWT manquant",
+                        "reason": "token_missing",
+                        "hint": "Vérifiez que le token est présent dans Authorization header, cookie access_token, ou payload auth.token",
+                    },
+                )
                 ws_metrics.on_error("token_missing")
                 return False
+
+            # ✅ Log conditionnel (uniquement en dev)
+            try:
+                is_prod = current_app.config.get("ENV") == "production"
+            except RuntimeError:
+                is_prod = False
+            if not is_prod:
+                print("✅ [SOCKET.IO] Token extrait avec succès")
 
             # Vérifie & décode (lève si invalide/expiré)
             try:
                 decoded = decode_token(token)
+                # #region agent log
+                log_data_decoded = {
+                    "location": "chat.py:handle_connect",
+                    "message": "Token decoded successfully",
+                    "data": {
+                        "has_decoded": bool(decoded),
+                        "has_sub": "sub" in decoded if decoded else False,
+                        "public_id": decoded.get("sub") if decoded else None,
+                        "role": decoded.get("role") if decoded else None,
+                    },
+                    "timestamp": int(now.timestamp() * 1000),
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "D",
+                }
+                try:
+                    req = urllib.request.Request(
+                        "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
+                        data=json.dumps(log_data_decoded).encode("utf-8"),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    urllib.request.urlopen(req, timeout=0.1)
+                except Exception:
+                    pass
+                # #endregion
             except jwt_exceptions.ExpiredSignatureError:
+                # #region agent log
+                log_data_expired = {
+                    "location": "chat.py:handle_connect",
+                    "message": "Token expired",
+                    "data": {
+                        "reason": "token_expired",
+                        "ip": client_ip,
+                    },
+                    "timestamp": int(now.timestamp() * 1000),
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "B",
+                }
+                try:
+                    req = urllib.request.Request(
+                        "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
+                        data=json.dumps(log_data_expired).encode("utf-8"),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    urllib.request.urlopen(req, timeout=0.1)
+                except Exception:
+                    pass
+                # #endregion
                 logger.info(
                     "socket_connect_error",
                     extra={
@@ -173,6 +781,32 @@ def init_chat_socket(socketio: SocketIO):
                 ws_metrics.on_error("token_invalid_audience")
                 return False
             except Exception as e:
+                # #region agent log
+                log_data_decode_error = {
+                    "location": "chat.py:handle_connect",
+                    "message": "Token decode error",
+                    "data": {
+                        "reason": "token_decode_error",
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "ip": client_ip,
+                    },
+                    "timestamp": int(now.timestamp() * 1000),
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "B",
+                }
+                try:
+                    req = urllib.request.Request(
+                        "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
+                        data=json.dumps(log_data_decode_error).encode("utf-8"),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    urllib.request.urlopen(req, timeout=0.1)
+                except Exception:
+                    pass
+                # #endregion
                 logger.warning(
                     "socket_connect_error",
                     extra={
@@ -218,6 +852,31 @@ def init_chat_socket(socketio: SocketIO):
 
             user = User.query.filter_by(public_id=public_id).first()
             if not user:
+                # #region agent log
+                log_data_user_not_found = {
+                    "location": "chat.py:handle_connect",
+                    "message": "User not found",
+                    "data": {
+                        "reason": "user_not_found",
+                        "user_public_id": public_id,
+                        "ip": client_ip,
+                    },
+                    "timestamp": int(now.timestamp() * 1000),
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "C",
+                }
+                try:
+                    req = urllib.request.Request(
+                        "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
+                        data=json.dumps(log_data_user_not_found).encode("utf-8"),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    urllib.request.urlopen(req, timeout=0.1)
+                except Exception:
+                    pass
+                # #endregion
                 logger.info(
                     "socket_connect_refused",
                     extra={
@@ -348,6 +1007,32 @@ def init_chat_socket(socketio: SocketIO):
                     },
                 )
             else:
+                # #region agent log
+                log_data_role_not_authorized = {
+                    "location": "chat.py:handle_connect",
+                    "message": "Role not authorized",
+                    "data": {
+                        "reason": "role_not_authorized",
+                        "user_id": user.id,
+                        "role": user.role.value,
+                        "ip": client_ip,
+                    },
+                    "timestamp": int(now.timestamp() * 1000),
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "D",
+                }
+                try:
+                    req = urllib.request.Request(
+                        "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
+                        data=json.dumps(log_data_role_not_authorized).encode("utf-8"),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    urllib.request.urlopen(req, timeout=0.1)
+                except Exception:
+                    pass
+                # #endregion
                 logger.warning(
                     "socket_connect_refused",
                     extra={
@@ -367,6 +1052,59 @@ def init_chat_socket(socketio: SocketIO):
             return True
 
         except Exception as e:
+            # ✅ Gérer toutes les exceptions pour éviter "server error"
+            error_msg = f"Erreur de connexion: {e!s}"
+            # ✅ Récupérer les variables qui peuvent ne pas être définies si l'exception est levée tôt
+            client_ip = (
+                request.environ.get("REMOTE_ADDR", "unknown")
+                if hasattr(request, "environ")
+                else "unknown"
+            )
+            trace_id = None
+            with suppress(Exception):
+                trace_id = request.headers.get("X-Trace-ID") or request.headers.get(
+                    "Trace-Id"
+                )
+
+            # #region agent log
+            log_data_exception = {
+                "location": "chat.py:handle_connect",
+                "message": "Exception in handle_connect",
+                "data": {
+                    "reason": "exception",
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "ip": client_ip,
+                },
+                "timestamp": int(datetime.now(UTC).timestamp() * 1000),
+                "sessionId": "debug-session",
+                "runId": "run1",
+                "hypothesisId": "F",
+            }
+            try:
+                req = urllib.request.Request(
+                    "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
+                    data=json.dumps(log_data_exception).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                urllib.request.urlopen(req, timeout=0.1)
+            except Exception:
+                pass
+            # #endregion
+
+            # ✅ Logs conditionnels (désactiver en production)
+            try:
+                is_prod = current_app.config.get("ENV") == "production"
+            except RuntimeError:
+                is_prod = False
+            if not is_prod:
+                print(
+                    f"❌ [SOCKET.IO] EXCEPTION dans handle_connect: {type(e).__name__}: {e!s}"
+                )
+                print("❌ [SOCKET.IO] Traceback:")
+                traceback.print_exc()
+            # ✅ logger.exception reste actif (géré par le système de logging)
             logger.exception(
                 "socket_connect_error",
                 extra={
@@ -375,11 +1113,13 @@ def init_chat_socket(socketio: SocketIO):
                     "error_type": type(e).__name__,
                     "ip": client_ip,
                     "timestamp": datetime.now(UTC).isoformat(),
-                    "request_trace_id": trace_id if "trace_id" in locals() else None,
+                    "request_trace_id": trace_id,
                 },
             )
             ws_metrics.on_error("connect_exception")
-            emit("unauthorized", {"error": str(e)})
+            with suppress(Exception):
+                # Si emit échoue, on ne peut rien faire
+                emit("unauthorized", {"error": error_msg})
             return False
 
     @socketio.on("team_chat_message")
@@ -474,10 +1214,7 @@ def init_chat_socket(socketio: SocketIO):
             has_pdf = bool(pdf_url)
             if has_image and has_pdf:
                 logger.error(
-                    (
-                        "❌ [CHAT] Limite: 1 fichier par message "
-                        "(image OU PDF, pas les deux)"
-                    )
+                    "❌ [CHAT] Limite: 1 fichier par message (image OU PDF, pas les deux)"
                 )
                 emit(
                     "error",
@@ -675,31 +1412,141 @@ def init_chat_socket(socketio: SocketIO):
                 "pdf_size": int(pdf_size) if has_pdf and pdf_size else None,
             }
 
+            # ✅ Enrichir payload avec event_id, version, timestamp
+            enriched_payload = _enrich_payload_if_needed(payload, "team_chat_message")
+
             room = f"company_{company_id}"
             # Pylance ne déclare pas kwarg 'room' sur emit -> cast en Any
-            cast("Any", emit)("team_chat_message", payload, room=room)
+            cast("Any", emit)("team_chat_message", enriched_payload, room=room)
             logger.info(
                 "📨 Message émis dans %s par %s : %s", room, sender_role, content
             )
 
             # ✅ Si un receiver_id (driver) est fourni, notifier aussi sa room dédiée
+            # Note: Utiliser le même payload enrichi (même event_id pour les deux rooms)
             if receiver_id:
                 driver_room = f"driver_{receiver_id}"
-                cast("Any", emit)("team_chat_message", payload, room=driver_room)
+                cast("Any", emit)(
+                    "team_chat_message", enriched_payload, room=driver_room
+                )
                 logger.info("📨 Message relayé vers %s", driver_room)
 
+            # ✅ P0: Push notification pour message.new (fan-out hybride)
+            # Envoyer push notification au destinataire si c'est un driver
+            if receiver_id:
+                try:
+                    receiver_user = User.query.get(receiver_id)
+                    if receiver_user and receiver_user.role == UserRole.driver:
+                        driver = Driver.query.filter_by(user_id=receiver_id).first()
+                        if driver and driver.push_token:
+                            # Préparer le titre et le corps du message
+                            sender_name = user.first_name or "Quelqu'un"
+                            message_preview = (
+                                content[:MESSAGE_PREVIEW_LENGTH]
+                                if content
+                                else "Nouveau message"
+                            )
+                            if content and len(content) > MESSAGE_PREVIEW_LENGTH:
+                                message_preview += "..."
+
+                            result = send_push_message(
+                                token=driver.push_token,
+                                title=f"Nouveau message de {sender_name}",
+                                body=message_preview,
+                                data={
+                                    "type": "message",
+                                    "message_id": message.id,
+                                    "sender_id": sender_id,
+                                    "company_id": company_id,
+                                    "deepLink": f"atmr://chat/message/{message.id}",
+                                },
+                                timeout=5,
+                            )
+
+                            if result.get("ok"):
+                                logger.info(
+                                    "[chat] Push sent to driver %s for message %s",
+                                    receiver_id,
+                                    message.id,
+                                )
+                            else:
+                                logger.warning(
+                                    "[chat] Push failed for driver %s: %s",
+                                    receiver_id,
+                                    result.get("error", "Unknown error"),
+                                )
+                except (ValueError, TypeError, AttributeError) as e:
+                    logger.error(
+                        "[chat] Push notification failed (validation error: %s): %s",
+                        type(e).__name__,
+                        e,
+                    )
+                except (ConnectionError, OSError) as e:
+                    logger.error(
+                        "[chat] Push notification failed (network error: %s): %s",
+                        type(e).__name__,
+                        e,
+                    )
+                except Exception:
+                    logger.exception("[chat] Push notification failed")
+
         except Exception as e:
-            logger.exception("❌ Erreur team_chat_message : %s", e)
-            emit("error", {"error": "Erreur d'envoi de message."})
+            # ✅ 18. Améliorer gestion erreurs Socket.IO : Logger avec contexte complet
+            try:
+                sid = _get_sid()
+                sid_data = _SID_INDEX.get(sid, {})
+            except Exception:
+                sid = None
+                sid_data = {}
+            _log_socketio_exception(
+                exception=e,
+                event_name="team_chat_message",
+                sid=sid,
+                user_id=sid_data.get("user_id"),
+                company_id=sid_data.get("company_id"),
+                driver_id=sid_data.get("driver_id"),
+                additional_context={
+                    "local_id": local_id,
+                    "has_content": bool(
+                        data.get("content") if isinstance(data, dict) else False
+                    ),
+                    "has_image": bool(
+                        data.get("image_url") or data.get("image")
+                        if isinstance(data, dict)
+                        else False
+                    ),
+                    "has_pdf": bool(
+                        data.get("pdf_url") or data.get("pdf")
+                        if isinstance(data, dict)
+                        else False
+                    ),
+                },
+            )
+            # Notifier l'utilisateur si possible
+            with suppress(Exception):
+                emit(
+                    "error",
+                    {
+                        "error": "Erreur d'envoi de message.",
+                        "event": "team_chat_message_error",
+                        "local_id": local_id,
+                    },
+                )
 
     @socketio.on("typing_start")
     def handle_typing_start(data=None):  # noqa: ARG001
         """Handler pour l'indicateur de frappe (typing indicator)."""
+        # Variables pour logging d'erreur
+        user_id_log: int | None = None
+        company_id_log: int | None = None
+        user_public_id_log: str | None = None
         try:
             sid = _get_sid()
             sid_data = _SID_INDEX.get(sid, {})
             user_public_id = sid_data.get("user_public_id")
             company_id = sid_data.get("company_id")
+            user_public_id_log = user_public_id
+            company_id_log = company_id
 
             if not user_public_id or not company_id:
                 return
@@ -714,6 +1561,7 @@ def init_chat_socket(socketio: SocketIO):
                 user = User.query.filter_by(public_id=user_public_id).first()
                 if user:
                     user_id = user.id
+                    user_id_log = user_id
             except Exception:
                 pass  # Si User non disponible, utiliser seulement IP
 
@@ -747,16 +1595,32 @@ def init_chat_socket(socketio: SocketIO):
             logger.debug("⌨️ typing_start de %s dans %s", user_public_id, room)
 
         except Exception as e:
-            logger.exception("❌ Erreur typing_start : %s", e)
+            # ✅ 18. Améliorer gestion erreurs Socket.IO : Logger avec contexte complet
+            _log_socketio_exception(
+                exception=e,
+                event_name="typing_start",
+                user_id=user_id_log,
+                company_id=company_id_log,
+                additional_context={"user_public_id": user_public_id_log},
+            )
+            # Notifier l'utilisateur si possible
+            with suppress(Exception):
+                emit("error", {"error": "Erreur lors de l'indicateur de frappe."})
 
     @socketio.on("typing_stop")
     def handle_typing_stop(data=None):  # noqa: ARG001
         """Handler pour arrêter l'indicateur de frappe."""
+        # Variables pour logging d'erreur
+        user_id_log: int | None = None
+        company_id_log: int | None = None
+        user_public_id_log: str | None = None
         try:
             sid = _get_sid()
             sid_data = _SID_INDEX.get(sid, {})
             user_public_id = sid_data.get("user_public_id")
             company_id = sid_data.get("company_id")
+            user_public_id_log = user_public_id
+            company_id_log = company_id
 
             if not user_public_id or not company_id:
                 return
@@ -771,6 +1635,7 @@ def init_chat_socket(socketio: SocketIO):
                 user = User.query.filter_by(public_id=user_public_id).first()
                 if user:
                     user_id = user.id
+                    user_id_log = user_id
             except Exception:
                 pass  # Si User non disponible, utiliser seulement IP
 
@@ -804,15 +1669,29 @@ def init_chat_socket(socketio: SocketIO):
             logger.debug("⌨️ typing_stop de %s dans %s", user_public_id, room)
 
         except Exception as e:
-            logger.exception("❌ Erreur typing_stop : %s", e)
+            # ✅ 18. Améliorer gestion erreurs Socket.IO : Logger avec contexte complet
+            _log_socketio_exception(
+                exception=e,
+                event_name="typing_stop",
+                user_id=user_id_log,
+                company_id=company_id_log,
+                additional_context={"user_public_id": user_public_id_log},
+            )
+            # Notifier l'utilisateur si possible
+            with suppress(Exception):
+                emit("error", {"error": "Erreur lors de l'arrêt de frappe."})
 
     @socketio.on("join_driver_room")
     def handle_join_driver_room(data=None):  # noqa: ARG001
+        # Variables pour logging d'erreur
+        user_id_log: int | None = None
+        user_public_id_log: str | None = None
         try:
             # ✅ SECURITY: Utiliser JWT depuis _SID_INDEX
             sid = _get_sid()
             sid_data = _SID_INDEX.get(sid, {})
             user_public_id = sid_data.get("user_public_id")
+            user_public_id_log = user_public_id
 
             if not user_public_id:
                 emit("error", {"error": "Session JWT introuvable. Reconnectez-vous."})
@@ -825,6 +1704,8 @@ def init_chat_socket(socketio: SocketIO):
                     {"error": "Seuls les chauffeurs peuvent rejoindre cette room."},
                 )
                 return
+
+            user_id_log = user.id
 
             driver = Driver.query.filter_by(user_id=user.id).first()
             if not driver:
@@ -847,8 +1728,19 @@ def init_chat_socket(socketio: SocketIO):
             emit("joined_room", {"rooms": [driver_room, company_room]})
 
         except Exception as e:
-            logger.exception("❌ Erreur join_driver_room : %s", e)
-            emit("error", {"error": str(e)})
+            # ✅ 18. Améliorer gestion erreurs Socket.IO : Logger avec contexte complet
+            _log_socketio_exception(
+                exception=e,
+                event_name="join_driver_room",
+                user_id=user_id_log,
+                additional_context={"user_public_id": user_public_id_log},
+            )
+            # Notifier l'utilisateur si possible
+            with suppress(Exception):
+                emit(
+                    "error",
+                    {"error": "Erreur lors de la connexion à la room chauffeur."},
+                )
 
     @socketio.on("driver_location")
     def handle_driver_location(data):  # noqa: PLR0911
@@ -858,9 +1750,16 @@ def init_chat_socket(socketio: SocketIO):
         Note: PLR0911 (too many returns) ignoré car les returns sont nécessaires
         pour la validation et la gestion d'erreurs (sécurité, rate limiting, etc.).
         """
+        # Variables pour logging d'erreur
+        current_sid_log: str | None = None
+        user_id_log: int | None = None
+        driver_id_log: int | None = None
+        company_id_log: int | None = None
+        payload_driver_id_log: Any = None
         try:
             # 1. Récupération du SID pour le debug
             current_sid = _get_sid()
+            current_sid_log = current_sid
             logger.info("📍 driver_location reçu, SID=%s, data=%s", current_sid, data)
 
             # ✅ SECURITY: Utiliser JWT depuis _SID_INDEX uniquement
@@ -881,9 +1780,11 @@ def init_chat_socket(socketio: SocketIO):
                 emit("error", {"error": "Utilisateur introuvable"})
                 return
             user_id = user.id
+            user_id_log = user_id
 
             # 4. Nouvelle approche: extraire driver_id du payload si disponible
             payload_driver_id = data.get("driver_id")
+            payload_driver_id_log = payload_driver_id
 
             # ✅ Rate limiting: vérifier après avoir récupéré user_id et driver_id
             client_ip = request.environ.get("REMOTE_ADDR", "unknown")
@@ -954,6 +1855,10 @@ def init_chat_socket(socketio: SocketIO):
             # Évite l'évaluation booléenne d'une colonne SQLA :
             # on récupère un int ou None
             company_id_val = tcast("int | None", getattr(driver, "company_id", None))
+            if driver:
+                driver_id_log = driver.id
+            if company_id_val:
+                company_id_log = company_id_val
             if (driver is None) or (company_id_val is None):
                 logger.error(
                     "❌ Driver introuvable: payload_driver_id=%s, user_id=%s",
@@ -997,12 +1902,8 @@ def init_chat_socket(socketio: SocketIO):
             speed = data.get("speed")
             heading = data.get("heading")
             accuracy = data.get("accuracy")
-            timestamp_str = data.get("timestamp")
-            timestamp = (
-                datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
-                if timestamp_str
-                else datetime.now(UTC)
-            )
+            timestamp_value = data.get("timestamp")
+            timestamp = _parse_timestamp(timestamp_value)
 
             snapped_lat, snapped_lon = latitude, longitude
             try:
@@ -1069,16 +1970,46 @@ def init_chat_socket(socketio: SocketIO):
             )
 
         except Exception as e:
-            logger.exception("❌ Erreur driver_location : %s", e)
-            emit("error", {"error": str(e)})
+            # ✅ 18. Améliorer gestion erreurs Socket.IO : Logger avec contexte complet
+            has_lat = False
+            has_lon = False
+            with suppress(Exception):
+                if isinstance(data, dict):
+                    has_lat = "latitude" in data
+                    has_lon = "longitude" in data
+            _log_socketio_exception(
+                exception=e,
+                event_name="driver_location",
+                sid=current_sid_log,
+                user_id=user_id_log,
+                driver_id=driver_id_log,
+                company_id=company_id_log,
+                additional_context={
+                    "payload_driver_id": payload_driver_id_log,
+                    "has_latitude": has_lat,
+                    "has_longitude": has_lon,
+                },
+            )
+            # Notifier l'utilisateur si possible
+            with suppress(Exception):
+                emit(
+                    "error", {"error": "Erreur lors de la mise à jour de localisation."}
+                )
 
     @socketio.on("driver_location_batch")
     def handle_driver_location_batch(data):
         """Handler pour la réception de batch de localisations du chauffeur.
         Traite chaque position du batch et les persiste.
         """
+        # Variables pour logging d'erreur
+        current_sid_log: str | None = None
+        user_id_log: int | None = None
+        driver_id_log: int | None = None
+        company_id_log: int | None = None
+        payload_driver_id_log: Any = None
         try:
             current_sid = _get_sid()
+            current_sid_log = current_sid
             logger.info(
                 "📍 driver_location_batch reçu, SID=%s, positions_count=%s",
                 current_sid,
@@ -1103,8 +2034,10 @@ def init_chat_socket(socketio: SocketIO):
                 emit("error", {"error": "Utilisateur introuvable"})
                 return
             user_id = user.id
+            user_id_log = user_id
 
             payload_driver_id = data.get("driver_id")
+            payload_driver_id_log = payload_driver_id
 
             # ✅ Rate limiting: vérifier après avoir récupéré user_id et driver_id
             client_ip = request.environ.get("REMOTE_ADDR", "unknown")
@@ -1170,6 +2103,10 @@ def init_chat_socket(socketio: SocketIO):
                     )
 
             company_id_val = tcast("int | None", getattr(driver, "company_id", None))
+            if driver:
+                driver_id_log = driver.id
+            if company_id_val:
+                company_id_log = company_id_val
             if (driver is None) or (company_id_val is None):
                 logger.error(
                     (
@@ -1208,12 +2145,8 @@ def init_chat_socket(socketio: SocketIO):
                     speed = pos.get("speed")
                     heading = pos.get("heading")
                     accuracy = pos.get("accuracy")
-                    timestamp_str = pos.get("timestamp")
-                    timestamp = (
-                        datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
-                        if timestamp_str
-                        else datetime.now(UTC)
-                    )
+                    timestamp_value = pos.get("timestamp")
+                    timestamp = _parse_timestamp(timestamp_value)
 
                     snapped_lat, snapped_lon = latitude, longitude
                     try:
@@ -1263,7 +2196,9 @@ def init_chat_socket(socketio: SocketIO):
                             ),
                             "latitude": snapped_lat,
                             "longitude": snapped_lon,
-                            "timestamp": timestamp_str or now_iso,
+                            "timestamp": timestamp.isoformat()
+                            if timestamp
+                            else now_iso,
                         },
                         room=company_room,
                     )
@@ -1279,17 +2214,45 @@ def init_chat_socket(socketio: SocketIO):
             )
 
         except Exception as e:
-            logger.exception("❌ Erreur driver_location_batch : %s", e)
-            emit("error", {"error": str(e)})
+            # ✅ 18. Améliorer gestion erreurs Socket.IO : Logger avec contexte complet
+            positions_count = 0
+            with suppress(Exception):
+                if isinstance(data, dict):
+                    positions_count = len(data.get("positions", []))
+            _log_socketio_exception(
+                exception=e,
+                event_name="driver_location_batch",
+                sid=current_sid_log,
+                user_id=user_id_log,
+                driver_id=driver_id_log,
+                company_id=company_id_log,
+                additional_context={
+                    "payload_driver_id": payload_driver_id_log,
+                    "positions_count": positions_count,
+                },
+            )
+            # Notifier l'utilisateur si possible
+            with suppress(Exception):
+                emit(
+                    "error",
+                    {"error": "Erreur lors de la mise à jour batch de localisation."},
+                )
 
     @socketio.on("join_company")
     def handle_join_company(data=None):  # noqa: ARG001
+        # Variables pour logging d'erreur
+        user_id_log: int | None = None
+        company_id_log: int | None = None
+        user_public_id_log: str | None = None
+        user_role_log: str | None = None
         try:
             # ✅ SECURITY: Utiliser JWT depuis _SID_INDEX
             sid = _get_sid()
             sid_data = _SID_INDEX.get(sid, {})
             user_public_id = sid_data.get("user_public_id")
             user_role = sid_data.get("role")
+            user_public_id_log = user_public_id
+            user_role_log = user_role
 
             if not user_public_id:
                 emit("error", {"error": "Session JWT introuvable. Reconnectez-vous."})
@@ -1301,11 +2264,15 @@ def init_chat_socket(socketio: SocketIO):
                 emit("error", {"error": "Utilisateur introuvable."})
                 return
 
+            user_id_log = user.id
+
             if user_role == "company":
                 company = Company.query.filter_by(user_id=user.id).first()
                 if not company:
                     emit("error", {"error": "Entreprise introuvable."})
                     return
+
+                company_id_log = company.id
 
                 room = f"company_{company.id}"
                 join_room(room)
@@ -1322,6 +2289,8 @@ def init_chat_socket(socketio: SocketIO):
                     )
                     return
 
+                company_id_log = driver.company_id
+
                 room = f"company_{driver.company_id}"
                 join_room(room)
                 # ✅ Tracking rooms
@@ -1334,11 +2303,32 @@ def init_chat_socket(socketio: SocketIO):
                     {"error": "Rôle non autorisé pour rejoindre une room entreprise."},
                 )
         except Exception as e:
-            logger.exception("❌ Error in join_company: %s", e)
-            emit("error", {"error": str(e)})
+            # ✅ 18. Améliorer gestion erreurs Socket.IO : Logger avec contexte complet
+            _log_socketio_exception(
+                exception=e,
+                event_name="join_company",
+                user_id=user_id_log,
+                company_id=company_id_log,
+                additional_context={
+                    "user_public_id": user_public_id_log,
+                    "user_role": user_role_log,
+                },
+            )
+            # Notifier l'utilisateur si possible
+            with suppress(Exception):
+                emit(
+                    "error",
+                    {"error": "Erreur lors de la connexion à la room entreprise."},
+                )
 
     @socketio.on("get_driver_locations")
     def handle_get_driver_locations():
+        # Variables pour logging d'erreur
+        user_id_log: int | None = None
+        company_id_log: int | None = None
+        user_public_id_log: str | None = None
+        user_role_log: str | None = None
+        drivers_count_log: int | None = None
         try:
             # ✅ SECURITY: Utiliser JWT depuis _SID_INDEX
             sid = _get_sid()
@@ -1346,6 +2336,9 @@ def init_chat_socket(socketio: SocketIO):
             user_public_id = company_info.get("user_public_id")
             user_role = company_info.get("role")
             company_id = company_info.get("company_id")
+            user_public_id_log = user_public_id
+            user_role_log = user_role
+            company_id_log = company_id
 
             if not user_public_id or user_role != "company":
                 emit(
@@ -1358,8 +2351,14 @@ def init_chat_socket(socketio: SocketIO):
                 emit("error", {"error": "Entreprise non identifiée."})
                 return
 
+            # Récupérer user_id pour logging
+            user = User.query.filter_by(public_id=user_public_id).first()
+            if user:
+                user_id_log = user.id
+
             # Get all drivers for this company
             drivers = Driver.query.filter_by(company_id=company_id).all()
+            drivers_count_log = len(drivers)
 
             # For each driver, get location from Redis or DB
             for driver in drivers:
@@ -1435,8 +2434,24 @@ def init_chat_socket(socketio: SocketIO):
             )
 
         except Exception as e:
-            logger.exception("❌ Error in get_driver_locations: %s", e)
-            emit("error", {"error": str(e)})
+            # ✅ 18. Améliorer gestion erreurs Socket.IO : Logger avec contexte complet
+            _log_socketio_exception(
+                exception=e,
+                event_name="get_driver_locations",
+                user_id=user_id_log,
+                company_id=company_id_log,
+                additional_context={
+                    "user_public_id": user_public_id_log,
+                    "user_role": user_role_log,
+                    "drivers_count": drivers_count_log,
+                },
+            )
+            # Notifier l'utilisateur si possible
+            with suppress(Exception):
+                emit(
+                    "error",
+                    {"error": "Erreur lors de la récupération des localisations."},
+                )
 
     @socketio.on("disconnect")
     def handle_disconnect():

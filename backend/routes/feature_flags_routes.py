@@ -2,8 +2,8 @@
 import logging
 from typing import Any
 
-from flask import Blueprint, jsonify, request
-from werkzeug.exceptions import BadRequest
+from flask import Blueprint, jsonify, request  # pyright: ignore[reportMissingImports]
+from werkzeug.exceptions import BadRequest  # pyright: ignore[reportMissingImports]
 
 from services.feature_flags import FeatureFlags, get_feature_flags_status
 
@@ -44,8 +44,10 @@ def get_status() -> tuple[dict[str, Any], int]:
         return jsonify(status), 200
 
     except Exception as e:
-        logger.error("[FeatureFlagsAPI] Error getting status: %s", e)
-        return jsonify({"error": str(e)}), 500
+        # ✅ REFACTORING: Utilisation de APIErrorHandler pour centraliser la gestion des erreurs
+        from shared.error_handlers import APIErrorHandler
+
+        return APIErrorHandler.handle_exception(e, logger)
 
 
 @feature_flags_bp.route("/ml/enable", methods=["POST"])
@@ -71,7 +73,7 @@ def enable_ml() -> tuple[dict[str, Any], int]:
         FeatureFlags.set_ml_enabled(True)
         FeatureFlags.set_ml_traffic_percentage(percentage)
 
-        logger.warning("[FeatureFlagsAPI] ML enabled at %s% via API", percentage)
+        logger.warning("[FeatureFlagsAPI] ML enabled at %s%% via API", percentage)
 
         return jsonify(
             {
@@ -82,10 +84,15 @@ def enable_ml() -> tuple[dict[str, Any], int]:
         ), 200
 
     except BadRequest as e:
-        return jsonify({"error": str(e)}), 400
+        # ✅ REFACTORING: Utilisation de APIErrorHandler pour BadRequest
+        from shared.error_handlers import APIErrorHandler
+
+        return APIErrorHandler.handle_validation_error(str(e), logger_instance=logger)
     except Exception as e:
-        logger.error("[FeatureFlagsAPI] Error enabling ML: %s", e)
-        return jsonify({"error": str(e)}), 500
+        # ✅ REFACTORING: Utilisation de APIErrorHandler pour centraliser la gestion des erreurs
+        from shared.error_handlers import APIErrorHandler
+
+        return APIErrorHandler.handle_exception(e, logger)
 
 
 @feature_flags_bp.route("/ml/disable", methods=["POST"])
@@ -111,8 +118,10 @@ def disable_ml() -> tuple[dict[str, Any], int]:
         ), 200
 
     except Exception as e:
-        logger.error("[FeatureFlagsAPI] Error disabling ML: %s", e)
-        return jsonify({"error": str(e)}), 500
+        # ✅ REFACTORING: Utilisation de APIErrorHandler pour centraliser la gestion des erreurs
+        from shared.error_handlers import APIErrorHandler
+
+        return APIErrorHandler.handle_exception(e, logger)
 
 
 @feature_flags_bp.route("/ml/percentage", methods=["POST"])
@@ -141,7 +150,9 @@ def set_percentage() -> tuple[dict[str, Any], int]:
 
         FeatureFlags.set_ml_traffic_percentage(percentage)
 
-        logger.warning("[FeatureFlagsAPI] ML percentage set to %s% via API", percentage)
+        logger.warning(
+            "[FeatureFlagsAPI] ML percentage set to %s%% via API", percentage
+        )
 
         return jsonify(
             {
@@ -152,10 +163,15 @@ def set_percentage() -> tuple[dict[str, Any], int]:
         ), 200
 
     except BadRequest as e:
-        return jsonify({"error": str(e)}), 400
+        # ✅ REFACTORING: Utilisation de APIErrorHandler pour BadRequest
+        from shared.error_handlers import APIErrorHandler
+
+        return APIErrorHandler.handle_validation_error(str(e), logger_instance=logger)
     except Exception as e:
-        logger.error("[FeatureFlagsAPI] Error setting percentage: %s", e)
-        return jsonify({"error": str(e)}), 500
+        # ✅ REFACTORING: Utilisation de APIErrorHandler pour centraliser la gestion des erreurs
+        from shared.error_handlers import APIErrorHandler
+
+        return APIErrorHandler.handle_exception(e, logger)
 
 
 @feature_flags_bp.route("/reset-stats", methods=["POST"])
@@ -180,8 +196,10 @@ def reset_stats() -> tuple[dict[str, Any], int]:
         ), 200
 
     except Exception as e:
-        logger.error("[FeatureFlagsAPI] Error resetting stats: %s", e)
-        return jsonify({"error": str(e)}), 500
+        # ✅ REFACTORING: Utilisation de APIErrorHandler pour centraliser la gestion des erreurs
+        from shared.error_handlers import APIErrorHandler
+
+        return APIErrorHandler.handle_exception(e, logger)
 
 
 @feature_flags_bp.route("/ml/health", methods=["GET"])
@@ -229,11 +247,11 @@ def ml_health() -> tuple[dict[str, Any], int]:
         ), 200 if is_healthy else 503
 
     except Exception as e:
-        logger.error("[FeatureFlagsAPI] Error checking health: %s", e)
-        return jsonify(
-            {
-                "status": "error",
-                "healthy": False,
-                "error": str(e),
-            }
-        ), 500
+        # ✅ REFACTORING: Utilisation de APIErrorHandler pour centraliser la gestion des erreurs
+        from shared.error_handlers import APIErrorHandler
+
+        error_response, status_code = APIErrorHandler.handle_exception(e, logger)
+        # Adapter la réponse pour le format health check
+        error_response["status"] = "error"
+        error_response["healthy"] = False
+        return jsonify(error_response), status_code

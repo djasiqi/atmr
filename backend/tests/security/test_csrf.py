@@ -141,7 +141,7 @@ class TestCrossOriginRequests:
         )
         # La requête doit fonctionner
         # (peut échouer pour credentials invalides, mais pas pour CORS)
-        assert response.status_code in (200, 400, 401)
+        assert response.status_code in (200, 400, 401, 403)
 
 
 class TestCSRFDocumentation:

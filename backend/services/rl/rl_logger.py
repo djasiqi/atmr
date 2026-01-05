@@ -18,7 +18,7 @@ import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Dict, List, Union, cast
 
-import numpy as np
+import numpy as np  # pyright: ignore[reportMissingImports]
 
 logger = logging.getLogger(__name__)
 
@@ -309,7 +309,7 @@ class RLLogger:
 
         # ✅ FIX: Vérifier si on est dans un contexte d'application Flask
         try:
-            from flask import has_app_context
+            from flask import has_app_context  # pyright: ignore[reportMissingImports]
 
             if not has_app_context():
                 msg = (
@@ -455,7 +455,9 @@ class RLLogger:
             if clear_db and db is not None and RLSuggestionMetric is not None:
                 # ✅ FIX: Vérifier si on est dans un contexte d'application Flask
                 try:
-                    from flask import has_app_context
+                    from flask import (  # pyright: ignore[reportMissingImports]
+                        has_app_context,
+                    )
 
                     if not has_app_context():
                         msg = (

@@ -5,8 +5,11 @@ Fournit des helpers pour valider les entr√©es et retourner des erreurs structur√
 
 from typing import Any, Dict, cast
 
-from marshmallow import Schema, ValidationError
-from marshmallow.validate import Length
+from marshmallow import (  # pyright: ignore[reportMissingImports]
+    Schema,
+    ValidationError,
+)
+from marshmallow.validate import Length  # pyright: ignore[reportMissingImports]
 
 
 def validate_request(

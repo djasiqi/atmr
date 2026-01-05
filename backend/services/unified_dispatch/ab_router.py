@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ class ABRouter:
 
         return should_apply
 
-    def get_rl_settings(self, company_id: int) -> Optional[Dict[str, Any]]:
+    def get_rl_settings(self, company_id: int) -> Dict[str, Any] | None:
         """Retourne les paramètres RL pour une entreprise.
 
         Args:

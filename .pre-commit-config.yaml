@@ -1,7 +1,9 @@
 # Configuration pre-commit hooks pour ATMR
 # Installation: pip install pre-commit && pre-commit install
+# Usage: pre-commit run --all-files (pour tester tous les fichiers)
 
 repos:
+  # Ruff: Linting et formatage (remplace black, isort, autoflake)
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.1.8
     hooks:
@@ -11,24 +13,15 @@ repos:
       - id: ruff-format
         files: ^backend/
 
-  - repo: https://github.com/PyCQA/autoflake
-    rev: v2.2.1
+  # Basedpyright: Type checking (utilise pyrightconfig.json à la racine)
+  - repo: https://github.com/RobertCraigie/pyright-python-precommit
+    rev: v1.1.350
     hooks:
-      - id: autoflake
-        args:
-          - --in-place
-          - --remove-all-unused-imports
-          - --remove-unused-variables
-          - --recursive
+      - id: pyright
         files: ^backend/
+        # pyrightconfig.json est automatiquement détecté à la racine
 
-  - repo: https://github.com/PyCQA/isort
-    rev: 5.13.2
-    hooks:
-      - id: isort
-        args: [--profile=black]
-        files: ^backend/
-
+  # Hooks génériques
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
     hooks:

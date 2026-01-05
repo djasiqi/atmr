@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Tuple
 
-import numpy as np
+import numpy as np  # pyright: ignore[reportMissingImports]
 
 # Constantes pour éviter les valeurs magiques
 VIOLATION_COUNT_THRESHOLD = 5

@@ -10,6 +10,7 @@ import ReservationChart from './components/ReservationChart';
 import ReservationTable from './components/ReservationTable';
 import DriverTable from '../../driver/components/Dashboard/DriverTable';
 import ReservationModals from '../../../components/reservations/ReservationModals';
+import TransferBookingModal from '../../../components/reservations/TransferBookingModal';
 import DriverLiveMap from './components/DriverLiveMap';
 import OpportunitiesSection from './components/OpportunitiesSection';
 import {
@@ -121,6 +122,8 @@ const CompanyDashboard = () => {
   const [scheduleModalReservation, setScheduleModalReservation] = useState(null);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [assignModalReservation, setAssignModalReservation] = useState(null);
+  const [transferModalOpen, setTransferModalOpen] = useState(false);
+  const [transferModalReservation, setTransferModalReservation] = useState(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteModalReservation, setDeleteModalReservation] = useState(null);
 
@@ -328,6 +331,25 @@ const CompanyDashboard = () => {
     if (!resObj) return;
     setScheduleModalReservation(resObj);
     setScheduleModalOpen(true);
+  };
+
+  // Ouvre la modale de transfert
+  const handleOpenTransferModal = (reservation) => {
+    const resObj =
+      typeof reservation === 'object'
+        ? reservation
+        : reservationsMap.get(reservation);
+    if (!resObj) return;
+    setTransferModalReservation(resObj);
+    setTransferModalOpen(true);
+  };
+
+  // Callback après transfert réussi
+  const handleTransferSuccess = () => {
+    startTransition(() => {
+      reloadReservations();
+    });
+    toast.success('Course transférée avec succès');
   };
 
   // Transforme en ISO local sans offset ni "Z"
@@ -692,18 +714,19 @@ const CompanyDashboard = () => {
               {/* Tableaux directement sans conteneur */}
               {reservationTab === 'pending' && (
                 <ReservationTable
-                  reservations={pendingReservations}
-                  loading={loadingReservations}
-                  onAccept={handleAccept}
-                  onReject={handleReject}
-                  onAssign={openAssignModal}
-                  onTriggerReturn={handleTriggerReturn}
-                  onDelete={handleDeleteReservationClick}
-                  onSchedule={handleScheduleReservation}
-                  onDispatchNow={handleDispatchNow}
-                  hideSchedule={true}
-                  hideEdit={true}
-                />
+                    reservations={pendingReservations}
+                    loading={loadingReservations}
+                    onAccept={handleAccept}
+                    onReject={handleReject}
+                    onAssign={openAssignModal}
+                    onTransfer={handleOpenTransferModal}
+                    onTriggerReturn={handleTriggerReturn}
+                    onDelete={handleDeleteReservationClick}
+                    onSchedule={handleScheduleReservation}
+                    onDispatchNow={handleDispatchNow}
+                    hideSchedule={true}
+                    hideEdit={true}
+                  />
               )}
 
               {reservationTab === 'assigned' && (
@@ -711,6 +734,7 @@ const CompanyDashboard = () => {
                   reservations={assignedReservations}
                   loading={loadingReservations}
                   onAssign={openAssignModal}
+                  onTransfer={handleOpenTransferModal}
                   onTriggerReturn={handleTriggerReturn}
                   onDelete={handleDeleteReservationClick}
                   onSchedule={handleScheduleReservation}
@@ -771,6 +795,17 @@ const CompanyDashboard = () => {
           setDeleteModalOpen(false);
           setDeleteModalReservation(null);
         }}
+      />
+
+      {/* Modal de transfert */}
+      <TransferBookingModal
+        isOpen={transferModalOpen}
+        onClose={() => {
+          setTransferModalOpen(false);
+          setTransferModalReservation(null);
+        }}
+        reservation={transferModalReservation}
+        onSuccess={handleTransferSuccess}
       />
     </div>
   );

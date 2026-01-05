@@ -67,7 +67,9 @@ backup_*.sql
 
 # ===== Documentation temporaire =====
 *_AUDIT*.md
+!docs/WEBSOCKET_SOCKETIO_AUDIT.md
 *_CHECKLIST*.md
+!docs/CHECKLIST_AUDIT_ATMR.md
 *_RAPPORT*.md
 *_RESUME*.md
 *_NOTES.md
@@ -75,6 +77,9 @@ AMELIORATION*.md
 amelioration*.md
 ANALYSE*.md
 ARCHITECTURE*.md
+!docs/Audit/ARCHITECTURE_EVENEMENTIELLE_MANQUANT.md
+PLAN_MIGRATION*.md
+!docs/Audit/PLAN_MIGRATION_DDD.md
 OPTIMIZATION*.md
 ROLLBACK.md
 

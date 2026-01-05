@@ -4,7 +4,7 @@ Agrège les métriques quotidiennes et génère des statistiques par période.
 """
 
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, Dict, cast
 
 from sqlalchemy import and_
@@ -108,7 +108,7 @@ class MetricsAggregator:
                 daily_stats.quality_score = avg_quality
                 daily_stats.bookings_trend = bookings_trend
                 daily_stats.delay_trend = delay_trend
-                daily_stats.updated_at = datetime.now(timezone.utc)
+                daily_stats.updated_at = datetime.now(UTC)
             else:
                 # Créer
                 daily_stats = DailyStats()

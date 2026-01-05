@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -17,6 +17,78 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/fr";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+
+// ✅ Palette professionnelle cohérente avec les autres pages
+const palette = {
+  background: "#F5F7F6",
+  card: "#FFFFFF",
+  heroGradient: ["#0A7F59", "#0D5F3F"] as [string, string],
+  textStrong: "#15362B",
+  textSecondary: "#5F7369",
+  hintText: "#91A59D",
+  border: "rgba(15,54,43,0.08)",
+  primary: "#0A7F59",
+  primaryText: "#FFFFFF",
+  error: "#EF4444",
+  modalOverlay: "rgba(21,54,43,0.75)",
+  modalBackground: "#FFFFFF",
+  modalBorder: "rgba(15,54,43,0.12)",
+  sectionSurface: "#FFFFFF",
+  sectionBorder: "rgba(15,54,43,0.08)",
+};
+
+// ✅ Couleurs de statut alignées avec le frontend web et RideSnippetCard
+const statusColors = {
+  pending: {
+    bg: "#fef3c7", // --warning-bg
+    text: "#f59e0b", // --warning-primary
+  },
+  accepted: {
+    bg: "#dbeafe", // --info-bg
+    text: "#3b82f6", // --info-primary
+  },
+  assigned: {
+    bg: "#dbeafe", // --info-bg
+    text: "#3b82f6", // --info-primary
+  },
+  en_route: {
+    bg: "#fef3c7", // --warning-bg (orange clair)
+    text: "#f59e0b", // --warning-primary (orange)
+  },
+  in_progress: {
+    bg: "#fef3c7", // --warning-bg (orange clair)
+    text: "#f59e0b", // --warning-primary (orange)
+  },
+  completed: {
+    bg: "#dcfce7", // --success-bg
+    text: "#16a34a", // --success-primary
+  },
+  return_completed: {
+    bg: "#dcfce7", // --success-bg
+    text: "#16a34a", // --success-primary
+  },
+  cancelled: {
+    bg: "#f3f4f6", // --bg-hover
+    text: "#6b7280", // --text-tertiary
+  },
+  canceled: {
+    bg: "#f3f4f6", // --bg-hover
+    text: "#6b7280", // --text-tertiary
+  },
+};
+
+// ✅ Fonction pour obtenir les couleurs selon le statut
+const getStatusColors = (status?: string) => {
+  if (!status) return statusColors.pending;
+  const normalizedStatus = status.toLowerCase().trim();
+  // ✅ Vérifier si le statut existe dans statusColors
+  if (normalizedStatus in statusColors) {
+    return statusColors[normalizedStatus as keyof typeof statusColors];
+  }
+  // ✅ Fallback vers pending si le statut n'est pas reconnu
+  return statusColors.pending;
+};
 
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -82,10 +154,32 @@ export default function RideDetailsScreen() {
       const data = await getDispatchRideDetails(rideId);
       setDetail(data);
     } catch (error: any) {
-      const message =
-        error?.response?.data?.error ??
-        error?.message ??
-        "Impossible de charger la fiche course.";
+      // ✅ Gestion améliorée des erreurs avec messages plus clairs
+      const status = error?.response?.status;
+      let message = "Impossible de charger la fiche course.";
+
+      if (status === 404) {
+        message = "Course introuvable. Elle a peut-être été supprimée.";
+      } else if (status === 403) {
+        message = "Vous n'avez pas l'autorisation d'accéder à cette course.";
+      } else if (status === 500) {
+        message = "Erreur serveur. Veuillez réessayer plus tard.";
+      } else if (error?.response?.data?.error) {
+        // Utiliser le message d'erreur du backend s'il est disponible
+        message = error.response.data.error;
+      } else if (error?.response?.data?.message) {
+        message = error.response.data.message;
+      } else if (error?.message && error.message !== "Request failed with status code") {
+        // Éviter les messages génériques comme "Request failed with status code 500"
+        message = error.message;
+      }
+
+      console.error("[RideDetails] Erreur chargement détails:", {
+        status,
+        message,
+        error: error?.response?.data || error,
+      });
+
       setErrorMessage(message);
     } finally {
       setLoading(false);
@@ -126,14 +220,30 @@ export default function RideDetailsScreen() {
         await loadDetail();
         Alert.alert("Assignation effectuée", "La course a été mise à jour.");
       } catch (error: any) {
+        // ✅ Gestion spécifique des erreurs 409 (conflit d'assignation)
+        const status = error?.response?.status;
         const responseMessage =
           error?.response?.data?.error ??
           error?.response?.data?.message ??
           error?.message;
-        setErrorMessage(
-          responseMessage ||
-          "Impossible de finaliser l’assignation. Vérifiez les validations (fairness, préférences, conflits)."
-        );
+
+        if (status === 409) {
+          // Erreur de conflit : afficher un message clair avec Alert
+          const conflictMessage = responseMessage ||
+            "Le chauffeur est déjà assigné à une autre course à ce moment. Veuillez choisir un autre chauffeur ou modifier l'horaire.";
+          Alert.alert(
+            "⚠️ Conflit d'assignation",
+            conflictMessage + "\n\nVeuillez choisir un autre chauffeur ou modifier l'horaire de la course.",
+            [{ text: "Compris", style: "default" }]
+          );
+          setErrorMessage(conflictMessage);
+        } else {
+          // Autres erreurs
+          setErrorMessage(
+            responseMessage ||
+            "Impossible de finaliser l'assignation. Vérifiez les validations (fairness, préférences, conflits)."
+          );
+        }
       } finally {
         setActionLoading(false);
       }
@@ -256,6 +366,14 @@ export default function RideDetailsScreen() {
     ? `${summary.client.name} • ${summary.time.pickup_at ? dayjs(summary.time.pickup_at).format("DD MMM HH:mm") : "⏱️ À définir"}`
     : "Course";
 
+  // ✅ Vérifier si la course a une heure planifiée valide (pas juste minuit)
+  const hasScheduledTime = useMemo(() => {
+    if (!summary?.time?.pickup_at) return false;
+    const scheduled = dayjs(summary.time.pickup_at);
+    // Si l'heure est à minuit (00:00), considérer comme non planifiée
+    return scheduled.hour() !== 0 || scheduled.minute() !== 0;
+  }, [summary?.time?.pickup_at]);
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -280,205 +398,132 @@ export default function RideDetailsScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>{headerTitle}</Text>
-      <Text style={styles.subtitle}>{summary.id}</Text>
+      {/* ✅ Header avec gradient cohérent */}
+      <LinearGradient
+        colors={palette.heroGradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.header}
+      >
+        <Text style={styles.title}>{headerTitle}</Text>
+        <Text style={styles.subtitle}>ID: {summary.id}</Text>
+      </LinearGradient>
 
+      {/* ✅ Section Informations client (enrichie) */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Informations générales</Text>
-        <InfoRow label="Client" value={summary.client.name} />
-        <InfoRow label="Priorité" value={summary.client.priority} />
-        <InfoRow label="Départ" value={summary.route.pickup_address} />
-        <InfoRow label="Arrivée" value={summary.route.dropoff_address} />
-        <InfoRow
-          label="Statut"
-          value={summary.status === "assigned" ? "Assignée" : "Non assignée"}
-        />
-        <InfoRow
-          label="Chauffeur"
-          value={
-            summary.driver?.name
-              ? `${summary.driver.name}${summary.driver.is_emergency ? " (urgence)" : ""}`
-              : "Non assigné"
-          }
-        />
+        <Text style={styles.sectionTitle}>Informations client</Text>
+        {(() => {
+          const clientFields = [
+            { label: "Nom complet", value: summary.client.name, show: true },
+            { label: "Prénom", value: summary.client.first_name, show: !!summary.client.first_name },
+            { label: "Nom", value: summary.client.last_name, show: !!summary.client.last_name },
+            { label: "Date de naissance", value: summary.client.birth_date ? dayjs(summary.client.birth_date).format("DD MMMM YYYY") : null, show: !!summary.client.birth_date },
+            { label: "Téléphone", value: summary.client.phone, show: !!summary.client.phone },
+            { label: "Adresse de domicile", value: summary.client.home_address, show: !!summary.client.home_address },
+          ].filter(f => f.show);
+
+          return clientFields.map((field, index) => (
+            <InfoRow
+              key={field.label}
+              label={field.label}
+              value={field.value || ""}
+              isLast={index === clientFields.length - 1}
+            />
+          ));
+        })()}
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Actions rapides</Text>
-        <View style={styles.quickActions}>
-          <TouchableOpacity
-            style={styles.quickActionButton}
-            onPress={handleMarkUrgent}
-            disabled={actionLoading}
-          >
-            <Text style={styles.quickActionText}>Marquer urgent +15 min</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.quickActionButton}
-            onPress={() => {
-              const existing = summary.time.pickup_at
-                ? dayjs(summary.time.pickup_at).format("HH:mm")
-                : "";
-              setScheduleValue(existing);
-              setScheduleVisible(true);
-            }}
-            disabled={actionLoading}
-          >
-            <Text style={styles.quickActionText}>Planifier l’horaire</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {conflicts.length > 0 && (
+      {/* ✅ Section Actions rapides (affichée seulement si pas d'heure planifiée) */}
+      {!hasScheduledTime && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Conflits détectés</Text>
-          {conflicts.map((conflict: RideConflict, index: number) => (
-            <View
-              key={`${conflict.type}-${index}`}
-              style={[
-                styles.conflictCard,
-                conflict.blocking && styles.conflictBlocking,
-              ]}
+          <Text style={styles.sectionTitle}>Actions rapides</Text>
+          <View style={styles.quickActions}>
+            <TouchableOpacity
+              style={styles.quickActionButton}
+              onPress={handleMarkUrgent}
+              disabled={actionLoading}
             >
-              <Text style={styles.conflictTitle}>{conflict.type}</Text>
-              <Text style={styles.conflictMessage}>{conflict.message}</Text>
-              <Text style={styles.conflictBadge}>
-                {conflict.blocking ? "Bloquant" : "Avertissement"}
-              </Text>
-            </View>
-          ))}
+              <Text style={styles.quickActionText}>Marquer urgent +15 min</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.quickActionButton}
+              onPress={() => {
+                setScheduleValue("");
+                setScheduleVisible(true);
+              }}
+              disabled={actionLoading}
+            >
+              <Text style={styles.quickActionText}>Planifier l'horaire</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
+      {/* ✅ Section Informations générales (simplifiée) */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Suggestions chauffeurs</Text>
-        {suggestions.length === 0 ? (
-          <Text style={styles.muted}>Aucune suggestion disponible.</Text>
-        ) : (
-          suggestions.map((suggestion: DriverSuggestion) => (
-            <View key={suggestion.driver_id} style={styles.suggestionCard}>
-              <View style={styles.suggestionMain}>
-                <Text style={styles.suggestionName}>
-                  {suggestion.driver_name}
-                </Text>
-                <Text style={styles.suggestionReason}>{suggestion.reason}</Text>
-                <Text style={styles.suggestionMeta}>
-                  Score: {suggestion.score.toFixed(2)} • Fairness:{" "}
-                  {suggestion.fairness_delta != null
-                    ? suggestion.fairness_delta.toFixed(2)
-                    : "n/a"}
-                </Text>
-                {suggestion.preferred_match && (
-                  <Text style={styles.badgePreferred}>Chauffeur préféré</Text>
-                )}
-                {suggestion.is_emergency && (
-                  <Text style={styles.badgeEmergency}>Chauffeur d’urgence</Text>
-                )}
-              </View>
-              <TouchableOpacity
-                style={[
-                  styles.assignButton,
-                  isActionDisabled && styles.assignButtonDisabled,
-                ]}
-                disabled={actionLoading || isActionDisabled}
-                onPress={() =>
-                  handleAssign(
-                    suggestion.driver_id,
-                    suggestion.reason,
-                    suggestion.is_emergency
-                  )
-                }
-              >
-                <Text
-                  style={[
-                    styles.assignButtonText,
-                    isActionDisabled && styles.assignButtonTextDisabled,
-                  ]}
-                >
-                  {isAssigned ? "Réassigner" : "Assigner"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          ))
-        )}
-      </View>
+        <Text style={styles.sectionTitle}>Informations générales</Text>
+        {(() => {
+          const generalFields = [
+            { label: "Priorité", value: summary.client.priority },
+            { label: "Départ", value: summary.route.pickup_address },
+            { label: "Arrivée", value: summary.route.dropoff_address },
+            ...(summary.route.distance_km ? [{ label: "Distance", value: `${summary.route.distance_km} km` }] : []),
+            {
+              label: "Statut",
+              value:
+                summary.status === "assigned"
+                  ? "Assignée"
+                  : summary.status === "completed"
+                    ? "Terminée"
+                    : summary.status === "cancelled"
+                      ? "Annulée"
+                      : "Non assignée",
+            },
+            {
+              label: "Chauffeur",
+              value: summary.driver?.name
+                ? `${summary.driver.name}${summary.driver.is_emergency ? " (urgence)" : ""}`
+                : "Non assigné",
+            },
+          ];
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Assignation manuelle</Text>
+          // ✅ Déterminer le statut à utiliser pour les couleurs du texte du chauffeur
+          let displayStatus: string | undefined = summary?.status;
+          const statusStr = String(displayStatus || "").toLowerCase().trim();
 
-        {/* ✅ Dropdown pour choisir le chauffeur au lieu d'un champ ID */}
-        <TouchableOpacity
-          style={[
-            styles.input,
-            styles.pickerInput,
-            isActionDisabled && styles.inputDisabled,
-          ]}
-          onPress={() => !isActionDisabled && setDriverPickerVisible(true)}
-          disabled={isActionDisabled}
-        >
-          <Text
-            style={[
-              styles.pickerText,
-              !manualDriverId && styles.pickerPlaceholder,
-            ]}
-          >
-            {manualDriverId
-              ? suggestions.find((s) => s.driver_id === manualDriverId)
-                ?.driver_name ||
-              summary?.driver?.name ||
-              `Chauffeur #${manualDriverId}`
-              : "-- Sélectionner un chauffeur --"}
-          </Text>
-          {!isActionDisabled && (
-            <Ionicons name="chevron-down" size={20} color="#8DA0C1" />
-          )}
-        </TouchableOpacity>
-        <TextInput
-          style={[styles.input, styles.inputMultiline]}
-          placeholder="Commentaire (optionnel)"
-          placeholderTextColor="#8DA0C1"
-          value={manualReason}
-          onChangeText={setManualReason}
-          multiline
-        />
-
-        <View style={styles.checkboxRow}>
-          <TouchableOpacity
-            style={[styles.checkbox, allowEmergency && styles.checkboxChecked]}
-            onPress={() => setAllowEmergency((prev) => !prev)}
-          >
-            {allowEmergency && <View style={styles.checkboxInner} />}
-          </TouchableOpacity>
-          <Text style={styles.checkboxLabel}>
-            Autoriser l’usage d’un chauffeur d’urgence
-          </Text>
-        </View>
-
-        <TouchableOpacity
-          style={[
-            styles.primaryButton,
-            (manualAssignDisabled || isActionDisabled) &&
-            styles.primaryButtonDisabled,
-          ]}
-          disabled={manualAssignDisabled || isActionDisabled}
-          onPress={() =>
-            handleAssign(manualDriverId.trim(), manualReason || undefined)
+          // ✅ Normaliser le statut en minuscules pour la correspondance avec statusColors
+          if (summary?.driver?.name) {
+            // ✅ Si un chauffeur est assigné, normaliser le statut pour l'affichage
+            // ✅ Conserver les statuts "completed", "return_completed" et "cancelled" tels quels (en minuscules)
+            if (statusStr === "completed" || statusStr === "return_completed" || statusStr === "cancelled" || statusStr === "canceled") {
+              // ✅ Utiliser le statut en minuscules pour la correspondance avec statusColors
+              displayStatus = statusStr;
+            } else if (!displayStatus || statusStr === "unassigned" || statusStr === "accepted" || statusStr === "") {
+              // ✅ Si pas de statut ou "unassigned"/"accepted" avec chauffeur, utiliser "assigned"
+              displayStatus = "assigned";
+            } else {
+              // ✅ Sinon, utiliser le statut en minuscules (assigned, en_route, in_progress, etc.)
+              displayStatus = statusStr;
+            }
+          } else {
+            // ✅ Si pas de chauffeur, normaliser quand même le statut en minuscules
+            // ✅ Mais ne pas appliquer de couleur si pas de chauffeur assigné
+            displayStatus = statusStr || undefined;
           }
-        >
-          <Text style={styles.primaryButtonText}>
-            {isAssigned ? "Réassigner" : "Assigner"} le chauffeur
-          </Text>
-        </TouchableOpacity>
 
-        {isActionDisabled && (
-          <Text style={styles.disabledHint}>
-            {isCompleted
-              ? "La course est terminée. L'assignation et l'annulation ne sont plus possibles."
-              : "Le client est à bord. L'assignation et l'annulation ne sont plus possibles."}
-          </Text>
-        )}
+          return generalFields.map((field, index) => (
+            <InfoRow
+              key={field.label}
+              label={field.label}
+              value={field.value}
+              isLast={index === generalFields.length - 1}
+              status={displayStatus} // ✅ Passer le statut normalisé pour appliquer les couleurs
+            />
+          ));
+        })()}
       </View>
 
+      {/* ✅ Section Historique (améliorée) */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Historique</Text>
         {history.length === 0 ? (
@@ -486,18 +531,25 @@ export default function RideDetailsScreen() {
         ) : (
           history.map((event: RideEvent, index: number) => (
             <View key={`${event.ts}-${index}`} style={styles.historyItem}>
-              <Text style={styles.historyTitle}>
-                {event.event} • {event.actor || "système"}
-              </Text>
-              <Text style={styles.historyDate}>
-                {dayjs(event.ts).format("DD MMM YYYY HH:mm")} (
-                {dayjs(event.ts).fromNow()})
-              </Text>
-              {event.details && (
-                <Text style={styles.historyDetails}>
-                  {JSON.stringify(event.details, null, 2)}
+              <View style={styles.historyHeader}>
+                <Text style={styles.historyTitle}>
+                  {formatEventType(event.event)} • {formatActor(event.actor || "système")}
                 </Text>
-              )}
+                <Text style={styles.historyDate}>
+                  {dayjs(event.ts).format("DD MMM YYYY HH:mm")} (
+                  {dayjs(event.ts).fromNow()})
+                </Text>
+              </View>
+              {/* ✅ Afficher les détails formatés si disponibles, sinon formater le JSON */}
+              {event.details_formatted ? (
+                <Text style={styles.historyDetailsFormatted}>
+                  {event.details_formatted}
+                </Text>
+              ) : event.details ? (
+                <Text style={styles.historyDetailsFormatted}>
+                  {formatEventDetails(event.details)}
+                </Text>
+              ) : null}
             </View>
           ))
         )}
@@ -555,7 +607,7 @@ export default function RideDetailsScreen() {
               value={scheduleValue}
               onChangeText={setScheduleValue}
               placeholder="HH:mm"
-              placeholderTextColor="#9AA5CC"
+              placeholderTextColor={palette.hintText}
               keyboardType="numeric"
               autoFocus
             />
@@ -650,39 +702,171 @@ export default function RideDetailsScreen() {
   );
 }
 
-const InfoRow = ({ label, value }: { label: string; value: string }) => (
-  <View style={styles.infoRow}>
-    <Text style={styles.infoLabel}>{label}</Text>
-    <Text style={styles.infoValue}>{value}</Text>
-  </View>
-);
+const InfoRow = ({
+  label,
+  value,
+  isLast = false,
+  status,
+}: {
+  label: string;
+  value: string;
+  isLast?: boolean;
+  status?: string; // ✅ Statut pour appliquer les couleurs
+}) => {
+  // ✅ Si c'est le champ "Chauffeur" et qu'il y a un statut, appliquer les couleurs
+  const isDriverField = label === "Chauffeur";
+  const isAssigned = isDriverField && value !== "Non assigné" && value !== "";
+
+  // ✅ Nettoyer la valeur (enlever "(urgence)" si présent)
+  const cleanDriverName = isDriverField && isAssigned
+    ? value.replace(/\s*\(urgence\)\s*/gi, "").trim()
+    : value;
+
+  // ✅ Normaliser le statut : toujours en minuscules pour la correspondance avec statusColors
+  let normalizedStatus = status ? String(status).toLowerCase().trim() : undefined;
+
+  if (isDriverField && isAssigned) {
+    // ✅ Si un chauffeur est assigné, normaliser le statut pour l'affichage
+    const statusStr = normalizedStatus || "";
+    // ✅ Conserver les statuts "completed", "return_completed" et "cancelled" tels quels
+    if (statusStr === "completed" || statusStr === "return_completed" || statusStr === "cancelled" || statusStr === "canceled") {
+      normalizedStatus = statusStr;
+    } else if (!status || statusStr === "accepted" || statusStr === "unassigned" || statusStr === "") {
+      normalizedStatus = "assigned"; // Traiter "accepted" ou undefined avec driver comme "assigned"
+    } else {
+      // ✅ Garder le statut original en minuscules (assigned, en_route, in_progress, etc.)
+      normalizedStatus = statusStr;
+    }
+  }
+
+  // ✅ Toujours obtenir les couleurs si c'est le champ chauffeur et qu'un chauffeur est assigné
+  // ✅ Utiliser "assigned" par défaut si pas de statut normalisé
+  const statusColors = isDriverField && isAssigned && normalizedStatus
+    ? getStatusColors(normalizedStatus)
+    : null;
+
+  // ✅ Appliquer la couleur du statut au texte du nom du chauffeur
+  return (
+    <View style={[styles.infoRow, isLast && styles.infoRowLast]}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      <Text
+        style={[
+          styles.infoValue,
+          isDriverField && isAssigned && statusColors
+            ? {
+              color: statusColors.text,
+              fontWeight: "600",
+            }
+            : {},
+        ]}
+      >
+        {isDriverField && isAssigned ? cleanDriverName : value}
+      </Text>
+    </View>
+  );
+};
+
+// ✅ Fonctions utilitaires pour formater l'historique
+const formatEventType = (event: string): string => {
+  const eventMap: Record<string, string> = {
+    created: "Création",
+    assigned: "Assignation",
+    reassigned: "Réassignation",
+    cancelled: "Annulation",
+    completed: "Terminaison",
+    status_changed: "Changement de statut",
+  };
+  return eventMap[event] || event;
+};
+
+const formatActor = (actor: string): string => {
+  const actorMap: Record<string, string> = {
+    system: "Système",
+    dispatcher: "Répartiteur",
+    driver: "Chauffeur",
+  };
+  return actorMap[actor] || actor;
+};
+
+const formatEventDetails = (details: any): string => {
+  if (typeof details === "string") {
+    try {
+      details = JSON.parse(details);
+    } catch {
+      return details;
+    }
+  }
+
+  if (typeof details !== "object" || details === null) {
+    return String(details);
+  }
+
+  const parts: string[] = [];
+
+  if (details.status) {
+    const statusMap: Record<string, string> = {
+      ACCEPTED: "Acceptée",
+      SCHEDULED: "Planifiée",
+      ASSIGNED: "Assignée",
+      IN_PROGRESS: "En cours",
+      COMPLETED: "Terminée",
+      CANCELLED: "Annulée",
+      PENDING: "En attente",
+    };
+    parts.push(`Statut: ${statusMap[details.status] || details.status}`);
+  }
+
+  if (details.driver_id) {
+    parts.push(`Chauffeur: #${details.driver_id}`);
+  }
+
+  // Ajouter les autres champs
+  Object.entries(details).forEach(([key, value]) => {
+    if (key !== "status" && key !== "driver_id") {
+      parts.push(`${key}: ${value}`);
+    }
+  });
+
+  return parts.length > 0 ? parts.join("\n") : JSON.stringify(details, null, 2);
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#09162E",
+    backgroundColor: palette.background,
   },
   content: {
-    padding: 20,
     paddingBottom: 60,
   },
+  header: {
+    padding: 20,
+    paddingTop: 40,
+    paddingBottom: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: palette.border,
+  },
   title: {
-    color: "#FFFFFF",
+    color: palette.primaryText,
     fontSize: 24,
     fontWeight: "700",
+    marginBottom: 4,
   },
   subtitle: {
-    color: "#7D8CB2",
-    marginBottom: 16,
+    color: "rgba(255,255,255,0.9)",
+    fontSize: 14,
+    marginTop: 4,
   },
   section: {
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderRadius: 18,
+    backgroundColor: palette.sectionSurface,
+    borderRadius: 12,
     padding: 16,
-    marginBottom: 18,
+    margin: 16,
+    marginBottom: 0,
+    borderWidth: 1,
+    borderColor: palette.sectionBorder,
   },
   sectionTitle: {
-    color: "#FFFFFF",
+    color: palette.textStrong,
     fontSize: 18,
     fontWeight: "600",
     marginBottom: 12,
@@ -690,94 +874,130 @@ const styles = StyleSheet.create({
   infoRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 8,
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: palette.border,
+  },
+  infoRowLast: {
+    marginBottom: 0,
+    paddingBottom: 0,
+    borderBottomWidth: 0,
   },
   infoLabel: {
-    color: "#94A3C1",
+    color: palette.textSecondary,
     fontSize: 14,
+    flex: 1,
   },
   infoValue: {
-    color: "#FFFFFF",
+    color: palette.textStrong,
     fontSize: 14,
-    flexShrink: 1,
+    flex: 1,
     textAlign: "right",
+    fontWeight: "500",
+  },
+  driverBadge: {
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    maxWidth: 140,
+    minWidth: 80,
+  },
+  driverBadgeText: {
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
   },
   conflictCard: {
-    borderRadius: 14,
+    borderRadius: 12,
     padding: 12,
     marginBottom: 10,
     backgroundColor: "rgba(251,191,36,0.12)",
+    borderWidth: 1,
+    borderColor: palette.border,
   },
   conflictBlocking: {
-    backgroundColor: "rgba(248,113,113,0.15)",
+    backgroundColor: "rgba(239,68,68,0.12)",
   },
   conflictTitle: {
-    color: "#FFFFFF",
+    color: palette.textStrong,
     fontSize: 15,
     fontWeight: "600",
   },
   conflictMessage: {
-    color: "#E3E9FF",
+    color: palette.textSecondary,
     marginTop: 4,
+    fontSize: 14,
   },
   conflictBadge: {
-    color: "#FBBF24",
+    color: palette.error,
     fontSize: 12,
     marginTop: 6,
+    fontWeight: "600",
   },
   suggestionCard: {
-    backgroundColor: "rgba(77,107,254,0.12)",
+    backgroundColor: palette.background,
     borderRadius: 12,
     padding: 12,
     marginBottom: 12,
     flexDirection: "row",
     justifyContent: "space-between",
+    borderWidth: 1,
+    borderColor: palette.border,
   },
   suggestionMain: {
     flex: 1,
     paddingRight: 12,
   },
   suggestionName: {
-    color: "#FFFFFF",
+    color: palette.textStrong,
     fontSize: 16,
     fontWeight: "600",
   },
   suggestionReason: {
-    color: "#CBD6FF",
+    color: palette.textSecondary,
     marginTop: 4,
+    fontSize: 14,
   },
   suggestionMeta: {
-    color: "#A9B6E5",
+    color: palette.hintText,
     marginTop: 4,
     fontSize: 13,
   },
   badgePreferred: {
-    color: "#4ADE80",
+    color: palette.primary,
     marginTop: 6,
     fontWeight: "600",
+    fontSize: 12,
   },
   badgeEmergency: {
-    color: "#F87171",
+    color: palette.error,
     marginTop: 4,
     fontWeight: "600",
+    fontSize: 12,
   },
   assignButton: {
     alignSelf: "center",
-    backgroundColor: "#4D6BFE",
+    backgroundColor: palette.primary,
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 10,
   },
   assignButtonText: {
-    color: "#FFFFFF",
+    color: palette.primaryText,
     fontWeight: "600",
+    fontSize: 14,
   },
   input: {
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: palette.background,
     borderRadius: 12,
     padding: 12,
-    color: "#FFFFFF",
+    color: palette.textStrong,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: palette.border,
   },
   inputMultiline: {
     minHeight: 80,
@@ -793,26 +1013,27 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: "#6C7AA5",
+    borderColor: palette.border,
     marginRight: 10,
     alignItems: "center",
     justifyContent: "center",
   },
   checkboxChecked: {
-    backgroundColor: "#4D6BFE",
-    borderColor: "#4D6BFE",
+    backgroundColor: palette.primary,
+    borderColor: palette.primary,
   },
   checkboxInner: {
     width: 10,
     height: 10,
     borderRadius: 2,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: palette.primaryText,
   },
   checkboxLabel: {
-    color: "#CDD7F6",
+    color: palette.textSecondary,
+    fontSize: 14,
   },
   primaryButton: {
-    backgroundColor: "#4D6BFE",
+    backgroundColor: palette.primary,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: "center",
@@ -820,9 +1041,10 @@ const styles = StyleSheet.create({
   },
   primaryButtonDisabled: {
     opacity: 0.5,
+    backgroundColor: palette.hintText,
   },
   primaryButtonText: {
-    color: "#FFFFFF",
+    color: palette.primaryText,
     fontSize: 16,
     fontWeight: "600",
   },
@@ -833,14 +1055,16 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.3)",
+    borderColor: palette.border,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: "center",
+    backgroundColor: palette.card,
   },
   secondaryButtonText: {
-    color: "#FFFFFF",
+    color: palette.textStrong,
     fontWeight: "600",
+    fontSize: 14,
   },
   flexButton: {
     flex: 1,
@@ -851,66 +1075,89 @@ const styles = StyleSheet.create({
   },
   quickActionButton: {
     flex: 1,
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: palette.background,
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: palette.border,
   },
   quickActionText: {
-    color: "#FFFFFF",
+    color: palette.textStrong,
     fontWeight: "600",
+    fontSize: 14,
   },
   linkButton: {
     alignItems: "center",
     marginTop: 20,
+    marginBottom: 20,
   },
   linkButtonText: {
-    color: "#AAB6FF",
+    color: palette.primary,
     fontSize: 15,
     textDecorationLine: "underline",
+    fontWeight: "500",
   },
   errorText: {
-    color: "#F87171",
+    color: palette.error,
     marginTop: 8,
     fontSize: 14,
+    marginHorizontal: 16,
   },
   muted: {
-    color: "#8FA0C6",
+    color: palette.hintText,
+    fontSize: 14,
   },
   historyItem: {
     marginBottom: 12,
     padding: 12,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderRadius: 10,
+    backgroundColor: palette.background,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
+  historyHeader: {
+    marginBottom: 8,
   },
   historyTitle: {
-    color: "#FFFFFF",
+    color: palette.textStrong,
     fontWeight: "600",
+    fontSize: 15,
+    marginBottom: 4,
   },
   historyDate: {
-    color: "#9CAEEC",
+    color: palette.textSecondary,
     fontSize: 12,
-    marginTop: 4,
+    marginTop: 2,
   },
   historyDetails: {
-    color: "#E5EDFF",
+    color: palette.textSecondary,
     fontSize: 12,
     marginTop: 8,
   },
+  historyDetailsFormatted: {
+    color: palette.textSecondary,
+    fontSize: 13,
+    marginTop: 8,
+    lineHeight: 20,
+  },
   noteItem: {
-    color: "#E5EDFF",
+    color: palette.textSecondary,
     marginBottom: 6,
+    fontSize: 14,
+    lineHeight: 20,
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: "#09162E",
+    backgroundColor: palette.background,
     alignItems: "center",
     justifyContent: "center",
     padding: 20,
   },
   loadingText: {
-    color: "#E5EDFF",
+    color: palette.hintText,
     marginTop: 12,
+    fontSize: 14,
   },
   overlay: {
     position: "absolute",
@@ -918,45 +1165,46 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(9,22,46,0.75)",
+    backgroundColor: palette.modalOverlay,
     alignItems: "center",
     justifyContent: "center",
   },
   overlayText: {
-    color: "#FFFFFF",
+    color: palette.primaryText,
     marginTop: 8,
+    fontSize: 14,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(5,22,16,0.82)",
+    backgroundColor: palette.modalOverlay,
     alignItems: "center",
     justifyContent: "center",
     padding: 24,
   },
   modalCard: {
-    backgroundColor: "#08211A",
+    backgroundColor: palette.modalBackground,
     width: "100%",
     maxWidth: 420,
-    borderRadius: 24,
+    borderRadius: 16,
     padding: 24,
     borderWidth: 1,
-    borderColor: "rgba(46,128,94,0.4)",
+    borderColor: palette.modalBorder,
     gap: 16,
   },
   modalTitle: {
-    color: "#E6F2EA",
+    color: palette.textStrong,
     fontSize: 20,
     fontWeight: "700",
   },
   modalInput: {
-    backgroundColor: "rgba(10,34,26,0.82)",
-    borderRadius: 14,
+    backgroundColor: palette.background,
+    borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 16,
-    color: "#E6F2EA",
+    color: palette.textStrong,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: "rgba(59,143,105,0.28)",
+    borderColor: palette.border,
   },
   modalActions: {
     flexDirection: "row",
@@ -968,18 +1216,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   modalCancelText: {
-    color: "rgba(184,214,198,0.75)",
+    color: palette.textSecondary,
     fontWeight: "600",
+    fontSize: 14,
   },
   modalConfirm: {
-    backgroundColor: "#1EB980",
+    backgroundColor: palette.primary,
     paddingVertical: 12,
     paddingHorizontal: 18,
-    borderRadius: 14,
+    borderRadius: 12,
   },
   modalConfirmText: {
-    color: "#052015",
-    fontWeight: "700",
+    color: palette.primaryText,
+    fontWeight: "600",
+    fontSize: 14,
   },
   // ✅ Styles pour le dropdown de sélection de chauffeur
   pickerInput: {
@@ -988,18 +1238,18 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   pickerText: {
-    color: "#FFFFFF",
+    color: palette.textStrong,
     fontSize: 15,
     flex: 1,
   },
   pickerPlaceholder: {
-    color: "#8DA0C1",
+    color: palette.hintText,
   },
   inputDisabled: {
     opacity: 0.5,
   },
   disabledHint: {
-    color: "#F87171",
+    color: palette.error,
     fontSize: 12,
     marginTop: 8,
     fontStyle: "italic",
@@ -1013,40 +1263,40 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     padding: 14,
-    borderRadius: 14,
-    backgroundColor: "rgba(10,34,26,0.6)",
+    borderRadius: 12,
+    backgroundColor: palette.background,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: "rgba(59,143,105,0.28)",
+    borderColor: palette.border,
   },
   driverOptionSelected: {
-    backgroundColor: "rgba(30,185,128,0.2)",
+    backgroundColor: "rgba(10,127,89,0.1)",
     borderWidth: 1,
-    borderColor: "#1EB980",
+    borderColor: palette.primary,
   },
   driverOptionContent: {
     flex: 1,
   },
   driverOptionName: {
-    color: "#E6F2EA",
+    color: palette.textStrong,
     fontSize: 16,
     fontWeight: "600",
     marginBottom: 4,
   },
   driverOptionMeta: {
-    color: "rgba(184,214,198,0.8)",
+    color: palette.textSecondary,
     fontSize: 13,
   },
   driverOptionReset: {
-    color: "rgba(184,214,198,0.75)",
+    color: palette.textSecondary,
     fontSize: 15,
     fontStyle: "italic",
   },
   assignButtonDisabled: {
     opacity: 0.5,
-    backgroundColor: "#6C7AA5",
+    backgroundColor: palette.hintText,
   },
   assignButtonTextDisabled: {
-    color: "#94A3C1",
+    color: palette.textSecondary,
   },
 });

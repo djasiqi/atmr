@@ -1,0 +1,1 @@
+"""Sous-couche persistence (Infrastructure)."""

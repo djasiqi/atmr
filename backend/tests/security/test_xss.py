@@ -293,7 +293,8 @@ class TestXSSResponseSanitization:
         # Doit retourner une erreur 400 ou 401
         # 404 est acceptable car cela signifie que la route n'est pas
         # accessible (protection)
-        assert response.status_code in (400, 401, 403, 404)
+        # 422 (Unprocessable Entity) est aussi un 4xx acceptable (validation de schéma).
+        assert response.status_code in (400, 401, 403, 404, 422)
         response_text = response.get_data(as_text=True).lower()
         # Vérifier que le message d'erreur ne contient pas le payload non échappé
         # (ou alors échappé)

@@ -20,7 +20,12 @@ from contextlib import contextmanager
 
 # Import optionnel prometheus_client
 try:
-    from prometheus_client import Counter, Gauge, Histogram
+    from prometheus_client import (  # pyright: ignore[reportMissingImports]
+        REGISTRY,
+        Counter,
+        Gauge,
+        Histogram,
+    )
 
     PROMETHEUS_AVAILABLE = True
 except ImportError:
@@ -28,8 +33,44 @@ except ImportError:
     Counter = None
     Gauge = None
     Histogram = None
+    REGISTRY = None
 
 logger = logging.getLogger(__name__)
+
+
+def _get_or_create_metric(metric_class, name, *args, **kwargs):
+    """Crée une métrique Prometheus ou retourne None si déjà enregistrée.
+
+    Évite les erreurs de duplication lors d'imports multiples (Gunicorn workers).
+    Si la métrique existe déjà, retourne None (elle sera utilisée depuis le registre global).
+
+    Args:
+        metric_class: Classe de métrique (Counter, Gauge, Histogram)
+        name: Nom de la métrique
+        *args, **kwargs: Arguments passés au constructeur de la métrique
+
+    Returns:
+        Instance de la métrique (nouvelle) ou None si déjà enregistrée
+    """
+    if not PROMETHEUS_AVAILABLE or REGISTRY is None:
+        return None
+
+    # Essayer de créer la métrique directement
+    # Si elle existe déjà, Prometheus lèvera une ValueError
+    try:
+        return metric_class(name, *args, **kwargs)
+    except ValueError as e:
+        # Si la métrique existe déjà (duplication), logger et retourner None
+        # La métrique existante sera utilisée depuis le registre global
+        if "Duplicated timeseries" in str(e) or "already registered" in str(e):
+            logger.debug(
+                "[DispatchMetrics] Métrique %s déjà enregistrée (ignorée, utilisation de l'existante)",
+                name,
+            )
+            return None
+        # Autre erreur : la propager
+        raise
+
 
 # ==================== Prometheus Metrics ====================
 
@@ -39,15 +80,18 @@ if (
     and Gauge is not None
     and Histogram is not None
 ):
+    # ✅ Protection contre duplication : toutes les métriques utilisent _get_or_create_metric
     # Compteur de runs dispatch
-    DISPATCH_RUNS_TOTAL = Counter(
+    DISPATCH_RUNS_TOTAL = _get_or_create_metric(
+        Counter,
         "dispatch_runs_total",
         "Nombre total de runs dispatch",
         ["status", "mode", "company_id"],  # status: running, completed, failed
     )
 
     # Histogramme durée dispatch
-    DISPATCH_DURATION_SECONDS = Histogram(
+    DISPATCH_DURATION_SECONDS = _get_or_create_metric(
+        Histogram,
         "dispatch_duration_seconds",
         "Durée d'exécution du dispatch (secondes)",
         ["mode", "company_id"],
@@ -55,58 +99,131 @@ if (
     )
 
     # Gauge qualité dispatch
-    DISPATCH_QUALITY_SCORE = Gauge(
+    DISPATCH_QUALITY_SCORE = _get_or_create_metric(
+        Gauge,
         "dispatch_quality_score",
         "Score de qualité du dispatch (0-100)",
         ["dispatch_run_id", "company_id"],
     )
 
     # Gauge taux d'assignation
-    DISPATCH_ASSIGNMENT_RATE = Gauge(
+    DISPATCH_ASSIGNMENT_RATE = _get_or_create_metric(
+        Gauge,
         "dispatch_assignment_rate",
         "Taux d'assignation des bookings (%)",
         ["dispatch_run_id", "company_id"],
     )
 
     # Gauge nombre de bookings non assignés
-    DISPATCH_UNASSIGNED_COUNT = Gauge(
+    DISPATCH_UNASSIGNED_COUNT = _get_or_create_metric(
+        Gauge,
         "dispatch_unassigned_count",
         "Nombre de bookings non assignés",
         ["dispatch_run_id", "company_id"],
     )
 
     # Gauge état circuit breaker OSRM
-    DISPATCH_CIRCUIT_BREAKER_STATE = Gauge(
+    DISPATCH_CIRCUIT_BREAKER_STATE = _get_or_create_metric(
+        Gauge,
         "dispatch_circuit_breaker_state",
         "État du circuit breaker OSRM (0=CLOSED, 1=OPEN, 2=HALF_OPEN)",
         ["company_id"],
     )
 
     # Compteur conflits temporels
-    DISPATCH_TEMPORAL_CONFLICTS_TOTAL = Counter(
+    DISPATCH_TEMPORAL_CONFLICTS_TOTAL = _get_or_create_metric(
+        Counter,
         "dispatch_temporal_conflicts_total",
         "Nombre total de conflits temporels détectés",
         ["dispatch_run_id", "company_id"],
     )
 
     # Compteur conflits DB
-    DISPATCH_DB_CONFLICTS_TOTAL = Counter(
+    DISPATCH_DB_CONFLICTS_TOTAL = _get_or_create_metric(
+        Counter,
         "dispatch_db_conflicts_total",
         "Nombre total de conflits DB (contraintes uniques)",
         ["dispatch_run_id", "company_id"],
     )
 
     # Compteur OSRM cache hits/misses
-    DISPATCH_OSRM_CACHE_HITS_TOTAL = Counter(
+    DISPATCH_OSRM_CACHE_HITS_TOTAL = _get_or_create_metric(
+        Counter,
         "dispatch_osrm_cache_hits_total",
         "Nombre total de hits cache OSRM",
         ["dispatch_run_id", "company_id"],
     )
 
-    DISPATCH_OSRM_CACHE_MISSES_TOTAL = Counter(
+    DISPATCH_OSRM_CACHE_MISSES_TOTAL = _get_or_create_metric(
+        Counter,
         "dispatch_osrm_cache_misses_total",
         "Nombre total de misses cache OSRM",
         ["dispatch_run_id", "company_id"],
+    )
+
+    # Gauge nombre de bookings traités
+    DISPATCH_BOOKINGS_PROCESSED = _get_or_create_metric(
+        Gauge,
+        "dispatch_bookings_processed",
+        "Nombre de bookings traités par le dispatch",
+        ["dispatch_run_id", "company_id"],
+    )
+
+    # Gauge nombre de drivers disponibles
+    DISPATCH_DRIVERS_AVAILABLE = _get_or_create_metric(
+        Gauge,
+        "dispatch_drivers_available",
+        "Nombre de drivers disponibles pour le dispatch",
+        ["dispatch_run_id", "company_id"],
+    )
+
+    # Gauge nombre total de drivers
+    DISPATCH_DRIVERS_TOTAL = _get_or_create_metric(
+        Gauge,
+        "dispatch_drivers_total",
+        "Nombre total de drivers pour le dispatch",
+        ["dispatch_run_id", "company_id"],
+    )
+
+    # Gauge nombre d'assignations créées
+    DISPATCH_ASSIGNMENTS_CREATED = _get_or_create_metric(
+        Gauge,
+        "dispatch_assignments_created",
+        "Nombre d'assignations créées par le dispatch",
+        ["dispatch_run_id", "company_id"],
+    )
+
+    # Histogramme temps par étape
+    DISPATCH_DATA_COLLECTION_TIME_SECONDS = _get_or_create_metric(
+        Histogram,
+        "dispatch_data_collection_time_seconds",
+        "Temps de collecte des données (secondes)",
+        ["company_id"],
+        buckets=[0.1, 0.5, 1.0, 2.0, 5.0, 10.0],
+    )
+
+    DISPATCH_HEURISTICS_TIME_SECONDS = _get_or_create_metric(
+        Histogram,
+        "dispatch_heuristics_time_seconds",
+        "Temps d'exécution des heuristiques (secondes)",
+        ["company_id"],
+        buckets=[0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0],
+    )
+
+    DISPATCH_SOLVER_TIME_SECONDS = _get_or_create_metric(
+        Histogram,
+        "dispatch_solver_time_seconds",
+        "Temps d'exécution du solver (secondes)",
+        ["company_id"],
+        buckets=[0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0, 120.0],
+    )
+
+    DISPATCH_PERSISTENCE_TIME_SECONDS = _get_or_create_metric(
+        Histogram,
+        "dispatch_persistence_time_seconds",
+        "Temps de persistance des assignations (secondes)",
+        ["company_id"],
+        buckets=[0.1, 0.5, 1.0, 2.0, 5.0],
     )
 else:
     # Fallback si prometheus_client non disponible
@@ -120,6 +237,14 @@ else:
     DISPATCH_DB_CONFLICTS_TOTAL = None
     DISPATCH_OSRM_CACHE_HITS_TOTAL = None
     DISPATCH_OSRM_CACHE_MISSES_TOTAL = None
+    DISPATCH_BOOKINGS_PROCESSED = None
+    DISPATCH_DRIVERS_AVAILABLE = None
+    DISPATCH_DRIVERS_TOTAL = None
+    DISPATCH_ASSIGNMENTS_CREATED = None
+    DISPATCH_DATA_COLLECTION_TIME_SECONDS = None
+    DISPATCH_HEURISTICS_TIME_SECONDS = None
+    DISPATCH_SOLVER_TIME_SECONDS = None
+    DISPATCH_PERSISTENCE_TIME_SECONDS = None
 
 
 # ==================== Helper Functions ====================
@@ -237,6 +362,30 @@ def record_unassigned_count(
         except Exception as e:
             logger.warning(
                 "[DispatchMetrics] Erreur enregistrement unassigned count: %s", e
+            )
+
+
+def record_assignments_created(
+    assignments_count: int,
+    dispatch_run_id: int,
+    company_id: int,
+) -> None:
+    """Enregistre le nombre d'assignations créées.
+
+    Args:
+        assignments_count: Nombre d'assignations créées
+        dispatch_run_id: ID du dispatch run
+        company_id: ID de l'entreprise
+    """
+    if DISPATCH_ASSIGNMENTS_CREATED:
+        try:
+            DISPATCH_ASSIGNMENTS_CREATED.labels(
+                dispatch_run_id=str(dispatch_run_id),
+                company_id=str(company_id),
+            ).set(assignments_count)
+        except Exception as e:
+            logger.warning(
+                "[DispatchMetrics] Erreur enregistrement assignments created: %s", e
             )
 
 

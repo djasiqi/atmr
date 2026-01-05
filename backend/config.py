@@ -104,6 +104,23 @@ class Config:
     """
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # ✅ Phase 1 N+1: Configuration profilage SQLAlchemy
+    # Activer SQLALCHEMY_ECHO pour logger toutes les requêtes SQL (développement uniquement)
+    SQLALCHEMY_ECHO = os.getenv("SQLALCHEMY_ECHO", "false").lower() in (
+        "true",
+        "1",
+        "yes",
+    )
+    # Activer SQLALCHEMY_RECORD_QUERIES pour Flask-SQLAlchemy query tracking
+    SQLALCHEMY_RECORD_QUERIES = os.getenv(
+        "SQLALCHEMY_RECORD_QUERIES", "false"
+    ).lower() in (
+        "true",
+        "1",
+        "yes",
+    )
+    # Timeout pour requêtes SQL (secondes)
+    SQLALCHEMY_QUERY_TIMEOUT = float(os.getenv("SQLALCHEMY_QUERY_TIMEOUT", "5.0"))
     # Options de base compatibles avec toutes les bases de données
     SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool | dict[str, str]]] = {
         "pool_pre_ping": True,
@@ -125,6 +142,37 @@ class Config:
     JWT_DECODE_AUDIENCE = None  # None = désactive la validation automatique
     # Algorithme de signature JWT (HS256 = symétrique, secret partagé via Vault)
     JWT_ALGORITHM = "HS256"
+
+    # --- Cookies httpOnly pour tokens JWT ---
+    # ✅ Migration localStorage → cookies httpOnly pour protection XSS
+    # Configuration des cookies pour les tokens JWT
+    COOKIE_SECURE = os.getenv("COOKIE_SECURE", "true").lower() == "true"
+    COOKIE_SAME_SITE = os.getenv("COOKIE_SAME_SITE", "Strict")
+    COOKIE_HTTP_ONLY = os.getenv("COOKIE_HTTP_ONLY", "true").lower() == "true"
+    COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN", None)  # Optionnel (pour sous-domaines)
+    COOKIE_PATH = os.getenv("COOKIE_PATH", "/")  # Chemin des cookies
+    # Noms des cookies
+    COOKIE_ACCESS_TOKEN_NAME = "access_token"
+    COOKIE_REFRESH_TOKEN_NAME = "refresh_token"
+
+    # --- Flask-JWT-Extended : Configuration pour lire depuis cookies ---
+    # ✅ Migration localStorage → cookies httpOnly
+    # JWT_TOKEN_LOCATION spécifie où chercher les tokens (cookies, headers, etc.)
+    # On supporte à la fois cookies (web) et headers (mobile)
+    JWT_TOKEN_LOCATION: ClassVar[list[str]] = [
+        "cookies",
+        "headers",
+    ]  # Priorité : cookies puis headers
+    JWT_COOKIE_SECURE = COOKIE_SECURE  # HTTPS uniquement si Secure=true
+    JWT_COOKIE_HTTP_ONLY = COOKIE_HTTP_ONLY  # Protection XSS
+    JWT_COOKIE_SAMESITE = COOKIE_SAME_SITE  # Protection CSRF
+    JWT_COOKIE_CSRF_PROTECT = (
+        False  # Désactivé pour l'instant (peut être activé plus tard)
+    )
+    JWT_ACCESS_COOKIE_NAME = COOKIE_ACCESS_TOKEN_NAME
+    JWT_REFRESH_COOKIE_NAME = COOKIE_REFRESH_TOKEN_NAME
+    JWT_COOKIE_DOMAIN = COOKIE_DOMAIN
+    JWT_COOKIE_PATH = COOKIE_PATH
 
     # --- Redis / Socket.IO ---
     REDIS_URL = os.getenv("REDIS_URL", "redis://127.00.1:6379/0")
@@ -152,6 +200,51 @@ class Config:
         pass
 
 
+def validate_production_security(app) -> None:
+    """Valide les paramètres de sécurité critiques en production.
+
+    Cette fonction vérifie que les paramètres de sécurité des cookies
+    sont correctement configurés en production. Elle lève une RuntimeError
+    si la configuration est dangereuse.
+
+    Args:
+        app: Instance Flask
+
+    Raises:
+        RuntimeError: Si la configuration de sécurité est invalide en production
+    """
+    # Vérifier si on est en production
+    flask_env = (
+        app.config.get("FLASK_ENV")
+        or os.getenv("FLASK_ENV")
+        or os.getenv("FLASK_CONFIG")
+    )
+
+    if flask_env == "production":
+        # Vérifier COOKIE_SECURE
+        cookie_secure = app.config.get("COOKIE_SECURE")
+        if not cookie_secure:
+            raise RuntimeError(
+                "❌ SECURITÉ: COOKIE_SECURE doit être True en production. "
+                + "Définissez COOKIE_SECURE=true dans les variables d'environnement."
+            )
+
+        # Vérifier COOKIE_HTTP_ONLY
+        cookie_httponly = app.config.get("COOKIE_HTTP_ONLY")
+        if not cookie_httponly:
+            raise RuntimeError(
+                "❌ SECURITÉ: COOKIE_HTTP_ONLY doit être True en production."
+            )
+
+        # Vérifier COOKIE_SAME_SITE
+        cookie_samesite = app.config.get("COOKIE_SAME_SITE")
+        if cookie_samesite not in ["Strict", "Lax"]:
+            raise RuntimeError(
+                "❌ SECURITÉ: COOKIE_SAME_SITE doit être 'Strict' ou 'Lax' en production, "
+                + f"actuellement: {cookie_samesite}"
+            )
+
+
 class DevelopmentConfig(Config):
     """Configuration pour le développement local (PostgreSQL via Docker)."""
 
@@ -167,6 +260,35 @@ class DevelopmentConfig(Config):
         vault_key="value",
         env_key="JWT_SECRET_KEY",
     )
+    # ✅ S3: Support legacy keys JWT (chargement depuis Vault ou env)
+    # Format env: "key1,key2,key3" (séparées par virgule)
+    # Format Vault: liste dans "keys" (retournée comme liste ou JSON string)
+    _jwt_legacy_keys_raw = _get_secret_from_vault_or_env(
+        vault_path="dev/jwt/legacy_secret_keys",
+        vault_key="keys",
+        env_key="JWT_LEGACY_SECRET_KEYS",
+    )
+    if _jwt_legacy_keys_raw:
+        # Si depuis Vault, peut être une liste ou une string JSON
+        import json
+
+        try:
+            if isinstance(_jwt_legacy_keys_raw, list):
+                # Liste directement depuis Vault
+                JWT_LEGACY_SECRET_KEYS = ",".join(_jwt_legacy_keys_raw)
+            else:
+                # À ce point, _jwt_legacy_keys_raw est forcément une str (pas None car vérifié dans le if)
+                legacy_keys_str: str = str(_jwt_legacy_keys_raw)
+                if legacy_keys_str.startswith("["):
+                    # Format JSON string depuis Vault
+                    JWT_LEGACY_SECRET_KEYS = ",".join(json.loads(legacy_keys_str))
+                else:
+                    # Format string depuis env (déjà formaté "key1,key2")
+                    JWT_LEGACY_SECRET_KEYS = legacy_keys_str
+        except Exception:
+            JWT_LEGACY_SECRET_KEYS = str(_jwt_legacy_keys_raw)
+    else:
+        JWT_LEGACY_SECRET_KEYS = os.getenv("JWT_LEGACY_SECRET_KEYS", "")
     MAIL_PASSWORD = _get_secret_from_vault_or_env(
         vault_path="dev/mail/password",
         vault_key="value",
@@ -197,9 +319,27 @@ class DevelopmentConfig(Config):
     REMEMBER_COOKIE_HTTPONLY = True
     REMEMBER_COOKIE_SAMESITE = "Lax"
 
+    # ✅ Cookies JWT pour développement (Secure=false pour localhost HTTP)
+    COOKIE_SECURE = False  # HTTP en dev
+    COOKIE_SAME_SITE = "Lax"  # Plus permissif en dev
+
     # Dev: PDFs accessibles en local
     PDF_BASE_URL = os.getenv("PDF_BASE_URL", "http://localhost:5000")
     UPLOADS_PUBLIC_BASE = "/uploads"
+
+    # ✅ Phase 1 N+1: Profilage activé par défaut en développement
+    SQLALCHEMY_ECHO = os.getenv("SQLALCHEMY_ECHO", "false").lower() in (
+        "true",
+        "1",
+        "yes",
+    )
+    SQLALCHEMY_RECORD_QUERIES = os.getenv(
+        "SQLALCHEMY_RECORD_QUERIES", "false"
+    ).lower() in (
+        "true",
+        "1",
+        "yes",
+    )
 
 
 class ProductionConfig(Config):
@@ -219,6 +359,29 @@ class ProductionConfig(Config):
         env_key="JWT_SECRET_KEY",
         required=True,  # Requis en production
     )
+    # ✅ S3: Support legacy keys JWT (chargement depuis Vault ou env)
+    _jwt_legacy_keys_raw = _get_secret_from_vault_or_env(
+        vault_path="prod/jwt/legacy_secret_keys",
+        vault_key="keys",
+        env_key="JWT_LEGACY_SECRET_KEYS",
+    )
+    if _jwt_legacy_keys_raw:
+        import json
+
+        try:
+            if isinstance(_jwt_legacy_keys_raw, list):
+                JWT_LEGACY_SECRET_KEYS = ",".join(_jwt_legacy_keys_raw)
+            else:
+                # À ce point, _jwt_legacy_keys_raw est forcément une str (pas None car vérifié dans le if)
+                legacy_keys_str: str = str(_jwt_legacy_keys_raw)
+                if legacy_keys_str.startswith("["):
+                    JWT_LEGACY_SECRET_KEYS = ",".join(json.loads(legacy_keys_str))
+                else:
+                    JWT_LEGACY_SECRET_KEYS = legacy_keys_str
+        except Exception:
+            JWT_LEGACY_SECRET_KEYS = str(_jwt_legacy_keys_raw)
+    else:
+        JWT_LEGACY_SECRET_KEYS = os.getenv("JWT_LEGACY_SECRET_KEYS", "")
     MAIL_PASSWORD = _get_secret_from_vault_or_env(
         vault_path="prod/mail/password",
         vault_key="value",
@@ -252,7 +415,12 @@ class ProductionConfig(Config):
         **Config.SQLALCHEMY_ENGINE_OPTIONS,
         "pool_size": 10,  # ✅ PERF: Connection pooling (PostgreSQL uniquement)
         "max_overflow": 20,  # ✅ PERF: Max connections overflow (PostgreSQL uniquement)
-        "connect_args": {"client_encoding": "utf8"},
+        "connect_args": {
+            "client_encoding": "utf8",
+            "sslmode": os.getenv(
+                "POSTGRES_SSLMODE", "require"
+            ),  # ✅ SECURITY: SSL requis en production
+        },
     }
     # Cookies plus stricts en prod (peuvent être ajustés via env si reverse proxy HTTP)
     SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "true").lower() == "true"
@@ -264,9 +432,53 @@ class ProductionConfig(Config):
     REMEMBER_COOKIE_HTTPONLY = True
     REMEMBER_COOKIE_SAMESITE = os.getenv("REMEMBER_COOKIE_SAMESITE", "Lax")
 
+    # ✅ Cookies JWT pour production (Secure=true, Strict pour sécurité maximale)
+    COOKIE_SECURE = True  # HTTPS uniquement en prod
+    COOKIE_SAME_SITE = "Strict"  # Protection CSRF maximale
+
     # ✅ Prod: URL backend publique (depuis env)
-    # Utiliser une valeur par défaut pour respecter le type str de la classe de base
-    PDF_BASE_URL = os.getenv("PDF_BASE_URL") or "http://localhost:5000"
+    # En production, PDF_BASE_URL est REQUIS et doit être HTTPS
+    # Exception: localhost/127.0.0.1 autorisé en développement local
+    _pdf_base_url = os.getenv("PDF_BASE_URL", default=None)
+    if not _pdf_base_url:
+        raise RuntimeError(
+            "PDF_BASE_URL est requis en production. "
+            + "Définissez cette variable d'environnement avec une URL HTTPS valide."
+        )
+    # ✅ Exception pour développement local (localhost/127.0.0.1)
+    _is_localhost = _pdf_base_url.startswith(
+        "http://localhost"
+    ) or _pdf_base_url.startswith("http://127.0.0.1")
+    if not _pdf_base_url.startswith("https://") and not _is_localhost:
+        raise RuntimeError(
+            "PDF_BASE_URL doit commencer par 'https://' en production. "
+            + f"Valeur actuelle: {_pdf_base_url}"
+        )
+    PDF_BASE_URL = _pdf_base_url
+
+    # ✅ Prod: Validation SOCKETIO_CORS_ORIGINS en production
+    # En production, SOCKETIO_CORS_ORIGINS doit être défini, non vide, et ne pas contenir "*"
+    _socketio_cors_origins = os.getenv("SOCKETIO_CORS_ORIGINS", "").strip()
+    if not _socketio_cors_origins:
+        raise RuntimeError(
+            "SOCKETIO_CORS_ORIGINS est requis en production. "
+            + "Définissez cette variable d'environnement avec une liste d'origines HTTPS séparées par des virgules."
+        )
+    if _socketio_cors_origins == "*":
+        raise RuntimeError(
+            "SOCKETIO_CORS_ORIGINS ne peut pas être '*' en production pour des raisons de sécurité. "
+            + "Définissez une liste explicite d'origines HTTPS."
+        )
+    # Valider que toutes les origines sont HTTPS (sauf localhost pour tests)
+    for origin in (origin.strip() for origin in _socketio_cors_origins.split(",")):
+        if origin and not origin.startswith(
+            ("https://", "http://localhost", "http://127.0.0.1")
+        ):
+            raise RuntimeError(
+                f"SOCKETIO_CORS_ORIGINS contient une origine non sécurisée en production: {origin}. "
+                + "Toutes les origines doivent être HTTPS (sauf localhost pour tests)."
+            )
+    SOCKETIO_CORS_ORIGINS = _socketio_cors_origins
 
 
 class TestingConfig(Config):

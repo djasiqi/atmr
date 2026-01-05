@@ -4,37 +4,50 @@ from __future__ import annotations
 import logging
 import math
 import os
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Tuple, cast
 
+from cachetools import LRUCache  # pyright: ignore[reportMissingModuleSource]
+
 from models import Booking, BookingStatus, Driver
+from services.geolocation_service import get_geolocation_service
 from services.unified_dispatch.settings import Settings
-from shared.geo_utils import haversine_distance
-from shared.geo_utils import haversine_distance_meters as _haversine_distance
+from shared.constants import DispatchHeuristicsConstants, GeoConstants
 from shared.time_utils import minutes_from_now, now_local, sort_key_utc, to_utc
 
-# Constantes pour éviter les valeurs magiques
+# ✅ REFACTORING: Utilisation de GeolocationService pour centraliser les calculs de distance
 
-AVG_KMH_ZERO = 0
-DIST_KM_ONE = 1
-MINS_THRESHOLD = 20
-CNT_ZERO = 0
-TO_PICKUP_MIN_THRESHOLD = 5
-SC_ZERO = 0
-CURRENT_LOAD_THRESHOLD = 2
-DID_THRESHOLD = 3
-LATENESS_THRESHOLD_MIN = 15
-FALLBACK_COORD_DEFAULT = (46.2044, 6.1432)
-# ⚡ Seuils pour bonus trajets d'urgence (minutes depuis le bureau)
-EMERGENCY_PICKUP_NEAR_THRESHOLD = 10  # Pickup proche du bureau
-EMERGENCY_PICKUP_MEDIUM_THRESHOLD = 15  # Pickup moyen du bureau
-EMERGENCY_PICKUP_FAR_THRESHOLD = 20  # Pickup loin du bureau
-EMERGENCY_TRIP_SHORT_THRESHOLD = 15  # Trajet court
-EMERGENCY_TRIP_MEDIUM_THRESHOLD = 20  # Trajet moyen
-MAX_FAIRNESS_GAP = 2  # Écart maximum entre chauffeurs réguliers (équité stricte)
+# Alias pour compatibilité avec le code existant
+AVG_KMH_ZERO = DispatchHeuristicsConstants.AVG_KMH_ZERO
+DIST_KM_ONE = DispatchHeuristicsConstants.DIST_KM_ONE
+MINS_THRESHOLD = DispatchHeuristicsConstants.MINS_THRESHOLD
+CNT_ZERO = DispatchHeuristicsConstants.CNT_ZERO
+TO_PICKUP_MIN_THRESHOLD = DispatchHeuristicsConstants.TO_PICKUP_MIN_THRESHOLD
+SC_ZERO = DispatchHeuristicsConstants.SC_ZERO
+CURRENT_LOAD_THRESHOLD = DispatchHeuristicsConstants.CURRENT_LOAD_THRESHOLD
+DID_THRESHOLD = DispatchHeuristicsConstants.DID_THRESHOLD
+LATENESS_THRESHOLD_MIN = DispatchHeuristicsConstants.LATENESS_THRESHOLD_MIN
+FALLBACK_COORD_DEFAULT = GeoConstants.FALLBACK_COORD_DEFAULT
+EMERGENCY_PICKUP_NEAR_THRESHOLD = (
+    DispatchHeuristicsConstants.EMERGENCY_PICKUP_NEAR_THRESHOLD
+)
+EMERGENCY_PICKUP_MEDIUM_THRESHOLD = (
+    DispatchHeuristicsConstants.EMERGENCY_PICKUP_MEDIUM_THRESHOLD
+)
+EMERGENCY_PICKUP_FAR_THRESHOLD = (
+    DispatchHeuristicsConstants.EMERGENCY_PICKUP_FAR_THRESHOLD
+)
+EMERGENCY_TRIP_SHORT_THRESHOLD = (
+    DispatchHeuristicsConstants.EMERGENCY_TRIP_SHORT_THRESHOLD
+)
+EMERGENCY_TRIP_MEDIUM_THRESHOLD = (
+    DispatchHeuristicsConstants.EMERGENCY_TRIP_MEDIUM_THRESHOLD
+)
+MAX_FAIRNESS_GAP = DispatchHeuristicsConstants.MAX_FAIRNESS_GAP
 
 
 def baseline_and_cap_loads(loads: Dict[int, int]) -> Tuple[Dict[int, int], int]:
@@ -93,9 +106,26 @@ PREFERRED_EXTRA_GAP = 1  # Marge supplémentaire autorisée pour le chauffeur pr
 DEFAULT_SETTINGS = Settings()
 
 # Constantes pour parallélisation
-PARALLEL_MIN_BOOKINGS = 20
+PARALLEL_MIN_BOOKINGS = DispatchHeuristicsConstants.PARALLEL_MIN_BOOKINGS
 PARALLEL_MIN_DRIVERS = 5
 PARALLEL_MAX_WORKERS = 32
+
+# ✅ P1: Optimisations performance pour heuristique
+# Seuil de distance max pour pré-filtrage (km) - drivers trop éloignés exclus
+HEURISTIC_MAX_DISTANCE_KM = float(os.getenv("UD_HEURISTIC_MAX_DISTANCE_KM", "50.0"))
+# Seuil de score optimal pour early exit (si score >= seuil, arrêter recherche)
+HEURISTIC_OPTIMAL_SCORE_THRESHOLD = float(
+    os.getenv("UD_HEURISTIC_OPTIMAL_SCORE_THRESHOLD", "0.95")
+)
+# Cache LRU pour scores (max 500 entrées)
+_HEURISTIC_SCORE_CACHE: LRUCache[
+    str, Tuple[float, Dict[str, float], Tuple[int, int]]
+] = LRUCache(maxsize=500)
+_HEURISTIC_SCORE_CACHE_LOCK = threading.Lock()
+# Seuil pour activer parallélisation automatique (même si feature flag désactivé)
+HEURISTIC_AUTO_PARALLEL_THRESHOLD = int(
+    os.getenv("UD_HEURISTIC_AUTO_PARALLEL_THRESHOLD", "30")
+)  # Auto-paralléliser si >30 bookings
 
 logger = logging.getLogger(__name__)
 
@@ -104,14 +134,14 @@ logger = logging.getLogger(__name__)
 class TemporalConflictCounter:
     """Compteur thread-safe pour les conflits temporels détectés."""
 
-    _instance: "TemporalConflictCounter | None" = None
+    _instance: TemporalConflictCounter | None = None
 
     def __init__(self) -> None:
         super().__init__()
         self._counter: int = 0
 
     @classmethod
-    def get_instance(cls) -> "TemporalConflictCounter":
+    def get_instance(cls) -> TemporalConflictCounter:
         """Retourne l'instance singleton."""
         if cls._instance is None:
             cls._instance = cls()
@@ -180,7 +210,11 @@ def _can_be_pooled(b1: Booking, b2: Booking, settings: Settings) -> bool:
     lon1safe = float(lon1) if lon1 is not None else 0
     lat2safe = float(lat2) if lat2 is not None else 0
     lon2safe = float(lon2) if lon2 is not None else 0
-    distance_m = _haversine_distance(lat1safe, lon1safe, lat2safe, lon2safe)
+    # ✅ REFACTORING: Utilisation de GeolocationService au lieu d'import direct
+    geolocation_service = get_geolocation_service()
+    distance_m = geolocation_service.distance_meters(
+        lat1safe, lon1safe, lat2safe, lon2safe
+    )
 
     if distance_m <= settings.pooling.pickup_distance_m:
         logger.info(
@@ -308,8 +342,9 @@ def haversine_minutes(
         # Ultime garde-fou
         avg_kmh = 30
 
-    # Haversine (distance en km) - Import centralisé
-    dist_km = haversine_distance(lat1, lon1, lat2, lon2)
+    # ✅ REFACTORING: Utilisation de GeolocationService au lieu d'import direct
+    geolocation_service = get_geolocation_service()
+    dist_km = geolocation_service.distance_km(lat1, lon1, lat2, lon2)
 
     # Si quasi le même point, temps minimal
     if dist_km < DIST_KM_ONE - 3:  # ~DIST_KM_ONE mètre
@@ -525,7 +560,37 @@ def _score_driver_for_booking(
       chauffeurs d'urgence.
     ⚡ NOUVEAU: last_dropoff_coord pour prioriser les courses proches de la
       dernière course assignée.
+
+    ✅ P1: Optimisations performance :
+    - Cache LRU pour scores similaires
+    - Pré-filtrage distance max avant calcul complet
     """
+    # ✅ P1: Créer clé de cache pour score (booking + driver + contexte)
+    b_id = int(cast("Any", getattr(b, "id", 0)) or 0)
+    d_id = int(cast("Any", getattr(d, "id", 0)) or 0)
+    cache_key_parts = [
+        f"b:{b_id}",
+        f"d:{d_id}",
+        f"w:{driver_window[0]}-{driver_window[1]}",
+        f"f:{hash(str(sorted(fairness_counts.items())))}",
+    ]
+    if company_coords:
+        cache_key_parts.append(f"c:{company_coords[0]:.4f},{company_coords[1]:.4f}")
+    if preferred_driver_id:
+        cache_key_parts.append(f"p:{preferred_driver_id}")
+    if last_dropoff_coord:
+        cache_key_parts.append(
+            f"l:{last_dropoff_coord[0]:.4f},{last_dropoff_coord[1]:.4f}"
+        )
+
+    cache_key = "|".join(cache_key_parts)
+
+    # ✅ P1: Vérifier cache LRU
+    with _HEURISTIC_SCORE_CACHE_LOCK:
+        if cache_key in _HEURISTIC_SCORE_CACHE:
+            logger.debug("[HEURISTIC] ✅ Score cache hit for b=%s d=%s", b_id, d_id)
+            return _HEURISTIC_SCORE_CACHE[cache_key]
+
     # 1) Proximité / coûts temps (paramétrable via settings)
     avg_kmh = getattr(getattr(settings, "matrix", None), "avg_speed_kmh", 25)
     # mapping des noms vers TimeSettings actuels
@@ -549,6 +614,28 @@ def _score_driver_for_booking(
     p_coord, d_coord = _booking_coords(b)
     booking_quality_factor = float(getattr(b, "_coord_quality_factor", 1.0) or 1.0)
     coord_quality_factor = max(0.2, min(driver_quality_factor, booking_quality_factor))
+
+    # ✅ P1: Pré-filtrage distance max (évite calculs coûteux pour drivers trop éloignés)
+    # ✅ REFACTORING: Utilisation de GeolocationService au lieu d'import direct
+    geolocation_service = get_geolocation_service()
+    distance_km = geolocation_service.distance_km(
+        current_coord[0], current_coord[1], p_coord[0], p_coord[1]
+    )
+
+    # ✅ P1: Exclure drivers trop éloignés avant scoring complet
+    if distance_km > HEURISTIC_MAX_DISTANCE_KM:
+        logger.debug(
+            "[HEURISTIC] Driver %s too far (%.1f km > %.1f km) for booking %s",
+            d_id,
+            distance_km,
+            HEURISTIC_MAX_DISTANCE_KM,
+            b_id,
+        )
+        # Retourner score négatif pour indiquer exclusion
+        result = (-1.0, {"distance_filtered": 1.0}, (0, 0))
+        with _HEURISTIC_SCORE_CACHE_LOCK:
+            _HEURISTIC_SCORE_CACHE[cache_key] = result
+        return result
 
     # Initialiser use_last_dropoff_for_bonus
     use_last_dropoff_for_bonus = False
@@ -763,7 +850,12 @@ def _score_driver_for_booking(
     else:
         total = heuristic_score
 
-    return (total, breakdown, (est_start_min, est_finish_min))
+    # ✅ P1: Mettre en cache le résultat
+    result = (total, breakdown, (est_start_min, est_finish_min))
+    with _HEURISTIC_SCORE_CACHE_LOCK:
+        _HEURISTIC_SCORE_CACHE[cache_key] = result
+
+    return result
 
 
 # -------------------------------------------------------------------
@@ -871,7 +963,8 @@ def assign(
         non_zero_fairness or "{}",
     )
     if preferred_driver_id:
-        driver_ids = [int(cast("Any", d.id)) for d in drivers]
+        # ✅ P1: Utiliser set pour vérification O(1) au lieu de O(n)
+        driver_ids = {int(cast("Any", d.id)) for d in drivers}
         logger.info(
             "[HEURISTIC] 🎯 Chauffeur préféré %s dans drivers disponibles: %s",
             preferred_driver_id,
@@ -1299,6 +1392,17 @@ def assign(
             )
             if (best is None) or (sc > best[0]):
                 best = (sc, cand)
+
+            # ✅ P1: Early exit si score optimal trouvé (seuil de qualité)
+            if sc >= HEURISTIC_OPTIMAL_SCORE_THRESHOLD:
+                logger.info(
+                    "[HEURISTIC] ✅ Optimal score (%.3f >= %.3f) found for booking %s, driver %s - early exit",
+                    sc,
+                    HEURISTIC_OPTIMAL_SCORE_THRESHOLD,
+                    b_id,
+                    did,
+                )
+                break
 
         if best:
             chosen = best[1]
@@ -1961,6 +2065,17 @@ def assign(
             if (best_for_b is None) or (sc > best_for_b[0]):
                 best_for_b = (sc, cand)
 
+            # ✅ P1: Early exit si score optimal trouvé (seuil de qualité)
+            if sc >= HEURISTIC_OPTIMAL_SCORE_THRESHOLD:
+                logger.info(
+                    "[HEURISTIC] ✅ Optimal score (%.3f >= %.3f) found for booking %s, driver %s - early exit",
+                    sc,
+                    HEURISTIC_OPTIMAL_SCORE_THRESHOLD,
+                    b_id,
+                    did,
+                )
+                break
+
         if best_for_b:
             # Log pour tracer les décisions de sélection
             if preferred_driver_id and best_for_b[1].driver_id == preferred_driver_id:
@@ -2511,10 +2626,8 @@ def assign(
                         # Si les heures ne sont pas disponibles, utiliser la
                         # vérification simple
                         conflict_reasons_final.append(
-                            (
-                                f"time_gap:{gap_minutes}min "
-                                "(heures non disponibles pour calcul détaillé)"
-                            )
+                            f"time_gap:{gap_minutes}min "
+                            + "(heures non disponibles pour calcul détaillé)"
                         )
                         conflict_msg = (
                             f"⚠️ CONFLIT: Chauffeur #{did} a course à "
@@ -2527,7 +2640,9 @@ def assign(
                         try:
                             is_testing = os.getenv("FLASK_CONFIG") == "testing"
                             try:
-                                from flask import current_app
+                                from flask import (  # pyright: ignore[reportMissingImports]
+                                    current_app,
+                                )
 
                                 is_testing = is_testing or current_app.config.get(
                                     "TESTING", False
@@ -2556,7 +2671,9 @@ def assign(
                     try:
                         is_testing = os.getenv("FLASK_CONFIG") == "testing"
                         try:
-                            from flask import current_app
+                            from flask import (  # pyright: ignore[reportMissingImports]
+                                current_app,
+                            )
 
                             is_testing = is_testing or current_app.config.get(
                                 "TESTING", False
@@ -2581,7 +2698,9 @@ def assign(
                 is_testing = os.getenv("FLASK_CONFIG") == "testing"
                 # Si current_app est disponible, utiliser sa config (plus précis)
                 try:
-                    from flask import current_app
+                    from flask import (  # pyright: ignore[reportMissingImports]
+                        current_app,
+                    )
 
                     is_testing = is_testing or current_app.config.get("TESTING", False)
                 except RuntimeError:
@@ -3172,7 +3291,7 @@ def closest_feasible(
     try:
         is_testing = os.getenv("FLASK_CONFIG") == "testing"
         try:
-            from flask import current_app
+            from flask import current_app  # pyright: ignore[reportMissingImports]
 
             is_testing = is_testing or current_app.config.get("TESTING", False)
         except RuntimeError:
@@ -3191,19 +3310,15 @@ def closest_feasible(
                 # busy_until devrait être >= au dernier scheduled_time
                 if busy > 0 and max_scheduled > busy:
                     inconsistencies.append(
-                        (
-                            f"Driver {did}: busy_until={busy} < "
-                            f"max_scheduled={max_scheduled}"
-                        )
+                        f"Driver {did}: busy_until={busy} < "
+                        + f"max_scheduled={max_scheduled}"
                     )
                 # proposed_load devrait correspondre au nombre de scheduled_times
                 proposed = proposed_load.get(did, 0)
                 if proposed != len(scheduled_list):
                     inconsistencies.append(
-                        (
-                            f"Driver {did}: proposed_load={proposed} != "
-                            f"len(scheduled_times)={len(scheduled_list)}"
-                        )
+                        f"Driver {did}: proposed_load={proposed} != "
+                        + f"len(scheduled_times)={len(scheduled_list)}"
                     )
 
     if inconsistencies:
@@ -3373,7 +3488,9 @@ def closest_feasible(
                     try:
                         is_testing_fb = os.getenv("FLASK_CONFIG") == "testing"
                         try:
-                            from flask import current_app
+                            from flask import (  # pyright: ignore[reportMissingImports]
+                                current_app,
+                            )
 
                             is_testing_fb = is_testing_fb or current_app.config.get(
                                 "TESTING", False
@@ -3660,8 +3777,8 @@ def estimate_wait_or_require_extra(
             continue
         try:
             pick = (
-                float(b.pickup_lat),
-                float(b.pickup_lon),
+                float(b.pickup_lat),  # type: ignore[reportArgumentType]
+                float(b.pickup_lon),  # type: ignore[reportArgumentType]
             )
         except Exception:
             # si coordonnées manquent, on saute (devrait être enrichi par
@@ -3702,10 +3819,8 @@ def estimate_wait_or_require_extra(
         suggestions.append("Aucun chauffeur disponible : en ajouter au planning.")
     elif any(it.get("lateness_min", 0) > LATENESS_THRESHOLD_MIN for it in items):
         suggestions.append(
-            (
-                "Ajouter au moins 1 chauffeur sur le créneau ou élargir "
-                "les fenêtres de temps."
-            )
+            "Ajouter au moins 1 chauffeur sur le créneau ou élargir "
+            + "les fenêtres de temps."
         )
     elif any(it.get("lateness_min", 0) > 0 for it in items):
         suggestions.append("Élargir légèrement les fenêtres ou ajuster les priorités.")

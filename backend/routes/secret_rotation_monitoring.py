@@ -8,9 +8,13 @@ Endpoints:
 
 import logging
 
-from flask import request
-from flask_jwt_extended import jwt_required
-from flask_restx import Namespace, Resource, fields
+from flask import request  # pyright: ignore[reportMissingImports]
+from flask_jwt_extended import jwt_required  # pyright: ignore[reportMissingImports]
+from flask_restx import (  # pyright: ignore[reportMissingImports]
+    Namespace,
+    Resource,
+    fields,
+)
 
 from ext import role_required
 from models import UserRole
@@ -120,7 +124,9 @@ class RotationHistory(Resource):
         """Récupère l'historique des rotations de secrets."""
         try:
             # ✅ 2.4: Validation Marshmallow des query parameters
-            from marshmallow import ValidationError
+            from marshmallow import (  # pyright: ignore[reportMissingImports]
+                ValidationError,
+            )
 
             from schemas.secret_rotation_schemas import (
                 SecretRotationMonitoringQuerySchema,

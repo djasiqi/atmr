@@ -1051,6 +1051,7 @@ const UnifiedDispatchRefactored = () => {
             onApplySuggestion={onApplySuggestion}
             onDeleteReservation={onDeleteReservationClick}
             onDispatchNow={onDispatchNow}
+            onAssign={onAssignReservation} // 🆕 Permettre l'assignation manuelle pour les courses transférées
             currentDate={date}
           />
         );

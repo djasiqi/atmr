@@ -155,10 +155,12 @@ export const invoiceService = {
   },
 
   // Clients éligibles (trajets non facturés)
-  async fetchEligibleClients(companyId, { search, limit } = {}) {
+  async fetchEligibleClients(companyId, { search, limit, year, month } = {}) {
     const params = new URLSearchParams();
     if (search) params.append('search', search);
     if (limit) params.append('limit', limit);
+    if (year) params.append('year', year);
+    if (month) params.append('month', month);
     const query = params.toString();
     const response = await apiClient.get(
       `${API_BASE}/invoices/companies/${companyId}/clients/eligible${query ? `?${query}` : ''}`
@@ -186,6 +188,36 @@ export const invoiceService = {
   async generateConsolidatedInvoice(companyId, data) {
     const response = await apiClient.post(
       `${API_BASE}/invoices/companies/${companyId}/invoices/generate`,
+      data
+    );
+    return response.data;
+  },
+
+  // Récupérer les partenaires facturables
+  async fetchBillablePartners(companyId) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'invoiceService.js:fetchBillablePartners',message:'Calling API',data:{companyId,url:`${API_BASE}/invoices/companies/${companyId}/partners/billable`},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
+    // #endregion
+    try {
+      const response = await apiClient.get(
+        `${API_BASE}/invoices/companies/${companyId}/partners/billable`
+      );
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'invoiceService.js:fetchBillablePartners',message:'API response received',data:{status:response?.status,hasData:!!response?.data,dataType:typeof response?.data,dataKeys:response?.data ? Object.keys(response?.data) : [],dataValue:response?.data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
+      // #endregion
+      return response.data;
+    } catch (err) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'invoiceService.js:fetchBillablePartners',message:'API error',data:{errorMessage:err?.message,errorStatus:err?.response?.status,errorData:err?.response?.data,errorUrl:err?.config?.url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
+      // #endregion
+      throw err;
+    }
+  },
+
+  // Générer une facture partenaire
+  async generatePartnerInvoice(companyId, data) {
+    const response = await apiClient.post(
+      `${API_BASE}/invoices/companies/${companyId}/partners/invoices/generate`,
       data
     );
     return response.data;
@@ -279,7 +311,8 @@ export const canGenerateReminder = (invoice) => {
 };
 
 export const canRegeneratePdf = (invoice) => {
-  return invoice.status !== 'cancelled';
+  // Les factures payées ne peuvent plus être régénérées, seule la visualisation est possible
+  return invoice.status !== 'cancelled' && invoice.status !== 'paid';
 };
 
 export const canCancelInvoice = (invoice) => {
@@ -287,8 +320,9 @@ export const canCancelInvoice = (invoice) => {
 };
 
 export const canDuplicateInvoice = (invoice) => {
+  // Les factures payées ne peuvent plus avoir de correctif
   return (
-    ['sent', 'partially_paid', 'paid', 'overdue'].includes(invoice.status) ||
+    ['sent', 'partially_paid', 'overdue'].includes(invoice.status) ||
     invoice.status === 'cancelled'
   );
 };

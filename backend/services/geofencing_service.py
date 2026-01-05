@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from typing import List, Tuple
 
 from models import Assignment, AssignmentStatus, Booking
+from repositories.assignment_repository import AssignmentRepository
+from repositories.booking_repository import BookingRepository
 from shared.geo_utils import haversine_distance
 
 logger = logging.getLogger(__name__)
@@ -159,13 +161,29 @@ class GeofencingService:
         Returns:
             True si arrivée détectée, False sinon
         """
+        result_arrived = False
         try:
-            assignment = Assignment.query.get(assignment_id)
-            if not assignment or assignment.driver_id != driver_id:
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            assignment_repo = AssignmentRepository()
+            assignment_dto = assignment_repo.find_by_id(assignment_id)
+            if not assignment_dto or assignment_dto.driver_id != driver_id:
+                return False
+            # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+            assignment = Assignment.query.get(assignment_dto.id)
+            if not assignment:
                 return False
 
-            booking = Booking.query.get(assignment.booking_id)
-            if not booking or not booking.pickup_lat or not booking.pickup_lon:
+            booking_repo = BookingRepository()
+            booking_dto = booking_repo.find_by_id(assignment.booking_id)
+            if (
+                not booking_dto
+                or not booking_dto.pickup_lat
+                or not booking_dto.pickup_lon
+            ):
+                return False
+            # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+            booking = Booking.query.get(booking_dto.id)
+            if not booking:
                 return False
 
             # Créer geofence circulaire autour du pickup
@@ -184,14 +202,12 @@ class GeofencingService:
                     assignment_id,
                     -result.distance_to_edge_m,
                 )
-                return True
-
-            return False
+                result_arrived = True
         except Exception as e:
             logger.debug(
                 "[GeofencingService] Pickup arrival detection failed: %s", str(e)
             )
-            return False
+        return result_arrived
 
     def detect_dropoff_arrival(
         self,
@@ -211,13 +227,29 @@ class GeofencingService:
         Returns:
             True si arrivée détectée, False sinon
         """
+        result_arrived = False
         try:
-            assignment = Assignment.query.get(assignment_id)
-            if not assignment or assignment.driver_id != driver_id:
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            assignment_repo = AssignmentRepository()
+            assignment_dto = assignment_repo.find_by_id(assignment_id)
+            if not assignment_dto or assignment_dto.driver_id != driver_id:
+                return False
+            # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+            assignment = Assignment.query.get(assignment_dto.id)
+            if not assignment:
                 return False
 
-            booking = Booking.query.get(assignment.booking_id)
-            if not booking or not booking.dropoff_lat or not booking.dropoff_lon:
+            booking_repo = BookingRepository()
+            booking_dto = booking_repo.find_by_id(assignment.booking_id)
+            if (
+                not booking_dto
+                or not booking_dto.dropoff_lat
+                or not booking_dto.dropoff_lon
+            ):
+                return False
+            # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+            booking = Booking.query.get(booking_dto.id)
+            if not booking:
                 return False
 
             # Créer geofence circulaire autour du dropoff
@@ -236,14 +268,12 @@ class GeofencingService:
                     assignment_id,
                     -result.distance_to_edge_m,
                 )
-                return True
-
-            return False
+                result_arrived = True
         except Exception as e:
             logger.debug(
                 "[GeofencingService] Dropoff arrival detection failed: %s", str(e)
             )
-            return False
+        return result_arrived
 
     def check_active_assignment_geofencing(
         self, driver_id: int, driver_lat: float, driver_lon: float
@@ -261,11 +291,20 @@ class GeofencingService:
         events = []
 
         try:
-            # Récupérer assignment actif
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            assignment_repo = AssignmentRepository()
+            assignment_dtos = assignment_repo.find_by_driver_id(driver_id)
+            # Filtrer par statut IN_PROGRESS en mémoire
+            in_progress_dtos = [
+                dto
+                for dto in assignment_dtos
+                if dto.status == AssignmentStatus.ONBOARD
+            ]
+            # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
             assignment = (
-                Assignment.query.filter_by(driver_id=driver_id)
-                .filter(Assignment.status == AssignmentStatus.IN_PROGRESS)
-                .first()
+                Assignment.query.get(in_progress_dtos[0].id)
+                if in_progress_dtos
+                else None
             )
 
             if not assignment:

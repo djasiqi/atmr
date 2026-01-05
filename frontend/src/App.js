@@ -83,11 +83,19 @@ function setupTokenAutoRefresh() {
       const now = Date.now();
       const refreshToken = localStorage.getItem('refreshToken');
       const authToken = localStorage.getItem('authToken');
+      const user = localStorage.getItem('user');
 
       // Vérifier si l'utilisateur est actif (moins de 55 min d'inactivité)
       const isActive = now - lastActivity < 55 * 60 * 1000;
 
+      // ✅ Si on utilise des cookies httpOnly (pas de tokens dans localStorage mais infos utilisateur),
+      // on ne fait pas de refresh automatique car le backend gère les cookies automatiquement
+      // On ne fait le refresh que si on a des tokens dans localStorage (mode mobile/compatibilité)
       if (!refreshToken || !authToken || !isActive) {
+        // Si on a des infos utilisateur mais pas de tokens, on utilise les cookies (pas besoin de refresh)
+        if (user) {
+          return; // Mode cookies httpOnly, le backend gère le refresh automatiquement
+        }
         return; // Ne rien faire si pas de tokens ou utilisateur inactif
       }
 

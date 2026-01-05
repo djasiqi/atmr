@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Optional, Tuple
+from typing import Any, Tuple
 
 from ext import db, redis_client
 from services.feature_flags import FeatureFlags
@@ -44,11 +44,11 @@ SPEED_HIGHWAY_KMH = 60.0
 class EtaContext:
     """Contexte pour calcul ETA avec ML."""
 
-    booking_id: Optional[int] = None
-    assignment_id: Optional[int] = None
-    driver_id: Optional[int] = None
-    company_id: Optional[int] = None
-    scheduled_time: Optional[datetime] = None
+    booking_id: int | None = None
+    assignment_id: int | None = None
+    driver_id: int | None = None
+    company_id: int | None = None
+    scheduled_time: datetime | None = None
     booking: Any = None  # Objet Booking (optionnel)
     driver: Any = None  # Objet Driver (optionnel)
 
@@ -61,8 +61,8 @@ class EtaResult:
     distance_meters: int
     source: str  # "osrm", "osrm_ml", "haversine", "haversine_adaptive"
     confidence: float = 1.0  # Confiance ML (0.0-1.0)
-    ml_correction_factor: Optional[float] = None  # Facteur de correction ML
-    ml_predicted_delay_minutes: Optional[float] = None  # Retard prédit par ML
+    ml_correction_factor: float | None = None  # Facteur de correction ML
+    ml_predicted_delay_minutes: float | None = None  # Retard prédit par ML
 
 
 class EtaService:
@@ -75,7 +75,7 @@ class EtaService:
         osrm_timeout: int = DEFAULT_OSRM_TIMEOUT,
         coord_precision: int = DEFAULT_COORD_PRECISION,
         avg_speed_kmh_fallback: float = DEFAULT_AVG_SPEED_KMH,
-        ml_predictor: Optional[ETADelayModel] = None,
+        ml_predictor: ETADelayModel | None = None,
         redis_client_instance: Any | None = None,
     ):
         """Initialise le service ETA.
@@ -105,7 +105,7 @@ class EtaService:
         origin: Tuple[float, float],
         destination: Tuple[float, float],
         *,
-        context: Optional[EtaContext] = None,
+        context: EtaContext | None = None,
         use_ml: bool = True,
         use_osrm: bool = True,
     ) -> EtaResult:
@@ -159,8 +159,8 @@ class EtaService:
 
         # 3. Correction ML si disponible et activé
         corrected_eta_seconds = base_eta_seconds
-        ml_correction_factor: Optional[float] = None
-        ml_predicted_delay: Optional[float] = None
+        ml_correction_factor: float | None = None
+        ml_predicted_delay: float | None = None
         confidence = 1.0
 
         # ✅ Vérifier feature flag ML global (avec pourcentage de trafic)
@@ -286,7 +286,7 @@ class EtaService:
         predicted_eta_seconds: int,
         context: EtaContext,
         source: str,
-        ml_confidence: Optional[float] = None,
+        ml_confidence: float | None = None,
     ) -> None:
         """Log prédiction ETA pour analytics (non-bloquant).
 
@@ -328,7 +328,7 @@ class EtaService:
 
 
 # Instance globale (singleton)
-_eta_service_instance: Optional[EtaService] = None
+_eta_service_instance: EtaService | None = None
 
 
 def get_eta_service() -> EtaService:
@@ -341,7 +341,7 @@ def get_eta_service() -> EtaService:
 
     if _eta_service_instance is None:
         # Charger modèle ML si disponible
-        ml_predictor: Optional[ETADelayModel] = None
+        ml_predictor: ETADelayModel | None = None
         try:
             ml_predictor = ETADelayModel()
             if ml_predictor.is_trained:

@@ -145,7 +145,8 @@ class TestAnonymizeOldUserData:
         old_date = datetime.now(UTC) - timedelta(days=DEFAULT_RETENTION_DAYS + 10)
         sample_user.created_at = old_date
         sample_user.role = UserRole.client  # Ne pas anonymiser admin
-        sample_user.email = "old@example.com"
+        # Email unique pour éviter collision si la DB de tests est persistée localement
+        sample_user.email = f"old_{sample_user.id}@example.com"
         sample_user.first_name = "John"
         sample_user.last_name = "Doe"
         db.session.commit()
@@ -181,7 +182,8 @@ class TestAnonymizeOldUserData:
         # Configurer sample_user comme admin ancien
         sample_user.created_at = old_date
         sample_user.role = UserRole.admin
-        sample_user.email = "admin@example.com"
+        # Email unique pour éviter collision avec d'autres fixtures/admins
+        sample_user.email = f"admin_{sample_user.id}@example.com"
         db.session.commit()
 
         result = anonymize_old_user_data(None)
@@ -191,4 +193,4 @@ class TestAnonymizeOldUserData:
 
         # Vérifier que l'email n'a pas changé
         db.session.refresh(sample_user)
-        assert sample_user.email == "admin@example.com"
+        assert sample_user.email == f"admin_{sample_user.id}@example.com"
