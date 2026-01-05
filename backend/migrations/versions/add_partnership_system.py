@@ -24,6 +24,13 @@ depends_on = None
 
 
 def upgrade():
+    # Imports pour vérifier l'existence des tables et colonnes
+    from sqlalchemy import inspect
+    from sqlalchemy.engine import reflection
+    
+    bind = op.get_bind()
+    inspector = reflection.Inspector.from_engine(bind)
+    
     # Créer les types d'enum pour les transferts (si ils n'existent pas déjà)
     # Note: Utilisation de DO $$ BEGIN ... EXCEPTION pour éviter les erreurs si les types existent déjà
     op.execute(
@@ -50,77 +57,92 @@ def upgrade():
     """
     )
 
-    # Créer la table partnerships
-    op.create_table(
-        "partnerships",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("owner_company_id", sa.Integer(), nullable=False),
-        sa.Column("partner_company_id", sa.Integer(), nullable=False),
-        sa.Column(
-            "default_transfer_model",
-            postgresql.ENUM(
-                "SUBCONTRACT",
-                "ASSIGN_TO_PARTNER",
-                "MARKETPLACE",
-                name="transfermodel",
-                create_type=False,  # Ne pas créer le type, il existe déjà
+    # Vérifier l'existence des tables avant de les créer
+    existing_tables = inspector.get_table_names()
+    existing_indexes = {}
+    for table_name in existing_tables:
+        existing_indexes[table_name] = [idx["name"] for idx in inspector.get_indexes(table_name)]
+
+    # Créer la table partnerships (si elle n'existe pas déjà)
+    if "partnerships" not in existing_tables:
+        op.create_table(
+            "partnerships",
+            sa.Column("id", sa.Integer(), nullable=False),
+            sa.Column("owner_company_id", sa.Integer(), nullable=False),
+            sa.Column("partner_company_id", sa.Integer(), nullable=False),
+            sa.Column(
+                "default_transfer_model",
+                postgresql.ENUM(
+                    "SUBCONTRACT",
+                    "ASSIGN_TO_PARTNER",
+                    "MARKETPLACE",
+                    name="transfermodel",
+                    create_type=False,  # Ne pas créer le type, il existe déjà
+                ),
+                nullable=False,
+                server_default="SUBCONTRACT",
             ),
-            nullable=False,
-            server_default="SUBCONTRACT",
-        ),
-        sa.Column("default_margin_percent", sa.Numeric(5, 2), nullable=True),
-        sa.Column("default_partner_tariff_percent", sa.Numeric(5, 2), nullable=True),
-        sa.Column(
-            "auto_accept_rules", sa.Boolean(), nullable=False, server_default="false"
-        ),
-        sa.Column("auto_invoice", sa.Boolean(), nullable=False, server_default="true"),
-        sa.Column(
-            "payment_terms_days", sa.Integer(), nullable=False, server_default="30"
-        ),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default="true"),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.text("now()"),
-        ),
-        sa.Column(
-            "updated_at",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.text("now()"),
-        ),
-        sa.ForeignKeyConstraint(
+            sa.Column("default_margin_percent", sa.Numeric(5, 2), nullable=True),
+            sa.Column("default_partner_tariff_percent", sa.Numeric(5, 2), nullable=True),
+            sa.Column(
+                "auto_accept_rules", sa.Boolean(), nullable=False, server_default="false"
+            ),
+            sa.Column("auto_invoice", sa.Boolean(), nullable=False, server_default="true"),
+            sa.Column(
+                "payment_terms_days", sa.Integer(), nullable=False, server_default="30"
+            ),
+            sa.Column("is_active", sa.Boolean(), nullable=False, server_default="true"),
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                nullable=False,
+                server_default=sa.text("now()"),
+            ),
+            sa.Column(
+                "updated_at",
+                sa.DateTime(timezone=True),
+                nullable=False,
+                server_default=sa.text("now()"),
+            ),
+            sa.ForeignKeyConstraint(
+                ["owner_company_id"],
+                ["company.id"],
+                ondelete="CASCADE",
+            ),
+            sa.ForeignKeyConstraint(
+                ["partner_company_id"],
+                ["company.id"],
+                ondelete="CASCADE",
+            ),
+            sa.PrimaryKeyConstraint("id"),
+            sa.UniqueConstraint(
+                "owner_company_id", "partner_company_id", name="unique_partnership"
+            ),
+        )
+
+    # Créer les index pour partnerships (si les index n'existent pas)
+    # Mettre à jour la liste des index si la table existe maintenant
+    if "partnerships" in inspector.get_table_names():
+        existing_indexes["partnerships"] = [idx["name"] for idx in inspector.get_indexes("partnerships")]
+    
+    if "ix_partnerships_owner_company" not in existing_indexes.get("partnerships", []):
+        op.create_index(
+            "ix_partnerships_owner_company",
+            "partnerships",
             ["owner_company_id"],
-            ["company.id"],
-            ondelete="CASCADE",
-        ),
-        sa.ForeignKeyConstraint(
+        )
+    
+    if "ix_partnerships_partner_company" not in existing_indexes.get("partnerships", []):
+        op.create_index(
+            "ix_partnerships_partner_company",
+            "partnerships",
             ["partner_company_id"],
-            ["company.id"],
-            ondelete="CASCADE",
-        ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "owner_company_id", "partner_company_id", name="unique_partnership"
-        ),
-    )
+        )
 
-    # Créer les index pour partnerships
-    op.create_index(
-        "ix_partnerships_owner_company",
-        "partnerships",
-        ["owner_company_id"],
-    )
-    op.create_index(
-        "ix_partnerships_partner_company",
-        "partnerships",
-        ["partner_company_id"],
-    )
-
-    # Créer la table booking_transfers
-    op.create_table(
-        "booking_transfers",
+    # Créer la table booking_transfers (si elle n'existe pas déjà)
+    if "booking_transfers" not in existing_tables:
+        op.create_table(
+            "booking_transfers",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("booking_id", sa.Integer(), nullable=False),
         sa.Column("partnership_id", sa.Integer(), nullable=False),
@@ -179,45 +201,58 @@ def upgrade():
         sa.ForeignKeyConstraint(["executing_company_id"], ["company.id"]),
         sa.ForeignKeyConstraint(["validated_by"], ["user.id"]),
         sa.PrimaryKeyConstraint("id"),
-    )
+        )
+    
+    # Créer les index pour booking_transfers (si les index n'existent pas)
+    # Mettre à jour la liste des index si la table existe maintenant
+    if "booking_transfers" in inspector.get_table_names():
+        existing_indexes["booking_transfers"] = [idx["name"] for idx in inspector.get_indexes("booking_transfers")]
 
-    # Créer les index pour booking_transfers
-    op.create_index("ix_booking_transfers_booking", "booking_transfers", ["booking_id"])
-    op.create_index(
-        "ix_booking_transfers_partnership", "booking_transfers", ["partnership_id"]
-    )
-    op.create_index(
-        "ix_booking_transfers_owner_company", "booking_transfers", ["owner_company_id"]
-    )
-    op.create_index(
-        "ix_booking_transfers_executing_company",
-        "booking_transfers",
-        ["executing_company_id"],
-    )
-    op.create_index("ix_booking_transfers_status", "booking_transfers", ["status"])
+    # Créer les index pour booking_transfers (si les index n'existent pas)
+    if "ix_booking_transfers_booking" not in existing_indexes.get("booking_transfers", []):
+        op.create_index("ix_booking_transfers_booking", "booking_transfers", ["booking_id"])
+    if "ix_booking_transfers_partnership" not in existing_indexes.get("booking_transfers", []):
+        op.create_index(
+            "ix_booking_transfers_partnership", "booking_transfers", ["partnership_id"]
+        )
+    if "ix_booking_transfers_owner_company" not in existing_indexes.get("booking_transfers", []):
+        op.create_index(
+            "ix_booking_transfers_owner_company", "booking_transfers", ["owner_company_id"]
+        )
+    if "ix_booking_transfers_executing_company" not in existing_indexes.get("booking_transfers", []):
+        op.create_index(
+            "ix_booking_transfers_executing_company",
+            "booking_transfers",
+            ["executing_company_id"],
+        )
+    if "ix_booking_transfers_status" not in existing_indexes.get("booking_transfers", []):
+        op.create_index("ix_booking_transfers_status", "booking_transfers", ["status"])
 
-    # Ajouter la colonne executing_company_id à bookings
-    op.add_column(
-        "booking",
-        sa.Column(
-            "executing_company_id",
-            sa.Integer(),
-            nullable=True,
-        ),
-    )
-    op.create_foreign_key(
-        "fk_bookings_executing_company",
-        "booking",
-        "company",
-        ["executing_company_id"],
-        ["id"],
-        ondelete="SET NULL",
-    )
-    op.create_index(
-        "ix_booking_executing_company",
-        "booking",
-        ["executing_company_id"],
-    )
+    # Ajouter la colonne executing_company_id à bookings (si elle n'existe pas déjà)
+    existing_columns = [col["name"] for col in inspector.get_columns("booking")]
+    
+    if "executing_company_id" not in existing_columns:
+        op.add_column(
+            "booking",
+            sa.Column(
+                "executing_company_id",
+                sa.Integer(),
+                nullable=True,
+            ),
+        )
+        op.create_foreign_key(
+            "fk_bookings_executing_company",
+            "booking",
+            "company",
+            ["executing_company_id"],
+            ["id"],
+            ondelete="SET NULL",
+        )
+        op.create_index(
+            "ix_booking_executing_company",
+            "booking",
+            ["executing_company_id"],
+        )
 
 
 def downgrade():
