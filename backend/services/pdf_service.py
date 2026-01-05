@@ -16,7 +16,7 @@ MAX_PATIENT_NAME_LENGTH = 18
 app_logger = logging.getLogger("pdf_service")
 
 
-def _format_address_for_display(address: str) -> str:
+def _format_address_for_display(address: str) -> str:  # noqa: PLR0911
     """Formate une adresse pour l'affichage dans le PDF.
 
     Format de sortie :
@@ -50,13 +50,13 @@ def _format_address_for_display(address: str) -> str:
         postal_code = parts[2]
         city = parts[3]
         return f"{street_and_number}<br/>{postal_code} {city}"
-    elif len(parts) >= MIN_ADDRESS_PARTS_POSTAL:
+    if len(parts) >= MIN_ADDRESS_PARTS_POSTAL:
         # Format: "Rue Numéro, Code Postal, Ville" ou "Rue, Code Postal, Ville"
         street = parts[0]
         postal_code = parts[1]
         city = parts[2]
         return f"{street}<br/>{postal_code} {city}"
-    elif len(parts) >= MIN_ADDRESS_PARTS:
+    if len(parts) >= MIN_ADDRESS_PARTS:
         # Format: "Rue Numéro, Code Postal Ville"
         street = parts[0]
         # Essayer d'extraire code postal et ville de la dernière partie
@@ -66,9 +66,8 @@ def _format_address_for_display(address: str) -> str:
             postal_code = parts_space[0]
             city = " ".join(parts_space[1:])
             return f"{street}<br/>{postal_code} {city}"
-        else:
-            # Si on ne peut pas parser, retourner tel quel avec un <br/> au milieu
-            return f"{street}<br/>{last_part}"
+        # Si on ne peut pas parser, retourner tel quel avec un <br/> au milieu
+        return f"{street}<br/>{last_part}"
 
     # Si le format n'est pas reconnu, essayer de trouver un code postal (4 chiffres)
     import re

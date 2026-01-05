@@ -535,10 +535,8 @@ class TestDisasterScenarios:
                 logger.info("[D3] ✅ Retries automatiques détectés dans les logs")
             else:
                 logger.warning(
-                    (
-                        "[D3] ⚠️ Retries non détectés "
-                        "(peut-être cache utilisé ou pas d'erreurs)"
-                    )
+                    "[D3] ⚠️ Retries non détectés "
+                    "(peut-être cache utilisé ou pas d'erreurs)"
                 )
 
             if fallback_detected:

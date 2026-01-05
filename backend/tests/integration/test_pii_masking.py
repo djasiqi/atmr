@@ -301,8 +301,8 @@ class TestPIIMaskingIntegration:
         masked_data = {"user_email": "user@example.com", "user_phone": "+33123456789"}
         # ✅ FIX: Formater le message complètement avant de le passer au logger
         # pour éviter que PIIFilter ne modifie les arguments et cause des erreurs
-        # de formatage. Utiliser % formatting (pas f-string) pour respecter Ruff G004
-        formatted_message = "Processing booking with PII: %s" % (str(masked_data),)
+        # de formatage. Utiliser format specifiers pour respecter Ruff UP031
+        formatted_message = "Processing booking with PII: {}".format(str(masked_data))
         logger.info(formatted_message)
 
         log_output = log_stream.getvalue()

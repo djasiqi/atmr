@@ -52,7 +52,7 @@ def upgrade():
     op.execute(
         """
         INSERT INTO app_version_config (platform, min_required_version, latest_version, store_url, update_message)
-        VALUES 
+        VALUES
         ('android', '1.0.0', '1.0.3', 'https://play.google.com/store/apps/details?id=com.drinjasiqi.atmr', NULL),
         ('ios', '1.0.0', '1.0.3', NULL, NULL)
         ON CONFLICT (platform) DO NOTHING;

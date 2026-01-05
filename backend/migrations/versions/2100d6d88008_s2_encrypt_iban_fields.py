@@ -42,8 +42,8 @@ def upgrade():
             sa.text(
                 """
                 SELECT EXISTS (
-                    SELECT 1 FROM pg_indexes 
-                    WHERE tablename = 'company' 
+                    SELECT 1 FROM pg_indexes
+                    WHERE tablename = 'company'
                     AND indexname = 'ix_company_iban'
                 )
                 """

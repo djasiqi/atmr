@@ -61,8 +61,8 @@ def upgrade():
         sa.text(
             """
             SELECT EXISTS (
-                SELECT 1 FROM pg_indexes 
-                WHERE tablename = 'client' 
+                SELECT 1 FROM pg_indexes
+                WHERE tablename = 'client'
                 AND indexname = 'uq_client_user_no_company'
             )
         """
@@ -115,7 +115,7 @@ def upgrade():
     task_failure_indexes_query = bind.execute(
         sa.text(
             """
-            SELECT indexname FROM pg_indexes 
+            SELECT indexname FROM pg_indexes
             WHERE tablename = 'task_failure'
         """
         )

@@ -518,7 +518,7 @@ class TestActionLogging:
         # Atteindre la limite
         # ✅ FIX: S'assurer que company est flushée avant de créer AutonomousAction
         db.session.flush()
-        from datetime import datetime, timezone
+        from datetime import UTC, datetime
 
         for i in range(2):
             action = AutonomousAction(
@@ -527,7 +527,7 @@ class TestActionLogging:
                 action_description=f"Limit action {i}",
                 success=True,
                 created_at=datetime.now(
-                    timezone.utc
+                    UTC
                 ),  # ✅ FIX: Définir created_at explicitement
             )
             db.session.add(action)
