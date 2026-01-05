@@ -16,26 +16,23 @@ services:
       - postgres_data:/var/lib/postgresql/data
       # ✅ P1: Configuration PostgreSQL pour monitoring des performances
       # Note: Les fichiers de config sont optionnels - si absents, PostgreSQL utilisera les valeurs par défaut
-      - ./backend/config/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
-      - ./backend/config/postgres/init-postgres-monitoring.sql:/docker-entrypoint-initdb.d/01-monitoring.sql:ro
-    command:
-      - postgres
-      - -c
-      - config_file=/etc/postgresql/postgresql.conf
+      # Temporairement désactivé pour diagnostiquer le problème de healthcheck
+      # - ./backend/config/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      # - ./backend/config/postgres/init-postgres-monitoring.sql:/docker-entrypoint-initdb.d/01-monitoring.sql:ro
+    # command:
+    #   - postgres
+    #   - -c
+    #   - config_file=/etc/postgresql/postgresql.conf
     ports:
       - "5432:5432"
     networks:
       - atmr-network
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U atmr_user -d atmr_db || pg_isready -U postgres || pg_isready",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 90s
     deploy:
       resources:
         limits:
