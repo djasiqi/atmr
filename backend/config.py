@@ -93,10 +93,7 @@ def _is_internal_database_host(host: str) -> bool:
         return True
 
     # IPs Docker (172.17.0.0/16, 172.18.0.0/16, etc.)
-    if host.startswith("172.17.") or host.startswith("172.18."):
-        return True
-
-    return False
+    return host.startswith("172.17.") or host.startswith("172.18.")
 
 
 def _build_database_url_safe() -> str:
@@ -117,7 +114,7 @@ def _build_database_url_safe() -> str:
         # Si DATABASE_URL contient déjà sslmode, on le garde tel quel
         # Sinon, on détecte si c'est un hôte interne et on ajoute sslmode=disable
         if "sslmode=" not in db_url:
-            from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+            from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
             parsed = urlparse(db_url)
             host = parsed.hostname or ""
