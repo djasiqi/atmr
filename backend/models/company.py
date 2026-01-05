@@ -241,7 +241,9 @@ class Company(db.Model):
             return None
         try:
             encryption_service = get_encryption_service()
-            return encryption_service.decrypt_field(str(getattr(self, "_iban_raw", None)))
+            return encryption_service.decrypt_field(
+                str(getattr(self, "_iban_raw", None))
+            )
         except Exception as e:
             logger.error(
                 "[Company] Erreur déchiffrement IBAN pour company_id=%s: %s", self.id, e

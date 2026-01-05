@@ -51,9 +51,7 @@ class DriverRepository:
             ),
             license_valid_until=driver.license_valid_until,
             trainings=(
-                list(cast(Any, driver.trainings))
-                if bool(driver.trainings)
-                else None
+                list(cast(Any, driver.trainings)) if bool(driver.trainings) else None
             ),
             medical_valid_until=driver.medical_valid_until,
         )

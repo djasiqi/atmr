@@ -617,11 +617,13 @@ class DriverBookingsSince(Resource):
                 Booking.query.filter(Booking.driver_id == driver.id)
                 .filter(Booking.updated_at >= since_dt)
                 .filter(
-                    Booking.status.in_([
-                        BookingStatus.ASSIGNED,
-                        BookingStatus.EN_ROUTE,
-                        BookingStatus.IN_PROGRESS,
-                    ])
+                    Booking.status.in_(
+                        [
+                            BookingStatus.ASSIGNED,
+                            BookingStatus.EN_ROUTE,
+                            BookingStatus.IN_PROGRESS,
+                        ]
+                    )
                 )
                 .order_by(Booking.updated_at.asc())
                 .all()

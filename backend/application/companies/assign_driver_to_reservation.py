@@ -71,6 +71,7 @@ class AssignDriverToReservationUseCase:
         status = _status_value(getattr(booking, "status", None))
         # #region agent log
         import logging
+
         logger = logging.getLogger(__name__)
         logger.info(
             "[AssignDriverToReservationUseCase] Status check: status=%s, status_lower=%s, is_accepted=%s, is_assigned=%s",

@@ -265,7 +265,12 @@ def normalize_photon(data: Dict[str, Any]) -> List[Dict[str, Any]]:
 
             # ✅ Enrichir avec Google Geocoding si code postal ou numéro manque
             # (seulement si Google Places est activé et qu'on a une rue)
-            if USE_GOOGLE_PLACES and street and city and (not postcode or not housenumber):
+            if (
+                USE_GOOGLE_PLACES
+                and street
+                and city
+                and (not postcode or not housenumber)
+            ):
                 # Construire une adresse de recherche pour Google
                 search_address_parts = [street]
                 if housenumber:

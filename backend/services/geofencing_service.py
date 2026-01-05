@@ -296,9 +296,7 @@ class GeofencingService:
             assignment_dtos = assignment_repo.find_by_driver_id(driver_id)
             # Filtrer par statut IN_PROGRESS en mémoire
             in_progress_dtos = [
-                dto
-                for dto in assignment_dtos
-                if dto.status == AssignmentStatus.ONBOARD
+                dto for dto in assignment_dtos if dto.status == AssignmentStatus.ONBOARD
             ]
             # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
             assignment = (

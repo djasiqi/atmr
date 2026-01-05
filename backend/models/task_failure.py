@@ -58,13 +58,17 @@ class TaskFailure(db.Model):
             "task_id": self.task_id,
             "task_name": self.task_name,
             "exception": self.exception[:500],  # Tronquer pour affichage
-            "traceback": self.traceback[:500] if bool(getattr(self, "traceback", None)) else None,
+            "traceback": self.traceback[:500]
+            if bool(getattr(self, "traceback", None))
+            else None,
             "args": self.args,
             "kwargs": self.kwargs,
             "first_seen": self.first_seen.isoformat()
             if bool(self.first_seen)
             else None,
-            "last_seen": self.last_seen.isoformat() if bool(getattr(self, "last_seen", None)) else None,
+            "last_seen": self.last_seen.isoformat()
+            if bool(getattr(self, "last_seen", None))
+            else None,
             "failure_count": self.failure_count,
             "worker_name": self.worker_name,
             "hostname": self.hostname,

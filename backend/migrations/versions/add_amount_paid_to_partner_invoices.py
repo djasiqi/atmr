@@ -13,7 +13,9 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "add_amount_paid_partner_inv"
-down_revision = "add_exec_company_partner_inv"  # Après add_executing_company_id_to_partner_invoice
+down_revision = (
+    "add_exec_company_partner_inv"  # Après add_executing_company_id_to_partner_invoice
+)
 branch_labels = None
 depends_on = None
 
@@ -23,19 +25,20 @@ def upgrade():
     # (peut avoir été ajoutée manuellement)
     from sqlalchemy import inspect
     from sqlalchemy.engine import reflection
-    
+
     conn = op.get_bind()
     inspector = inspect(conn)
-    columns = [col['name'] for col in inspector.get_columns('partner_invoices')]
-    
-    if 'amount_paid' not in columns:
+    columns = [col["name"] for col in inspector.get_columns("partner_invoices")]
+
+    if "amount_paid" not in columns:
         op.add_column(
             "partner_invoices",
-            sa.Column("amount_paid", sa.Numeric(10, 2), nullable=False, server_default="0.00"),
+            sa.Column(
+                "amount_paid", sa.Numeric(10, 2), nullable=False, server_default="0.00"
+            ),
         )
 
 
 def downgrade():
     # Supprimer la colonne amount_paid
     op.drop_column("partner_invoices", "amount_paid")
-
