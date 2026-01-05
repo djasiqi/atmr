@@ -167,23 +167,29 @@ def normalize_google_places(
             else:
                 street_with_number = None
 
-            # Construire le label : FORCER le format "Rue, Numéro, Code Postal, Ville"
+            # Construire le label : FORCER le format "Rue, Numéro, Code Postal, Ville" (SANS PAYS)
+            # ✅ Le code postal doit TOUJOURS être inclus s'il est disponible
+            # ❌ Le pays ne doit JAMAIS être inclus dans le label
             if place_name and street_with_number:
                 # Lieu nommé avec adresse complète : "Nom, Rue, Numéro, CP, Ville"
                 address_parts = [street_with_number]
+                # ✅ Toujours inclure le code postal s'il est disponible
                 if postcode:
                     address_parts.append(postcode)
                 if city:
                     address_parts.append(city)
+                # ❌ NE PAS inclure le pays
                 address_str = ", ".join(address_parts)
                 label = f"{place_name}, {address_str}"
             elif place_name and street:
                 # Lieu nommé avec rue mais sans numéro : "Nom, Rue, CP, Ville"
                 address_parts = [street]
+                # ✅ Toujours inclure le code postal s'il est disponible
                 if postcode:
                     address_parts.append(postcode)
                 if city:
                     address_parts.append(city)
+                # ❌ NE PAS inclure le pays
                 address_str = ", ".join(address_parts)
                 label = f"{place_name}, {address_str}"
             elif place_name:
@@ -192,25 +198,44 @@ def normalize_google_places(
             elif street_with_number and city:
                 # Adresse complète : "Rue, Numéro, CP, Ville"
                 parts = [street_with_number]
+                # ✅ Toujours inclure le code postal s'il est disponible
                 if postcode:
                     parts.append(postcode)
                 if city:
                     parts.append(city)
+                # ❌ NE PAS inclure le pays
+                label = ", ".join(parts)
+            elif street_with_number and postcode:
+                # Rue avec numéro et code postal mais sans ville : "Rue, Numéro, CP"
+                parts = [street_with_number, postcode]
                 label = ", ".join(parts)
             elif street and city:
                 # Rue sans numéro : "Rue, CP, Ville"
                 parts = [street]
+                # ✅ Toujours inclure le code postal s'il est disponible
                 if postcode:
                     parts.append(postcode)
                 if city:
                     parts.append(city)
+                # ❌ NE PAS inclure le pays
                 label = ", ".join(parts)
+            elif street and postcode:
+                # Rue avec code postal mais sans ville : "Rue, CP"
+                label = f"{street}, {postcode}"
             elif city:
-                # Au moins la ville
+                # Au moins la ville : inclure le code postal s'il est disponible
                 label = f"{postcode} {city}" if postcode and city else city
+            elif postcode:
+                # Seulement le code postal (cas rare)
+                label = postcode
             else:
-                # Dernier recours : utiliser l'adresse formatée de Google
-                label = details.get("address", "")
+                # Dernier recours : utiliser l'adresse formatée de Google (sans pays)
+                google_address = details.get("address", "")
+                # Retirer le pays s'il est présent à la fin
+                if google_address:
+                    # Retirer "Suisse", "Switzerland", "France", etc. à la fin
+                    google_address = google_address.replace(/,?\s*(Suisse|Switzerland|France|Deutschland|Germany|Italy|Italia)\s*$/i, "").trim()
+                label = google_address or "Adresse"
 
             # L'adresse à afficher doit toujours inclure le numéro si disponible
             address_display = street_with_number or street or label
@@ -317,24 +342,30 @@ def normalize_photon(data: Dict[str, Any]) -> List[Dict[str, Any]]:
             else:
                 street_with_number = None
 
-            # Construire le label : FORCER le format "Rue, Numéro, Code Postal, Ville"
+            # Construire le label : FORCER le format "Rue, Numéro, Code Postal, Ville" (SANS PAYS)
+            # ✅ Le code postal doit TOUJOURS être inclus s'il est disponible
+            # ❌ Le pays ne doit JAMAIS être inclus dans le label
             # Ne pas inclure les résultats incomplets (sans code postal ET sans numéro si c'est une adresse)
             if place_name and street_with_number:
                 # Lieu nommé avec adresse complète : "Nom, Rue, Numéro, CP, Ville"
                 address_parts = [street_with_number]
+                # ✅ Toujours inclure le code postal s'il est disponible
                 if postcode:
                     address_parts.append(postcode)
                 if city:
                     address_parts.append(city)
+                # ❌ NE PAS inclure le pays
                 address_str = ", ".join(address_parts)
                 label = f"{place_name}, {address_str}"
             elif place_name and street:
                 # Lieu nommé avec rue mais sans numéro : "Nom, Rue, CP, Ville"
                 address_parts = [street]
+                # ✅ Toujours inclure le code postal s'il est disponible
                 if postcode:
                     address_parts.append(postcode)
                 if city:
                     address_parts.append(city)
+                # ❌ NE PAS inclure le pays
                 address_str = ", ".join(address_parts)
                 label = f"{place_name}, {address_str}"
             elif place_name:
@@ -348,18 +379,31 @@ def normalize_photon(data: Dict[str, Any]) -> List[Dict[str, Any]]:
                     parts.append(postcode)
                 if city:
                     parts.append(city)
+                # ❌ NE PAS inclure le pays
+                label = ", ".join(parts)
+            elif street_with_number and postcode:
+                # Rue avec numéro et code postal mais sans ville : "Rue, Numéro, CP"
+                parts = [street_with_number, postcode]
                 label = ", ".join(parts)
             elif street and city:
                 # Rue sans numéro : "Rue, CP, Ville"
                 parts = [street]
+                # ✅ Toujours inclure le code postal s'il est disponible
                 if postcode:
                     parts.append(postcode)
                 if city:
                     parts.append(city)
+                # ❌ NE PAS inclure le pays
                 label = ", ".join(parts)
+            elif street and postcode:
+                # Rue avec code postal mais sans ville : "Rue, CP"
+                label = f"{street}, {postcode}"
             elif city:
-                # Au moins la ville
+                # Au moins la ville : inclure le code postal s'il est disponible
                 label = f"{postcode} {city}" if postcode and city else city
+            elif postcode:
+                # Seulement le code postal (cas rare)
+                label = postcode
             else:
                 label = "Adresse"
 
