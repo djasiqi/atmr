@@ -49,6 +49,11 @@ const BillingTab = () => {
     try {
       setLoading(true);
       const data = await fetchBillingSettings();
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'BillingTab.jsx:loadSettings:after_fetch',message:'Data loaded from API',data:{has_data:!!data,data_keys:data ? Object.keys(data) : [],has_iban:data?.iban !== undefined,iban_value:data?.iban,iban_length:data?.iban?.length,has_qr_iban:data?.qr_iban !== undefined,qr_iban_value:data?.qr_iban},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+      // #endregion
+      
       if (data) {
         setForm({
           payment_terms_days: data.payment_terms_days || 10,
@@ -98,9 +103,22 @@ const BillingTab = () => {
     try {
       const formData = updatedForm || form;
 
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'BillingTab.jsx:autoSave:start',message:'Starting autoSave',data:{has_iban:!!formData.iban,iban_value:formData.iban,iban_length:formData.iban?.length,has_qr_iban:!!formData.qr_iban,qr_iban_value:formData.qr_iban},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
+
+      // Fonction pour normaliser l'IBAN (enlever les espaces)
+      const normalizeIban = (iban) => {
+        if (!iban) return null;
+        return iban.replace(/\s+/g, '').toUpperCase().trim() || null;
+      };
+
       // Nettoyer les données avant envoi
       const cleanedData = {
         ...formData,
+        // Normaliser les IBAN (enlever les espaces avant envoi)
+        iban: normalizeIban(formData.iban),
+        qr_iban: normalizeIban(formData.qr_iban),
         // S'assurer que reminder_schedule_days a les bonnes clés (strings)
         reminder_schedule_days: formData.reminder_schedule_days
           ? {
@@ -132,8 +150,32 @@ const BillingTab = () => {
         payment_terms_days: parseInt(formData.payment_terms_days) || 10,
       };
 
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'BillingTab.jsx:autoSave:before_send',message:'Data before sending',data:{has_iban:!!cleanedData.iban,iban_value:cleanedData.iban,iban_length:cleanedData.iban?.length,has_qr_iban:!!cleanedData.qr_iban,qr_iban_value:cleanedData.qr_iban},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+
       console.log('[BillingTab] Sending data:', cleanedData);
-      await updateBillingSettings(cleanedData);
+      const response = await updateBillingSettings(cleanedData);
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'BillingTab.jsx:autoSave:after_send',message:'Data after sending',data:{has_response:!!response,response_keys:response ? Object.keys(response) : [],has_data:!!response?.data,data_keys:response?.data ? Object.keys(response.data) : [],has_iban_in_response:response?.data?.iban !== undefined,iban_in_response:response?.data?.iban,iban_length_in_response:response?.data?.iban?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
+      
+      // Mettre à jour le formulaire avec la réponse du serveur
+      if (response?.data) {
+        const formatIbanPretty = (iban) => {
+          if (!iban) return '';
+          const v = iban.replace(/\s+/g, '').toUpperCase();
+          return v.replace(/(.{4})/g, '$1 ').trim();
+        };
+        
+        setForm((prev) => ({
+          ...prev,
+          iban: response.data.iban ? formatIbanPretty(response.data.iban) : prev.iban,
+          qr_iban: response.data.qr_iban ? formatIbanPretty(response.data.qr_iban) : prev.qr_iban,
+        }));
+      }
+      
       setMessage('✅ Sauvegardé automatiquement');
       setTimeout(() => setMessage(''), 2000);
     } catch (err) {
