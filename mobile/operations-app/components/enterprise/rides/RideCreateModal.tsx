@@ -600,13 +600,16 @@ export const RideCreateModal: React.FC<RideCreateModalProps> = ({
 
                     {renderStepIndicator()}
 
-                    <ScrollView
-                        style={styles.modalScroll}
-                        contentContainerStyle={styles.modalContent}
-                        showsVerticalScrollIndicator={false}
-                    >
-                        {renderStepContent()}
-                    </ScrollView>
+                    <View style={styles.scrollContainer}>
+                        <ScrollView
+                            style={styles.modalScroll}
+                            contentContainerStyle={styles.modalContent}
+                            showsVerticalScrollIndicator={false}
+                            keyboardShouldPersistTaps="handled"
+                        >
+                            {renderStepContent()}
+                        </ScrollView>
+                    </View>
 
                     <View style={styles.modalActions}>
                         {currentStep > 1 && (
@@ -681,6 +684,8 @@ const styles = StyleSheet.create({
         shadowOpacity: 1,
         shadowRadius: 24,
         elevation: 8,
+        flexDirection: "column",
+        overflow: "hidden",
     },
     modalHeader: {
         flexDirection: "row",
@@ -740,11 +745,17 @@ const styles = StyleSheet.create({
     stepLineActive: {
         backgroundColor: palette.stepActive,
     },
+    scrollContainer: {
+        flex: 1,
+        minHeight: 300,
+    },
     modalScroll: {
         flex: 1,
     },
     modalContent: {
         padding: 24,
+        paddingBottom: 32,
+        flexGrow: 1,
     },
     stepContent: {
         gap: 20,

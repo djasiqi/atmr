@@ -459,6 +459,36 @@ class BillingSettings(Resource):
             for field in updatable_fields:
                 if field in data:
                     value = data[field]
+                    # #region agent log
+                    if field in ["iban", "qr_iban"]:
+                        import json
+                        import time
+                        from pathlib import Path
+
+                        log_path = Path("/app/.cursor/debug.log")
+                        log_data = {
+                            "location": "company_settings.py:BillingSettings.put:before_set",
+                            "message": f"Setting {field}",
+                            "data": {
+                                "field": field,
+                                "value": value,
+                                "value_type": type(value).__name__,
+                                "is_none": value is None,
+                                "is_empty": value == "",
+                                "value_length": len(value) if value else None,
+                            },
+                            "timestamp": int(time.time() * 1000),
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "E",
+                        }
+                        try:
+                            log_path.parent.mkdir(parents=True, exist_ok=True)
+                            with log_path.open("a", encoding="utf-8") as f:
+                                f.write(json.dumps(log_data) + "\n")
+                        except Exception:
+                            pass
+                    # #endregion
                     # Gérer les valeurs None/empty pour les champs optionnels
                     if value is None or value == "":
                         if field in [
@@ -483,6 +513,32 @@ class BillingSettings(Resource):
                         }
                         setattr(billing, field, normalized)
                     else:
+                        # #region agent log
+                        if field in ["iban", "qr_iban"]:
+                            import json
+                            import time
+                            from pathlib import Path
+
+                            log_path = Path("/app/.cursor/debug.log")
+                            log_data = {
+                                "location": "company_settings.py:BillingSettings.put:setting",
+                                "message": f"Setting {field} with value",
+                                "data": {
+                                    "field": field,
+                                    "value": value,
+                                    "value_type": type(value).__name__,
+                                },
+                                "timestamp": int(time.time() * 1000),
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "F",
+                            }
+                            try:
+                                with log_path.open("a", encoding="utf-8") as f:
+                                    f.write(json.dumps(log_data) + "\n")
+                            except Exception:
+                                pass
+                        # #endregion
                         setattr(billing, field, value)
 
             # Gestion de la TVA
@@ -529,10 +585,64 @@ class BillingSettings(Resource):
                 "[Settings] Billing settings updated for company %s", company.id
             )
 
+            # #region agent log
+            import json
+            import time
+            from pathlib import Path
+
+            log_path = Path("/app/.cursor/debug.log")
+            log_data = {
+                "location": "company_settings.py:BillingSettings.put:after_commit",
+                "message": "After commit, preparing response",
+                "data": {
+                    "has_iban_raw": hasattr(billing, "_iban_raw"),
+                    "iban_raw_value": str(getattr(billing, "_iban_raw", None)),
+                    "iban_decrypted": billing.iban,
+                    "has_qr_iban_raw": hasattr(billing, "_qr_iban_raw"),
+                    "qr_iban_raw_value": str(getattr(billing, "_qr_iban_raw", None)),
+                    "qr_iban_decrypted": billing.qr_iban,
+                },
+                "timestamp": int(time.time() * 1000),
+                "sessionId": "debug-session",
+                "runId": "run1",
+                "hypothesisId": "G",
+            }
+            try:
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(json.dumps(log_data) + "\n")
+            except Exception:
+                pass
+            # #endregion
+
+            result_dict = billing.to_dict()
+
+            # #region agent log
+            log_data = {
+                "location": "company_settings.py:BillingSettings.put:to_dict_result",
+                "message": "to_dict result for response",
+                "data": {
+                    "has_iban_in_dict": "iban" in result_dict,
+                    "iban_in_dict": result_dict.get("iban"),
+                    "has_qr_iban_in_dict": "qr_iban" in result_dict,
+                    "qr_iban_in_dict": result_dict.get("qr_iban"),
+                },
+                "timestamp": int(time.time() * 1000),
+                "sessionId": "debug-session",
+                "runId": "run1",
+                "hypothesisId": "H",
+            }
+            try:
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(json.dumps(log_data) + "\n")
+            except Exception:
+                pass
+            # #endregion
+
             return {
                 "success": True,
                 "message": "Paramètres de facturation mis à jour",
-                "data": billing.to_dict(),
+                "data": result_dict,
             }, 200
         except Exception as e:
             db.session.rollback()
