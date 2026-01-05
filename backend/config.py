@@ -70,6 +70,35 @@ def _get_secret_from_vault_or_env(
     return None
 
 
+def _is_internal_database_host(host: str) -> bool:
+    """Détecte si l'hôte de base de données est sur le réseau Docker interne.
+
+    Args:
+        host: Nom d'hôte ou adresse IP de la base de données
+
+    Returns:
+        True si l'hôte est sur le réseau Docker interne (pas besoin de SSL)
+    """
+    # Hôtes Docker internes (noms de service)
+    internal_hosts = ["postgres", "localhost", "127.0.0.1", "0.0.0.0"]
+    if host in internal_hosts:
+        return True
+
+    # IPs privées (RFC 1918)
+    if (
+        host.startswith("10.")
+        or host.startswith("172.16.")
+        or host.startswith("192.168.")
+    ):
+        return True
+
+    # IPs Docker (172.17.0.0/16, 172.18.0.0/16, etc.)
+    if host.startswith("172.17.") or host.startswith("172.18."):
+        return True
+
+    return False
+
+
 def _build_database_url_safe() -> str:
     """Construit DATABASE_URL depuis variables individuelles avec échappement URL.
 
@@ -77,12 +106,28 @@ def _build_database_url_safe() -> str:
     il est utilisé tel quel. Sinon, l'URL est construite depuis les variables
     individuelles POSTGRES_* avec échappement automatique du mot de passe.
 
+    Pour les hôtes Docker internes, SSL est automatiquement désactivé (sslmode=disable).
+
     Returns:
         URL de connexion PostgreSQL avec mot de passe échappé si nécessaire.
     """
     # Vérifier si DATABASE_URL existe déjà
     db_url = os.getenv("DATABASE_URL")
     if db_url:
+        # Si DATABASE_URL contient déjà sslmode, on le garde tel quel
+        # Sinon, on détecte si c'est un hôte interne et on ajoute sslmode=disable
+        if "sslmode=" not in db_url:
+            from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+
+            parsed = urlparse(db_url)
+            host = parsed.hostname or ""
+            if _is_internal_database_host(host):
+                # Ajouter sslmode=disable pour hôtes internes
+                query_params = parse_qs(parsed.query)
+                query_params["sslmode"] = ["disable"]
+                new_query = urlencode(query_params, doseq=True)
+                new_parsed = parsed._replace(query=new_query)
+                return urlunparse(new_parsed)
         return db_url
 
     # Construire depuis variables individuelles
@@ -95,7 +140,16 @@ def _build_database_url_safe() -> str:
     # Échapper le mot de passe pour URL (caractères spéciaux comme !, @, #, etc.)
     password_escaped = quote_plus(password)
 
-    return f"postgresql://{user}:{password_escaped}@{host}:{port}/{db}"
+    # Détecter si c'est un hôte interne et ajouter sslmode=disable si nécessaire
+    sslmode = os.getenv("POSTGRES_SSLMODE")
+    if not sslmode and _is_internal_database_host(host):
+        sslmode = "disable"
+
+    base_url = f"postgresql://{user}:{password_escaped}@{host}:{port}/{db}"
+    if sslmode:
+        return f"{base_url}?sslmode={sslmode}"
+
+    return base_url
 
 
 class Config:
@@ -411,15 +465,27 @@ class ProductionConfig(Config):
         raise RuntimeError(error_msg)
 
     # ✅ PostgreSQL-specific options
+    # Détecter automatiquement si SSL est nécessaire selon l'hôte
+    _db_uri = SQLALCHEMY_DATABASE_URI
+    _db_host = ""
+    if _db_uri:
+        from urllib.parse import urlparse
+
+        parsed = urlparse(_db_uri)
+        _db_host = parsed.hostname or ""
+
+    # Pour les hôtes Docker internes, désactiver SSL automatiquement
+    # Pour les DB externes (managed), SSL reste requis par défaut
+    _default_sslmode = "disable" if _is_internal_database_host(_db_host) else "require"
+    _sslmode = os.getenv("POSTGRES_SSLMODE", _default_sslmode)
+
     SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool | dict[str, str]]] = {
         **Config.SQLALCHEMY_ENGINE_OPTIONS,
         "pool_size": 10,  # ✅ PERF: Connection pooling (PostgreSQL uniquement)
         "max_overflow": 20,  # ✅ PERF: Max connections overflow (PostgreSQL uniquement)
         "connect_args": {
             "client_encoding": "utf8",
-            "sslmode": os.getenv(
-                "POSTGRES_SSLMODE", "require"
-            ),  # ✅ SECURITY: SSL requis en production
+            "sslmode": _sslmode,  # ✅ SECURITY: SSL désactivé pour Docker interne, requis pour DB externes
         },
     }
     # Cookies plus stricts en prod (peuvent être ajustés via env si reverse proxy HTTP)
