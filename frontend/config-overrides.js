@@ -41,8 +41,14 @@ module.exports = function override(config, _env) {
     return plugin;
   });
 
-  // Ignore "Failed to parse source map" (optionnel)
-  config.ignoreWarnings = [...(config.ignoreWarnings || []), /Failed to parse source map/];
+  // Ignore les warnings courants (source maps, baseline-browser-mapping, etc.)
+  config.ignoreWarnings = [
+    ...(config.ignoreWarnings || []),
+    /Failed to parse source map/,
+    /baseline-browser-mapping/,
+    /The data in this module is over/,
+    /to ensure accurate Baseline data/,
+  ];
 
   // ✅ PERF: Optimisations de bundle
   if (_env === 'production') {
