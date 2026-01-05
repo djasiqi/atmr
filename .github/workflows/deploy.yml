@@ -593,6 +593,17 @@ jobs:
             fi
 
             export DATABASE_URL="${SQLALCHEMY_DATABASE_URI}"
+            # 🔍 Diagnostic: Afficher les informations de connexion DB (sans secrets)
+            echo "🔍 Diagnostic de connexion DB:"
+            DB_HOST=$(echo "$DATABASE_URL" | sed -n 's/.*@\([^:]*\):.*/\1/p' || echo "N/A")
+            DB_PORT=$(echo "$DATABASE_URL" | sed -n 's/.*:\([0-9]*\)\/.*/\1/p' || echo "N/A")
+            DB_NAME=$(echo "$DATABASE_URL" | sed -n 's/.*\/\([^?]*\).*/\1/p' || echo "N/A")
+            SSL_MODE=$(echo "$DATABASE_URL" | sed -n 's/.*sslmode=\([^&]*\).*/\1/p' || echo "N/A")
+            echo "  Host: $DB_HOST"
+            echo "  Port: $DB_PORT"
+            echo "  Database: $DB_NAME"
+            echo "  SSL Mode: $SSL_MODE"
+            echo ""
             echo "📋 État des migrations avant upgrade:"
             docker_exec flask db current || true
             docker_exec flask db heads || true
@@ -602,6 +613,10 @@ jobs:
               UPGRADE_EXIT_CODE=$?
               echo "$UPGRADE_OUTPUT"
               echo "⚠️  Première tentative échouée (code: $UPGRADE_EXIT_CODE), vérification de l'état..."
+              # 🔍 Diagnostic: Afficher les logs PostgreSQL en cas d'échec
+              echo "🔍 Logs PostgreSQL (dernières 50 lignes):"
+              docker compose -f docker-compose.production.yml logs postgres --tail=50 || true
+              echo ""
               CURRENT_OUTPUT=$(docker_exec flask db current 2>&1 || echo "")
               echo "$CURRENT_OUTPUT"
               # Si erreur "overlaps", détecter et appliquer les révisions parentes manquantes

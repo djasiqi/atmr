@@ -23,8 +23,10 @@ services:
     #   - postgres
     #   - -c
     #   - config_file=/etc/postgresql/postgresql.conf
-    ports:
-      - "5432:5432"
+    # ⚠️ SÉCURITÉ: Port NON exposé publiquement - uniquement accessible via le réseau Docker
+    # Si vous devez accéder à PostgreSQL depuis l'extérieur, utilisez un tunnel SSH ou un VPN
+    expose:
+      - "5432"
     networks:
       - atmr-network
     healthcheck:
