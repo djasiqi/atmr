@@ -1,4 +1,7 @@
 import { enterpriseApi } from "./enterpriseAuth";
+import axios from "axios";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { ENTERPRISE_TOKEN_KEY, ENTERPRISE_SESSION_KEY } from "./enterpriseAuth";
 import {
   DispatchRunResponse,
   DispatchStatus,
@@ -463,19 +466,20 @@ export const applyOpportunity = async (
 
 export interface CreateClientPayload {
   client_type?: "PRIVATE";
+  email?: string; // Généré automatiquement si non fourni
   first_name: string;
   last_name: string;
   phone?: string;
-  address?: string;
+  address?: string; // Adresse complète formatée
   birth_date?: string;
   is_institution?: boolean;
   institution_name?: string;
-  domicile_address?: string;
+  domicile_address?: string; // Rue seule (sans code postal/ville)
   domicile_zip?: string;
   domicile_city?: string;
   domicile_lat?: number | null;
   domicile_lon?: number | null;
-  billing_address?: string;
+  billing_address?: string; // Adresse complète de facturation
   billing_lat?: number | null;
   billing_lon?: number | null;
   contact_email?: string;
@@ -493,15 +497,109 @@ export const createClient = async (
     ? `institution-${randomId}-${timestamp}@internal.atmr.local`
     : `client-${randomId}-${timestamp}@internal.atmr.local`;
 
-  const fullPayload = {
-    ...payload,
-    email,
+  // Construire l'adresse complète comme dans le frontend
+  // Format: "Rue, Code postal, Ville"
+  let address = payload.address;
+  if (!address && payload.domicile_address) {
+    const parts = [payload.domicile_address];
+    if (payload.domicile_zip) parts.push(payload.domicile_zip);
+    if (payload.domicile_city) parts.push(payload.domicile_city);
+    address = parts.join(", ");
+  }
+
+  // Construire l'adresse de facturation si non fournie
+  let billingAddress = payload.billing_address;
+  if (!billingAddress) {
+    // Utiliser la même adresse que le domicile
+    billingAddress = address;
+  }
+
+  const fullPayload: any = {
     client_type: payload.client_type || "PRIVATE",
+    email,
+    first_name: payload.first_name,
+    last_name: payload.last_name,
+    phone: payload.phone || undefined,
+    birth_date: payload.birth_date || undefined,
+    is_institution: payload.is_institution || false,
+    institution_name: payload.institution_name || undefined,
+    // Adresse complète (comme dans le frontend)
+    address: address || undefined,
+    // Adresse de domicile structurée
+    domicile_address: payload.domicile_address || undefined,
+    domicile_zip: payload.domicile_zip || undefined,
+    domicile_city: payload.domicile_city || undefined,
+    // Adresse de facturation
+    billing_address: billingAddress || undefined,
+    contact_email: payload.contact_email || undefined,
+    contact_phone: payload.contact_phone || undefined,
+    preferential_rate: payload.preferential_rate || undefined,
   };
 
-  const response = await enterpriseApi.post<{ data: ClientOption }>(
-    "/companies/me/clients",
-    fullPayload
+  // Ajouter les coordonnées GPS seulement si elles sont définies (pas null)
+  if (payload.domicile_lat !== null && payload.domicile_lat !== undefined) {
+    fullPayload.domicile_lat = payload.domicile_lat;
+  }
+  if (payload.domicile_lon !== null && payload.domicile_lon !== undefined) {
+    fullPayload.domicile_lon = payload.domicile_lon;
+  }
+  if (payload.billing_lat !== null && payload.billing_lat !== undefined) {
+    fullPayload.billing_lat = payload.billing_lat;
+  }
+  if (payload.billing_lon !== null && payload.billing_lon !== undefined) {
+    fullPayload.billing_lon = payload.billing_lon;
+  }
+
+  // Nettoyer le payload : supprimer les valeurs null/undefined/vides
+  Object.keys(fullPayload).forEach((key) => {
+    if (
+      fullPayload[key] === null ||
+      fullPayload[key] === undefined ||
+      fullPayload[key] === ""
+    ) {
+      delete fullPayload[key];
+    }
+  });
+
+  // L'endpoint /companies/me/clients est dans le namespace companies, pas company_mobile
+  // Il faut utiliser l'URL complète de l'API standard
+  const baseURL = enterpriseApi.defaults.baseURL || "";
+  // Remplacer /api/v1/company_mobile par /api/v1 pour accéder à l'API standard
+  const standardApiURL = baseURL.replace("/api/v1/company_mobile", "/api/v1");
+  
+  // Récupérer le token et les headers depuis AsyncStorage
+  const token = await AsyncStorage.getItem(ENTERPRISE_TOKEN_KEY);
+  const sessionRaw = await AsyncStorage.getItem(ENTERPRISE_SESSION_KEY);
+  
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  
+  if (sessionRaw) {
+    try {
+      const session = JSON.parse(sessionRaw);
+      if (session?.company?.id) {
+        headers["X-Company-ID"] = String(session.company.id);
+      }
+      if (session?.sessionId) {
+        headers["X-Session-ID"] = session.sessionId;
+      }
+    } catch (e) {
+      // Ignore parsing errors
+    }
+  }
+
+  console.log("[createClient] Payload envoyé:", JSON.stringify(fullPayload, null, 2));
+  console.log("[createClient] URL:", `${standardApiURL}/companies/me/clients`);
+
+  const response = await axios.post<{ data: ClientOption }>(
+    `${standardApiURL}/companies/me/clients`,
+    fullPayload,
+    { headers }
   );
   return response.data.data || response.data;
 };
