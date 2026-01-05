@@ -75,21 +75,27 @@ export default function AddressAutocomplete({
       const city = props.city || props.locality || '';
       const placeName = props.name;
 
-      // Construire le label : FORCER le format "Rue, Numéro, Code Postal, Ville"
+      // Construire le label : FORCER le format "Rue, Numéro, Code Postal, Ville" (SANS PAYS)
+      // ✅ Le code postal doit TOUJOURS être inclus s'il est disponible
+      // ✅ Le pays ne doit JAMAIS être inclus dans le label
       let label = '';
 
       if (placeName && fullStreetAddress) {
         // Lieu nommé avec adresse complète : "Nom, Rue, Numéro, CP, Ville"
         const addressParts = [fullStreetAddress];
+        // ✅ Toujours inclure le code postal s'il est disponible
         if (postcode) addressParts.push(postcode);
         if (city) addressParts.push(city);
+        // ❌ NE PAS inclure le pays
         const addressStr = addressParts.join(', ');
         label = `${placeName}, ${addressStr}`;
       } else if (placeName && street) {
         // Lieu nommé avec rue mais sans numéro : "Nom, Rue, CP, Ville"
         const addressParts = [street];
+        // ✅ Toujours inclure le code postal s'il est disponible
         if (postcode) addressParts.push(postcode);
         if (city) addressParts.push(city);
+        // ❌ NE PAS inclure le pays
         const addressStr = addressParts.join(', ');
         label = `${placeName}, ${addressStr}`;
       } else if (placeName) {
@@ -98,18 +104,32 @@ export default function AddressAutocomplete({
       } else if (fullStreetAddress && city) {
         // Format complet : "Rue, Numéro, CP, Ville"
         const parts = [fullStreetAddress];
+        // ✅ Toujours inclure le code postal s'il est disponible
         if (postcode) parts.push(postcode);
         if (city) parts.push(city);
+        // ❌ NE PAS inclure le pays
+        label = parts.join(', ');
+      } else if (fullStreetAddress && postcode) {
+        // Rue avec numéro et code postal mais sans ville : "Rue, Numéro, CP"
+        const parts = [fullStreetAddress, postcode];
         label = parts.join(', ');
       } else if (street && city) {
         // Rue sans numéro : "Rue, CP, Ville"
         const parts = [street];
+        // ✅ Toujours inclure le code postal s'il est disponible
         if (postcode) parts.push(postcode);
         if (city) parts.push(city);
+        // ❌ NE PAS inclure le pays
         label = parts.join(', ');
+      } else if (street && postcode) {
+        // Rue avec code postal mais sans ville : "Rue, CP"
+        label = `${street}, ${postcode}`;
       } else if (city) {
-        // Au moins la ville
+        // Au moins la ville : inclure le code postal s'il est disponible
         label = postcode && city ? `${postcode} ${city}` : city;
+      } else if (postcode) {
+        // Seulement le code postal (cas rare)
+        label = postcode;
       } else {
         // Dernier recours
         label = props.osm_value || 'Adresse';
