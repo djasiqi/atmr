@@ -18,7 +18,23 @@ depends_on = None
 
 
 def upgrade():
-    # Créer le type enum partnership_status
+    """
+    Ajoute le champ status au modèle Partnership pour gérer les demandes (pending, accepted, rejected).
+    
+    ⚠️ NOTE: Cette migration est idempotente - elle vérifie l'existence
+    de la colonne avant de l'ajouter. En production, la colonne peut
+    avoir été créée manuellement avant l'application de cette migration.
+    """
+    # Vérifier l'existence de la colonne avant de l'ajouter
+    from sqlalchemy import inspect
+    from sqlalchemy.engine import reflection
+    
+    bind = op.get_bind()
+    inspector = reflection.Inspector.from_engine(bind)
+    existing_columns = [col["name"] for col in inspector.get_columns("partnerships")]
+    existing_indexes = [idx["name"] for idx in inspector.get_indexes("partnerships")]
+    
+    # Créer le type enum partnership_status (si il n'existe pas déjà)
     op.execute(
         """
         DO $$ BEGIN
@@ -29,23 +45,25 @@ def upgrade():
         """
     )
 
-    # Ajouter la colonne status
-    op.add_column(
-        "partnerships",
-        sa.Column(
-            "status",
-            sa.Enum("PENDING", "ACCEPTED", "REJECTED", name="partnership_status"),
-            nullable=False,
-            server_default="PENDING",
-        ),
-    )
+    # Ajouter la colonne status (si elle n'existe pas déjà)
+    if "status" not in existing_columns:
+        op.add_column(
+            "partnerships",
+            sa.Column(
+                "status",
+                sa.Enum("PENDING", "ACCEPTED", "REJECTED", name="partnership_status"),
+                nullable=False,
+                server_default="PENDING",
+            ),
+        )
+        
+        # Mettre à jour les partenariats existants en "ACCEPTED" (seulement si la colonne vient d'être créée)
+        op.execute("UPDATE partnerships SET status = 'ACCEPTED' WHERE is_active = true")
+        op.execute("UPDATE partnerships SET status = 'REJECTED' WHERE is_active = false")
 
-    # Mettre à jour les partenariats existants en "ACCEPTED"
-    op.execute("UPDATE partnerships SET status = 'ACCEPTED' WHERE is_active = true")
-    op.execute("UPDATE partnerships SET status = 'REJECTED' WHERE is_active = false")
-
-    # Créer l'index
-    op.create_index("ix_partnerships_status", "partnerships", ["status"])
+    # Créer l'index (si il n'existe pas déjà)
+    if "ix_partnerships_status" not in existing_indexes:
+        op.create_index("ix_partnerships_status", "partnerships", ["status"])
 
 
 def downgrade():
