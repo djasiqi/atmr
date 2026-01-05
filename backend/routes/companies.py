@@ -1237,7 +1237,7 @@ class AcceptReservation(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     @limiter.limit("200 per hour")  # ✅ 2.8: Rate limiting acceptation réservation
-    def post(self, reservation_id):
+    def post(self, reservation_id):  # noqa: PLR0911
         from repositories.booking_repository import BookingRepository
 
         # ✅ DDD: Utilise use-case au lieu de service directement

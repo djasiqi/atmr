@@ -58,18 +58,14 @@ class TestSchemaValidationE2E:
             if location.endswith("/login"):
                 # Redirection vers login = erreur d'authentification (devrait être 401)
                 pytest.fail(
-                    (
-                        f"Redirection 302 vers /login inattendue "
-                        f"(devrait être 401 ou 400). Location: {location}"
-                    )
+                    f"Redirection 302 vers /login inattendue "
+                    f"(devrait être 401 ou 400). Location: {location}"
                 )
             elif location.endswith("/"):
                 # Redirection après login = OK, mais devrait être 200 avec token
                 pytest.fail(
-                    (
-                        f"Redirection 302 après login inattendue "
-                        f"(devrait être 200 avec token). Location: {location}"
-                    )
+                    f"Redirection 302 après login inattendue "
+                    f"(devrait être 200 avec token). Location: {location}"
                 )
             else:
                 pytest.fail(f"Redirection 302 inattendue vers {location}")
@@ -94,9 +90,8 @@ class TestSchemaValidationE2E:
         if response.status_code == 302:
             location = response.headers.get("Location", "")
             pytest.fail(
-                (
-                    f"Redirection 302 inattendue pour payload invalide "
-                    f"(devrait être 400). Location: {location}"
+                f"Redirection 302 inattendue pour payload invalide "
+                f"(devrait être 400). Location: {location}"
                 )
             )
 
@@ -132,9 +127,8 @@ class TestSchemaValidationE2E:
         if response.status_code == 302:
             location = response.headers.get("Location", "")
             pytest.fail(
-                (
-                    f"Redirection 302 inattendue pour register "
-                    f"(devrait être 200/201 ou 400). Location: {location}"
+                f"Redirection 302 inattendue pour register "
+                f"(devrait être 200/201 ou 400). Location: {location}"
                 )
             )
 
@@ -3034,9 +3028,8 @@ class TestSchemaValidationE2E:
         start_date = date.today() - timedelta(days=7)
         end_date = date.today()
         response = authenticated_client.get(
-            (
-                f"/api/v1/analytics/export?"
-                f"start_date={start_date.isoformat()}&"
+            f"/api/v1/analytics/export?"
+            f"start_date={start_date.isoformat()}&"
                 f"end_date={end_date.isoformat()}&format=csv"
             )
         )
