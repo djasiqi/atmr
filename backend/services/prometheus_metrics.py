@@ -9,10 +9,14 @@ Centralise toutes les métriques Prometheus du système :
 """
 
 import logging
-from typing import Optional
 
 try:
-    from prometheus_client import Counter, Gauge, Histogram
+    from prometheus_client import (  # pyright: ignore[reportMissingImports]
+        REGISTRY,
+        Counter,
+        Gauge,
+        Histogram,
+    )
 
     PROMETHEUS_AVAILABLE = True
 except ImportError:
@@ -20,8 +24,44 @@ except ImportError:
     Counter = None
     Gauge = None
     Histogram = None
+    REGISTRY = None
 
 logger = logging.getLogger(__name__)
+
+
+def _get_or_create_metric(metric_class, name, *args, **kwargs):
+    """Crée une métrique Prometheus ou retourne None si déjà enregistrée.
+
+    Évite les erreurs de duplication lors d'imports multiples (Gunicorn workers).
+    Si la métrique existe déjà, retourne None (elle sera utilisée depuis le registre global).
+
+    Args:
+        metric_class: Classe de métrique (Counter, Gauge, Histogram)
+        name: Nom de la métrique
+        *args, **kwargs: Arguments passés au constructeur de la métrique
+
+    Returns:
+        Instance de la métrique (nouvelle) ou None si déjà enregistrée
+    """
+    if not PROMETHEUS_AVAILABLE or REGISTRY is None:
+        return None
+
+    # Essayer de créer la métrique directement
+    # Si elle existe déjà, Prometheus lèvera une ValueError
+    try:
+        return metric_class(name, *args, **kwargs)
+    except ValueError as e:
+        # Si la métrique existe déjà (duplication), logger et retourner None
+        # La métrique existante sera utilisée depuis le registre global
+        if "Duplicated timeseries" in str(e) or "already registered" in str(e):
+            logger.debug(
+                "[PrometheusMetrics] Métrique %s déjà enregistrée (ignorée, utilisation de l'existante)",
+                name,
+            )
+            return None
+        # Autre erreur : la propager
+        raise
+
 
 # ==================== WebSocket Metrics ====================
 # (Déjà définies dans websocket_metrics.py, mais on les expose ici pour centralisation)
@@ -67,8 +107,10 @@ else:
 # (Déjà définies dans dispatch_metrics.py et performance_metrics.py)
 
 if PROMETHEUS_AVAILABLE and Counter and Gauge:
+    # ✅ Protection contre duplication : utiliser _get_or_create_metric
     # Assignations par jour
-    DISPATCH_ASSIGNMENTS_TOTAL = Counter(
+    DISPATCH_ASSIGNMENTS_TOTAL = _get_or_create_metric(
+        Counter,
         "dispatch_assignments_total",
         "Total assignations créées",
         ["company_id", "status"],  # status: "scheduled", "in_progress", "completed"
@@ -181,6 +223,85 @@ if PROMETHEUS_AVAILABLE and Gauge:
 else:
     DRIVERS_ONLINE = None
 
+# ==================== Push Notifications Metrics ====================
+
+if PROMETHEUS_AVAILABLE and Counter and Histogram and Gauge:
+    # Push notifications envoyées (succès/échec)
+    PUSH_NOTIFICATIONS_TOTAL = Counter(
+        "push_notifications_total",
+        "Total push notifications envoyées",
+        [
+            "status",
+            "event_type",
+        ],  # status: "success", "failed", event_type: "booking", "message", "delay", etc.
+    )
+
+    # Latence push notifications
+    PUSH_NOTIFICATION_LATENCY_SECONDS = Histogram(
+        "push_notification_latency_seconds",
+        "Latence envoi push notification (secondes)",
+        ["event_type"],
+        buckets=[0.1, 0.5, 1.0, 2.0, 5.0, 10.0],
+    )
+
+    # Retry count pour push notifications
+    PUSH_NOTIFICATION_RETRIES_TOTAL = Counter(
+        "push_notification_retries_total",
+        "Total retries pour push notifications",
+        ["event_type", "attempt"],  # attempt: "1", "2", "3", "4", "5"
+    )
+
+    # Taux de succès push notifications
+    PUSH_NOTIFICATION_SUCCESS_RATE = Gauge(
+        "push_notification_success_rate",
+        "Taux de succès push notifications (0-1)",
+        ["event_type"],
+    )
+else:
+    PUSH_NOTIFICATIONS_TOTAL = None
+    PUSH_NOTIFICATION_LATENCY_SECONDS = None
+    PUSH_NOTIFICATION_RETRIES_TOTAL = None
+    PUSH_NOTIFICATION_SUCCESS_RATE = None
+
+# ==================== Resync Metrics ====================
+
+if PROMETHEUS_AVAILABLE and Counter and Histogram and Gauge:
+    # Resync déclenchés
+    RESYNC_TOTAL = Counter(
+        "resync_total",
+        "Total resync déclenchés",
+        ["type", "platform"],  # type: "bookings", "messages", platform: "mobile", "web"
+    )
+
+    # Durée resync
+    RESYNC_DURATION_SECONDS = Histogram(
+        "resync_duration_seconds",
+        "Durée resync (secondes)",
+        ["type", "platform"],
+        buckets=[0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0],
+    )
+
+    # Volume de données resynchronisées
+    RESYNC_DATA_VOLUME = Histogram(
+        "resync_data_volume",
+        "Volume de données resynchronisées (nombre d'items)",
+        ["type", "platform"],
+        buckets=[1, 5, 10, 50, 100, 500, 1000],
+    )
+
+    # Fréquence resync (temps depuis dernière sync)
+    RESYNC_INTERVAL_SECONDS = Histogram(
+        "resync_interval_seconds",
+        "Intervalle entre resyncs (secondes)",
+        ["type", "platform"],
+        buckets=[60, 300, 600, 1800, 3600, 7200, 14400],  # 1min à 4h
+    )
+else:
+    RESYNC_TOTAL = None
+    RESYNC_DURATION_SECONDS = None
+    RESYNC_DATA_VOLUME = None
+    RESYNC_INTERVAL_SECONDS = None
+
 
 # ==================== Helper Functions ====================
 
@@ -188,8 +309,8 @@ else:
 def track_eta_calculation(
     source: str,
     latency_seconds: float,
-    accuracy: Optional[float] = None,
-    zone: Optional[str] = None,
+    accuracy: float | None = None,
+    zone: str | None = None,
 ) -> None:
     """Enregistre un calcul ETA.
 
@@ -415,3 +536,102 @@ def update_drivers_online(company_id: int, count: int) -> None:
         DRIVERS_ONLINE.labels(company_id=str(company_id)).set(count)
     except Exception as e:
         logger.debug("[PrometheusMetrics] Error updating drivers online: %s", e)
+
+
+# ==================== Push Notifications Helper Functions ====================
+
+
+def track_push_notification(
+    status: str,
+    event_type: str,
+    latency_seconds: float | None = None,
+    attempts: int = 1,
+) -> None:
+    """Enregistre une push notification.
+
+    Args:
+        status: Statut ("success", "failed")
+        event_type: Type d'événement ("booking", "message", "delay", "alert", etc.)
+        latency_seconds: Latence en secondes (optionnel)
+        attempts: Nombre de tentatives (défaut: 1)
+    """
+    if not PROMETHEUS_AVAILABLE:
+        return
+
+    try:
+        if PUSH_NOTIFICATIONS_TOTAL:
+            PUSH_NOTIFICATIONS_TOTAL.labels(status=status, event_type=event_type).inc()
+
+        if latency_seconds is not None and PUSH_NOTIFICATION_LATENCY_SECONDS:
+            PUSH_NOTIFICATION_LATENCY_SECONDS.labels(event_type=event_type).observe(
+                latency_seconds
+            )
+
+        if attempts > 1 and PUSH_NOTIFICATION_RETRIES_TOTAL:
+            # Enregistrer chaque retry
+            for attempt_num in range(2, attempts + 1):
+                PUSH_NOTIFICATION_RETRIES_TOTAL.labels(
+                    event_type=event_type, attempt=str(attempt_num)
+                ).inc()
+    except Exception as e:
+        logger.debug("[PrometheusMetrics] Error tracking push notification: %s", e)
+
+
+def update_push_notification_success_rate(event_type: str, rate: float) -> None:
+    """Met à jour le taux de succès push notifications.
+
+    Args:
+        event_type: Type d'événement
+        rate: Taux de succès (0-1)
+    """
+    if not PROMETHEUS_AVAILABLE or not PUSH_NOTIFICATION_SUCCESS_RATE:
+        return
+
+    try:
+        PUSH_NOTIFICATION_SUCCESS_RATE.labels(event_type=event_type).set(rate)
+    except Exception as e:
+        logger.debug("[PrometheusMetrics] Error updating push success rate: %s", e)
+
+
+# ==================== Resync Helper Functions ====================
+
+
+def track_resync(
+    resync_type: str,
+    platform: str,
+    duration_seconds: float,
+    data_volume: int,
+    interval_seconds: float | None = None,
+) -> None:
+    """Enregistre un resync.
+
+    Args:
+        resync_type: Type de resync ("bookings", "messages")
+        platform: Plateforme ("mobile", "web")
+        duration_seconds: Durée du resync en secondes
+        data_volume: Volume de données récupérées (nombre d'items)
+        interval_seconds: Intervalle depuis le dernier resync en secondes (optionnel)
+    """
+    if not PROMETHEUS_AVAILABLE:
+        return
+
+    try:
+        if RESYNC_TOTAL:
+            RESYNC_TOTAL.labels(type=resync_type, platform=platform).inc()
+
+        if RESYNC_DURATION_SECONDS:
+            RESYNC_DURATION_SECONDS.labels(type=resync_type, platform=platform).observe(
+                duration_seconds
+            )
+
+        if RESYNC_DATA_VOLUME:
+            RESYNC_DATA_VOLUME.labels(type=resync_type, platform=platform).observe(
+                data_volume
+            )
+
+        if interval_seconds is not None and RESYNC_INTERVAL_SECONDS:
+            RESYNC_INTERVAL_SECONDS.labels(type=resync_type, platform=platform).observe(
+                interval_seconds
+            )
+    except Exception as e:
+        logger.debug("[PrometheusMetrics] Error tracking resync: %s", e)

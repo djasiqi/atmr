@@ -1,47 +1,18 @@
 # backend/routes_api.py
 # ✅ 3.2: Versioning API explicite avec /api/v1/ et /api/v2/
+# ✅ REFACTORING: Imports tardifs pour éviter les cycles d'imports
+# Les namespaces de routes sont importés dans init_namespaces() plutôt qu'au niveau du module
+# pour éviter le cycle: app.py → routes_api.py → routes/* → services/* → models/* → ext.py
 from __future__ import annotations
 
 import os
 from typing import Any
 
-from flask import Response, make_response
-from flask_restx import Api
+from flask import Response, make_response  # pyright: ignore[reportMissingImports]
+from flask_restx import Api  # pyright: ignore[reportMissingImports]
 
-from routes.admin import admin_ns
-from routes.analytics import analytics_ns  # /analytics
-from routes.app_version import app_version_ns  # Version check mobile
-from routes.auth import auth_ns
-from routes.bookings import bookings_ns
-from routes.clients import clients_ns
-from routes.companies import companies_ns
-from routes.company_mobile_auth import company_mobile_auth_ns
-from routes.company_mobile_dispatch import company_mobile_dispatch_ns
-from routes.company_settings import settings_ns
-from routes.dispatch_health import dispatch_health_ns  # /company_dispatch_health
-from routes.dispatch_routes import (
-    dispatch_ns as company_dispatch_ns,  # /company_dispatch
-)
-from routes.driver import driver_ns
-from routes.geocode import geocode_ns
-from routes.invoices import invoices_ns
-from routes.medical import medical_ns
-from routes.messages import messages_ns
-from routes.osrm import osrm_ns
-from routes.osrm_health import osrm_health_ns
-from routes.osrm_metrics import ns_osrm_metrics
-from routes.payments import payments_ns
-from routes.planning import planning_ns
-from routes.prometheus_metrics import prometheus_metrics_ns
-from routes.secret_rotation_monitoring import secret_rotation_ns
-from routes.shadow_mode_routes import shadow_mode_bp  # Shadow Mode RL
-from routes.utils import utils_ns
-
-# Routes RL (uniquement disponible dans l'environnement RL)
-try:
-    from routes.rl_routes import rl_ns
-except ImportError:
-    rl_ns = None
+# ✅ Imports tardifs des namespaces pour éviter les cycles d'imports
+# Les namespaces seront importés dans init_namespaces() au lieu d'ici
 
 authorizations = {
     "BearerAuth": {"type": "apiKey", "in": "header", "name": "Authorization"}
@@ -94,60 +65,9 @@ api_v2 = Api(
     default_mediatype="application/json",
 )
 
-# ✅ 3.2: Migration de tous les namespaces existants vers API v1
-# Routes d'authentification
-api_v1.add_namespace(auth_ns, path="/auth")
-
-# Routes clients
-api_v1.add_namespace(clients_ns, path="/clients")
-
-# Routes admin
-api_v1.add_namespace(admin_ns, path="/admin")
-api_v1.add_namespace(secret_rotation_ns)
-
-# Routes companies
-api_v1.add_namespace(companies_ns, path="/companies")
-
-# Routes app version check (mobile)
-api_v1.add_namespace(app_version_ns, path="/app")
-
-# Routes driver
-api_v1.add_namespace(driver_ns, path="/driver")
-
-# Routes bookings
-api_v1.add_namespace(bookings_ns, path="/bookings")
-
-# Routes payments
-api_v1.add_namespace(payments_ns, path="/payments")
-
-# Routes utils
-api_v1.add_namespace(utils_ns, path="/utils")
-
-# Routes messages
-api_v1.add_namespace(messages_ns, path="/messages")
-
-# Routes geocode
-api_v1.add_namespace(geocode_ns, path="/geocode")
-
-# Routes medical
-api_v1.add_namespace(medical_ns, path="/medical")
-
-# Routes invoices
-api_v1.add_namespace(invoices_ns, path="/invoices")
-
-# Routes planning
-api_v1.add_namespace(planning_ns, path="/planning")
-
-# Routes OSRM
-api_v1.add_namespace(osrm_ns, path="/osrm")
-api_v1.add_namespace(ns_osrm_metrics, path="/osrm-metrics")
-api_v1.add_namespace(osrm_health_ns, path="/osrm")
-
-# Dispatch namespaces
-api_v1.add_namespace(company_dispatch_ns, path="/company_dispatch")
-api_v1.add_namespace(dispatch_health_ns, path="/company_dispatch_health")
-api_v1.add_namespace(company_mobile_auth_ns, path="/company_mobile/auth")
-api_v1.add_namespace(company_mobile_dispatch_ns, path="/company_mobile/dispatch")
+# ✅ REFACTORING: Les namespaces sont ajoutés dans init_namespaces() pour éviter les cycles d'imports
+# Les add_namespace() ont été déplacés dans init_namespaces() pour que les routes ne soient
+# importées qu'au moment de l'initialisation de l'application, pas au chargement du module
 
 
 # Prometheus metrics export
@@ -169,18 +89,6 @@ def output_text_plain(data, code, headers=None):
     resp.headers.update(headers or {})
     return resp
 
-
-api_v1.add_namespace(prometheus_metrics_ns, path="/prometheus")
-
-# Analytics namespace
-api_v1.add_namespace(analytics_ns, path="/analytics")
-
-# Company settings
-api_v1.add_namespace(settings_ns, path="/company-settings")
-
-# Routes RL (uniquement dans l'environnement RL)
-if rl_ns:
-    api_v1.add_namespace(rl_ns, path="/rl")
 
 # ✅ 3.2: API v2 - Vide pour l'instant, prête pour nouvelles routes
 # Exemple d'ajout futur:
@@ -210,38 +118,57 @@ if _keep_legacy_api:
         default_mediatype="application/json",
     )
 
-    # Dupliquer tous les namespaces vers API legacy pour compatibilité
-    api_legacy.add_namespace(auth_ns, path="/auth")
-    api_legacy.add_namespace(clients_ns, path="/clients")
-    api_legacy.add_namespace(admin_ns, path="/admin")
-    api_legacy.add_namespace(companies_ns, path="/companies")
-    api_legacy.add_namespace(driver_ns, path="/driver")
-    api_legacy.add_namespace(bookings_ns, path="/bookings")
-    api_legacy.add_namespace(payments_ns, path="/payments")
-    api_legacy.add_namespace(utils_ns, path="/utils")
-    api_legacy.add_namespace(messages_ns, path="/messages")
-    api_legacy.add_namespace(geocode_ns, path="/geocode")
-    api_legacy.add_namespace(medical_ns, path="/medical")
-    api_legacy.add_namespace(invoices_ns, path="/invoices")
-    api_legacy.add_namespace(planning_ns, path="/planning")
-    api_legacy.add_namespace(osrm_ns, path="/osrm")
-    api_legacy.add_namespace(ns_osrm_metrics, path="/osrm-metrics")
-    api_legacy.add_namespace(osrm_health_ns, path="/osrm")
-    api_legacy.add_namespace(company_dispatch_ns, path="/company_dispatch")
-    api_legacy.add_namespace(dispatch_health_ns, path="/company_dispatch_health")
-    api_legacy.add_namespace(company_mobile_auth_ns, path="/company_mobile/auth")
-    api_legacy.add_namespace(
-        company_mobile_dispatch_ns, path="/company_mobile/dispatch"
-    )
-    api_legacy.add_namespace(prometheus_metrics_ns, path="/prometheus")
-    api_legacy.add_namespace(analytics_ns, path="/analytics")
-    api_legacy.add_namespace(settings_ns, path="/company-settings")
+    # ✅ REFACTORING: Les namespaces legacy sont ajoutés dans init_namespaces() pour éviter les cycles d'imports
 else:
     api_legacy = None
 
 
 def init_namespaces(app):
-    """✅ 3.2: Initialise les APIs versionnées v1, v2 et legacy."""
+    """✅ 3.2: Initialise les APIs versionnées v1, v2 et legacy.
+
+    ✅ REFACTORING: Les imports des routes sont faits ici plutôt qu'au niveau du module
+    pour éviter le cycle: app.py → routes_api.py → routes/* → services/* → models/* → ext.py
+    """
+    # ✅ Imports tardifs des namespaces pour éviter les cycles d'imports
+    from routes.admin import admin_ns
+    from routes.analytics import analytics_ns  # /analytics
+    from routes.app_version import app_version_ns  # Version check mobile
+    from routes.auth import auth_ns
+    from routes.bookings import bookings_ns
+    from routes.clients import clients_ns
+    from routes.companies import companies_ns
+    from routes.company_mobile_auth import company_mobile_auth_ns
+    from routes.company_mobile_dispatch import company_mobile_dispatch_ns
+    from routes.company_settings import settings_ns
+    from routes.dispatch import (
+        dispatch_ns as company_dispatch_ns,  # /company_dispatch
+    )
+    from routes.dispatch_health import dispatch_health_ns  # /company_dispatch_health
+    from routes.driver import driver_ns
+    from routes.geocode import geocode_ns
+    from routes.invoices import invoices_ns
+    from routes.medical import medical_ns
+    from routes.messages import messages_ns
+    from routes.osrm import osrm_ns
+    from routes.osrm_health import osrm_health_ns
+    from routes.osrm_metrics import ns_osrm_metrics
+    from routes.partnerships import partnerships_ns
+    from routes.payments import payments_ns
+    from routes.planning import planning_ns
+    from routes.prometheus_metrics import prometheus_metrics_ns
+    from routes.secret_rotation_monitoring import secret_rotation_ns
+    from routes.security_monitoring import (
+        security_monitoring_ns,
+    )  # ✅ S3: Monitoring sécurité
+    from routes.shadow_mode_routes import shadow_mode_bp  # Shadow Mode RL
+    from routes.utils import utils_ns
+
+    # Routes RL (uniquement disponible dans l'environnement RL)
+    try:
+        from routes.rl_routes import rl_ns
+    except ImportError:
+        rl_ns = None
+
     # Enregistrer le Blueprint Shadow Mode (non-RESTX)
     app.register_blueprint(shadow_mode_bp)
 
@@ -251,9 +178,86 @@ def init_namespaces(app):
 
     register_proactive_alerts_sockets(socketio)
 
-    # ✅ 3.2: Initialiser API v1 (routes existantes)
+    # ✅ IMPORTANT:
+    # api_v1/api_legacy sont des singletons de module. Ils peuvent déjà avoir été
+    # initialisés avec une autre app (ex: suite de tests). Il faut donc binder l'API
+    # à l'app courante AVANT d'appeler add_namespace(), sinon Flask-RESTX tente
+    # d'enregistrer les routes sur l'ancienne app (et échoue après le 1er request).
+
+    # ✅ 3.2: Initialiser API v1 (binding à l'app courante)
     api_v1.init_app(app)
     app.logger.info("[api] ✅ API v1 initialisée: %s/v1", API_PREFIX)
+
+    # ✅ 3.2: Ajouter tous les namespaces à API v1 (déplacé ici pour éviter cycles d'imports)
+    # Routes d'authentification
+    api_v1.add_namespace(auth_ns, path="/auth")
+
+    # Routes clients
+    api_v1.add_namespace(clients_ns, path="/clients")
+
+    # Routes admin
+    api_v1.add_namespace(admin_ns, path="/admin")
+    api_v1.add_namespace(secret_rotation_ns)
+    api_v1.add_namespace(
+        security_monitoring_ns, path="/security-monitoring"
+    )  # ✅ S3: Monitoring sécurité
+
+    # Routes companies
+    api_v1.add_namespace(companies_ns, path="/companies")
+
+    # Routes app version check (mobile)
+    api_v1.add_namespace(app_version_ns, path="/app")
+
+    # Routes driver
+    api_v1.add_namespace(driver_ns, path="/driver")
+
+    # Routes bookings
+    api_v1.add_namespace(bookings_ns, path="/bookings")
+
+    # Routes payments
+    api_v1.add_namespace(partnerships_ns, path="/partnerships")
+    api_v1.add_namespace(payments_ns, path="/payments")
+
+    # Routes utils
+    api_v1.add_namespace(utils_ns, path="/utils")
+
+    # Routes messages
+    api_v1.add_namespace(messages_ns, path="/messages")
+
+    # Routes geocode
+    api_v1.add_namespace(geocode_ns, path="/geocode")
+
+    # Routes medical
+    api_v1.add_namespace(medical_ns, path="/medical")
+
+    # Routes invoices
+    api_v1.add_namespace(invoices_ns, path="/invoices")
+
+    # Routes planning
+    api_v1.add_namespace(planning_ns, path="/planning")
+
+    # Routes OSRM
+    api_v1.add_namespace(osrm_ns, path="/osrm")
+    api_v1.add_namespace(ns_osrm_metrics, path="/osrm-metrics")
+    api_v1.add_namespace(osrm_health_ns, path="/osrm")
+
+    # Dispatch namespaces
+    api_v1.add_namespace(company_dispatch_ns, path="/company_dispatch")
+    api_v1.add_namespace(dispatch_health_ns, path="/company_dispatch_health")
+    api_v1.add_namespace(company_mobile_auth_ns, path="/company_mobile/auth")
+    api_v1.add_namespace(company_mobile_dispatch_ns, path="/company_mobile/dispatch")
+
+    api_v1.add_namespace(prometheus_metrics_ns, path="/prometheus")
+
+    # Analytics namespace
+    api_v1.add_namespace(analytics_ns, path="/analytics")
+
+    # Company settings
+    api_v1.add_namespace(settings_ns, path="/company-settings")
+
+    # Routes RL (uniquement dans l'environnement RL)
+    if rl_ns:
+        api_v1.add_namespace(rl_ns, path="/rl")
 
     # ✅ 3.2: Initialiser API v2 seulement quand des routes seront ajoutées
     # Pour l'instant, api_v2 est vide donc on ne l'initialise pas
@@ -270,6 +274,33 @@ def init_namespaces(app):
             "[api] ⚠️  API legacy initialisée: %s (dépréciée - utiliser /v1 ou /v2)",
             API_PREFIX,
         )
+        # ✅ Dupliquer tous les namespaces vers API legacy pour compatibilité
+        api_legacy.add_namespace(auth_ns, path="/auth")
+        api_legacy.add_namespace(clients_ns, path="/clients")
+        api_legacy.add_namespace(admin_ns, path="/admin")
+        api_legacy.add_namespace(companies_ns, path="/companies")
+        api_legacy.add_namespace(partnerships_ns, path="/partnerships")
+        api_legacy.add_namespace(driver_ns, path="/driver")
+        api_legacy.add_namespace(bookings_ns, path="/bookings")
+        api_legacy.add_namespace(payments_ns, path="/payments")
+        api_legacy.add_namespace(utils_ns, path="/utils")
+        api_legacy.add_namespace(messages_ns, path="/messages")
+        api_legacy.add_namespace(geocode_ns, path="/geocode")
+        api_legacy.add_namespace(medical_ns, path="/medical")
+        api_legacy.add_namespace(invoices_ns, path="/invoices")
+        api_legacy.add_namespace(planning_ns, path="/planning")
+        api_legacy.add_namespace(osrm_ns, path="/osrm")
+        api_legacy.add_namespace(ns_osrm_metrics, path="/osrm-metrics")
+        api_legacy.add_namespace(osrm_health_ns, path="/osrm")
+        api_legacy.add_namespace(company_dispatch_ns, path="/company_dispatch")
+        api_legacy.add_namespace(dispatch_health_ns, path="/company_dispatch_health")
+        api_legacy.add_namespace(company_mobile_auth_ns, path="/company_mobile/auth")
+        api_legacy.add_namespace(
+            company_mobile_dispatch_ns, path="/company_mobile/dispatch"
+        )
+        api_legacy.add_namespace(prometheus_metrics_ns, path="/prometheus")
+        api_legacy.add_namespace(analytics_ns, path="/analytics")
+        api_legacy.add_namespace(settings_ns, path="/company-settings")
     else:
         app.logger.info("[api] ℹ️  API legacy désactivée (API_LEGACY_ENABLED=false)")
 

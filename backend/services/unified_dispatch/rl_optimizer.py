@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 from services.rl.dispatch_env import DispatchEnv
 from services.rl.improved_dqn_agent import ImprovedDQNAgent
@@ -19,7 +19,7 @@ from services.rl.optimal_hyperparameters import OptimalHyperparameters
 from services.safety_guards import get_safety_guards
 
 if TYPE_CHECKING:
-    import numpy as np
+    import numpy as np  # pyright: ignore[reportMissingImports]
 
 logger = logging.getLogger(__name__)
 
@@ -70,8 +70,8 @@ class RLDispatchOptimizer:
         self.config = OptimalHyperparameters.get_optimal_config(config_context)
         logger.info("[RLOptimizer] Configuration chargée: %s", config_context)
 
-        self.agent: Optional[ImprovedDQNAgent] = None
-        self.env: Optional[DispatchEnv] = None
+        self.agent: ImprovedDQNAgent | None = None
+        self.env: DispatchEnv | None = None
         self._driver_index_map: List[int] = []
         self._booking_index_map: List[int] = []
 
@@ -90,7 +90,9 @@ class RLDispatchOptimizer:
                 is_testing = os.getenv("FLASK_CONFIG") == "testing"
                 # Si current_app est disponible, utiliser sa config (plus précis)
                 try:
-                    from flask import current_app
+                    from flask import (  # pyright: ignore[reportMissingImports]
+                        current_app,
+                    )
 
                     is_testing = is_testing or current_app.config.get("TESTING", False)
                 except RuntimeError:
@@ -178,8 +180,8 @@ class RLDispatchOptimizer:
         bookings: List[Any],
         drivers: List[Any],
         *,
-        matrix_quality: Optional[Dict[str, Any]] = None,
-        coord_quality: Optional[Dict[str, Any]] = None,
+        matrix_quality: Dict[str, Any] | None = None,
+        coord_quality: Dict[str, Any] | None = None,
     ) -> List[Dict[str, Any]]:
         """Optimise les assignations initiales avec l'agent RL.
 
@@ -203,7 +205,7 @@ class RLDispatchOptimizer:
             logger.warning("[RLOptimizer] Aucune assignation à optimiser")
             return []
 
-        disable_reason: Optional[str] = None
+        disable_reason: str | None = None
         if matrix_quality and (
             matrix_quality.get("fallback_used") or matrix_quality.get("has_large_value")
         ):

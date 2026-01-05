@@ -5,18 +5,17 @@ import os
 import re
 from typing import Any, Dict, List, Tuple, cast
 
-import requests
-from flask import current_app, request
-from flask_restx import Namespace, Resource
-from sqlalchemy import func
+import requests  # pyright: ignore[reportMissingModuleSource]
+from flask import current_app, request  # pyright: ignore[reportMissingImports]
+from flask_restx import Namespace, Resource  # pyright: ignore[reportMissingImports]
 
-from models import FavoritePlace
 from services.google_places import (
     GooglePlacesError,
     autocomplete_address,
     geocode_address_google,
     get_place_details,
 )
+from shared.error_handlers import APIErrorHandler
 
 geocode_ns = Namespace(
     "geocode", description="Autocomplete & géocodage avec Google Places API"
@@ -62,11 +61,6 @@ ALIASES: List[Dict[str, Any]] = [
 ]
 
 
-def _like_ci(col: Any, like_query: str):
-    """LIKE insensible à la casse (équivalent portable à ILIKE)."""
-    return func.lower(col).like(like_query)
-
-
 def match_alias(q: str) -> Dict[str, Any] | None:
     q_norm = (q or "").strip()
     for a in ALIASES:
@@ -102,34 +96,80 @@ def photon_query(
     return cast("Dict[str, Any]", r.json())
 
 
-def normalize_photon(data: Dict[str, Any]) -> List[Dict[str, Any]]:
-    feats = cast("List[Dict[str, Any]]", (data or {}).get("features") or [])
-    out: List[Dict[str, Any]] = []
-    for f in feats:
-        try:
-            props = cast("Dict[str, Any]", f.get("properties") or {})
-            geom = cast("Dict[str, Any]", f.get("geometry") or {})
-            coords = cast("List[float]", geom.get("coordinates") or [])
-            if len(coords) < MIN_COORDINATES_COUNT:
-                continue
-            lng, lat = float(coords[0]), float(coords[1])
+def normalize_google_places(
+    google_results: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Normalise les résultats Google Places pour avoir le format "Rue, Numéro, Code Postal, Ville".
 
-            housenumber = props.get("housenumber")
-            street = props.get("street")
-            city = props.get("city") or props.get("locality")
-            postcode = props.get("postcode")
-            country = props.get("country")
+    Args:
+        google_results: Liste de résultats de autocomplete_address
+
+    Returns:
+        Liste de dictionnaires normalisés avec label et address au format complet
+    """
+    from services.google_places import (
+        GooglePlacesError,
+        extract_address_components,
+        get_place_details,
+    )
+
+    normalized: List[Dict[str, Any]] = []
+
+    for result in google_results:
+        try:
+            place_id = result.get("place_id")
+            if not place_id:
+                continue
+
+            # Récupérer les détails complets du lieu pour obtenir les composants d'adresse
+            try:
+                details = get_place_details(place_id)
+            except GooglePlacesError:
+                # Si on ne peut pas récupérer les détails, utiliser les données de base
+                description = result.get("description", "")
+                main_text = result.get("main_text", "")
+                secondary_text = result.get("secondary_text", "")
+
+                # Construire un label basique
+                if main_text and secondary_text:
+                    label = f"{main_text}, {secondary_text}"
+                else:
+                    label = description
+
+                normalized.append(
+                    {
+                        "source": "google",
+                        "label": label,
+                        "address": description or main_text or label,
+                        "lat": None,
+                        "lon": None,
+                        "place_id": place_id,
+                    }
+                )
+                continue
+
+            # Extraire les composants d'adresse
+            address_components = details.get("address_components", [])
+            components = extract_address_components(address_components)
+
+            street = components.get("route", "")
+            housenumber = components.get("street_number", "")
+            city = components.get("locality", "")
+            postcode = components.get("postal_code", "")
+            place_name = details.get("name", "")
 
             # Construire l'adresse complète avec numéro et rue
-            street_with_number = (
-                " ".join(x for x in [street, housenumber] if x) if street else None
-            )
+            # Format : "Rue, Numéro" (avec virgule)
+            if street and housenumber:
+                street_with_number = f"{street}, {housenumber}"
+            elif street:
+                street_with_number = street
+            else:
+                street_with_number = None
 
-            # Construire le label : TOUJOURS inclure l'adresse complète avec numéro si disponible
-            place_name = props.get("name")
-            
+            # Construire le label : FORCER le format "Rue, Numéro, Code Postal, Ville"
             if place_name and street_with_number:
-                # Lieu nommé avec adresse complète : "Nom, Rue Numéro, CP, Ville"
+                # Lieu nommé avec adresse complète : "Nom, Rue, Numéro, CP, Ville"
                 address_parts = [street_with_number]
                 if postcode:
                     address_parts.append(postcode)
@@ -149,14 +189,180 @@ def normalize_photon(data: Dict[str, Any]) -> List[Dict[str, Any]]:
             elif place_name:
                 # Lieu nommé sans adresse : juste le nom (fallback)
                 label = place_name
-            elif street_with_number:
-                # Adresse complète : "Rue + Numéro, CP, Ville"
-                parts = [street_with_number, postcode, city]
-                label = ", ".join(x for x in parts if x)
+            elif street_with_number and city:
+                # Adresse complète : "Rue, Numéro, CP, Ville"
+                parts = [street_with_number]
+                if postcode:
+                    parts.append(postcode)
+                if city:
+                    parts.append(city)
+                label = ", ".join(parts)
+            elif street and city:
+                # Rue sans numéro : "Rue, CP, Ville"
+                parts = [street]
+                if postcode:
+                    parts.append(postcode)
+                if city:
+                    parts.append(city)
+                label = ", ".join(parts)
             elif city:
-                label = city
+                # Au moins la ville
+                label = f"{postcode} {city}" if postcode and city else city
+            else:
+                # Dernier recours : utiliser l'adresse formatée de Google
+                label = details.get("address", "")
+
+            # L'adresse à afficher doit toujours inclure le numéro si disponible
+            address_display = street_with_number or street or label
+
+            normalized.append(
+                {
+                    "source": "google",
+                    "label": label,
+                    "address": address_display,
+                    "postcode": postcode,
+                    "city": city,
+                    "country": components.get("country", ""),
+                    "lat": details.get("lat"),
+                    "lon": details.get("lon"),
+                    "housenumber": housenumber,
+                    "place_id": place_id,
+                }
+            )
+        except Exception:
+            # Une feature mal formée : on ignore proprement
+            continue
+
+    # Priorise les adresses avec n° + CP + label pertinent
+    normalized.sort(
+        key=lambda r: (
+            r.get("housenumber") is None,
+            r.get("postcode") is None,
+            (r.get("label") or "").lower(),
+        )
+    )
+    return normalized
+
+
+def normalize_photon(data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    feats = cast("List[Dict[str, Any]]", (data or {}).get("features") or [])
+    out: List[Dict[str, Any]] = []
+    for f in feats:
+        try:
+            props = cast("Dict[str, Any]", f.get("properties") or {})
+            geom = cast("Dict[str, Any]", f.get("geometry") or {})
+            coords = cast("List[float]", geom.get("coordinates") or [])
+            if len(coords) < MIN_COORDINATES_COUNT:
+                continue
+            lng, lat = float(coords[0]), float(coords[1])
+
+            housenumber = props.get("housenumber")
+            street = props.get("street")
+            city = props.get("city") or props.get("locality")
+            postcode = props.get("postcode")
+            country = props.get("country")
+            place_name = props.get("name")
+
+            # ✅ Enrichir avec Google Geocoding si code postal ou numéro manque
+            # (seulement si Google Places est activé et qu'on a une rue)
+            if USE_GOOGLE_PLACES and street and city and (not postcode or not housenumber):
+                # Construire une adresse de recherche pour Google
+                search_address_parts = [street]
+                if housenumber:
+                    search_address_parts.insert(1, housenumber)
+                if city:
+                    search_address_parts.append(city)
+                if country:
+                    search_address_parts.append(country)
+                search_address = ", ".join(search_address_parts)
+
+                try:
+                    # Appeler Google Geocoding pour enrichir
+                    from services.google_places import geocode_address_google
+
+                    google_result = geocode_address_google(
+                        search_address, country=country or "CH"
+                    )
+                    if google_result:
+                        address_components = google_result.get("address_components", [])
+                        # Extraire le code postal si manquant
+                        if not postcode:
+                            for comp in address_components:
+                                if "postal_code" in comp.get("types", []):
+                                    postcode = comp.get("long_name")
+                                    break
+                        # Extraire le numéro si manquant
+                        if not housenumber:
+                            for comp in address_components:
+                                if "street_number" in comp.get("types", []):
+                                    housenumber = comp.get("long_name")
+                                    break
+                except Exception as e:
+                    # En cas d'erreur Google, continuer avec les données Photon
+                    current_app.logger.debug(
+                        "Erreur enrichissement Google pour '%s': %s", search_address, e
+                    )
+
+            # Construire l'adresse complète avec numéro et rue
+            # Format : "Rue, Numéro" (avec virgule)
+            if street and housenumber:
+                street_with_number = f"{street}, {housenumber}"
+            elif street:
+                street_with_number = street
+            else:
+                street_with_number = None
+
+            # Construire le label : FORCER le format "Rue, Numéro, Code Postal, Ville"
+            # Ne pas inclure les résultats incomplets (sans code postal ET sans numéro si c'est une adresse)
+            if place_name and street_with_number:
+                # Lieu nommé avec adresse complète : "Nom, Rue, Numéro, CP, Ville"
+                address_parts = [street_with_number]
+                if postcode:
+                    address_parts.append(postcode)
+                if city:
+                    address_parts.append(city)
+                address_str = ", ".join(address_parts)
+                label = f"{place_name}, {address_str}"
+            elif place_name and street:
+                # Lieu nommé avec rue mais sans numéro : "Nom, Rue, CP, Ville"
+                address_parts = [street]
+                if postcode:
+                    address_parts.append(postcode)
+                if city:
+                    address_parts.append(city)
+                address_str = ", ".join(address_parts)
+                label = f"{place_name}, {address_str}"
+            elif place_name:
+                # Lieu nommé sans adresse : juste le nom (fallback)
+                label = place_name
+            elif street_with_number and city:
+                # Adresse complète : "Rue, Numéro, CP, Ville"
+                # ✅ FORCER le code postal si disponible
+                parts = [street_with_number]
+                if postcode:
+                    parts.append(postcode)
+                if city:
+                    parts.append(city)
+                label = ", ".join(parts)
+            elif street and city:
+                # Rue sans numéro : "Rue, CP, Ville"
+                parts = [street]
+                if postcode:
+                    parts.append(postcode)
+                if city:
+                    parts.append(city)
+                label = ", ".join(parts)
+            elif city:
+                # Au moins la ville
+                label = f"{postcode} {city}" if postcode and city else city
             else:
                 label = "Adresse"
+
+            # ✅ Ne pas inclure les résultats incomplets pour les adresses
+            # (doivent avoir au moins rue + ville, ou lieu nommé)
+            if not place_name and not street:
+                # Pas de lieu nommé ni de rue : ignorer
+                continue
 
             # L'adresse à afficher doit toujours inclure le numéro si disponible
             address_display = street_with_number or street or label
@@ -166,7 +372,7 @@ def normalize_photon(data: Dict[str, Any]) -> List[Dict[str, Any]]:
                     "source": "photon",
                     "label": label,
                     "address": address_display,
-                    "postcode": props.get("postcode"),
+                    "postcode": postcode,
                     "city": city,
                     "country": country,
                     "lat": float(lat),
@@ -178,9 +384,13 @@ def normalize_photon(data: Dict[str, Any]) -> List[Dict[str, Any]]:
             # Une feature mal formée : on ignore proprement
             continue
 
-    # Priorise les adresses avec n° + label pertinent
+    # Priorise les adresses avec n° + CP + label pertinent
     out.sort(
-        key=lambda r: (r.get("housenumber") is None, (r.get("label") or "").lower())
+        key=lambda r: (
+            r.get("housenumber") is None,
+            r.get("postcode") is None,
+            (r.get("label") or "").lower(),
+        )
     )
     return out
 
@@ -260,15 +470,13 @@ class GeocodeAutocomplete(Resource):
         company_id = request.args.get("company_id")
         if company_id:
             try:
-                like_q = f"%{q.lower()}%"
-                favs = (
-                    FavoritePlace.query.filter(
-                        FavoritePlace.company_id == int(company_id),
-                        _like_ci(FavoritePlace.label, like_q),
-                    )
-                    .order_by(FavoritePlace.label.asc())
-                    .limit(6)
-                    .all()
+                from repositories.favorite_place_repository import (
+                    FavoritePlaceRepository,
+                )
+
+                favorite_place_repo = FavoritePlaceRepository()
+                favs = favorite_place_repo.find_by_company_id_with_label_search(
+                    company_id=int(company_id), search_query=q, limit=6
                 )
                 for f in favs:
                     results.append(
@@ -475,10 +683,17 @@ class PlaceDetails(Resource):
         place_id = request.args.get("place_id", "").strip()
 
         if not place_id:
-            return {"error": "place_id est requis"}, 400
+            return APIErrorHandler.handle_validation_error(
+                "place_id est requis",
+                field="place_id",
+                logger_instance=current_app.logger,
+            )
 
         if not USE_GOOGLE_PLACES:
-            return {"error": "Google Places API non activée"}, 503
+            return APIErrorHandler.handle_validation_error(
+                "Google Places API non activée",
+                logger_instance=current_app.logger,
+            )
 
         try:
             details = get_place_details(place_id)
@@ -496,7 +711,7 @@ class PlaceDetails(Resource):
 
         except GooglePlacesError as e:
             current_app.logger.error("❌ Erreur Place Details: %s", e)
-            return {"error": str(e)}, 500
+            return APIErrorHandler.handle_exception(e, current_app.logger)
 
 
 @geocode_ns.route("/geocode")
@@ -515,7 +730,11 @@ class GeocodeAddress(Resource):
         address = request.args.get("address", "").strip()
 
         if not address:
-            return {"error": "address est requis"}, 400
+            return APIErrorHandler.handle_validation_error(
+                "address est requis",
+                field="address",
+                logger_instance=current_app.logger,
+            )
 
         country = request.args.get("country", "CH")
 
@@ -538,7 +757,11 @@ class GeocodeAddress(Resource):
                 )
 
             if not result:
-                return {"error": "Aucune coordonnée trouvée pour cette adresse"}, 404
+                return APIErrorHandler.handle_not_found(
+                    "Coordonnées pour cette adresse",
+                    address if "address" in locals() else None,
+                    current_app.logger,
+                )
 
             return {
                 "source": "google_geocoding" if USE_GOOGLE_PLACES else "nominatim",
@@ -551,4 +774,4 @@ class GeocodeAddress(Resource):
 
         except Exception as e:
             current_app.logger.error("❌ Erreur géocodage: %s", e)
-            return {"error": "Erreur lors du géocodage"}, 500
+            return APIErrorHandler.handle_exception(e, current_app.logger)

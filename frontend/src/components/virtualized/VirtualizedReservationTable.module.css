@@ -1,0 +1,287 @@
+/**
+ * VirtualizedReservationTable.module.css
+ *
+ * Styles pour le composant VirtualizedReservationTable.
+ * Adapté depuis ReservationTable.module.css pour fonctionner avec la virtualisation.
+ */
+
+.tableContainer {
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-primary) var(--bg-secondary);
+}
+
+.tableContainer::-webkit-scrollbar {
+  height: 8px;
+}
+
+.tableContainer::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+}
+
+.tableContainer::-webkit-scrollbar-thumb {
+  background: var(--border-primary);
+  border-radius: var(--radius-sm);
+}
+
+.tableContainer::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse !important;
+  border-spacing: 0 !important;
+  min-width: 750px; /* Réduit de 800px à 750px */
+  table-layout: fixed;
+  box-sizing: border-box;
+  border: 0 !important;
+  outline: 0 !important;
+}
+
+/* Forcer la suppression de toutes les bordures latérales sur tous les éléments table */
+.table th,
+.table td,
+.table tr,
+.table thead,
+.table tbody,
+.virtualizedRow,
+.virtualizedRow > div {
+  border-left: 0 !important;
+  border-right: 0 !important;
+}
+
+/* Assurer que le body virtualisé a la même largeur que le header */
+.tableContainer > div[style*="display: table"] {
+  width: 100%;
+  box-sizing: border-box;
+  border: none !important;
+  outline: none !important;
+  border-collapse: collapse !important;
+  border-spacing: 0 !important;
+}
+
+/* Supprimer toutes les bordures sur les éléments de table */
+.table tr,
+.table thead,
+.table tbody {
+  border: none !important;
+  outline: none !important;
+}
+
+.table th {
+  background-color: var(--bg-tertiary);
+  padding-top: var(--spacing-sm);
+  padding-bottom: var(--spacing-xxs); /* Réduire le padding après le texte */
+  padding-left: var(--spacing-xs);
+  padding-right: var(--spacing-xs);
+  text-align: left;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-tertiary);
+  border-bottom: 2px solid var(--border-primary);
+  border-top: 0 !important;
+  border-right: 0 !important;
+  border-left: 0 !important;
+  border-width: 0 !important;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  font-size: var(--font-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 0; /* Force la troncature avec table-layout: fixed */
+  box-sizing: border-box;
+  outline: 0 !important;
+}
+
+.table th:not(:last-child) {
+  border-right: 0 !important;
+}
+
+.table th + th {
+  border-left: 0 !important;
+}
+
+/* Styles pour les lignes virtualisées (divs) */
+.virtualizedRow {
+  display: table-row;
+  background-color: var(--bg-primary);
+  transition: background-color var(--transition-fast);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.virtualizedRow:hover {
+  background-color: var(--bg-hover);
+}
+
+/* Styles pour les cellules virtualisées (divs) */
+.virtualizedRow > div {
+  display: table-cell;
+  padding-top: var(--spacing-sm);
+  padding-bottom: var(--spacing-xxs); /* Réduire le padding après le texte */
+  padding-left: var(--spacing-xs);
+  padding-right: var(--spacing-xs);
+  vertical-align: middle;
+  border-bottom: none !important; /* Supprimer la bordure sur les cellules, seule la ligne a une bordure */
+  border-top: none !important;
+  border-right: none !important;
+  border-left: none !important;
+  border-width: 0 !important;
+  font-size: var(--font-sm);
+  overflow: hidden;
+  word-wrap: break-word;
+  box-sizing: border-box;
+  outline: none !important;
+}
+
+/* Supprimer les bordures entre les cellules */
+.virtualizedRow > div:not(:last-child) {
+  border-right: 0 !important;
+}
+
+.virtualizedRow > div + div {
+  border-left: 0 !important;
+}
+
+/* Cellule Client - troncature avec ellipsis */
+.clientCell {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+/* Cellule Date/Heure - troncature si nécessaire */
+.virtualizedRow > div:nth-child(2) {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+/* Cellule Lieu - troncature pour chaque ligne de texte */
+.locationCell {
+  overflow: hidden !important;
+}
+
+.locationCell > div {
+  margin: 0; /* Supprimer la marge verticale pour réduire la hauteur */
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  max-width: 100%;
+  display: block;
+}
+
+/* Cellule Montant - pas de troncature, texte court */
+.virtualizedRow > div:nth-child(4) {
+  white-space: nowrap;
+  overflow: visible;
+}
+
+/* Cellule Statut - pas de troncature, texte court */
+.virtualizedRow > div:nth-child(5) {
+  white-space: nowrap;
+  overflow: visible;
+}
+
+.actionsCell {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.actionButton {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--spacing-xs);
+  margin: 0 var(--spacing-xs);
+  border-radius: 50%;
+  color: var(--text-tertiary);
+  transition: all var(--transition-base);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.actionButton:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+.acceptButton:hover {
+  background-color: var(--success-bg);
+  color: var(--success-primary);
+}
+
+.rejectButton:hover {
+  background-color: var(--danger-bg);
+  color: var(--danger-primary);
+}
+
+.statusBadge {
+  display: inline-block;
+  padding: var(--spacing-xxs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-xs);
+  text-transform: capitalize;
+}
+
+.pending {
+  background-color: var(--warning-bg);
+  color: var(--warning-primary);
+}
+
+.accepted,
+.assigned {
+  background-color: var(--info-bg);
+  color: var(--info-primary);
+}
+
+.en_route,
+.in_progress {
+  background-color: var(--info-bg);
+  color: var(--brand-primary);
+  animation: pulse 2s infinite ease-in-out;
+}
+
+.completed,
+.return_completed {
+  background-color: var(--success-bg);
+  color: var(--success-primary);
+}
+
+.canceled {
+  background-color: var(--bg-hover);
+  color: var(--text-tertiary);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
+}
+
+.emptyMessage {
+  padding: var(--spacing-lg);
+  text-align: center;
+  color: var(--text-secondary);
+}
+

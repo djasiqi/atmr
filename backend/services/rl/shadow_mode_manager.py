@@ -4,11 +4,13 @@
 import json
 import logging
 import math
+import os
+import tempfile
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List
 
-import pandas as pd
+import pandas as pd  # pyright: ignore[reportMissingImports]
 
 X_ZERO = 0
 AVG_ETA_IMPROVEMENT_THRESHOLD = 2
@@ -69,26 +71,43 @@ class ShadowModeManager:
 
             with suppress(OSError, PermissionError):
                 self.data_dir.chmod(0o755)
-        except PermissionError as e:
-            # Logger l'erreur mais continuer (le répertoire sera créé plus tard)
-            import logging
-            from contextlib import suppress
-
+        except (PermissionError, OSError) as e:
+            # En CI / tests Docker, /app/data peut être en lecture seule.
+            # On bascule alors vers un répertoire temporaire inscriptible,
+            # pour éviter de faire échouer la génération de rapports.
             logger = logging.getLogger(__name__)
             logger.warning(
-                (
-                    "Impossible de créer le répertoire %s: %s. "
-                    "Le répertoire devrait être créé par docker-entrypoint.sh. "
-                    "Vérifiez les permissions du volume Docker."
-                ),
+                "Impossible de créer le répertoire %s: %s. Fallback vers un répertoire temporaire inscriptible.",
                 self.data_dir,
                 e,
             )
-            # Essayer de créer le répertoire parent au moins
-            with suppress(PermissionError, OSError):
-                self.data_dir.parent.mkdir(parents=True, exist_ok=True)
+
+            preferred_tmp = os.getenv("SHADOW_MODE_DATA_DIR")
+            if preferred_tmp:
+                fallback_dir = Path(preferred_tmp)
+            else:
+                # /tmp/atmr/shadow_mode/<nom_du_dir>
+                fallback_dir = (
+                    Path(tempfile.gettempdir())
+                    / "atmr"
+                    / "shadow_mode"
+                    / self.data_dir.name
+                )
+
+            self.data_dir = fallback_dir
+            try:
+                self.data_dir.mkdir(parents=True, exist_ok=True)
+                from contextlib import suppress
+
                 with suppress(OSError, PermissionError):
-                    self.data_dir.parent.chmod(0o755)
+                    self.data_dir.chmod(0o755)
+            except (PermissionError, OSError) as e2:
+                # Dernier recours: on ne bloque pas l'app, mais l'export sera désactivé.
+                logger.warning(
+                    "Impossible de créer le répertoire fallback %s: %s. Les exports shadow mode seront ignorés.",
+                    self.data_dir,
+                    e2,
+                )
 
         # Structure des KPIs
         self.kpi_metrics: Dict[str, List[Any]] = {
@@ -870,10 +889,7 @@ class ShadowModeManager:
             avg_eta_improvement < EXCELLENT_RL_ETA_IMPROVEMENT_THRESHOLD
         ):  # RL meilleur de plus de 5 minutes
             recommendations.append(
-                (
-                    "Performance RL excellente - Augmenter la confiance dans "
-                    "les suggestions"
-                )
+                "Performance RL excellente - Augmenter la confiance dans les suggestions"
             )
 
         return recommendations
@@ -885,7 +901,29 @@ class ShadowModeManager:
 
         # Créer le répertoire de l'entreprise
         company_dir = self.data_dir / company_id
-        company_dir.mkdir(exist_ok=True)
+        try:
+            company_dir.mkdir(parents=True, exist_ok=True)
+        except (PermissionError, OSError) as e:
+            # Si le répertoire n'est pas inscriptible, on tente un fallback temporaire
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                "Impossible de créer le répertoire %s: %s. Fallback vers /tmp pour sauvegarde du rapport.",
+                company_dir,
+                e,
+            )
+            fallback_base = (
+                Path(tempfile.gettempdir()) / "atmr" / "shadow_mode" / "reports"
+            )
+            company_dir = fallback_base / company_id
+            try:
+                company_dir.mkdir(parents=True, exist_ok=True)
+            except (PermissionError, OSError) as e2:
+                logger.warning(
+                    "Impossible de créer le répertoire fallback %s: %s. Le rapport ne sera pas sauvegardé.",
+                    company_dir,
+                    e2,
+                )
+                return
 
         # Sauvegarder en JSON
         json_path = company_dir / f"report_{date_str}.json"

@@ -1,5 +1,5 @@
 // styles/profileStyles.ts
-import { StyleSheet } from "react-native";
+import { StyleSheet, Platform } from "react-native";
 
 // ✅ Palette épurée et élégante (cohérente avec le login, mission, courses et chat)
 const palette = {
@@ -13,6 +13,98 @@ const palette = {
   error: "#D32F2F",
   errorLight: "#FFEBEE",
 };
+
+// Styles shadow conditionnels pour éviter l'avertissement de dépréciation
+// Utiliser Platform.OS === 'web' au lieu de Platform.select() pour éviter la détection des shadow* sur le web
+const headerGradientShadow = Platform.OS === 'web'
+  ? { boxShadow: '0 2px 8px rgba(16,39,30,0.06)' }
+  : {
+      shadowColor: "rgba(16,39,30,0.06)",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      elevation: 2,
+    };
+
+const headerPhotoShadow = Platform.OS === 'web'
+  ? { boxShadow: '0 2px 6px rgba(10,127,89,0.2)' }
+  : {
+      shadowColor: "rgba(10,127,89,0.2)",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.16,
+      shadowRadius: 6,
+      elevation: 3,
+    };
+
+const headerPhotoOverlayShadow = Platform.OS === 'web'
+  ? { boxShadow: '0 2px 4px rgba(10,127,89,0.3)' }
+  : {
+      shadowColor: "rgba(10,127,89,0.3)",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+      elevation: 3,
+    };
+
+const cardContainerShadow = Platform.OS === 'web'
+  ? { boxShadow: '0 2px 8px rgba(16,39,30,0.06)' }
+  : {
+      shadowColor: "rgba(16,39,30,0.06)",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      elevation: 3,
+    };
+
+const saveButtonShadow = Platform.OS === 'web'
+  ? { boxShadow: '0 4px 8px rgba(10,127,89,0.3)' }
+  : {
+      shadowColor: "rgba(10,127,89,0.3)",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      elevation: 4,
+    };
+
+const logoutButtonShadow = Platform.OS === 'web'
+  ? { boxShadow: '0 4px 8px rgba(211,47,47,0.3)' }
+  : {
+      shadowColor: "rgba(211,47,47,0.3)",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      elevation: 4,
+    };
+
+const modalContainerShadow = Platform.OS === 'web'
+  ? { boxShadow: '0 10px 20px rgba(16,39,30,0.2)' }
+  : {
+      shadowColor: "rgba(16,39,30,0.2)",
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.25,
+      shadowRadius: 20,
+      elevation: 10,
+    };
+
+const logoutModalContainerShadow = Platform.OS === 'web'
+  ? { boxShadow: '0 10px 20px rgba(16,39,30,0.2)' }
+  : {
+      shadowColor: "rgba(16,39,30,0.2)",
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.25,
+      shadowRadius: 20,
+      elevation: 10,
+    };
+
+const logoutConfirmButtonShadow = Platform.OS === 'web'
+  ? { boxShadow: '0 6px 12px rgba(211,47,47,0.35)' }
+  : {
+      shadowColor: "rgba(211,47,47,0.35)",
+      shadowOpacity: 0.35,
+      shadowOffset: { width: 0, height: 6 },
+      shadowRadius: 12,
+      elevation: 6,
+    };
 
 export const profileStyles = StyleSheet.create({
   // ✅ Container principal
@@ -33,11 +125,7 @@ export const profileStyles = StyleSheet.create({
     paddingBottom: 24,
     borderBottomWidth: 1,
     borderBottomColor: palette.border,
-    shadowColor: "rgba(16,39,30,0.06)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
+    ...headerGradientShadow,
   },
 
   headerContent: {
@@ -70,11 +158,7 @@ export const profileStyles = StyleSheet.create({
     backgroundColor: palette.border,
     borderWidth: 3,
     borderColor: palette.accent,
-    shadowColor: "rgba(10,127,89,0.2)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.16,
-    shadowRadius: 6,
-    elevation: 3,
+    ...headerPhotoShadow,
   },
 
   headerPhotoOverlay: {
@@ -89,11 +173,7 @@ export const profileStyles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 2,
     borderColor: palette.card,
-    shadowColor: "rgba(10,127,89,0.3)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    ...headerPhotoOverlayShadow,
   },
 
   // ✅ Cartes de contenu élégantes
@@ -103,11 +183,7 @@ export const profileStyles = StyleSheet.create({
     marginVertical: 10,
     borderRadius: 18,
     padding: 20,
-    shadowColor: "rgba(16,39,30,0.06)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    ...cardContainerShadow,
     borderWidth: 1,
     borderColor: palette.border,
   },
@@ -144,11 +220,7 @@ export const profileStyles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 24,
     borderRadius: 14,
-    shadowColor: "rgba(10,127,89,0.3)",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    ...saveButtonShadow,
     marginBottom: 12,
   },
 
@@ -169,11 +241,7 @@ export const profileStyles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 24,
     borderRadius: 14,
-    shadowColor: "rgba(211,47,47,0.3)",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    ...logoutButtonShadow,
   },
 
   logoutButtonText: {
@@ -203,11 +271,7 @@ export const profileStyles = StyleSheet.create({
     borderRadius: 20,
     width: "100%",
     maxWidth: 400,
-    shadowColor: "rgba(16,39,30,0.2)",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
+    ...modalContainerShadow,
     borderWidth: 1,
     borderColor: palette.border,
   },
@@ -285,11 +349,7 @@ export const profileStyles = StyleSheet.create({
     borderColor: palette.border,
     gap: 20,
     alignItems: "center",
-    shadowColor: "rgba(16,39,30,0.2)",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
+    ...logoutModalContainerShadow,
   },
 
   logoutIconContainer: {
@@ -344,11 +404,7 @@ export const profileStyles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 14,
-    shadowColor: "rgba(211,47,47,0.35)",
-    shadowOpacity: 0.35,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 12,
-    elevation: 6,
+    ...logoutConfirmButtonShadow,
   },
 
   logoutConfirmButtonText: {

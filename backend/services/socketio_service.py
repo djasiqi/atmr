@@ -4,14 +4,17 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any, cast
 
+from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.orm import joinedload
 
 from ext import app_logger, socketio
+from schemas.socket_events import EVENT_VERSION, SocketEvent
 
 if TYPE_CHECKING:
     from models import Booking
-else:
-    from models import Driver
+
+from models import Driver
+from repositories.driver_repository import DriverRepository
 
 # ---------------------------------------------------------------------------
 # Constantes simples
@@ -47,8 +50,39 @@ def _is_jsonable(x: Any) -> bool:
     try:
         json.dumps(x)
         return True
-    except Exception:
+    except (TypeError, ValueError):
+        # Erreurs de sérialisation JSON attendues : types non sérialisables
         return False
+    except Exception:
+        # Erreur inattendue lors de la sérialisation JSON
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Helper pour enrichir payload avec event_id si absent
+# ---------------------------------------------------------------------------
+def _enrich_payload_if_needed(
+    payload: dict[str, Any], event_name: str
+) -> dict[str, Any]:
+    """Enrichit un payload avec event_id, version, timestamp si absents.
+
+    Utilise le schéma centralisé SocketEvent pour garantir la cohérence.
+
+    Args:
+        payload: Payload d'événement (peut déjà contenir event_id)
+        event_name: Nom de l'événement Socket.IO (ex: "new_booking", "dispatch:run:started")
+
+    Returns:
+        Payload enrichi (nouveau dict si enrichissement nécessaire, sinon original)
+    """
+    # Si event_id déjà présent, ne pas enrichir (évite doublon)
+    if "event_id" in payload:
+        return payload
+
+    # ✅ Utiliser le schéma centralisé SocketEvent pour enrichir
+    return SocketEvent.create(
+        event_type=event_name, payload=payload, version=EVENT_VERSION
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -89,17 +123,32 @@ def _safe_emit(
         try:
             kwargs = {"namespace": namespace, "room": room}
             cast("Any", socketio).emit(event, payload, **kwargs)
-        except Exception as e:
+        except (ConnectionError, OSError) as e:
+            # Erreurs réseau attendues : Socket.IO indisponible
             app_logger.error(
-                "[socketio] emit failed (compat) event=%s room=%s err=%s",
+                "[socketio] emit failed (compat) event=%s room=%s (network error: %s): %s",
                 event,
                 room,
+                type(e).__name__,
                 e,
             )
-    except Exception as e:
+        except Exception:
+            # Erreur inattendue : logger avec trace complète
+            app_logger.exception(
+                "[socketio] emit failed (compat) event=%s room=%s", event, room
+            )
+    except (ConnectionError, OSError) as e:
+        # Erreurs réseau attendues : Socket.IO indisponible
         app_logger.error(
-            "[socketio] emit failed event=%s room=%s err=%s", event, room, e
+            "[socketio] emit failed event=%s room=%s (network error: %s): %s",
+            event,
+            room,
+            type(e).__name__,
+            e,
         )
+    except Exception:
+        # Erreur inattendue : logger avec trace complète
+        app_logger.exception("[socketio] emit failed event=%s room=%s", event, room)
 
 
 # ---------------------------------------------------------------------------
@@ -115,8 +164,17 @@ def notify_driver_new_booking(
             if hasattr(booking, "to_dict")
             else {"id": getattr(booking, "id", None)}
         )
+    except (AttributeError, TypeError, ValueError) as e:
+        # Erreurs de sérialisation attendues : attributs manquants, types non sérialisables
+        app_logger.debug(
+            "[socketio] Fallback serialization (validation error: %s): %s",
+            type(e).__name__,
+            e,
+        )
+        data = {"id": getattr(booking, "id", None)}
     except Exception:
-        # fallback minimal en cas de serialization tricky
+        # Erreur inattendue lors de la sérialisation
+        app_logger.exception("[socketio] Fallback serialization")
         data = {"id": getattr(booking, "id", None)}
 
     _safe_emit(
@@ -131,8 +189,14 @@ def emit_driver_event(
     *,
     namespace: str = DEFAULT_NAMESPACE,
 ) -> None:
-    """Émet un événement générique vers un chauffeur (room driver_...)."""
-    _safe_emit(event, payload, room=get_driver_room(driver_id), namespace=namespace)
+    """Émet un événement générique vers un chauffeur (room driver_...).
+
+    Enrichit automatiquement le payload avec event_id, version, timestamp si absents.
+    """
+    enriched_payload = _enrich_payload_if_needed(payload, event)
+    _safe_emit(
+        event, enriched_payload, room=get_driver_room(driver_id), namespace=namespace
+    )
 
 
 def emit_company_event(
@@ -145,8 +209,13 @@ def emit_company_event(
     """Émet un événement SocketIO dans la room de l'entreprise (thread-safe).
     Utilise 'to=' si dispo, sinon 'room=' (compat v4/v5).
     Ne lève pas d'exception : log l'erreur si l'envoi échoue.
+
+    Enrichit automatiquement le payload avec event_id, version, timestamp si absents.
     """
-    _safe_emit(event, payload, room=get_company_room(company_id), namespace=namespace)
+    enriched_payload = _enrich_payload_if_needed(payload, event)
+    _safe_emit(
+        event, enriched_payload, room=get_company_room(company_id), namespace=namespace
+    )
 
 
 def emit_date_event(
@@ -156,8 +225,14 @@ def emit_date_event(
     *,
     namespace: str = DEFAULT_NAMESPACE,
 ) -> None:
-    """Émet un événement vers la room d'une date (utile pour vues par journée)."""
-    _safe_emit(event, payload, room=get_date_room(date_str), namespace=namespace)
+    """Émet un événement vers la room d'une date (utile pour vues par journée).
+
+    Enrichit automatiquement le payload avec event_id, version, timestamp si absents.
+    """
+    enriched_payload = _enrich_payload_if_needed(payload, event)
+    _safe_emit(
+        event, enriched_payload, room=get_date_room(date_str), namespace=namespace
+    )
 
 
 # Évènements typés du moteur/dispatch
@@ -309,7 +384,7 @@ def emit_delay_detected(
     namespace: str = DEFAULT_NAMESPACE,
 ) -> None:
     """Émet un événement de retard détecté avec les informations du chauffeur.
-    
+
     Charge automatiquement les informations du chauffeur (nom, téléphone, véhicule)
     pour les afficher dans le frontend.
     """
@@ -321,17 +396,22 @@ def emit_delay_detected(
         "has_alternative": bool(has_alternative),
         "is_dropoff": bool(is_dropoff),
     }
-    
+
     # Charger les informations du chauffeur pour l'affichage
+    driver = None  # Initialiser avant le try pour éviter "possibly unbound"
     try:
-        from ext import db
-        
-        driver = (
-            Driver.query.options(joinedload(Driver.user))
-            .filter_by(id=driver_id)
-            .first()
-        )
-        
+        # ✅ Utilisation du repository pour découpler de SQLAlchemy
+        driver_repo = DriverRepository()
+        driver_dto = driver_repo.find_by_id(driver_id)
+        if driver_dto:
+            # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+            # avec eager loading de la relation user
+            driver = (
+                Driver.query.options(joinedload(Driver.user))
+                .filter_by(id=driver_dto.id)
+                .first()
+            )
+
         if driver:
             user = getattr(driver, "user", None)
             if user:
@@ -339,11 +419,13 @@ def emit_delay_detected(
                 last_name = getattr(user, "last_name", None) or ""
                 driver_name = f"{first_name} {last_name}".strip()
                 if not driver_name:
-                    driver_name = getattr(user, "username", None) or f"Chauffeur #{driver_id}"
-                
+                    driver_name = (
+                        getattr(user, "username", None) or f"Chauffeur #{driver_id}"
+                    )
+
                 payload["driver_name"] = driver_name
                 payload["driver_phone"] = getattr(user, "phone", None)
-            
+
             # Récupérer la plaque d'immatriculation depuis le Driver
             license_plate = getattr(driver, "license_plate", None)
             if license_plate:
@@ -353,15 +435,30 @@ def emit_delay_detected(
                 vehicle_assigned = getattr(driver, "vehicle_assigned", None)
                 if vehicle_assigned:
                     payload["driver_vehicle"] = vehicle_assigned
-        
-    except Exception as e:
-        # En cas d'erreur, continuer sans les infos du chauffeur (non bloquant)
+
+    except (OperationalError, DBAPIError) as e:
+        # Erreurs DB attendues : connexion, timeout
         app_logger.warning(
-            "[socketio] Erreur lors du chargement des infos chauffeur pour driver_id=%s: %s",
+            "[socketio] Erreur lors du chargement des infos chauffeur pour driver_id=%s (DB error: %s): %s",
             driver_id,
+            type(e).__name__,
             e,
         )
-    
+    except (AttributeError, TypeError) as e:
+        # Erreurs de validation attendues : attributs manquants
+        app_logger.warning(
+            "[socketio] Erreur lors du chargement des infos chauffeur pour driver_id=%s (validation error: %s): %s",
+            driver_id,
+            type(e).__name__,
+            e,
+        )
+    except Exception:
+        # En cas d'erreur inattendue, continuer sans les infos du chauffeur (non bloquant)
+        app_logger.exception(
+            "[socketio] Erreur lors du chargement des infos chauffeur pour driver_id=%s",
+            driver_id,
+        )
+
     if has_alternative and alternative_driver_id is not None:
         payload["alternative_driver_id"] = int(alternative_driver_id)
     if alternative_delay_minutes is not None:
@@ -371,6 +468,58 @@ def emit_delay_detected(
         company_id, "dispatch:delay:detected", payload, namespace=namespace
     )
     emit_driver_event(driver_id, "driver:delay:detected", payload, namespace=namespace)
+
+    # ✅ P0: Push notification pour delay.detected (fan-out hybride)
+    # Import depuis push_service pour éviter les cycles d'import
+    if driver and hasattr(driver, "push_token") and driver.push_token:
+        try:
+            from services.push_service import send_push_message
+
+            delay_text = (
+                f"{int(delay_minutes)} min" if delay_minutes >= 1 else "< 1 min"
+            )
+            result = send_push_message(
+                token=driver.push_token,
+                title="Retard détecté",
+                body=f"Retard de {delay_text} sur la mission #{booking_id}",
+                data={
+                    "type": "delay",
+                    "booking_id": booking_id,
+                    "assignment_id": assignment_id,
+                    "delay_minutes": float(delay_minutes),
+                    "deepLink": f"atmr://booking/{booking_id}?alert=delay",
+                },
+                timeout=5,
+                driver_id=driver_id,
+                bypass_rate_limit=False,  # Les delays ne sont pas critiques, respecter le rate limit
+            )
+
+            if result.get("ok"):
+                app_logger.info(
+                    "[socketio] Push sent to driver %s for delay on booking %s",
+                    driver_id,
+                    booking_id,
+                )
+            else:
+                app_logger.warning(
+                    "[socketio] Push failed for driver %s: %s",
+                    driver_id,
+                    result.get("error", "Unknown error"),
+                )
+        except (ValueError, TypeError, AttributeError) as e:
+            app_logger.error(
+                "[socketio] Push notification failed (validation error: %s): %s",
+                type(e).__name__,
+                e,
+            )
+        except (ConnectionError, OSError) as e:
+            app_logger.error(
+                "[socketio] Push notification failed (network error: %s): %s",
+                type(e).__name__,
+                e,
+            )
+        except Exception:
+            app_logger.exception("[socketio] Push notification failed")
 
 
 # ---------------------------------------------------------------------------
@@ -386,9 +535,19 @@ def join_company_room(
         cast("Any", socketio).enter_room(
             sid, get_company_room(company_id), namespace=namespace
         )
-    except Exception as e:
+    except (ConnectionError, OSError) as e:
+        # Erreurs réseau attendues : Socket.IO indisponible
         app_logger.error(
-            "[socketio] enter_room failed sid=%s company=%s err=%s", sid, company_id, e
+            "[socketio] enter_room failed sid=%s company=%s (network error: %s): %s",
+            sid,
+            company_id,
+            type(e).__name__,
+            e,
+        )
+    except Exception:
+        # Erreur inattendue : logger avec trace complète
+        app_logger.exception(
+            "[socketio] enter_room failed sid=%s company=%s", sid, company_id
         )
 
 
@@ -402,9 +561,19 @@ def leave_company_room(
         cast("Any", socketio).leave_room(
             sid, get_company_room(company_id), namespace=namespace
         )
-    except Exception as e:
+    except (ConnectionError, OSError) as e:
+        # Erreurs réseau attendues : Socket.IO indisponible
         app_logger.error(
-            "[socketio] leave_room failed sid=%s company=%s err=%s", sid, company_id, e
+            "[socketio] leave_room failed sid=%s company=%s (network error: %s): %s",
+            sid,
+            company_id,
+            type(e).__name__,
+            e,
+        )
+    except Exception:
+        # Erreur inattendue : logger avec trace complète
+        app_logger.exception(
+            "[socketio] leave_room failed sid=%s company=%s", sid, company_id
         )
 
 
@@ -414,9 +583,19 @@ def join_date_room(sid: str, date_str: str, namespace: str = DEFAULT_NAMESPACE) 
         cast("Any", socketio).enter_room(
             sid, get_date_room(date_str), namespace=namespace
         )
-    except Exception as e:
+    except (ConnectionError, OSError) as e:
+        # Erreurs réseau attendues : Socket.IO indisponible
         app_logger.error(
-            "[socketio] enter_room(date) failed sid=%s date=%s err=%s", sid, date_str, e
+            "[socketio] enter_room(date) failed sid=%s date=%s (network error: %s): %s",
+            sid,
+            date_str,
+            type(e).__name__,
+            e,
+        )
+    except Exception:
+        # Erreur inattendue : logger avec trace complète
+        app_logger.exception(
+            "[socketio] enter_room(date) failed sid=%s date=%s", sid, date_str
         )
 
 
@@ -428,9 +607,19 @@ def leave_date_room(
         cast("Any", socketio).leave_room(
             sid, get_date_room(date_str), namespace=namespace
         )
-    except Exception as e:
+    except (ConnectionError, OSError) as e:
+        # Erreurs réseau attendues : Socket.IO indisponible
         app_logger.error(
-            "[socketio] leave_room(date) failed sid=%s date=%s err=%s", sid, date_str, e
+            "[socketio] leave_room(date) failed sid=%s date=%s (network error: %s): %s",
+            sid,
+            date_str,
+            type(e).__name__,
+            e,
+        )
+    except Exception:
+        # Erreur inattendue : logger avec trace complète
+        app_logger.exception(
+            "[socketio] leave_room(date) failed sid=%s date=%s", sid, date_str
         )
 
 

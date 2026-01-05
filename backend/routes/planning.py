@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import contextlib
+import logging
 from datetime import date, datetime
 
-from flask import request
-from flask_jwt_extended import jwt_required
-from flask_restx import Namespace, Resource
+from flask import request  # pyright: ignore[reportMissingImports]
+from flask_jwt_extended import jwt_required  # pyright: ignore[reportMissingImports]
+from flask_restx import Namespace, Resource  # pyright: ignore[reportMissingImports]
 
 from ext import db
 from models import (
@@ -21,13 +22,14 @@ from services.planning_service import (
     serialize_shift,
     validate_shift_overlap,
 )
-
-# from shared.time_utils import parse_local_naive
+from shared.error_handlers import APIErrorHandler
 from sockets.planning import (
     emit_shift_created,
     emit_shift_deleted,
     emit_shift_updated,
 )
+
+logger = logging.getLogger(__name__)
 
 planning_ns = Namespace("planning", description="Planning Chauffeurs")
 
@@ -46,9 +48,12 @@ class ShiftsMe(Resource):
         """
         company, _, _ = get_company_from_token()
         if not company:
-            return {"error": "unauthorized"}, 401
+            return APIErrorHandler.handle_permission_error(
+                "unauthorized",
+                logger_instance=logger,
+            )
         # ✅ 2.4: Validation Marshmallow pour query params
-        from marshmallow import ValidationError
+        from marshmallow import ValidationError  # pyright: ignore[reportMissingImports]
 
         from schemas.planning_schemas import PlanningShiftsQuerySchema
         from schemas.validation_utils import handle_validation_error, validate_request
@@ -76,18 +81,27 @@ class ShiftsMe(Resource):
     def post(self):
         company, _, _ = get_company_from_token()
         if not company:
-            return {"error": "unauthorized"}, 401
+            return APIErrorHandler.handle_permission_error(
+                "unauthorized",
+                logger_instance=logger,
+            )
         data = request.json or {}
         try:
             driver_id = int(data.get("driver_id", 0))
             start_local = datetime.fromisoformat(data.get("start_local", ""))
             end_local = datetime.fromisoformat(data.get("end_local", ""))
         except Exception:
-            return {"error": "payload invalide"}, 400
+            return APIErrorHandler.handle_validation_error(
+                "payload invalide",
+                logger_instance=logger,
+            )
         try:
             validate_shift_overlap(company.id, driver_id, start_local, end_local)
         except ValueError as e:
-            return {"error": str(e)}, 409
+            return APIErrorHandler.handle_conflict_error(
+                str(e),
+                logger_instance=logger,
+            )
         s = DriverShift()
         s.company_id = company.id
         s.driver_id = driver_id
@@ -170,10 +184,17 @@ class ShiftDetailMe(Resource):
     def delete(self, shift_id: int):
         company, _, _ = get_company_from_token()
         if not company:
-            return {"error": "unauthorized"}, 401
+            return APIErrorHandler.handle_permission_error(
+                "unauthorized",
+                logger_instance=logger,
+            )
         s = db.session.get(DriverShift, shift_id)
         if s is None or getattr(s, "company_id", None) != getattr(company, "id", None):
-            return {"error": "not found"}, 404
+            return APIErrorHandler.handle_not_found(
+                "Resource",
+                None,
+                logger,
+            )
         db.session.delete(s)
         db.session.commit()
         with contextlib.suppress(Exception):
@@ -188,16 +209,26 @@ class ShiftBreaks(Resource):
     def post(self, shift_id: int):
         company, _, _ = get_company_from_token()
         if not company:
-            return {"error": "unauthorized"}, 401
+            return APIErrorHandler.handle_permission_error(
+                "unauthorized",
+                logger_instance=logger,
+            )
         s = db.session.get(DriverShift, shift_id)
         if s is None or getattr(s, "company_id", None) != getattr(company, "id", None):
-            return {"error": "not found"}, 404
+            return APIErrorHandler.handle_not_found(
+                "Resource",
+                None,
+                logger,
+            )
         data = request.json or {}
         try:
             start_local = datetime.fromisoformat(data.get("start_local", ""))
             end_local = datetime.fromisoformat(data.get("end_local", ""))
         except Exception:
-            return {"error": "payload invalide"}, 400
+            return APIErrorHandler.handle_validation_error(
+                "payload invalide",
+                logger_instance=logger,
+            )
         b = DriverBreak()
         b.shift_id = getattr(s, "id", None)
         b.start_local = start_local
@@ -214,17 +245,28 @@ class ShiftBreakDetail(Resource):
     def delete(self, shift_id: int, break_id: int):
         company, _, _ = get_company_from_token()
         if not company:
-            return {"error": "unauthorized"}, 401
+            return APIErrorHandler.handle_permission_error(
+                "unauthorized",
+                logger_instance=logger,
+            )
         b = db.session.get(DriverBreak, break_id)
         if not b:
-            return {"error": "not found"}, 404
+            return APIErrorHandler.handle_not_found(
+                "Resource",
+                None,
+                logger,
+            )
         s = db.session.get(DriverShift, shift_id)
         if (
             s is None
             or getattr(s, "company_id", None) != getattr(company, "id", None)
             or getattr(b, "shift_id", None) != getattr(s, "id", None)
         ):
-            return {"error": "not found"}, 404
+            return APIErrorHandler.handle_not_found(
+                "Resource",
+                None,
+                logger,
+            )
         db.session.delete(b)
         db.session.commit()
         return {"ok": True}, 204
@@ -245,9 +287,12 @@ class Unavailability(Resource):
         """
         company, _, _ = get_company_from_token()
         if not company:
-            return {"error": "unauthorized"}, 401
+            return APIErrorHandler.handle_permission_error(
+                "unauthorized",
+                logger_instance=logger,
+            )
         # ✅ 2.4: Validation Marshmallow pour query params
-        from marshmallow import ValidationError
+        from marshmallow import ValidationError  # pyright: ignore[reportMissingImports]
 
         from schemas.planning_schemas import PlanningUnavailabilityQuerySchema
         from schemas.validation_utils import handle_validation_error, validate_request
@@ -283,14 +328,20 @@ class Unavailability(Resource):
     def post(self):
         company, _, _ = get_company_from_token()
         if not company:
-            return {"error": "unauthorized"}, 401
+            return APIErrorHandler.handle_permission_error(
+                "unauthorized",
+                logger_instance=logger,
+            )
         data = request.json or {}
         try:
             driver_id = int(data.get("driver_id", 0))
             start_local = datetime.fromisoformat(data.get("start_local", ""))
             end_local = datetime.fromisoformat(data.get("end_local", ""))
         except Exception:
-            return {"error": "payload invalide"}, 400
+            return APIErrorHandler.handle_validation_error(
+                "payload invalide",
+                logger_instance=logger,
+            )
         u = DriverUnavailability()
         u.company_id = getattr(company, "id", None)
         u.driver_id = driver_id
@@ -309,10 +360,17 @@ class UnavailabilityDetail(Resource):
     def delete(self, uid: int):
         company, _, _ = get_company_from_token()
         if not company:
-            return {"error": "unauthorized"}, 401
+            return APIErrorHandler.handle_permission_error(
+                "unauthorized",
+                logger_instance=logger,
+            )
         u = db.session.get(DriverUnavailability, uid)
         if u is None or getattr(u, "company_id", None) != getattr(company, "id", None):
-            return {"error": "not found"}, 404
+            return APIErrorHandler.handle_not_found(
+                "Resource",
+                None,
+                logger,
+            )
         db.session.delete(u)
         db.session.commit()
         return {"ok": True}, 204
@@ -333,9 +391,12 @@ class WeeklyTemplate(Resource):
         """
         company, _, _ = get_company_from_token()
         if not company:
-            return {"error": "unauthorized"}, 401
+            return APIErrorHandler.handle_permission_error(
+                "unauthorized",
+                logger_instance=logger,
+            )
         # ✅ 2.4: Validation Marshmallow pour query params
-        from marshmallow import ValidationError
+        from marshmallow import ValidationError  # pyright: ignore[reportMissingImports]
 
         from schemas.planning_schemas import PlanningWeeklyTemplateQuerySchema
         from schemas.validation_utils import handle_validation_error, validate_request
@@ -378,7 +439,10 @@ class WeeklyTemplate(Resource):
     def post(self):
         company, _, _ = get_company_from_token()
         if not company:
-            return {"error": "unauthorized"}, 401
+            return APIErrorHandler.handle_permission_error(
+                "unauthorized",
+                logger_instance=logger,
+            )
         data = request.json or {}
         try:
             t = DriverWeeklyTemplate()
@@ -394,7 +458,10 @@ class WeeklyTemplate(Resource):
                 else None
             )
         except Exception:
-            return {"error": "payload invalide"}, 400
+            return APIErrorHandler.handle_validation_error(
+                "payload invalide",
+                logger_instance=logger,
+            )
         db.session.add(t)
         db.session.commit()
         return {"id": t.id}, 201
@@ -406,10 +473,17 @@ class WeeklyTemplateDetail(Resource):
     def put(self, tid: int):
         company, _, _ = get_company_from_token()
         if not company:
-            return {"error": "unauthorized"}, 401
+            return APIErrorHandler.handle_permission_error(
+                "unauthorized",
+                logger_instance=logger,
+            )
         t = db.session.get(DriverWeeklyTemplate, tid)
         if t is None or getattr(t, "company_id", None) != getattr(company, "id", None):
-            return {"error": "not found"}, 404
+            return APIErrorHandler.handle_not_found(
+                "Resource",
+                None,
+                logger,
+            )
         data = request.json or {}
         if "weekday" in data:
             t.weekday = int(data["weekday"])
@@ -432,10 +506,17 @@ class WeeklyTemplateDetail(Resource):
     def delete(self, tid: int):
         company, _, _ = get_company_from_token()
         if not company:
-            return {"error": "unauthorized"}, 401
+            return APIErrorHandler.handle_permission_error(
+                "unauthorized",
+                logger_instance=logger,
+            )
         t = db.session.get(DriverWeeklyTemplate, tid)
         if t is None or getattr(t, "company_id", None) != getattr(company, "id", None):
-            return {"error": "not found"}, 404
+            return APIErrorHandler.handle_not_found(
+                "Resource",
+                None,
+                logger,
+            )
         db.session.delete(t)
         db.session.commit()
         return {"ok": True}, 204
@@ -447,7 +528,10 @@ class WeeklyTemplateMaterialize(Resource):
     def post(self):
         company, _, _ = get_company_from_token()
         if not company:
-            return {"error": "unauthorized"}, 401
+            return APIErrorHandler.handle_permission_error(
+                "unauthorized",
+                logger_instance=logger,
+            )
         data = request.json or {}
         try:
             driver_id = int(data["driver_id"]) if data.get("driver_id") else None
@@ -458,9 +542,15 @@ class WeeklyTemplateMaterialize(Resource):
                 date.fromisoformat(data["to_date"]) if data.get("to_date") else None
             )
         except Exception:
-            return {"error": "payload invalide"}, 400
+            return APIErrorHandler.handle_validation_error(
+                "payload invalide",
+                logger_instance=logger,
+            )
         if not (driver_id and from_date and to_date):
-            return {"error": "missing fields"}, 400
+            return APIErrorHandler.handle_validation_error(
+                "missing fields",
+                logger_instance=logger,
+            )
         created = materialize_template(company.id, driver_id, from_date, to_date)
         return {"created": int(created)}
 
@@ -472,7 +562,10 @@ class PlanningSettings(Resource):
     def get(self):
         company, _, _ = get_company_from_token()
         if not company:
-            return {"error": "unauthorized"}, 401
+            return APIErrorHandler.handle_permission_error(
+                "unauthorized",
+                logger_instance=logger,
+            )
         s = db.session.get(CompanyPlanningSettings, company.id)
         return {"settings": s.settings if s else {}}
 
@@ -480,7 +573,10 @@ class PlanningSettings(Resource):
     def put(self):
         company, _, _ = get_company_from_token()
         if not company:
-            return {"error": "unauthorized"}, 401
+            return APIErrorHandler.handle_permission_error(
+                "unauthorized",
+                logger_instance=logger,
+            )
         payload = (request.json or {}).get("settings") or {}
         s = db.session.get(CompanyPlanningSettings, company.id)
         if not s:
@@ -501,7 +597,10 @@ class PlanningAssignments(Resource):
     def get(self):
         company, _, _ = get_company_from_token()
         if not company:
-            return {"error": "unauthorized"}, 401
+            return APIErrorHandler.handle_permission_error(
+                "unauthorized",
+                logger_instance=logger,
+            )
         # Placeholder: renvoie liste vide pour l'instant
         return {"items": [], "total": 0}
 
@@ -513,7 +612,10 @@ class PlanningICS(Resource):
     def get(self):
         company, _, _ = get_company_from_token()
         if not company:
-            return {"error": "unauthorized"}, 401
+            return APIErrorHandler.handle_permission_error(
+                "unauthorized",
+                logger_instance=logger,
+            )
         # Placeholder minimal: renvoie ICS vide
         ics = (
             "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//ATMR//Planning//EN\n"

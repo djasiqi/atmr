@@ -65,8 +65,12 @@ export const fetchCompanyReservations = async (date) => {
 };
 
 export const acceptReservation = async (reservationId) => {
-  const { data } = await apiClient.post(`/companies/me/reservations/${reservationId}/accept`);
-  return data;
+  try {
+    const { data } = await apiClient.post(`/companies/me/reservations/${reservationId}/accept`);
+    return data;
+  } catch (error) {
+    throw error;
+  }
 };
 
 export const rejectReservation = async (reservationId) => {
@@ -94,8 +98,12 @@ export const completeReservation = async (reservationId) => {
  * Supprime une réservation.
  */
 export const deleteReservation = async (reservationId) => {
-  const { data } = await apiClient.delete(`/companies/me/reservations/${reservationId}`);
-  return data;
+  try {
+    const { data } = await apiClient.delete(`/companies/me/reservations/${reservationId}`);
+    return data;
+  } catch (error) {
+    throw error;
+  }
 };
 
 /**
@@ -158,7 +166,11 @@ export const fetchCompanyDriver = async () => {
     if (Array.isArray(data?.driver)) return data.driver;
     return []; // fallback sûr
   } catch (e) {
-    console.error('fetchCompanyDriver failed:', e?.response?.data || e);
+    // Ne pas logger les erreurs 403/404 comme des erreurs critiques (permissions manquantes)
+    const status = e?.response?.status;
+    if (status !== 403 && status !== 404) {
+      console.error('fetchCompanyDriver failed:', e?.response?.data || e);
+    }
     return [];
   }
 };
@@ -238,9 +250,19 @@ export const setDispatchEnabled = async (enabled) => {
 export const fetchCompanyInfo = async () => {
   try {
     const { data } = await apiClient.get('/companies/me');
+    // ✅ Le backend retourne success_response(data=company.serialize) qui crée { data: {...}, message: "..." }
+    // Il faut extraire data.data si la structure est { data: {...} }, sinon retourner data directement
+    if (data && typeof data === 'object' && 'data' in data && !('error' in data)) {
+      return data.data;
+    }
+    // Si data n'a pas de structure { data: {...} }, retourner data directement (compatibilité)
     return data;
   } catch (error) {
-    console.error('Error fetching company info:', error?.response?.data || error);
+    // Ne pas logger les erreurs 403/404/401 comme des erreurs critiques (permissions manquantes ou company non trouvée)
+    const status = error?.response?.status;
+    if (status !== 403 && status !== 404 && status !== 401) {
+      console.error('Error fetching company info:', error?.response?.data || error);
+    }
     // Return a minimal valid company object to prevent UI from breaking
     return {
       id: null,
@@ -280,7 +302,11 @@ export const fetchCompanyMessages = async (companyId) => {
 export const fetchCompanyClients = async () => {
   // Récupérer tous les clients en une seule fois (max 1000 par page)
   const { data } = await apiClient.get('/companies/me/clients?per_page=1000');
-  // L'API retourne {clients: [...], total: number}
+  // L'API retourne un format paginé : {data: [...], pagination: {...}, links: {...}}
+  if (data && data.data && Array.isArray(data.data)) {
+    return data.data;
+  }
+  // Fallback : format ancien {clients: [...]}
   return data.clients || [];
 };
 
@@ -297,8 +323,13 @@ export const searchClients = async (query) => {
     const { data } = await apiClient.get(
       `/companies/me/clients?search=${encodeURIComponent(query)}`
     );
-    // ✅ Le backend retourne {"clients": [...], "total": ...}
-    // Extraire le tableau clients
+    // ✅ Le backend retourne un format paginé : {"data": [...], "pagination": {...}, "links": {...}}
+    // Extraire le tableau clients depuis data.data
+    if (data && data.data && Array.isArray(data.data)) {
+      console.log(`✅ ${data.data.length} client(s) trouvé(s) pour "${query}"`);
+      return data.data;
+    }
+    // Fallback : format ancien {"clients": [...]}
     if (data && Array.isArray(data.clients)) {
       console.log(`✅ ${data.clients.length} client(s) trouvé(s) pour "${query}"`);
       return data.clients;

@@ -15,18 +15,22 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any, Dict
 
-from flask import Blueprint, jsonify, request
-from flask_jwt_extended import jwt_required
+from flask import Blueprint, jsonify, request  # pyright: ignore[reportMissingImports]
+from flask_jwt_extended import jwt_required  # pyright: ignore[reportMissingImports]
 
-from services.proactive_alerts import ProactiveAlertsService
+from alerts.infrastructure.adapters.proactive_alerts_adapter import (
+    check_delay_risk_via_service,
+    clear_alert_history_via_service,
+    get_alert_statistics_via_service,
+    get_rl_explanation_via_service,
+    send_proactive_alert_via_service,
+)
+from shared.error_handlers import APIErrorHandler
 
 logger = logging.getLogger(__name__)
 
 # Créer le blueprint
 proactive_alerts_bp = Blueprint("proactive_alerts", __name__, url_prefix="/api/alerts")
-
-# Instance globale du service
-alerts_service = ProactiveAlertsService()
 
 
 @proactive_alerts_bp.route("/delay-risk", methods=["GET"])
@@ -64,10 +68,14 @@ def check_delay_risk():
             driver_data = None
 
         if not booking_data or not driver_data:
-            return jsonify({"error": "Booking ou chauffeur non trouvé"}), 404
+            return APIErrorHandler.handle_not_found(
+                "Booking ou chauffeur",
+                None,
+                logger,
+            )
 
-        # Analyser le risque
-        analysis_result = alerts_service.check_delay_risk(
+        # ✅ DDD: Analyser le risque via adapter
+        analysis_result = check_delay_risk_via_service(
             booking=booking_data, driver=driver_data, current_time=datetime.now(UTC)
         )
 
@@ -89,7 +97,7 @@ def check_delay_risk():
 
     except Exception as e:
         logger.error("[ProactiveAlerts] Erreur endpoint delay-risk: %s", e)
-        return jsonify({"error": "Erreur interne du serveur", "details": str(e)}), 500
+        return APIErrorHandler.handle_exception(e, logger)
 
 
 @proactive_alerts_bp.route("/delay-risk", methods=["POST"])
@@ -124,10 +132,18 @@ def analyze_multiple_delay_risks():
         company_id = data.get("company_id")
 
         if not company_id:
-            return jsonify({"error": "company_id requis"}), 400
+            return APIErrorHandler.handle_validation_error(
+                "company_id requis",
+                field="company_id",
+                logger_instance=logger,
+            )
 
         if not isinstance(assignments, list) or len(assignments) == 0:
-            return jsonify({"error": "assignments doit être une liste non vide"}), 400
+            return APIErrorHandler.handle_validation_error(
+                "assignments doit être une liste non vide",
+                field="assignments",
+                logger_instance=logger,
+            )
 
         # Analyser chaque assignation
         results = []
@@ -159,8 +175,8 @@ def analyze_multiple_delay_risks():
                 )
                 continue
 
-            # Analyser
-            analysis_result = alerts_service.check_delay_risk(
+            # ✅ DDD: Analyser via adapter
+            analysis_result = check_delay_risk_via_service(
                 booking=booking_data, driver=driver_data, current_time=datetime.now(UTC)
             )
 
@@ -187,7 +203,7 @@ def analyze_multiple_delay_risks():
 
     except Exception as e:
         logger.error("[ProactiveAlerts] Erreur endpoint batch delay-risk: %s", e)
-        return jsonify({"error": "Erreur interne du serveur", "details": str(e)}), 500
+        return APIErrorHandler.handle_exception(e, logger)
 
 
 @proactive_alerts_bp.route("/explain-decision", methods=["POST"])
@@ -213,17 +229,23 @@ def explain_rl_decision():
         data = request.get_json()
 
         if not data:
-            return jsonify({"error": "Body requis"}), 400
+            return APIErrorHandler.handle_validation_error(
+                "Body requis",
+                logger_instance=logger,
+            )
 
         booking_id = data.get("booking_id")
         driver_id = data.get("driver_id")
         rl_decision = data.get("rl_decision", {})
 
         if not all([booking_id, driver_id]):
-            return jsonify({"error": "booking_id et driver_id requis"}), 400
+            return APIErrorHandler.handle_validation_error(
+                "booking_id et driver_id requis",
+                logger_instance=logger,
+            )
 
-        # Générer l'explication
-        explanation = alerts_service.get_explanation_for_decision(
+        # ✅ DDD: Générer l'explication via adapter
+        explanation = get_rl_explanation_via_service(
             booking_id=booking_id, driver_id=driver_id, rl_decision=rl_decision
         )
 
@@ -243,7 +265,7 @@ def explain_rl_decision():
 
     except Exception as e:
         logger.error("[ProactiveAlerts] Erreur endpoint explain-decision: %s", e)
-        return jsonify({"error": "Erreur interne du serveur", "details": str(e)}), 500
+        return APIErrorHandler.handle_exception(e, logger)
 
 
 @proactive_alerts_bp.route("/send-alert", methods=["POST"])
@@ -266,7 +288,10 @@ def send_proactive_alert():
         data = request.get_json()
 
         if not data:
-            return jsonify({"error": "Body requis"}), 400
+            return APIErrorHandler.handle_validation_error(
+                "Body requis",
+                logger_instance=logger,
+            )
 
         booking_id = data.get("booking_id")
         driver_id = data.get("driver_id")
@@ -274,22 +299,29 @@ def send_proactive_alert():
         force_send = data.get("force_send", False)
 
         if not all([booking_id, driver_id, company_id]):
-            return jsonify({"error": "booking_id, driver_id et company_id requis"}), 400
+            return APIErrorHandler.handle_validation_error(
+                "booking_id, driver_id et company_id requis",
+                logger_instance=logger,
+            )
 
         # Récupérer données
         booking_data = _get_mock_booking_data(booking_id)
         driver_data = _get_mock_driver_data(driver_id)
 
         if not booking_data or not driver_data:
-            return jsonify({"error": "Booking ou chauffeur non trouvé"}), 404
+            return APIErrorHandler.handle_not_found(
+                "Booking ou chauffeur",
+                None,
+                logger,
+            )
 
-        # Analyser le risque
-        analysis_result = alerts_service.check_delay_risk(
+        # ✅ DDD: Analyser le risque via adapter
+        analysis_result = check_delay_risk_via_service(
             booking=booking_data, driver=driver_data, current_time=datetime.now(UTC)
         )
 
-        # Envoyer l'alerte
-        alert_sent = alerts_service.send_proactive_alert(
+        # ✅ DDD: Envoyer l'alerte via adapter
+        alert_sent = send_proactive_alert_via_service(
             analysis_result=analysis_result,
             company_id=company_id,
             force_send=force_send,
@@ -313,7 +345,7 @@ def send_proactive_alert():
 
     except Exception as e:
         logger.error("[ProactiveAlerts] Erreur endpoint send-alert: %s", e)
-        return jsonify({"error": "Erreur interne du serveur", "details": str(e)}), 500
+        return APIErrorHandler.handle_exception(e, logger)
 
 
 @proactive_alerts_bp.route("/statistics", methods=["GET"])
@@ -326,7 +358,8 @@ def get_alert_statistics():
 
     """
     try:
-        stats = alerts_service.get_alert_statistics()
+        # ✅ DDD: Récupérer les statistiques via adapter
+        stats = get_alert_statistics_via_service()
 
         logger.info("[ProactiveAlerts] Statistiques récupérées")
 
@@ -340,7 +373,7 @@ def get_alert_statistics():
 
     except Exception as e:
         logger.error("[ProactiveAlerts] Erreur endpoint statistics: %s", e)
-        return jsonify({"error": "Erreur interne du serveur", "details": str(e)}), 500
+        return APIErrorHandler.handle_exception(e, logger)
 
 
 @proactive_alerts_bp.route("/clear-history", methods=["POST"])
@@ -360,7 +393,7 @@ def clear_alert_history():
         data = request.get_json() or {}
 
         # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-        from marshmallow import ValidationError
+        from marshmallow import ValidationError  # pyright: ignore[reportMissingImports]
 
         from schemas.alert_schemas import ClearAlertHistorySchema
         from schemas.validation_utils import handle_validation_error, validate_request
@@ -374,8 +407,8 @@ def clear_alert_history():
 
         booking_id = validated_data.get("booking_id")
 
-        # Nettoyer l'historique
-        alerts_service.clear_alert_history(booking_id)
+        # ✅ DDD: Nettoyer l'historique via adapter
+        clear_alert_history_via_service(booking_id=booking_id)
 
         logger.info(
             "[ProactiveAlerts] Historique nettoyé%s",
@@ -395,7 +428,7 @@ def clear_alert_history():
 
     except Exception as e:
         logger.error("[ProactiveAlerts] Erreur endpoint clear-history: %s", e)
-        return jsonify({"error": "Erreur interne du serveur", "details": str(e)}), 500
+        return APIErrorHandler.handle_exception(e, logger)
 
 
 @proactive_alerts_bp.route("/health", methods=["GET"])
@@ -407,9 +440,14 @@ def health_check():
 
     """
     try:
-        # Vérifier les composants
-        delay_predictor_loaded = alerts_service.delay_predictor is not None
-        notification_service_available = alerts_service.notification_service is not None
+        # ✅ DDD: Vérifier les composants via service (accès direct nécessaire pour health check)
+        from alerts.infrastructure.adapters.proactive_alerts_adapter import (
+            create_proactive_alerts_service,
+        )
+
+        service = create_proactive_alerts_service()
+        delay_predictor_loaded = service.delay_predictor is not None
+        notification_service_available = service.notification_service is not None
 
         health_status = {
             "service": "proactive_alerts",

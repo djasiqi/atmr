@@ -1,0 +1,61 @@
+{
+  "name": "ATMR Backend Development",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "api",
+  "workspaceFolder": "/app",
+  "runArgs": ["--user", "root"],
+  "overrideCommand": false,
+
+  // Configuration Python
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.analysis.typeCheckingMode": "standard",
+        "python.analysis.autoImportCompletions": true,
+        "python.analysis.diagnosticMode": "workspace",
+        "python.linting.enabled": true,
+        "python.linting.ruffEnabled": true,
+        "python.formatting.provider": "none",
+        "editor.formatOnSave": true,
+        "[python]": {
+          "editor.defaultFormatter": "charliermarsh.ruff",
+          "editor.codeActionsOnSave": {
+            "source.fixAll": "explicit",
+            "source.organizeImports": "explicit"
+          }
+        }
+      }
+    }
+  },
+
+  // Post-create command: installer les outils de développement si nécessaire
+  "postCreateCommand": "pip install --quiet ruff mypy || true",
+
+  // Forward ports pour l'API
+  "forwardPorts": [5000],
+  "portsAttributes": {
+    "5000": {
+      "label": "Flask API",
+      "onAutoForward": "notify"
+    }
+  },
+
+  // Variables d'environnement
+  "remoteEnv": {
+    "PYTHONPATH": "/app",
+    "FLASK_APP": "app.py",
+    "FLASK_ENV": "development"
+  },
+
+  // Features optionnelles (commentées par défaut)
+  "features": {},
+
+  // Commentez cette ligne si vous ne voulez pas que le conteneur se ferme automatiquement
+  "shutdownAction": "stopCompose"
+}

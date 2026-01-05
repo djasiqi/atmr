@@ -241,6 +241,7 @@ class TestBookingUpdateSchema:
             "pickup_location": "123 Main St",
             "dropoff_location": "456 Oak Ave",
             "scheduled_time": "2025-12-25T14:00:00Z",
+            "return_time": "2025-12-25T18:00:00Z",
             "amount": 100.0,
             "status": "confirmed",
             "medical_facility": "Hôpital",
@@ -252,6 +253,7 @@ class TestBookingUpdateSchema:
         assert result["pickup_location"] == "123 Main St"
         assert result["dropoff_location"] == "456 Oak Ave"
         assert result["scheduled_time"] == "2025-12-25T14:00:00Z"
+        assert result["return_time"] == "2025-12-25T18:00:00Z"
         assert result["amount"] == 100.0
         assert result["status"] == "confirmed"
         assert result["medical_facility"] == "Hôpital"
@@ -313,10 +315,17 @@ class TestBookingUpdateSchema:
         assert "errors" in exc_info.value.messages
         assert "amount" in exc_info.value.messages["errors"]
 
-        # Montant zéro (valide)
+        # Montant zéro (invalide : minimum = 0.5)
         data = {"amount": 0.0}
+        with pytest.raises(ValidationError) as exc_info:
+            validate_request(BookingUpdateSchema(), data, strict=False)
+        assert "errors" in exc_info.value.messages
+        assert "amount" in exc_info.value.messages["errors"]
+
+        # Montant minimum (valide)
+        data = {"amount": 0.5}
         result = validate_request(BookingUpdateSchema(), data, strict=False)
-        assert result["amount"] == 0.0
+        assert result["amount"] == 0.5
 
         # Montant positif (valide)
         data = {"amount": 50.5}
@@ -369,9 +378,17 @@ class TestBookingUpdateSchema:
 
     def test_boolean_fields(self):
         """Test validation des champs booléens."""
+        # is_round_trip=True => return_time requis
         data = {"is_round_trip": True}
+        with pytest.raises(ValidationError) as exc_info:
+            validate_request(BookingUpdateSchema(), data, strict=False)
+        assert "errors" in exc_info.value.messages
+        # l'erreur est portée au niveau _schema (règle croisée)
+
+        data = {"is_round_trip": True, "return_time": "2025-12-25T18:00:00Z"}
         result = validate_request(BookingUpdateSchema(), data, strict=False)
         assert result["is_round_trip"] is True
+        assert result["return_time"] == "2025-12-25T18:00:00Z"
 
         data = {"is_round_trip": False}
         result = validate_request(BookingUpdateSchema(), data, strict=False)

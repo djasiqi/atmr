@@ -1,6 +1,7 @@
-"""✅ 2.5: Tâches Celery pour rotation automatique des clés de chiffrement.
+"""✅ S3: Tâches Celery pour rotation automatique des secrets.
 
-Rotation toutes les 90 jours + migration progressive des données.
+Rotation automatique des clés JWT et de chiffrement tous les 90 jours.
+Utilise SecretRotationService pour gérer l'historique et les vérifications.
 """
 
 from __future__ import annotations
@@ -9,22 +10,22 @@ import logging
 import os
 from typing import Any
 
-from celery import Task
+from celery import Task  # pyright: ignore[reportMissingImports]
 
 from celery_app import celery, get_flask_app
 
 logger = logging.getLogger(__name__)
 
-# ✅ 2.5: Intervalle de rotation (90 jours par défaut)
-DEFAULT_ROTATION_INTERVAL_DAYS = 90
+# ✅ S3: Intervalle de rotation (90 jours par défaut)
+DEFAULT_ROTATION_INTERVAL_DAYS = int(os.getenv("SECRET_ROTATION_INTERVAL_DAYS", "90"))
 
 
 @celery.task(bind=True, name="tasks.secret_rotation_tasks.rotate_encryption_keys")
-def rotate_encryption_keys(self: Task) -> dict[str, Any]:  # noqa: ARG001
-    """✅ 2.5: Génère une nouvelle clé de chiffrement et la marque comme active.
+def rotate_encryption_keys(self: Task) -> dict[str, Any]:
+    """✅ S3: Génère une nouvelle clé de chiffrement et la marque comme active.
 
     L'ancienne clé devient legacy pour permettre le déchiffrement
-    des données existantes.
+    des données existantes. Utilise SecretRotationService pour l'historique.
 
     Returns:
         dict avec status, old_key_hex, new_key_hex
@@ -32,53 +33,46 @@ def rotate_encryption_keys(self: Task) -> dict[str, Any]:  # noqa: ARG001
     try:
         app = get_flask_app()
         with app.app_context():
-            from security.crypto import (
-                DEFAULT_KEY_LENGTH,
-                get_encryption_service,
-                rotate_to_new_key,
-            )
+            from security.secret_rotation_service import SecretRotationService
 
-            logger.info("[2.5] Début rotation clés de chiffrement...")
+            logger.info("[S3] Début rotation clés de chiffrement...")
 
-            # Récupérer le service
-            service = get_encryption_service()
+            # Définir le task_id pour l'historique
+            os.environ["CELERY_TASK_ID"] = str(self.request.id)
 
-            # Générer nouvelle clé
-            new_key = os.urandom(DEFAULT_KEY_LENGTH)
-            new_key_hex = new_key.hex()
-
-            # Effectuer la rotation (ancienne devient legacy)
-            old_key = rotate_to_new_key(service, new_key)
-            old_key_hex = old_key.hex()
-
-            logger.info(
-                "[2.5] ✅ Rotation effectuée - Nouvelle clé: %s... (ancienne → legacy)",
-                new_key_hex[:16],
-            )
-
-            # ⚠️ IMPORTANT: Le développeur doit mettre à jour
-            # les variables d'environnement
-            # MASTER_ENCRYPTION_KEY et LEGACY_ENCRYPTION_KEYS manuellement
-            warning_msg = (
-                "[2.5] ⚠️ MISE À JOUR MANUELLE REQUISE:\n"
-                f"  - MASTER_ENCRYPTION_KEY={new_key_hex}\n"
-                f"  - LEGACY_ENCRYPTION_KEYS={old_key_hex} (ajouter l'ancienne clé)"
-            )
-            logger.warning(warning_msg)
-
-            return {
-                "status": "success",
-                "message": (
-                    "Rotation effectuée - Mise à jour manuelle "
-                    "des variables d'environnement requise"
-                ),
-                "new_key_hex": new_key_hex,
-                "old_key_hex": old_key_hex,
-                "legacy_count": len(service.legacy_keys),
-            }
+            # Utiliser le service de rotation
+            return SecretRotationService.rotate_encryption_key()
 
     except Exception as e:
-        logger.exception("[2.5] ❌ Erreur lors de la rotation des clés: %s", e)
+        logger.exception("[S3] ❌ Erreur lors de la rotation des clés: %s", e)
+        raise
+
+
+@celery.task(bind=True, name="tasks.secret_rotation_tasks.rotate_jwt_secret")
+def rotate_jwt_secret(self: Task) -> dict[str, Any]:
+    """✅ S3: Effectue la rotation de la clé JWT.
+
+    Génère une nouvelle clé JWT et l'enregistre dans Vault ou .env.
+    Enregistre l'historique dans SecretRotation.
+
+    Returns:
+        dict avec status, message, et métadonnées
+    """
+    try:
+        app = get_flask_app()
+        with app.app_context():
+            from security.secret_rotation_service import SecretRotationService
+
+            logger.info("[S3] Début rotation clé JWT...")
+
+            # Définir le task_id pour l'historique
+            os.environ["CELERY_TASK_ID"] = str(self.request.id)
+
+            # Utiliser le service de rotation
+            return SecretRotationService.rotate_jwt_secret()
+
+    except Exception as e:
+        logger.exception("[S3] ❌ Erreur lors de la rotation JWT: %s", e)
         raise
 
 
@@ -265,54 +259,50 @@ def migrate_encrypted_data(
         raise
 
 
-@celery.task(bind=True, name="tasks.secret_rotation_tasks.check_rotation_due")
-def check_rotation_due(self: Task) -> dict[str, Any]:  # noqa: ARG001
-    """✅ 2.5: Vérifie si une rotation de clé est due.
+@celery.task(bind=True, name="tasks.secret_rotation_tasks.check_and_rotate_all")
+def check_and_rotate_all(self: Task) -> dict[str, Any]:
+    """✅ S3: Vérifie et effectue toutes les rotations nécessaires.
 
-    Cette tâche peut être appelée périodiquement pour déterminer si une rotation
-    est nécessaire (basée sur l'intervalle de 90 jours).
+    Cette tâche est appelée périodiquement (tous les 7 jours) pour vérifier
+    si une rotation est due et l'effectuer automatiquement.
 
     Returns:
-        dict avec rotation_due (bool) et jours_restants
+        dict avec le résultat de toutes les rotations
     """
     try:
         app = get_flask_app()
         with app.app_context():
-            logger.info("[2.5] Vérification rotation des clés...")
+            from security.secret_rotation_service import SecretRotationService
 
-            # ⚠️ NOTE: L'age de la clé devrait être stocké en DB ou fichier
-            # Pour simplifier, on vérifie via variable d'environnement
-            # ou dernière rotation
-            # En production, utiliser une table de métadonnées
-            # pour stocker la date de dernière rotation
+            logger.info("[S3] Vérification et rotation automatique des secrets...")
 
-            rotation_interval_days = int(
-                os.getenv("ENCRYPTION_KEY_ROTATION_INTERVAL_DAYS", "90")
-            )
+            # Définir le task_id pour l'historique
+            os.environ["CELERY_TASK_ID"] = str(self.request.id)
 
-            # Logique simplifiée: si pas de rotation récente détectée, suggérer rotation
-            logger.info(
-                (
-                    "[2.5] Intervalle rotation: %d jours "
-                    "(configurable via ENCRYPTION_KEY_ROTATION_INTERVAL_DAYS)"
-                ),
-                rotation_interval_days,
-            )
+            # Vérifier et effectuer toutes les rotations nécessaires
+            results = SecretRotationService.check_and_rotate_all()
 
-            # ⚠️ En production, lire la date de dernière rotation
-            # depuis une source persistante
-            # Ici on retourne juste l'info que la rotation
-            # peut être effectuée manuellement
+            logger.info("[S3] ✅ Vérification terminée: %s", results)
 
             return {
-                "status": "check_complete",
-                "rotation_interval_days": rotation_interval_days,
-                "message": (
-                    "Vérification terminée - Utiliser rotate_encryption_keys() "
-                    "pour rotation manuelle"
-                ),
+                "status": "complete",
+                "results": results,
+                "rotation_interval_days": DEFAULT_ROTATION_INTERVAL_DAYS,
             }
 
     except Exception as e:
-        logger.exception("[2.5] ❌ Erreur lors de la vérification: %s", e)
+        logger.exception("[S3] ❌ Erreur lors de la vérification/rotation: %s", e)
         raise
+
+
+@celery.task(bind=True, name="tasks.secret_rotation_tasks.check_rotation_due")
+def check_rotation_due(self: Task) -> dict[str, Any]:
+    """✅ S3: Vérifie si une rotation de clé est due (déprécié, utiliser check_and_rotate_all).
+
+    Cette tâche est conservée pour compatibilité mais redirige vers check_and_rotate_all.
+
+    Returns:
+        dict avec rotation_due (bool) et jours_restants
+    """
+    # Rediriger vers la nouvelle tâche
+    return check_and_rotate_all(self)

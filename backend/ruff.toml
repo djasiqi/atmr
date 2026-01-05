@@ -6,14 +6,17 @@ line-length = 88  # Aligné avec flake8 max-line-length
 
 [lint]
 # Configuration optimisée pour Docker - règles critiques uniquement
+# Règles de base recommandées : I, E, F, W, B, C4, UP
 select = [
     "E4",    # pycodestyle errors critiques (E401, E402, E403, E404)
     "E7",    # pycodestyle errors critiques (E701, E702, E703, E704, E711, E712, E713, E714, E721, E722, E731, E741, E742, E743, E744, E745, E746, E747, E748, E749)
     "E9",    # pycodestyle errors critiques (E901, E902, E903, E904, E905, E906, E907, E908, E909, E910, E911, E912, E913, E914, E915, E916, E917, E918, E919, E920, E921, E922, E923, E924, E925, E926, E927, E928, E929, E930, E931, E932, E933, E934, E935, E936, E937, E938, E939, E940, E941, E942, E943, E944, E945, E946, E947, E948, E949, E950, E951, E952, E953, E954, E955, E956, E957, E958, E959, E960, E961, E962, E963, E964, E965, E966, E967, E968, E969, E970, E971, E972, E973, E974, E975, E976, E977, E978, E979, E980, E981, E982, E983, E984, E985, E986, E987, E988, E989, E990, E991, E992, E993, E994, E995, E996, E997, E998, E999)
     "F",     # pyflakes (erreurs importantes)
     "I",     # isort (imports)
+    "W",     # pycodestyle warnings (W291, W292, W293, etc.)
     "B",     # flake8-bugbear (bugs potentiels)
     "C4",    # flake8-comprehensions (optimisations)
+    "UP",    # pyupgrade (modernisation du code Python)
     "SIM",   # flake8-simplify (simplifications)
     "A",     # flake8-builtins (conflits builtins)
     "G",     # flake8-logging-format (logging)
@@ -58,7 +61,7 @@ ignore = [
 [lint.per-file-ignores]
 "__init__.py" = ["F401", "D104"]  # Imports inutilisés OK dans __init__
 "manage.py" = ["RUF100"]  # noqa: E402 nécessaire pour Flake8 (eventlet monkey patch)
-"migrations/**/*.py" = ["E501", "F401", "N999", "D"]  # Alembic auto-generated
+"migrations/**/*.py" = ["E501", "F401", "N999", "D", "I001"]  # Alembic auto-generated (I001: import sorting peut varier)
 "scripts/**/*.py" = [
     "T201",     # Print statements OK dans scripts
     "DTZ005",   # datetime.now() sans tz OK dans scripts
@@ -100,7 +103,16 @@ ignore = [
 ]
 
 [lint.isort]
-known-first-party = ["services", "models", "routes", "shared"]
+known-first-party = [
+    "application",
+    "domain",
+    "infrastructure",
+    "models",
+    "repositories",
+    "routes",
+    "services",
+    "shared",
+]
 force-single-line = false
 
 [lint.mccabe]

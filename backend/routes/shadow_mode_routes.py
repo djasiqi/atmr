@@ -5,16 +5,28 @@ Fournit des endpoints REST pour consulter les rapports,
 KPIs et métriques du mode shadow.
 """
 
+import logging
 import os
 from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, cast
 
-from flask import Blueprint, jsonify, request
-from flask_jwt_extended import get_jwt, jwt_required
-from flask_restx import Api, Namespace, Resource, fields
+from flask import Blueprint, jsonify, request  # pyright: ignore[reportMissingImports]
+from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
+    get_jwt,
+    jwt_required,
+)
+from flask_restx import (  # pyright: ignore[reportMissingImports]
+    Api,
+    Namespace,
+    Resource,
+    fields,
+)
 
 from ext import redis_client
 from services.rl.shadow_mode_manager import ShadowModeManager
+from shared.error_handlers import APIErrorHandler
+
+logger = logging.getLogger(__name__)
 
 # Créer le blueprint
 shadow_mode_bp = Blueprint("shadow_mode", __name__, url_prefix="/api/shadow-mode")
@@ -94,7 +106,7 @@ def _get_state_from_store() -> bool:
             value = redis_client.get(_STATE_KEY)
             if value is None:
                 return False
-            return value.decode("utf-8") == "1"
+            return cast(bytes, value).decode("utf-8") == "1"
         except Exception:
             return bool(_FALLBACK_STATE["active"])
     return bool(_FALLBACK_STATE["active"])
@@ -239,7 +251,11 @@ def toggle_shadow_mode_session():
     role = str(claims.get("role", "")).upper()
 
     if role != "ADMIN":
-        return jsonify({"error": "Accès réservé aux administrateurs."}), 403
+        error_response, status_code = APIErrorHandler.handle_permission_error(
+            "Accès réservé aux administrateurs.",
+            logger_instance=logger,
+        )
+        return jsonify(error_response), status_code
 
     if request.method == "POST":
         current = _get_count_from_store()
@@ -284,9 +300,13 @@ class DailyReport(Resource):
             return report, 200
 
         except ValueError as e:
-            return {"error": f"Format de date invalide: {e}"}, 400
+            return APIErrorHandler.handle_validation_error(
+                f"Format de date invalide: {e}",
+                field="date",
+                logger_instance=logger,
+            )
         except Exception as e:
-            return {"error": f"Erreur lors de la génération du rapport: {e}"}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
     @reports_ns.doc("log_decision")
     @reports_ns.expect(decision_model)
@@ -299,7 +319,11 @@ class DailyReport(Resource):
             required_fields = ["booking_id", "human_decision", "rl_decision"]
             for field in required_fields:
                 if field not in data:
-                    return {"error": f"Champ requis manquant: {field}"}, 400
+                    return APIErrorHandler.handle_validation_error(
+                        f"Champ requis manquant: {field}",
+                        field=field,
+                        logger_instance=logger,
+                    )
 
             # Enregistrer la décision
             kpis = get_shadow_manager().log_decision_comparison(
@@ -313,7 +337,7 @@ class DailyReport(Resource):
             return {"message": "Décision enregistrée avec succès", "kpis": kpis}, 201
 
         except Exception as e:
-            return {"error": f"Erreur lors de l'enregistrement: {e}"}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 @reports_ns.route("/summary/<string:company_id>")
@@ -338,9 +362,12 @@ class CompanySummary(Resource):
             return summary, 200
 
         except ValueError as e:
-            return {"error": f"Paramètre invalide: {e}"}, 400
+            return APIErrorHandler.handle_validation_error(
+                f"Paramètre invalide: {e}",
+                logger_instance=logger,
+            )
         except Exception as e:
-            return {"error": f"Erreur lors de la génération du résumé: {e}"}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 @kpis_ns.route("/metrics/<string:company_id>")
@@ -405,9 +432,12 @@ class KPIMetrics(Resource):
             }, 200
 
         except ValueError as e:
-            return {"error": f"Paramètre invalide: {e}"}, 400
+            return APIErrorHandler.handle_validation_error(
+                f"Paramètre invalide: {e}",
+                logger_instance=logger,
+            )
         except Exception as e:
-            return {"error": f"Erreur lors de la récupération des métriques: {e}"}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 @kpis_ns.route("/export/<string:company_id>")
@@ -488,9 +518,12 @@ class ExportData(Resource):
             }, 200
 
         except ValueError as e:
-            return {"error": f"Paramètre invalide: {e}"}, 400
+            return APIErrorHandler.handle_validation_error(
+                f"Paramètre invalide: {e}",
+                logger_instance=logger,
+            )
         except Exception as e:
-            return {"error": f"Erreur lors de l'export: {e}"}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
     def _prepare_csv_data(self, reports: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Prépare les données pour l'export CSV."""

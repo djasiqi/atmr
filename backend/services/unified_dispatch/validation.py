@@ -1,17 +1,27 @@
 # backend/services/unified_dispatch/validation.py
 """Validation des assignations pour empêcher les conflits temporels.
 Détecte les courses qui se chevauchent pour un même chauffeur.
+Gère également les courses groupables (même heure, même départ, même destination).
 """
 
 from __future__ import annotations
 
 import logging
+import os
 from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Tuple
 
-from models import Assignment, Booking
+from shared.geo_utils import haversine_distance
 
 logger = logging.getLogger(__name__)
+
+# ✅ Variables d'environnement pour tolérances courses groupées
+GROUP_RIDE_TIME_TOLERANCE_MIN = int(
+    os.getenv("GROUP_RIDE_TIME_TOLERANCE_MIN", "5")
+)  # ±5 minutes par défaut
+GROUP_RIDE_DISTANCE_TOLERANCE_M = float(
+    os.getenv("GROUP_RIDE_DISTANCE_TOLERANCE_M", "100.0")
+)  # 100 mètres par défaut
 
 
 def validate_no_temporal_conflicts(
@@ -139,12 +149,7 @@ def validate_no_duplicate_times(
         if len(driver_assignments) > max_same_time:
             booking_ids = [a.get("booking_id") for a in driver_assignments]
             errors.append(
-                (
-                    f"🔴 Chauffeur #{driver_id}: {len(driver_assignments)} courses "
-                    f"AU MÊME MOMENT ({scheduled_time:%H:%M}) → Courses: {booking_ids} "
-                    "(IMPOSSIBLE : un chauffeur ne peut pas être à plusieurs "
-                    "endroits simultanément)"
-                )
+                f"🔴 Chauffeur #{driver_id}: {len(driver_assignments)} courses AU MÊME MOMENT ({scheduled_time:%H:%M}) → Courses: {booking_ids} (IMPOSSIBLE : un chauffeur ne peut pas être à plusieurs endroits simultanément)"
             )
 
     return (len(errors) == 0, errors)
@@ -274,71 +279,241 @@ def validate_assignments(
     }
 
 
+def is_groupable(new_booking: Any, existing_booking: Any) -> Tuple[bool, str | None]:
+    """Vérifie si deux courses peuvent être groupées.
+
+    ✅ NOUVELLE LOGIQUE: Si deux courses ont le même départ OU la même arrivée,
+    et que le départ est à moins de 5 minutes d'écart, un chauffeur peut effectuer
+    les deux courses en même temps.
+
+    Args:
+        new_booking: Booking à assigner
+        existing_booking: Booking existant déjà assigné au chauffeur
+
+    Returns:
+        (is_groupable, reason_message)
+        - is_groupable: True si les courses peuvent être groupées
+        - reason_message: Message explicatif (None si groupable)
+
+    """
+    # Initialiser le résultat (non groupable par défaut)
+    is_groupable_result = False
+    reason_message: str | None = None
+
+    # 1. Vérifier que les deux courses ont un scheduled_time
+    if not new_booking.scheduled_time or not existing_booking.scheduled_time:
+        return (False, "Une des courses n'a pas d'heure planifiée")
+
+    # 2. Vérifier écart temporel ≤ 5 minutes
+    time_diff_minutes = abs(
+        (new_booking.scheduled_time - existing_booking.scheduled_time).total_seconds()
+        / 60
+    )
+    if time_diff_minutes > GROUP_RIDE_TIME_TOLERANCE_MIN:
+        return (
+            False,
+            f"Écart temporel trop important ({time_diff_minutes:.1f} min > {GROUP_RIDE_TIME_TOLERANCE_MIN} min)",
+        )
+
+    # 3. Vérifier même départ OU même arrivée (coordonnées ou adresse)
+    pickup_match = False
+    dropoff_match = False
+
+    # Vérifier même départ (coordonnées GPS)
+    if (
+        new_booking.pickup_lat is not None
+        and new_booking.pickup_lon is not None
+        and existing_booking.pickup_lat is not None
+        and existing_booking.pickup_lon is not None
+    ):
+        pickup_distance_m = (
+            haversine_distance(
+                float(new_booking.pickup_lat),
+                float(new_booking.pickup_lon),
+                float(existing_booking.pickup_lat),
+                float(existing_booking.pickup_lon),
+            )
+            * 1000
+        )  # Convertir en mètres
+        pickup_match = pickup_distance_m <= GROUP_RIDE_DISTANCE_TOLERANCE_M
+    else:
+        # Fallback: comparer les adresses normalisées (insensible à la casse)
+        new_pickup = str(new_booking.pickup_location or "").strip().lower()
+        existing_pickup = str(existing_booking.pickup_location or "").strip().lower()
+        pickup_match = new_pickup == existing_pickup and new_pickup != ""
+
+    # Vérifier même arrivée (coordonnées GPS)
+    if (
+        new_booking.dropoff_lat is not None
+        and new_booking.dropoff_lon is not None
+        and existing_booking.dropoff_lat is not None
+        and existing_booking.dropoff_lon is not None
+    ):
+        dropoff_distance_m = (
+            haversine_distance(
+                float(new_booking.dropoff_lat),
+                float(new_booking.dropoff_lon),
+                float(existing_booking.dropoff_lat),
+                float(existing_booking.dropoff_lon),
+            )
+            * 1000
+        )  # Convertir en mètres
+        dropoff_match = dropoff_distance_m <= GROUP_RIDE_DISTANCE_TOLERANCE_M
+    else:
+        # Fallback: comparer les adresses normalisées (insensible à la casse)
+        new_dropoff = str(new_booking.dropoff_location or "").strip().lower()
+        existing_dropoff = str(existing_booking.dropoff_location or "").strip().lower()
+        dropoff_match = new_dropoff == existing_dropoff and new_dropoff != ""
+
+    # ✅ NOUVELLE LOGIQUE: Groupable si même départ OU même arrivée
+    if pickup_match or dropoff_match:
+        is_groupable_result = True
+    else:
+        reason_message = "Ni le départ ni l'arrivée ne correspondent"
+
+    # 5. Vérifier statut compatible (pas completed/cancelled)
+    if is_groupable_result:
+        from models.enums import BookingStatus
+
+        incompatible_statuses = {BookingStatus.COMPLETED, BookingStatus.CANCELED}
+        if new_booking.status in incompatible_statuses:
+            is_groupable_result = False
+            reason_message = (
+                f"Statut de la nouvelle course incompatible: {new_booking.status}"
+            )
+        elif existing_booking.status in incompatible_statuses:
+            is_groupable_result = False
+            reason_message = (
+                f"Statut de la course existante incompatible: {existing_booking.status}"
+            )
+
+    # Retourner le résultat (un seul return)
+    return (is_groupable_result, reason_message)
+
+
 def check_existing_assignment_conflict(
     driver_id: int,
     scheduled_time: datetime,
     booking_id: int | None = None,
     tolerance_minutes: int = 30,
-) -> Tuple[bool, str | None]:
+    new_booking: Any | None = None,
+) -> Tuple[bool, str | None, Any | None]:
     """Vérifie si une nouvelle assignation créerait un conflit
     avec les assignations existantes.
     Utilisé lors d'assignation manuelle ou réassignation.
+
+    ✅ NOUVEAU: Support des courses groupables.
+    Si deux courses ont le même départ OU la même arrivée, et que le départ
+    est à moins de 5 minutes d'écart, un chauffeur peut effectuer les deux
+    courses en même temps (pas de conflit).
 
     Args:
         driver_id: ID du chauffeur
         scheduled_time: Heure de la course
         booking_id: ID du booking (pour exclure lors de modification)
         tolerance_minutes: Marge de sécurité
+        new_booking: Booking à assigner (optionnel, requis pour vérification groupable)
 
     Returns:
-        (has_conflict, error_message)
+        (has_conflict, error_message, conflicting_booking)
+        - has_conflict: True si conflit détecté
+        - error_message: Message d'erreur détaillé avec temps nécessaire et écart disponible
+        - conflicting_booking: Booking en conflit (None si pas de conflit ou groupable)
 
     """
-    from models import AssignmentStatus
+    # ✅ Utilisation du repository pour découpler de SQLAlchemy
+    from repositories.assignment_repository import AssignmentRepository
 
-    # Chercher assignations existantes pour ce chauffeur
-    query = Assignment.query.join(Booking).filter(
-        Assignment.driver_id == driver_id,
-        Assignment.status.in_(
-            [
-                AssignmentStatus.SCHEDULED,
-                AssignmentStatus.EN_ROUTE_PICKUP,
-                AssignmentStatus.ARRIVED_PICKUP,
-                AssignmentStatus.ONBOARD,
-                AssignmentStatus.EN_ROUTE_DROPOFF,
-            ]
-        ),
+    assignment_repo = AssignmentRepository()
+    existing_assignments = assignment_repo.find_active_by_driver_and_time_range(
+        driver_id=driver_id,
+        booking_id=booking_id,
     )
-
-    # Exclure le booking actuel si fourni (cas de modification)
-    if booking_id:
-        query = query.filter(Booking.id != booking_id)
-
-    existing_assignments = query.all()
 
     # Vérifier chaque assignation existante
     for assignment in existing_assignments:
-        booking = assignment.booking
-        if not booking or not booking.scheduled_time:
+        existing_booking = assignment.booking
+        if not existing_booking or not existing_booking.scheduled_time:
             continue
 
-        existing_time = booking.scheduled_time
+        existing_time = existing_booking.scheduled_time
 
-        # Calculer fenêtre occupée
-        # Durée moyenne course (pickup 5 + trajet 20 + dropoff 10)
-        estimated_duration = 35
+        # ✅ NOUVEAU: Vérifier si les courses sont groupables AVANT de vérifier le conflit temporel
+        # Cela permet d'autoriser les courses avec même départ/arrivée et < 5 min d'écart
+        # Vérifier pour TOUTES les assignations, pas seulement celles dans la fenêtre temporelle
+        if new_booking is not None:
+            is_groupable_result, _ = is_groupable(new_booking, existing_booking)
+            if is_groupable_result:
+                # Courses groupables : pas de conflit, ignorer cette assignation
+                logger.info(
+                    "[Validation] Courses groupables détectées: booking %d et %d (écart: %.1f min)",
+                    new_booking.id if new_booking.id else 0,
+                    existing_booking.id,
+                    abs((scheduled_time - existing_time).total_seconds() / 60),
+                )
+                continue  # Passer à la prochaine assignation
+
+        # Calculer fenêtre occupée avec durée estimée plus précise
+        # Utiliser les coordonnées GPS si disponibles pour calculer la durée réelle
+        estimated_duration = 35  # Par défaut
+        if (
+            existing_booking.pickup_lat is not None
+            and existing_booking.pickup_lon is not None
+            and existing_booking.dropoff_lat is not None
+            and existing_booking.dropoff_lon is not None
+        ):
+            trip_distance_km = haversine_distance(
+                float(existing_booking.pickup_lat),
+                float(existing_booking.pickup_lon),
+                float(existing_booking.dropoff_lat),
+                float(existing_booking.dropoff_lon),
+            )
+            # Vitesse moyenne 25 km/h en ville
+            trip_time_min = int((trip_distance_km / 25) * 60)
+            estimated_duration = (
+                trip_time_min + 15
+            )  # +15 min pour pickup + dropoff + marge
+
         time_start = existing_time - timedelta(minutes=tolerance_minutes)
         time_end = existing_time + timedelta(
             minutes=estimated_duration + tolerance_minutes
         )
 
-        # Vérifier si conflit
+        # Vérifier si conflit temporel
         if time_start <= scheduled_time <= time_end:
-            time_diff = abs((scheduled_time - existing_time).total_seconds() / 60)
+            # Calculer le temps nécessaire et l'écart disponible pour un message plus informatif
+            existing_end_time = existing_time + timedelta(minutes=estimated_duration)
+
+            # Temps de transition entre les deux courses
+            transition_time_min = 0
+            if (
+                new_booking is not None
+                and existing_booking.dropoff_lat is not None
+                and existing_booking.dropoff_lon is not None
+                and new_booking.pickup_lat is not None
+                and new_booking.pickup_lon is not None
+            ):
+                transition_distance_km = haversine_distance(
+                    float(existing_booking.dropoff_lat),
+                    float(existing_booking.dropoff_lon),
+                    float(new_booking.pickup_lat),
+                    float(new_booking.pickup_lon),
+                )
+                transition_time_min = int((transition_distance_km / 25) * 60)
+            else:
+                transition_time_min = 15  # Estimation par défaut
+
+            # Temps total nécessaire
+            total_time_needed = estimated_duration + transition_time_min
+
+            # Écart disponible (négatif si conflit)
+            time_gap_minutes = (scheduled_time - existing_end_time).total_seconds() / 60
+
             return (
                 True,
-                f"Conflit avec course #{booking.id} à {existing_time:%H:%M} "
-                + f"(écart: {time_diff:.1f}min)",
+                f"Conflit temporel avec course #{existing_booking.id} à {existing_time:%H:%M}. "
+                + f"Temps nécessaire: {total_time_needed}min, écart disponible: {time_gap_minutes:.1f}min",
+                existing_booking,
             )
 
-    return (False, None)
+    return (False, None, None)

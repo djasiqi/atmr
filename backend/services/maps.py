@@ -5,9 +5,11 @@ import math
 import os
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Tuple, cast
 
-import requests
+import requests  # pyright: ignore[reportMissingModuleSource]
+from cachetools import LRUCache  # pyright: ignore[reportMissingModuleSource]
 
 from ext import app_logger
 from shared.geo_utils import haversine_tuple as _haversine_km
@@ -90,13 +92,25 @@ def get_distance_duration(
         if data.get("status") != "OK":
             raise RuntimeError(data.get("error_message") or data.get("status"))
 
-        elem = data["rows"][0]["elements"][0]
+        # ✅ P1: Protéger accès dictionnaires pour éviter KeyError
+        rows = data.get("rows", [])
+        if not rows:
+            raise RuntimeError("No rows in Google Maps response")
+        elements = rows[0].get("elements", [])
+        if not elements:
+            raise RuntimeError("No elements in Google Maps response")
+        elem = elements[0]
         if elem.get("status") != "OK":
             raise RuntimeError(elem.get("status"))
 
         dur_field = elem.get("duration_in_traffic") or elem.get("duration")
+        if not dur_field or "value" not in dur_field:
+            raise RuntimeError("Missing duration value in Google Maps response")
         duration_seconds = int(dur_field["value"])
-        distance_meters = int(elem["distance"]["value"])
+        distance = elem.get("distance", {})
+        if "value" not in distance:
+            raise RuntimeError("Missing distance value in Google Maps response")
+        distance_meters = int(distance["value"])
         return duration_seconds, distance_meters
 
     except Exception as e:
@@ -117,6 +131,9 @@ def geocode_address(
     """Géocode une adresse → {'lat': float, 'lon': float} | None.
     - country: code ISO (ex: "CH") pour biaiser la recherche
     - language: "fr" par défaut.
+
+    ✅ P1: Utilise cache Redis/local pour améliorer performance.
+    ✅ P1: Utilise retry avec backoff pour améliorer résilience.
     """
     if not GOOGLE_MAPS_API_KEY:
         app_logger.warning(
@@ -129,6 +146,75 @@ def geocode_address(
         msg = "Adresse vide ou invalide pour le géocodage."
         raise ValueError(msg)
 
+    # ✅ P1: Normaliser l'adresse pour améliorer cache hit rate
+    address_normalized = _normalize_address_for_cache(address, country)
+    cache_key = f"google:{address_normalized}:{language}"
+
+    # ✅ P1: Vérifier cache local (L1 cache) - ultra-rapide
+    with _GOOGLE_MAPS_LOCAL_CACHE_LOCK:
+        cached_result = _GOOGLE_MAPS_LOCAL_CACHE.get(cache_key)
+        if cached_result is not None:
+            app_logger.debug(
+                "[Google Maps] ✅ L1 cache hit (local LRU) for address: %s",
+                address[:50],
+            )
+            return cached_result
+
+    # ✅ P1: Vérifier cache Redis (L2 cache)
+    redis_client = _get_redis_for_geocoding()
+    if redis_client:
+        try:
+            cache_key_hash = hashlib.sha256(
+                cache_key.encode("utf-8"), usedforsecurity=False
+            ).hexdigest()
+            redis_cache_key = f"geocoding:google:{cache_key_hash}"
+            cached_data = redis_client.get(redis_cache_key)
+            if cached_data:
+                try:
+                    cached_str: str | None = None
+                    if isinstance(cached_data, (bytes, bytearray)):
+                        cached_str = cached_data.decode("utf-8", errors="ignore")
+                    elif isinstance(cached_data, str):
+                        cached_str = cached_data
+
+                    if cached_str:
+                        cached_result = json.loads(cached_str)
+                        if (
+                            isinstance(cached_result, dict)
+                            and "lat" in cached_result
+                            and "lon" in cached_result
+                        ):
+                            result = {
+                                "lat": float(cached_result["lat"]),
+                                "lon": float(cached_result["lon"]),
+                            }
+                            # Stocker dans cache local pour accès ultérieur
+                            with _GOOGLE_MAPS_LOCAL_CACHE_LOCK:
+                                _GOOGLE_MAPS_LOCAL_CACHE[cache_key] = result
+                            app_logger.debug(
+                                "[Google Maps] ✅ L2 cache hit (Redis) for address: %s",
+                                address[:50],
+                            )
+                            return result
+                        if cached_str == "null":
+                            # Cache des résultats None pour éviter requêtes répétées
+                            with _GOOGLE_MAPS_LOCAL_CACHE_LOCK:
+                                _GOOGLE_MAPS_LOCAL_CACHE[cache_key] = None
+                            return None
+                except (
+                    json.JSONDecodeError,
+                    UnicodeDecodeError,
+                    ValueError,
+                    KeyError,
+                    TypeError,
+                ) as e:
+                    app_logger.debug(
+                        "[Google Maps] Failed to decode cached data: %s", e
+                    )
+        except Exception as e:
+            app_logger.debug("[Google Maps] Redis cache check failed: %s", e)
+
+    # ✅ P1: Géocoder avec retry et backoff
     url = "https://maps.googleapis.com/maps/api/geocode/json"
     params: Dict[str, str] = {
         "address": address,
@@ -138,27 +224,146 @@ def geocode_address(
     if country:
         params["components"] = f"country:{country}"
 
-    try:
-        resp = requests.get(url, params=params, timeout=_GOOGLE_TIMEOUT)
-        resp.raise_for_status()
-        data = resp.json()
+    result: Dict[str, float] | None = None
 
-        if data.get("status") != "OK" or not data.get("results"):
-            app_logger.warning(
-                "⚠️ Aucune coordonnée trouvée pour : '%s' (country=%s)",
+    # ✅ P1: Utiliser retry avec backoff pour améliorer résilience
+    def _geocode_request() -> Dict[str, float] | None:
+        """Fonction interne pour requête Google Maps avec gestion d'erreurs."""
+        try:
+            resp = requests.get(url, params=params, timeout=_GOOGLE_TIMEOUT)
+            resp.raise_for_status()
+            data = resp.json()
+
+            if data.get("status") != "OK" or not data.get("results"):
+                app_logger.warning(
+                    "⚠️ Aucune coordonnée trouvée pour : '%s' (country=%s)",
+                    address,
+                    country,
+                )
+                return None
+
+            # ✅ P1: Protéger accès dictionnaires pour éviter KeyError
+            results = data.get("results", [])
+            if results:
+                geometry = results[0].get("geometry", {})
+                if geometry:
+                    location = geometry.get("location", {})
+                    if location:
+                        lat = location.get("lat")
+                        lng = location.get("lng")
+                        if lat is not None and lng is not None:
+                            return {"lat": float(lat), "lon": float(lng)}
+            return None
+        except requests.Timeout as e:
+            # ✅ P2: Gestion spécifique des timeouts pour meilleure observabilité
+            app_logger.error(
+                "⏱️ Timeout API Google Maps Geocoding pour '%s' (country=%s, timeout=%ds): %s",
                 address,
                 country,
+                _GOOGLE_TIMEOUT,
+                e,
             )
-            return None
+            raise
+        except requests.RequestException as e:
+            app_logger.error(
+                "❌ Erreur API Google Maps pour '%s' (country=%s): %s",
+                address,
+                country,
+                e,
+            )
+            raise
 
-        loc = data["results"][0]["geometry"]["location"]
-        return {"lat": float(loc["lat"]), "lon": float(loc["lng"])}
-
-    except requests.RequestException as e:
-        app_logger.error(
-            "❌ Erreur API Google Maps pour '%s' (country=%s): %s", address, country, e
+    try:
+        # ✅ P1: Retry avec backoff (2 retries, 250ms base)
+        result = retry_http_request(
+            _geocode_request,
+            max_retries=2,
+            base_delay_ms=250,
         )
-        return None
+    except Exception as e:
+        app_logger.warning(
+            "[Google Maps] Échec géocodage après retries pour '%s': %s", address[:50], e
+        )
+        result = None
+
+    # ✅ P1: Mettre en cache le résultat (même si None pour éviter requêtes répétées)
+    if redis_client:
+        try:
+            cache_value = json.dumps(result) if result else "null"
+            cache_key_hash = hashlib.sha256(
+                cache_key.encode("utf-8"), usedforsecurity=False
+            ).hexdigest()
+            redis_cache_key = f"geocoding:google:{cache_key_hash}"
+            redis_client.setex(redis_cache_key, _GOOGLE_MAPS_CACHE_TTL, cache_value)
+            app_logger.debug(
+                "[Google Maps] ✅ L2 cache write (Redis) for address: %s", address[:50]
+            )
+        except Exception as e:
+            app_logger.debug("[Google Maps] Failed to write to Redis cache: %s", e)
+
+    # ✅ P1: Mettre en cache local (L1 cache)
+    with _GOOGLE_MAPS_LOCAL_CACHE_LOCK:
+        _GOOGLE_MAPS_LOCAL_CACHE[cache_key] = result
+        app_logger.debug(
+            "[Google Maps] ✅ L1 cache write (local LRU) for address: %s", address[:50]
+        )
+
+    return result
+
+
+# ✅ P1: Cache pour géocodage Nominatim (TTL 24h)
+_NOMINATIM_CACHE_TTL = int(os.getenv("NOMINATIM_CACHE_TTL", "86400"))  # 24h par défaut
+_NOMINATIM_LOCAL_CACHE: LRUCache[str, Dict[str, float] | None] = LRUCache(maxsize=500)
+_NOMINATIM_LOCAL_CACHE_LOCK = threading.Lock()
+
+# ✅ P1: Cache pour géocodage Google Maps (TTL 7j)
+_GOOGLE_MAPS_CACHE_TTL = int(
+    os.getenv("GOOGLE_MAPS_CACHE_TTL", "604800")
+)  # 7 jours par défaut
+_GOOGLE_MAPS_LOCAL_CACHE: LRUCache[str, Dict[str, float] | None] = LRUCache(maxsize=500)
+_GOOGLE_MAPS_LOCAL_CACHE_LOCK = threading.Lock()
+
+
+def _get_redis_for_geocoding():
+    """Récupère un client Redis pour le cache de géocodage."""
+    try:
+        from ext import redis_client as ext_redis_client
+
+        if ext_redis_client is not None:
+            ext_redis_client.ping()
+            return ext_redis_client
+    except Exception:
+        pass
+
+    # Fallback : essayer de créer depuis REDIS_URL
+    try:
+        redis_url = os.getenv("REDIS_URL", None)
+        if redis_url:
+            import redis  # pyright: ignore[reportMissingImports]
+
+            socket_timeout = int(os.getenv("REDIS_SOCKET_TIMEOUT", "5"))
+            socket_connect_timeout = int(os.getenv("REDIS_SOCKET_CONNECT_TIMEOUT", "5"))
+            client = redis.from_url(
+                redis_url,
+                decode_responses=False,
+                socket_timeout=socket_timeout,
+                socket_connect_timeout=socket_connect_timeout,
+            )
+            client.ping()
+            return client
+    except Exception:
+        pass
+
+    return None
+
+
+def _normalize_address_for_cache(address: str, country: str | None) -> str:
+    """Normalise une adresse pour améliorer le taux de cache hit."""
+    # Normaliser : minuscules, supprimer espaces multiples, trim
+    normalized = " ".join((address or "").strip().lower().split())
+    if country:
+        normalized = f"{normalized}|{country.lower()}"
+    return normalized
 
 
 def geocode_address_nominatim(
@@ -167,12 +372,72 @@ def geocode_address_nominatim(
     """Géocode une adresse avec Nominatim (OpenStreetMap)
     → {'lat': float, 'lon': float} | None.
     - country: code ISO (ex: "CH") pour biaiser la recherche.
+
+    ✅ P1: Optimisations performance :
+    - Cache Redis avec TTL 24h pour adresses géocodées
+    - Cache local LRU (L1 cache) pour accès ultra-rapide
+    - Normalisation des adresses pour améliorer cache hit
     """
     address = (address or "").strip()
     if not address:
         msg = "Adresse vide ou invalide pour le géocodage."
         raise ValueError(msg)
 
+    # ✅ P1: Normaliser l'adresse pour améliorer le cache hit
+    cache_key_normalized = _normalize_address_for_cache(address, country)
+    cache_key_hash = hashlib.md5(
+        cache_key_normalized.encode("utf-8"), usedforsecurity=False
+    ).hexdigest()
+    redis_cache_key = f"nominatim:geocode:{cache_key_hash}"
+
+    # ✅ P1: Vérifier cache local LRU (L1 cache - ultra rapide)
+    with _NOMINATIM_LOCAL_CACHE_LOCK:
+        cached_result = _NOMINATIM_LOCAL_CACHE.get(cache_key_normalized)
+        if cached_result is not None:
+            app_logger.debug(
+                "[Nominatim] ✅ L1 cache hit (local LRU) for address: %s", address[:50]
+            )
+            return cached_result
+
+    # ✅ P1: Vérifier cache Redis (L2 cache)
+    redis_client = _get_redis_for_geocoding()
+    if redis_client:
+        try:
+            cached_raw = redis_client.get(redis_cache_key)
+            if cached_raw:
+                # ✅ P1: Gérer types bytes/str pour compatibilité Redis
+                cached_str: str | None = None
+                if isinstance(cached_raw, (bytes, bytearray)):
+                    cached_str = cached_raw.decode("utf-8", errors="ignore")
+                elif isinstance(cached_raw, str):
+                    cached_str = cached_raw
+
+                if cached_str:
+                    try:
+                        cached_data = json.loads(cached_str)
+                        if (
+                            isinstance(cached_data, dict)
+                            and "lat" in cached_data
+                            and "lon" in cached_data
+                        ):
+                            result = {
+                                "lat": float(cached_data["lat"]),
+                                "lon": float(cached_data["lon"]),
+                            }
+                            # ✅ P1: Mettre en cache local LRU (L1 cache)
+                            with _NOMINATIM_LOCAL_CACHE_LOCK:
+                                _NOMINATIM_LOCAL_CACHE[cache_key_normalized] = result
+                            app_logger.debug(
+                                "[Nominatim] ✅ L2 cache hit (Redis) for address: %s",
+                                address[:50],
+                            )
+                            return result
+                    except (json.JSONDecodeError, ValueError, KeyError, TypeError):
+                        pass
+        except Exception as e:
+            app_logger.debug("[Nominatim] Redis get failed: %s", e)
+
+    # Cache miss - faire la requête Nominatim
     url = "https://nominatim.openstreetmap.org/search"
     # Typer correctement params pour satisfaire mypy
     params: dict[str, str | int] = {
@@ -187,11 +452,20 @@ def geocode_address_nominatim(
 
     headers = {"User-Agent": "ATMR-Transport-App/1.0"}
 
-    try:
+    def _fetch_nominatim() -> requests.Response:
+        """Fonction interne pour fetch Nominatim avec respect du rate limit."""
         # Nominatim a une limite de 1 requête par seconde
         time.sleep(1.1)
+        return requests.get(url, params=params, headers=headers, timeout=10)
 
-        resp = requests.get(url, params=params, headers=headers, timeout=10)
+    result: Dict[str, float] | None = None
+    try:
+        # ✅ 2.3: Utiliser retry uniformisé (2 retries, 1s base) pour meilleure résilience
+        resp = retry_http_request(
+            _fetch_nominatim,
+            max_retries=2,
+            base_delay_ms=1000,  # 1 seconde comme spécifié dans le rapport
+        )
         resp.raise_for_status()
         data = resp.json()
 
@@ -199,14 +473,187 @@ def geocode_address_nominatim(
             app_logger.warning(
                 "⚠️ Nominatim: Aucune coordonnée trouvée pour '%s'", address
             )
-            return None
-
-        result = data[0]
-        return {"lat": float(result["lat"]), "lon": float(result["lon"])}
+            result = None
+        else:
+            result_data = data[0]
+            result = {
+                "lat": float(result_data["lat"]),
+                "lon": float(result_data["lon"]),
+            }
 
     except requests.RequestException as e:
-        app_logger.error("❌ Erreur Nominatim pour '%s': %s", address, e)
-        return None
+        app_logger.error(
+            "❌ Erreur Nominatim pour '%s' (après retries): %s", address, e
+        )
+        result = None
+
+    # ✅ P1: Mettre en cache le résultat (même si None pour éviter requêtes répétées)
+    # Cache Redis (L2 cache) avec TTL 24h
+    if redis_client:
+        try:
+            cache_value = json.dumps(result) if result else json.dumps(None)
+            redis_client.setex(redis_cache_key, _NOMINATIM_CACHE_TTL, cache_value)
+            app_logger.debug(
+                "[Nominatim] ✅ L2 cache write (Redis) for address: %s", address[:50]
+            )
+        except Exception as e:
+            app_logger.debug("[Nominatim] Redis setex failed: %s", e)
+
+    # ✅ P1: Mettre en cache local LRU (L1 cache) pour accès ultra-rapide
+    with _NOMINATIM_LOCAL_CACHE_LOCK:
+        _NOMINATIM_LOCAL_CACHE[cache_key_normalized] = result
+        app_logger.debug(
+            "[Nominatim] ✅ L1 cache write (local LRU) for address: %s", address[:50]
+        )
+
+    return result
+
+
+# ✅ P1: Parallélisation intelligente pour géocodage batch
+_NOMINATIM_RATE_LIMITER_LOCK = threading.Lock()
+_NOMINATIM_LAST_REQUEST_TIME = {"value": 0.0}
+_NOMINATIM_MIN_INTERVAL = 1.1  # 1.1 secondes entre requêtes Nominatim
+
+
+def _wait_for_nominatim_rate_limit():
+    """Attend le respect du rate limit Nominatim (1 req/seconde)."""
+    with _NOMINATIM_RATE_LIMITER_LOCK:
+        now = time.time()
+        elapsed = now - _NOMINATIM_LAST_REQUEST_TIME["value"]
+        if elapsed < _NOMINATIM_MIN_INTERVAL:
+            wait_time = _NOMINATIM_MIN_INTERVAL - elapsed
+            time.sleep(wait_time)
+        _NOMINATIM_LAST_REQUEST_TIME["value"] = time.time()
+
+
+def geocode_addresses_batch(
+    addresses: List[str],
+    *,
+    country: str | None = None,
+    max_workers: int | None = None,
+    prefer_google: bool = True,
+) -> Dict[str, Dict[str, float] | None]:
+    """Géocode plusieurs adresses en parallèle avec rate limiting intelligent.
+
+    ✅ P1: Optimisation performance - Batch geocoding parallélisé
+    - Parallélisation avec ThreadPoolExecutor pour géocoder plusieurs adresses simultanément
+    - Rate limiting intelligent : respecte limite Nominatim (1 req/s) mais parallélise avec Google
+    - Priorise Google Maps si disponible (50 QPS vs 1 QPS Nominatim)
+    - Utilise le cache existant pour éviter requêtes redondantes
+    - Gestion d'erreurs robuste : continue même si certaines adresses échouent
+
+    Args:
+        addresses: Liste d'adresses à géocoder
+        country: Code pays ISO (ex: "CH")
+        max_workers: Nombre max de workers parallèles (défaut: min(5, len(addresses)))
+        prefer_google: Si True, utilise Google Maps en priorité (plus rapide, plus de parallélisme)
+
+    Returns:
+        Dict[str, Dict[str, float] | None]: Dictionnaire {adresse: {'lat': float, 'lon': float} | None}
+        - Clé = adresse originale
+        - Valeur = coordonnées ou None si échec
+
+    Exemple:
+        >>> results = geocode_addresses_batch(
+        ...     ["Rue de Genève 1, Lausanne", "Avenue de la Gare 10, Genève"],
+        ...     country="CH"
+        ... )
+        >>> print(results["Rue de Genève 1, Lausanne"])
+        {'lat': 46.5197, 'lon': 6.6323}
+    """
+    if not addresses:
+        return {}
+
+    # ✅ P1: Dédupliquer les adresses pour éviter géocodage redondant
+    unique_addresses = list(
+        dict.fromkeys(addresses)
+    )  # Préserve l'ordre, supprime doublons
+    results: Dict[str, Dict[str, float] | None] = {}
+
+    # ✅ P1: Vérifier cache pour toutes les adresses d'abord (très rapide)
+    cached_results: Dict[str, Dict[str, float] | None] = {}
+    uncached_addresses: List[str] = []
+
+    for address in unique_addresses:
+        cached = geocode_address(address, country=country)
+        if cached:
+            cached_results[address] = cached
+        else:
+            uncached_addresses.append(address)
+
+    results.update(cached_results)
+
+    # ✅ P1: Si toutes les adresses sont en cache, retourner immédiatement
+    if not uncached_addresses:
+        app_logger.debug(
+            "[Batch Geocoding] ✅ Toutes les %d adresses trouvées en cache",
+            len(addresses),
+        )
+        # Retourner dans l'ordre original
+        return {addr: results.get(addr) for addr in addresses}
+
+    app_logger.info(
+        "[Batch Geocoding] Géocodage de %d adresses (%d en cache, %d à géocoder)",
+        len(addresses),
+        len(cached_results),
+        len(uncached_addresses),
+    )
+
+    # ✅ P1: Déterminer le nombre de workers optimal
+    if max_workers is None:
+        # Pour Google Maps : jusqu'à 5 workers (50 QPS / 10 = marge de sécurité)
+        # Pour Nominatim : 1 worker (rate limit strict 1 req/s)
+        if GOOGLE_MAPS_API_KEY and prefer_google:
+            max_workers = min(5, len(uncached_addresses))
+        else:
+            max_workers = 1  # Nominatim : rate limit strict
+
+    # ✅ P1: Fonction wrapper pour géocodage avec gestion d'erreurs
+    def _geocode_single(address: str) -> Tuple[str, Dict[str, float] | None]:
+        """Géocode une seule adresse avec gestion d'erreurs."""
+        try:
+            # ✅ P1: Rate limiting pour Nominatim uniquement
+            if not GOOGLE_MAPS_API_KEY or not prefer_google:
+                _wait_for_nominatim_rate_limit()
+
+            result = geocode_address(address, country=country)
+            return (address, result)
+        except Exception as e:
+            app_logger.warning(
+                "[Batch Geocoding] ⚠️ Échec géocodage pour '%s': %s",
+                address[:50],
+                e,
+            )
+            return (address, None)
+
+    # ✅ P1: Paralléliser le géocodage des adresses non cachées
+    if max_workers > 1 and len(uncached_addresses) > 1:
+        # Parallélisation avec ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_address = {
+                executor.submit(_geocode_single, addr): addr
+                for addr in uncached_addresses
+            }
+
+            for future in as_completed(future_to_address):
+                address, result = future.result()
+                results[address] = result
+    else:
+        # Géocodage séquentiel (Nominatim ou 1 seule adresse)
+        for address in uncached_addresses:
+            _, result = _geocode_single(address)
+            results[address] = result
+
+    # ✅ P1: Retourner dans l'ordre original des adresses
+    final_results = {addr: results.get(addr) for addr in addresses}
+    success_count = sum(1 for v in final_results.values() if v is not None)
+    app_logger.info(
+        "[Batch Geocoding] ✅ Géocodage terminé: %d/%d réussis",
+        success_count,
+        len(addresses),
+    )
+
+    return final_results
 
 
 # Defaults
@@ -299,7 +746,7 @@ def _get_redis():
     if not UD_MATRIX_CACHE_USE_REDIS or not REDIS_URL:
         return None
     try:
-        import redis
+        import redis  # pyright: ignore[reportMissingImports]
 
         return redis.from_url(REDIS_URL, decode_responses=False)
     except Exception as e:
@@ -389,7 +836,23 @@ def _dm_request(
         def _fetch_matrix() -> List[List[int | None]]:
             resp = requests.get(url, params=params, timeout=timeout)
             resp.raise_for_status()  # Lève exception pour codes HTTP d'erreur
-            data = resp.json()
+
+            # ✅ P1: Protéger parsing JSON contre réponses malformées
+            try:
+                data = resp.json()
+            except json.JSONDecodeError as e:
+                app_logger.error(
+                    (
+                        "[GDM] JSON decode error for Google Maps Distance Matrix: %s. "
+                        "Response status: %d, Response preview: %s"
+                    ),
+                    e,
+                    resp.status_code,
+                    resp.text[:200] if resp.text else "(empty)",
+                )
+                # Lever exception pour déclencher retry (si retryable) ou fallback
+                raise ValueError(f"Google Maps returned invalid JSON: {e}") from e
+
             if data.get("status") != "OK":
                 msg = f"status={data.get('status')} err={data.get('error_message')}"
                 raise RuntimeError(msg)

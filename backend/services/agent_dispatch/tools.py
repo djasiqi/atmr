@@ -9,9 +9,9 @@ import json
 import logging
 import time
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
-from flask import current_app
+from flask import current_app  # pyright: ignore[reportMissingImports]
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import joinedload
 
@@ -19,6 +19,10 @@ from ext import db
 from models import Assignment, Booking, Driver
 from models.autonomous_action import AutonomousAction
 from models.enums import AssignmentStatus, BookingStatus
+from repositories.assignment_repository import AssignmentRepository
+from repositories.booking_repository import BookingRepository
+from repositories.company_repository import CompanyRepository
+from repositories.driver_repository import DriverRepository
 from services.unified_dispatch.validation import check_existing_assignment_conflict
 
 logger = logging.getLogger(__name__)
@@ -54,12 +58,21 @@ class AgentTools:
 
         """
         with current_app.app_context():
-            # Récupérer drivers disponibles
-            drivers = Driver.query.filter(
-                Driver.company_id == self.company_id,
-                Driver.is_available == True,  # noqa: E712
-            ).all()
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            driver_repo = DriverRepository()
+            driver_dtos = driver_repo.find_available_by_company_id(self.company_id)
+            # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs pour la compatibilité
+            driver_ids = [dto.id for dto in driver_dtos]
+            drivers = (
+                Driver.query.filter(Driver.id.in_(driver_ids)).all()
+                if driver_ids
+                else []
+            )
 
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            # Note: Le repository ne supporte pas encore les filtres complexes par fenêtre temporelle,
+            # donc on utilise encore la requête directe pour cette requête complexe
+            # TODO: Ajouter une méthode find_by_company_and_time_window() au repository
             # Récupérer bookings dans la fenêtre
             # Inclure ACCEPTED, ASSIGNED pour détecter toutes les courses à assigner
             # Si scheduled_time est NULL, inclure quand même
@@ -215,7 +228,7 @@ class AgentTools:
         try:
             import os
 
-            import requests
+            import requests  # pyright: ignore[reportMissingModuleSource]
 
             from services.osrm_client import _osrm_circuit_breaker
 
@@ -264,10 +277,7 @@ class AgentTools:
             # on le considère comme suspect
             if not test_successful and cb_state == "CLOSED":
                 logger.warning(
-                    (
-                        "[AgentTools] OSRM test failed but circuit breaker is CLOSED - "
-                        "possible issue"
-                    )
+                    "[AgentTools] OSRM test failed but circuit breaker is CLOSED - possible issue"
                 )
 
             return {
@@ -354,49 +364,126 @@ class AgentTools:
         """
         with current_app.app_context():
             try:
-                booking = Booking.query.get(job_id)
+                # ✅ Utilisation des repositories pour découpler de SQLAlchemy
+                booking_repo = BookingRepository()
+                booking_dto = booking_repo.find_by_id(job_id)
+                if not booking_dto:
+                    result = {"ok": False, "error": f"Booking {job_id} not found"}
+                else:
+                    # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+                    booking = Booking.query.get(booking_dto.id)
+                    if not booking:
+                        result = {"ok": False, "error": f"Booking {job_id} not found"}
+                    else:
+                        driver_repo = DriverRepository()
+                        driver_dto = driver_repo.find_by_id(driver_id)
+                        if not driver_dto:
+                            result = {
+                                "ok": False,
+                                "error": f"Driver {driver_id} not found",
+                            }
+                        else:
+                            # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+                            driver = Driver.query.get(driver_dto.id)
+                            if not driver:
+                                result = {
+                                    "ok": False,
+                                    "error": f"Driver {driver_id} not found",
+                                }
+                            elif not driver.is_available:
+                                result = {
+                                    "ok": False,
+                                    "conflict": True,
+                                    "error": f"Driver {driver_id} is not available",
+                                }
+                            else:
+                                # Les chauffeurs d'urgence sont utilisés uniquement en dernier recours
+                                # (quand aucune autre solution n'est viable)
+                                # Cette vérification est faite au niveau de l'orchestrateur, pas ici
+                                # Ici on accepte l'assignation si elle est proposée
+
+                                # Vérifier contraintes (TW, capacité)
+                                conflict = self._check_conflicts(booking, driver)
+                                if conflict:
+                                    result = {
+                                        "ok": False,
+                                        "conflict": True,
+                                        "error": conflict,
+                                    }
+                                else:
+                                    result = None  # Continue avec l'assignation
+
+                # Si une erreur a été détectée, retourner immédiatement
+                if result is not None:
+                    return result
+
+                # ✅ Récupérer le booking pour les opérations suivantes
+                # (booking peut ne pas être défini si on est sorti du bloc else précédent)
+                booking_repo_temp = BookingRepository()
+                booking_dto_temp = booking_repo_temp.find_by_id(job_id)
+                if not booking_dto_temp:
+                    return {"ok": False, "error": f"Booking {job_id} not found"}
+                booking = Booking.query.get(booking_dto_temp.id)
                 if not booking:
                     return {"ok": False, "error": f"Booking {job_id} not found"}
 
-                driver = Driver.query.get(driver_id)
-                if not driver:
-                    return {"ok": False, "error": f"Driver {driver_id} not found"}
+                # ✅ NOUVEAU: Vérifier si la course est groupable avec une course existante
+                from services.unified_dispatch.validation import is_groupable
 
-                # Vérifier que le driver est disponible
-                if not driver.is_available:
-                    return {
-                        "ok": False,
-                        "conflict": True,
-                        "error": f"Driver {driver_id} is not available",
-                    }
-
-                # Les chauffeurs d'urgence sont utilisés uniquement en dernier recours
-                # (quand aucune autre solution n'est viable)
-                # Cette vérification est faite au niveau de l'orchestrateur, pas ici
-                # Ici on accepte l'assignation si elle est proposée
-
-                # Vérifier contraintes (TW, capacité)
-                conflict = self._check_conflicts(booking, driver)
-                if conflict:
-                    return {"ok": False, "conflict": True, "error": conflict}
-
-                # Créer/modifier assignment
-                existing = (
-                    Assignment.query.filter_by(
+                assignment_repo = AssignmentRepository()
+                existing_assignments = (
+                    assignment_repo.find_active_by_driver_and_time_range(
+                        driver_id=driver_id,
                         booking_id=job_id,
                     )
-                    .filter(
-                        Assignment.status.in_(
-                            [
-                                AssignmentStatus.SCHEDULED,
-                                AssignmentStatus.EN_ROUTE_PICKUP,
-                                AssignmentStatus.ARRIVED_PICKUP,
-                                AssignmentStatus.ONBOARD,
-                            ]
-                        )
-                    )
-                    .first()
                 )
+
+                grouped_booking = None
+                group_id = None
+                for assignment in existing_assignments:
+                    existing_booking = assignment.booking
+                    if not existing_booking or not existing_booking.scheduled_time:
+                        continue
+
+                    # Vérifier si groupable
+                    is_groupable_result, _ = is_groupable(booking, existing_booking)
+                    if is_groupable_result:
+                        grouped_booking = existing_booking
+                        # Utiliser le booking_group_id de la course existante, ou créer un nouveau groupe
+                        if (
+                            hasattr(existing_booking, "booking_group_id")
+                            and existing_booking.booking_group_id
+                        ):
+                            group_id = existing_booking.booking_group_id
+                        else:
+                            # Créer un nouveau groupe : utiliser l'ID de la première course comme group_id
+                            group_id = existing_booking.id
+                            existing_booking.booking_group_id = group_id
+                            db.session.add(existing_booking)
+                        break
+
+                # ✅ Utilisation du repository pour découpler de SQLAlchemy
+                assignment_dtos = assignment_repo.find_by_booking_id(job_id)
+                # Filtrer par statuts en mémoire
+                active_statuses = [
+                    AssignmentStatus.SCHEDULED,
+                    AssignmentStatus.EN_ROUTE_PICKUP,
+                    AssignmentStatus.ARRIVED_PICKUP,
+                    AssignmentStatus.ONBOARD,
+                    AssignmentStatus.EN_ROUTE_DROPOFF,
+                ]
+                filtered_assignment_dtos = [
+                    dto for dto in assignment_dtos if dto.status in active_statuses
+                ]
+                # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs pour la compatibilité
+                assignment_ids = [dto.id for dto in filtered_assignment_dtos]
+                existing_list = (
+                    Assignment.query.filter(Assignment.id.in_(assignment_ids)).all()
+                    if assignment_ids
+                    else []
+                )
+                # Créer/modifier assignment
+                existing = existing_list[0] if existing_list else None
 
                 old_driver_id = existing.driver_id if existing else None
 
@@ -412,11 +499,25 @@ class AgentTools:
                     existing_any.status = AssignmentStatus.SCHEDULED
                     db.session.add(existing)
 
+                # ✅ NOUVEAU: Associer le booking au groupe si groupable
+                if group_id is not None:
+                    if hasattr(booking, "booking_group_id"):
+                        booking.booking_group_id = group_id
+                        db.session.add(booking)
+                    logger.info(
+                        "[AgentTools] Booking %d groupé avec booking %d (group_id=%s)",
+                        job_id,
+                        grouped_booking.id if grouped_booking else "?",
+                        group_id,
+                    )
+
                 db.session.commit()
 
                 return {
                     "ok": True,
                     "conflict": False,
+                    "grouped": group_id is not None,
+                    "group_id": group_id,
                     "diff": {
                         "booking_id": job_id,
                         "old_driver_id": old_driver_id,
@@ -429,7 +530,7 @@ class AgentTools:
                 logger.exception("[AgentTools] Error in assign: %s", e)
                 return {"ok": False, "error": str(e)}
 
-    def _check_conflicts(self, booking: Booking, driver: Driver) -> Optional[str]:
+    def _check_conflicts(self, booking: Booking, driver: Driver) -> str | None:
         """Vérifie les conflits (TW, capacité) avec calculs de temps réels.
 
         Args:
@@ -447,7 +548,10 @@ class AgentTools:
         from models import Company
         from services.unified_dispatch import settings as ud_settings
 
-        company = Company.query.get(self.company_id)
+        # ✅ Utilisation du repository pour découpler de SQLAlchemy
+        company_repo = CompanyRepository()
+        company_dto = company_repo.find_by_id(self.company_id)
+        company = Company.query.get(company_dto.id) if company_dto else None
         if company:
             dispatch_settings = ud_settings.for_company(company)
             pickup_service_min = dispatch_settings.service_times.pickup_service_min
@@ -467,37 +571,33 @@ class AgentTools:
             pickup_service_min + dropoff_service_min + min_transition_margin_min
         )
 
-        has_conflict, conflict_msg = check_existing_assignment_conflict(
-            driver_id=int(driver.id),
-            scheduled_time=booking.scheduled_time,
-            booking_id=int(booking.id),
-            tolerance_minutes=tolerance_minutes,
+        # ✅ NOUVEAU: Passer le booking pour vérification groupable
+        has_conflict, conflict_msg, conflicting_booking = (
+            check_existing_assignment_conflict(
+                driver_id=int(driver.id),
+                scheduled_time=booking.scheduled_time,
+                booking_id=int(booking.id),
+                tolerance_minutes=tolerance_minutes,
+                new_booking=booking,
+            )
         )
 
         if has_conflict:
+            # ✅ Si conflicting_booking existe, inclure son ID dans le message
+            if conflicting_booking:
+                return (
+                    conflict_msg
+                    or f"Temporal conflict detected with booking #{conflicting_booking.id}"
+                )
             return conflict_msg or "Temporal conflict detected"
 
-        # Vérification supplémentaire : calculer le temps réel entre les courses
-        # Récupérer les assignments existants du driver
-        from models import Assignment, AssignmentStatus
+        # ✅ Utilisation du repository pour découpler de SQLAlchemy
+        from repositories.assignment_repository import AssignmentRepository
 
-        existing_assignments = (
-            Assignment.query.join(Booking)
-            .filter(
-                Assignment.driver_id == driver.id,
-                Assignment.booking_id != booking.id,
-                Assignment.status.in_(
-                    [
-                        AssignmentStatus.SCHEDULED,
-                        AssignmentStatus.EN_ROUTE_PICKUP,
-                        AssignmentStatus.ARRIVED_PICKUP,
-                        AssignmentStatus.ONBOARD,
-                        AssignmentStatus.EN_ROUTE_DROPOFF,
-                    ]
-                ),
-            )
-            .order_by(Booking.scheduled_time)
-            .all()
+        assignment_repo = AssignmentRepository()
+        existing_assignments = assignment_repo.find_active_by_driver(
+            driver_id=driver.id,
+            exclude_booking_id=booking.id if booking.id else None,
         )
 
         # Vérifier chaque assignment existant
@@ -596,8 +696,8 @@ class AgentTools:
         self,
         scope: str,  # noqa: ARG002
         strategy: str,
-        overrides: Optional[Dict[str, Any]] = None,
-        for_date: Optional[str] = None,  # ✅ Nouveau paramètre pour spécifier la date
+        overrides: Dict[str, Any] | None = None,
+        for_date: str | None = None,  # ✅ Nouveau paramètre pour spécifier la date
         force_reassign: bool = False,  # ✅ Si True, réassigne même les bookings
         # déjà assignés aux réguliers
     ) -> Dict[str, Any]:
@@ -616,7 +716,9 @@ class AgentTools:
         """
         with current_app.app_context():
             try:
-                from services.unified_dispatch.engine import run as dispatch_run
+                from infrastructure.dispatch.engine_runner import (
+                    run_dispatch_engine as dispatch_run,
+                )
                 from shared.time_utils import now_local
 
                 # Déterminer for_date (utiliser celle fournie ou aujourd'hui)
@@ -630,7 +732,10 @@ class AgentTools:
                 # depuis les paramètres de la company
                 from models import Company, Driver
 
-                company = Company.query.get(self.company_id)
+                # ✅ Utilisation du repository pour découpler de SQLAlchemy
+                company_repo = CompanyRepository()
+                company_dto = company_repo.find_by_id(self.company_id)
+                company = Company.query.get(company_dto.id) if company_dto else None
                 if company:
                     autonomous_config = company.get_autonomous_config()
                     dispatch_overrides = autonomous_config.get("dispatch_overrides", {})
@@ -650,12 +755,18 @@ class AgentTools:
                             # S'assurer que c'est un entier
                             try:
                                 preferred_driver_id = int(preferred_driver_id)
-                                # Vérifier que le chauffeur existe et appartient
-                                # à la company
-                                driver = Driver.query.filter(
-                                    Driver.id == preferred_driver_id,
-                                    Driver.company_id == self.company_id,
-                                ).first()
+                                # ✅ Utilisation du repository pour découpler de SQLAlchemy
+                                driver_repo = DriverRepository()
+                                driver_dto = driver_repo.find_by_id(preferred_driver_id)
+                                # Vérifier que le chauffeur existe et appartient à la company
+                                if (
+                                    driver_dto
+                                    and driver_dto.company_id == self.company_id
+                                ):
+                                    # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+                                    driver = Driver.query.get(driver_dto.id)
+                                else:
+                                    driver = None
                                 if driver:
                                     final_overrides["preferred_driver_id"] = (
                                         preferred_driver_id
@@ -686,27 +797,17 @@ class AgentTools:
                                     )
                             except (ValueError, TypeError) as e:
                                 logger.warning(
-                                    (
-                                        "[AgentTools] ⚠️ preferred_driver_id invalide: "
-                                        "%s (erreur: %s)"
-                                    ),
+                                    "[AgentTools] ⚠️ preferred_driver_id invalide: %s (erreur: %s)",
                                     preferred_driver_id,
                                     e,
                                 )
                         else:
                             logger.info(
-                                (
-                                    "[AgentTools] ℹ️ preferred_driver_id est "
-                                    "None/null - équité stricte sera appliquée"
-                                )
+                                "[AgentTools] ℹ️ preferred_driver_id est None/null - équité stricte sera appliquée"
                             )
                     else:
                         logger.info(
-                            (
-                                "[AgentTools] ℹ️ Aucun preferred_driver_id configuré "
-                                "dans dispatch_overrides - équité stricte "
-                                "sera appliquée"
-                            )
+                            "[AgentTools] ℹ️ Aucun preferred_driver_id configuré dans dispatch_overrides - équité stricte sera appliquée"
                         )
 
                     # Récupérer driver_load_multipliers depuis dispatch_overrides
@@ -727,27 +828,18 @@ class AgentTools:
                                         normalized_multipliers
                                     )
                                     logger.info(
-                                        (
-                                            "[AgentTools] ⚖️ Multiplicateurs de charge "
-                                            "DÉTECTÉS et ACTIVÉS: %s"
-                                        ),
+                                        "[AgentTools] ⚖️ Multiplicateurs de charge DÉTECTÉS et ACTIVÉS: %s",
                                         normalized_multipliers,
                                     )
                                 else:
                                     logger.warning(
-                                        (
-                                            "[AgentTools] ⚠️ driver_load_multipliers "
-                                            "n'est pas un dict: %s (type: %s)"
-                                        ),
+                                        "[AgentTools] ⚠️ driver_load_multipliers n'est pas un dict: %s (type: %s)",
                                         driver_load_multipliers,
                                         type(driver_load_multipliers).__name__,
                                     )
                             except (ValueError, TypeError) as e:
                                 logger.warning(
-                                    (
-                                        "[AgentTools] ⚠️ Erreur normalisation "
-                                        "driver_load_multipliers: %s (erreur: %s)"
-                                    ),
+                                    "[AgentTools] ⚠️ Erreur normalisation driver_load_multipliers: %s (erreur: %s)",
                                     driver_load_multipliers,
                                     e,
                                 )
@@ -757,10 +849,7 @@ class AgentTools:
                             )
                     else:
                         logger.debug(
-                            (
-                                "[AgentTools] ℹ️ Aucun driver_load_multipliers dans "
-                                "dispatch_overrides"
-                            )
+                            "[AgentTools] ℹ️ Aucun driver_load_multipliers dans dispatch_overrides"
                         )
 
                 # ⚠️ IMPORTANT: Ne PAS utiliser reset_existing=True pour éviter
@@ -768,10 +857,7 @@ class AgentTools:
                 # L'agent doit seulement assigner les courses non assignées
                 if "reset_existing" in final_overrides:
                     logger.warning(
-                        (
-                            "[AgentTools] ⚠️ reset_existing ignoré dans overrides "
-                            "(agent ne doit pas réassigner toutes les courses)"
-                        )
+                        "[AgentTools] ⚠️ reset_existing ignoré dans overrides (agent ne doit pas réassigner toutes les courses)"
                     )
                     final_overrides = {
                         k: v
@@ -809,21 +895,29 @@ class AgentTools:
                 booking_ids = [b.id for b in all_bookings]
                 existing_assignments = {}
                 if booking_ids:
+                    # ✅ Utilisation du repository pour découpler de SQLAlchemy
+                    assignment_repo = AssignmentRepository()
+                    assignment_dtos = assignment_repo.find_by_booking_ids(booking_ids)
+                    # Filtrer par statuts en mémoire
+                    active_statuses = [
+                        AssignmentStatus.SCHEDULED,
+                        AssignmentStatus.EN_ROUTE_PICKUP,
+                        AssignmentStatus.ARRIVED_PICKUP,
+                        AssignmentStatus.ONBOARD,
+                        AssignmentStatus.EN_ROUTE_DROPOFF,
+                    ]
+                    filtered_assignment_dtos = [
+                        dto for dto in assignment_dtos if dto.status in active_statuses
+                    ]
+                    # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs pour la compatibilité
+                    # (nécessaire pour eager loading avec joinedload)
+                    assignment_ids = [dto.id for dto in filtered_assignment_dtos]
                     assignments = (
-                        Assignment.query.filter(Assignment.booking_id.in_(booking_ids))
-                        .filter(
-                            Assignment.status.in_(
-                                [
-                                    AssignmentStatus.SCHEDULED,
-                                    AssignmentStatus.EN_ROUTE_PICKUP,
-                                    AssignmentStatus.ARRIVED_PICKUP,
-                                    AssignmentStatus.ONBOARD,
-                                    AssignmentStatus.EN_ROUTE_DROPOFF,
-                                ]
-                            )
-                        )
-                        .options(joinedload(Assignment.driver))
+                        Assignment.query.options(joinedload(Assignment.driver))
+                        .filter(Assignment.id.in_(assignment_ids))
                         .all()
+                        if assignment_ids
+                        else []
                     )
 
                     for assignment in assignments:
@@ -898,10 +992,7 @@ class AgentTools:
                     bookings_to_dispatch.append(booking)
 
                 logger.info(
-                    (
-                        "[AgentTools] 📋 Dispatch: %d bookings à traiter "
-                        "(%d déjà assignés aux réguliers exclus)"
-                    ),
+                    "[AgentTools] 📋 Dispatch: %d bookings à traiter (%d déjà assignés aux réguliers exclus)",
                     len(bookings_to_dispatch),
                     len(already_assigned_to_regular),
                 )
@@ -909,10 +1000,7 @@ class AgentTools:
                 # Si aucune course à traiter, retourner vide
                 if not bookings_to_dispatch:
                     logger.info(
-                        (
-                            "[AgentTools] ✅ Toutes les courses sont déjà assignées aux"
-                            " réguliers, aucun dispatch nécessaire"
-                        )
+                        "[AgentTools] ✅ Toutes les courses sont déjà assignées aux réguliers, aucun dispatch nécessaire"
                     )
                     return {
                         "plan": [],
@@ -1022,20 +1110,27 @@ class AgentTools:
 
                     # ✅ Vérifier si cette course est déjà assignée à un régulier
                     # (ne pas réassigner même si engine.run() l'a retournée)
+                    # ✅ Utilisation du repository pour découpler de SQLAlchemy
+                    assignment_repo = AssignmentRepository()
+                    assignment_dtos = assignment_repo.find_by_booking_id(
+                        int(booking_id)
+                    )
+                    # Filtrer par statuts en mémoire
+                    active_statuses = [
+                        AssignmentStatus.SCHEDULED,
+                        AssignmentStatus.EN_ROUTE_PICKUP,
+                        AssignmentStatus.ARRIVED_PICKUP,
+                        AssignmentStatus.ONBOARD,
+                        AssignmentStatus.EN_ROUTE_DROPOFF,
+                    ]
+                    filtered_assignment_dtos = [
+                        dto for dto in assignment_dtos if dto.status in active_statuses
+                    ]
+                    # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
                     existing_assignment = (
-                        Assignment.query.filter_by(booking_id=int(booking_id))
-                        .filter(
-                            Assignment.status.in_(
-                                [
-                                    AssignmentStatus.SCHEDULED,
-                                    AssignmentStatus.EN_ROUTE_PICKUP,
-                                    AssignmentStatus.ARRIVED_PICKUP,
-                                    AssignmentStatus.ONBOARD,
-                                    AssignmentStatus.EN_ROUTE_DROPOFF,
-                                ]
-                            )
-                        )
-                        .first()
+                        Assignment.query.get(filtered_assignment_dtos[0].id)
+                        if filtered_assignment_dtos
+                        else None
                     )
 
                     if existing_assignment:

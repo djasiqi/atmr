@@ -6,16 +6,17 @@ from __future__ import annotations
 import contextlib
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List
 
-import numpy as np
+import numpy as np  # pyright: ignore[reportMissingImports]
+from sqlalchemy.exc import DBAPIError, OperationalError
 
 logger = logging.getLogger(__name__)
 
 try:
-    import joblib
+    import joblib  # pyright: ignore[reportMissingImports]
 except ImportError:
     # Fallback vers pickle si joblib n'est pas disponible (cas rare en production)
     # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
@@ -50,21 +51,36 @@ Installation: pip install scikit-learn pandas
 logger = logging.getLogger(__name__)
 
 # Vérifier si scikit-learn est disponible
-try:
-    from sklearn.ensemble import RandomForestRegressor
-    from sklearn.preprocessing import StandardScaler
+if TYPE_CHECKING:
+    from sklearn.ensemble import (  # pyright: ignore[reportMissingImports]
+        RandomForestRegressor,
+    )
+    from sklearn.preprocessing import (  # pyright: ignore[reportMissingImports]
+        StandardScaler,
+    )
+else:
+    RandomForestRegressor = Any
+    StandardScaler = Any
 
+try:
+    from sklearn.ensemble import (  # pyright: ignore[reportMissingImports]
+        RandomForestRegressor as _RandomForestRegressor,
+    )
+    from sklearn.preprocessing import (  # pyright: ignore[reportMissingImports]
+        StandardScaler as _StandardScaler,
+    )
+
+    if not TYPE_CHECKING:
+        RandomForestRegressor = _RandomForestRegressor
+        StandardScaler = _StandardScaler
     SKLEARN_AVAILABLE = True
 except ImportError:
-    from sklearn.ensemble import RandomForestRegressor
-    from sklearn.preprocessing import StandardScaler
-
     SKLEARN_AVAILABLE = False
+    if not TYPE_CHECKING:
+        RandomForestRegressor = Any
+        StandardScaler = Any
     logger.warning(
-        (
-            "[MLPredictor] scikit-learn not available. "
-            "Install with: pip install scikit-learn"
-        )
+        "[MLPredictor] scikit-learn not available. Install with: pip install scikit-learn"
     )
 
 
@@ -88,7 +104,7 @@ class DelayPrediction:
         }
 
 
-class DelayMLPredictor(object):
+class DelayMLPredictor:
     """Prédicteur ML de retards basé sur l'historique.
     Utilise Random Forest pour la régression.
     """
@@ -100,8 +116,8 @@ class DelayMLPredictor(object):
         """
         super().__init__()
         self.model_path = model_path or "data/ml/models/delay_predictor.pkl"
-        self.model: RandomForestRegressor | None = None
-        self.scaler: StandardScaler | None = None
+        self.model: Any | None = None
+        self.scaler: Any | None = None
         self.scaler_params: Dict[str, Any] | None = None
         self.feature_names: List[str] = []
         self.is_trained = False
@@ -182,7 +198,7 @@ class DelayMLPredictor(object):
         except Exception:
             return 5  # Distance par défaut
 
-    def _calculate_driver_punctuality(self, driver: Any) -> float:
+    def _calculate_driver_punctuality(self, driver: Any) -> float:  # noqa: PLR0911
         """Calcule un score de ponctualité du chauffeur (0-1)
         basé sur l'historique réel.
         Méthode :
@@ -195,59 +211,52 @@ class DelayMLPredictor(object):
 
         """
         try:
-            from datetime import datetime, timedelta, timezone
+            from datetime import datetime, timedelta
 
-            from sqlalchemy import and_
-
-            from models import Booking, BookingStatus
+            from repositories.booking_repository import BookingRepository
 
             driver_id = getattr(driver, "id", None)
             if not driver_id:
                 return 0.75  # Valeur par défaut si driver inconnu
 
             # Récupérer les 50 dernières courses terminées dans les 90 derniers jours
-            cutoff_date = datetime.now(timezone.utc) - timedelta(days=90)
-            recent_bookings = (
-                Booking.query.filter(
-                    and_(
-                        Booking.driver_id == driver_id,
-                        Booking.status == BookingStatus.COMPLETED,
-                        Booking.completed_at >= cutoff_date,
-                    )
-                )
-                .order_by(Booking.completed_at.desc())
-                .limit(50)
-                .all()
+            cutoff_date = datetime.now(UTC) - timedelta(days=90)
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            booking_repo = BookingRepository()
+            booking_dtos = booking_repo.find_recent_completed_by_driver(
+                driver_id, cutoff_date, limit=50
             )
 
             # Minimum SI_THRESHOLD courses pour avoir des statistiques significatives
-            if len(recent_bookings) < SI_THRESHOLD:
+            if len(booking_dtos) < SI_THRESHOLD:
                 logger.debug(
                     (
                         "[MLPredictor] Driver #%s : seulement %s courses, "
                         "score par défaut 0.75"
                     ),
                     driver_id,
-                    len(recent_bookings),
+                    len(booking_dtos),
                 )
                 return 0.75
 
             # Calculer combien de courses étaient à l'heure
+            # ✅ Utilisation directe des DTOs au lieu de reconvertir en modèles SQLAlchemy
             on_time_count = 0
             total_count = 0
 
-            for booking in recent_bookings:
-                # Comparer scheduled_time vs actual_pickup_time
-                # (ou completed_at si pas de pickup_time)
-                scheduled = getattr(booking, "scheduled_time", None)
-                actual_pickup = getattr(booking, "actual_pickup_time", None)
+            for dto in booking_dtos:
+                # Comparer scheduled_time vs completed_at (ou boarded_at si disponible)
+                # Note: actual_pickup_time n'existe pas dans le modèle Booking,
+                # on utilise completed_at comme proxy (ou boarded_at si disponible)
+                scheduled = dto.scheduled_time
+                actual_pickup = dto.completed_at
 
                 if not scheduled:
                     continue
 
-                # Si pas de actual_pickup_time, utiliser completed_at comme proxy
+                # Si pas de completed_at, utiliser boarded_at comme proxy
                 if not actual_pickup:
-                    actual_pickup = getattr(booking, "completed_at", None)
+                    actual_pickup = dto.boarded_at
 
                 if not actual_pickup:
                     continue
@@ -278,9 +287,25 @@ class DelayMLPredictor(object):
 
             return punctuality_score
 
-        except Exception as e:
-            # En cas d'erreur (DB non accessible, etc.), retourner la valeur par défaut
-            logger.warning("[MLPredictor] Erreur calcul ponctualité : %s", e)
+        except (OperationalError, DBAPIError) as e:
+            # Erreurs DB attendues : connexion, timeout
+            logger.warning(
+                "[MLPredictor] Erreur calcul ponctualité (DB error: %s): %s",
+                type(e).__name__,
+                e,
+            )
+            return 0.75
+        except (ValueError, TypeError, AttributeError) as e:
+            # Erreurs de validation attendues : données invalides
+            logger.warning(
+                "[MLPredictor] Erreur calcul ponctualité (validation error: %s): %s",
+                type(e).__name__,
+                e,
+            )
+            return 0.75
+        except Exception:
+            # En cas d'erreur inattendue, retourner la valeur par défaut
+            logger.exception("[MLPredictor] Erreur calcul ponctualité")
             return 0.75
 
     def _estimate_traffic_density(self, hour: int, day_of_week: int) -> float:
@@ -353,11 +378,12 @@ class DelayMLPredictor(object):
 
         # Standardiser les features
         self.scaler = StandardScaler()
+        assert self.scaler is not None
         X_scaled = self.scaler.fit_transform(X_array)
 
         # Entraîner le modèle
         self.model = RandomForestRegressor(
-            n_estimators=0.100,
+            n_estimators=100,
             max_depth=10,
             min_samples_split=5,
             min_samples_leaf=2,
@@ -365,6 +391,7 @@ class DelayMLPredictor(object):
             n_jobs=-1,
         )
 
+        assert self.model is not None
         self.model.fit(X_scaled, y_array)
         self.is_trained = True
 
@@ -378,7 +405,9 @@ class DelayMLPredictor(object):
             "feature_importance": {
                 name: float(importance)
                 for name, importance in zip(
-                    self.feature_names, self.model.feature_importances_, strict=False
+                    self.feature_names,
+                    self.model.feature_importances_ if self.model is not None else [],
+                    strict=False,
                 )
             },
         }
@@ -450,6 +479,7 @@ class DelayMLPredictor(object):
             feature_df = features_to_dataframe(features, self.feature_names)
 
             # 4. Prédire
+            assert self.model is not None
             predicted_delay = float(self.model.predict(feature_df)[0])
 
             # 5. Calculer la confiance (basée sur variance des arbres)
@@ -469,6 +499,7 @@ class DelayMLPredictor(object):
                 risk_level = "high"
 
             # 7. Top 5 facteurs contributifs
+            assert self.model is not None
             feature_importances = self.model.feature_importances_
             top_factors = {}
             for i, name in enumerate(self.feature_names):
@@ -603,8 +634,25 @@ class DelayMLPredictor(object):
                 len(self.feature_names),
                 model_data.get("metrics", {}).get("test", {}).get("mae", "N/A"),
             )
-        except Exception as e:
-            logger.error("[MLPredictor] Failed to load model: %s", e)
+        except (FileNotFoundError, OSError) as e:
+            # Erreurs de fichier attendues : fichier non trouvé, permissions
+            logger.error(
+                "[MLPredictor] Failed to load model (file error: %s): %s",
+                type(e).__name__,
+                e,
+            )
+            self.is_trained = False
+        except (ValueError, TypeError, KeyError) as e:
+            # Erreurs de validation attendues : JSON invalide, données corrompues
+            logger.error(
+                "[MLPredictor] Failed to load model (validation error: %s): %s",
+                type(e).__name__,
+                e,
+            )
+            self.is_trained = False
+        except Exception:
+            # Erreur inattendue : logger avec trace complète
+            logger.exception("[MLPredictor] Failed to load model")
             self.is_trained = False
 
 
@@ -698,9 +746,26 @@ def predict_with_feature_flag(
             predictor = get_ml_predictor()
             prediction = predictor.predict_delay(booking, driver, current_time)
 
-    except Exception as e:
-        # En cas d'erreur, utiliser fallback si activé
-        logger.exception("[ML] Prediction failed for booking %s: %s", booking_id, e)
+    except (ValueError, TypeError, AttributeError, KeyError) as e:
+        # Erreurs de validation attendues : données invalides, clés manquantes
+        logger.warning(
+            "[ML] Prediction failed for booking %s (validation error: %s): %s",
+            booking_id,
+            type(e).__name__,
+            e,
+        )
+        FeatureFlags.record_ml_failure()
+        # Fallback en cas d'erreur de validation
+        prediction = DelayPrediction(
+            booking_id=int(booking_id) if booking_id else 0,
+            predicted_delay_minutes=5,
+            confidence=0.2,
+            risk_level="medium",
+            contributing_factors={"fallback_validation_error": 1},
+        )
+    except Exception:
+        # En cas d'erreur inattendue, utiliser fallback si activé
+        logger.exception("[ML] Prediction failed for booking %s", booking_id)
 
         FeatureFlags.record_ml_failure()
 

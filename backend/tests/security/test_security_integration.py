@@ -241,21 +241,21 @@ class TestSecurityMonitoring:
     def test_audit_logs_are_persistent(self, client, auth_headers, db):
         """Test que les logs d'audit sont persistants."""
         import json
+        import uuid
 
         from security.audit_log import AuditLog, AuditLogger
 
         # Créer un log d'audit
-        AuditLogger.log_action(
-            action_type="test_action",
+        action_type = f"test_action_{uuid.uuid4().hex}"
+        created = AuditLogger.log_action(
+            action_type=action_type,
             action_category="test",
             user_id=1,
             action_details={"test": "integration_test"},
         )
 
-        db.session.commit()
-
         # Vérifier que le log a été créé
-        log_entry = AuditLog.query.filter_by(action_type="test_action").first()
+        log_entry = AuditLog.query.get(created.id)
         assert log_entry is not None
         assert log_entry.user_id == 1
         action_details = json.loads(log_entry.action_details or "{}")

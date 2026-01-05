@@ -11,6 +11,7 @@ const ReservationTable = ({
   onReject,
   onAssign,
   onEdit,
+  onTransfer,
   onDelete,
   onSchedule,
   onDispatchNow,
@@ -18,6 +19,7 @@ const ReservationTable = ({
   hideSchedule = false,
   hideUrgent = false,
   hideEdit = false,
+  hideTransfer = false,
   hideDelete = false,
 }) => {
   const deletableStatuses = ['pending', 'accepted', 'assigned'];
@@ -116,18 +118,20 @@ const ReservationTable = ({
                         </>
                       )}
 
-                      {/* Actions centralisées : Planifier, Urgent, Assigner, Supprimer */}
+                      {/* Actions centralisées : Planifier, Urgent, Assigner, Transférer, Supprimer */}
                       <ReservationActions
                         reservation={r}
                         onSchedule={onSchedule}
                         onDispatchNow={onDispatchNow}
                         onAssign={onAssign}
                         onEdit={onEdit}
+                        onTransfer={onTransfer}
                         onDelete={onDelete}
                         hideAssign={hideAssign}
                         hideSchedule={hideSchedule}
                         hideUrgent={hideUrgent}
                         hideEdit={hideEdit}
+                        hideTransfer={hideTransfer}
                         hideDelete={hideDelete}
                       />
                     </>

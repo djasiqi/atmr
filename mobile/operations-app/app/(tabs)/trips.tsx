@@ -16,6 +16,11 @@ import { tripCardStyles as cardStyles } from "@/styles/tripCardStyles";
 import TripHeader from "@/components/dashboard/TripHeader";
 import { useNotifications } from "@/hooks/useNotifications";
 import TripDetailsModal from "@/components/dashboard/TripDetailsModal";
+import {
+  onBookingNew,
+  onBookingUpdated,
+  onBookingCancelled,
+} from "@/services/socket";
 
 function categorizeTripByTime(trip: Booking) {
   const hour = new Date(trip.scheduled_time).getHours();
@@ -70,6 +75,91 @@ export default function TripsScreen() {
   useEffect(() => {
     loadTrips();
   }, [loadTrips]);
+
+  // ✅ Listen to real-time booking events via EventEmitter
+  useEffect(() => {
+    if (!driver) return;
+
+    // Listen to new booking
+    const unsubscribeNew = onBookingNew((booking: Booking) => {
+      console.log("📩 New booking received in trips:", booking.id);
+      setAssignedTrips((prev) => {
+        // Check if booking already exists
+        const exists = prev.find((b) => b.id === booking.id);
+        if (exists) {
+          // Update existing booking
+          return prev.map((b) => (b.id === booking.id ? booking : b));
+        }
+        // Add new booking and sort by scheduled_time
+        const updated = [...prev, booking].sort(
+          (a, b) =>
+            new Date(a.scheduled_time).getTime() -
+            new Date(b.scheduled_time).getTime()
+        );
+        return updated;
+      });
+    });
+
+    // Listen to booking updated
+    const unsubscribeUpdated = onBookingUpdated((booking: Booking) => {
+      console.log("📩 Booking updated in trips:", booking.id, booking.status);
+      const status = (booking.status || "").toLowerCase();
+
+      // Update assigned trips
+      setAssignedTrips((prev) => {
+        const updated = prev
+          .map((b) => (b.id === booking.id ? booking : b))
+          .filter((b) => {
+            // Remove if cancelled
+            const s = (b.status || "").toLowerCase();
+            return !["canceled", "cancelled"].includes(s);
+          });
+        return updated;
+      });
+
+      // If booking is completed, move to completed trips
+      if (status === "completed" || status === "return_completed") {
+        setCompletedTrips((prev) => {
+          // Check if already in completed list
+          const exists = prev.find((b) => b.id === booking.id);
+          if (exists) {
+            return prev.map((b) => (b.id === booking.id ? booking : b));
+          }
+          // Add to completed and sort
+          const today = new Date().toDateString();
+          const bookingDate = new Date(booking.scheduled_time).toDateString();
+          if (bookingDate === today) {
+            return [...prev, booking].sort(
+              (a, b) =>
+                new Date(a.scheduled_time).getTime() -
+                new Date(b.scheduled_time).getTime()
+            );
+          }
+          return prev;
+        });
+      }
+    });
+
+    // Listen to booking cancelled
+    const unsubscribeCancelled = onBookingCancelled((data) => {
+      const bookingId = typeof data === "object" && "id" in data ? data.id : null;
+      if (!bookingId) return;
+
+      console.log("📩 Booking cancelled in trips:", bookingId);
+
+      // Remove from assigned trips
+      setAssignedTrips((prev) => prev.filter((b) => b.id !== bookingId));
+
+      // Remove from completed trips if present
+      setCompletedTrips((prev) => prev.filter((b) => b.id !== bookingId));
+    });
+
+    return () => {
+      unsubscribeNew();
+      unsubscribeUpdated();
+      unsubscribeCancelled();
+    };
+  }, [driver]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);

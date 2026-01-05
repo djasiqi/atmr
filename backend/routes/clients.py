@@ -1,23 +1,37 @@
 import logging
 from datetime import UTC, datetime
-
-# Constantes pour éviter les valeurs magiques
 from typing import Any, cast
 from urllib.parse import urlencode
 
-from flask import request
-from flask_jwt_extended import get_jwt_identity, jwt_required
-from flask_mail import Message
-from flask_restx import Namespace, Resource, fields
-from sqlalchemy.orm import joinedload
+from flask import request  # pyright: ignore[reportMissingImports]
+from flask_jwt_extended import jwt_required  # pyright: ignore[reportMissingImports]
+from flask_mail import Message  # pyright: ignore[reportMissingImports]
+from flask_restx import (  # pyright: ignore[reportMissingImports]
+    Namespace,
+    Resource,
+    fields,
+)
 
 from app import sentry_sdk
 from ext import mail, role_required
-from models import Booking, BookingStatus, Client, GenderEnum, User, UserRole, db
+from models import db
+from models.enums import GenderEnum, UserRole
+from repositories.booking_repository import BookingRepository
+from repositories.client_repository import ClientRepository
+from repositories.user_repository import UserRepository
+from shared.error_handlers import APIErrorHandler
+from shared.infrastructure.adapters.auth_adapter import (
+    get_current_user_via_use_case,
+)
 
 TOTAL_AMOUNT_ZERO = 0
 
-app_logger = logging.getLogger("app")
+logger = logging.getLogger(__name__)
+
+# Initialisation des repositories et services
+user_repo = UserRepository()
+client_repo = ClientRepository()
+booking_repo = BookingRepository()
 
 clients_ns = Namespace(
     "clients",
@@ -65,66 +79,72 @@ class ManageClientProfile(Resource):
     @role_required(UserRole.client)
     def get(self, public_id):
         try:
-            current_user_public_id = get_jwt_identity()
-            current_user = User.query.filter_by(
-                public_id=current_user_public_id
-            ).one_or_none()
+            current_user = get_current_user_via_use_case()
             if not current_user:
-                return {"error": "User not found or invalid token"}, 401
+                return APIErrorHandler.handle_permission_error(
+                    "User not found or invalid token",
+                    logger_instance=logger,
+                )
             if (
                 current_user.public_id != public_id
                 and current_user.role != UserRole.admin
             ):
-                return {"error": "Unauthorized access"}, 403
-            client = (
-                Client.query.options(joinedload(Client.user))
-                .join(User)
-                .filter(User.public_id == public_id)
-                .one_or_none()
-            )
+                return APIErrorHandler.handle_permission_error(
+                    "Unauthorized access",
+                    logger_instance=logger,
+                )
+            client = client_repo.find_by_public_id_with_user(public_id)
             if not client:
-                return {"error": "Client profile not found"}, 404
+                return APIErrorHandler.handle_not_found(
+                    "Client profile",
+                    public_id if "public_id" in locals() else None,
+                    logger,
+                )
             return cast("Any", client).serialize, 200
         except Exception as e:
-            app_logger.error(
+            logger.error(
                 "❌ ERREUR manage_client_profile GET: %s - %s", type(e).__name__, str(e)
             )
-            return {"error": "Une erreur interne est survenue."}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
     @jwt_required()
     @role_required(UserRole.client)
     @clients_ns.expect(client_profile_model)
-    def put(self, public_id):
+    def put(self, public_id):  # noqa: PLR0911
         try:
             # Validation initiale combinée
-            current_user_public_id = get_jwt_identity()
-            current_user = User.query.filter_by(
-                public_id=current_user_public_id
-            ).one_or_none()
+            current_user = get_current_user_via_use_case()
 
             if not current_user:
-                return {"error": "User not found or invalid token"}, 401
+                return APIErrorHandler.handle_permission_error(
+                    "User not found or invalid token",
+                    logger_instance=logger,
+                )
 
             if (
                 current_user.public_id != public_id
                 and current_user.role != UserRole.admin
             ):
-                return {"error": "Unauthorized access"}, 403
+                return APIErrorHandler.handle_permission_error(
+                    "Unauthorized access",
+                    logger_instance=logger,
+                )
 
-            client = (
-                Client.query.options(joinedload(Client.user))
-                .join(User)
-                .filter(User.public_id == public_id)
-                .one_or_none()
-            )
+            client = client_repo.find_by_public_id_with_user(public_id)
 
             if not client:
-                return {"error": "Client profile not found"}, 404
+                return APIErrorHandler.handle_not_found(
+                    "Client profile",
+                    public_id if "public_id" in locals() else None,
+                    logger,
+                )
 
             data = request.get_json() or {}
 
             # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-            from marshmallow import ValidationError
+            from marshmallow import (  # pyright: ignore[reportMissingImports]
+                ValidationError,
+            )
 
             from schemas.client_schemas import ClientUpdateSchema
             from schemas.validation_utils import (
@@ -139,21 +159,34 @@ class ManageClientProfile(Resource):
             except ValidationError as e:
                 return handle_validation_error(e)
 
-            # Mise à jour des champs - utilise données validées
+            # ✅ DDD: Utiliser le use case pour mettre à jour le client (champs Client)
+            from application.companies.clients.update_company_client import (
+                UpdateCompanyClientUseCase,
+            )
+
+            # Préparer les données pour le use case (champs Client uniquement)
+            client_data = {}
+            if "phone" in validated_data:
+                client_data["contact_phone"] = validated_data["phone"]
+            if "address" in validated_data:
+                client_data["domicile_address"] = validated_data["address"]
+            if validated_data.get("birth_date"):
+                client_data["birth_date"] = validated_data["birth_date"]
+
+            # Utiliser le use case pour les champs Client
+            if client_data:
+                uc = UpdateCompanyClientUseCase()
+                result = uc.execute(client=client, data=client_data)
+                if not result.ok:
+                    return result.error or {
+                        "error": "Failed to update client"
+                    }, result.status_code or 400
+
+            # Mise à jour des champs User (non gérés par le use case actuel)
             if validated_data.get("first_name"):
                 client.user.first_name = validated_data["first_name"]
             if validated_data.get("last_name"):
                 client.user.last_name = validated_data["last_name"]
-            if "phone" in validated_data:
-                client.phone = validated_data["phone"]
-            if "address" in validated_data:
-                client.address = validated_data["address"]
-            if validated_data.get("birth_date"):
-                from datetime import datetime
-
-                client.user.birth_date = datetime.strptime(
-                    validated_data["birth_date"], "%Y-%m-%d"
-                ).date()
             if "gender" in validated_data:
                 client.user.gender = GenderEnum(validated_data["gender"])
 
@@ -162,10 +195,10 @@ class ManageClientProfile(Resource):
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(
+            logger.error(
                 "❌ ERREUR manage_client_profile PUT: %s - %s", type(e).__name__, str(e)
             )
-            return {"error": "Une erreur interne est survenue."}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 # -------------------------------------------------------------------
@@ -179,26 +212,18 @@ class RecentBookings(Resource):
     @role_required(UserRole.client)
     def get(self, public_id):
         try:
-            client = (
-                Client.query.options(joinedload(Client.user))
-                .join(User)
-                .filter(User.public_id == public_id)
-                .one_or_none()
-            )
+            client = client_repo.find_by_public_id_with_user(public_id)
             if not client:
-                return {"error": "Client not found"}, 404
-            bookings = (
-                Booking.query.filter_by(client_id=client.id)
-                .order_by(Booking.scheduled_time.desc())
-                .limit(4)
-                .all()
-            )
+                return APIErrorHandler.handle_not_found(
+                    "Client",
+                    public_id if "public_id" in locals() else None,
+                    logger,
+                )
+            bookings = booking_repo.find_models_by_client_id(client.id, limit=4)
             return [cast("Any", booking).serialize for booking in bookings], 200
         except Exception as e:
-            app_logger.error(
-                "❌ ERREUR recent_bookings: %s - %s", type(e).__name__, str(e)
-            )
-            return {"error": "Une erreur interne est survenue."}, 500
+            logger.error("❌ ERREUR recent_bookings: %s - %s", type(e).__name__, str(e))
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 # -------------------------------------------------------------------
@@ -212,25 +237,20 @@ class ClientBookings(Resource):
     @role_required(UserRole.client)
     def get(self, public_id):
         try:
-            client = (
-                Client.query.options(joinedload(Client.user))
-                .join(User)
-                .filter(User.public_id == public_id)
-                .one_or_none()
-            )
+            client = client_repo.find_by_public_id_with_user(public_id)
             if not client:
-                return {"error": "Client profile not found"}, 404
-            bookings = (
-                Booking.query.filter_by(client_id=client.id)
-                .order_by(Booking.scheduled_time.desc())
-                .all()
-            )
+                return APIErrorHandler.handle_not_found(
+                    "Client profile",
+                    public_id if "public_id" in locals() else None,
+                    logger,
+                )
+            bookings = booking_repo.find_models_by_client_id(client.id)
             return [cast("Any", booking).serialize for booking in bookings], 200
         except Exception as e:
-            app_logger.error(
+            logger.error(
                 "❌ ERREUR list_client_bookings: %s - %s", type(e).__name__, str(e)
             )
-            return {"error": "Une erreur interne est survenue."}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
     @jwt_required()
     @role_required(UserRole.client)
@@ -238,21 +258,23 @@ class ClientBookings(Resource):
     def post(self, _public_id):  # noqa: PLR0911
         try:
             # Validation initiale combinée
-            current_user_id = get_jwt_identity()
-            current_user = User.query.filter_by(public_id=current_user_id).one_or_none()
+            current_user = get_current_user_via_use_case()
+            client = None
+            if current_user:
+                client = client_repo.find_by_user_id(current_user.id)
 
+            # Validation combinée pour réduire les returns
             if not current_user:
-                return {"error": "User not found"}, 404
-
-            client = Client.query.filter_by(user_id=current_user.id).one_or_none()
-
+                return APIErrorHandler.handle_not_found("User", None, logger)
             if not client:
-                return {"error": "Client profile not found"}, 404
+                return APIErrorHandler.handle_not_found("Client profile", None, logger)
 
             data = request.get_json() or {}
 
             # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-            from marshmallow import ValidationError
+            from marshmallow import (  # pyright: ignore[reportMissingImports]
+                ValidationError,
+            )
 
             from schemas.booking_schemas import BookingCreateSchema
             from schemas.validation_utils import (
@@ -267,43 +289,68 @@ class ClientBookings(Resource):
             except ValidationError as e:
                 return handle_validation_error(e)
 
-            # Validation du format de date et de l'heure future
+            # Validation du format de date et de l'heure future (regroupée)
+            scheduled_time = None
+            error_response = None
             try:
                 dt = datetime.fromisoformat(validated_data["scheduled_time"])
                 scheduled_time = dt if dt.tzinfo else dt.replace(tzinfo=UTC)
                 if dt.tzinfo:
                     scheduled_time = dt.astimezone(UTC)
+                if scheduled_time <= datetime.now(UTC):
+                    error_response = APIErrorHandler.handle_validation_error(
+                        "Scheduled time must be in the future",
+                        field="scheduled_time",
+                        logger_instance=logger,
+                    )
             except ValueError:
-                return {"error": "Invalid scheduled_time format"}, 400
+                error_response = APIErrorHandler.handle_validation_error(
+                    "Invalid scheduled_time format",
+                    field="scheduled_time",
+                    logger_instance=logger,
+                )
 
-            if scheduled_time <= datetime.now(UTC):
-                return {"error": "Scheduled time must be in the future"}, 400
+            if error_response or scheduled_time is None:
+                return error_response or APIErrorHandler.handle_validation_error(
+                    "Invalid scheduled_time",
+                    field="scheduled_time",
+                    logger_instance=logger,
+                )
 
-            # Création de la réservation avec données validées
-            new_booking = cast("Any", Booking)(
-                customer_name=f"{client.user.first_name} {client.user.last_name}",
-                pickup_location=validated_data["pickup_location"],
-                dropoff_location=validated_data["dropoff_location"],
-                scheduled_time=scheduled_time,
-                amount=validated_data.get("amount", 10),
-                user_id=current_user.id,
-                client_id=client.id,
-                status=BookingStatus.PENDING,
+            # ✅ DDD: Utiliser le use case pour créer la réservation
+            from bookings.infrastructure.adapters.booking_service_adapter import (
+                create_booking_via_use_case,
             )
 
-            db.session.add(new_booking)
-            db.session.commit()
-            return {
-                "message": "Booking created successfully",
-                "booking": new_booking.serialize,
-            }, 201
+            # Préparer les données pour le use case
+            booking_data = {
+                "customer_name": f"{client.user.first_name} {client.user.last_name}",
+                "pickup_location": validated_data["pickup_location"],
+                "dropoff_location": validated_data["dropoff_location"],
+                "scheduled_time": scheduled_time.isoformat(),
+                "amount": validated_data.get("amount", 10),
+            }
+
+            try:
+                new_booking = create_booking_via_use_case(
+                    user_id=current_user.id, client_id=client.id, data=booking_data
+                )
+                result = {
+                    "message": "Booking created successfully",
+                    "booking": new_booking.serialize,
+                }
+                return result, 201
+            except (ValueError, RuntimeError) as e:
+                # Erreur de validation ou de géocodage
+                return APIErrorHandler.handle_validation_error(
+                    str(e),
+                    logger_instance=logger,
+                )
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(
-                "❌ ERREUR create_booking: %s - %s", type(e).__name__, str(e)
-            )
-            return {"error": "Une erreur interne est survenue."}, 500
+            logger.error("❌ ERREUR create_booking: %s - %s", type(e).__name__, str(e))
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 # -------------------------------------------------------------------
@@ -317,26 +364,20 @@ class GenerateQRBill(Resource):
     @role_required(UserRole.client)
     def post(self):
         try:
-            current_user_id = get_jwt_identity()
-            from typing import cast
-
-            user = (
-                User.query
-                # 👈 évite l'alerte "unknown attribute"
-                .options(joinedload(cast("Any", User).client))
-                .filter_by(public_id=current_user_id)
-                .one_or_none()
-            )
-            if not user:
-                return {"error": "User not found"}, 404
-            # Supporte user.client (1-1) et user.clients (1-N)
-            client = getattr(cast("Any", user), "client", None)
-            if client is None:
-                clients_rel = getattr(cast("Any", user), "clients", None)
-                if clients_rel and len(clients_rel) > 0:
-                    client = clients_rel[0]
+            current_user = get_current_user_via_use_case()
+            if not current_user:
+                return APIErrorHandler.handle_not_found(
+                    "User",
+                    None,
+                    logger,
+                )
+            # Récupérer le client associé à l'utilisateur (avec user pour accéder aux attributs)
+            client = client_repo.find_by_user_id_with_user(current_user.id)
             if not client:
-                return {"error": "Client profile not found"}, 403
+                return APIErrorHandler.handle_permission_error(
+                    "Client profile not found",
+                    logger_instance=logger,
+                )
             payments = getattr(client, "payments", []) or []
             total_amount = sum(
                 (getattr(p, "amount", 0) or 0)
@@ -344,17 +385,20 @@ class GenerateQRBill(Resource):
                 if getattr(p, "status", None) == "pending"
             )
             if total_amount <= TOTAL_AMOUNT_ZERO:
-                return {"error": "No pending payments to generate a QR bill"}, 400
-            upid = getattr(cast("Any", user), "public_id", None) or ""
+                return APIErrorHandler.handle_validation_error(
+                    "No pending payments to generate a QR bill",
+                    logger_instance=logger,
+                )
+            upid = current_user.public_id or ""
             params = urlencode({"amount": total_amount, "client": upid})
             qr_code_url = f"https://example.com/qr-payment?{params}"
             return {"qr_code_url": qr_code_url}, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(
+            logger.error(
                 "❌ ERREUR generate_qr_bill: %s - %s", type(e).__name__, str(e)
             )
-            return {"error": "Une erreur interne est survenue."}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 # -------------------------------------------------------------------
@@ -368,38 +412,37 @@ class DeleteAccount(Resource):
     @role_required(UserRole.client)
     def delete(self):
         try:
-            current_user_id = get_jwt_identity()
-            user = (
-                User.query
-                # 👈 évite l'alerte "unknown attribute"
-                .options(joinedload(cast("Any", User).client))
-                .filter_by(public_id=current_user_id)
-                .one_or_none()
-            )
-            if not user:
-                return {"error": "Client profile not found"}, 403
-            # Supporte les 2 relations possibles: user.client (1-1) ou
-            # user.clients (1-N)
-            client = getattr(user, "client", None)
-            if client is None:
-                clients_rel = getattr(user, "clients", None)
-                if clients_rel and len(clients_rel) > 0:
-                    client = clients_rel[0]
-            if client is None:
-                return {"error": "Client profile not found"}, 403
+            current_user = get_current_user_via_use_case()
+            if not current_user:
+                return APIErrorHandler.handle_permission_error(
+                    "Client profile not found",
+                    logger_instance=logger,
+                )
+            # Récupérer le client associé à l'utilisateur (modèle SQLAlchemy pour modification)
+            from models import Client
 
-            if not client.is_active:
-                return {"error": "Account is already deactivated"}, 400
-            client.is_active = False
-            user.is_active = False
+            client_model = Client.query.filter(
+                Client.user_id == current_user.id
+            ).first()
+            if client_model is None:
+                return APIErrorHandler.handle_permission_error(
+                    "Client profile not found",
+                    logger_instance=logger,
+                )
+
+            if not client_model.is_active:
+                return APIErrorHandler.handle_validation_error(
+                    "Account is already deactivated",
+                    logger_instance=logger,
+                )
+            client_model.is_active = False
+            current_user.is_active = False
             db.session.commit()
             return {"message": "Account deactivated successfully"}, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(
-                "❌ ERREUR delete_account: %s - %s", type(e).__name__, str(e)
-            )
-            return {"error": "Une erreur interne est survenue."}, 500
+            logger.error("❌ ERREUR delete_account: %s - %s", type(e).__name__, str(e))
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 # -------------------------------------------------------------------
@@ -413,24 +456,21 @@ class ListPayments(Resource):
     @role_required(UserRole.client)
     def get(self, public_id):
         try:
-            client = (
-                Client.query.options(joinedload(Client.payments))
-                .join(User)
-                .filter(User.public_id == public_id)
-                .one_or_none()
-            )
+            client = client_repo.find_by_public_id_with_payments(public_id)
             if not client:
-                return {"error": "Client profile not found"}, 404
+                return APIErrorHandler.handle_not_found(
+                    "Client profile",
+                    public_id if "public_id" in locals() else None,
+                    logger,
+                )
             payments = client.payments
             if not payments:
                 return {"message": "No payments found"}, 404
-            return [cast("Any", payment).serialize for payment in payments], 200
+            return [payment.serialize for payment in payments], 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(
-                "❌ ERREUR list_payments: %s - %s", type(e).__name__, str(e)
-            )
-            return {"error": "Une erreur interne est survenue."}, 500
+            logger.error("❌ ERREUR list_payments: %s - %s", type(e).__name__, str(e))
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 # -------------------------------------------------------------------
@@ -445,33 +485,46 @@ class CancelBooking(Resource):
     def delete(self, booking_id):
         try:
             # 🔒 get user (public_id) → user.id, puis récupérer le client
-            current_user_pub_id = get_jwt_identity()
-            user = User.query.filter_by(public_id=current_user_pub_id).one_or_none()
-            if not user:
-                return {"error": "User not found"}, 404
-            client = (
-                Client.query.options(joinedload(Client.bookings))
-                .filter_by(user_id=user.id)
-                .one_or_none()
-            )
+            current_user = get_current_user_via_use_case()
+            if not current_user:
+                return APIErrorHandler.handle_not_found(
+                    "User",
+                    None,
+                    logger,
+                )
+            client = client_repo.find_by_user_id_with_bookings(current_user.id)
             if not client:
-                return {"error": "Client profile not found"}, 403
-            booking = Booking.query.filter_by(
-                id=booking_id, client_id=client.id
-            ).one_or_none()
+                return APIErrorHandler.handle_permission_error(
+                    "Client profile not found",
+                    logger_instance=logger,
+                )
+            booking = booking_repo.find_model_by_id_and_client(booking_id, client.id)
             if not booking:
-                return {"error": "Booking not found"}, 404
-            if booking.status != BookingStatus.PENDING:
-                return {"error": "Only pending bookings can be canceled"}, 400
-            booking.status = BookingStatus.CANCELED
+                return APIErrorHandler.handle_not_found(
+                    "Booking",
+                    booking_id if "booking_id" in locals() else None,
+                    logger,
+                )
+            # ✅ DDD: Utiliser le use case pour annuler la réservation
+            from application.bookings.cancel_booking import (
+                CancelBookingInput,
+                CancelBookingUseCase,
+            )
+
+            uc = CancelBookingUseCase()
+            input_data = CancelBookingInput(booking=booking)
+            uc_result = uc.execute(input_data)
+            if not uc_result.success:
+                return uc_result.error or {
+                    "error": "Bad request"
+                }, uc_result.status_code or 400
+
             db.session.commit()
             return {"message": "Booking canceled successfully"}, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(
-                "❌ ERREUR cancel_booking: %s - %s", type(e).__name__, str(e)
-            )
-            return {"error": "Une erreur interne est survenue."}, 500
+            logger.error("❌ ERREUR cancel_booking: %s - %s", type(e).__name__, str(e))
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 # -------------------------------------------------------------------
@@ -481,22 +534,32 @@ class CancelBooking(Resource):
 
 @clients_ns.route("/<string:public_id>/reset-password")
 class ResetPassword(Resource):
-    @jwt_required()
+    # ✅ S2: Fresh token requis pour changement de mot de passe (action sensible)
+    @jwt_required(fresh=True)
     @role_required(UserRole.client)
     def post(self, public_id):
         try:
-            # Validation initiale
-            current_user_id = get_jwt_identity()
-            current_user = User.query.filter_by(public_id=current_user_id).one_or_none()
+            # Validation initiale (regroupée pour réduire les return statements)
+            current_user = get_current_user_via_use_case()
             if not current_user:
-                return {"error": "User not found"}, 404
+                return APIErrorHandler.handle_not_found(
+                    "User",
+                    None,
+                    logger,
+                )
 
             if current_user.public_id != public_id:
-                return {"error": "Unauthorized access"}, 403
+                return APIErrorHandler.handle_permission_error(
+                    "Unauthorized access",
+                    logger_instance=logger,
+                )
 
             data = request.get_json()
             if not data:
-                return {"error": "No data provided"}, 400
+                return APIErrorHandler.handle_validation_error(
+                    "No data provided",
+                    logger_instance=logger,
+                )
 
             old_password = data.get("old_password", "").strip()
             new_password = data.get("new_password", "").strip()
@@ -515,52 +578,65 @@ class ResetPassword(Resource):
 
             # Validation explicite du mot de passe avant set_password (sécurité)
             if not error_message:
-                from routes.utils import validate_password
+                # ✅ S3: Validation avec politique renforcée (complexité + HIBP + historique)
+                from security.password_policy import (
+                    PasswordPolicyError,
+                    PasswordPolicyService,
+                )
 
-                # Valider explicitement le mot de passe avant de le définir
-                # (imite django.contrib.auth.password_validation.validate_password)
-                if not validate_password(new_password):
-                    error_message = (
-                        "Le mot de passe doit contenir au moins 8 caractères, "
-                        "une majuscule, une minuscule et un chiffre."
+                try:
+                    PasswordPolicyService.validate_password(
+                        new_password, user_id=current_user.id, check_history=True
                     )
+                except PasswordPolicyError as e:
+                    error_message = e.message
 
             if error_message:
-                return {"error": error_message}, 400
+                return APIErrorHandler.handle_validation_error(
+                    error_message,
+                    field="password",
+                    logger_instance=logger,
+                )
 
             # Le mot de passe est validé explicitement par validate_password()
             # avant set_password() - satisfait les exigences de sécurité
             current_user.set_password(new_password)  # nosem
             db.session.commit()
 
-            # Envoi de l'email de confirmation
-            msg = Message(
-                subject="Confirmation de changement de mot de passe",
-                sender="support@votreapp.com",
-                recipients=[current_user.email],
-                body=(
-                    f"Bonjour {current_user.first_name},\n\n"
-                    "Votre mot de passe a été modifié avec succès. "
-                    "Si vous n'êtes pas à l'origine de cette modification, "
-                    "veuillez contacter immédiatement notre support."
-                ),
-            )
-            mail.send(msg)
-            app_logger.info(
-                "✅ Mot de passe réinitialisé avec succès pour l'utilisateur %s",
-                current_user.email,
-            )
+            # Envoi de l'email de confirmation (regroupé avec le return final)
+            result_message = "Password reset successfully"
+            if current_user.email:
+                msg = Message(
+                    subject="Confirmation de changement de mot de passe",
+                    sender="support@votreapp.com",
+                    recipients=[current_user.email],
+                    body=(
+                        f"Bonjour {current_user.first_name},\n\n"
+                        "Votre mot de passe a été modifié avec succès. "
+                        "Si vous n'êtes pas à l'origine de cette modification, "
+                        "veuillez contacter immédiatement notre support."
+                    ),
+                )
+                mail.send(msg)
+                logger.info(
+                    "✅ Mot de passe réinitialisé avec succès pour l'utilisateur %s",
+                    current_user.email,
+                )
+                result_message = (
+                    "Password reset successfully and confirmation email sent."
+                )
+            else:
+                logger.warning(
+                    "⚠️ Mot de passe réinitialisé mais email non trouvé pour l'utilisateur %s",
+                    current_user.public_id,
+                )
 
-            return {
-                "message": "Password reset successfully and confirmation email sent."
-            }, 200
+            return {"message": result_message}, 200
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(
-                "❌ ERREUR reset_password: %s - %s", type(e).__name__, str(e)
-            )
-            return {"error": "Une erreur interne est survenue."}, 500
+            logger.error("❌ ERREUR reset_password: %s - %s", type(e).__name__, str(e))
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 # -------------------------------------------------------------------
@@ -581,22 +657,16 @@ class ClientsList(Resource):
                 return [], 200
 
             # Requête sur le champ first_name et last_name
-            clients = (
-                Client.query.join(User)
-                .filter(
-                    User.first_name.ilike(f"%{q}%") | User.last_name.ilike(f"%{q}%")
-                )
-                .all()
-            )
+            clients = client_repo.find_by_search_with_user(q)
 
             # Sérialisation
             return [cast("Any", c).serialize for c in clients], 200
 
         except Exception as e:
-            app_logger.exception(
+            logger.exception(
                 "❌ ERREUR clients GET / : %s - %s", type(e).__name__, str(e)
             )
-            return {"error": "Une erreur serveur est survenue."}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
     @jwt_required()
     @role_required(UserRole.company)
@@ -637,15 +707,36 @@ class ClientsList(Resource):
             # Validation basique
             for field in ("first_name", "last_name", "email"):
                 if not data.get(field):
-                    return {"error": f"{field} manquant"}, 400
+                    return APIErrorHandler.handle_validation_error(
+                        f"{field} manquant",
+                        field=field,
+                        logger_instance=logger,
+                    )
 
             # Obtenir l'utilisateur actuel pour récupérer company_id
-            current_user_id = get_jwt_identity()
-            current_user = User.query.filter_by(public_id=current_user_id).one_or_none()
+            current_user = get_current_user_via_use_case()
             if not current_user:
-                return {"error": "Utilisateur non trouvé"}, 401
+                return APIErrorHandler.handle_permission_error(
+                    "Utilisateur non trouvé",
+                    logger_instance=logger,
+                )
 
-            # Créer l'utilisateur
+            # ⚠️ TODO DDD: Migrer vers CreateCompanyClientUseCase une fois l'adapter créé
+            # Pour l'instant, création directe car ClientRepository n'implémente pas le port requis
+            from repositories.company_repository import CompanyRepository
+
+            # Récupérer la company de l'utilisateur actuel
+            company_repo = CompanyRepository()
+            company = company_repo.find_by_user_id(current_user.id)
+            if not company:
+                return APIErrorHandler.handle_permission_error(
+                    "Company not found for current user",
+                    logger_instance=logger,
+                )
+
+            # Créer l'utilisateur (création directe temporaire, à migrer vers use case)
+            from models import Client, User
+
             new_user = cast("Any", User)(
                 first_name=data["first_name"],
                 last_name=data["last_name"],
@@ -655,7 +746,7 @@ class ClientsList(Resource):
             db.session.add(new_user)
             db.session.flush()  # récupère new_user.id
 
-            # Créer le client
+            # Créer le client (création directe temporaire, à migrer vers use case)
             new_client = cast("Any", Client)(
                 user_id=new_user.id,
                 contact_phone=data.get("phone"),
@@ -680,7 +771,7 @@ class ClientsList(Resource):
                         log_msg = (
                             "✅ Adresse de domicile géocodée pour %s %s: %s -> (%s, %s)"
                         )
-                        app_logger.info(
+                        logger.info(
                             log_msg,
                             data["first_name"],
                             data["last_name"],
@@ -691,14 +782,14 @@ class ClientsList(Resource):
                     else:
                         # Sauvegarde l'adresse même sans coordonnées
                         new_client.domicile_address = main_address
-                        app_logger.warning(
+                        logger.warning(
                             "⚠️ Impossible de géocoder l'adresse de domicile: %s",
                             main_address,
                         )
                 except Exception as e:
                     # Sauvegarde l'adresse même en cas d'erreur
                     new_client.domicile_address = main_address
-                    app_logger.warning(
+                    logger.warning(
                         "⚠️ Erreur lors du géocodage de l'adresse de domicile: %s", e
                     )
 
@@ -717,7 +808,7 @@ class ClientsList(Resource):
                             "✅ Adresse de facturation géocodée pour %s %s: %s "
                             "-> (%s, %s)"
                         )
-                        app_logger.info(
+                        logger.info(
                             log_msg,
                             data["first_name"],
                             data["last_name"],
@@ -727,13 +818,13 @@ class ClientsList(Resource):
                         )
                     else:
                         new_client.billing_address = billing_address
-                        app_logger.warning(
+                        logger.warning(
                             "⚠️ Impossible de géocoder l'adresse de facturation: %s",
                             billing_address,
                         )
                 except Exception as e:
                     new_client.billing_address = billing_address
-                    app_logger.warning(
+                    logger.warning(
                         "⚠️ Erreur lors du géocodage de l'adresse de facturation: %s", e
                     )
             elif main_address:
@@ -750,7 +841,7 @@ class ClientsList(Resource):
             db.session.add(new_client)
             db.session.commit()
 
-            app_logger.info(
+            logger.info(
                 "✅ Client créé avec succès: %s %s (ID: %s)",
                 data["first_name"],
                 data["last_name"],
@@ -761,7 +852,7 @@ class ClientsList(Resource):
 
         except Exception as e:
             db.session.rollback()
-            app_logger.exception(
+            logger.exception(
                 "❌ ERREUR clients POST / : %s - %s", type(e).__name__, str(e)
             )
-            return {"error": "Impossible de créer le client."}, 500
+            return APIErrorHandler.handle_exception(e, logger)

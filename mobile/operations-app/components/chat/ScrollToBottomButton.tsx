@@ -2,7 +2,7 @@
 // ✅ Version refactorisée - Bouton flottant animé avec cleanup complet
 
 import React, { useEffect } from "react";
-import { TouchableOpacity, StyleSheet } from "react-native";
+import { TouchableOpacity, StyleSheet, Platform } from "react-native";
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -44,10 +44,9 @@ export default function ScrollToBottomButton({
         <Animated.View
             style={[
                 styles.wrapper,
-                { bottom: bottomOffset },
+                { bottom: bottomOffset, pointerEvents: visible ? "auto" : "none" },
                 animatedStyle,
             ]}
-            pointerEvents={visible ? "auto" : "none"}
         >
             <TouchableOpacity
                 style={styles.button}
@@ -74,10 +73,15 @@ const styles = StyleSheet.create({
         alignItems: "center",
         justifyContent: "center",
         // Ombre premium
-        shadowColor: "#0A7F59",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 6,
+        ...(Platform.OS === 'web'
+            ? { boxShadow: '0 4px 8px rgba(10,127,89,0.3)' }
+            : {
+                shadowColor: "#0A7F59",
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 8,
+                elevation: 6,
+            }
+        ),
     },
 });

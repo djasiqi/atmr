@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
-from flask import current_app
+from flask import current_app  # pyright: ignore[reportMissingImports]
 from sqlalchemy.orm import joinedload
 
 from models import Client, CompanyBillingSettings, Invoice, InvoiceLineType
@@ -14,6 +14,75 @@ LEVEL_THRESHOLD = 2
 MAX_PATIENT_NAME_LENGTH = 18
 
 app_logger = logging.getLogger("pdf_service")
+
+
+def _format_address_for_display(address: str) -> str:
+    """Formate une adresse pour l'affichage dans le PDF.
+    
+    Format de sortie :
+    - Ligne 1 : Rue et numéro
+    - Ligne 2 : Code postal et ville
+    
+    Args:
+        address: Adresse complète (peut être au format "Rue, Numéro, Code Postal, Ville" 
+                 ou "Rue Numéro, Code Postal Ville" ou autres formats)
+    
+    Returns:
+        Adresse formatée avec <br/> pour les retours à la ligne
+    """
+    if not address or address == "Adresse non renseignée":
+        return "Adresse non renseignée"
+    
+    # Nettoyer l'adresse
+    clean_address = address.strip()
+    
+    # Essayer différents formats d'adresse
+    # Format 1: "Rue, Numéro, Code Postal, Ville" (avec virgules)
+    parts = [p.strip() for p in clean_address.split(",")]
+    
+    MIN_ADDRESS_PARTS = 2
+    MIN_ADDRESS_PARTS_POSTAL = 3
+    MIN_ADDRESS_PARTS_CITY = 4
+    
+    if len(parts) >= MIN_ADDRESS_PARTS_CITY:
+        # Format: "Rue, Numéro, Code Postal, Ville"
+        street_and_number = f"{parts[0]}, {parts[1]}"
+        postal_code = parts[2]
+        city = parts[3]
+        return f"{street_and_number}<br/>{postal_code} {city}"
+    elif len(parts) >= MIN_ADDRESS_PARTS_POSTAL:
+        # Format: "Rue Numéro, Code Postal, Ville" ou "Rue, Code Postal, Ville"
+        street = parts[0]
+        postal_code = parts[1]
+        city = parts[2]
+        return f"{street}<br/>{postal_code} {city}"
+    elif len(parts) >= MIN_ADDRESS_PARTS:
+        # Format: "Rue Numéro, Code Postal Ville"
+        street = parts[0]
+        # Essayer d'extraire code postal et ville de la dernière partie
+        last_part = parts[-1].strip()
+        parts_space = last_part.split()
+        if len(parts_space) >= MIN_ADDRESS_PARTS:
+            postal_code = parts_space[0]
+            city = " ".join(parts_space[1:])
+            return f"{street}<br/>{postal_code} {city}"
+        else:
+            # Si on ne peut pas parser, retourner tel quel avec un <br/> au milieu
+            return f"{street}<br/>{last_part}"
+    
+    # Si le format n'est pas reconnu, essayer de trouver un code postal (4 chiffres)
+    import re
+    postal_match = re.search(r'\b(\d{4})\b', clean_address)
+    if postal_match:
+        postal_code = postal_match.group(1)
+        postal_pos = clean_address.find(postal_code)
+        street = clean_address[:postal_pos].strip().rstrip(",")
+        city = clean_address[postal_pos + len(postal_code):].strip()
+        if street and city:
+            return f"{street}<br/>{postal_code} {city}"
+    
+    # Fallback : retourner l'adresse telle quelle
+    return clean_address
 
 
 class PDFService:
@@ -151,12 +220,20 @@ class PDFService:
         # Import ici pour éviter les problèmes de dépendances circulaires
         from io import BytesIO
 
-        from reportlab.lib import colors
-        from reportlab.lib.enums import TA_CENTER, TA_LEFT
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-        from reportlab.lib.units import cm
-        from reportlab.platypus import (
+        from reportlab.lib import colors  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.lib.enums import (  # pyright: ignore[reportMissingModuleSource]
+            TA_CENTER,
+            TA_LEFT,
+        )
+        from reportlab.lib.pagesizes import (  # pyright: ignore[reportMissingModuleSource]
+            A4,
+        )
+        from reportlab.lib.styles import (  # pyright: ignore[reportMissingModuleSource]
+            ParagraphStyle,
+            getSampleStyleSheet,
+        )
+        from reportlab.lib.units import cm  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.platypus import (  # pyright: ignore[reportMissingModuleSource]
             Image,
             Paragraph,
             SimpleDocTemplate,
@@ -250,7 +327,9 @@ class PDFService:
                     if logo_path.suffix.lower() == ".svg":
                         # Convertir SVG en drawing ReportLab avec svglib
                         try:
-                            from svglib.svglib import svg2rlg
+                            from svglib.svglib import (  # pyright: ignore[reportMissingImports]
+                                svg2rlg,
+                            )
 
                             drawing = svg2rlg(str(logo_path))
                             if drawing:
@@ -287,7 +366,8 @@ class PDFService:
 
         # Informations de l'entreprise
         company_name = company.name or "Emmenez Moi"
-        company_address = company.address or "Route de Chevrens 145, 1247 Anières"
+        company_address_raw = company.address or "Route de Chevrens 145, 1247 Anières"
+        company_address = _format_address_for_display(company_address_raw)
         company_phone = company.contact_phone or "0225120203"
         company_email = (
             company.billing_email or company.contact_email or "info@casa-famiglia.ch"
@@ -325,7 +405,9 @@ class PDFService:
                 story.append(logo_table)
             else:
                 # Pour les images standard (PNG, JPG), utiliser un Paragraph
-                from reportlab.lib.styles import ParagraphStyle
+                from reportlab.lib.styles import (  # pyright: ignore[reportMissingModuleSource]
+                    ParagraphStyle,
+                )
 
                 logo_style = ParagraphStyle(
                     "LogoStyle",
@@ -367,11 +449,12 @@ class PDFService:
 
             if institution and institution.is_institution:
                 billed_to_name = institution.institution_name or "Institution"
-                billed_to_address = (
+                billed_to_address_raw = (
                     institution.billing_address
                     or institution.contact_address
                     or "Adresse non renseignée"
                 )
+                billed_to_address = _format_address_for_display(billed_to_address_raw)
             else:
                 # Fallback si l'institution n'est pas trouvée
                 billed_to_name = "Institution"
@@ -385,7 +468,7 @@ class PDFService:
                 or "Client"
             )
 
-            # Adresse du client formatée correctement (sans <br/>)
+            # Adresse du client formatée correctement
             billed_to_address = "Adresse non renseignée"
             if hasattr(client, "domicile_address") and client.domicile_address:
                 street_address = client.domicile_address
@@ -395,19 +478,18 @@ class PDFService:
                     and client.domicile_zip
                     and client.domicile_city
                 ):
-                    billed_to_address = (
-                        f"{street_address}\n{client.domicile_zip} "
-                        f"{client.domicile_city} Suisse"
-                    )
+                    # Construire l'adresse complète puis la formater
+                    full_address = f"{street_address}, {client.domicile_zip} {client.domicile_city}"
+                    billed_to_address = _format_address_for_display(full_address)
                 else:
-                    billed_to_address = street_address
+                    billed_to_address = _format_address_for_display(street_address)
             elif (
                 hasattr(client, "user")
                 and client.user
                 and hasattr(client.user, "address")
                 and client.user.address
             ):
-                billed_to_address = client.user.address
+                billed_to_address = _format_address_for_display(client.user.address)
 
         # Informations de facturation alignées à droite
         billed_to_info_right = f"""
@@ -775,7 +857,9 @@ class PDFService:
 
         # === QR-BILL SUISSE OFFICIEL SUR PAGE SÉPARÉE ===
         # Forcer une nouvelle page pour le QR-Bill (toujours après la facture)
-        from reportlab.platypus import PageBreak
+        from reportlab.platypus import (  # pyright: ignore[reportMissingModuleSource]
+            PageBreak,
+        )
 
         story.append(PageBreak())
 
@@ -791,7 +875,9 @@ class PDFService:
             if qr_bill_svg_content:
                 # Convertir le SVG directement en drawing ReportLab
 
-                from svglib.svglib import svg2rlg
+                from svglib.svglib import (  # pyright: ignore[reportMissingImports]
+                    svg2rlg,
+                )
 
                 # Convertir SVG en drawing ReportLab
                 drawing = svg2rlg(BytesIO(qr_bill_svg_content))
@@ -803,7 +889,10 @@ class PDFService:
                     drawing.scale(12 * cm / drawing.width, 6 * cm / drawing.height)
 
                     # Centrer le QR-Bill avec un tableau
-                    from reportlab.platypus import Table, TableStyle
+                    from reportlab.platypus import (  # pyright: ignore[reportMissingModuleSource]
+                        Table,
+                        TableStyle,
+                    )
 
                     # Créer un tableau avec colonne vide pour vraiment aligner à gauche
                     qr_table = Table(
@@ -854,12 +943,20 @@ class PDFService:
         (version simplifiée)."""
         from io import BytesIO
 
-        from reportlab.lib import colors
-        from reportlab.lib.enums import TA_CENTER, TA_LEFT
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-        from reportlab.lib.units import cm
-        from reportlab.platypus import (
+        from reportlab.lib import colors  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.lib.enums import (  # pyright: ignore[reportMissingModuleSource]
+            TA_CENTER,
+            TA_LEFT,
+        )
+        from reportlab.lib.pagesizes import (  # pyright: ignore[reportMissingModuleSource]
+            A4,
+        )
+        from reportlab.lib.styles import (  # pyright: ignore[reportMissingModuleSource]
+            ParagraphStyle,
+            getSampleStyleSheet,
+        )
+        from reportlab.lib.units import cm  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.platypus import (  # pyright: ignore[reportMissingModuleSource]
             PageBreak,
             Paragraph,
             SimpleDocTemplate,
@@ -1046,7 +1143,9 @@ class PDFService:
             qr_bill_service = self.qrbill_service
             qr_bill_svg_content = qr_bill_service.generate_qr_bill_svg(invoice)
             if qr_bill_svg_content:
-                from svglib.svglib import svg2rlg
+                from svglib.svglib import (  # pyright: ignore[reportMissingImports]
+                    svg2rlg,
+                )
 
                 drawing = svg2rlg(BytesIO(qr_bill_svg_content))
                 if drawing:
@@ -1077,12 +1176,20 @@ class PDFService:
         (version enrichie)."""
         from io import BytesIO
 
-        from reportlab.lib import colors
-        from reportlab.lib.enums import TA_CENTER, TA_LEFT
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-        from reportlab.lib.units import cm
-        from reportlab.platypus import (
+        from reportlab.lib import colors  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.lib.enums import (  # pyright: ignore[reportMissingModuleSource]
+            TA_CENTER,
+            TA_LEFT,
+        )
+        from reportlab.lib.pagesizes import (  # pyright: ignore[reportMissingModuleSource]
+            A4,
+        )
+        from reportlab.lib.styles import (  # pyright: ignore[reportMissingModuleSource]
+            ParagraphStyle,
+            getSampleStyleSheet,
+        )
+        from reportlab.lib.units import cm  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.platypus import (  # pyright: ignore[reportMissingModuleSource]
             Image,
             PageBreak,
             Paragraph,
@@ -1154,7 +1261,9 @@ class PDFService:
                         logo_height = logo_width / 4.17
                         if logo_path.suffix.lower() == ".svg":
                             try:
-                                from svglib.svglib import svg2rlg
+                                from svglib.svglib import (  # pyright: ignore[reportMissingImports]
+                                    svg2rlg,
+                                )
 
                                 drawing = svg2rlg(str(logo_path))
                                 if drawing:
@@ -1543,7 +1652,9 @@ class PDFService:
             qr_bill_service = self.qrbill_service
             qr_bill_svg_content = qr_bill_service.generate_qr_bill_svg(invoice)
             if qr_bill_svg_content:
-                from svglib.svglib import svg2rlg
+                from svglib.svglib import (  # pyright: ignore[reportMissingImports]
+                    svg2rlg,
+                )
 
                 drawing = svg2rlg(BytesIO(qr_bill_svg_content))
                 if drawing:
@@ -1571,10 +1682,19 @@ class PDFService:
 
     def _create_swiss_qr_bill_layout(self, invoice, billing_settings, qr_image):
         """Crée le layout authentique du QR-Bill suisse."""
-        from reportlab.lib import colors
-        from reportlab.lib.enums import TA_CENTER, TA_LEFT
-        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-        from reportlab.platypus import Paragraph, Spacer
+        from reportlab.lib import colors  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.lib.enums import (  # pyright: ignore[reportMissingModuleSource]
+            TA_CENTER,
+            TA_LEFT,
+        )
+        from reportlab.lib.styles import (  # pyright: ignore[reportMissingModuleSource]
+            ParagraphStyle,
+            getSampleStyleSheet,
+        )
+        from reportlab.platypus import (  # pyright: ignore[reportMissingModuleSource]
+            Paragraph,
+            Spacer,
+        )
 
         styles = getSampleStyleSheet()
 
@@ -1768,11 +1888,22 @@ class PDFService:
 
     def _create_official_swiss_qr_bill(self, invoice, billing_settings, qr_image):
         """Crée un QR-Bill suisse officiel avec le format exact."""
-        from reportlab.lib import colors
-        from reportlab.lib.enums import TA_CENTER, TA_LEFT
-        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-        from reportlab.lib.units import cm
-        from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
+        from reportlab.lib import colors  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.lib.enums import (  # pyright: ignore[reportMissingModuleSource]
+            TA_CENTER,
+            TA_LEFT,
+        )
+        from reportlab.lib.styles import (  # pyright: ignore[reportMissingModuleSource]
+            ParagraphStyle,
+            getSampleStyleSheet,
+        )
+        from reportlab.lib.units import cm  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.platypus import (  # pyright: ignore[reportMissingModuleSource]
+            Paragraph,
+            Spacer,
+            Table,
+            TableStyle,
+        )
 
         styles = getSampleStyleSheet()
 
@@ -1984,12 +2115,19 @@ class PDFService:
         # Import ici pour éviter les problèmes de dépendances circulaires
         from io import BytesIO
 
-        from reportlab.lib import colors
-        from reportlab.lib.enums import TA_CENTER
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-        from reportlab.lib.units import cm
-        from reportlab.platypus import (
+        from reportlab.lib import colors  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.lib.enums import (  # pyright: ignore[reportMissingModuleSource]
+            TA_CENTER,
+        )
+        from reportlab.lib.pagesizes import (  # pyright: ignore[reportMissingModuleSource]
+            A4,
+        )
+        from reportlab.lib.styles import (  # pyright: ignore[reportMissingModuleSource]
+            ParagraphStyle,
+            getSampleStyleSheet,
+        )
+        from reportlab.lib.units import cm  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.platypus import (  # pyright: ignore[reportMissingModuleSource]
             Paragraph,
             SimpleDocTemplate,
             Spacer,

@@ -81,7 +81,13 @@ export const ModeSelectionModal: React.FC<ModeSelectionModalProps> = ({
                       <Ionicons
                         name={modeIconName[mode.value]}
                         size={18}
-                        color="#f8faff"
+                        color={
+                          mode.value === "manual"
+                            ? "#0A7F59"
+                            : mode.value === "semi_auto"
+                              ? "#F59E0B"
+                              : "#10B981"
+                        }
                       />
                     </View>
                     <View style={{ flex: 1 }}>
@@ -136,30 +142,31 @@ const modeIconName: Record<
   fully_auto: "rocket-outline",
 };
 
+// ✅ Palette professionnelle claire cohérente avec le dashboard
 const modalPalette = {
-  backdrop: "rgba(5,22,16,0.8)",
-  cardBackground: "#08211A",
-  cardBorder: "rgba(46,128,94,0.4)",
-  title: "#E6F2EA",
-  subtitle: "rgba(184,214,198,0.76)",
-  optionBackground: "rgba(10,34,26,0.92)",
-  optionBorder: "rgba(59,143,105,0.26)",
-  optionActiveBackground: "rgba(16,58,44,0.95)",
-  optionActiveBorder: "rgba(78,214,160,0.55)",
-  optionText: "#F4FFFA",
-  optionDescription: "rgba(184,214,198,0.76)",
-  cancelBackground: "rgba(255,255,255,0.06)",
-  cancelText: "rgba(214,236,224,0.92)",
-  manualIcon: "rgba(78,214,160,0.16)",
-  semiIcon: "rgba(236,196,94,0.16)",
-  autoIcon: "rgba(126,246,168,0.16)",
-  iconBorder: "rgba(62,155,116,0.36)",
-  iconLockedBorder: "rgba(246,193,88,0.45)",
-  chevron: "rgba(180,218,201,0.7)",
-  check: "#4ADE80",
-  lockBadgeBg: "rgba(246,193,88,0.18)",
-  lockBadgeBorder: "rgba(246,193,88,0.45)",
-  lockBadgeText: "#F6C158",
+  backdrop: "rgba(5,22,16,0.82)",
+  cardBackground: "#FFFFFF",
+  cardBorder: "rgba(15,54,43,0.08)",
+  title: "#15362B",
+  subtitle: "#5F7369",
+  optionBackground: "#FFFFFF",
+  optionBorder: "rgba(15,54,43,0.08)",
+  optionActiveBackground: "rgba(10,127,89,0.06)",
+  optionActiveBorder: "#0A7F59",
+  optionText: "#15362B",
+  optionDescription: "#5F7369",
+  cancelBackground: "#F5F7F6",
+  cancelText: "#5F7369",
+  manualIcon: "rgba(10,127,89,0.12)",
+  semiIcon: "rgba(245,158,11,0.12)",
+  autoIcon: "rgba(16,185,129,0.12)",
+  iconBorder: "rgba(10,127,89,0.2)",
+  iconLockedBorder: "rgba(245,158,11,0.3)",
+  chevron: "#91A59D",
+  check: "#0A7F59",
+  lockBadgeBg: "rgba(245,158,11,0.12)",
+  lockBadgeBorder: "rgba(245,158,11,0.25)",
+  lockBadgeText: "#F59E0B",
 };
 
 const modeIconBackground: Record<
@@ -184,28 +191,29 @@ const styles = StyleSheet.create({
     maxWidth: 380,
     backgroundColor: modalPalette.cardBackground,
     borderRadius: 24,
-    padding: 20,
+    padding: 24,
     borderWidth: 1,
     borderColor: modalPalette.cardBorder,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.35,
+    shadowColor: "rgba(15,54,43,0.12)",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 1,
     shadowRadius: 24,
-    elevation: 12,
+    elevation: 8,
   },
   header: {
     marginBottom: 20,
   },
   title: {
     color: modalPalette.title,
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "700",
+    letterSpacing: 0.2,
   },
   subtitle: {
-    marginTop: 6,
+    marginTop: 8,
     color: modalPalette.subtitle,
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 20,
   },
   list: {
     maxHeight: 280,
@@ -213,14 +221,24 @@ const styles = StyleSheet.create({
   option: {
     borderRadius: 18,
     backgroundColor: modalPalette.optionBackground,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
     borderWidth: 1,
     borderColor: modalPalette.optionBorder,
+    shadowColor: "rgba(15,54,43,0.04)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    elevation: 1,
   },
   optionActive: {
     borderColor: modalPalette.optionActiveBorder,
+    borderWidth: 2,
     backgroundColor: modalPalette.optionActiveBackground,
+    shadowColor: modalPalette.optionActiveBorder,
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 3,
   },
   optionLocked: {
     opacity: 0.65,
@@ -234,20 +252,22 @@ const styles = StyleSheet.create({
     color: modalPalette.optionText,
     fontSize: 16,
     fontWeight: "700",
+    letterSpacing: 0.2,
   },
   optionDescription: {
-    marginTop: 2,
+    marginTop: 4,
     color: modalPalette.optionDescription,
     fontSize: 13,
-    lineHeight: 18,
+    lineHeight: 20,
+    fontWeight: "500",
   },
   modeIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: modalPalette.iconBorder,
   },
   modeIconLocked: {
@@ -272,17 +292,20 @@ const styles = StyleSheet.create({
     letterSpacing: 0.7,
   },
   cancelButton: {
-    marginTop: 16,
+    marginTop: 20,
     alignSelf: "stretch",
-    paddingVertical: 12,
-    borderRadius: 16,
+    paddingVertical: 14,
+    borderRadius: 18,
     backgroundColor: modalPalette.cancelBackground,
+    borderWidth: 1,
+    borderColor: modalPalette.optionBorder,
     alignItems: "center",
   },
   cancelLabel: {
     color: modalPalette.cancelText,
     fontSize: 15,
-    fontWeight: "600",
+    fontWeight: "700",
+    letterSpacing: 0.2,
   },
 });
 

@@ -13,9 +13,10 @@ const HeaderDashboard = () => {
   const menuRef = useRef(null);
 
   useEffect(() => {
-    const token = localStorage.getItem('authToken');
+    // ✅ Vérifier l'authentification : soit token dans localStorage (mobile), soit infos utilisateur (web avec cookies)
+    const _token = localStorage.getItem('authToken');
     const userData = localStorage.getItem('user');
-    if (token && userData) {
+    if (userData) {
       try {
         const user = JSON.parse(userData);
         if (user?.username) setUserName(user.username);
@@ -25,6 +26,7 @@ const HeaderDashboard = () => {
         console.error("Erreur lors de la récupération de l'utilisateur :", error);
       }
     }
+    // ✅ Si pas de token ni d'infos utilisateur, les valeurs par défaut restent
   }, []);
 
   const toggleMenu = () => {

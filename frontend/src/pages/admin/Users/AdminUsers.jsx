@@ -316,12 +316,8 @@ const AdminUsers = () => {
                   };
                   const response = await apiClient.put(
                     `/admin/users/${pendingDriverUserId}/role`,
-                    updateData,
-                    {
-                      headers: {
-                        Authorization: `Bearer ${localStorage.getItem('authToken')}`,
-                      },
-                    }
+                    updateData
+                    // ✅ apiClient gère automatiquement l'authentification (token dans localStorage ou cookies httpOnly)
                   );
                   if (response.status === 200) {
                     alert(`✅ Rôle mis à jour avec succès : driver`);

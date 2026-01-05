@@ -8,6 +8,9 @@ import logging
 from typing import Any, Dict, List, cast
 
 from models import Company, DispatchMode
+from repositories.booking_repository import BookingRepository
+from repositories.company_repository import CompanyRepository
+from repositories.driver_repository import DriverRepository
 from services.unified_dispatch.reactive_suggestions import Suggestion, apply_suggestion
 from shared.time_utils import now_local
 
@@ -33,10 +36,14 @@ class AutonomousDispatchManager:
 
         """
         self.company_id = company_id
-        self.company = Company.query.get(company_id)
-        if not self.company:
+        # ✅ Utilisation du repository pour découpler de SQLAlchemy
+        company_repo = CompanyRepository()
+        company_dto = company_repo.find_by_id(company_id)
+        if not company_dto:
             msg = f"Company {company_id} not found"
             raise ValueError(msg)
+        # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+        self.company = Company.query.get(company_dto.id)
 
         self.mode = self.company.dispatch_mode
         self.config = self.company.get_autonomous_config()
@@ -332,22 +339,27 @@ class AutonomousDispatchManager:
 
                             # Logger l'action dans la table autonomous_action
                             # (audit trail)
-                            from models import Booking, Driver
                             from models.autonomous_action import AutonomousAction
 
                             action_record = AutonomousAction()
                             action_record.company_id = self.company_id
-                            # Vérifier que le booking existe avant d'assigner booking_id
+                            # ✅ Utilisation du repository pour découpler de SQLAlchemy
                             if suggestion.booking_id is not None:
-                                booking = Booking.query.get(int(suggestion.booking_id))
-                                if booking is not None:
+                                booking_repo = BookingRepository()
+                                booking_dto = booking_repo.find_by_id(
+                                    int(suggestion.booking_id)
+                                )
+                                if booking_dto is not None:
                                     action_record.booking_id = int(
                                         suggestion.booking_id
                                     )
-                            # Vérifier que le driver existe avant d'assigner driver_id
+                            # ✅ Utilisation du repository pour découpler de SQLAlchemy
                             if suggestion.driver_id is not None:
-                                driver = Driver.query.get(int(suggestion.driver_id))
-                                if driver is not None:
+                                driver_repo = DriverRepository()
+                                driver_dto = driver_repo.find_by_id(
+                                    int(suggestion.driver_id)
+                                )
+                                if driver_dto is not None:
                                     action_record.driver_id = int(suggestion.driver_id)
                             action_record.action_type = suggestion.action
                             action_record.action_description = suggestion.message
@@ -393,22 +405,27 @@ class AutonomousDispatchManager:
                             )
 
                             # Logger l'échec aussi (pour monitoring)
-                            from models import Booking, Driver
                             from models.autonomous_action import AutonomousAction
 
                             action_record = AutonomousAction()
                             action_record.company_id = self.company_id
-                            # Vérifier que le booking existe avant d'assigner booking_id
+                            # ✅ Utilisation du repository pour découpler de SQLAlchemy
                             if suggestion.booking_id is not None:
-                                booking = Booking.query.get(int(suggestion.booking_id))
-                                if booking is not None:
+                                booking_repo = BookingRepository()
+                                booking_dto = booking_repo.find_by_id(
+                                    int(suggestion.booking_id)
+                                )
+                                if booking_dto is not None:
                                     action_record.booking_id = int(
                                         suggestion.booking_id
                                     )
-                            # Vérifier que le driver existe avant d'assigner driver_id
+                            # ✅ Utilisation du repository pour découpler de SQLAlchemy
                             if suggestion.driver_id is not None:
-                                driver = Driver.query.get(int(suggestion.driver_id))
-                                if driver is not None:
+                                driver_repo = DriverRepository()
+                                driver_dto = driver_repo.find_by_id(
+                                    int(suggestion.driver_id)
+                                )
+                                if driver_dto is not None:
                                     action_record.driver_id = int(suggestion.driver_id)
                             action_record.action_type = suggestion.action
                             action_record.action_description = suggestion.message

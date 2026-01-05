@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Modal,
   Platform,
@@ -7,112 +8,209 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 
+import { router } from "expo-router";
 import { useAuth } from "@/hooks/useAuth";
 import {
-  getDispatchSettings,
-  updateDispatchSettings,
+  getMyDriverAccount,
+  DriverAccountInfo,
+  switchToDriverToken,
 } from "@/services/enterpriseDispatch";
-import { DispatchSettings } from "@/types/enterpriseDispatch";
+import { secureStorage, asyncStorage } from "@/services/storage";
+import { fetchDriverProfile, invalidateInterceptorCache } from "@/services/api";
 
-const numberOr = (value: string, fallback: number): number => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-};
-
+// ✅ Palette professionnelle cohérente avec le dashboard driver
 const palette = {
-  background: "#07130E",
-  heroGradient: ["#11412F", "#07130E"] as [string, string],
-  heroBorder: "rgba(46,128,94,0.36)",
-  heroText: "#E6F2EA",
-  heroMeta: "rgba(184,214,198,0.72)",
-  cardBg: "rgba(10,34,26,0.9)",
-  cardBorder: "rgba(59,143,105,0.28)",
-  cardShadow: "#04150F",
-  muted: "rgba(184,214,198,0.75)",
-  inputBg: "rgba(5,22,16,0.82)",
-  inputBorder: "rgba(59,143,105,0.3)",
-  inputText: "#F4FFFA",
-  divider: "rgba(46,128,94,0.2)",
-  primary: "#1EB980",
-  primaryText: "#052015",
-  secondaryBg: "rgba(10,34,26,0.6)",
-  secondaryBorder: "rgba(59,143,105,0.28)",
-  dangerBg: "rgba(241,104,104,0.18)",
-  dangerBorder: "rgba(241,104,104,0.3)",
-  logoutBg: "rgba(30,185,128,0.15)",
-  logoutBorder: "rgba(30,185,128,0.4)",
-  error: "#F87171",
+  background: "#F5F7F6",
+  heroGradient: ["#0A7F59", "#0D5F3F"] as [string, string],
+  heroBorder: "rgba(15,54,43,0.08)",
+  heroText: "#FFFFFF",
+  heroMeta: "rgba(255,255,255,0.9)",
+  cardBg: "#FFFFFF",
+  cardBorder: "rgba(15,54,43,0.08)",
+  cardShadow: "rgba(15,54,43,0.08)",
+  muted: "#91A59D",
+  primary: "#0A7F59",
+  primaryText: "#FFFFFF",
+  logoutBg: "rgba(239,68,68,0.08)",
+  logoutBorder: "rgba(239,68,68,0.2)",
+  error: "#EF4444",
+  switchBg: "rgba(10,127,89,0.1)",
+  switchBorder: "rgba(10,127,89,0.25)",
 };
 
 export default function EnterpriseSettingsScreen() {
-  const { refreshEnterprise, logoutEnterprise, switchMode } = useAuth();
+  const { enterpriseSession, logoutEnterprise, switchMode, loadDriverSession } = useAuth();
 
-  const [settings, setSettings] = useState<DispatchSettings | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [driverAccount, setDriverAccount] = useState<DriverAccountInfo | null>(null);
+  const [checkingDriverAccount, setCheckingDriverAccount] = useState(true);
+  const [switchingToDriver, setSwitchingToDriver] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showSwitchModal, setShowSwitchModal] = useState(false);
 
-  const heroSubtitle = useMemo(() => {
-    if (!settings) return "Chargement des paramètres…";
-    return `Veille au bon équilibre de l'algorithme et déclenche les actions critiques sans quitter le mobile.`;
-  }, [settings]);
+  // Charger l'info du compte chauffeur (avec cache AsyncStorage)
+  useEffect(() => {
+    const checkDriverAccount = async () => {
+      setCheckingDriverAccount(true);
+      try {
+        // 1. D'abord, essayer de charger depuis le cache
+        const cachedInfo = await asyncStorage.getDriverAccountInfo();
+        if (cachedInfo) {
+          console.log("[Settings] Info compte chauffeur chargée depuis le cache:", cachedInfo);
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'settings.tsx:checkDriverAccount', message: 'Driver account from cache', data: { hasDriverAccount: cachedInfo.has_driver_account, driverType: cachedInfo.driver_type }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' }) }).catch(() => { });
+          // #endregion
+          setDriverAccount(cachedInfo);
+          setCheckingDriverAccount(false);
 
-  const loadSettings = useCallback(async () => {
-    setLoading(true);
-    setErrorMessage(null);
-    try {
-      const response = await getDispatchSettings();
-      setSettings(response);
-    } catch (error: any) {
-      const message =
-        error?.response?.data?.error ??
-        error?.message ??
-        "Impossible de charger les paramètres.";
-      setErrorMessage(message);
-    } finally {
-      setLoading(false);
-    }
+          // 2. En arrière-plan, vérifier si l'info est toujours à jour
+          try {
+            const freshInfo = await getMyDriverAccount();
+            console.log("[Settings] Réponse getMyDriverAccount (fresh):", freshInfo);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'settings.tsx:checkDriverAccount', message: 'Driver account from API', data: { hasDriverAccount: freshInfo.has_driver_account, driverType: freshInfo.driver_type }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' }) }).catch(() => { });
+            // #endregion
+            // Mettre à jour le cache et l'état si différent
+            if (JSON.stringify(cachedInfo) !== JSON.stringify(freshInfo)) {
+              await asyncStorage.setDriverAccountInfo(freshInfo);
+              setDriverAccount(freshInfo);
+            }
+          } catch (error) {
+            // Si l'appel échoue, on garde le cache
+            console.warn("[Settings] Impossible de rafraîchir l'info du compte chauffeur:", error);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'settings.tsx:checkDriverAccount', message: 'Error refreshing driver account', data: { error: String(error) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' }) }).catch(() => { });
+            // #endregion
+          }
+          return;
+        }
+
+        // 3. Si pas de cache, faire l'appel API
+        console.log("[Settings] Vérification du compte chauffeur...");
+        const info = await getMyDriverAccount();
+        console.log("[Settings] Réponse getMyDriverAccount:", info);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'settings.tsx:checkDriverAccount', message: 'Driver account from API (no cache)', data: { hasDriverAccount: info.has_driver_account, driverType: info.driver_type }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' }) }).catch(() => { });
+        // #endregion
+        setDriverAccount(info);
+        // Sauvegarder dans le cache
+        await asyncStorage.setDriverAccountInfo(info);
+      } catch (error: any) {
+        console.error("[Settings] Erreur lors de la vérification du compte chauffeur:", error);
+        console.error("[Settings] Détails de l'erreur:", {
+          message: error?.message,
+          response: error?.response?.data,
+          status: error?.response?.status,
+        });
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'settings.tsx:checkDriverAccount', message: 'Error checking driver account', data: { error: String(error), status: error?.response?.status }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' }) }).catch(() => { });
+        // #endregion
+        setDriverAccount({ has_driver_account: false });
+        // Sauvegarder dans le cache même en cas d'erreur
+        await asyncStorage.setDriverAccountInfo({ has_driver_account: false });
+      } finally {
+        setCheckingDriverAccount(false);
+      }
+    };
+    checkDriverAccount();
   }, []);
 
-  useEffect(() => {
-    loadSettings();
-  }, [loadSettings]);
+  // Fonction pour basculer vers le compte chauffeur
+  const handleSwitchToDriver = useCallback(async () => {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'settings.tsx:handleSwitchToDriver', message: 'handleSwitchToDriver entry', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' }) }).catch(() => { });
+    // #endregion
 
-  const handleSave = useCallback(async () => {
-    if (!settings) return;
-    setLoading(true);
-    setErrorMessage(null);
+    setShowSwitchModal(false);
+    setSwitchingToDriver(true);
     try {
-      await updateDispatchSettings({
-        fairness: { max_gap: settings.fairness.max_gap },
-        emergency: {
-          emergency_penalty: settings.emergency.emergency_penalty,
-        },
-        service_times: { ...settings.service_times },
+      // 1. Obtenir un token driver à partir du token entreprise
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'settings.tsx:handleSwitchToDriver', message: 'Avant switchToDriverToken', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' }) }).catch(() => { });
+      // #endregion
+
+      const driverTokenResponse = await switchToDriverToken();
+
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'settings.tsx:handleSwitchToDriver', message: 'Après switchToDriverToken', data: { hasToken: !!driverTokenResponse.token, hasRefreshToken: !!driverTokenResponse.refresh_token, userPublicId: driverTokenResponse.user?.public_id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' }) }).catch(() => { });
+      // #endregion
+
+      console.log("[Settings] Tokens driver reçus:", {
+        hasToken: !!driverTokenResponse.token,
+        hasRefreshToken: !!driverTokenResponse.refresh_token,
+        userPublicId: driverTokenResponse.user.public_id,
       });
-      await refreshEnterprise();
-      Alert.alert("Paramètres mis à jour");
+
+      // 2. Stocker les tokens driver AVANT de nettoyer l'entreprise
+      // Cela garantit que les tokens driver sont sauvegardés avant toute opération de nettoyage
+      await secureStorage.setAccessToken(driverTokenResponse.token);
+      if (driverTokenResponse.refresh_token) {
+        await secureStorage.setRefreshToken(driverTokenResponse.refresh_token);
+      }
+      if (driverTokenResponse.user.public_id) {
+        await secureStorage.setUserPublicId(driverTokenResponse.user.public_id);
+      }
+      // Invalider le cache de l'intercepteur pour forcer l'utilisation des nouveaux tokens driver
+      invalidateInterceptorCache();
+      console.log("[Settings] Tokens driver stockés dans SecureStorage et cache intercepteur invalidé");
+
+      // 3. Basculer vers le mode driver AVANT de nettoyer l'entreprise
+      // Cela garantit que le contexte auth est mis à jour avec le bon mode
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'settings.tsx:handleSwitchToDriver', message: 'Avant switchMode driver', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' }) }).catch(() => { });
+      // #endregion
+
+      await switchMode("driver");
+
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'settings.tsx:handleSwitchToDriver', message: 'Après switchMode driver', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' }) }).catch(() => { });
+      // #endregion
+
+      console.log("[Settings] Mode changé vers 'driver'");
+
+      // 4. Nettoyer l'entreprise (cela ne devrait pas affecter les tokens driver déjà stockés)
+      await logoutEnterprise();
+      console.log("[Settings] Stockage entreprise nettoyé");
+
+      // 5. Charger la session driver depuis SecureStorage et mettre à jour le contexte
+      // Au lieu d'appeler fetchDriverProfile et refreshProfile (qui peuvent échouer),
+      // nous chargeons directement la session que nous venons de stocker
+      await loadDriverSession();
+      console.log("[Settings] Session driver chargée depuis SecureStorage");
+
+      // 6. Attendre un peu pour que le state se mette à jour
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      // 7. Naviguer vers la page driver
+      // Le système de navigation dans _layout.tsx gérera automatiquement la redirection
+      // mais on force la navigation ici pour être sûr
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'settings.tsx:handleSwitchToDriver', message: 'Avant navigation mission', data: { target: '/(tabs)/mission' }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' }) }).catch(() => { });
+      // #endregion
+
+      router.replace("/(tabs)/mission" as any);
     } catch (error: any) {
-      const message =
+      console.error("Erreur lors du basculement:", error);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'settings.tsx:handleSwitchToDriver', message: 'Erreur handleSwitchToDriver', data: { error: String(error), status: error?.response?.status, errorMessage: error?.response?.data?.error }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' }) }).catch(() => { });
+      // #endregion
+
+      const errorMessage =
         error?.response?.data?.error ??
         error?.message ??
-        "Impossible de sauvegarder les paramètres.";
-      setErrorMessage(message);
+        "Impossible de basculer vers le compte chauffeur.";
+      Alert.alert("Erreur", errorMessage);
     } finally {
-      setLoading(false);
+      setSwitchingToDriver(false);
     }
-  }, [refreshEnterprise, settings]);
+  }, [logoutEnterprise, switchMode, loadDriverSession]);
 
-
-  const takeSettingsField = (path: keyof DispatchSettings["service_times"]) =>
-    settings ? settings.service_times[path].toString() : "";
+  const heroSubtitle = "Gérez votre compte et basculez entre les modes entreprise et chauffeur.";
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -123,146 +221,79 @@ export default function EnterpriseSettingsScreen() {
         style={styles.hero}
       >
         <View style={{ flex: 1 }}>
-          <Text style={styles.heroTitle}>Paramètres dispatch</Text>
+          <Text style={styles.heroTitle}>Paramètres</Text>
           <Text style={styles.heroSubtitle}>{heroSubtitle}</Text>
         </View>
         <View style={styles.heroBadge}>
           <Ionicons name="settings-outline" size={18} color={palette.primaryText} />
           <Text style={styles.heroBadgeText}>
-            {settings ? "Actifs" : "Initialisation"}
+            {enterpriseSession?.company?.name || "Entreprise"}
           </Text>
         </View>
       </LinearGradient>
 
-      <Text style={styles.sectionKicker}>Calibration</Text>
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Règles d’équité & urgence</Text>
-        <Text style={styles.sectionDescription}>
-          Ajuste le comportement du moteur pour respecter les SLA et la rotation
-          des chauffeurs.
-        </Text>
-
-        <LabeledInput
-          label="Fairness – écart maximal"
-          help="Limite acceptable entre chauffeurs pour la charge courante."
-          value={settings ? settings.fairness.max_gap.toString() : ""}
-          onChangeText={(value) =>
-            setSettings((prev) =>
-              prev
-                ? {
-                  ...prev,
-                  fairness: {
-                    max_gap: numberOr(value, prev.fairness.max_gap),
-                  },
-                }
-                : prev
-            )
-          }
-        />
-        <LabeledInput
-          label="Pénalité chauffeur urgence"
-          help="Pénalité appliquée aux chauffeurs déjà sollicités en urgence."
-          value={
-            settings ? settings.emergency.emergency_penalty.toString() : ""
-          }
-          onChangeText={(value) =>
-            setSettings((prev) =>
-              prev
-                ? {
-                  ...prev,
-                  emergency: {
-                    emergency_penalty: numberOr(
-                      value,
-                      prev.emergency.emergency_penalty
-                    ),
-                  },
-                }
-                : prev
-            )
-          }
-        />
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Temps de service</Text>
-        <Text style={styles.sectionDescription}>
-          Définit les durées standards utilisées par l’optimiseur pour planifier
-          les créneaux.
-        </Text>
-        <View style={styles.inputGrid}>
-          <LabeledInput
-            label="Pickup (min)"
-            value={takeSettingsField("pickup_service_min")}
-            onChangeText={(value) =>
-              setSettings((prev) =>
-                prev
-                  ? {
-                    ...prev,
-                    service_times: {
-                      ...prev.service_times,
-                      pickup_service_min: numberOr(
-                        value,
-                        prev.service_times.pickup_service_min
-                      ),
-                    },
-                  }
-                  : prev
-              )
-            }
-          />
-          <LabeledInput
-            label="Drop-off (min)"
-            value={takeSettingsField("dropoff_service_min")}
-            onChangeText={(value) =>
-              setSettings((prev) =>
-                prev
-                  ? {
-                    ...prev,
-                    service_times: {
-                      ...prev.service_times,
-                      dropoff_service_min: numberOr(
-                        value,
-                        prev.service_times.dropoff_service_min
-                      ),
-                    },
-                  }
-                  : prev
-              )
-            }
-          />
-          <LabeledInput
-            label="Marge transition (min)"
-            value={takeSettingsField("min_transition_margin_min")}
-            onChangeText={(value) =>
-              setSettings((prev) =>
-                prev
-                  ? {
-                    ...prev,
-                    service_times: {
-                      ...prev.service_times,
-                      min_transition_margin_min: numberOr(
-                        value,
-                        prev.service_times.min_transition_margin_min
-                      ),
-                    },
-                  }
-                  : prev
-              )
-            }
-          />
+      {/* Indicateur de chargement */}
+      {checkingDriverAccount && (
+        <View style={styles.card}>
+          <View style={styles.switchAccountHeader}>
+            <ActivityIndicator size="small" color={palette.primary} />
+            <Text style={[styles.sectionDescription, { marginLeft: 12 }]}>
+              Vérification du compte chauffeur...
+            </Text>
+          </View>
         </View>
-      </View>
+      )}
 
-      <TouchableOpacity
-        style={styles.primaryButton}
-        onPress={handleSave}
-        disabled={loading || !settings}
-      >
-        <Text style={styles.primaryButtonText}>
-          {loading ? "Sauvegarde…" : "Enregistrer les ajustements"}
-        </Text>
-      </TouchableOpacity>
+      {/* Message de débogage si pas de compte chauffeur */}
+      {!checkingDriverAccount && driverAccount && !driverAccount.has_driver_account && (
+        <View style={styles.card}>
+          <View style={styles.switchAccountHeader}>
+            <Ionicons name="information-circle-outline" size={24} color={palette.muted} />
+            <Text style={[styles.sectionDescription, { marginLeft: 12, flex: 1 }]}>
+              Aucun compte chauffeur associé à votre compte entreprise.
+            </Text>
+          </View>
+        </View>
+      )}
 
+      {/* Section Switch de compte */}
+      {!checkingDriverAccount && driverAccount?.has_driver_account && (
+        <View style={styles.card}>
+          <View style={styles.switchAccountHeader}>
+            <Ionicons name="swap-horizontal" size={24} color={palette.primary} />
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={styles.sectionTitle}>Compte chauffeur</Text>
+              <Text style={styles.sectionDescription}>
+                {driverAccount.driver_type === "EMERGENCY"
+                  ? "Vous êtes également chauffeur d'urgence"
+                  : "Vous avez également un compte chauffeur"}
+              </Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.switchButton, switchingToDriver && styles.switchButtonDisabled]}
+            onPress={() => setShowSwitchModal(true)}
+            disabled={checkingDriverAccount || switchingToDriver}
+          >
+            {switchingToDriver ? (
+              <>
+                <ActivityIndicator size="small" color={palette.primaryText} />
+                <Text style={styles.switchButtonText}>Basculement en cours...</Text>
+              </>
+            ) : (
+              <>
+                <Ionicons name="car-outline" size={20} color={palette.primaryText} />
+                <Text style={styles.switchButtonText}>
+                  Basculer vers le compte chauffeur
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Bouton de déconnexion */}
       <TouchableOpacity
         style={styles.logoutButton}
         onPress={() => setShowLogoutModal(true)}
@@ -270,6 +301,45 @@ export default function EnterpriseSettingsScreen() {
         <Text style={styles.logoutButtonText}>Se déconnecter</Text>
       </TouchableOpacity>
 
+      {/* Modal de confirmation de switch */}
+      <Modal
+        visible={showSwitchModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSwitchModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalIconContainer}>
+              <Ionicons
+                name="swap-horizontal"
+                size={32}
+                color={palette.primary}
+              />
+            </View>
+            <Text style={styles.modalTitle}>Basculer vers le compte chauffeur</Text>
+            <Text style={styles.modalMessage}>
+              Vous allez être automatiquement connecté en tant que chauffeur. La connexion au compte entreprise sera fermée.
+            </Text>
+            <View style={styles.modalActions}>
+              <Pressable
+                style={styles.modalCancel}
+                onPress={() => setShowSwitchModal(false)}
+              >
+                <Text style={styles.modalCancelText}>Annuler</Text>
+              </Pressable>
+              <Pressable
+                style={styles.modalConfirm}
+                onPress={handleSwitchToDriver}
+              >
+                <Text style={styles.modalConfirmText}>Continuer</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal de confirmation de déconnexion */}
       <Modal
         visible={showLogoutModal}
         transparent
@@ -310,44 +380,9 @@ export default function EnterpriseSettingsScreen() {
           </View>
         </View>
       </Modal>
-
-      {errorMessage && (
-        <View style={styles.errorBanner}>
-          <Ionicons name="alert-circle" size={18} color={palette.error} />
-          <Text style={styles.error}>{errorMessage}</Text>
-        </View>
-      )}
     </ScrollView>
   );
 }
-
-const LabeledInput = ({
-  label,
-  value,
-  help,
-  onChangeText,
-  keyboardType,
-}: {
-  label: string;
-  value: string;
-  help?: string;
-  onChangeText: (text: string) => void;
-  keyboardType?: "numeric" | "default";
-}) => (
-  <View style={styles.inputGroup}>
-    <View style={styles.inputHeader}>
-      <Text style={styles.inputLabel}>{label}</Text>
-      {help ? <Text style={styles.inputHelp}>{help}</Text> : null}
-    </View>
-    <TextInput
-      style={styles.input}
-      value={value}
-      onChangeText={onChangeText}
-      keyboardType={keyboardType ?? "numeric"}
-      placeholderTextColor={palette.muted}
-    />
-  </View>
-);
 
 const styles = StyleSheet.create({
   container: {
@@ -356,17 +391,22 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
-    paddingBottom: Platform.OS === "ios" ? 94 : 84, // Hauteur tabbar (78/68) + marge de sécurité (16)
+    paddingBottom: Platform.OS === "ios" ? 94 : 84,
     gap: 22,
   },
   hero: {
     borderRadius: 24,
-    padding: 22,
+    padding: 24,
     flexDirection: "row",
     alignItems: "center",
     gap: 18,
     borderWidth: 1,
     borderColor: palette.heroBorder,
+    shadowColor: "rgba(10,127,89,0.15)",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 1,
+    shadowRadius: 24,
+    elevation: 8,
   },
   heroTitle: {
     color: palette.heroText,
@@ -395,111 +435,59 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 13,
   },
-  sectionKicker: {
-    color: palette.muted,
-    textTransform: "uppercase",
-    letterSpacing: 3,
-    fontSize: 12,
-  },
   card: {
     backgroundColor: palette.cardBg,
     borderRadius: 20,
-    padding: 20,
+    padding: 22,
     borderWidth: 1,
     borderColor: palette.cardBorder,
     shadowColor: palette.cardShadow,
-    shadowOpacity: 0.25,
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 18,
-    elevation: 6,
-    gap: 14,
+    shadowOpacity: 1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 2,
+    gap: 16,
+  },
+  switchAccountHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
   },
   sectionTitle: {
-    color: palette.heroText,
+    color: "#15362B",
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: "700",
+    letterSpacing: -0.2,
   },
   sectionDescription: {
     color: palette.muted,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  inputGroup: {
-    gap: 8,
-  },
-  inputHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
-    gap: 12,
-  },
-  inputLabel: {
-    color: palette.heroText,
     fontSize: 14,
-    fontWeight: "600",
+    lineHeight: 20,
+    marginTop: 4,
   },
-  inputHelp: {
-    color: palette.muted,
-    fontSize: 12,
-    flex: 1,
-    textAlign: "right",
-  },
-  input: {
-    backgroundColor: palette.inputBg,
-    borderRadius: 14,
-    padding: 14,
-    color: palette.inputText,
-    borderWidth: 1,
-    borderColor: palette.inputBorder,
-    fontSize: 15,
-  },
-  inputGrid: {
-    flexDirection: "column",
-    gap: 12,
-  },
-  primaryButton: {
+  switchButton: {
     backgroundColor: palette.primary,
     borderRadius: 16,
     paddingVertical: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: palette.primary,
-    shadowOpacity: 0.35,
-    shadowOffset: { width: 0, height: 10 },
-    shadowRadius: 18,
-    elevation: 6,
-  },
-  primaryButtonText: {
-    color: palette.primaryText,
-    fontSize: 16,
-    fontWeight: "700",
-    letterSpacing: 0.4,
-  },
-  secondaryButton: {
-    backgroundColor: palette.secondaryBg,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: palette.secondaryBorder,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
+    shadowColor: palette.primary,
+    shadowOpacity: 0.35,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12,
+    elevation: 6,
   },
-  secondaryButtonText: {
+  switchButtonDisabled: {
+    opacity: 0.6,
+  },
+  switchButtonText: {
     color: palette.primaryText,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  dangerButton: {
-    backgroundColor: palette.dangerBg,
-    borderColor: palette.dangerBorder,
-  },
-  dangerButtonText: {
-    color: palette.error,
-    fontSize: 14,
-    fontWeight: "600",
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: 0.4,
   },
   logoutButton: {
     backgroundColor: palette.logoutBg,
@@ -518,26 +506,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     letterSpacing: 0.4,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: palette.divider,
-    marginVertical: 12,
-  },
-  errorBanner: {
-    flexDirection: "row",
-    gap: 12,
-    alignItems: "center",
-    backgroundColor: "rgba(241,104,104,0.12)",
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "rgba(241,104,104,0.24)",
-  },
-  error: {
-    color: palette.error,
-    flex: 1,
-    fontSize: 13,
   },
   modalOverlay: {
     flex: 1,
@@ -561,13 +529,13 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: "rgba(241,104,104,0.15)",
+    backgroundColor: "rgba(10,127,89,0.15)",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 4,
   },
   modalTitle: {
-    color: palette.heroText,
+    color: "#15362B",
     fontSize: 22,
     fontWeight: "700",
     textAlign: "center",
@@ -598,11 +566,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   modalConfirm: {
-    backgroundColor: palette.error,
+    backgroundColor: palette.primary,
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 14,
-    shadowColor: palette.error,
+    shadowColor: palette.primary,
     shadowOpacity: 0.35,
     shadowOffset: { width: 0, height: 6 },
     shadowRadius: 12,

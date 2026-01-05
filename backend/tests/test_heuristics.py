@@ -470,8 +470,9 @@ class TestHeuristicsHelpers:
         company = CompanyFactory()
         driver = DriverFactory(company=company)
         booking_assigned = BookingFactory(
-            company=company, driver_id=driver.id, status=BookingStatus.ASSIGNED
+            company=company, driver_id=driver.id, status=BookingStatus.PENDING
         )
+        booking_assigned.status = BookingStatus.ASSIGNED
 
         result = _is_booking_assigned(booking_assigned)
         assert result is True, "Booking avec driver devrait être assigné"

@@ -7,10 +7,11 @@ type Props = {
   bleed?: boolean;
 };
 
+// ✅ Palette professionnelle cohérente avec le dashboard driver
 const palette = {
-  background: "rgba(10,34,26,0.92)",
-  border: "rgba(59,143,105,0.24)",
-  shadow: "#04150F",
+  background: "#FFFFFF",
+  border: "rgba(15,54,43,0.08)",
+  shadow: "rgba(15,54,43,0.08)",
 };
 
 export const EnterpriseCard: React.FC<Props> = ({ children, style, bleed }) => {
@@ -22,15 +23,15 @@ export const EnterpriseCard: React.FC<Props> = ({ children, style, bleed }) => {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: palette.background,
-    borderRadius: 18,
-    padding: 16,
+    borderRadius: 20,
+    padding: 18,
     borderWidth: 1,
     borderColor: palette.border,
     shadowColor: palette.shadow,
-    shadowOpacity: 0.25,
+    shadowOpacity: 1,
     shadowOffset: { width: 0, height: 4 },
     shadowRadius: 12,
-    elevation: 3,
+    elevation: 2,
   },
   cardBleed: {
     paddingHorizontal: 0,

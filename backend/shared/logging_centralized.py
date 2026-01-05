@@ -17,7 +17,7 @@ if sys.version_info >= (3, 12):
 else:
     from typing_extensions import override
 
-import requests
+import requests  # pyright: ignore[reportMissingModuleSource]
 
 
 class CentralizedLogHandler(logging.Handler):
@@ -101,13 +101,13 @@ class CentralizedLogHandler(logging.Handler):
 
         # Ajouter les informations de contexte si disponibles
         if hasattr(record, "request_id"):
-            log_data["request_id"] = record.request_id
+            log_data["request_id"] = getattr(record, "request_id", None)
 
         if hasattr(record, "user_id"):
-            log_data["user_id"] = record.user_id
+            log_data["user_id"] = getattr(record, "user_id", None)
 
         if hasattr(record, "ip_address"):
-            log_data["ip_address"] = record.ip_address
+            log_data["ip_address"] = getattr(record, "ip_address", None)
 
         # Ajouter les exceptions
         if record.exc_info:
@@ -119,7 +119,7 @@ class CentralizedLogHandler(logging.Handler):
 
         # Ajouter les métadonnées personnalisées
         if hasattr(record, "metadata"):
-            log_data.update(record.metadata)
+            log_data.update(getattr(record, "metadata", {}))
 
         return log_data
 
@@ -224,10 +224,7 @@ def setup_centralized_logging(app) -> None:
     endpoint = os.getenv("LOG_CENTRALIZATION_ENDPOINT")
     if not endpoint:
         app.logger.debug(
-            (
-                "[Centralized Logging] Désactivé "
-                "(LOG_CENTRALIZATION_ENDPOINT non configuré)"
-            )
+            "[Centralized Logging] Désactivé (LOG_CENTRALIZATION_ENDPOINT non configuré)"
         )
         return
 

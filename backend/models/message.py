@@ -5,8 +5,6 @@ Extrait depuis models.py (lignes ~1926-2014).
 
 from __future__ import annotations
 
-from typing import Optional
-
 import sqlalchemy as sa
 from sqlalchemy import (
     Boolean,
@@ -62,7 +60,7 @@ class Message(db.Model):
     sender_role: Mapped[SenderRole] = mapped_column(
         SAEnum(SenderRole, name="sender_role"), nullable=False
     )
-    content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Support pour images et PDF
     image_url = Column(sa.String(500), nullable=True)

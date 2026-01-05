@@ -260,10 +260,8 @@ def generate_report() -> str:
 
     print()
     print(
-        (
-            f"Métriques trouvées: {len(metrics_results['metrics_found'])}/"
-            f"{metrics_results['total_metrics_expected']}"
-        )
+        f"Métriques trouvées: {len(metrics_results['metrics_found'])}/"
+        f"{metrics_results['total_metrics_expected']}"
     )
     for metric_name, info in metrics_results["metrics_found"].items():
         print(f"  ✅ {metric_name}: {info}")

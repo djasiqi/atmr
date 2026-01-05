@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Optional, cast
+from typing import Any, cast
 
 try:
     import hvac  # type: ignore[import-untyped]  # Dépendance optionnelle
@@ -47,11 +47,11 @@ class VaultClient:
 
     def __init__(
         self,
-        vault_addr: Optional[str] = None,
-        vault_token: Optional[str] = None,
-        role_id: Optional[str] = None,
-        secret_id: Optional[str] = None,
-        use_vault: Optional[bool] = None,
+        vault_addr: str | None = None,
+        vault_token: str | None = None,
+        role_id: str | None = None,
+        secret_id: str | None = None,
+        use_vault: bool | None = None,
         cache_ttl: int = 300,
     ):
         """Initialise le client Vault.
@@ -78,7 +78,7 @@ class VaultClient:
 
         self.use_vault = use_vault and HVAC_AVAILABLE
         self.cache_ttl = cache_ttl
-        self._client: Optional[Any] = None
+        self._client: Any | None = None
 
         if self.use_vault:
             self._init_client()
@@ -135,10 +135,10 @@ class VaultClient:
         self,
         path: str,
         key: str,
-        env_fallback: Optional[str] = None,
-        default: Optional[str] = None,
+        env_fallback: str | None = None,
+        default: str | None = None,
         use_cache: bool = True,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Récupère un secret depuis Vault ou variable d'environnement.
 
         Args:
@@ -160,7 +160,7 @@ class VaultClient:
 
                 if time.time() - timestamp < self.cache_ttl:
                     logger.debug("[4.1 Vault] Secret récupéré depuis cache: %s", path)
-                    return cast(Optional[str], value)
+                    return cast(str | None, value)
                 del _cache[cache_key]
 
         # Essayer Vault
@@ -187,7 +187,7 @@ class VaultClient:
                         _cache[cache_key] = (value, time.time())
 
                     logger.debug("[4.1 Vault] Secret récupéré depuis Vault: %s", path)
-                    return cast(Optional[str], value)
+                    return cast(str | None, value)
 
             except Exception as e:
                 logger.warning(
@@ -220,7 +220,7 @@ class VaultClient:
         self,
         path: str,
         key: str,
-        env_fallback: Optional[str] = None,
+        env_fallback: str | None = None,
     ) -> str:
         """Récupère un secret requis (lance une exception si absent).
 
@@ -282,7 +282,7 @@ class VaultClient:
 
 
 # ✅ 4.1: Instance globale (singleton)
-_vault_client: Optional[VaultClient] = None
+_vault_client: VaultClient | None = None
 
 
 def get_vault_client() -> VaultClient:

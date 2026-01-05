@@ -4,7 +4,7 @@
 
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from shared.geo_utils import haversine_distance
@@ -31,7 +31,7 @@ class ABTestingService:
 
         """
         if current_time is None:
-            current_time = datetime.now(timezone.utc)
+            current_time = datetime.now(UTC)
 
         logger.info(
             "[AB Test] Running for booking %s, driver %s", booking.id, driver.id
@@ -216,14 +216,29 @@ def run_batch_ab_tests(booking_ids: list[int], driver_ids: list[int]) -> dict[st
         raise ValueError(msg)
 
     results = []
-    current_time = datetime.now(timezone.utc)
+    current_time = datetime.now(UTC)
 
     logger.info("[AB Test] Starting batch of %s tests", len(booking_ids))
 
     for booking_id, driver_id in zip(booking_ids, driver_ids, strict=False):
         try:
-            booking = Booking.query.get(booking_id)
-            driver = Driver.query.get(driver_id)
+            # ✅ Utilisation des repositories pour découpler de SQLAlchemy
+            from repositories.booking_repository import BookingRepository
+            from repositories.driver_repository import DriverRepository
+
+            booking_repo = BookingRepository()
+            booking_dto = booking_repo.find_by_id(booking_id)
+            if not booking_dto:
+                continue
+            # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+            booking = Booking.query.get(booking_dto.id)
+
+            driver_repo = DriverRepository()
+            driver_dto = driver_repo.find_by_id(driver_id)
+            if not driver_dto:
+                continue
+            # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+            driver = Driver.query.get(driver_dto.id)
 
             if not booking or not driver:
                 logger.warning(

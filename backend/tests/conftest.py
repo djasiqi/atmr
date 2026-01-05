@@ -55,6 +55,7 @@ def test_nested_transaction(db):
 ```
 """
 
+import importlib.util
 import os
 
 # Mock JSONB → JSON AVANT tout import (SQLite ne supporte pas JSONB)
@@ -82,12 +83,52 @@ from ext import db as _db  # noqa: E402
 from models import Company, User, UserRole  # noqa: E402
 
 
+def _module_available(name: str) -> bool:
+    return importlib.util.find_spec(name) is not None
+
+
+def pytest_ignore_collect(path: object, config: object) -> bool:
+    """Skip optional heavy test suites when optional deps are not installed.
+
+    Docker dev image used in local dev does not necessarily include RL/ML deps
+    (torch/gymnasium/optuna). Without this guard, collection fails and blocks
+    running coverage on the rest of the suite.
+    """
+    _ = config
+    p = str(path).replace("\\", "/")
+
+    run_e2e = os.getenv("RUN_E2E_TESTS", "0") in {"1", "true", "True"}
+    has_torch = _module_available("torch")
+    has_gymnasium = _module_available("gymnasium")
+    has_optuna = _module_available("optuna")
+
+    is_e2e = "/tests/e2e/" in p
+    is_ml = "/tests/ml/" in p
+    is_rl = "/tests/rl/" in p
+    is_md5_migration = p.endswith("/tests/security/test_md5_to_sha256_migration.py")
+
+    return (
+        (is_e2e and not run_e2e)
+        or (is_ml and not has_torch)
+        or (is_rl and (not has_torch or not has_gymnasium or not has_optuna))
+        or (is_md5_migration and not has_torch)
+    )
+
+
 @pytest.fixture(scope="session")
 def app() -> Flask:
     """Crée une instance Flask en mode test."""
 
     # ✅ FIX: Passer explicitement "testing" pour désactiver force_https dans Talisman
     app = create_app(config_name="testing")
+
+    # ✅ Supprimer les warnings OpenTelemetry en mode test
+    import logging
+
+    # Ignorer les warnings OpenTelemetry dans les tests
+    logging.getLogger("shared.otel_setup").setLevel(logging.ERROR)
+    # Ignorer aussi les warnings de l'app Flask pour OpenTelemetry
+    app.logger.setLevel(logging.ERROR)
 
     # ✅ FIX: Utiliser la DB PostgreSQL du workflow GitHub Actions
     # pour les tests
@@ -104,6 +145,7 @@ def app() -> Flask:
             "TESTING": True,
             "SQLALCHEMY_DATABASE_URI": database_url,
             "WTF_CSRF_ENABLED": False,
+            "CSRF_ENABLED": False,  # ✅ S1: Désactiver CSRF en tests
             "JWT_SECRET_KEY": "test-secret-key",
             "SECRET_KEY": "test-secret-key",
             "SQLALCHEMY_ECHO": False,  # Pas de logs SQL verbeux en tests
@@ -355,9 +397,8 @@ def authenticated_client(client, sample_user):
         )
 
     # Créer une classe wrapper qui ajoute automatiquement les headers
-    class AuthenticatedClient(object):
-        def __init__(self, client, token):
-            super().__init__()
+    class AuthenticatedClient:
+        def __init__(self, client, token):  # pyright: ignore[reportMissingSuperCall]
             self._client = client
             self._token = token
             self._headers = {"Authorization": f"Bearer {token}"}
@@ -399,7 +440,7 @@ def authenticated_client(client, sample_user):
 @pytest.fixture
 def sample_booking(db, sample_company, sample_client):
     """Crée un booking de test pour les tests ML monitoring et autres."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import UTC, datetime, timedelta
 
     from models.booking import Booking
     from models.enums import BookingStatus
@@ -413,7 +454,7 @@ def sample_booking(db, sample_company, sample_client):
     booking.dropoff_lat = 46.2100
     booking.dropoff_lon = 6.1500
     booking.booking_type = "standard"
-    booking.scheduled_time = datetime.now(timezone.utc) + timedelta(hours=2)
+    booking.scheduled_time = datetime.now(UTC) + timedelta(hours=2)
     booking.amount = 50.0
     booking.status = BookingStatus.PENDING
     booking.user_id = sample_client.user_id
@@ -1351,3 +1392,71 @@ def nested_savepoint(db_session: Any) -> Iterator[None]:
         if savepoint.is_active:
             with suppress(Exception):
                 savepoint.rollback()
+
+
+# ============================================================
+# Fixtures pour mock du temps (tests déterministes)
+# ============================================================
+
+
+@pytest.fixture
+def frozen_time():
+    """Fixture pour mocker le temps avec freezegun.
+
+    Utilise une date fixe par défaut (2025-01-15 10:00:00) pour rendre
+    les tests déterministes. Les tests peuvent utiliser cette fixture
+    pour contrôler le temps.
+
+    Exemple d'utilisation:
+        def test_something(frozen_time):
+            # Le temps est maintenant figé à 2025-01-15 10:00:00
+            from datetime import timedelta
+            from shared.time_utils import now_local
+            assert now_local().year == 2025
+
+            # Avancer le temps
+            frozen_time.tick(timedelta(hours=1))
+            assert now_local().hour == 11
+
+    Note: Cette fixture utilise freezegun qui mock datetime.now(),
+    datetime.utcnow(), et time.time() automatiquement.
+    """
+    from datetime import UTC, datetime
+
+    try:
+        from freezegun import freeze_time  # type: ignore[reportMissingImports]
+    except ImportError:
+        pytest.skip("freezegun not installed")
+        return  # type: ignore[unreachable]
+
+    # Date fixe par défaut pour tests déterministes.
+    # now_local() convertit depuis datetime.now(UTC) vers Europe/Zurich puis retire tzinfo.
+    # Pour obtenir 10:00 "local" (Zurich) en hiver, on fige donc 09:00 en UTC.
+    FIXED_DATE = datetime(2025, 1, 15, 9, 0, 0, tzinfo=UTC)
+
+    with freeze_time(FIXED_DATE) as frozen:
+        yield frozen
+
+
+@pytest.fixture
+def mock_now_local(monkeypatch):
+    """Fixture pour mocker now_local() directement.
+
+    Alternative à frozen_time si on veut seulement mocker now_local()
+    sans affecter datetime.now().
+
+    Exemple d'utilisation:
+        def test_something(mock_now_local):
+            from shared.time_utils import now_local
+            # now_local() retourne maintenant une date fixe
+            assert now_local().year == 2025
+    """
+    from datetime import datetime
+
+    FIXED_DATE = datetime(2025, 1, 15, 10, 0, 0)
+
+    def mock_now():
+        return FIXED_DATE
+
+    monkeypatch.setattr("shared.time_utils.now_local", mock_now)
+    return FIXED_DATE

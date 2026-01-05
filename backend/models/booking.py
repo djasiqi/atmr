@@ -4,7 +4,8 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any, Optional, cast
+from pathlib import Path
+from typing import Any
 
 from sqlalchemy import (
     Boolean,
@@ -45,6 +46,16 @@ COMPANY_ID_ZERO = 0
 CUSTOMER_NAME_MAX_LENGTH = 100
 LOCATION_MAX_LENGTH = 200
 
+# Constantes pour règles d'arrondi métier
+AMOUNT_MINIMUM = 0.5
+AMOUNT_ROUNDING_THRESHOLD_1 = 0.6
+AMOUNT_ROUNDING_THRESHOLD_2 = 0.75
+AMOUNT_ROUNDING_THRESHOLD_3 = 0.8
+AMOUNT_ROUNDING_THRESHOLD_4 = 39.98
+AMOUNT_ROUNDING_TARGET_1 = 0.5
+AMOUNT_ROUNDING_TARGET_2 = 0.8
+AMOUNT_ROUNDING_TARGET_3 = 40.0
+
 """Model Booking - Gestion des réservations de transport.
 Extrait depuis models.py (lignes ~1294-1642).
 """
@@ -72,9 +83,26 @@ class Booking(db.Model):
             "dropoff_lon IS NULL OR (dropoff_lon BETWEEN -180 AND 180)",
             name="chk_booking_drop_lon",
         ),
+        # ✅ Contrainte : status='ASSIGNED' implique driver_id IS NOT NULL
+        CheckConstraint(
+            "status != 'ASSIGNED' OR driver_id IS NOT NULL",
+            name="chk_booking_assigned_requires_driver",
+        ),
         Index("ix_booking_company_scheduled", "company_id", "scheduled_time"),
         Index("ix_booking_status_scheduled", "status", "scheduled_time"),
         Index("ix_booking_driver_status", "driver_id", "status"),
+        # ✅ P1: Index composite optimisé pour requêtes dispatch (company_id, status, scheduled_time)
+        # Améliore les performances de get_bookings_for_dispatch()
+        Index(
+            "ix_booking_company_status_scheduled",
+            "company_id",
+            "status",
+            "scheduled_time",
+        ),
+        # ✅ P1: Index composite pour recherches par client avec tri temporel
+        # Optimise les requêtes qui filtrent par client_id et trient par scheduled_time
+        # Note: DESC sera géré par la migration (SQLAlchemy Index ne supporte pas directement DESC)
+        Index("ix_booking_client_time", "client_id", "scheduled_time"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -83,7 +111,7 @@ class Booking(db.Model):
     dropoff_location: Mapped[str] = mapped_column(String(200), nullable=False)
     booking_type = Column(String(200), nullable=False, server_default="standard")
 
-    scheduled_time: Mapped[Optional[datetime]] = mapped_column(
+    scheduled_time: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=False), nullable=True
     )
 
@@ -110,22 +138,36 @@ class Booking(db.Model):
     company_id = Column(
         Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=True, index=True
     )
-    driver_id: Mapped[Optional[int]] = mapped_column(
+    executing_company_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("company.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )  # Entreprise qui exécute réellement (si transférée à un partenaire)
+    driver_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("driver.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
     is_round_trip = Column(Boolean, nullable=False, server_default=text("false"))
     is_return = Column(Boolean, nullable=False, server_default=text("false"))
 
-    boarded_at: Mapped[Optional[datetime]] = mapped_column(
+    boarded_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    completed_at: Mapped[Optional[datetime]] = mapped_column(
+    completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
     parent_booking_id = Column(
         Integer, ForeignKey("booking.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # ✅ NOUVEAU: Groupe de courses (pour courses groupées)
+    booking_group_id = Column(
+        Integer,
+        ForeignKey("booking.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
 
     medical_facility = Column(String(200))
@@ -156,7 +198,7 @@ class Booking(db.Model):
     )
 
     billed_to_type = Column(String(50), nullable=False, server_default="patient")
-    billed_to_company_id: Mapped[Optional[int]] = mapped_column(
+    billed_to_company_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("company.id", ondelete="SET NULL"), nullable=True
     )
     billed_to_contact = Column(String(120))
@@ -184,6 +226,7 @@ class Booking(db.Model):
     )
 
     billed_to_company = relationship("Company", foreign_keys=[billed_to_company_id])
+    executing_company = relationship("Company", foreign_keys=[executing_company_id])
     invoice_line = relationship(
         "InvoiceLine",
         foreign_keys=[invoice_line_id],
@@ -263,7 +306,39 @@ class Booking(db.Model):
         )
 
         amt = _as_float(self.amount)
-        status_val = cast("BookingStatus", self.status)
+        # #region agent log
+        try:
+            import json
+
+            with Path(r"c:\Users\jasiq\atmr\.cursor\debug.log").open(
+                "a", encoding="utf-8"
+            ) as f:
+                status_raw = getattr(self, "status", None)
+                f.write(
+                    json.dumps(
+                        {
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "B",
+                            "location": "booking.py:293",
+                            "message": "Booking.serialize entry",
+                            "data": {
+                                "booking_id": self.id,
+                                "status_type": str(type(status_raw)),
+                                "status_value": str(status_raw),
+                                "has_value_attr": hasattr(status_raw, "value")
+                                if status_raw is not None
+                                else False,
+                            },
+                            "timestamp": int(__import__("time").time() * 1000),
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion
+        status_val = self.status
 
         cli = self.client
         cli_user = getattr(cli, "user", None)
@@ -370,16 +445,39 @@ class Booking(db.Model):
     def validate_amount(self, _key, amount):
         if amount is None:
             return None
-        if amount <= AMOUNT_ZERO:
-            msg = "Le montant doit être supérieur à 0"
+        if amount < AMOUNT_MINIMUM:
+            msg = f"Le montant minimum accepté est {AMOUNT_MINIMUM}"
             raise ValueError(msg)
+        # Règles d'arrondi métier
+        # - 0.5-0.6 → 0.5
+        # - 0.75-0.8 → 0.8
+        # - 39.98-40.0 → 40.0
+        if (
+            AMOUNT_MINIMUM <= amount < AMOUNT_ROUNDING_THRESHOLD_1
+            or AMOUNT_ROUNDING_THRESHOLD_1 <= amount < AMOUNT_ROUNDING_THRESHOLD_2
+        ):
+            return AMOUNT_ROUNDING_TARGET_1
+        if AMOUNT_ROUNDING_THRESHOLD_2 <= amount < AMOUNT_ROUNDING_THRESHOLD_3:
+            return AMOUNT_ROUNDING_TARGET_2
+        if AMOUNT_ROUNDING_THRESHOLD_4 <= amount < AMOUNT_ROUNDING_TARGET_3:
+            return AMOUNT_ROUNDING_TARGET_3
+        # Arrondi standard à 2 décimales pour les autres cas
         return round(amount, 2)
 
     @validates("scheduled_time")
     def validate_scheduled_time(self, _key, scheduled_time):
+        # ✅ scheduled_time est obligatoire pour le dispatch
+        # Le dispatch nécessite cette valeur pour fonctionner correctement
+        if scheduled_time is None:
+            msg = "scheduled_time est obligatoire. Le dispatch nécessite cette valeur."
+            raise ValueError(msg)
         st = parse_local_naive(scheduled_time)
-        # Validation désactivée si time_confirmed=False (pour import
-        # historique)
+        # ⚠️ IMPORTANT : Validation désactivée si time_confirmed=False
+        # Cela permet d'importer des bookings historiques avec des dates passées.
+        # Lorsque time_confirmed=False :
+        #   - Les dates passées sont acceptées (pour import historique)
+        #   - Le booking est exclu du dispatch automatique (voir get_bookings_for_dispatch)
+        #   - Utile pour les retours avec heure à confirmer ou imports de données anciennes
         time_confirmed = getattr(self, "time_confirmed", True)
         if st and st < now_local() and time_confirmed:
             msg = "Heure prévue dans le passé."
@@ -424,6 +522,17 @@ class Booking(db.Model):
         if not isinstance(status, BookingStatus):
             msg = f"Statut invalide : {status}. Doit être un BookingStatus valide."
             raise ValueError(msg)
+
+        # ✅ Validation : status=ASSIGNED implique driver_id IS NOT NULL
+        if status == BookingStatus.ASSIGNED:
+            driver_id = getattr(self, "driver_id", None)
+            if driver_id is None:
+                msg = (
+                    "status=ASSIGNED nécessite un driver_id. "
+                    "Un booking assigné doit avoir un chauffeur."
+                )
+                raise ValueError(msg)
+
         return status
 
     @validates("driver_id")
@@ -431,6 +540,18 @@ class Booking(db.Model):
         if value is not None and (not isinstance(value, int) or value < VALUE_ZERO):
             msg = "driver_id doit être un entier positif ou null"
             raise ValueError(msg)
+
+        # ✅ Validation : si driver_id est None et status=ASSIGNED, c'est invalide
+        # (vérification après validation du type)
+        if value is None:
+            current_status = getattr(self, "status", None)
+            if current_status == BookingStatus.ASSIGNED:
+                msg = (
+                    "driver_id ne peut pas être NULL si status=ASSIGNED. "
+                    "Un booking assigné doit avoir un chauffeur."
+                )
+                raise ValueError(msg)
+
         return value
 
     @validates("billed_to_type")
@@ -475,7 +596,7 @@ class Booking(db.Model):
 
     def is_assignable(self) -> bool:
         st = _as_dt(self.scheduled_time)
-        status_val = cast("BookingStatus", self.status)
+        status_val = self.status
         return (status_val in (BookingStatus.PENDING, BookingStatus.ACCEPTED)) and bool(
             st and st > now_local()
         )

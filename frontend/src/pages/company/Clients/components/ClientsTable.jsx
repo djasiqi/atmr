@@ -36,7 +36,24 @@ const ClientsTable = ({ clients, onEdit, onDelete, onRefresh: _onRefresh }) => {
           </tr>
         </thead>
         <tbody>
-          {clients.map((client) => (
+          {clients.map((client) => {
+            // Déterminer le nom à afficher
+            // Le backend retourne user_first_name et user_last_name depuis ClientDTO.to_dict()
+            let displayName = `Client #${client.id}`;
+            
+            if (client.is_institution && client.institution_name) {
+              displayName = client.institution_name;
+            } else {
+              // Utiliser directement user_first_name et user_last_name du ClientDTO
+              const firstName = client.user_first_name || '';
+              const lastName = client.user_last_name || '';
+              
+              if (firstName || lastName) {
+                displayName = `${firstName} ${lastName}`.trim();
+              }
+            }
+            
+            return (
             <tr key={client.id} className={!client.is_active ? styles.inactive : ''}>
               <td>
                 <div className={styles.clientInfo}>
@@ -44,12 +61,10 @@ const ClientsTable = ({ clients, onEdit, onDelete, onRefresh: _onRefresh }) => {
                     {client.is_institution ? (
                       <>
                         <span className={styles.institutionBadge}>🏥</span>
-                        <strong>{client.institution_name || 'Institution'}</strong>
+                        <strong>{displayName}</strong>
                       </>
                     ) : (
-                      <strong>
-                        {client.first_name || ''} {client.last_name || ''}
-                      </strong>
+                      <strong>{displayName}</strong>
                     )}
                   </div>
                   {!client.is_institution && client.institution_name && (
@@ -117,7 +132,8 @@ const ClientsTable = ({ clients, onEdit, onDelete, onRefresh: _onRefresh }) => {
                 </div>
               </td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>

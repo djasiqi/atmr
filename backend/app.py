@@ -24,7 +24,13 @@ from typing import Any, Literal, cast
 
 # TypeAlias import (compatible Python 3.10+)
 try:
-    from typing import TypeAlias, override
+    from typing import TypeAlias
+
+    # override n'est disponible dans typing qu'à partir de Python 3.12
+    try:
+        from typing import override
+    except ImportError:
+        from typing_extensions import override  # type: ignore[assignment]
 except ImportError:  # pragma: no cover
     from typing_extensions import TypeAlias
 
@@ -38,9 +44,9 @@ except ImportError:  # pragma: no cover
 
 
 # --- Imports de libs tiers (tous en haut pour Ruff E402) ---
-import sentry_sdk
-from dotenv import load_dotenv
-from flask import (
+import sentry_sdk  # pyright: ignore[reportMissingImports]
+from dotenv import load_dotenv  # pyright: ignore[reportMissingImports]
+from flask import (  # pyright: ignore[reportMissingImports]
     Flask,
     current_app,
     jsonify,
@@ -48,15 +54,31 @@ from flask import (
     request,
     send_from_directory,
 )
-from flask_cors import CORS
-from flask_talisman import Talisman
-from sentry_sdk.integrations.flask import FlaskIntegration
-from werkzeug.exceptions import HTTPException, NotFound
-from werkzeug.middleware.proxy_fix import ProxyFix
+from flask_cors import CORS  # pyright: ignore[reportMissingModuleSource]
+from flask_talisman import Talisman  # pyright: ignore[reportMissingImports]
+from sentry_sdk.integrations.flask import (  # pyright: ignore[reportMissingImports]
+    FlaskIntegration,
+)
+from werkzeug.exceptions import (  # pyright: ignore[reportMissingImports]
+    HTTPException,
+    NotFound,
+)
+from werkzeug.middleware.proxy_fix import (  # pyright: ignore[reportMissingImports]
+    ProxyFix,
+)
 
 # Extensions & config
 from config import config
-from ext import bcrypt, db, jwt, limiter, mail, migrate, socketio
+from ext import (
+    _socketio_message_queue,
+    bcrypt,
+    db,
+    jwt,
+    limiter,
+    mail,
+    migrate,
+    socketio,
+)
 
 # ---------- Chargement .env ----------
 BASE_DIR = Path(__file__).resolve().parent
@@ -131,10 +153,47 @@ def validate_required_env_vars(config_name: str) -> None:
                 + "Fournissez soit REDIS_URL, soit REDIS_PASSWORD."
             )
 
-        # SENTRY_DSN et PDF_BASE_URL sont optionnels mais recommandés
+        # ✅ S1: Valider CORS en production - rejeter configuration "*"
+        cors_origins_env = os.getenv("SOCKETIO_CORS_ORIGINS", default="")
+        if not cors_origins_env or cors_origins_env.strip() == "*":
+            raise RuntimeError(
+                "Configuration CORS invalide pour production. "
+                + "SOCKETIO_CORS_ORIGINS ne peut pas être vide ou '*' en production. "
+                + "Fournissez une liste d'origines autorisées séparées par des virgules "
+                + "(ex: 'https://app.example.com,https://www.example.com')."
+            )
+        # Valider que toutes les origines sont HTTPS (sauf localhost pour tests)
+        origins_list = [origin.strip() for origin in cors_origins_env.split(",")]
+        for origin in origins_list:
+            if origin and not origin.startswith(
+                ("https://", "http://localhost", "http://127.0.0.1")
+            ):
+                raise RuntimeError(
+                    f"SOCKETIO_CORS_ORIGINS contient une origine non sécurisée en production: {origin}. "
+                    + "Toutes les origines doivent être HTTPS (sauf localhost pour tests)."
+                )
+
+        # ✅ Valider PDF_BASE_URL en production (REQUIS)
+        # Exception: localhost/127.0.0.1 autorisé en développement local
+        pdf_base_url = os.getenv("PDF_BASE_URL", default=None)
+        if not pdf_base_url:
+            raise RuntimeError(
+                "PDF_BASE_URL est requis en production. "
+                + "Définissez cette variable d'environnement avec une URL HTTPS valide."
+            )
+        # ✅ Exception pour développement local (localhost/127.0.0.1)
+        is_localhost = pdf_base_url.startswith(
+            "http://localhost"
+        ) or pdf_base_url.startswith("http://127.0.0.1")
+        if not pdf_base_url.startswith("https://") and not is_localhost:
+            raise RuntimeError(
+                "PDF_BASE_URL doit commencer par 'https://' en production. "
+                + f"Valeur actuelle: {pdf_base_url}"
+            )
+
+        # SENTRY_DSN est optionnel mais recommandé
         recommended_vars = {
             "SENTRY_DSN",
-            "PDF_BASE_URL",
         }
 
         # Vérifier les variables requises
@@ -191,9 +250,14 @@ def create_app(config_name: str | None = None):
     app.url_map.strict_slashes = False
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 
-    if os.getenv("FLASK_ENV", "production") != "production":
+    # Utiliser config_name plutôt que FLASK_ENV: en tests on peut créer une app
+    # "production" avec FLASK_ENV=testing.
+    if config_name != "production":
         app.config["PREFERRED_URL_SCHEME"] = "http"
         app.config["SESSION_COOKIE_SECURE"] = False
+        # ✅ En développement, permettre les cookies sur http://localhost
+        app.config["COOKIE_SECURE"] = False
+        app.config["JWT_COOKIE_SECURE"] = False
     else:
         # Sécurité cookies de session en production
         app.config["SESSION_COOKIE_SECURE"] = True  # HTTPS uniquement
@@ -202,7 +266,9 @@ def create_app(config_name: str | None = None):
 
     # Flask 2.3+ : JSON Provider ; fallback <2.3 : json_encoder
     try:
-        from flask.json.provider import DefaultJSONProvider
+        from flask.json.provider import (  # pyright: ignore[reportMissingImports]
+            DefaultJSONProvider,
+        )
 
         class CustomJSONProvider(DefaultJSONProvider):
             @override
@@ -213,11 +279,17 @@ def create_app(config_name: str | None = None):
 
         app.json = CustomJSONProvider(app)
     except Exception:
+        # Fallback pour Flask < 2.3 (json_encoder est déprécié mais fonctionne)
         app.json_encoder = CustomJSONEncoder
 
     # 1) Config
     app.config.from_object(config[config_name])
     config[config_name].init_app(app)
+
+    # ✅ Validation de sécurité en production
+    from config import validate_production_security
+
+    validate_production_security(app)
 
     # ✅ Force UTF-8 encoding pour JSON et réponses
     app.config["JSON_AS_ASCII"] = False
@@ -230,8 +302,42 @@ def create_app(config_name: str | None = None):
     bcrypt.init_app(app)
     migrate.init_app(app, db, compare_type=True, render_as_batch=True)
 
+    # ✅ Clean Architecture: wiring explicite du bus d'événements
+    # - Application ne dépend pas de services/celery/redis.
+    # - Le choix de l'implémentation (infra) est fait ici (outer layer).
+    try:
+        from application.events.event_bus import set_event_bus
+        from infrastructure.events.celery_event_bus import CeleryEventBus
+        from infrastructure.events.in_memory_event_bus import InMemoryEventBus
+
+        default_mode = "celery" if config_name == "production" else "in_memory"
+        mode = os.getenv("EVENT_BUS_MODE", default_mode).strip().lower()
+        if mode in ("celery", "async"):
+            set_event_bus(CeleryEventBus())
+            app.logger.info("[EventBus] ✅ CeleryEventBus activé (mode=%s)", mode)
+        else:
+            set_event_bus(InMemoryEventBus())
+            app.logger.info("[EventBus] ✅ InMemoryEventBus activé (mode=%s)", mode)
+    except Exception as e:
+        # Ne pas bloquer le démarrage si le wiring échoue (tests/unit, dépendances optionnelles, etc.)
+        app.logger.warning("[EventBus] ⚠️ Wiring bus échoué: %s", e)
+
     if app.config.get("RATELIMIT_ENABLED", True):
         limiter.init_app(app)
+
+    # ✅ S1: Setup protection CSRF pour requêtes mutantes
+    try:
+        from services.csrf_protection import setup_csrf_protection
+
+        # Activer CSRF seulement si explicitement activé (par défaut activé en production)
+        csrf_enabled = os.getenv("CSRF_ENABLED", "true").lower() in ("true", "1", "yes")
+        if csrf_enabled:
+            setup_csrf_protection(app)
+            app.logger.info("[CSRF] ✅ Protection CSRF activée")
+        else:
+            app.logger.info("[CSRF] ⚠️ Protection CSRF désactivée (CSRF_ENABLED=false)")
+    except Exception as e:
+        app.logger.warning("[CSRF] ⚠️ Échec activation protection CSRF: %s", e)
 
     # ✅ 2.9: Setup OpenTelemetry avec instrumentation complète
     try:
@@ -273,8 +379,14 @@ def create_app(config_name: str | None = None):
                     instrument_sqlalchemy(engine)
             else:
                 # Délayer l'instrumentation après que l'engine soit créé
-                @app.before_first_request
+                # Utiliser before_request avec un flag au lieu de before_first_request
+                # (déprécié dans Flask 2.2+)
+                _db_instrumented = {"done": False}
+
+                @app.before_request
                 def _instrument_db_after_init():  # pyright: ignore
+                    if _db_instrumented["done"]:
+                        return
                     try:
                         with app.app_context():
                             if hasattr(db, "engine") and db.engine is not None:
@@ -284,6 +396,7 @@ def create_app(config_name: str | None = None):
                             else:
                                 return
                             instrument_sqlalchemy(db_engine)
+                            _db_instrumented["done"] = True
                     except Exception as e:
                         app.logger.warning(
                             "[2.9] Échec instrumentation DB différée: %s", e
@@ -294,7 +407,12 @@ def create_app(config_name: str | None = None):
             if "application context" not in str(e).lower():
                 app.logger.warning("[2.9] Échec instrumentation SQLAlchemy: %s", e)
     except ImportError as e:
-        app.logger.warning("[2.9] OpenTelemetry non disponible (optionnel): %s", e)
+        # Ne pas logger le warning en mode test (évite le bruit dans les tests)
+        if (
+            os.getenv("FLASK_ENV") != "testing"
+            and os.getenv("FLASK_CONFIG") != "testing"
+        ):
+            app.logger.warning("[2.9] OpenTelemetry non disponible (optionnel): %s", e)
     except Exception as e:
         app.logger.warning("[2.9] Échec initialisation OpenTelemetry: %s", e)
 
@@ -349,14 +467,58 @@ def create_app(config_name: str | None = None):
 
     # Définir cors_origins même si Socket.IO est désactivé
     # (nécessaire pour CORS plus bas)
+    # ✅ Liste centralisée des origines CORS en développement
+    # Inclut toujours les origines essentielles (frontend React + Expo web)
+    CORS_DEV_ORIGINS = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        "http://localhost:5000",
+        "http://127.0.0.1:5000",
+        "http://localhost:8081",  # ✅ Application mobile Expo web
+        "http://127.0.0.1:8081",  # ✅ Application mobile Expo web
+    ]
+
     if config_name == "development":
-        cors_origins: str | list[str] = "*"  # dev permissif
-    else:
-        cors_origins = (
-            os.getenv("SOCKETIO_CORS_ORIGINS", default="").split(",")
-            if os.getenv("SOCKETIO_CORS_ORIGINS", default=None)
-            else []
+        # ✅ En développement, spécifier explicitement les origines locales
+        # (ne peut pas utiliser "*" avec cors_credentials=True)
+        # Permettre override via variable d'environnement, mais toujours inclure les origines essentielles
+        dev_cors_origins_env = os.getenv("SOCKETIO_CORS_ORIGINS", default="")
+        if dev_cors_origins_env:
+            # Parser les origines depuis l'environnement
+            env_origins = [
+                origin.strip()
+                for origin in dev_cors_origins_env.split(",")
+                if origin.strip()
+            ]
+            # Fusionner avec les origines essentielles (éviter les doublons)
+            cors_origins = list(set(CORS_DEV_ORIGINS + env_origins))
+        else:
+            # Utiliser la liste centralisée par défaut
+            cors_origins = CORS_DEV_ORIGINS.copy()
+        # ✅ Logger les origines autorisées pour debug
+        app.logger.info(
+            "[Socket.IO] CORS configuré en développement avec %d origine(s): %s",
+            len(cors_origins),
+            ", ".join(cors_origins),
         )
+    else:
+        cors_origins_str = os.getenv("SOCKETIO_CORS_ORIGINS", default="")
+        if cors_origins_str:
+            cors_origins = [
+                origin.strip()
+                for origin in cors_origins_str.split(",")
+                if origin.strip()
+            ]
+            # ✅ Logger les origines autorisées pour debug
+            app.logger.info(
+                "[Socket.IO] CORS configuré avec %d origine(s): %s",
+                len(cors_origins),
+                ", ".join(cors_origins),
+            )
+        else:
+            cors_origins = []
 
     if skip_socketio:
         app.logger.info("⏭️  Socket.IO désactivé (SKIP_SOCKETIO=1)")
@@ -380,6 +542,42 @@ def create_app(config_name: str | None = None):
 
         # NB: pas de 'upgrade_timeout' (paramètre inexistant)
         # ni 'cookie=True' (type incompatible)
+        # #region agent log
+        import json
+        import urllib.request
+        from datetime import UTC, datetime
+
+        try:
+            log_data = {
+                "location": "app.py:socketio.init_app",
+                "message": "Socket.IO initialization",
+                "data": {
+                    "async_mode": async_mode,
+                    "cors_origins": cors_origins if cors_origins else [],
+                    "cors_origins_count": len(cors_origins) if cors_origins else 0,
+                    "path": "/socket.io",
+                    "allow_upgrades": allow_ws_upgrades,
+                    "cors_credentials": True,
+                    "config_name": config_name,
+                },
+                "timestamp": int(datetime.now(UTC).timestamp() * 1000),
+                "sessionId": "debug-session",
+                "runId": "run1",
+                "hypothesisId": "C",
+            }
+            req = urllib.request.Request(
+                "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
+                data=json.dumps(log_data).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=0.1)
+        except Exception:
+            pass
+        # #endregion
+        # ✅ FIX Socket.IO multi-workers: Passer message_queue explicitement à init_app()
+        # pour garantir que Redis est utilisé pour partager les SIDs entre workers.
+        # Le message_queue est configuré dans ext.py, mais doit être passé ici aussi.
         socketio.init_app(
             app,
             async_mode=async_mode,
@@ -392,15 +590,69 @@ def create_app(config_name: str | None = None):
             max_http_buffer_size=10_000_000,  # int
             allow_upgrades=allow_ws_upgrades,
             cors_credentials=True,
+            message_queue=_socketio_message_queue,  # ✅ FIX: Passer message_queue explicitement
             # ✅ Note: La compression Socket.IO est gérée automatiquement
             # par le protocole lors de la négociation client/serveur.
             # Pas besoin de paramètre explicite dans Flask-SocketIO.
         )
+
+        # #region agent log - Socket.IO request tracking
+        @app.before_request
+        def log_socketio_requests():  # pyright: ignore[reportUnusedFunction]
+            """Log toutes les requêtes Socket.IO pour vérifier le partage SID entre workers."""
+            if request.path.startswith("/socket.io"):
+                from pathlib import Path
+
+                try:
+                    sid = (
+                        request.args.get("sid")
+                        or request.environ.get("socketio.sid")
+                        or "none"
+                    )
+                    transport = request.args.get("transport", "unknown")
+                    method = request.method
+                    worker_pid = os.getpid()
+                    debug_log_path = os.getenv(
+                        "DEBUG_LOG_PATH", r"c:\Users\jasiq\atmr\.cursor\debug.log"
+                    )
+                    log_path = Path(debug_log_path)
+                    log_path.parent.mkdir(parents=True, exist_ok=True)
+                    with log_path.open("a", encoding="utf-8") as f:
+                        log_data = {
+                            "id": f"log_{int(datetime.now(UTC).timestamp() * 1000)}_socketio_req",
+                            "timestamp": int(datetime.now(UTC).timestamp() * 1000),
+                            "location": "app.py:log_socketio_requests",
+                            "message": "Socket.IO request",
+                            "data": {
+                                "method": method,
+                                "path": request.path,
+                                "sid": str(sid),
+                                "transport": transport,
+                                "worker_pid": worker_pid,
+                                "query_string": request.query_string.decode("utf-8")[
+                                    :100
+                                ],
+                            },
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "C",
+                        }
+                        f.write(json.dumps(log_data) + "\n")
+                except Exception:
+                    pass
+
+        # #endregion
         app.logger.info(
-            "✅ Socket.IO initialisé: async_mode=%s, cors=%s, allow_upgrades=%s",
+            "✅ Socket.IO initialisé: async_mode=%s, cors=%s, allow_upgrades=%s, path=/socket.io",
             async_mode,
-            "*" if cors_origins == "*" else "restricted",
+            "*"
+            if (isinstance(cors_origins, str) and cors_origins == "*")
+            else "restricted",
             allow_ws_upgrades,
+        )
+        # ✅ Log explicite pour confirmer que Socket.IO est branché sur l'app
+        print(
+            "🔌 [SOCKET.IO] Flask-SocketIO initialisé avec path=/socket.io", flush=True
         )
 
     # ✅ 2.9: Injection trace_id dans logs pour corrélation
@@ -433,6 +685,42 @@ def create_app(config_name: str | None = None):
     def _log_socketio_requests():  # pyright: ignore[reportUnusedFunction]
         p = request.path or ""
         if p.startswith("/socket.io"):
+            # #region agent log
+            import json
+            import urllib.request
+            from datetime import UTC, datetime
+
+            try:
+                log_data = {
+                    "location": "app.py:_log_socketio_requests",
+                    "message": "Socket.IO request received",
+                    "data": {
+                        "method": request.method,
+                        "path": request.path,
+                        "full_path": request.full_path,
+                        "remote_addr": request.remote_addr,
+                        "origin": request.headers.get("Origin"),
+                        "has_cookies": bool(request.cookies),
+                        "cookie_keys": list(request.cookies.keys())
+                        if request.cookies
+                        else [],
+                        "has_authz_header": bool(request.headers.get("Authorization")),
+                    },
+                    "timestamp": int(datetime.now(UTC).timestamp() * 1000),
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "A",
+                }
+                req = urllib.request.Request(
+                    "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
+                    data=json.dumps(log_data).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                urllib.request.urlopen(req, timeout=0.1)
+            except Exception:
+                pass
+            # #endregion
             app.logger.debug(
                 "📡 SIO %s %s from %s",
                 request.method,
@@ -474,6 +762,49 @@ def create_app(config_name: str | None = None):
         except Exception:
             # Si erreur de lecture du flag, continuer normalement
             pass
+
+    # ✅ S3: Middleware pour capturer les tentatives d'accès non autorisé
+    @app.after_request
+    def _track_unauthorized_access(resp):  # pyright: ignore[reportUnusedFunction]
+        """✅ S3: Enregistre les tentatives d'accès non autorisé (401/403) pour alertes."""
+        if resp.status_code in (401, 403):
+            try:
+                from security.security_alerts import SecurityAlertService
+
+                ip_address = request.remote_addr or "unknown"
+                endpoint = request.path or "unknown"
+                user_id = None
+
+                # Essayer de récupérer l'ID utilisateur si authentifié
+                try:
+                    from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
+                        get_jwt_identity,
+                    )
+
+                    user_public_id = get_jwt_identity()
+                    if user_public_id:
+                        from models import User
+
+                        user = User.query.filter_by(public_id=user_public_id).first()
+                        if user:
+                            user_id = user.id
+                except Exception:
+                    pass  # Pas d'utilisateur authentifié ou erreur
+
+                # Enregistrer la tentative pour détection d'alertes
+                SecurityAlertService.record_unauthorized_access(
+                    ip_address=ip_address,
+                    endpoint=endpoint,
+                    status_code=resp.status_code,
+                    user_id=user_id,
+                )
+            except Exception as e:
+                # Ne pas bloquer la réponse si le tracking échoue
+                app.logger.debug(
+                    "[SecurityAlerts] Failed to track unauthorized access: %s", e
+                )
+
+        return resp
 
     # ✅ D3: Vérification DB Read-Only (chaos injector)
     @app.before_request
@@ -560,12 +891,32 @@ def create_app(config_name: str | None = None):
             return response
 
         base = Path(app.config["UPLOADS_DIR"]).resolve()
-        candidate = (base / filename).resolve()
+        try:
+            candidate = (base / filename).resolve()
+        except (ValueError, RuntimeError):
+            # Ex: "embedded null byte" ou erreurs de résolution de chemin
+            app.logger.warning(
+                "Tentative de path traversal / chemin invalide bloquée: filename=%s, base=%s",
+                filename,
+                base,
+            )
+            raise NotFound from None
 
-        # anti-path traversal
-        if not str(candidate).startswith(str(base)):
-            app.logger.warning("Tentative de path traversal bloquée: %s", filename)
-            raise NotFound
+        # ✅ S2: Protection path traversal améliorée avec Path.is_relative_to() (Python 3.9+)
+        # Plus robuste que startswith() car gère correctement les chemins Windows et liens symboliques
+        try:
+            # Vérifier que le chemin résolu est bien relatif au répertoire de base
+            # is_relative_to() lève ValueError si le chemin n'est pas relatif
+            candidate.relative_to(base)
+        except (ValueError, RuntimeError):
+            # Path traversal détecté : le chemin résolu sort du répertoire autorisé
+            app.logger.warning(
+                "Tentative de path traversal bloquée: filename=%s, resolved=%s, base=%s",
+                filename,
+                candidate,
+                base,
+            )
+            raise NotFound from None
 
         # Vérifier que le fichier existe
         if not candidate.exists():
@@ -608,7 +959,7 @@ def create_app(config_name: str | None = None):
         csp = {
             "default-src": "'self'",
             "script-src": "'self'",
-            "style-src": "'self' 'unsafe-inline'",
+            "style-src": "'self'",  # ✅ 'unsafe-inline' supprimé : tous les styles inline ont été migrés vers classes CSS
             "img-src": "'self' data: blob:",
             "connect-src": "'self' http://localhost:3000 http://127.00.1:3000 ws: wss:",
         }
@@ -619,7 +970,7 @@ def create_app(config_name: str | None = None):
         csp = {
             "default-src": "'self'",
             "script-src": "'self'",
-            "style-src": "'self' 'unsafe-inline'",
+            "style-src": "'self'",  # ✅ 'unsafe-inline' supprimé : tous les styles inline ont été migrés vers classes CSS
             "img-src": "'self' data: blob:",
             "connect-src": f"'self' {frontend_url} ws: wss:",
         }
@@ -762,8 +1113,75 @@ def create_app(config_name: str | None = None):
         talisman.init_app(app)
 
     # Retirer CSP pour les réponses JSON et forcer UTF-8
+    # ✅ S2: Ajouter headers de sécurité manquants (Referrer-Policy, Permissions-Policy)
     @app.after_request
-    def strip_csp_for_json(resp):  # pyright: ignore[reportUnusedFunction]
+    def add_security_headers_and_strip_csp(resp):  # pyright: ignore[reportUnusedFunction]
+        # #region agent log
+        if request.method == "OPTIONS":
+            try:
+                import urllib.request
+                from datetime import UTC, datetime
+
+                log_data = {
+                    "location": "app.py:add_security_headers_and_strip_csp:entry",
+                    "message": "after_request for OPTIONS",
+                    "data": {
+                        "path": request.path,
+                        "status_code": resp.status_code,
+                        "has_access_control_allow_origin": "Access-Control-Allow-Origin"
+                        in resp.headers,
+                        "access_control_allow_origin": resp.headers.get(
+                            "Access-Control-Allow-Origin"
+                        ),
+                        "all_headers": dict(resp.headers),
+                    },
+                    "timestamp": int(datetime.now(UTC).timestamp() * 1000),
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "F",
+                }
+                req = urllib.request.Request(
+                    "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
+                    data=json.dumps(log_data).encode("utf-8"),  # pyright: ignore[reportPossiblyUnboundVariable]
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                urllib.request.urlopen(req, timeout=0.1)
+            except Exception:
+                pass
+        # #endregion
+        # ✅ S2: Ajouter Referrer-Policy: strict-origin-when-cross-origin
+        # Limite la fuite d'informations via le header Referer
+        if "Referrer-Policy" not in resp.headers:
+            resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+        # ✅ S2: Ajouter Permissions-Policy pour désactiver features non nécessaires
+        # Désactive les fonctionnalités du navigateur qui ne sont pas nécessaires pour l'application
+        # Cela réduit la surface d'attaque et limite les risques de fuite d'informations
+        if "Permissions-Policy" not in resp.headers:
+            # Désactiver les fonctionnalités non nécessaires pour une application de transport
+            # - geolocation: désactivé (on utilise notre propre système de géolocalisation)
+            # - camera: désactivé (pas de caméra nécessaire)
+            # - microphone: désactivé (pas de microphone nécessaire)
+            # - payment: désactivé (gestion des paiements via API)
+            # - usb: désactivé (pas d'accès USB nécessaire)
+            # - bluetooth: désactivé (pas d'accès Bluetooth nécessaire)
+            # - magnetometer: désactivé (pas de magnétomètre nécessaire)
+            # - gyroscope: désactivé (pas de gyroscope nécessaire)
+            # - accelerometer: désactivé (pas d'accéléromètre nécessaire)
+            permissions_policy = (
+                "geolocation=(), "
+                "camera=(), "
+                "microphone=(), "
+                "payment=(), "
+                "usb=(), "
+                "bluetooth=(), "
+                "magnetometer=(), "
+                "gyroscope=(), "
+                "accelerometer=()"
+            )
+            resp.headers["Permissions-Policy"] = permissions_policy
+
         ct = (resp.headers.get("Content-Type") or "").lower()
         if "application/json" in ct:
             resp.headers.pop("Content-Security-Policy", None)
@@ -774,20 +1192,384 @@ def create_app(config_name: str | None = None):
         elif "text/" in ct and "charset" not in ct:
             current_ct = resp.headers.get("Content-Type")
             resp.headers["Content-Type"] = f"{current_ct}; charset=utf-8"
+        # #region agent log
+        if request.method == "OPTIONS":
+            try:
+                import urllib.request
+                from datetime import UTC, datetime
+
+                log_data = {
+                    "location": "app.py:add_security_headers_and_strip_csp:exit",
+                    "message": "after_request for OPTIONS (exit)",
+                    "data": {
+                        "path": request.path,
+                        "status_code": resp.status_code,
+                        "has_access_control_allow_origin": "Access-Control-Allow-Origin"
+                        in resp.headers,
+                        "access_control_allow_origin": resp.headers.get(
+                            "Access-Control-Allow-Origin"
+                        ),
+                        "all_headers": dict(resp.headers),
+                    },
+                    "timestamp": int(datetime.now(UTC).timestamp() * 1000),
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "G",
+                }
+                req = urllib.request.Request(
+                    "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
+                    data=json.dumps(log_data).encode("utf-8"),  # pyright: ignore[reportPossiblyUnboundVariable]
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                urllib.request.urlopen(req, timeout=0.1)
+            except Exception:
+                pass
+        # #endregion
         return resp
 
+    # ✅ API Versioning: Ajouter header X-API-Version dans toutes les réponses
+    @app.after_request
+    def add_api_version_header(resp):  # pyright: ignore[reportUnusedFunction]
+        """Ajoute le header X-API-Version basé sur le chemin de la requête.
+
+        Extrait la version depuis request.path :
+        - /api/v1/* → X-API-Version: v1
+        - /api/v2/* → X-API-Version: v2
+        - /api/* (legacy) → X-API-Version: legacy
+        - Autres chemins → Pas de header (non-API)
+
+        Ce header permet aux clients de détecter automatiquement la version
+        de l'API utilisée pour faciliter la migration et le debugging.
+        """
+        path = request.path or ""
+
+        # Extraire la version depuis le chemin
+        # Pattern: /api/v1/, /api/v2/, ou /api/ (legacy)
+        match = re.search(r"/api/v(\d+)/", path)
+        if match:
+            version = f"v{match.group(1)}"
+            resp.headers["X-API-Version"] = version
+        elif path.startswith("/api/") and not re.search(r"/api/v\d+/", path):
+            # Route legacy /api/* (sans /v1/ ou /v2/)
+            resp.headers["X-API-Version"] = "legacy"
+        # Pour les autres chemins (non-API), ne pas ajouter le header
+
+        return resp
+
+    # ✅ FIX CORS Mobile: Handler after_request pour garantir les headers CORS
+    # S'exécute APRÈS Flask-CORS pour s'assurer que les headers sont présents
+    @app.after_request
+    def _ensure_cors_headers_for_options(resp):  # pyright: ignore[reportUnusedFunction]
+        """Garantit que les headers CORS sont présents pour les requêtes OPTIONS."""
+        if request.method == "OPTIONS":
+            origin = request.headers.get("Origin")
+            app.logger.info(
+                "[CORS-FIX] after_request pour OPTIONS %s, origin: %s, has_headers: %s",
+                request.path,
+                origin,
+                "Access-Control-Allow-Origin" in resp.headers,
+            )
+            # Si les headers CORS ne sont pas présents, les ajouter
+            if (
+                origin
+                and origin in cors_origins
+                and "Access-Control-Allow-Origin" not in resp.headers
+            ):
+                resp.headers["Access-Control-Allow-Origin"] = origin
+                resp.headers["Access-Control-Allow-Methods"] = (
+                    "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+                )
+                resp.headers["Access-Control-Allow-Headers"] = (
+                    "Content-Type, Authorization, Cache-Control, Pragma, X-Device-ID, X-Company-ID, X-Session-ID, X-CSRF-Token, X-Csrf-Token, X-Requested-With"
+                )
+                resp.headers["Access-Control-Allow-Credentials"] = "true"
+                resp.headers["Access-Control-Max-Age"] = "3600"
+                app.logger.info(
+                    "[CORS-FIX] Headers CORS ajoutés manuellement pour %s", origin
+                )
+        return resp
+
+    # ✅ FIX CORS Mobile: Handler explicite pour les requêtes OPTIONS preflight
+    # Doit être défini AVANT Flask-CORS pour intercepter les requêtes OPTIONS
+    @app.before_request
+    def _handle_cors_preflight():  # pyright: ignore[reportUnusedFunction]
+        """Gère les requêtes OPTIONS preflight pour CORS (avant Flask-CORS)."""
+        # #region agent log - Log toutes les requêtes vers company_mobile/auth
+        if request.path.startswith("/api/v1/company_mobile/auth"):
+            log_path = Path(r"c:\Users\jasiq\atmr\.cursor\debug.log")
+            try:
+                import json
+                from datetime import UTC, datetime
+
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "location": "app.py:_handle_cors_preflight",
+                                "message": "before_request entry (all methods)",
+                                "data": {
+                                    "path": request.path,
+                                    "method": request.method,
+                                    "origin": request.headers.get("Origin"),
+                                    "content_type": request.headers.get("Content-Type"),
+                                    "has_json": request.is_json,
+                                },
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "B",
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+        # #endregion
+        if request.method == "OPTIONS":
+            # Log Flask standard pour vérifier que le handler s'exécute
+            app.logger.info(
+                "[CORS-PREFLIGHT] Handler appelé pour OPTIONS %s depuis %s",
+                request.path,
+                request.headers.get("Origin", "no-origin"),
+            )
+            # #region agent log
+            import urllib.request
+            from datetime import UTC, datetime
+
+            try:
+                origin = request.headers.get("Origin")
+                log_data = {
+                    "location": "app.py:_handle_cors_preflight",
+                    "message": "OPTIONS preflight request",
+                    "data": {
+                        "path": request.path,
+                        "origin": origin,
+                        "origin_in_cors_origins": origin in cors_origins
+                        if origin
+                        else False,
+                        "cors_origins": cors_origins,
+                        "cors_origins_count": len(cors_origins),
+                    },
+                    "timestamp": int(datetime.now(UTC).timestamp() * 1000),
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "B",
+                }
+                # json est importé en haut du fichier (ligne 18)
+                req = urllib.request.Request(
+                    "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
+                    data=json.dumps(log_data).encode("utf-8"),  # pyright: ignore[reportPossiblyUnboundVariable]
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                urllib.request.urlopen(req, timeout=0.1)
+            except Exception:
+                pass
+            # #endregion
+            # Vérifier si l'origine est autorisée
+            origin = request.headers.get("Origin")
+            app.logger.info(
+                "[CORS-PREFLIGHT] Origin: %s, cors_origins: %s, in list: %s",
+                origin,
+                cors_origins,
+                origin in cors_origins if origin else False,
+            )
+            # #region agent log
+            try:
+                log_data = {
+                    "location": "app.py:_handle_cors_preflight:check_origin",
+                    "message": "Checking origin in cors_origins",
+                    "data": {
+                        "origin": origin,
+                        "cors_origins": cors_origins,
+                        "origin_in_cors_origins": origin in cors_origins
+                        if origin
+                        else False,
+                        "cors_origins_type": type(cors_origins).__name__,
+                    },
+                    "timestamp": int(datetime.now(UTC).timestamp() * 1000),
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "C",
+                }
+                req = urllib.request.Request(
+                    "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
+                    data=json.dumps(log_data).encode("utf-8"),  # pyright: ignore[reportPossiblyUnboundVariable]
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                urllib.request.urlopen(req, timeout=0.1)
+            except Exception:
+                pass
+            # #endregion
+            if origin and origin in cors_origins:
+                response = make_response("", 204)
+                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Methods"] = (
+                    "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+                )
+                response.headers["Access-Control-Allow-Headers"] = (
+                    "Content-Type, Authorization, Cache-Control, Pragma, X-Device-ID, X-Company-ID, X-Session-ID, X-CSRF-Token, X-Csrf-Token, X-Requested-With"
+                )
+                response.headers["Access-Control-Allow-Credentials"] = "true"
+                response.headers["Access-Control-Max-Age"] = "3600"
+                app.logger.info(
+                    "[CORS-PREFLIGHT] Réponse créée avec headers: %s",
+                    str(dict(response.headers)),
+                )
+                # #region agent log
+                try:
+                    import json as json_module
+                    import urllib.request
+                    from datetime import UTC, datetime
+
+                    requested_headers = request.headers.get(
+                        "Access-Control-Request-Headers", ""
+                    )
+                    log_data = {
+                        "location": "app.py:_handle_cors_preflight:headers_set",
+                        "message": "CORS preflight headers set with X-Requested-With",
+                        "data": {
+                            "origin": origin,
+                            "requested_headers": requested_headers,
+                            "allowed_headers": response.headers.get(
+                                "Access-Control-Allow-Headers"
+                            ),
+                            "has_x_requested_with_in_allowed": "X-Requested-With"
+                            in response.headers.get("Access-Control-Allow-Headers", ""),
+                        },
+                        "timestamp": int(datetime.now(UTC).timestamp() * 1000),
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "B",
+                    }
+                    req = urllib.request.Request(
+                        "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
+                        data=json_module.dumps(log_data).encode("utf-8"),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    urllib.request.urlopen(req, timeout=0.1)
+                except Exception:
+                    pass
+                # #endregion
+                return response
+            # Si l'origine n'est pas dans cors_origins, laisser Flask-CORS gérer
+            # #region agent log
+            try:
+                log_data = {
+                    "location": "app.py:_handle_cors_preflight:origin_not_allowed",
+                    "message": "Origin not in cors_origins, letting Flask-CORS handle",
+                    "data": {
+                        "origin": origin,
+                        "cors_origins": cors_origins,
+                    },
+                    "timestamp": int(datetime.now(UTC).timestamp() * 1000),
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "E",
+                }
+                req = urllib.request.Request(
+                    "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
+                    data=json.dumps(log_data).encode("utf-8"),  # pyright: ignore[reportPossiblyUnboundVariable]
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                urllib.request.urlopen(req, timeout=0.1)
+            except Exception:
+                pass
+            # #endregion
+        return None
+
     # 5) CORS
+    # ✅ S1: Validation CORS en production - rejeter "*"
+    if config_name == "production":
+        # Normaliser cors_origins en liste pour validation
+        if isinstance(cors_origins, str):
+            origins_list = [cors_origins] if cors_origins else []
+        else:
+            origins_list = cors_origins if cors_origins else []
+
+        # Vérifier que "*" n'est pas présent
+        if "*" in origins_list or cors_origins == "*":
+            raise RuntimeError(
+                "Configuration CORS invalide pour production. "
+                + "Les origines CORS ne peuvent pas être '*' en production. "
+                + "Fournissez une liste d'origines autorisées via SOCKETIO_CORS_ORIGINS "
+                + "(ex: 'https://app.example.com,https://www.example.com')."
+            )
+        # Vérifier que la liste n'est pas vide
+        if not origins_list:
+            raise RuntimeError(
+                "Configuration CORS invalide pour production. "
+                + "SOCKETIO_CORS_ORIGINS doit être défini avec au moins une origine autorisée."
+            )
+        # Logger les origines autorisées pour documentation
+        app.logger.info(
+            "[Security] CORS configuré pour production avec %d origine(s) autorisée(s): %s",
+            len(origins_list),
+            ", ".join(origins_list),
+        )
+
+    # ✅ Log explicite de la configuration CORS avant initialisation
+    # #region agent log
+    import urllib.request
+    from datetime import UTC, datetime
+
+    try:
+        # cors_origins est toujours une liste en développement (défini lignes 445-454)
+        cors_origins_list: list[str] = list(cors_origins) if cors_origins else []
+        log_data = {
+            "location": "app.py:Flask-CORS init",
+            "message": "Flask-CORS configuration",
+            "data": {
+                "config_name": config_name,
+                "cors_origins": cors_origins_list,
+                "cors_origins_type": type(cors_origins).__name__,
+                "cors_origins_count": len(cors_origins_list),
+                "has_localhost_8081": "http://localhost:8081" in cors_origins_list,
+            },
+            "timestamp": int(datetime.now(UTC).timestamp() * 1000),
+            "sessionId": "debug-session",
+            "runId": "run1",
+            "hypothesisId": "A",
+        }
+        # json est importé en haut du fichier (ligne 18) - pyright: ignore[reportPossiblyUnboundVariable]
+        # json est importé en haut du fichier (ligne 18)
+        req = urllib.request.Request(
+            "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
+            data=json.dumps(log_data).encode("utf-8"),  # pyright: ignore[reportPossiblyUnboundVariable]
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        urllib.request.urlopen(req, timeout=0.1)
+    except Exception:
+        pass
+    # #endregion
+    app.logger.info(
+        "[Flask-CORS] Configuration avec %d origine(s) autorisée(s): %s",
+        len(cors_origins),
+        ", ".join(cors_origins),
+    )
+
     CORS(
         app,
         resources={r"/*": {"origins": "*" if cors_origins == "*" else cors_origins}},
         supports_credentials=True,
-        expose_headers=["Content-Type", "Authorization"],
+        expose_headers=["Content-Type", "Authorization", "X-CSRF-Token"],
         allow_headers=[
             "Content-Type",
             "Authorization",
             "Cache-Control",
             "Pragma",
-        ],  # ✅ Ajout Cache-Control et Pragma pour les requêtes avec no-cache
+            "X-Device-ID",
+            "X-Company-ID",
+            "X-Session-ID",
+            "X-CSRF-Token",  # ✅ S1: Header CSRF pour protection
+            "X-Csrf-Token",  # Variante du header CSRF
+            "X-Requested-With",  # ✅ Header pour identifier les requêtes mobile (Expo)
+        ],  # ✅ Ajout des en-têtes personnalisés pour l'application mobile
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     )
 
@@ -802,15 +1584,25 @@ def create_app(config_name: str | None = None):
         )
 
     # 7) Logging
-    app_log_level = getattr(
-        logging, os.getenv("APP_LOG_LEVEL", "INFO").upper(), logging.INFO
-    )
-    app.logger.setLevel(app_log_level)
-    logging.getLogger("werkzeug").setLevel(
-        getattr(
+    # ✅ S1: Forcer WARNING en production, ignorer APP_LOG_LEVEL si défini à DEBUG/INFO
+    if config_name == "production":
+        # En production, forcer WARNING minimum pour éviter fuite d'informations
+        app_log_level = logging.WARNING
+        werkzeug_log_level = logging.ERROR
+        app.logger.warning(
+            "[Security] Niveau de log forcé à WARNING en production (APP_LOG_LEVEL ignoré pour sécurité)"
+        )
+    else:
+        # En développement/testing, respecter APP_LOG_LEVEL
+        app_log_level = getattr(
+            logging, os.getenv("APP_LOG_LEVEL", "INFO").upper(), logging.INFO
+        )
+        werkzeug_log_level = getattr(
             logging, os.getenv("WERKZEUG_LOG_LEVEL", "ERROR").upper(), logging.ERROR
         )
-    )
+
+    app.logger.setLevel(app_log_level)
+    logging.getLogger("werkzeug").setLevel(werkzeug_log_level)
 
     # ✅ Ajout filtre PII si activé
     if os.getenv("MASK_PII_LOGS", "true").lower() == "true":
@@ -871,12 +1663,8 @@ def create_app(config_name: str | None = None):
             register_proactive_alerts_routes(app)
 
         if not skip_routes_init:
-            # Réponse générique aux préflights CORS (toutes routes)
-            @app.before_request
-            def _cors_preflights_any():  # pyright: ignore[reportUnusedFunction]
-                if request.method == "OPTIONS":
-                    return make_response("", 204)
-                return None
+            # Note: Le handler CORS preflight est défini AVANT Flask-CORS (ligne ~1094)
+            # pour intercepter les requêtes OPTIONS en premier
 
             # ✅ 3.2: Ajouter header Deprecation sur toutes les routes /api/v1/*
             @app.after_request
@@ -1043,7 +1831,7 @@ def create_app(config_name: str | None = None):
         # (évite 404 si RESTX rate) ---
         from routes.companies import CompanyDriversList, CompanyMe
 
-        @app.route("/api/companies/me", methods=["GET", "PUT", "OPTIONS"])  # type: ignore[arg-type]
+        @app.route("/api/companies/me", methods=["GET", "PUT", "OPTIONS"])
         def _compat_companies_me():  # pyright: ignore[reportUnusedFunction]
             if request.method == "OPTIONS":
                 return make_response("", 204)
@@ -1056,7 +1844,7 @@ def create_app(config_name: str | None = None):
 
         @app.route(
             "/api/v<int:version>/companies/me", methods=["GET", "PUT", "OPTIONS"]
-        )  # type: ignore[arg-type]
+        )
         def _compat_companies_me_v(version: int):  # pyright: ignore  # noqa: ARG001
             if request.method == "OPTIONS":
                 return make_response("", 204)
@@ -1067,7 +1855,7 @@ def create_app(config_name: str | None = None):
                 return res.put()
             raise NotFound
 
-        @app.route("/api/companies/me/drivers", methods=["GET", "OPTIONS"])  # type: ignore[arg-type]
+        @app.route("/api/companies/me/drivers", methods=["GET", "OPTIONS"])
         def _compat_companies_me_drivers():  # pyright: ignore[reportUnusedFunction]
             if request.method == "OPTIONS":
                 return make_response("", 204)
@@ -1075,7 +1863,7 @@ def create_app(config_name: str | None = None):
 
         @app.route(
             "/api/v<int:version>/companies/me/drivers", methods=["GET", "OPTIONS"]
-        )  # type: ignore[arg-type]
+        )
         def _compat_companies_me_drivers_v(  # pyright: ignore[reportUnusedFunction]
             version: int,  # noqa: ARG001
         ):
@@ -1138,7 +1926,10 @@ def create_app(config_name: str | None = None):
         @app.errorhandler(Exception)
         def handle_exception(e: Exception):  # pyright: ignore[reportUnusedFunction]
             # Intercepter les erreurs JWT expirées qui peuvent échapper aux handlers JWT
-            from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
+            from jwt.exceptions import (  # pyright: ignore[reportMissingImports]
+                ExpiredSignatureError,
+                InvalidTokenError,
+            )
 
             if isinstance(e, ExpiredSignatureError):
                 app.logger.warning("Token JWT expiré intercepté: %s", str(e))
@@ -1149,13 +1940,22 @@ def create_app(config_name: str | None = None):
                 app.logger.warning("Token JWT invalide intercepté: %s", str(e))
                 return jsonify({"error": "invalid_token", "message": str(e)}), 422
 
-            # Pour toutes les autres exceptions
+            # ✅ S1: Réduire les détails dans les stack traces en production
+            # En production, ne jamais exposer les détails de l'exception
+            is_production = config_name == "production"
+            is_debug = app.config.get("DEBUG", False)
+
+            # Logger l'exception complète (pour Sentry/logs serveur)
             app.logger.exception("Unhandled server error")
-            msg = (
-                str(e)
-                if app.config.get("DEBUG")
-                else "Une erreur interne est survenue."
-            )
+
+            # Message pour le client : générique en production, détaillé seulement en dev
+            if is_production or not is_debug:
+                # Production ou non-DEBUG : message générique
+                msg = "Une erreur interne est survenue."
+            else:
+                # Développement avec DEBUG : message détaillé (pour debugging)
+                msg = str(e)
+
             return jsonify({"error": "server_error", "message": msg}), 500
 
     # Note: handler disconnect géré dans sockets/chat.py (pas de doublon)

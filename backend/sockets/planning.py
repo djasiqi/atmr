@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 from services.socketio_service import emit_company_event
 
 if TYPE_CHECKING:
-    from flask_socketio import SocketIO
+    from flask_socketio import SocketIO  # pyright: ignore[reportMissingModuleSource]
 
 
 def emit_shift_created(company_id: int, payload: dict[str, Any]) -> None:

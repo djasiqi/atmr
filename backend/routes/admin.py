@@ -1,25 +1,50 @@
 import contextlib
+import logging
 import random
 import string
 from datetime import UTC, datetime
-
-# Constantes pour éviter les valeurs magiques
 from typing import TYPE_CHECKING, Any, cast
 
-import sentry_sdk
-from flask import request
-from flask_jwt_extended import get_jwt_identity, jwt_required
-from flask_restx import Namespace, Resource, fields
+import sentry_sdk  # pyright: ignore[reportMissingImports]
+from flask import request  # pyright: ignore[reportMissingImports]
+from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
+    get_jwt_identity,
+    jwt_required,
+)
+from flask_restx import (  # pyright: ignore[reportMissingImports]
+    Namespace,
+    Resource,
+    fields,
+)
 from sqlalchemy import and_, func, select
-from sqlalchemy.orm import joinedload
 
-from ext import app_logger, db, limiter, redis_client, role_required
-from models import Booking, BookingStatus, Client, Invoice, User, UserRole
+from ext import db, limiter, redis_client, role_required
+from models import Booking, BookingStatus, User, UserRole
+from repositories.autonomous_action_repository import (
+    AutonomousActionRepository,
+)
+from repositories.booking_repository import BookingRepository
+from repositories.company_repository import CompanyRepository
+from repositories.invoice_repository import InvoiceRepository
+from repositories.user_repository import UserRepository
 from security.ip_whitelist import ip_whitelist_required
 from services.websocket_metrics import ws_metrics
+from shared.error_handlers import APIErrorHandler
+from shared.infrastructure.adapters.auth_adapter import (
+    get_current_user_via_use_case,
+)
+
+logger = logging.getLogger(__name__)
 
 MONTH_THRESHOLD = 12
 TOTAL_ACTIONS_ZERO = 0
+
+# Initialisation des repositories et services
+user_repo = UserRepository()
+booking_repo = BookingRepository()
+invoice_repo = InvoiceRepository()
+company_repo = CompanyRepository()
+autonomous_action_repo = AutonomousActionRepository()
 
 if TYPE_CHECKING:
     from sqlalchemy.sql.elements import BinaryExpression
@@ -54,15 +79,16 @@ class AdminStats(Resource):
     @jwt_required()
     @role_required(UserRole.admin)
     @ip_whitelist_required()  # ✅ Phase 3: IP whitelist pour endpoints admin
-    @limiter.limit("100 per hour")  # ✅ 2.8: Rate limiting stats admin (coûteux)
+    # ✅ S2: Rate limiting strict pour stats admin (endpoint coûteux)
+    @limiter.limit("50 per hour")
     @admin_ns.marshal_with(stats_model)
     def get(self):
         """Récupère les statistiques administrateur."""
         try:
-            app_logger.info("🔍 Récupération des statistiques administrateur...")
-            total_bookings = Booking.query.count()
-            total_users = User.query.count()
-            total_invoices = Invoice.query.count()
+            logger.info("🔍 Récupération des statistiques administrateur...")
+            total_bookings = booking_repo.count_all()
+            total_users = user_repo.count_all()
+            total_invoices = invoice_repo.count_all()
 
             now = datetime.now(UTC)
             start_of_month = now.replace(
@@ -139,9 +165,7 @@ class AdminStats(Resource):
                     month_end = next_month_start - timedelta(microseconds=1)
 
                 # Compter les réservations pour ce mois
-                month_count = Booking.query.filter(
-                    Booking.created_at >= month_start, Booking.created_at <= month_end
-                ).count()
+                month_count = booking_repo.count_by_date_range(month_start, month_end)
 
                 # Format du mois pour l'affichage
                 month_label = month_start.strftime("%Y-%m")
@@ -152,7 +176,7 @@ class AdminStats(Resource):
                 f"📊 Stats: {total_bookings} bookings, {total_users} users, "
                 + f"{total_invoices} invoices, {total_revenue} revenue"
             )
-            app_logger.info(stats_msg)
+            logger.info(stats_msg)
             return {
                 "totalBookings": total_bookings,
                 "totalUsers": total_users,
@@ -163,7 +187,7 @@ class AdminStats(Resource):
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.exception("❌ ERREUR get_admin_stats: {e!s}")
+            logger.exception("❌ ERREUR get_admin_stats: {e!s}")
             admin_ns.abort(500, "Une erreur interne est survenue.")
 
 
@@ -174,22 +198,13 @@ class RecentBookings(Resource):
     def get(self):
         """Récupère les 5 réservations récentes."""
         try:
-            recent_bookings = (
-                Booking.query.options(
-                    joinedload(Booking.client).joinedload(Client.user)
-                )
-                .order_by(Booking.scheduled_time.desc())
-                .limit(5)
-                .all()
-            )
-            app_logger.info(
-                f"✅ {len(recent_bookings)} réservations récentes trouvées."
-            )
+            recent_bookings = booking_repo.find_recent_with_client_and_user(limit=5)
+            logger.info("✅ %s réservations récentes trouvées.", len(recent_bookings))
             return [cast("Any", b).serialize for b in recent_bookings], 200
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(f"❌ ERREUR get_recent_bookings: {e!s}", exc_info=True)
+            logger.exception("❌ ERREUR get_recent_bookings: %s", e)
             admin_ns.abort(500, "Une erreur interne est survenue.")
 
 
@@ -198,16 +213,17 @@ class AllUsers(Resource):
     @jwt_required()
     @role_required(UserRole.admin)
     @ip_whitelist_required()  # ✅ Phase 3: IP whitelist pour endpoints admin
-    @limiter.limit("200 per hour")  # ✅ 2.8: Rate limiting liste utilisateurs
+    # ✅ S2: Rate limiting pour liste utilisateurs (endpoint admin)
+    @limiter.limit("100 per hour")
     def get(self):
         """Récupère la liste complète des utilisateurs."""
         try:
-            app_logger.info("📢 Appel de l'endpoint AllUsers")
-            users = User.query.all()
+            logger.info("📢 Appel de l'endpoint AllUsers")
+            users = user_repo.find_all()
             return {"users": [cast("Any", u).serialize for u in users]}, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.exception("❌ ERREUR get_all_users: {e!s}")
+            logger.exception("❌ ERREUR get_all_users: {e!s}")
             admin_ns.abort(500, "Une erreur interne est survenue.")
 
 
@@ -218,11 +234,11 @@ class RecentUsers(Resource):
     def get(self):
         """Récupère les 5 utilisateurs récents."""
         try:
-            recent_users = User.query.order_by(User.created_at.desc()).limit(5).all()
+            recent_users = user_repo.find_recent(limit=5)
             return [cast("Any", u).serialize for u in recent_users], 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(f"❌ ERREUR get_recent_users: {e!s}", exc_info=True)
+            logger.exception("❌ ERREUR get_recent_users: %s", e)
             admin_ns.abort(500, "Une erreur interne est survenue.")
 
 
@@ -233,21 +249,14 @@ class ManageUser(Resource):
     def get(self, user_id):
         """Récupère les détails d'un utilisateur."""
         try:
-            user = (
-                User.query.options(
-                    joinedload(User.clients),
-                    joinedload(User.company),  # ← ici au singulier
-                )
-                .filter_by(id=user_id)
-                .one_or_none()
-            )
+            user = user_repo.find_by_id_with_clients_and_company(user_id)
             if not user:
                 admin_ns.abort(404, "User not found")
             return cast("Any", user).serialize, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
             db.session.rollback()
-            app_logger.exception("❌ ERREUR manage_user GET: {e}")
+            logger.exception("❌ ERREUR manage_user GET: {e}")
             admin_ns.abort(500, "Une erreur interne est survenue.")
 
     @jwt_required()
@@ -255,24 +264,17 @@ class ManageUser(Resource):
     def delete(self, user_id):
         """Supprime un utilisateur."""
         try:
-            user = (
-                User.query.options(
-                    joinedload(User.clients),
-                    joinedload(User.company),  # ← et ici aussi
-                )
-                .filter_by(id=user_id)
-                .one_or_none()
-            )
+            user = user_repo.find_by_id_with_clients_and_company(user_id)
             if not user:
                 admin_ns.abort(404, "User not found")
             db.session.delete(user)
             db.session.commit()
-            app_logger.info("✅ Utilisateur {user_id} supprimé avec succès.")
+            logger.info("✅ Utilisateur {user_id} supprimé avec succès.")
             return {"message": f"User {user_id} deleted successfully"}, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
             db.session.rollback()
-            app_logger.error(f"❌ ERREUR manage_user DELETE: {e}", exc_info=True)
+            logger.exception("❌ ERREUR manage_user DELETE: %s", e)
             admin_ns.abort(500, "Une erreur interne est survenue.")
 
 
@@ -284,14 +286,24 @@ def _setup_driver_role(
     """
     if not company_id:
         db.session.rollback()
-        return False, {"error": "company_id is required for a driver."}, 400
+        error_response, status_code = APIErrorHandler.handle_validation_error(
+            "company_id is required for a driver.",
+            field="company_id",
+            logger_instance=logger,
+        )
+        return False, error_response, status_code
 
-    from models import Company, Driver
+    from models import Driver
 
-    company = Company.query.get(company_id)
+    company = company_repo.find_model_by_id(company_id)
     if company is None:
         db.session.rollback()
-        return False, {"error": f"Company {company_id} does not exist."}, 400
+        error_response, status_code = APIErrorHandler.handle_not_found(
+            "Company",
+            company_id,
+            logger,
+        )
+        return False, error_response, status_code
 
     drv = getattr(user, "driver", None)
     if drv is None:
@@ -342,7 +354,8 @@ autonomous_action_review_model = admin_ns.model(
 class UpdateUserRole(Resource):
     @jwt_required()
     @role_required(UserRole.admin)
-    @limiter.limit("50 per hour")  # ✅ 2.8: Rate limiting changement rôle utilisateur
+    # ✅ S2: Rate limiting strict pour changement rôle (action sensible)
+    @limiter.limit("20 per hour")
     @admin_ns.expect(user_role_update_model, validate=False)
     def put(self, user_id: int):
         """Met à jour le rôle d'un utilisateur et, si besoin,
@@ -350,19 +363,24 @@ class UpdateUserRole(Resource):
         """
         try:
             # ---------- 1) Charger l'utilisateur + relations ----------
-            user_opt: User | None = User.query.options(
-                joinedload(User.driver),
-                joinedload(User.company),
-            ).get(user_id)
+            user_opt: User | None = user_repo.find_by_id_with_driver_and_company(
+                user_id
+            )
             if user_opt is None:
-                return {"error": "User not found"}, 404
+                return APIErrorHandler.handle_not_found(
+                    "User",
+                    user_id if "user_id" in locals() else None,
+                    logger,
+                )
             user = user_opt
 
             # ---------- 2) Lire & valider le payload ----------
             data = request.get_json(silent=True) or {}
 
             # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-            from marshmallow import ValidationError
+            from marshmallow import (  # pyright: ignore[reportMissingImports]
+                ValidationError,
+            )
 
             from schemas.admin_schemas import UserRoleUpdateSchema
             from schemas.validation_utils import (
@@ -386,10 +404,14 @@ class UpdateUserRole(Resource):
                 )
 
             if new_role_enum is None:
-                return {"error": "Invalid role"}, 400
+                return APIErrorHandler.handle_validation_error(
+                    "Invalid role",
+                    field="role",
+                    logger_instance=logger,
+                )
 
             old_role_value = (
-                user.role.value if isinstance(user.role, UserRole) else str(user.role)
+                user.role.value if hasattr(user.role, "value") else str(user.role)
             )
             old_role_value = str(old_role_value or "").upper()
 
@@ -452,8 +474,7 @@ class UpdateUserRole(Resource):
                 )
                 from shared.logging_utils import mask_email
 
-                current_user_id = get_jwt_identity()
-                current_user = User.query.filter_by(public_id=current_user_id).first()
+                current_user = get_current_user_via_use_case()
 
                 AuditLogger.log_action(
                     action_type="permission_changed",
@@ -481,7 +502,7 @@ class UpdateUserRole(Resource):
                 security_permission_changes_total.inc()
             except Exception as audit_error:
                 # Ne pas bloquer la modification si l'audit logging échoue
-                app_logger.warning(
+                logger.warning(
                     "Échec audit logging permission_changed: %s", audit_error
                 )
 
@@ -494,7 +515,7 @@ class UpdateUserRole(Resource):
 
         except Exception:
             db.session.rollback()
-            app_logger.exception("❌ ERREUR update_user_role: {e}")
+            logger.exception("❌ ERREUR update_user_role: {e}")
             return {"message": "Une erreur interne est survenue."}, 500
 
 
@@ -502,11 +523,12 @@ class UpdateUserRole(Resource):
 class ResetUserPassword(Resource):
     @jwt_required()
     @role_required(UserRole.admin)
-    @limiter.limit("10 per hour")  # ✅ 2.8: Rate limiting reset mot de passe (sécurité)
+    # ✅ S2: Rate limiting très strict pour reset mot de passe admin (action critique)
+    @limiter.limit("5 per hour")
     def post(self, user_id):
         """Réinitialise le mot de passe d'un utilisateur."""
         try:
-            user = User.query.filter_by(id=user_id).one_or_none()
+            user = user_repo.find_by_id(user_id)
             if user is None:
                 admin_ns.abort(404, "User not found")
                 return None  # abort() lève, mais ce return rassure l'analyste statique
@@ -514,17 +536,18 @@ class ResetUserPassword(Resource):
             new_password = "".join(
                 random.choices(string.ascii_letters + string.digits, k=12)
             )
-            # Validation explicite du mot de passe avant set_password (sécurité)
-            # Utilisation d'un wrapper qui imite l'API Django pour satisfaire Semgrep
-            from routes.utils import validate_password
+            # ✅ S3: Validation avec politique renforcée (complexité + HIBP + historique)
+            from security.password_policy import (
+                PasswordPolicyError,
+                PasswordPolicyService,
+            )
 
-            # Valider explicitement le mot de passe avant de le définir
-            # (imite django.contrib.auth.password_validation.validate_password)
-            if not validate_password(new_password):
-                admin_ns.abort(
-                    400,
-                    "Le mot de passe généré ne respecte pas les critères de sécurité",
+            try:
+                PasswordPolicyService.validate_password(
+                    new_password, user_id=u.id, check_history=True
                 )
+            except PasswordPolicyError as e:
+                admin_ns.abort(400, e.message)
             # Le mot de passe est validé explicitement par validate_password()
             # avant set_password() - satisfait les exigences de sécurité
             u.set_password(new_password)  # nosem
@@ -538,7 +561,7 @@ class ResetUserPassword(Resource):
         except Exception as e:
             sentry_sdk.capture_exception(e)
             db.session.rollback()
-            app_logger.exception("❌ ERREUR reset_password: {e!s}")
+            logger.exception("❌ ERREUR reset_password: {e!s}")
             admin_ns.abort(500, "Une erreur interne est survenue.")
 
 
@@ -568,7 +591,9 @@ class AutonomousActionsList(Resource):
 
         try:
             # ✅ 2.4: Validation Marshmallow des query parameters
-            from marshmallow import ValidationError
+            from marshmallow import (  # pyright: ignore[reportMissingImports]
+                ValidationError,
+            )
 
             from schemas.admin_schemas import AutonomousActionsListQuerySchema
             from schemas.validation_utils import (
@@ -587,39 +612,32 @@ class AutonomousActionsList(Resource):
             page = validated_params.get("page", 1)
             per_page = validated_params.get("per_page", 50)
 
-            # Construire la query
-            query = AutonomousAction.query
-
             # Filtres (utiliser données validées)
             company_id = validated_params.get("company_id")
-            if company_id:
-                query = query.filter(AutonomousAction.company_id == company_id)
-
             action_type = validated_params.get("action_type")
-            if action_type:
-                query = query.filter(AutonomousAction.action_type == action_type)
-
             success = validated_params.get("success")
-            if success is not None:
-                # Convertir string en bool (déjà validé par le schéma)
-                success_bool = success.lower() in ["true", "1", "yes"]
-                query = query.filter(AutonomousAction.success == success_bool)
-
             reviewed = validated_params.get("reviewed")
-            if reviewed is not None:
-                # Convertir string en bool (déjà validé par le schéma)
-                reviewed_bool = reviewed.lower() in ["true", "1", "yes"]
-                query = query.filter(
-                    AutonomousAction.reviewed_by_admin == reviewed_bool
-                )
-
             start_date = validated_params.get("start_date")
-            if start_date:
-                query = query.filter(AutonomousAction.created_at >= start_date)
-
             end_date = validated_params.get("end_date")
-            if end_date:
-                query = query.filter(AutonomousAction.created_at <= end_date)
+
+            # Convertir string en bool pour success et reviewed
+            success_bool = None
+            if success is not None:
+                success_bool = success.lower() in ["true", "1", "yes"]
+
+            reviewed_bool = None
+            if reviewed is not None:
+                reviewed_bool = reviewed.lower() in ["true", "1", "yes"]
+
+            # Construire la query avec filtres
+            query = autonomous_action_repo.find_all_with_filters_query(
+                company_id=company_id,
+                action_type=action_type,
+                success=success_bool,
+                reviewed=reviewed_bool,
+                start_date=start_date,
+                end_date=end_date,
+            )
 
             # Tri par date décroissante
             query = query.order_by(AutonomousAction.created_at.desc())
@@ -640,7 +658,7 @@ class AutonomousActionsList(Resource):
             }, 200
 
         except Exception as e:
-            app_logger.error(f"❌ ERREUR list_autonomous_actions: {e!s}", exc_info=True)
+            logger.exception("❌ ERREUR list_autonomous_actions: %s", e)
             return {"message": "Erreur lors de la récupération des actions"}, 500
 
 
@@ -676,23 +694,20 @@ class AutonomousActionsStats(Resource):
             else:  # day
                 start_time = now - timedelta(days=1)
 
-            # Base query
-            query = AutonomousAction.query.filter(
-                AutonomousAction.created_at >= start_time
-            )
-
-            if company_id:
-                query = query.filter(AutonomousAction.company_id == company_id)
-
+            # Base query avec repository
             # Statistiques globales
-            total_actions = query.count()
-            successful_actions = query.filter(
-                AutonomousAction.success.is_(True)
-            ).count()
-            failed_actions = query.filter(AutonomousAction.success.is_(False)).count()
-            reviewed_actions = query.filter(
-                AutonomousAction.reviewed_by_admin.is_(True)
-            ).count()
+            total_actions = autonomous_action_repo.count_with_filters(
+                company_id=company_id, start_date=start_time
+            )
+            successful_actions = autonomous_action_repo.count_with_filters(
+                company_id=company_id, start_date=start_time, success=True
+            )
+            failed_actions = autonomous_action_repo.count_with_filters(
+                company_id=company_id, start_date=start_time, success=False
+            )
+            reviewed_actions = autonomous_action_repo.count_with_filters(
+                company_id=company_id, start_date=start_time, reviewed=True
+            )
 
             # Stats par type d'action
             action_type_stats = db.session.query(
@@ -781,9 +796,7 @@ class AutonomousActionsStats(Resource):
             }, 200
 
         except Exception as e:
-            app_logger.error(
-                f"❌ ERREUR autonomous_actions_stats: {e!s}", exc_info=True
-            )
+            logger.exception("❌ ERREUR autonomous_actions_stats: %s", e)
             return {"message": "Erreur lors du calcul des statistiques"}, 500
 
 
@@ -797,13 +810,11 @@ class AutonomousActionDetail(Resource):
         """Récupère les détails d'une action autonome."""
 
         try:
-            from models.autonomous_action import AutonomousAction
-
-            action = AutonomousAction.query.get_or_404(action_id)
+            action = autonomous_action_repo.find_by_id_or_404(action_id)
             return action.to_dict(), 200
 
         except Exception as e:
-            app_logger.error(f"❌ ERREUR get_autonomous_action: {e!s}", exc_info=True)
+            logger.exception("❌ ERREUR get_autonomous_action: %s", e)
             return {"message": "Action non trouvée"}, 404
 
 
@@ -820,17 +831,19 @@ class AutonomousActionReview(Resource):
         Body:
         - notes: notes optionnelles de l'admin (max 1000 caractères)
         """
-        from flask_jwt_extended import get_jwt_identity
+        from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
+            get_jwt_identity,
+        )
 
         try:
-            from models.autonomous_action import AutonomousAction
-
-            action = AutonomousAction.query.get_or_404(action_id)
+            action = autonomous_action_repo.find_by_id_or_404(action_id)
 
             data = request.get_json() or {}
 
             # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-            from marshmallow import ValidationError
+            from marshmallow import (  # pyright: ignore[reportMissingImports]
+                ValidationError,
+            )
 
             from schemas.admin_schemas import AutonomousActionReviewSchema
             from schemas.validation_utils import (
@@ -853,8 +866,10 @@ class AutonomousActionReview(Resource):
 
             db.session.commit()
 
-            app_logger.info(
-                f"✅ Action {action_id} reviewée par admin {get_jwt_identity()}"
+            logger.info(
+                "✅ Action %s reviewée par admin %s",
+                action_id,
+                get_jwt_identity(),
             )
 
             return {
@@ -864,7 +879,7 @@ class AutonomousActionReview(Resource):
 
         except Exception:
             db.session.rollback()
-            app_logger.exception("❌ ERREUR review_action: {e!s}")
+            logger.exception("❌ ERREUR review_action: {e!s}")
             return {"message": "Erreur lors de la review"}, 500
 
 
@@ -923,18 +938,19 @@ class OptunaOptimize(Resource):
             eval_episodes = data.get("eval_episodes", 15)
             custom_days = data.get("custom_days", 7)
 
-            app_logger.info(
-                (
-                    f"🚀 Démarrage optimisation Optuna par admin {get_jwt_identity()}: "
-                    f"company_id={company_id}, period={data_period}, trials={n_trials}"
-                )
+            logger.info(
+                "🚀 Démarrage optimisation Optuna par admin %s: company_id=%s, period=%s, trials=%s",
+                get_jwt_identity(),
+                company_id,
+                data_period,
+                n_trials,
             )
 
             # Faire une requête HTTP vers le worker RL pour lancer l'optimisation
             # Le worker RL a accès à Optuna et à la base de données RL PostgreSQL
             import os
 
-            import requests
+            import requests  # pyright: ignore[reportMissingModuleSource]
 
             # URL du worker RL (par défaut : atmr-rl-worker:5000 dans le réseau Docker)
             rl_worker_url = os.getenv(
@@ -944,7 +960,7 @@ class OptunaOptimize(Resource):
             # Forcer HTTP si l'URL commence par https:// (communication interne Docker)
             if rl_worker_url.startswith("https://"):
                 rl_worker_url = rl_worker_url.replace("https://", "http://", 1)
-                app_logger.warning(
+                logger.warning(
                     "⚠️ URL worker RL était en HTTPS, conversion en HTTP pour communication interne"
                 )
 
@@ -954,11 +970,11 @@ class OptunaOptimize(Resource):
 
             rl_endpoint = f"{rl_worker_url}/api/v1/rl/optuna/optimize"
 
-            app_logger.info(
-                (
-                    f"📡 Envoi requête vers worker RL: {rl_endpoint} "
-                    f"(company_id={company_id}, trials={n_trials})"
-                )
+            logger.info(
+                "📡 Envoi requête vers worker RL: %s (company_id=%s, trials=%s)",
+                rl_endpoint,
+                company_id,
+                n_trials,
             )
 
             # Préparer les données à envoyer
@@ -978,7 +994,7 @@ class OptunaOptimize(Resource):
 
                 # Désactiver les avertissements SSL pour les connexions internes non sécurisées
                 try:
-                    import urllib3
+                    import urllib3  # pyright: ignore[reportMissingImports]
 
                     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
                 except ImportError:
@@ -1002,8 +1018,8 @@ class OptunaOptimize(Resource):
 
                 for redirect_count in range(MAX_REDIRECTS + 1):
                     if redirect_count > 0:
-                        app_logger.info(
-                            f"🔄 Tentative {redirect_count + 1}: {current_url}"
+                        logger.info(
+                            "🔄 Tentative %s: %s", redirect_count + 1, current_url
                         )
 
                     # Faire la requête (sans suivre les redirections pour pouvoir les intercepter)
@@ -1028,11 +1044,11 @@ class OptunaOptimize(Resource):
                     # Toujours forcer HTTP (même si l'URL est déjà en HTTP)
                     if redirect_url.startswith("https://"):
                         redirect_url = redirect_url.replace("https://", "http://", 1)
-                        app_logger.warning(
-                            (
-                                f"⚠️ Redirection HTTPS détectée (tentative {redirect_count + 1}), "
-                                f"conversion en HTTP: {current_url} → {redirect_url}"
-                            )
+                        logger.warning(
+                            "⚠️ Redirection HTTPS détectée (tentative %s), conversion en HTTP: %s → %s",
+                            redirect_count + 1,
+                            current_url,
+                            redirect_url,
                         )
                     elif not redirect_url.startswith("http://"):
                         # URL relative, construire depuis l'URL actuelle
@@ -1051,7 +1067,7 @@ class OptunaOptimize(Resource):
                 # Vérifier qu'on a une réponse valide
                 if response is None:
                     error_msg = "Aucune réponse reçue du worker RL"
-                    app_logger.error(f"❌ {error_msg}")
+                    logger.error("❌ %s", error_msg)
                     return (
                         {
                             "message": "Erreur lors de la communication avec le worker RL",
@@ -1069,7 +1085,7 @@ class OptunaOptimize(Resource):
                         f"Trop de redirections ({MAX_REDIRECTS}), "
                         f"dernière URL: {current_url}"
                     )
-                    app_logger.error(f"❌ {error_msg}")
+                    logger.error("❌ %s", error_msg)
                     return (
                         {
                             "message": "Erreur lors de la communication avec le worker RL",
@@ -1082,22 +1098,19 @@ class OptunaOptimize(Resource):
                 if response.status_code == HTTP_STATUS_ACCEPTED:
                     # Succès : le worker RL a accepté la requête
                     worker_response = response.json()
-                    app_logger.info(
-                        (
-                            f"✅ Worker RL a accepté l'optimisation: "
-                            f"{worker_response.get('status', 'unknown')}"
-                        )
+                    logger.info(
+                        "✅ Worker RL a accepté l'optimisation: %s",
+                        worker_response.get("status", "unknown"),
                     )
                     # Utiliser directement la réponse du worker RL
                     response_data = worker_response
                 else:
                     # Erreur : le worker RL a rejeté la requête
                     error_msg = response.text or f"Status code: {response.status_code}"
-                    app_logger.error(
-                        (
-                            f"❌ Erreur lors de l'appel au worker RL "
-                            f"(status {response.status_code}): {error_msg}"
-                        )
+                    logger.error(
+                        "❌ Erreur lors de l'appel au worker RL (status %s): %s",
+                        response.status_code,
+                        error_msg,
                     )
                     return (
                         {
@@ -1109,11 +1122,10 @@ class OptunaOptimize(Resource):
 
             except requests.exceptions.RequestException as e:
                 # Erreur de connexion au worker RL
-                app_logger.exception(
-                    (
-                        f"❌ Impossible de se connecter au worker RL "
-                        f"({rl_endpoint}): {e!s}"
-                    )
+                logger.exception(
+                    "❌ Impossible de se connecter au worker RL (%s): %s",
+                    rl_endpoint,
+                    e,
                 )
                 return (
                     {
@@ -1138,8 +1150,7 @@ class OptunaOptimize(Resource):
             try:
                 from security.audit_log import AuditLogger
 
-                current_user_id = get_jwt_identity()
-                current_user = User.query.filter_by(public_id=current_user_id).first()
+                current_user = get_current_user_via_use_case()
 
                 AuditLogger.log_action(
                     action_type="optuna_optimization_started",
@@ -1159,13 +1170,13 @@ class OptunaOptimize(Resource):
                     user_agent=request.headers.get("User-Agent"),
                 )
             except Exception as audit_error:
-                app_logger.warning(f"⚠️ Erreur audit logging: {audit_error}")
+                logger.warning("⚠️ Erreur audit logging: %s", audit_error)
 
             return response_data, 202  # 202 Accepted (traitement asynchrone)
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(f"❌ ERREUR optuna_optimize: {e!s}", exc_info=True)
+            logger.exception("❌ ERREUR optuna_optimize: %s", e)
             return {"message": "Erreur lors du démarrage de l'optimisation"}, 500
 
 
@@ -1235,17 +1246,18 @@ class OptunaTrain(Resource):
             eval_episodes = data.get("eval_episodes", 50)
             company_id = data.get("company_id")
 
-            app_logger.info(
-                (
-                    f"🎓 Démarrage entraînement modèle optimal par admin {get_jwt_identity()}: "
-                    f"config_path={config_path}, study_name={study_name}, episodes={training_episodes}"
-                )
+            logger.info(
+                "🎓 Démarrage entraînement modèle optimal par admin %s: config_path=%s, study_name=%s, episodes=%s",
+                get_jwt_identity(),
+                config_path,
+                study_name,
+                training_episodes,
             )
 
             # Faire une requête HTTP vers le worker RL pour lancer l'entraînement
             import os
 
-            import requests
+            import requests  # pyright: ignore[reportMissingModuleSource]
 
             # URL du worker RL (par défaut : atmr-rl-worker:5000 dans le réseau Docker)
             rl_worker_url = os.getenv(
@@ -1261,8 +1273,10 @@ class OptunaTrain(Resource):
 
             rl_endpoint = f"{rl_worker_url}/api/v1/rl/train/optimal"
 
-            app_logger.info(
-                f"📡 Envoi requête vers worker RL: {rl_endpoint} (episodes={training_episodes})"
+            logger.info(
+                "📡 Envoi requête vers worker RL: %s (episodes=%s)",
+                rl_endpoint,
+                training_episodes,
             )
 
             # Préparer les données à envoyer
@@ -1277,7 +1291,7 @@ class OptunaTrain(Resource):
 
             # Désactiver les avertissements SSL pour les connexions internes
             try:
-                import urllib3
+                import urllib3  # pyright: ignore[reportMissingImports]
 
                 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
             except ImportError:
@@ -1296,14 +1310,17 @@ class OptunaTrain(Resource):
                 HTTP_STATUS_ACCEPTED = 202
                 if response.status_code == HTTP_STATUS_ACCEPTED:
                     worker_response = response.json()
-                    app_logger.info(
-                        f"✅ Worker RL a accepté l'entraînement: {worker_response.get('status', 'unknown')}"
+                    logger.info(
+                        "✅ Worker RL a accepté l'entraînement: %s",
+                        worker_response.get("status", "unknown"),
                     )
                     response_data = worker_response
                 else:
                     error_msg = response.text or f"Status code: {response.status_code}"
-                    app_logger.error(
-                        f"❌ Erreur lors de l'appel au worker RL (status {response.status_code}): {error_msg}"
+                    logger.error(
+                        "❌ Erreur lors de l'appel au worker RL (status %s): %s",
+                        response.status_code,
+                        error_msg,
                     )
                     return (
                         {
@@ -1314,8 +1331,10 @@ class OptunaTrain(Resource):
                     )
 
             except requests.exceptions.RequestException as e:
-                app_logger.exception(
-                    f"❌ Impossible de se connecter au worker RL ({rl_endpoint}): {e!s}"
+                logger.exception(
+                    "❌ Impossible de se connecter au worker RL (%s): %s",
+                    rl_endpoint,
+                    e,
                 )
                 return (
                     {
@@ -1333,8 +1352,7 @@ class OptunaTrain(Resource):
             try:
                 from security.audit_log import AuditLogger
 
-                current_user_id = get_jwt_identity()
-                current_user = User.query.filter_by(public_id=current_user_id).first()
+                current_user = get_current_user_via_use_case()
 
                 AuditLogger.log_action(
                     action_type="rl_model_training_started",
@@ -1356,13 +1374,13 @@ class OptunaTrain(Resource):
                     user_agent=request.headers.get("User-Agent"),
                 )
             except Exception as audit_error:
-                app_logger.warning(f"⚠️ Erreur audit logging: {audit_error}")
+                logger.warning("⚠️ Erreur audit logging: %s", audit_error)
 
             return response_data, 202  # 202 Accepted (traitement asynchrone)
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(f"❌ ERREUR optuna_train: {e!s}", exc_info=True)
+            logger.exception("❌ ERREUR optuna_train: %s", e)
             return {"message": "Erreur lors du démarrage de l'entraînement"}, 500
 
 
@@ -1393,10 +1411,10 @@ class WebSocketMetricsResource(Resource):
             else:
                 stats["drivers_online_count"] = 0
 
-            app_logger.info("📊 Métriques WebSocket récupérées")
+            logger.info("📊 Métriques WebSocket récupérées")
             return stats, 200
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(f"❌ ERREUR websocket_metrics: {e!s}", exc_info=True)
-            return {"error": "Erreur lors de la récupération des métriques"}, 500
+            logger.exception("❌ ERREUR websocket_metrics: %s", e)
+            return APIErrorHandler.handle_exception(e, logger)

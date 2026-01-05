@@ -3,6 +3,7 @@
 
 import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import type { DriverAccountInfo } from "@/services/enterpriseDispatch";
 
 // ============ Clés de stockage sécurisé (SecureStore) ============
 const SECURE_KEYS = {
@@ -11,9 +12,36 @@ const SECURE_KEYS = {
   USER_PUBLIC_ID: "auth.user_public_id", // Optionnel, pour auto-login
 } as const;
 
+// ============ Cache en mémoire pour optimisation des performances ============
+// ⚡ Phase 1 : Cache en mémoire pour réduire les lectures SecureStore répétées
+// Cache pour access_token (TTL: 1 minute - tokens expirent après 1h)
+let cachedAccessToken: string | null = null;
+let tokenCacheTime = 0;
+const TOKEN_CACHE_TTL = 60000; // 1 minute
+
+// Cache pour refresh_token (TTL: 5 minutes - moins fréquent)
+let cachedRefreshToken: string | null = null;
+let refreshTokenCacheTime = 0;
+const REFRESH_TOKEN_CACHE_TTL = 300000; // 5 minutes
+
+// ⚡ Phase 4 : Métriques de performance (optionnel, pour debug)
+// Uniquement actif en mode développement
+let accessTokenCacheHitCount = 0;
+let accessTokenCacheMissCount = 0;
+let accessTokenTotalReadTime = 0;
+let accessTokenReadCount = 0;
+
+let refreshTokenCacheHitCount = 0;
+let refreshTokenCacheMissCount = 0;
+let refreshTokenTotalReadTime = 0;
+let refreshTokenReadCount = 0;
+
+const METRICS_LOG_INTERVAL = 100; // Log toutes les 100 lectures
+
 // ============ Clés de stockage non-sécurisé (AsyncStorage) ============
 const ASYNC_KEYS = {
   DRIVER_ID: "driver_id",
+  DRIVER_ACCOUNT_INFO: "enterprise.driver_account_info", // Info du compte chauffeur associé
   // Note : ACCESS_TOKEN a été déplacé vers SecureStore pour sécurité renforcée
 } as const;
 
@@ -21,23 +49,81 @@ const ASYNC_KEYS = {
 export const secureStorage = {
   /**
    * Stocke le refresh token de manière sécurisée (Keychain/Keystore)
+   * ⚡ Optimisation : Met à jour le cache en mémoire immédiatement
    */
   async setRefreshToken(token: string): Promise<void> {
     await SecureStore.setItemAsync(SECURE_KEYS.REFRESH_TOKEN, token);
+
+    // Mettre à jour le cache immédiatement
+    cachedRefreshToken = token;
+    refreshTokenCacheTime = Date.now();
   },
 
   /**
    * Récupère le refresh token depuis le stockage sécurisé
+   * ⚡ Optimisation : Utilise le cache en mémoire si disponible et valide
    */
   async getRefreshToken(): Promise<string | null> {
-    return await SecureStore.getItemAsync(SECURE_KEYS.REFRESH_TOKEN);
+    const startTime = __DEV__ ? Date.now() : 0;
+    const now = Date.now();
+
+    // Vérifier le cache en mémoire
+    if (
+      cachedRefreshToken &&
+      now - refreshTokenCacheTime < REFRESH_TOKEN_CACHE_TTL
+    ) {
+      if (__DEV__) {
+        refreshTokenCacheHitCount++;
+      }
+      return cachedRefreshToken;
+    }
+
+    if (__DEV__) {
+      refreshTokenCacheMissCount++;
+    }
+
+    // Lire depuis SecureStore
+    const token = await SecureStore.getItemAsync(SECURE_KEYS.REFRESH_TOKEN);
+
+    // Mettre à jour le cache
+    cachedRefreshToken = token;
+    refreshTokenCacheTime = now;
+
+    // ⚡ Phase 4 : Métriques de performance (dev uniquement)
+    if (__DEV__) {
+      const readTime = Date.now() - startTime;
+      refreshTokenTotalReadTime += readTime;
+      refreshTokenReadCount++;
+
+      // Log périodique
+      if (refreshTokenReadCount % METRICS_LOG_INTERVAL === 0) {
+        const avgReadTime =
+          refreshTokenTotalReadTime / refreshTokenReadCount;
+        const totalRequests =
+          refreshTokenCacheHitCount + refreshTokenCacheMissCount;
+        const cacheHitRate =
+          totalRequests > 0
+            ? (refreshTokenCacheHitCount / totalRequests) * 100
+            : 0;
+        console.log(
+          `[Storage] RefreshToken Performance: avg=${avgReadTime.toFixed(2)}ms, cache=${cacheHitRate.toFixed(1)}%, hits=${refreshTokenCacheHitCount}, misses=${refreshTokenCacheMissCount}`
+        );
+      }
+    }
+
+    return token;
   },
 
   /**
    * Supprime le refresh token du stockage sécurisé
+   * ⚡ Optimisation : Nettoie le cache en mémoire
    */
   async removeRefreshToken(): Promise<void> {
     await SecureStore.deleteItemAsync(SECURE_KEYS.REFRESH_TOKEN);
+
+    // Nettoyer le cache
+    cachedRefreshToken = null;
+    refreshTokenCacheTime = 0;
   },
 
   /**
@@ -64,27 +150,83 @@ export const secureStorage = {
   /**
    * Stocke le token d'accès de manière sécurisée (Keychain/Keystore)
    * ✅ Amélioration de sécurité : Même si court terme, le token d'accès est sensible
+   * ⚡ Optimisation : Met à jour le cache en mémoire immédiatement
    */
   async setAccessToken(token: string): Promise<void> {
     await SecureStore.setItemAsync(SECURE_KEYS.ACCESS_TOKEN, token);
+
+    // Mettre à jour le cache immédiatement
+    cachedAccessToken = token;
+    tokenCacheTime = Date.now();
   },
 
   /**
    * Récupère le token d'accès depuis le stockage sécurisé
+   * ⚡ Optimisation : Utilise le cache en mémoire si disponible et valide
+   * Réduit les lectures SecureStore répétées lors de requêtes simultanées
    */
   async getAccessToken(): Promise<string | null> {
-    return await SecureStore.getItemAsync(SECURE_KEYS.ACCESS_TOKEN);
+    const startTime = __DEV__ ? Date.now() : 0;
+    const now = Date.now();
+
+    // Vérifier le cache en mémoire
+    if (cachedAccessToken && now - tokenCacheTime < TOKEN_CACHE_TTL) {
+      if (__DEV__) {
+        accessTokenCacheHitCount++;
+      }
+      return cachedAccessToken;
+    }
+
+    if (__DEV__) {
+      accessTokenCacheMissCount++;
+    }
+
+    // Lire depuis SecureStore
+    const token = await SecureStore.getItemAsync(SECURE_KEYS.ACCESS_TOKEN);
+
+    // Mettre à jour le cache
+    cachedAccessToken = token;
+    tokenCacheTime = now;
+
+    // ⚡ Phase 4 : Métriques de performance (dev uniquement)
+    if (__DEV__) {
+      const readTime = Date.now() - startTime;
+      accessTokenTotalReadTime += readTime;
+      accessTokenReadCount++;
+
+      // Log périodique
+      if (accessTokenReadCount % METRICS_LOG_INTERVAL === 0) {
+        const avgReadTime = accessTokenTotalReadTime / accessTokenReadCount;
+        const totalRequests =
+          accessTokenCacheHitCount + accessTokenCacheMissCount;
+        const cacheHitRate =
+          totalRequests > 0
+            ? (accessTokenCacheHitCount / totalRequests) * 100
+            : 0;
+        console.log(
+          `[Storage] AccessToken Performance: avg=${avgReadTime.toFixed(2)}ms, cache=${cacheHitRate.toFixed(1)}%, hits=${accessTokenCacheHitCount}, misses=${accessTokenCacheMissCount}`
+        );
+      }
+    }
+
+    return token;
   },
 
   /**
    * Supprime le token d'accès du stockage sécurisé
+   * ⚡ Optimisation : Nettoie le cache en mémoire
    */
   async removeAccessToken(): Promise<void> {
     await SecureStore.deleteItemAsync(SECURE_KEYS.ACCESS_TOKEN);
+
+    // Nettoyer le cache
+    cachedAccessToken = null;
+    tokenCacheTime = 0;
   },
 
   /**
    * Nettoie tout le stockage sécurisé (refresh_token, access_token, user_public_id)
+   * ⚡ Optimisation : Nettoie également tous les caches en mémoire
    */
   async clearAll(): Promise<void> {
     await Promise.all([
@@ -92,6 +234,70 @@ export const secureStorage = {
       SecureStore.deleteItemAsync(SECURE_KEYS.ACCESS_TOKEN),
       SecureStore.deleteItemAsync(SECURE_KEYS.USER_PUBLIC_ID),
     ]);
+
+    // Nettoyer tous les caches en mémoire
+    cachedAccessToken = null;
+    tokenCacheTime = 0;
+    cachedRefreshToken = null;
+    refreshTokenCacheTime = 0;
+
+    // ⚡ Phase 4 : Réinitialiser les métriques
+    if (__DEV__) {
+      accessTokenCacheHitCount = 0;
+      accessTokenCacheMissCount = 0;
+      accessTokenTotalReadTime = 0;
+      accessTokenReadCount = 0;
+      refreshTokenCacheHitCount = 0;
+      refreshTokenCacheMissCount = 0;
+      refreshTokenTotalReadTime = 0;
+      refreshTokenReadCount = 0;
+    }
+  },
+
+  /**
+   * ⚡ Phase 4 : Récupère les métriques de performance (dev uniquement)
+   * Utile pour le debugging et l'analyse des performances
+   */
+  getPerformanceMetrics() {
+    if (!__DEV__) {
+      return null;
+    }
+
+    const accessTokenTotal =
+      accessTokenCacheHitCount + accessTokenCacheMissCount;
+    const refreshTokenTotal =
+      refreshTokenCacheHitCount + refreshTokenCacheMissCount;
+
+    return {
+      accessToken: {
+        cacheHits: accessTokenCacheHitCount,
+        cacheMisses: accessTokenCacheMissCount,
+        totalRequests: accessTokenTotal,
+        cacheHitRate:
+          accessTokenTotal > 0
+            ? (accessTokenCacheHitCount / accessTokenTotal) * 100
+            : 0,
+        avgReadTime:
+          accessTokenReadCount > 0
+            ? accessTokenTotalReadTime / accessTokenReadCount
+            : 0,
+        totalReads: accessTokenReadCount,
+      },
+      refreshToken: {
+        cacheHits: refreshTokenCacheHitCount,
+        cacheMisses: refreshTokenCacheMissCount,
+        totalRequests: refreshTokenTotal,
+        cacheHitRate:
+          refreshTokenTotal > 0
+            ? (refreshTokenCacheHitCount / refreshTokenTotal) * 100
+            : 0,
+        avgReadTime:
+          refreshTokenReadCount > 0
+            ? refreshTokenTotalReadTime / refreshTokenReadCount
+            : 0,
+        totalReads: refreshTokenReadCount,
+      },
+    };
   },
 };
 
@@ -121,11 +327,39 @@ export const asyncStorage = {
   },
 
   /**
+   * Stocke l'info du compte chauffeur associé (pour éviter de refaire l'appel API)
+   */
+  async setDriverAccountInfo(info: DriverAccountInfo): Promise<void> {
+    await AsyncStorage.setItem(
+      ASYNC_KEYS.DRIVER_ACCOUNT_INFO,
+      JSON.stringify(info)
+    );
+  },
+
+  /**
+   * Récupère l'info du compte chauffeur associé
+   */
+  async getDriverAccountInfo(): Promise<DriverAccountInfo | null> {
+    const info = await AsyncStorage.getItem(ASYNC_KEYS.DRIVER_ACCOUNT_INFO);
+    return info ? (JSON.parse(info) as DriverAccountInfo) : null;
+  },
+
+  /**
+   * Supprime l'info du compte chauffeur associé
+   */
+  async removeDriverAccountInfo(): Promise<void> {
+    await AsyncStorage.removeItem(ASYNC_KEYS.DRIVER_ACCOUNT_INFO);
+  },
+
+  /**
    * Nettoie tout le stockage d'authentification non-sécurisé (IDs uniquement)
    * Note : Les tokens sont maintenant gérés par secureStorage
    */
   async clearAuth(): Promise<void> {
-    await AsyncStorage.multiRemove([ASYNC_KEYS.DRIVER_ID]);
+    await AsyncStorage.multiRemove([
+      ASYNC_KEYS.DRIVER_ID,
+      ASYNC_KEYS.DRIVER_ACCOUNT_INFO,
+    ]);
   },
 };
 

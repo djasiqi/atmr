@@ -1,5 +1,5 @@
 // styles/chatStyles.ts
-import { StyleSheet } from "react-native";
+import { StyleSheet, Platform } from "react-native";
 
 const palette = {
   background: "#F5F7F6",
@@ -14,6 +14,47 @@ const palette = {
   companyMessageBg: "rgba(95,115,105,0.08)",
   companyMessageBorder: "rgba(95,115,105,0.15)",
 };
+
+// Styles shadow conditionnels pour éviter l'avertissement de dépréciation
+const messageContainerShadow = Platform.OS === 'web'
+  ? { boxShadow: '0 2px 8px rgba(16,39,30,0.06)' }
+  : {
+      shadowColor: "rgba(16,39,30,0.06)",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      elevation: 2,
+    };
+
+const inputShadow = Platform.OS === 'web'
+  ? { boxShadow: '0 2px 4px rgba(16,39,30,0.04)' }
+  : {
+      shadowColor: "rgba(16,39,30,0.04)",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 4,
+      elevation: 1,
+    };
+
+const sendButtonShadow = Platform.OS === 'web'
+  ? { boxShadow: '0 4px 8px rgba(10,127,89,0.24)' }
+  : {
+      shadowColor: palette.accent,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.24,
+      shadowRadius: 8,
+      elevation: 4,
+    };
+
+const scrollToBottomButtonShadow = Platform.OS === 'web'
+  ? { boxShadow: '0 2px 4px rgba(0,0,0,0.25)' }
+  : {
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      elevation: 5,
+    };
 
 export const chatStyles = StyleSheet.create({
   container: {
@@ -58,11 +99,7 @@ export const chatStyles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderWidth: 1,
-    shadowColor: "rgba(16,39,30,0.06)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
+    ...messageContainerShadow,
   },
   driverMessage: {
     alignSelf: "flex-end",
@@ -140,11 +177,7 @@ export const chatStyles = StyleSheet.create({
     fontSize: 15,
     color: palette.text,
     marginRight: 10,
-    shadowColor: "rgba(16,39,30,0.04)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 1,
+    ...inputShadow,
   },
 
   inputPlaceholder: {
@@ -158,11 +191,7 @@ export const chatStyles = StyleSheet.create({
     backgroundColor: palette.accent,
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: palette.accent,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.24,
-    shadowRadius: 8,
-    elevation: 4,
+    ...sendButtonShadow,
   },
 
   emptyContainer: {
@@ -227,11 +256,7 @@ export const chatStyles = StyleSheet.create({
     backgroundColor: palette.accent,
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+    ...scrollToBottomButtonShadow,
   },
 
   // --- TYPING INDICATOR ---

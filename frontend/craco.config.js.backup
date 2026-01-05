@@ -1,0 +1,165 @@
+// craco.config.js
+// Configuration pour @craco/craco (alternative moderne à react-app-rewired)
+
+const SML_EXCLUDE = /node_modules[\\/](svg-engine)/;
+const MiniCssExtractPlugin = require('mini-css-extract-plugin');
+
+module.exports = {
+  eslint: {
+    enable: false, // ✅ Désactiver ESLint pour éviter l'erreur eslint-loader
+  },
+  devServer: {
+    // ✅ Désactiver complètement HMR pour éviter les erreurs ModuleHotAcceptDependency
+    hot: false,
+    liveReload: true, // Utiliser live reload au lieu de HMR (recharge complète de la page)
+    webSocketServer: false, // Désactiver WebSocket pour HMR
+    // ✅ Laisser Create React App utiliser sa valeur par défaut pour host
+    // Ne pas définir host ici pour éviter les conflits
+    port: 3000,
+  },
+  webpack: {
+    configure: (config, { env }) => {
+      // ✅ Fix: Supprimer les propriétés obsolètes de devServer et forcer la configuration
+      if (config.devServer) {
+        // Supprimer les propriétés obsolètes qui causent l'erreur
+        delete config.devServer.onAfterSetupMiddleware;
+        delete config.devServer.onBeforeSetupMiddleware;
+        // ✅ Ne pas forcer le host - laisser Create React App utiliser sa valeur par défaut
+        // Supprimer host si défini pour éviter les conflits
+        if (config.devServer.host) {
+          delete config.devServer.host;
+        }
+        config.devServer.port = 3000;
+        config.devServer.allowedHosts = 'all';
+        // ✅ S'assurer que le serveur démarre vraiment
+        config.devServer.open = false; // Ne pas ouvrir automatiquement le navigateur
+        config.devServer.compress = true; // Activer la compression
+      }
+      const isSmlRule = (rule) => {
+        const inUse =
+          Array.isArray(rule?.use) &&
+          rule.use.some((u) => {
+            const loader = typeof u === 'string' ? u : u?.loader || '';
+            return loader.includes('source-map-loader');
+          });
+        const inLoader = typeof rule?.loader === 'string' && rule.loader.includes('source-map-loader');
+        return rule?.enforce === 'pre' && (inUse || inLoader);
+      };
+
+      const appendExclude = (rule, pattern) => {
+        if (!rule.exclude) rule.exclude = [pattern];
+        else if (Array.isArray(rule.exclude)) rule.exclude.push(pattern);
+        else rule.exclude = [rule.exclude, pattern];
+      };
+
+      const visit = (rule) => {
+        if (!rule) return;
+        if (isSmlRule(rule)) appendExclude(rule, SML_EXCLUDE);
+        if (Array.isArray(rule.oneOf)) rule.oneOf.forEach(visit);
+        if (Array.isArray(rule.rules)) rule.rules.forEach(visit);
+      };
+
+      (config.module?.rules || []).forEach(visit);
+
+      // Forcer MiniCssExtractPlugin à ignorer l'ordre des imports CSS
+      config.plugins = (config.plugins || []).map((plugin) => {
+        if (plugin instanceof MiniCssExtractPlugin) {
+          plugin.options = {
+            ...plugin.options,
+            ignoreOrder: true,
+          };
+        }
+        return plugin;
+      });
+
+      // Ignore "Failed to parse source map"
+      config.ignoreWarnings = [...(config.ignoreWarnings || []), /Failed to parse source map/];
+      
+      // ✅ Ignorer les erreurs ModuleHotAcceptDependency (problème connu avec webpack-dev-server v4/v5)
+      config.ignoreWarnings = [
+        ...(config.ignoreWarnings || []),
+        /No template for dependency: ModuleHotAcceptDependency/,
+        /ModuleHotAcceptDependency/,
+      ];
+      
+      // ✅ Désactiver complètement HMR pour éviter les problèmes de compilation
+      // Cela forcera webpack à recompiler complètement à chaque changement
+      if (config.plugins) {
+        // Supprimer le plugin HMR si présent
+        config.plugins = config.plugins.filter(
+          (plugin) => !(plugin.constructor.name === 'HotModuleReplacementPlugin')
+        );
+      }
+      
+      // ✅ Désactiver HMR dans la configuration du devServer
+      if (config.devServer) {
+        config.devServer.hot = false;
+        config.devServer.liveReload = true; // Utiliser live reload au lieu de HMR
+      }
+
+      // ✅ PERF: Optimisations de bundle
+      if (env === 'production') {
+        // Split chunks plus aggressif
+        config.optimization = {
+          ...config.optimization,
+          splitChunks: {
+            chunks: 'all',
+            cacheGroups: {
+              // Vendor libs séparées
+              vendor: {
+                test: /[\\/]node_modules[\\/]/,
+                name(module) {
+                  const packageName = module.context.match(/[\\/]node_modules[\\/](.*?)([\\/]|$)/)?.[1];
+                  return `vendor.${packageName?.replace('@', '')}`;
+                },
+                priority: 10,
+              },
+              // Leaflet séparé (150 KB)
+              leaflet: {
+                test: /[\\/]node_modules[\\/](react-)?leaflet/,
+                name: 'vendor.leaflet',
+                priority: 20,
+              },
+              // Recharts séparé (380 KB)
+              recharts: {
+                test: /[\\/]node_modules[\\/]recharts/,
+                name: 'vendor.recharts',
+                priority: 20,
+              },
+              // Socket.IO séparé
+              socketio: {
+                test: /[\\/]node_modules[\\/]socket\.io-client/,
+                name: 'vendor.socketio',
+                priority: 20,
+              },
+              // Libs communes
+              common: {
+                minChunks: 2,
+                priority: 5,
+                reuseExistingChunk: true,
+              },
+            },
+          },
+          // Minimize plus agressif
+          minimizer: config.optimization.minimizer?.map((plugin) => {
+            if (plugin.constructor.name === 'TerserPlugin') {
+              plugin.options.terserOptions = {
+                ...plugin.options.terserOptions,
+                compress: {
+                  ...plugin.options.terserOptions?.compress,
+                  drop_console: true,
+                  drop_debugger: true,
+                  pure_funcs: ['console.log', 'console.info', 'console.debug'],
+                },
+              };
+            }
+            return plugin;
+          }),
+        };
+      }
+
+      return config;
+    },
+  },
+};
+

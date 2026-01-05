@@ -7,25 +7,49 @@ import logging
 import os
 import re
 import uuid
-from datetime import timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import (
+    UTC,
+    datetime,
+    timedelta,
+)
+from pathlib import Path
+from typing import (
+    Any,
+    Dict,
+    List,
+    Tuple,
+    cast,
+)
 
-import jwt
-import sentry_sdk
-from flask import current_app, request
-from flask_jwt_extended import (
+import jwt  # pyright: ignore[reportMissingImports]
+import sentry_sdk  # pyright: ignore[reportMissingImports]
+from flask import current_app, request  # pyright: ignore[reportMissingImports]
+from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
     create_access_token,
     create_refresh_token,
     get_jwt,
     get_jwt_identity,
     jwt_required,
 )
-from flask_restx import Namespace, Resource, fields
-from marshmallow import Schema, ValidationError, validate
-from marshmallow import fields as ma_fields
+from flask_restx import (  # pyright: ignore[reportMissingImports]
+    Namespace,
+    Resource,
+    fields,
+)
+from marshmallow import (  # pyright: ignore[reportMissingImports]
+    Schema,
+    ValidationError,
+    validate,
+)
+from marshmallow import fields as ma_fields  # pyright: ignore[reportMissingImports]
 
 from ext import limiter, redis_client
 from models import Company, User, UserRole
+from models.enums import DriverType
+from shared.error_handlers import APIErrorHandler
+from shared.infrastructure.adapters.auth_adapter import (
+    get_current_user_via_use_case,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +173,7 @@ def _company_requires_mfa(company: Company | None) -> bool:
     return bool(policy.get("required", False))
 
 
-def _get_totp_secret(company: Company | None) -> Optional[str]:
+def _get_totp_secret(company: Company | None) -> str | None:
     security = _get_company_security(company)
     policy = security.get("mobile_mfa") or {}
     secret = policy.get("totp_secret")
@@ -229,7 +253,7 @@ def _reset_failed_login(email: str) -> None:
         redis_client.delete(key)
 
 
-def _validate_device_id(device_id: Optional[str]) -> bool:
+def _validate_device_id(device_id: str | None) -> bool:
     """Valide le format du device_id (UUID ou format MDM valide).
 
     Args:
@@ -272,9 +296,9 @@ def _verify_totp_code(company: Company | None, code: str) -> bool:
 def _issue_tokens(
     user: User,
     company: Company,
-    device_id: Optional[str] = None,
-    extra_scopes: Optional[List[str]] = None,
-    session_id: Optional[str] = None,
+    device_id: str | None = None,
+    extra_scopes: List[str] | None = None,
+    session_id: str | None = None,
 ) -> Dict[str, Any]:
     scopes = list(DEFAULT_SCOPES)
     if user.role == UserRole.ADMIN:
@@ -335,7 +359,7 @@ def _store_mfa_challenge(
     user: User,
     company: Company,
     method: str,
-    device_id: Optional[str],
+    device_id: str | None,
 ) -> str:
     challenge_id = str(uuid.uuid4())
     payload = {
@@ -359,7 +383,7 @@ def _store_mfa_challenge(
     return challenge_id
 
 
-def _consume_mfa_challenge(challenge_id: str) -> Optional[Dict[str, Any]]:
+def _consume_mfa_challenge(challenge_id: str) -> Dict[str, Any] | None:
     key = f"{MFA_CHALLENGE_PREFIX}{challenge_id}"
     if not redis_client:
         logger.error("[AUTH][Enterprise] Redis requis pour vérifier le challenge MFA.")
@@ -377,11 +401,15 @@ def _consume_mfa_challenge(challenge_id: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def _find_company_user_by_email(email: str) -> Tuple[Optional[User], Optional[Company]]:
-    user: Optional[User] = User.query.filter(User.email == email).first()
+def _find_company_user_by_email(email: str) -> Tuple[User | None, Company | None]:
+    # Utiliser le repository pour récupérer l'utilisateur
+    from repositories.user_repository import UserRepository
+
+    user_repo = UserRepository()
+    user = user_repo.find_by_email_with_role_filter(
+        email, (UserRole.COMPANY, UserRole.ADMIN)
+    )
     if not user:
-        return None, None
-    if user.role not in (UserRole.COMPANY, UserRole.ADMIN):
         return None, None
     company = user.company
     if not company:
@@ -390,8 +418,8 @@ def _find_company_user_by_email(email: str) -> Tuple[Optional[User], Optional[Co
 
 
 def _handle_oidc_login(
-    id_token: str, provider: Optional[str]
-) -> Tuple[Optional[User], Optional[Company]]:
+    id_token: str, provider: str | None
+) -> Tuple[User | None, Company | None]:
     """Gère la connexion OIDC avec validation de sécurité renforcée.
 
     Args:
@@ -474,11 +502,94 @@ class EnterpriseMobileLogin(Resource):
     @company_mobile_auth_ns.expect(login_model, validate=True)
     @limiter.limit("10/minute")
     def post(self):
+        # #region agent log
+        log_path = Path(r"c:\Users\jasiq\atmr\.cursor\debug.log")
+        try:
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "location": "company_mobile_auth.py:486",
+                            "message": "POST /login entry",
+                            "data": {
+                                "headers": {
+                                    k: v
+                                    for k, v in request.headers
+                                    if k.lower()
+                                    in [
+                                        "authorization",
+                                        "x-company-id",
+                                        "x-session-id",
+                                        "content-type",
+                                    ]
+                                },
+                                "has_json": request.is_json,
+                            },
+                            "timestamp": datetime.now(UTC).isoformat(),
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "B",
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion
         payload = request.get_json() or {}
+        # #region agent log
+        try:
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "location": "company_mobile_auth.py:489",
+                            "message": "payload received",
+                            "data": {
+                                "has_email": "email" in payload,
+                                "has_password": "password" in payload,
+                                "method": payload.get("method"),
+                            },
+                            "timestamp": datetime.now(UTC).isoformat(),
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "C",
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion
         try:
             data = EnterpriseLoginSchema().load(payload)
         except ValidationError as exc:
-            return {"error": "Paramètres invalides", "details": exc.messages}, 400
+            # #region agent log
+            try:
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "location": "company_mobile_auth.py:491",
+                                "message": "validation error",
+                                "data": {
+                                    "error": str(exc),
+                                    "messages": exc.messages
+                                    if hasattr(exc, "messages")
+                                    else None,
+                                },
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "E",
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
+            return APIErrorHandler.handle_exception(exc, logger)
 
         # Type assertion: load() returns a dict
         assert isinstance(data, dict), "Schema load should return a dict"
@@ -489,8 +600,33 @@ class EnterpriseMobileLogin(Resource):
         mfa_code = data.get("mfa_code")
         device_id = data.get("device_id")
 
-        user: Optional[User] = None
-        company: Optional[Company] = None
+        # #region agent log
+        try:
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "location": "company_mobile_auth.py:495",
+                            "message": "data parsed",
+                            "data": {
+                                "method": method,
+                                "has_email": bool(email),
+                                "has_password": bool(password),
+                            },
+                            "timestamp": datetime.now(UTC).isoformat(),
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "C",
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion
+
+        user: User | None = None
+        company: Company | None = None
         result: Tuple[Dict[str, Any], int] = (
             {"error": "Erreur interne."},
             HTTP_INTERNAL_ERROR,
@@ -498,10 +634,59 @@ class EnterpriseMobileLogin(Resource):
 
         if method == "password":
             if not email or not password:
+                # #region agent log
+                try:
+                    with log_path.open("a", encoding="utf-8") as f:
+                        f.write(
+                            json.dumps(
+                                {
+                                    "location": "company_mobile_auth.py:510",
+                                    "message": "missing credentials",
+                                    "data": {
+                                        "has_email": bool(email),
+                                        "has_password": bool(password),
+                                    },
+                                    "timestamp": datetime.now(UTC).isoformat(),
+                                    "sessionId": "debug-session",
+                                    "runId": "run1",
+                                    "hypothesisId": "C",
+                                }
+                            )
+                            + "\n"
+                        )
+                except Exception:
+                    pass
+                # #endregion
                 result = ({"error": "Email et mot de passe requis."}, 400)
             else:
                 # Vérifier les tentatives échouées
                 blocked, attempts = _check_failed_login_attempts(email)
+                # #region agent log
+                try:
+                    with log_path.open("a", encoding="utf-8") as f:
+                        f.write(
+                            json.dumps(
+                                {
+                                    "location": "company_mobile_auth.py:514",
+                                    "message": "failed login check",
+                                    "data": {
+                                        "blocked": blocked,
+                                        "attempts": attempts,
+                                        "email": _sanitize_log_data(email)
+                                        if email
+                                        else None,
+                                    },
+                                    "timestamp": datetime.now(UTC).isoformat(),
+                                    "sessionId": "debug-session",
+                                    "runId": "run1",
+                                    "hypothesisId": "B",
+                                }
+                            )
+                            + "\n"
+                        )
+                except Exception:
+                    pass
+                # #endregion
                 if blocked:
                     logger.warning(
                         (
@@ -523,7 +708,62 @@ class EnterpriseMobileLogin(Resource):
                     )
                 else:
                     user, company = _find_company_user_by_email(email)
+                    # #region agent log
+                    try:
+                        with log_path.open("a", encoding="utf-8") as f:
+                            f.write(
+                                json.dumps(
+                                    {
+                                        "location": "company_mobile_auth.py:535",
+                                        "message": "user lookup",
+                                        "data": {
+                                            "user_found": user is not None,
+                                            "company_found": company is not None,
+                                            "user_id": user.id if user else None,
+                                            "company_id": company.id
+                                            if company
+                                            else None,
+                                        },
+                                        "timestamp": datetime.now(UTC).isoformat(),
+                                        "sessionId": "debug-session",
+                                        "runId": "run1",
+                                        "hypothesisId": "C",
+                                    }
+                                )
+                                + "\n"
+                            )
+                    except Exception:
+                        pass
+                    # #endregion
                     if not user or not company or not user.check_password(password):
+                        # #region agent log
+                        try:
+                            with log_path.open("a", encoding="utf-8") as f:
+                                f.write(
+                                    json.dumps(
+                                        {
+                                            "location": "company_mobile_auth.py:536",
+                                            "message": "password check failed",
+                                            "data": {
+                                                "user_exists": user is not None,
+                                                "company_exists": company is not None,
+                                                "password_valid": user.check_password(
+                                                    password
+                                                )
+                                                if user
+                                                else False,
+                                            },
+                                            "timestamp": datetime.now(UTC).isoformat(),
+                                            "sessionId": "debug-session",
+                                            "runId": "run1",
+                                            "hypothesisId": "C",
+                                        }
+                                    )
+                                    + "\n"
+                                )
+                        except Exception:
+                            pass
+                        # #endregion
                         # Incrémenter le compteur d'échecs
                         new_count = _increment_failed_login(email)
                         logger.warning(
@@ -548,6 +788,30 @@ class EnterpriseMobileLogin(Resource):
                 except ValueError as exc:
                     result = ({"error": str(exc)}, 401)
 
+        # #region agent log
+        try:
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "location": "company_mobile_auth.py:562",
+                            "message": "result before return",
+                            "data": {
+                                "status_code": result[1],
+                                "has_error": "error" in result[0],
+                                "error_message": result[0].get("error"),
+                            },
+                            "timestamp": datetime.now(UTC).isoformat(),
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "C",
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion
         # Vérifier si une erreur s'est produite
         if result[1] != HTTP_INTERNAL_ERROR:
             return result
@@ -604,26 +868,47 @@ class EnterpriseMobileMfaVerify(Resource):
         try:
             data = EnterpriseMfaVerifySchema().load(payload)
         except ValidationError as exc:
-            return {"error": "Paramètres invalides", "details": exc.messages}, 400
+            return APIErrorHandler.handle_exception(exc, logger)
 
         # Type assertion: load() returns a dict
         assert isinstance(data, dict), "Schema load should return a dict"
         challenge = _consume_mfa_challenge(str(data["challenge_id"]))
         if not challenge:
-            return {"error": "Challenge MFA expiré ou invalide."}, 410
+            return APIErrorHandler.handle_validation_error(
+                "Challenge MFA expiré ou invalide.",
+                field="mfa_challenge",
+                logger_instance=logger,
+            )
 
-        user = User.query.filter_by(public_id=challenge["user_public_id"]).first()
+        # Utiliser le repository pour récupérer l'utilisateur et l'entreprise
+        from repositories.company_repository import CompanyRepository
+        from repositories.user_repository import UserRepository
+
+        user_repo = UserRepository()
+        company_repo = CompanyRepository()
+        user = user_repo.find_by_public_id(challenge["user_public_id"])
         if not user:
-            return {"error": "Utilisateur introuvable."}, 404
-        company = Company.query.get(challenge["company_id"])
+            return APIErrorHandler.handle_not_found(
+                "User",
+                None,
+                logger,
+            )
+        company = company_repo.find_model_by_id(challenge["company_id"])
         if not company:
-            return {"error": "Entreprise introuvable."}, 404
+            return APIErrorHandler.handle_not_found(
+                "Company",
+                None,
+                logger,
+            )
 
         if not _verify_totp_code(company, data["code"]):
-            return {"error": "Code MFA invalide."}, 401
+            return APIErrorHandler.handle_permission_error(
+                "Code MFA invalide.",
+                logger_instance=logger,
+            )
 
         response = _issue_tokens(
-            user,
+            user,  # pyright: ignore[reportArgumentType]
             company,
             device_id=data.get("device_id") or challenge.get("device_id"),
         )
@@ -640,14 +925,14 @@ class EnterpriseMobileRefresh(Resource):
         try:
             data = EnterpriseRefreshSchema().load(payload)
         except ValidationError as exc:
-            return {"error": "Paramètres invalides", "details": exc.messages}, 400
+            return APIErrorHandler.handle_exception(exc, logger)
 
         # Type assertion: load() returns a dict
         assert isinstance(data, dict), "Schema load should return a dict"
 
         # ✅ SECURITE: Vérifier la signature du refresh token
         # avec JWT_SECRET_KEY (contrairement à OIDC, nos tokens sont signés)
-        decoded: Optional[Dict[str, Any]] = None
+        decoded: Dict[str, Any] | None = None
         result: Tuple[Dict[str, Any], int] = (
             {"error": "Erreur interne."},
             HTTP_INTERNAL_ERROR,
@@ -659,7 +944,10 @@ class EnterpriseMobileRefresh(Resource):
                 logger.error(
                     "[AUTH][Enterprise] JWT_SECRET_KEY manquant dans la config"
                 )
-                return {"error": "Erreur de configuration serveur."}, 500
+                return APIErrorHandler.handle_validation_error(
+                    "Erreur de configuration serveur",
+                    logger_instance=logger,
+                )
 
             decoded = jwt.decode(
                 data["refresh_token"],
@@ -699,57 +987,1034 @@ class EnterpriseMobileRefresh(Resource):
             if not public_id:
                 result = ({"error": "Refresh token invalide."}, 401)
             else:
-                user = User.query.filter_by(public_id=str(public_id)).first()
+                # Utiliser le repository pour récupérer l'utilisateur
+                from repositories.user_repository import UserRepository
+
+                user_repo = UserRepository()
+
+                user = user_repo.find_by_public_id(str(public_id))
                 if not user or user.role not in (UserRole.COMPANY, UserRole.ADMIN):
                     result = ({"error": "Accès refusé."}, 403)
                 else:
-                    company = user.company
+                    # Récupérer l'entreprise via le modèle User directement car user est un DTO
+                    user_model = User.query.filter_by(public_id=str(public_id)).first()
+                    company = user_model.company if user_model else None
                     if not company:
                         result = ({"error": "Entreprise introuvable."}, 403)
                     else:
-                        response = _issue_tokens(user, company, session_id=session_id)
+                        response = _issue_tokens(user, company, session_id=session_id)  # pyright: ignore[reportArgumentType]
                         response["mfa_required"] = False
                         result = (response, 200)
 
         return result
 
 
+@company_mobile_auth_ns.route("/me/driver-account")
+class MyDriverAccount(Resource):
+    @jwt_required()
+    @company_mobile_auth_ns.doc(
+        description="Vérifie si l'utilisateur entreprise a aussi un compte chauffeur"
+    )
+    def get(self):
+        """Vérifie si l'utilisateur entreprise a aussi un compte chauffeur."""
+        user_public_id = get_jwt_identity()
+        # Utiliser le repository pour récupérer l'utilisateur
+        from repositories.user_repository import UserRepository
+
+        user_repo = UserRepository()
+        user = user_repo.find_by_public_id(user_public_id)
+
+        if not user:
+            return APIErrorHandler.handle_not_found(
+                "User",
+                None,
+                logger,
+            )
+
+        logger.info(
+            "[MyDriverAccount] Recherche compte driver pour user_id=%s, email=%s, role=%s",
+            user.id,
+            user.email,
+            user.role,
+        )
+        # #region agent log
+        log_path = Path(r"c:\Users\jasiq\atmr\.cursor\debug.log")
+        try:
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "location": "company_mobile_auth.py:MyDriverAccount.get",
+                            "message": "Recherche compte driver entry",
+                            "data": {
+                                "user_id": user.id,
+                                "user_email": user.email,
+                                "user_role": user.role.value
+                                if hasattr(user.role, "value")
+                                else str(user.role),
+                                "user_username": user.username,
+                            },
+                            "timestamp": datetime.now(UTC).isoformat(),
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "A",
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion
+
+        # 1. Vérifier si ce user a directement un compte driver (user_id)
+        # Utiliser le repository pour récupérer le driver
+        from repositories.company_repository import CompanyRepository
+        from repositories.driver_repository import DriverRepository
+        from repositories.user_repository import UserRepository
+
+        driver_repo = DriverRepository()
+        user_repo = UserRepository()
+        company_repo = CompanyRepository()
+        driver = driver_repo.find_model_by_user_id(user.id)
+        if driver:
+            logger.info(
+                "[MyDriverAccount] Driver trouvé directement par user_id: driver_id=%s",
+                driver.id,
+            )
+        else:
+            logger.debug(
+                "[MyDriverAccount] Aucun driver trouvé directement par user_id"
+            )
+
+        # 2. Si pas trouvé, chercher par email (même email = même personne)
+        if not driver and user.email:
+            driver_user = user_repo.find_by_email_and_role(user.email, UserRole.DRIVER)
+            if driver_user:
+                driver = driver_repo.find_model_by_user_id(driver_user.id)
+                if driver:
+                    logger.info(
+                        "[MyDriverAccount] Driver trouvé par email: driver_id=%s, driver_user_id=%s",
+                        driver.id,
+                        driver_user.id,
+                    )
+
+        # 3. Si toujours pas trouvé, chercher par company_id (chauffeur d'urgence de la même entreprise)
+        if not driver:
+            company = company_repo.find_model_by_user_id(user.id)
+            # #region agent log
+            log_path = Path(r"c:\Users\jasiq\atmr\.cursor\debug.log")
+            try:
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "location": "company_mobile_auth.py:MyDriverAccount.get",
+                                "message": "Recherche company",
+                                "data": {
+                                    "user_id": user.id,
+                                    "company_found": company is not None,
+                                    "company_id": company.id if company else None,
+                                },
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "B",
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
+            if company:
+                logger.info(
+                    "[MyDriverAccount] Company trouvée: company_id=%s, cherchant drivers d'urgence",
+                    company.id,
+                )
+
+                # Chercher un driver d'urgence de la même entreprise avec le même email
+                if user.email:
+                    driver_user = user_repo.find_by_email_with_driver_join(
+                        user.email, company.id, DriverType.EMERGENCY
+                    )
+                    if driver_user:
+                        driver = driver_repo.find_model_by_user_id(driver_user.id)
+                        if driver:
+                            logger.info(
+                                "[MyDriverAccount] Driver d'urgence trouvé par email: driver_id=%s",
+                                driver.id,
+                            )
+
+                # Si toujours pas trouvé, chercher n'importe quel driver d'urgence de la même entreprise
+                # (au cas où l'email serait différent)
+                if not driver:
+                    # #region agent log
+                    try:
+                        # Chercher tous les drivers de l'entreprise pour debug
+                        all_company_drivers = driver_repo.find_models_by_company_id(
+                            company.id
+                        )
+                        emergency_count = driver_repo.count_by_company_and_type(
+                            company.id, DriverType.EMERGENCY
+                        )
+                        with log_path.open("a", encoding="utf-8") as f:
+                            f.write(
+                                json.dumps(
+                                    {
+                                        "location": "company_mobile_auth.py:MyDriverAccount.get",
+                                        "message": "Recherche driver d'urgence - avant query",
+                                        "data": {
+                                            "company_id": company.id,
+                                            "user_email": user.email,
+                                            "total_drivers_in_company": len(
+                                                all_company_drivers
+                                            ),
+                                            "emergency_drivers_count": emergency_count,
+                                            "all_driver_types": [
+                                                (
+                                                    d.driver_type.value
+                                                    if hasattr(d.driver_type, "value")
+                                                    else str(d.driver_type)
+                                                )
+                                                for d in all_company_drivers
+                                            ],
+                                            "all_driver_user_ids": [
+                                                d.user_id for d in all_company_drivers
+                                            ],
+                                        },
+                                        "timestamp": datetime.now(UTC).isoformat(),
+                                        "sessionId": "debug-session",
+                                        "runId": "run1",
+                                        "hypothesisId": "C",
+                                    }
+                                )
+                                + "\n"
+                            )
+                    except Exception as e:
+                        try:
+                            with log_path.open("a", encoding="utf-8") as f:
+                                f.write(
+                                    json.dumps(
+                                        {
+                                            "location": "company_mobile_auth.py:MyDriverAccount.get",
+                                            "message": "Erreur lors du log de recherche",
+                                            "data": {"error": str(e)},
+                                            "timestamp": datetime.now(UTC).isoformat(),
+                                            "sessionId": "debug-session",
+                                            "runId": "run1",
+                                            "hypothesisId": "C",
+                                        }
+                                    )
+                                    + "\n"
+                                )
+                        except Exception:
+                            pass
+                    # #endregion
+                    emergency_driver = driver_repo.find_model_by_company_and_type(
+                        company.id, DriverType.EMERGENCY
+                    )
+                    # #region agent log
+                    try:
+                        with log_path.open("a", encoding="utf-8") as f:
+                            f.write(
+                                json.dumps(
+                                    {
+                                        "location": "company_mobile_auth.py:MyDriverAccount.get",
+                                        "message": "Recherche driver d'urgence - après query",
+                                        "data": {
+                                            "company_id": company.id,
+                                            "emergency_driver_found": emergency_driver
+                                            is not None,
+                                            "emergency_driver_id": emergency_driver.id
+                                            if emergency_driver
+                                            else None,
+                                            "emergency_driver_user_id": emergency_driver.user_id
+                                            if emergency_driver
+                                            else None,
+                                            "emergency_driver_type": (
+                                                emergency_driver.driver_type.value
+                                                if emergency_driver
+                                                and hasattr(
+                                                    emergency_driver.driver_type,
+                                                    "value",
+                                                )
+                                                else (
+                                                    str(emergency_driver.driver_type)
+                                                    if emergency_driver
+                                                    else None
+                                                )
+                                            ),
+                                        },
+                                        "timestamp": datetime.now(UTC).isoformat(),
+                                        "sessionId": "debug-session",
+                                        "runId": "run1",
+                                        "hypothesisId": "C",
+                                    }
+                                )
+                                + "\n"
+                            )
+                    except Exception:
+                        pass
+                    # #endregion
+                    if emergency_driver:
+                        logger.info(
+                            "[MyDriverAccount] Driver d'urgence trouvé dans l'entreprise: driver_id=%s, user_id=%s",
+                            emergency_driver.id,
+                            emergency_driver.user_id,
+                        )
+                        # Vérifier si c'est le même utilisateur (par email ou username)
+                        emergency_user = user_repo.find_by_id(
+                            cast(int, emergency_driver.user_id)
+                        )
+                        if emergency_user:
+                            logger.info(
+                                "[MyDriverAccount] User du driver: email=%s, username=%s",
+                                emergency_user.email,
+                                emergency_user.username,
+                            )
+                            # Si email ou username correspond, ou si c'est le seul driver d'urgence de l'entreprise
+                            # on considère qu'il peut switcher
+                            if (user.email and emergency_user.email == user.email) or (
+                                user.username
+                                and emergency_user.username == user.username
+                            ):
+                                driver = emergency_driver
+                                logger.info(
+                                    "[MyDriverAccount] Driver d'urgence associé par email/username"
+                                )
+                            else:
+                                # Si c'est le seul driver d'urgence de l'entreprise, on l'associe quand même
+                                # (cas où l'entreprise a un seul chauffeur d'urgence)
+                                emergency_count = driver_repo.count_by_company_and_type(
+                                    company.id, DriverType.EMERGENCY
+                                )
+                                if emergency_count == 1:
+                                    driver = emergency_driver
+                                    logger.info(
+                                        "[MyDriverAccount] Driver d'urgence unique de l'entreprise associé"
+                                    )
+            else:
+                logger.warning(
+                    "[MyDriverAccount] Aucune company trouvée pour user_id=%s", user.id
+                )
+
+        if driver:
+            driver_type = (
+                driver.driver_type.value
+                if hasattr(driver.driver_type, "value")
+                else str(driver.driver_type)
+            )
+            logger.info(
+                "[MyDriverAccount] Retourne has_driver_account=True: driver_id=%s, type=%s",
+                driver.id,
+                driver_type,
+            )
+            return {
+                "has_driver_account": True,
+                "driver_id": driver.id,
+                "driver_type": driver_type,
+                "is_active": driver.is_active,
+                "is_available": driver.is_available,
+            }
+
+        logger.info(
+            "[MyDriverAccount] Aucun driver trouvé, retourne has_driver_account=False"
+        )
+        return {"has_driver_account": False}
+
+
+@company_mobile_auth_ns.route("/me/switch-to-driver")
+class SwitchToDriver(Resource):
+    @jwt_required()
+    @company_mobile_auth_ns.doc(
+        description="Génère un token driver à partir du token entreprise (si l'utilisateur a aussi un compte driver)"
+    )
+    def post(self):
+        """Génère un token driver pour permettre le switch automatique."""
+        logger.info("[SwitchToDriver] Endpoint appelé")
+        from datetime import datetime, timedelta
+
+        from flask import current_app  # pyright: ignore[reportMissingImports]
+        from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
+            create_access_token,
+            create_refresh_token,
+        )
+
+        from routes.auth import store_refresh_token
+
+        user_public_id = get_jwt_identity()
+        logger.info("[SwitchToDriver] user_public_id=%s", user_public_id)
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        user = get_current_user_via_use_case()
+
+        # #region agent log
+        log_path = Path(r"c:\Users\jasiq\atmr\.cursor\debug.log")
+        try:
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "location": "company_mobile_auth.py:SwitchToDriver.post",
+                            "message": "POST /switch-to-driver entry",
+                            "data": {
+                                "user_public_id": user_public_id,
+                                "user_id": user.id if user else None,
+                                "user_email": user.email if user else None,
+                                "user_role": user.role.value
+                                if user and hasattr(user.role, "value")
+                                else str(user.role)
+                                if user
+                                else None,
+                            },
+                            "timestamp": datetime.now(UTC).isoformat(),
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "J",
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion
+
+        if not user:
+            return APIErrorHandler.handle_not_found(
+                "User",
+                None,
+                logger,
+            )
+
+        # Utiliser la même logique que MyDriverAccount pour trouver le driver
+        # 1. Vérifier si ce user a directement un compte driver (user_id)
+        # Utiliser le repository pour récupérer le driver
+        from repositories.company_repository import CompanyRepository
+        from repositories.driver_repository import DriverRepository
+        from repositories.user_repository import UserRepository
+
+        driver_repo = DriverRepository()
+        user_repo = UserRepository()
+        company_repo = CompanyRepository()
+        driver = driver_repo.find_model_by_user_id(user.id)
+
+        # #region agent log
+        try:
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "location": "company_mobile_auth.py:SwitchToDriver.post",
+                            "message": "Recherche driver par user_id",
+                            "data": {
+                                "user_id": user.id,
+                                "driver_found": driver is not None,
+                                "driver_id": driver.id if driver else None,
+                            },
+                            "timestamp": datetime.now(UTC).isoformat(),
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "J",
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion
+
+        # 2. Si pas trouvé, chercher par email (même email = même personne)
+        if not driver and user.email:
+            driver_user = user_repo.find_by_email_and_role(user.email, UserRole.DRIVER)
+            if driver_user:
+                driver = driver_repo.find_model_by_user_id(driver_user.id)
+
+        # 3. Si toujours pas trouvé, chercher par company_id (chauffeur d'urgence de la même entreprise)
+        if not driver:
+            company = company_repo.find_model_by_user_id(user.id)
+            # #region agent log
+            try:
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "location": "company_mobile_auth.py:SwitchToDriver.post",
+                                "message": "Recherche company",
+                                "data": {
+                                    "user_id": user.id,
+                                    "company_found": company is not None,
+                                    "company_id": company.id if company else None,
+                                },
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "J",
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
+            if company:
+                # Chercher un driver d'urgence de la même entreprise avec le même email
+                if user.email:
+                    driver_user = user_repo.find_by_email_with_driver_join(
+                        user.email, company.id, DriverType.EMERGENCY
+                    )
+                    if driver_user:
+                        driver = driver_repo.find_model_by_user_id(driver_user.id)
+
+                # Si toujours pas trouvé, chercher n'importe quel driver d'urgence de la même entreprise
+                if not driver:
+                    # #region agent log
+                    try:
+                        all_company_drivers = driver_repo.find_models_by_company_id(
+                            company.id
+                        )
+                        emergency_count = driver_repo.count_by_company_and_type(
+                            company.id, DriverType.EMERGENCY
+                        )
+                        with log_path.open("a", encoding="utf-8") as f:
+                            f.write(
+                                json.dumps(
+                                    {
+                                        "location": "company_mobile_auth.py:SwitchToDriver.post",
+                                        "message": "Recherche driver d'urgence - avant query",
+                                        "data": {
+                                            "company_id": company.id,
+                                            "user_email": user.email,
+                                            "total_drivers_in_company": len(
+                                                all_company_drivers
+                                            ),
+                                            "emergency_drivers_count": emergency_count,
+                                            "all_driver_types": [
+                                                (
+                                                    d.driver_type.value
+                                                    if hasattr(d.driver_type, "value")
+                                                    else str(d.driver_type)
+                                                )
+                                                for d in all_company_drivers
+                                            ],
+                                            "all_driver_user_ids": [
+                                                d.user_id for d in all_company_drivers
+                                            ],
+                                        },
+                                        "timestamp": datetime.now(UTC).isoformat(),
+                                        "sessionId": "debug-session",
+                                        "runId": "run1",
+                                        "hypothesisId": "J",
+                                    }
+                                )
+                                + "\n"
+                            )
+                    except Exception as e:
+                        try:
+                            with log_path.open("a", encoding="utf-8") as f:
+                                f.write(
+                                    json.dumps(
+                                        {
+                                            "location": "company_mobile_auth.py:SwitchToDriver.post",
+                                            "message": "Erreur lors du log de recherche",
+                                            "data": {"error": str(e)},
+                                            "timestamp": datetime.now(UTC).isoformat(),
+                                            "sessionId": "debug-session",
+                                            "runId": "run1",
+                                            "hypothesisId": "J",
+                                        }
+                                    )
+                                    + "\n"
+                                )
+                        except Exception:
+                            pass
+                    # #endregion
+
+                    emergency_driver = driver_repo.find_model_by_company_and_type(
+                        company.id, DriverType.EMERGENCY
+                    )
+
+                    # #region agent log
+                    try:
+                        with log_path.open("a", encoding="utf-8") as f:
+                            f.write(
+                                json.dumps(
+                                    {
+                                        "location": "company_mobile_auth.py:SwitchToDriver.post",
+                                        "message": "Recherche driver d'urgence - après query",
+                                        "data": {
+                                            "company_id": company.id,
+                                            "emergency_driver_found": emergency_driver
+                                            is not None,
+                                            "emergency_driver_id": emergency_driver.id
+                                            if emergency_driver
+                                            else None,
+                                            "emergency_driver_user_id": emergency_driver.user_id
+                                            if emergency_driver
+                                            else None,
+                                            "emergency_driver_type": (
+                                                emergency_driver.driver_type.value
+                                                if emergency_driver
+                                                and hasattr(
+                                                    emergency_driver.driver_type,
+                                                    "value",
+                                                )
+                                                else (
+                                                    str(emergency_driver.driver_type)
+                                                    if emergency_driver
+                                                    else None
+                                                )
+                                            ),
+                                        },
+                                        "timestamp": datetime.now(UTC).isoformat(),
+                                        "sessionId": "debug-session",
+                                        "runId": "run1",
+                                        "hypothesisId": "J",
+                                    }
+                                )
+                                + "\n"
+                            )
+                    except Exception:
+                        pass
+                    # #endregion
+
+                    if emergency_driver:
+                        # Vérifier si c'est le même utilisateur (par email ou username)
+                        emergency_user = user_repo.find_by_id(
+                            cast(int, emergency_driver.user_id)
+                        )
+                        if emergency_user:
+                            # Si email ou username correspond, ou si c'est le seul driver d'urgence de l'entreprise
+                            if (user.email and emergency_user.email == user.email) or (
+                                user.username
+                                and emergency_user.username == user.username
+                            ):
+                                driver = emergency_driver
+                            else:
+                                # Si c'est le seul driver d'urgence de l'entreprise, on l'associe quand même
+                                emergency_count = driver_repo.count_by_company_and_type(
+                                    company.id, DriverType.EMERGENCY
+                                )
+                                if emergency_count == 1:
+                                    driver = emergency_driver
+
+        # #region agent log
+        try:
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "location": "company_mobile_auth.py:SwitchToDriver.post",
+                            "message": "Résultat final recherche driver",
+                            "data": {
+                                "driver_found": driver is not None,
+                                "driver_id": driver.id if driver else None,
+                                "driver_user_id": driver.user_id if driver else None,
+                            },
+                            "timestamp": datetime.now(UTC).isoformat(),
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "J",
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion
+
+        if not driver:
+            return APIErrorHandler.handle_not_found(
+                "Driver",
+                None,
+                logger,
+            )
+
+        # Vérifier que le driver est actif
+        if not bool(driver.is_active):
+            return APIErrorHandler.handle_permission_error(
+                "Le compte chauffeur n'est pas actif",
+                logger_instance=logger,
+            )
+
+        # Récupérer le User associé au driver (peut être différent de l'user entreprise)
+        driver_user = user_repo.find_by_id(cast(int, driver.user_id))
+        if not driver_user:
+            return APIErrorHandler.handle_not_found(
+                "User",
+                None,
+                logger,
+            )
+
+        logger.info(
+            "[SwitchToDriver] Driver trouvé: driver_id=%s, driver_user_id=%s, driver_user_role=%s, driver_user_public_id=%s",
+            driver.id,
+            driver_user.id,
+            driver_user.role,
+            driver_user.public_id,
+        )
+
+        # Créer un token driver avec l'audience "atmr-api" (pour l'API driver)
+        # Utiliser le public_id du driver_user (pas celui de l'user entreprise)
+        claims = {
+            "role": "driver",  # Forcer le rôle driver
+            "company_id": driver.company_id,
+            "driver_id": driver.id,
+            "aud": "atmr-api",  # Audience pour l'API driver
+        }
+
+        access_token = create_access_token(
+            identity=str(driver_user.public_id),  # Utiliser le public_id du driver_user
+            additional_claims=claims,
+            expires_delta=current_app.config.get(
+                "JWT_ACCESS_TOKEN_EXPIRES", timedelta(hours=1)
+            ),
+        )
+
+        # Créer un refresh token
+        refresh_token = create_refresh_token(
+            identity=str(driver_user.public_id),  # Utiliser le public_id du driver_user
+            additional_claims={
+                "aud": "atmr-api",
+                "role": "driver",
+            },
+            expires_delta=current_app.config.get(
+                "JWT_REFRESH_TOKEN_EXPIRES", timedelta(days=30)
+            ),
+        )
+
+        # Stocker le refresh token dans la DB (comme pour le login normal)
+        try:
+            refresh_expires_delta = current_app.config.get(
+                "JWT_REFRESH_TOKEN_EXPIRES", timedelta(days=30)
+            )
+            refresh_expires_at = datetime.now(UTC) + refresh_expires_delta
+            store_refresh_token(
+                token=refresh_token,
+                user_id=driver_user.id,  # Utiliser le user_id du driver_user
+                expires_at=refresh_expires_at,
+                device_id=request.headers.get("X-Device-ID"),
+                device_name=request.headers.get("X-Device-Name"),
+            )
+        except Exception as store_error:
+            logger.warning("Échec stockage refresh token driver: %s", store_error)
+
+        return (
+            {
+                "token": access_token,
+                "refresh_token": refresh_token,
+                "user": {
+                    "public_id": driver_user.public_id,  # Utiliser le public_id du driver_user
+                    "email": driver_user.email,
+                    "first_name": driver_user.first_name,
+                    "last_name": driver_user.last_name,
+                    "role": "driver",
+                },
+                "driver": {
+                    "id": driver.id,
+                    "driver_type": (
+                        driver.driver_type.value
+                        if hasattr(driver.driver_type, "value")
+                        else str(driver.driver_type)
+                    ),
+                },
+                "mfa_required": False,
+            },
+            200,
+        )
+
+
 @company_mobile_auth_ns.route("/session")
 class EnterpriseMobileSession(Resource):
     @jwt_required()
     def get(self):
+        # #region agent log
+        log_path = Path(r"c:\Users\jasiq\atmr\.cursor\debug.log")
+        try:
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "location": "company_mobile_auth.py:1093",
+                            "message": "GET /auth/session entry",
+                            "data": {
+                                "headers": {
+                                    k: v
+                                    for k, v in request.headers
+                                    if k.lower()
+                                    in ["authorization", "x-company-id", "x-session-id"]
+                                }
+                            },
+                            "timestamp": datetime.now(UTC).isoformat(),
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "A",
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion
         try:
             claims = get_jwt()
-            identity = get_jwt_identity()
+            # #region agent log
+            try:
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "location": "company_mobile_auth.py:1095",
+                                "message": "get_jwt() success",
+                                "data": {
+                                    "aud": claims.get("aud"),
+                                    "has_session_id": "session_id" in claims,
+                                },
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "A",
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
 
             # ✅ Validation manuelle de l'audience pour les tokens entreprise mobile
             aud = claims.get("aud")
             if aud and aud != MOBILE_AUDIENCE:
+                # #region agent log
+                try:
+                    with log_path.open("a", encoding="utf-8") as f:
+                        f.write(
+                            json.dumps(
+                                {
+                                    "location": "company_mobile_auth.py:1099",
+                                    "message": "audience mismatch",
+                                    "data": {"aud": aud, "expected": MOBILE_AUDIENCE},
+                                    "timestamp": datetime.now(UTC).isoformat(),
+                                    "sessionId": "debug-session",
+                                    "runId": "run1",
+                                    "hypothesisId": "A",
+                                }
+                            )
+                            + "\n"
+                        )
+                except Exception:
+                    pass
+                # #endregion
                 logger.warning(
                     "[AUTH][Enterprise] Token avec audience incorrecte: %s (attendu: %s)",
                     aud,
                     MOBILE_AUDIENCE,
                 )
-                return {"error": "Token invalide (audience incorrecte)."}, 401
+                return APIErrorHandler.handle_permission_error(
+                    "Token invalide (audience incorrecte).",
+                    logger_instance=logger,
+                )
 
-            user = User.query.filter_by(public_id=str(identity)).first()
+            # ✅ DDD: Utilise use-case au lieu de service directement
+            try:
+                user = get_current_user_via_use_case()
+                # #region agent log
+                try:
+                    with log_path.open("a", encoding="utf-8") as f:
+                        f.write(
+                            json.dumps(
+                                {
+                                    "location": "company_mobile_auth.py:1111",
+                                    "message": "get_current_user_via_use_case success",
+                                    "data": {
+                                        "user_id": user.id if user else None,
+                                        "role": user.role.value if user else None,
+                                    },
+                                    "timestamp": datetime.now(UTC).isoformat(),
+                                    "sessionId": "debug-session",
+                                    "runId": "run1",
+                                    "hypothesisId": "B",
+                                }
+                            )
+                            + "\n"
+                        )
+                except Exception:
+                    pass
+                # #endregion
+            except Exception as e:
+                # #region agent log
+                try:
+                    with log_path.open("a", encoding="utf-8") as f:
+                        f.write(
+                            json.dumps(
+                                {
+                                    "location": "company_mobile_auth.py:1111",
+                                    "message": "get_current_user_via_use_case error",
+                                    "data": {
+                                        "error": str(e),
+                                        "error_type": type(e).__name__,
+                                    },
+                                    "timestamp": datetime.now(UTC).isoformat(),
+                                    "sessionId": "debug-session",
+                                    "runId": "run1",
+                                    "hypothesisId": "B",
+                                }
+                            )
+                            + "\n"
+                        )
+                except Exception:
+                    pass
+                # #endregion
+                raise
             if not user or user.role not in (UserRole.COMPANY, UserRole.ADMIN):
-                return {"error": "Accès refusé."}, 403
+                # #region agent log
+                try:
+                    with log_path.open("a", encoding="utf-8") as f:
+                        f.write(
+                            json.dumps(
+                                {
+                                    "location": "company_mobile_auth.py:1112",
+                                    "message": "user role check failed",
+                                    "data": {
+                                        "user": user is not None,
+                                        "role": user.role.value if user else None,
+                                    },
+                                    "timestamp": datetime.now(UTC).isoformat(),
+                                    "sessionId": "debug-session",
+                                    "runId": "run1",
+                                    "hypothesisId": "B",
+                                }
+                            )
+                            + "\n"
+                        )
+                except Exception:
+                    pass
+                # #endregion
+                return APIErrorHandler.handle_permission_error(
+                    "Accès refusé.",
+                    logger_instance=logger,
+                )
 
             # Récupérer l'entreprise
-            company = user.company
+            # ✅ Fix: UserDTO n'a pas d'attribut company, utiliser CompanyRepository
+            from repositories.company_repository import CompanyRepository
+
+            company_repo = CompanyRepository()
+            # Si user est un UserDTO, utiliser find_model_by_user_id
+            # Si user est un User, essayer d'abord user.company puis fallback
+            if hasattr(user, "company"):
+                # user est un modèle User SQLAlchemy
+                company = user.company
+            else:
+                # user est un UserDTO, récupérer via repository
+                company = company_repo.find_model_by_user_id(user.id)
+            # #region agent log
+            try:
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "location": "company_mobile_auth.py:1119",
+                                "message": "user.company retrieved",
+                                "data": {
+                                    "company": company.id if company else None,
+                                    "user_role": user.role.value,
+                                    "user_type": type(user).__name__,
+                                },
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "C",
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
             # Pour ADMIN, si pas de relation directe, récupérer la première entreprise
             if user.role == UserRole.ADMIN and not company:
-                company = Company.query.first()
+                from repositories.company_repository import CompanyRepository
+
+                company_repo = CompanyRepository()
+                company = company_repo.find_first_model()
+                # #region agent log
+                try:
+                    with log_path.open("a", encoding="utf-8") as f:
+                        f.write(
+                            json.dumps(
+                                {
+                                    "location": "company_mobile_auth.py:1125",
+                                    "message": "admin company fallback",
+                                    "data": {
+                                        "company": company.id if company else None
+                                    },
+                                    "timestamp": datetime.now(UTC).isoformat(),
+                                    "sessionId": "debug-session",
+                                    "runId": "run1",
+                                    "hypothesisId": "C",
+                                }
+                            )
+                            + "\n"
+                        )
+                except Exception:
+                    pass
+                # #endregion
 
             # Valider que l'entreprise existe
             if not company:
+                # #region agent log
+                try:
+                    with log_path.open("a", encoding="utf-8") as f:
+                        f.write(
+                            json.dumps(
+                                {
+                                    "location": "company_mobile_auth.py:1128",
+                                    "message": "company not found",
+                                    "data": {"user_role": user.role.value},
+                                    "timestamp": datetime.now(UTC).isoformat(),
+                                    "sessionId": "debug-session",
+                                    "runId": "run1",
+                                    "hypothesisId": "C",
+                                }
+                            )
+                            + "\n"
+                        )
+                except Exception:
+                    pass
+                # #endregion
                 error_msg = (
                     "Aucune entreprise trouvée."
                     if user.role == UserRole.ADMIN
                     else "Entreprise introuvable."
                 )
-                return {"error": error_msg}, 404
+                result = APIErrorHandler.handle_not_found(
+                    "User",
+                    None,
+                    logger,
+                )
+                # #region agent log
+                try:
+                    with log_path.open("a", encoding="utf-8") as f:
+                        f.write(
+                            json.dumps(
+                                {
+                                    "location": "company_mobile_auth.py:1134",
+                                    "message": "handle_not_found returned",
+                                    "data": {
+                                        "result_type": type(result).__name__,
+                                        "result": str(result)[:200] if result else None,
+                                    },
+                                    "timestamp": datetime.now(UTC).isoformat(),
+                                    "sessionId": "debug-session",
+                                    "runId": "run1",
+                                    "hypothesisId": "D",
+                                }
+                            )
+                            + "\n"
+                        )
+                except Exception:
+                    pass
+                # #endregion
+                return result
 
             # Succès : construire la réponse
             response_data = {
@@ -776,6 +2041,29 @@ class EnterpriseMobileSession(Resource):
             jwt.exceptions.ExpiredSignatureError,
             jwt.exceptions.InvalidAudienceError,
         ) as jwt_error:
+            # #region agent log
+            try:
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "location": "company_mobile_auth.py:1161",
+                                "message": "JWT exception caught",
+                                "data": {
+                                    "error_type": type(jwt_error).__name__,
+                                    "error": str(jwt_error),
+                                },
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "A",
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
             error_msg = (
                 "Token expiré. Veuillez vous reconnecter."
                 if isinstance(jwt_error, jwt.exceptions.ExpiredSignatureError)
@@ -787,12 +2075,86 @@ class EnterpriseMobileSession(Resource):
                 else "Token avec audience invalide pour /auth/session"
             )
             logger.warning(log_msg)
-            return {"error": error_msg}, 401
+            result = APIErrorHandler.handle_permission_error(
+                error_msg,
+                logger_instance=logger,
+            )
+            # #region agent log
+            try:
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "location": "company_mobile_auth.py:1176",
+                                "message": "handle_permission_error returned",
+                                "data": {
+                                    "result_type": type(result).__name__,
+                                    "status_code": result[1],
+                                },
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "A",
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
+            return result
         except Exception as e:
+            # #region agent log
+            try:
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "location": "company_mobile_auth.py:1180",
+                                "message": "unhandled exception",
+                                "data": {
+                                    "error_type": type(e).__name__,
+                                    "error": str(e),
+                                },
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "E",
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
             sentry_sdk.capture_exception(e)
             logger.exception(
                 "❌ ERREUR /auth/session: %s - %s",
                 type(e).__name__,
                 str(e),
             )
-            return {"error": "Une erreur interne est survenue."}, 500
+            result = APIErrorHandler.handle_exception(e, logger)
+            # #region agent log
+            try:
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "location": "company_mobile_auth.py:1187",
+                                "message": "handle_exception returned",
+                                "data": {
+                                    "result_type": type(result).__name__,
+                                    "status_code": result[1],
+                                },
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "E",
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
+            return result

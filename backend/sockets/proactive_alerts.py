@@ -19,8 +19,14 @@ import logging
 from datetime import UTC, datetime
 from typing import Any, Dict, Set
 
-from flask import request
-from flask_socketio import SocketIO, emit, join_room, leave_room, rooms
+from flask import request  # pyright: ignore[reportMissingImports]
+from flask_socketio import (  # pyright: ignore[reportMissingModuleSource]
+    SocketIO,
+    emit,
+    join_room,
+    leave_room,
+    rooms,
+)
 
 from services.proactive_alerts import ProactiveAlertsService
 from sockets.websocket_ack import get_ack_manager, register_ack_handlers

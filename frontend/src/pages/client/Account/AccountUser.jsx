@@ -25,16 +25,17 @@ const AccountUser = () => {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
+    // ✅ Vérifier l'authentification : soit token dans localStorage (mobile), soit infos utilisateur (web avec cookies)
     const token = localStorage.getItem('authToken');
-    if (!token) {
+    const user = localStorage.getItem('user');
+    if (!token && !user) {
       navigate('/login');
       return;
     }
 
+    // ✅ apiClient gère automatiquement l'authentification (token dans localStorage ou cookies httpOnly)
     apiClient
-      .get(`/clients/${public_id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      .get(`/clients/${public_id}`)
       .then((response) => {
         setProfile(response.data);
         setUpdatedProfile(response.data);
@@ -69,11 +70,10 @@ const AccountUser = () => {
   // ❌ onPlaceSelected / autocomplete supprimés
 
   const handleUpdateProfile = () => {
-    const token = localStorage.getItem('authToken');
+    // ✅ apiClient gère automatiquement l'authentification (token dans localStorage ou cookies httpOnly)
     apiClient
       .put(`/clients/${public_id}`, updatedProfile, {
         headers: {
-          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
       })

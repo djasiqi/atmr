@@ -18,13 +18,17 @@ import time
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, cast
 from zoneinfo import ZoneInfo
 
-from flask import current_app
+from flask import current_app  # pyright: ignore[reportMissingImports]
 
 from ext import db
 from models import Company
+from repositories.assignment_repository import AssignmentRepository
+from repositories.booking_repository import BookingRepository
+from repositories.company_repository import CompanyRepository
+from repositories.driver_repository import DriverRepository
 from services.agent_dispatch.reporting import generate_daily_report
 from services.agent_dispatch.safety_policy import SafetyPolicy
 from services.agent_dispatch.tools import AgentTools
@@ -40,20 +44,20 @@ class AgentState:
 
     company_id: int
     running: bool = False
-    last_tick: Optional[datetime] = None
+    last_tick: datetime | None = None
     actions_today: int = 0
     actions_last_hour: int = 0
-    last_report: Optional[datetime] = None
-    current_plan: Optional[Dict[str, Any]] = None
-    osrm_health: Optional[Dict[str, Any]] = None
+    last_report: datetime | None = None
+    current_plan: dict[str, Any] | None = None
+    osrm_health: dict[str, Any] | None = None
     # ✅ Mémorisation de l'état précédent pour détecter les changements
-    last_known_booking_ids: Optional[set[int]] = None
-    last_known_driver_ids: Optional[set[int]] = None
+    last_known_booking_ids: set[int] | None = None
+    last_known_driver_ids: set[int] | None = None
     last_known_unassigned_count: int = 0
     # ✅ Mémorisation de la configuration précédente pour détecter les changements
-    last_known_preferred_driver_id: Optional[int] = None
+    last_known_preferred_driver_id: int | None = None
     # ✅ Mémorisation des corrections d'urgent déjà effectuées (pour éviter répétitions)
-    emergency_corrections_done: Optional[set[int]] = None
+    emergency_corrections_done: set[int] | None = None
 
 
 class AgentOrchestrator:
@@ -81,10 +85,14 @@ class AgentOrchestrator:
         """
         super().__init__()
         self.company_id = company_id
-        self.company = Company.query.get(company_id)
-        if not self.company:
+        # ✅ Utilisation du repository pour découpler de SQLAlchemy
+        company_repo = CompanyRepository()
+        company_dto = company_repo.find_by_id(company_id)
+        if not company_dto:
             msg = f"Company {company_id} not found"
             raise ValueError(msg)
+        # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+        self.company = Company.query.get(company_dto.id)
 
         self.tools = AgentTools(company_id)
         self.safety = SafetyPolicy(company_id)
@@ -108,7 +116,7 @@ class AgentOrchestrator:
             emergency_corrections_done=set(),
         )
         self._running = False
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
         # current_app est un LocalProxy, _get_current_object() existe mais
         # pyright ne le reconnaît pas
@@ -195,7 +203,14 @@ class AgentOrchestrator:
         # L'objet SQLAlchemy peut être en cache et ne pas refléter
         # les changements récents
         db.session.expire_all()  # Expirer tous les objets en cache
-        current_company = Company.query.get(self.company_id)
+        # ✅ Utilisation du repository pour découpler de SQLAlchemy
+        company_repo = CompanyRepository()
+        company_dto = company_repo.find_by_id(self.company_id)
+        if not company_dto:
+            logger.error("[AgentOrchestrator] Company %s non trouvée", self.company_id)
+            return
+        # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+        current_company = Company.query.get(company_dto.id)
         if not current_company:
             logger.error("[AgentOrchestrator] Company %s non trouvée", self.company_id)
             return
@@ -364,10 +379,7 @@ class AgentOrchestrator:
             and not preferred_driver_changed
         ):
             logger.info(
-                (
-                    "[AgentOrchestrator] ✅ Situation normale - Toutes les courses "
-                    "assignées (%d), aucun changement détecté. Surveillance uniquement."
-                ),
+                "[AgentOrchestrator] ✅ Situation normale - Toutes les courses assignées (%d), aucun changement détecté. Surveillance uniquement.",
                 len(all_jobs),
             )
             # Vérifier les retards potentiels (optimiseur différé)
@@ -388,28 +400,17 @@ class AgentOrchestrator:
         if should_act:
             if preferred_driver_changed:
                 logger.info(
-                    (
-                        "[AgentOrchestrator] 🔄 Changement de chauffeur préféré "
-                        "détecté → Réoptimisation pour appliquer nouvelle préférence"
-                    )
+                    "[AgentOrchestrator] 🔄 Changement de chauffeur préféré détecté → Réoptimisation pour appliquer nouvelle préférence"
                 )
             elif is_first_tick and unassigned_jobs and current_preferred_driver_id:
                 logger.info(
-                    (
-                        "[AgentOrchestrator] 🎯 Premier tick avec chauffeur préféré "
-                        "configuré (#%s) → Réoptimisation pour appliquer "
-                        "préférence aux %d course(s) non assignée(s)"
-                    ),
+                    "[AgentOrchestrator] 🎯 Premier tick avec chauffeur préféré configuré (#%s) → Réoptimisation pour appliquer préférence aux %d course(s) non assignée(s)",
                     current_preferred_driver_id,
                     unassigned_count,
                 )
             else:
                 logger.info(
-                    (
-                        "[AgentOrchestrator] 🔄 Changement détecté: "
-                        "%d nouvelle(s) course(s), %d chauffeur(s) indisponible(s), "
-                        "%d course(s) non assignée(s)"
-                    ),
+                    "[AgentOrchestrator] 🔄 Changement détecté: %d nouvelle(s) course(s), %d chauffeur(s) indisponible(s), %d course(s) non assignée(s)",
                     len(new_bookings),
                     len(drivers_became_unavailable),
                     unassigned_count,
@@ -461,10 +462,7 @@ class AgentOrchestrator:
         # Si le chauffeur préféré a changé, on doit réoptimiser même si tout est assigné
         if preferred_driver_changed and not unassigned_jobs:
             logger.info(
-                (
-                    "[AgentOrchestrator] 🔄 Changement de chauffeur préféré détecté → "
-                    "Réoptimisation complète pour appliquer nouvelle préférence"
-                )
+                "[AgentOrchestrator] 🔄 Changement de chauffeur préféré détecté → Réoptimisation complète pour appliquer nouvelle préférence"
             )
             # Extraire la date la plus fréquente des courses assignées
             all_jobs = state.get("jobs", [])
@@ -483,10 +481,7 @@ class AgentOrchestrator:
             if job_dates:
                 most_common_date = Counter(job_dates).most_common(1)[0][0]
                 logger.info(
-                    (
-                        "[AgentOrchestrator] 📅 Réoptimisation pour date: %s "
-                        "(changement chauffeur préféré)"
-                    ),
+                    "[AgentOrchestrator] 📅 Réoptimisation pour date: %s (changement chauffeur préféré)",
                     most_common_date,
                 )
                 plan = self.tools.reoptimize(
@@ -502,10 +497,7 @@ class AgentOrchestrator:
                     )
                     if not success:
                         logger.warning(
-                            (
-                                "[AgentOrchestrator] ⚠️ Plan initial rejeté, "
-                                "ré-optimisation avec contraintes renforcées"
-                            )
+                            "[AgentOrchestrator] ⚠️ Plan initial rejeté, ré-optimisation avec contraintes renforcées"
                         )
                         # Ré-optimiser avec contraintes plus strictes
                         plan_retry = self.tools.reoptimize(
@@ -523,10 +515,7 @@ class AgentOrchestrator:
 
         if not unassigned_jobs:
             logger.info(
-                (
-                    "[AgentOrchestrator] Aucune course non assignée, "
-                    "pas d'action nécessaire"
-                )
+                "[AgentOrchestrator] Aucune course non assignée, pas d'action nécessaire"
             )
             return
 
@@ -540,10 +529,7 @@ class AgentOrchestrator:
             # Une seule nouvelle course → essayer assignation simple
             job = new_unassigned_jobs[0]
             logger.info(
-                (
-                    "[AgentOrchestrator] 🎯 Nouvelle course unique détectée (#%s), "
-                    "tentative assignation simple"
-                ),
+                "[AgentOrchestrator] 🎯 Nouvelle course unique détectée (#%s), tentative assignation simple",
                 job.get("job_id"),
             )
 
@@ -560,10 +546,7 @@ class AgentOrchestrator:
                 )
                 if result.get("ok"):
                     logger.info(
-                        (
-                            "[AgentOrchestrator] ✅ Assignation simple réussie: "
-                            "job %s → driver %s"
-                        ),
+                        "[AgentOrchestrator] ✅ Assignation simple réussie: job %s → driver %s",
                         job.get("job_id"),
                         best_driver,
                     )
@@ -572,10 +555,7 @@ class AgentOrchestrator:
                     return
 
                 logger.warning(
-                    (
-                        "[AgentOrchestrator] ⚠️ Assignation simple échouée: %s, "
-                        "passage à réorganisation ciblée"
-                    ),
+                    "[AgentOrchestrator] ⚠️ Assignation simple échouée: %s, passage à réorganisation ciblée",
                     result.get("error"),
                 )
 
@@ -586,10 +566,7 @@ class AgentOrchestrator:
             or len(unassigned_jobs) <= MAX_JOBS_FOR_TARGETED_REORG
         ):
             logger.info(
-                (
-                    "[AgentOrchestrator] 🔄 Réorganisation ciblée: %d course(s) "
-                    "non assignée(s) ou chauffeur indisponible"
-                ),
+                "[AgentOrchestrator] 🔄 Réorganisation ciblée: %d course(s) non assignée(s) ou chauffeur indisponible",
                 len(unassigned_jobs),
             )
 
@@ -627,18 +604,12 @@ class AgentOrchestrator:
                 if success:
                     return
                 logger.warning(
-                    (
-                        "[AgentOrchestrator] ⚠️ Plan ciblé rejeté, "
-                        "passage au dispatch complet"
-                    )
+                    "[AgentOrchestrator] ⚠️ Plan ciblé rejeté, passage au dispatch complet"
                 )
 
         # Étape 3 : Dispatch complet (dernier recours)
         logger.info(
-            (
-                "[AgentOrchestrator] 🚀 Dispatch complet nécessaire: "
-                "%d course(s) non assignée(s)"
-            ),
+            "[AgentOrchestrator] 🚀 Dispatch complet nécessaire: %d course(s) non assignée(s)",
             len(unassigned_jobs),
         )
 
@@ -672,28 +643,31 @@ class AgentOrchestrator:
             success = self._apply_plan_with_validation(plan["plan"], strategy, now)
             if not success:
                 logger.error(
-                    (
-                        "[AgentOrchestrator] ❌ Échec application plan complet "
-                        "après %d tentatives"
-                    ),
+                    "[AgentOrchestrator] ❌ Échec application plan complet après %d tentatives",
                     3,
                 )
 
     def _find_best_driver_simple(
         self, job: Dict[str, Any], drivers: list[Dict[str, Any]]
-    ) -> Optional[int]:
+    ) -> int | None:
         """Trouve le meilleur chauffeur pour une assignation simple sans impact.
 
         Retourne None si aucun chauffeur disponible sans conflit.
         """
-        from models import Assignment, AssignmentStatus, Booking, Driver
+        from models import Assignment, AssignmentStatus, Driver
 
         job_id = job.get("job_id")
         if not job_id:
             return None
 
-        booking = Booking.query.get(job_id)
-        if not booking or not booking.scheduled_time:
+        # ✅ Utilisation du repository pour découpler de SQLAlchemy
+        booking_repo = BookingRepository()
+        booking_dto = booking_repo.find_by_id(job_id)
+        if not booking_dto or not booking_dto.scheduled_time:
+            return None
+        # Récupérer le modèle SQLAlchemy depuis le repository pour la compatibilité
+        booking = booking_repo.find_model_by_id(booking_dto.id)
+        if not booking:
             return None
 
         MIN_TIME_GAP_MINUTES = 30  # Minimum 30 minutes entre deux courses
@@ -703,29 +677,39 @@ class AgentOrchestrator:
             if not driver_id or not driver_info.get("available"):
                 continue
 
-            driver = Driver.query.get(driver_id)
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            driver_repo = DriverRepository()
+            driver_dto = driver_repo.find_by_id(driver_id)
+            if not driver_dto:
+                continue
+            # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+            driver = Driver.query.get(driver_dto.id)
             if not driver:
                 continue
 
             # Vérifier conflits temporels avec les courses existantes du chauffeur
-            has_conflict = False
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            assignment_repo = AssignmentRepository()
+            assignment_dtos = assignment_repo.find_by_driver_id(driver_id)
+            # Filtrer par statuts en mémoire
+            active_statuses = [
+                AssignmentStatus.SCHEDULED,
+                AssignmentStatus.EN_ROUTE_PICKUP,
+                AssignmentStatus.ARRIVED_PICKUP,
+                AssignmentStatus.ONBOARD,
+                AssignmentStatus.EN_ROUTE_DROPOFF,
+            ]
+            filtered_assignment_dtos = [
+                dto for dto in assignment_dtos if dto.status in active_statuses
+            ]
+            # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs pour la compatibilité
+            assignment_ids = [dto.id for dto in filtered_assignment_dtos]
             driver_assignments = (
-                Assignment.query.filter_by(driver_id=driver_id)
-                .filter(
-                    Assignment.status.in_(
-                        [
-                            AssignmentStatus.SCHEDULED,
-                            AssignmentStatus.EN_ROUTE_PICKUP,
-                            AssignmentStatus.ARRIVED_PICKUP,
-                            AssignmentStatus.ONBOARD,
-                            AssignmentStatus.EN_ROUTE_DROPOFF,
-                        ]
-                    )
-                )
-                .join(Booking)
-                .filter(Booking.scheduled_time.isnot(None))
-                .all()
+                Assignment.query.filter(Assignment.id.in_(assignment_ids)).all()
+                if assignment_ids
+                else []
             )
+            has_conflict = False
 
             for existing_assignment in driver_assignments:
                 existing_booking = existing_assignment.booking
@@ -755,7 +739,7 @@ class AgentOrchestrator:
 
     def _find_regular_driver_for_booking(
         self, booking_id: int, state: Dict[str, Any]
-    ) -> Optional[int]:
+    ) -> int | None:
         """Trouve un chauffeur régulier disponible pour une course
         actuellement assignée à l'urgent.
 
@@ -763,8 +747,14 @@ class AgentOrchestrator:
         """
         from models import Assignment, AssignmentStatus, Booking, Driver
 
-        booking = Booking.query.get(booking_id)
-        if not booking or not booking.scheduled_time:
+        # ✅ Utilisation du repository pour découpler de SQLAlchemy
+        booking_repo = BookingRepository()
+        booking_dto = booking_repo.find_by_id(booking_id)
+        if not booking_dto or not booking_dto.scheduled_time:
+            return None
+        # Récupérer le modèle SQLAlchemy depuis le repository pour la compatibilité
+        booking = booking_repo.find_model_by_id(booking_dto.id)
+        if not booking:
             return None
 
         # Récupérer tous les chauffeurs réguliers disponibles
@@ -776,7 +766,13 @@ class AgentOrchestrator:
             if not driver_id or not driver_info.get("available"):
                 continue
 
-            driver = Driver.query.get(driver_id)
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            driver_repo = DriverRepository()
+            driver_dto = driver_repo.find_by_id(driver_id)
+            if not driver_dto:
+                continue
+            # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+            driver = Driver.query.get(driver_dto.id)
             if not driver:
                 continue
 
@@ -797,6 +793,9 @@ class AgentOrchestrator:
         # Tester chaque régulier pour trouver le meilleur (sans conflit)
         for driver_id, _driver in regular_drivers:
             # Vérifier conflits temporels avec les courses existantes du chauffeur
+            # ⚠️ TODO: Refactorer pour utiliser AssignmentRepository.find_active_by_driver_with_bookings()
+            # quand cette méthode sera ajoutée au repository pour gérer les joins complexes avec Booking.
+            # Pour l'instant, on utilise encore la requête directe pour cette validation complexe.
             has_conflict = False
             driver_assignments = (
                 Assignment.query.filter_by(driver_id=driver_id)
@@ -864,8 +863,6 @@ class AgentOrchestrator:
         Returns:
             True si appliqué avec succès, False si conflits persistants
         """
-        from models import Booking
-
         retry_count = 0
         current_plan = plan
 
@@ -884,11 +881,16 @@ class AgentOrchestrator:
                 for step in current_plan:
                     job_id = step.get("job_id")
                     if job_id:
-                        booking = Booking.query.get(job_id)
-                        if booking and booking.scheduled_time:
-                            job_dates.append(
-                                booking.scheduled_time.strftime("%Y-%m-%d")
-                            )
+                        # ✅ Utilisation du repository pour découpler de SQLAlchemy
+                        booking_repo = BookingRepository()
+                        booking_dto = booking_repo.find_by_id(job_id)
+                        if booking_dto and booking_dto.scheduled_time:
+                            # Récupérer le modèle SQLAlchemy depuis le repository pour la compatibilité
+                            booking = booking_repo.find_model_by_id(booking_dto.id)
+                            if booking and booking.scheduled_time:
+                                job_dates.append(
+                                    booking.scheduled_time.strftime("%Y-%m-%d")
+                                )
 
                 most_common_date = (
                     Counter(job_dates).most_common(1)[0][0]
@@ -937,7 +939,7 @@ class AgentOrchestrator:
         Returns:
             True si le plan a été appliqué avec succès, False si des conflits persistent
         """
-        from models import Assignment, AssignmentStatus, Booking
+        from models import Assignment, AssignmentStatus
 
         filtered_plan = []
         for step in plan:
@@ -946,29 +948,38 @@ class AgentOrchestrator:
                 continue
 
             # Vérifier si déjà assignée
-            booking = Booking.query.get(job_id)
-            if booking:
-                existing_assignment = (
-                    Assignment.query.filter_by(booking_id=job_id)
-                    .filter(
-                        Assignment.status.in_(
-                            [
-                                AssignmentStatus.SCHEDULED,
-                                AssignmentStatus.EN_ROUTE_PICKUP,
-                                AssignmentStatus.ARRIVED_PICKUP,
-                                AssignmentStatus.ONBOARD,
-                                AssignmentStatus.EN_ROUTE_DROPOFF,
-                            ]
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            booking_repo = BookingRepository()
+            booking_dto = booking_repo.find_by_id(job_id)
+            if booking_dto:
+                # Récupérer le modèle SQLAlchemy depuis le repository pour la compatibilité
+                booking = booking_repo.find_model_by_id(booking_dto.id)
+                if booking:
+                    # ✅ Utilisation du repository pour découpler de SQLAlchemy
+                    assignment_repo = AssignmentRepository()
+                    assignment_dtos = assignment_repo.find_by_booking_id(job_id)
+                    # Filtrer par statuts en mémoire
+                    active_statuses = [
+                        AssignmentStatus.SCHEDULED,
+                        AssignmentStatus.EN_ROUTE_PICKUP,
+                        AssignmentStatus.ARRIVED_PICKUP,
+                        AssignmentStatus.ONBOARD,
+                        AssignmentStatus.EN_ROUTE_DROPOFF,
+                    ]
+                    filtered_assignment_dtos = [
+                        dto for dto in assignment_dtos if dto.status in active_statuses
+                    ]
+                    # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+                    existing_assignment = (
+                        Assignment.query.get(filtered_assignment_dtos[0].id)
+                        if filtered_assignment_dtos
+                        else None
+                    )
+                    if existing_assignment:
+                        logger.debug(
+                            "[AgentOrchestrator] ⏭️ Job %s déjà assigné, skip", job_id
                         )
-                    )
-                    .first()
-                )
-
-                if existing_assignment:
-                    logger.debug(
-                        "[AgentOrchestrator] ⏭️ Job %s déjà assigné, skip", job_id
-                    )
-                    continue
+                        continue
 
             filtered_plan.append(step)
 
@@ -982,15 +993,22 @@ class AgentOrchestrator:
         # Simuler les assignations pour valider
         simulated_assignments = []
         for step in filtered_plan:
-            booking = Booking.query.get(step.get("job_id"))
-            if booking and booking.scheduled_time:
-                simulated_assignments.append(
-                    {
-                        "booking_id": step.get("job_id"),
-                        "driver_id": step.get("driver_id"),
-                        "scheduled_time": booking.scheduled_time.isoformat(),
-                    }
-                )
+            job_id = step.get("job_id")
+            if job_id:
+                # ✅ Utilisation du repository pour découpler de SQLAlchemy
+                booking_repo = BookingRepository()
+                booking_dto = booking_repo.find_by_id(job_id)
+                if booking_dto and booking_dto.scheduled_time:
+                    # Récupérer le modèle SQLAlchemy depuis le repository pour la compatibilité
+                    booking = booking_repo.find_model_by_id(booking_dto.id)
+                    if booking and booking.scheduled_time:
+                        simulated_assignments.append(
+                            {
+                                "booking_id": step.get("job_id"),
+                                "driver_id": step.get("driver_id"),
+                                "scheduled_time": booking.scheduled_time.isoformat(),
+                            }
+                        )
 
         # Valider le plan simulé avec validation améliorée
         if simulated_assignments:
@@ -999,10 +1017,7 @@ class AgentOrchestrator:
 
             if has_conflicts:
                 logger.warning(
-                    (
-                        "[AgentOrchestrator] ⚠️ Conflits temporels détectés "
-                        "dans le plan, ré-optimisation nécessaire"
-                    )
+                    "[AgentOrchestrator] ⚠️ Conflits temporels détectés dans le plan, ré-optimisation nécessaire"
                 )
                 return False
 
@@ -1059,12 +1074,18 @@ class AgentOrchestrator:
         Returns:
             True si des conflits sont détectés, False sinon
         """
-        from models import Booking, Company
+        from models import Company
         from services.unified_dispatch import settings as ud_settings
         from shared.geo_utils import haversine_minutes
 
         # Récupérer les paramètres configurables
-        company = Company.query.get(self.company_id)
+        # ✅ Utilisation du repository pour découpler de SQLAlchemy
+        company_repo = CompanyRepository()
+        company_dto = company_repo.find_by_id(self.company_id)
+        if not company_dto:
+            return False
+        # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+        company = Company.query.get(company_dto.id)
         if not company:
             return False
 
@@ -1093,11 +1114,18 @@ class AgentOrchestrator:
             # Trier par scheduled_time
             def get_scheduled_time(step: Dict[str, Any]) -> datetime:
                 """Extrait le scheduled_time d'un step pour le tri."""
-                booking = Booking.query.get(step.get("job_id"))
-                if booking and booking.scheduled_time:
-                    # booking.scheduled_time est une colonne SQLAlchemy,
-                    # convertir en datetime
-                    return cast(datetime, booking.scheduled_time)
+                # ✅ Utilisation du repository pour découpler de SQLAlchemy
+                job_id = step.get("job_id")
+                if job_id:
+                    booking_repo = BookingRepository()
+                    booking_dto = booking_repo.find_by_id(job_id)
+                    if booking_dto and booking_dto.scheduled_time:
+                        # Récupérer le modèle SQLAlchemy depuis le repository pour la compatibilité
+                        booking = booking_repo.find_model_by_id(booking_dto.id)
+                        if booking:
+                            # booking.scheduled_time est une colonne SQLAlchemy,
+                            # convertir en datetime
+                            return cast(datetime, booking.scheduled_time)
                 return datetime.min
 
             sorted_steps = sorted(driver_steps, key=get_scheduled_time)
@@ -1107,8 +1135,25 @@ class AgentOrchestrator:
                 current_step = sorted_steps[i]
                 next_step = sorted_steps[i + 1]
 
-                current_booking = Booking.query.get(current_step.get("job_id"))
-                next_booking = Booking.query.get(next_step.get("job_id"))
+                # ✅ Utilisation du repository pour découpler de SQLAlchemy
+                current_job_id = current_step.get("job_id")
+                next_job_id = next_step.get("job_id")
+                if not current_job_id or not next_job_id:
+                    continue
+                booking_repo = BookingRepository()
+                current_booking_dto = booking_repo.find_by_id(current_job_id)
+                next_booking_dto = booking_repo.find_by_id(next_job_id)
+                # Récupérer les modèles SQLAlchemy depuis le repository pour la compatibilité
+                current_booking = (
+                    booking_repo.find_model_by_id(current_booking_dto.id)
+                    if current_booking_dto
+                    else None
+                )
+                next_booking = (
+                    booking_repo.find_model_by_id(next_booking_dto.id)
+                    if next_booking_dto
+                    else None
+                )
 
                 if not current_booking or not next_booking:
                     continue
@@ -1242,7 +1287,13 @@ class AgentOrchestrator:
                 continue
 
             # Vérifier si c'est un chauffeur d'urgence
-            driver = Driver.query.get(driver_id)
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            driver_repo = DriverRepository()
+            driver_dto = driver_repo.find_by_id(driver_id)
+            if not driver_dto:
+                continue
+            # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+            driver = Driver.query.get(driver_dto.id)
             if not driver:
                 continue
 

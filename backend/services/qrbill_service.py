@@ -3,9 +3,9 @@ import tempfile
 from io import BytesIO
 from pathlib import Path
 
-from qrbill import QRBill
-from reportlab.graphics import renderPDF
-from svglib.svglib import svg2rlg
+from qrbill import QRBill  # pyright: ignore[reportMissingModuleSource]
+from reportlab.graphics import renderPDF  # pyright: ignore[reportMissingModuleSource]
+from svglib.svglib import svg2rlg  # pyright: ignore[reportMissingImports]
 
 from models import CompanyBillingSettings
 
@@ -135,7 +135,7 @@ class QRBillService:
                     f"Facture {invoice.invoice_number} - "
                     f"Période: {invoice.period_month:02d}.{invoice.period_year}"
                 ),
-                language="de",
+                language="fr",
             )
 
             # Générer le SVG du QR-Bill
@@ -145,7 +145,7 @@ class QRBillService:
                 qr_bill.as_svg(temp_svg.name)
 
                 # Lire le contenu SVG
-                with Path(temp_svg.name, encoding="utf-8").open() as f:
+                with Path(temp_svg.name).open("r", encoding="utf-8") as f:
                     svg_content = f.read()
 
                 # Nettoyer le fichier temporaire
@@ -271,7 +271,7 @@ class QRBillService:
                     f"Facture {invoice.invoice_number} - "
                     f"Période: {invoice.period_month:02d}.{invoice.period_year}"
                 ),
-                language="de",
+                language="fr",
             )
 
             # Générer le PDF du QR-Bill

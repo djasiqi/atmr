@@ -6,6 +6,7 @@ import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
 import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/CompanySidebar';
 import GeneralTab from './tabs/GeneralTab';
 import OperationsTab from './tabs/OperationsTab';
+import PartnershipsTab from './tabs/PartnershipsTab';
 import BillingTab from './tabs/BillingTab';
 import NotificationsTab from './tabs/NotificationsTab';
 import SecurityTab from './tabs/SecurityTab';
@@ -13,6 +14,7 @@ import VehiclesTab from './tabs/VehiclesTab';
 
 import useCompanyData from '../../../hooks/useCompanyData';
 import { updateCompanyInfo, uploadCompanyLogo } from '../../../services/companyService';
+import { getFreshToken } from '../../../services/authService';
 import resolveLogoUrl from '../../../utils/resolveLogoUrl';
 
 // Validations locales
@@ -44,20 +46,20 @@ function ibanChecksumIsValid(iban) {
 }
 
 export default function CompanySettings() {
-  const { company, error: loadError, reloadCompany } = useCompanyData();
+  const { company, error: loadError, loadingCompany, reloadCompany } = useCompanyData();
   const location = useLocation();
 
   // Onglet actif (détecte le hash dans l'URL)
   const [activeTab, setActiveTab] = useState(() => {
     const hash = location.hash.replace('#', '');
-    const validTabs = ['general', 'operations', 'billing', 'notifications', 'security', 'vehicles'];
+    const validTabs = ['general', 'operations', 'partnerships', 'billing', 'notifications', 'security', 'vehicles'];
     return validTabs.includes(hash) ? hash : 'general';
   });
 
   // Écouter les changements de hash (via React Router location)
   useEffect(() => {
     const hash = location.hash.replace('#', '');
-    const validTabs = ['general', 'operations', 'billing', 'notifications', 'security', 'vehicles'];
+    const validTabs = ['general', 'operations', 'partnerships', 'billing', 'notifications', 'security', 'vehicles'];
     if (validTabs.includes(hash)) {
       setActiveTab(hash);
     }
@@ -68,7 +70,7 @@ export default function CompanySettings() {
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace('#', '');
-      const validTabs = ['general', 'operations', 'billing', 'notifications', 'security', 'vehicles'];
+      const validTabs = ['general', 'operations', 'partnerships', 'billing', 'notifications', 'security', 'vehicles'];
       if (validTabs.includes(hash)) {
         setActiveTab(hash);
       }
@@ -82,6 +84,9 @@ export default function CompanySettings() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [pendingPayload, setPendingPayload] = useState(null);
 
   // -------- Logo --------
   const [logoPreview, setLogoPreview] = useState(null);
@@ -229,8 +234,14 @@ export default function CompanySettings() {
     };
 
     setSaving(true);
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CompanySettings.jsx:handleSubmit:start',message:'Starting company info update',data:{has_name:!!payload.name,name:payload.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
     try {
       const updated = await updateCompanyInfo(payload);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CompanySettings.jsx:handleSubmit:success',message:'Company info update succeeded',data:{has_updated:!!updated},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+      // #endregion
       setMessage('Paramètres enregistrés avec succès.');
       setEditMode(false);
       await reloadCompany?.();
@@ -240,7 +251,58 @@ export default function CompanySettings() {
         uid_ide: updated?.uid_ide ?? prev.uid_ide,
       }));
     } catch (err) {
-      setError(err?.response?.data?.error || err?.message || 'Erreur lors de la sauvegarde.');
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CompanySettings.jsx:handleSubmit:error',message:'Company info update error',data:{is_fresh_token_required:err?.isFreshTokenRequired,status:err?.response?.status,error_data:err?.response?.data,error_msg:err?.response?.data?.msg,error_error:err?.response?.data?.error,error_message:err?.response?.data?.message,err_message:err?.message,all_error_keys:err?.response?.data ? Object.keys(err.response.data) : []},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+      // #endregion
+      // ✅ Gestion spéciale pour les erreurs de token "fresh" requis
+      if (err?.isFreshTokenRequired) {
+        // Demander le mot de passe pour obtenir un token fresh
+        setPendingPayload(payload);
+        setShowPasswordModal(true);
+        setError(''); // Effacer l'erreur précédente
+      } else {
+        const errorMsg = err?.response?.data?.error || err?.message || 'Erreur lors de la sauvegarde.';
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CompanySettings.jsx:setError:other',message:'Setting error message for other error',data:{error_msg:errorMsg},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+        // #endregion
+        setError(errorMsg);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Gérer la soumission du mot de passe pour obtenir un token fresh
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (!passwordInput.trim()) {
+      setError('Veuillez entrer votre mot de passe.');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    try {
+      // Obtenir un token fresh
+      await getFreshToken(passwordInput);
+      setShowPasswordModal(false);
+      setPasswordInput('');
+      
+      // Réessayer la modification avec le nouveau token
+      if (pendingPayload) {
+        const updated = await updateCompanyInfo(pendingPayload);
+        setMessage('Paramètres enregistrés avec succès.');
+        setEditMode(false);
+        await reloadCompany?.();
+        setForm((prev) => ({
+          ...prev,
+          iban: updated?.iban ? formatIbanPretty(updated.iban) : prev.iban,
+          uid_ide: updated?.uid_ide ?? prev.uid_ide,
+        }));
+        setPendingPayload(null);
+      }
+    } catch (err) {
+      setError(err?.response?.data?.error || err?.message || 'Mot de passe incorrect ou erreur lors de l\'obtention du token.');
     } finally {
       setSaving(false);
     }
@@ -363,6 +425,7 @@ export default function CompanySettings() {
   const tabs = [
     { id: 'general', label: 'Général', icon: '🏢' },
     { id: 'operations', label: 'Opérations', icon: '🚗' },
+    { id: 'partnerships', label: 'Partenariats', icon: '🤝' },
     { id: 'vehicles', label: 'Véhicules', icon: '🚙' },
     { id: 'billing', label: 'Facturation', icon: '💰' },
     { id: 'notifications', label: 'Notifications', icon: '📧' },
@@ -385,7 +448,7 @@ export default function CompanySettings() {
           </div>
 
           {/* Messages globaux */}
-          {!company && !loadError && <p>Chargement…</p>}
+          {loadingCompany && <p>Chargement…</p>}
           {loadError && <div className={styles.error}>{loadError}</div>}
           {activeTab === 'general' && message && <div className={styles.success}>{message}</div>}
           {activeTab === 'general' && error && <div className={styles.error}>{error}</div>}
@@ -459,6 +522,7 @@ export default function CompanySettings() {
               )}
 
               {activeTab === 'operations' && <OperationsTab />}
+              {activeTab === 'partnerships' && <PartnershipsTab />}
               {activeTab === 'vehicles' && <VehiclesTab />}
               {activeTab === 'billing' && <BillingTab />}
               {activeTab === 'notifications' && <NotificationsTab />}
@@ -467,6 +531,88 @@ export default function CompanySettings() {
           )}
         </main>
       </div>
+
+      {/* Modal pour demander le mot de passe */}
+      {showPasswordModal && (
+        <div
+          className="modal-overlay"
+          onClick={() => {
+            setShowPasswordModal(false);
+            setPasswordInput('');
+            setPendingPayload(null);
+            setError('');
+          }}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+          }}
+        >
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              padding: '24px',
+              maxWidth: '400px',
+              width: '90%',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
+            }}
+          >
+            <h2 style={{ marginTop: 0, marginBottom: '16px' }}>
+              🔒 Vérification requise
+            </h2>
+            <p style={{ marginBottom: '16px', color: 'var(--text-secondary)' }}>
+              Pour des raisons de sécurité, veuillez entrer votre mot de passe pour confirmer cette modification.
+            </p>
+            <form onSubmit={handlePasswordSubmit}>
+              <div className={styles.formGroup}>
+                <label htmlFor="password">Mot de passe</label>
+                <input
+                  id="password"
+                  type="password"
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  className={styles.input}
+                  autoFocus
+                  disabled={saving}
+                />
+              </div>
+              {error && <div className={styles.error} style={{ marginBottom: '16px' }}>{error}</div>}
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className={`${styles.button} ${styles.secondary}`}
+                  onClick={() => {
+                    setShowPasswordModal(false);
+                    setPasswordInput('');
+                    setPendingPayload(null);
+                    setError('');
+                  }}
+                  disabled={saving}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className={`${styles.button} ${styles.primary}`}
+                  disabled={saving || !passwordInput.trim()}
+                >
+                  {saving ? 'Vérification...' : 'Confirmer'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

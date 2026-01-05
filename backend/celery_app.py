@@ -6,10 +6,10 @@ import os
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote_plus
 
-from celery import Celery
+from celery import Celery  # pyright: ignore[reportMissingImports]
 
 if TYPE_CHECKING:
-    from flask import Flask
+    from flask import Flask  # pyright: ignore[reportMissingImports]
 
 logger = logging.getLogger(__name__)
 
@@ -223,10 +223,19 @@ celery.conf.beat_schedule = {
             # (tasks hebdomadaires)
         },
     },
-    # ✅ 2.5: Vérification rotation clés
-    # (tous les 7 jours pour détecter si rotation due)
+    # ✅ P1: Pré-calcul matrices OSRM pour zones fréquentes (quotidien à 3h)
+    "osrm-precompute-matrices": {
+        "task": "tasks.osrm_precompute_matrices",
+        "schedule": 24 * 3600,  # 1 jour (86400 secondes)
+        "options": {
+            "expires": 6 * 3600,  # Expire après 6h
+            "jitter": 1800,  # ✅ 2.6: Jitter jusqu'à 30 minutes (tasks quotidiennes)
+        },
+    },
+    # ✅ S3: Vérification et rotation automatique des secrets
+    # (tous les 7 jours pour détecter si rotation due et l'effectuer)
     "secret-rotation-check": {
-        "task": "tasks.secret_rotation_tasks.check_rotation_due",
+        "task": "tasks.secret_rotation_tasks.check_and_rotate_all",
         "schedule": 7 * 24 * 3600,  # 1 semaine
         "options": {
             "expires": 12 * 3600,
@@ -364,13 +373,20 @@ def init_app(app: Flask) -> Celery:
     # ✅ A3: Enregistrer les handlers pour DLQ
     _register_dlq_handlers()
 
+    # ✅ P3: Initialiser la métrique Prometheus pour la longueur de queue
+    _init_queue_length_metric()
+
     return celery
 
 
 # ✅ DLQ: Handler pour stocker métadonnées des tâches échouées avec monitoring
 def _register_dlq_handlers():
     """Enregistre les handlers pour capturer les échecs et les stocker en DLQ."""
-    from celery.signals import task_failure, task_retry, task_success
+    from celery.signals import (  # pyright: ignore[reportMissingImports]
+        task_failure,
+        task_retry,
+        task_success,
+    )
 
     @task_failure.connect
     def task_failed_handler(  # pyright: ignore[reportUnusedFunction]
@@ -389,7 +405,9 @@ def _register_dlq_handlers():
 
             if PROMETHEUS_AVAILABLE:
                 try:
-                    from prometheus_client import Counter
+                    from prometheus_client import (  # pyright: ignore[reportMissingImports]
+                        Counter,
+                    )
 
                     dlq_counter = Counter(
                         "celery_dlq_failures_total",
@@ -507,3 +525,137 @@ def _store_task_failure_in_db(
     except Exception as e:
         logger.exception("[Celery DLQ] Failed to store failure in DB: %s", e)
         # Continue sans erreur critique (ne bloque pas le worker)
+
+
+# ✅ P3: Métrique Prometheus pour la longueur de queue Celery
+# Utiliser un dict pour éviter l'utilisation de global statement (Ruff PLW0603)
+_celery_queue_length_gauge_container: dict[str, Any | None] = {"gauge": None}
+
+
+def _get_queue_length_gauge():
+    """Retourne la métrique Prometheus pour la longueur de queue Celery.
+
+    Initialise la métrique si nécessaire (lazy initialization).
+
+    Returns:
+        Gauge Prometheus ou None si prometheus_client non disponible
+    """
+    if _celery_queue_length_gauge_container["gauge"] is None:
+        try:
+            from prometheus_client import (  # pyright: ignore[reportMissingImports]
+                Gauge,
+            )
+
+            _celery_queue_length_gauge_container["gauge"] = Gauge(
+                "celery_queue_length",
+                "Nombre de tâches en attente dans la queue Celery",
+                ["queue_name"],
+            )
+            logger.info("[Celery] Prometheus metric 'celery_queue_length' initialized")
+        except ImportError:
+            logger.warning(
+                "[Celery] prometheus_client non disponible, métrique queue_length désactivée"
+            )
+        except Exception as e:
+            logger.warning(
+                "[Celery] Erreur initialisation métrique queue_length: %s", e
+            )
+
+    return _celery_queue_length_gauge_container["gauge"]
+
+
+def _init_queue_length_metric():
+    """Initialise la métrique Prometheus pour la longueur de queue Celery."""
+    _get_queue_length_gauge()
+
+
+def get_celery_queue_lengths() -> dict[str, int]:
+    """Obtient la longueur de toutes les queues Celery.
+
+    Utilise l'API inspect de Celery pour obtenir le nombre de tâches
+    actives, réservées et programmées par queue.
+
+    Returns:
+        Dict avec {queue_name: length} pour chaque queue
+        Retourne {} en cas d'erreur ou si les workers ne sont pas disponibles
+    """
+    try:
+        inspect = celery.control.inspect()
+
+        # Obtenir les tâches actives, réservées et programmées
+        active = inspect.active() or {}
+        reserved = inspect.reserved() or {}
+        scheduled = inspect.scheduled() or {}
+
+        # Compter les tâches par queue
+        queue_lengths: dict[str, int] = {}
+
+        # Parcourir toutes les tâches actives
+        for worker_tasks in active.values():
+            for task in worker_tasks:
+                queue = task.get("delivery_info", {}).get("routing_key", "default")
+                queue_lengths[queue] = queue_lengths.get(queue, 0) + 1
+
+        # Parcourir toutes les tâches réservées
+        for worker_tasks in reserved.values():
+            for task in worker_tasks:
+                queue = task.get("delivery_info", {}).get("routing_key", "default")
+                queue_lengths[queue] = queue_lengths.get(queue, 0) + 1
+
+        # Parcourir toutes les tâches programmées
+        for worker_tasks in scheduled.values():
+            for task in worker_tasks:
+                queue = task.get("delivery_info", {}).get("routing_key", "default")
+                queue_lengths[queue] = queue_lengths.get(queue, 0) + 1
+
+        # Si aucune tâche trouvée mais que des workers sont actifs,
+        # retourner au moins les queues connues avec 0
+        if not queue_lengths:
+            # Vérifier si des workers sont actifs
+            stats = inspect.stats() or {}
+            if stats:
+                # Workers actifs mais pas de tâches = queues vides
+                # Retourner les queues par défaut avec 0
+                queue_lengths = {
+                    "default": 0,
+                    "realtime": 0,
+                    "dlq": 0,
+                }
+
+        return queue_lengths
+
+    except Exception as e:
+        logger.warning(
+            "[Celery] Erreur lors de la récupération de la longueur des queues: %s", e
+        )
+        return {}
+
+
+def update_celery_queue_length_metric():
+    """Met à jour la métrique Prometheus avec les longueurs actuelles des queues.
+
+    Cette fonction doit être appelée périodiquement (ex: toutes les 30 secondes)
+    ou lors de l'export des métriques Prometheus.
+    """
+    gauge = _get_queue_length_gauge()
+    if gauge is None:
+        return
+
+    try:
+        queue_lengths = get_celery_queue_lengths()
+
+        # Mettre à jour la métrique pour chaque queue
+        for queue_name, length in queue_lengths.items():
+            gauge.labels(queue_name=queue_name).set(length)
+
+        # Réinitialiser les queues qui n'ont plus de tâches
+        # (pour éviter que les métriques restent à l'ancienne valeur)
+        known_queues = {"default", "realtime", "dlq"}
+        for queue_name in known_queues:
+            if queue_name not in queue_lengths:
+                gauge.labels(queue_name=queue_name).set(0)
+
+    except Exception as e:
+        logger.warning(
+            "[Celery] Erreur lors de la mise à jour de la métrique queue_length: %s", e
+        )

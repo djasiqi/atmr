@@ -52,5 +52,10 @@
   "workbench.view.alwaysShowHeaderActions": true,
 
   // Ruff (extension native) — pas de ruff.lint.run (déprécié)
-  "ruff.enable": true
+  "ruff.enable": true,
+  "cursorpyright.analysis.extraPaths": [
+    "${workspaceFolder}/backend"
+  ],
+  "cursorpyright.analysis.typeCheckingMode": "basic",
+  "cursorpyright.analysis.useLibraryCodeForTypes": true
 }

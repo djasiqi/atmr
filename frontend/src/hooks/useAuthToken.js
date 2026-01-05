@@ -6,7 +6,10 @@ const useAuthToken = () => {
 
   useEffect(() => {
     const token = localStorage.getItem('authToken');
+    const rawUser = localStorage.getItem('user');
+    const storedUser = rawUser ? JSON.parse(rawUser) : null;
 
+    // ✅ Si on a un token dans localStorage (mode mobile), le décoder
     if (token) {
       try {
         const decoded = jwtDecode(token);
@@ -33,6 +36,18 @@ const useAuthToken = () => {
         console.error('❌ Erreur lors du décodage du token:', error);
         setUser(null);
       }
+    } else if (storedUser) {
+      // ✅ Mode cookies httpOnly : utiliser les infos utilisateur stockées
+      // Le backend vérifiera l'authentification via les cookies
+      setUser({
+        ...storedUser,
+        isCompany: String(storedUser.role || '').toLowerCase() === 'company',
+        isDriver: String(storedUser.role || '').toLowerCase() === 'driver',
+        isClient: String(storedUser.role || '').toLowerCase() === 'client',
+        companyId: storedUser.company_id,
+        userId: storedUser.id,
+        public_id: storedUser.public_id,
+      });
     } else {
       setUser(null);
     }

@@ -27,6 +27,26 @@ Utilisé par :
 - Mode Semi-Auto (UI suggestions MDI)
 - Dashboard dispatch
 
+⚠️ NON-DÉTERMINISME PAR DESIGN :
+Les suggestions RL sont intentionnellement non déterministes pour plusieurs raisons :
+1. Exploration : L'agent utilise epsilon-greedy (exploration vs exploitation)
+   - Avec probabilité epsilon, l'agent explore en choisissant une action aléatoire
+   - Cela permet de découvrir de nouvelles stratégies optimales
+2. Replay Buffer : L'échantillonnage prioritaire utilise np.random.choice()
+   - Les transitions sont sélectionnées aléatoirement selon leur priorité
+   - Cela introduit de la variabilité dans l'apprentissage
+3. Noisy Networks : Si activées, les réseaux de neurones utilisent du bruit paramétrique
+   - Le bruit est régénéré à chaque forward pass, créant de la variabilité
+4. Bénéfices du non-déterminisme :
+   - Évite la stagnation dans des solutions sous-optimales
+   - Permet d'explorer différentes stratégies d'assignation
+   - Améliore la robustesse du système face à des situations variées
+   - Facilite la découverte de nouvelles optimisations
+
+Note : En mode production avec epsilon=0 (exploitation pure), le comportement est plus
+déterministe mais peut encore varier légèrement selon l'ordre de traitement des
+assignments et les arrondis numériques des Q-values.
+
 Voir aussi : services/unified_dispatch/reactive_suggestions.py (suggestions réactives)
 """
 
@@ -34,7 +54,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 
@@ -137,8 +157,8 @@ class RLSuggestionGenerator:
     def generate_suggestions(
         self,
         company_id: int,
-        assignments: Optional[List[Any]],
-        drivers: Optional[List[Any]],
+        assignments: List[Any] | None,
+        drivers: List[Any] | None,
         for_date: str,
         min_confidence: float = 0.5,
         max_suggestions: int = 20,
@@ -176,8 +196,8 @@ class RLSuggestionGenerator:
     def _generate_rl_suggestions(
         self,
         _company_id: int,
-        assignments: Optional[List[Any]],
-        drivers: Optional[List[Any]],
+        assignments: List[Any] | None,
+        drivers: List[Any] | None,
         _for_date: str,
         min_confidence: float,
         max_suggestions: int,
@@ -411,20 +431,22 @@ class RLSuggestionGenerator:
                 # 3. Charge actuelle normalisée (nombre assignments actifs, max
                 # 5)
                 try:
-                    from models import Assignment
+                    from repositories.assignment_repository import AssignmentRepository
 
-                    current_load = Assignment.query.filter(
-                        Assignment.driver_id == driver.id,
-                        Assignment.status.in_(
-                            [
-                                AssignmentStatus.SCHEDULED,
-                                AssignmentStatus.EN_ROUTE_PICKUP,
-                                AssignmentStatus.ARRIVED_PICKUP,
-                                AssignmentStatus.ONBOARD,
-                                AssignmentStatus.EN_ROUTE_DROPOFF,
-                            ]
-                        ),
-                    ).count()
+                    # ✅ Utilisation du repository pour découpler de SQLAlchemy
+                    assignment_repo = AssignmentRepository()
+                    assignment_dtos = assignment_repo.find_by_driver_id(driver.id)
+                    # Filtrer par statuts actifs
+                    active_statuses = [
+                        AssignmentStatus.SCHEDULED,
+                        AssignmentStatus.EN_ROUTE_PICKUP,
+                        AssignmentStatus.ARRIVED_PICKUP,
+                        AssignmentStatus.ONBOARD,
+                        AssignmentStatus.EN_ROUTE_DROPOFF,
+                    ]
+                    current_load = sum(
+                        1 for dto in assignment_dtos if dto.status in active_statuses
+                    )
                     normalized_load = min(current_load / 5, 1)
                 except Exception as e:
                     logger.warning("[RL] Error counting driver load: %s", e)
@@ -464,8 +486,8 @@ class RLSuggestionGenerator:
 
     def _generate_basic_suggestions(
         self,
-        assignments: Optional[List[Any]],
-        drivers: Optional[List[Any]],
+        assignments: List[Any] | None,
+        drivers: List[Any] | None,
         min_confidence: float,
         max_suggestions: int,
     ) -> List[Dict[str, Any]]:

@@ -1,0 +1,261 @@
+# services/partnership_stats_service.py
+"""Service pour calculer les statistiques de partenariats."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from decimal import Decimal
+from typing import Any
+
+from sqlalchemy import func, or_
+
+from ext import db
+from models.booking_transfer import BookingTransfer
+from models.enums import PartnershipStatus, TransferStatus
+from models.partner_invoice import PartnerInvoice, PartnerInvoiceStatus
+from models.partnership import Partnership
+
+
+class PartnershipStatsService:
+    """Service pour calculer les statistiques de partenariats."""
+
+    @staticmethod
+    def get_global_stats(
+        company_id: int, month: int | None = None, year: int | None = None
+    ) -> dict[str, Any]:
+        """Calcule les statistiques globales de partenariats pour une entreprise.
+
+        Args:
+            company_id: ID de l'entreprise
+            month: Mois (1-12), None pour mois en cours
+            year: Année, None pour année en cours
+
+        Returns:
+            Dictionnaire avec les statistiques globales
+        """
+        now = datetime.now(UTC)
+        if month is None:
+            month = now.month
+        if year is None:
+            year = now.year
+
+        # Dates du mois
+        MONTHS_IN_YEAR = 12
+        start_of_month = datetime(year, month, 1, tzinfo=UTC)
+        if month == MONTHS_IN_YEAR:
+            end_of_month = datetime(year + 1, 1, 1, tzinfo=UTC)
+        else:
+            end_of_month = datetime(year, month + 1, 1, tzinfo=UTC)
+
+        # Partenaires actifs
+        active_partnerships = (
+            db.session.query(func.count(Partnership.id))
+            .filter(
+                or_(
+                    Partnership.owner_company_id == company_id,
+                    Partnership.partner_company_id == company_id,
+                ),
+                Partnership.status == PartnershipStatus.ACCEPTED,
+                Partnership.is_active.is_(True),
+            )
+            .scalar()
+            or 0
+        )
+
+        # Courses envoyées (où l'entreprise est propriétaire)
+        sent_transfers = (
+            db.session.query(func.count(BookingTransfer.id))
+            .join(Partnership)
+            .filter(
+                BookingTransfer.owner_company_id == company_id,
+                BookingTransfer.requested_at >= start_of_month,
+                BookingTransfer.requested_at < end_of_month,
+            )
+            .scalar()
+            or 0
+        )
+
+        # Courses reçues (où l'entreprise est exécutante)
+        # Utiliser requested_at au lieu de accepted_at pour être cohérent avec les courses envoyées
+        # Si A envoie une course à B, B doit la voir comme reçue dès la demande (requested_at)
+        received_transfers = (
+            db.session.query(func.count(BookingTransfer.id))
+            .join(Partnership)
+            .filter(
+                BookingTransfer.executing_company_id == company_id,
+                BookingTransfer.requested_at >= start_of_month,
+                BookingTransfer.requested_at < end_of_month,
+            )
+            .scalar()
+            or 0
+        )
+
+        # Montant à payer aux partenaires (factures où l'autre entreprise a émis la facture)
+        # Si executing_company_id != company_id, alors l'entreprise actuelle doit payer
+        amount_to_pay = db.session.query(
+            func.coalesce(func.sum(PartnerInvoice.total_amount), 0)
+        ).join(Partnership).filter(
+            or_(
+                Partnership.owner_company_id == company_id,
+                Partnership.partner_company_id == company_id,
+            ),
+            PartnerInvoice.executing_company_id != company_id,
+            PartnerInvoice.status.in_(
+                [PartnerInvoiceStatus.SENT, PartnerInvoiceStatus.DRAFT]
+            ),
+        ).scalar() or Decimal("0")
+
+        # Montant à recevoir des partenaires (factures où l'entreprise actuelle a émis la facture)
+        # Si executing_company_id == company_id, alors l'entreprise actuelle doit recevoir
+        amount_to_receive = db.session.query(
+            func.coalesce(func.sum(PartnerInvoice.total_amount), 0)
+        ).join(Partnership).filter(
+            or_(
+                Partnership.owner_company_id == company_id,
+                Partnership.partner_company_id == company_id,
+            ),
+            PartnerInvoice.executing_company_id == company_id,
+            PartnerInvoice.status.in_(
+                [PartnerInvoiceStatus.SENT, PartnerInvoiceStatus.DRAFT]
+            ),
+        ).scalar() or Decimal("0")
+
+        # Solde net
+        net_balance = float(amount_to_receive - amount_to_pay)
+
+        return {
+            "active_partnerships": active_partnerships,
+            "sent_transfers_current_month": sent_transfers,
+            "received_transfers_current_month": received_transfers,
+            "amount_to_pay": float(amount_to_pay),
+            "amount_to_receive": float(amount_to_receive),
+            "net_balance": net_balance,
+            "period": {"year": year, "month": month},
+        }
+
+    @staticmethod
+    def get_partnership_stats(
+        partnership: Partnership,
+        company_id: int,
+        month: int | None = None,
+        year: int | None = None,
+    ) -> dict[str, Any]:
+        """Calcule les statistiques pour un partenariat spécifique.
+
+        Args:
+            partnership: Le partenariat
+            company_id: ID de l'entreprise actuelle
+            month: Mois (1-12), None pour mois en cours
+            year: Année, None pour année en cours
+
+        Returns:
+            Dictionnaire avec les statistiques du partenariat
+        """
+        now = datetime.now(UTC)
+        if month is None:
+            month = now.month
+        if year is None:
+            year = now.year
+
+        # Dates du mois
+        MONTHS_IN_YEAR = 12
+        start_of_month = datetime(year, month, 1, tzinfo=UTC)
+        if month == MONTHS_IN_YEAR:
+            end_of_month = datetime(year + 1, 1, 1, tzinfo=UTC)
+        else:
+            end_of_month = datetime(year, month + 1, 1, tzinfo=UTC)
+
+        # Déterminer si l'entreprise est propriétaire ou partenaire
+        is_owner = partnership.owner_company_id == company_id
+
+        # Courses envoyées (où l'entreprise actuelle est propriétaire)
+        # Utiliser requested_at pour être cohérent avec les courses reçues
+        sent_transfers = (
+            db.session.query(func.count(BookingTransfer.id))
+            .filter(
+                BookingTransfer.partnership_id == partnership.id,
+                BookingTransfer.owner_company_id == company_id,
+                BookingTransfer.requested_at >= start_of_month,
+                BookingTransfer.requested_at < end_of_month,
+            )
+            .scalar()
+            or 0
+        )
+
+        # Courses reçues (où l'entreprise actuelle est exécutante)
+        # Utiliser requested_at au lieu de accepted_at pour être cohérent avec les courses envoyées
+        # Si A envoie une course à B, B doit la voir comme reçue dès la demande (requested_at)
+        received_transfers = (
+            db.session.query(func.count(BookingTransfer.id))
+            .filter(
+                BookingTransfer.partnership_id == partnership.id,
+                BookingTransfer.executing_company_id == company_id,
+                BookingTransfer.requested_at >= start_of_month,
+                BookingTransfer.requested_at < end_of_month,
+            )
+            .scalar()
+            or 0
+        )
+
+        # CA généré (somme des client_price des transferts acceptés/complétés)
+        total_revenue = db.session.query(
+            func.coalesce(func.sum(BookingTransfer.client_price), 0)
+        ).filter(
+            BookingTransfer.partnership_id == partnership.id,
+            BookingTransfer.status.in_(
+                [TransferStatus.ACCEPTED, TransferStatus.COMPLETED]
+            ),
+            BookingTransfer.requested_at >= start_of_month,
+            BookingTransfer.requested_at < end_of_month,
+        ).scalar() or Decimal("0")
+
+        # À payer (factures reçues non payées où l'entreprise est propriétaire)
+        amount_to_pay = (
+            (
+                db.session.query(
+                    func.coalesce(func.sum(PartnerInvoice.total_amount), 0)
+                )
+                .filter(
+                    PartnerInvoice.partnership_id == partnership.id,
+                    PartnerInvoice.status.in_(
+                        [PartnerInvoiceStatus.SENT, PartnerInvoiceStatus.DRAFT]
+                    ),
+                )
+                .scalar()
+                or Decimal("0")
+            )
+            if is_owner
+            else Decimal("0")
+        )
+
+        # À recevoir (factures émises non payées où l'entreprise est partenaire)
+        amount_to_receive = (
+            (
+                db.session.query(
+                    func.coalesce(func.sum(PartnerInvoice.total_amount), 0)
+                )
+                .filter(
+                    PartnerInvoice.partnership_id == partnership.id,
+                    PartnerInvoice.status.in_(
+                        [PartnerInvoiceStatus.SENT, PartnerInvoiceStatus.DRAFT]
+                    ),
+                )
+                .scalar()
+                or Decimal("0")
+            )
+            if not is_owner
+            else Decimal("0")
+        )
+
+        # Solde
+        balance = float(amount_to_receive - amount_to_pay)
+
+        return {
+            "sent_transfers": sent_transfers,
+            "received_transfers": received_transfers,
+            "total_revenue": float(total_revenue),
+            "amount_to_pay": float(amount_to_pay),
+            "amount_to_receive": float(amount_to_receive),
+            "balance": balance,
+            "period": {"year": year, "month": month},
+        }

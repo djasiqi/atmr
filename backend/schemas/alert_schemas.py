@@ -1,6 +1,10 @@
 """✅ Schemas Marshmallow pour validation des endpoints d'alertes."""
 
-from marshmallow import Schema, fields, validate
+from marshmallow import (  # pyright: ignore[reportMissingImports]
+    Schema,
+    fields,
+    validate,
+)
 
 
 class ClearAlertHistorySchema(Schema):
@@ -13,5 +17,5 @@ class ClearAlertHistorySchema(Schema):
         load_default=None,
     )
 
-    class Meta:  # type: ignore
+    class Meta:
         unknown = "EXCLUDE"  # Rejeter les champs inconnus pour sécurité

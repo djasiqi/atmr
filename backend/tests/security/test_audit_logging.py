@@ -128,6 +128,8 @@ class TestAuditLoggingSensitiveActions:
     def test_user_created_logged(self, app, db, sample_user, sample_company):
         """Vérifie que la création d'utilisateur est loggée."""
         with app.app_context():
+            import uuid
+
             from flask import request
 
             with current_app.test_request_context(
@@ -140,8 +142,9 @@ class TestAuditLoggingSensitiveActions:
                 from ext import bcrypt
 
                 new_user = User()
-                new_user.username = "newclient"
-                new_user.email = "newclient@example.com"
+                unique_suffix = uuid.uuid4().hex[:8]
+                new_user.username = f"newclient_{unique_suffix}"
+                new_user.email = f"newclient_{unique_suffix}@example.com"
                 new_user.role = UserRole.client
                 # ✅ FIX: Définir password avant d'ajouter à la session
                 password_hash = bcrypt.generate_password_hash("password123")
@@ -162,7 +165,7 @@ class TestAuditLoggingSensitiveActions:
                     result_status="success",
                     action_details={
                         "created_user_id": new_user.id,
-                        "created_user_email": "newclient@example.com",
+                        "created_user_email": new_user.email,
                         "created_user_role": "client",
                     },
                     company_id=sample_company.id if sample_company else None,

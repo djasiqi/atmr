@@ -11,7 +11,7 @@ import random
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
-import numpy as np
+import numpy as np  # pyright: ignore[reportMissingImports]
 
 logger = logging.getLogger(__name__)
 

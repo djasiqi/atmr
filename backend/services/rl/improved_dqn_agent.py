@@ -53,6 +53,25 @@ class ImprovedDQNAgent:
         - Gradient clipping
         - Target network soft update
         - Epsilon decay adaptatif
+
+    ⚠️ NON-DÉTERMINISME PAR DESIGN :
+    Cet agent est intentionnellement non déterministe pour plusieurs raisons :
+    1. Exploration epsilon-greedy : Avec probabilité epsilon, l'agent choisit
+       une action aléatoire pour explorer l'espace d'actions
+    2. Replay Buffer : L'échantillonnage prioritaire utilise np.random.choice()
+       pour sélectionner les transitions selon leur priorité
+    3. Initialisation des poids : Les réseaux de neurones sont initialisés avec
+       des poids aléatoires (selon la seed si fixée)
+    4. Noisy Networks : Si activées, le bruit paramétrique est régénéré à chaque
+       forward pass, créant de la variabilité
+
+    Ce non-déterminisme est essentiel pour :
+    - L'apprentissage efficace (exploration vs exploitation)
+    - La découverte de nouvelles stratégies optimales
+    - L'évitement de solutions sous-optimales locales
+
+    En mode production avec epsilon=0, le comportement est plus déterministe
+    mais peut encore varier selon l'ordre de traitement et les arrondis numériques.
     """
 
     def __init__(  # pyright: ignore[reportMissingSuperCall]

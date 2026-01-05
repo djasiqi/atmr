@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -75,13 +76,13 @@ export default function IndexScreen() {
   const description =
     selectedMode === "enterprise"
       ? {
-          title: "Espace Enterprise Dispatch",
-          text: "Pilotez les assignations, suivez les alertes critiques et ajustez les paramètres en temps réel depuis votre téléphone.",
-        }
+        title: "Espace Enterprise Dispatch",
+        text: "Pilotez les assignations, suivez les alertes critiques et ajustez les paramètres en temps réel depuis votre téléphone.",
+      }
       : {
-          title: "Espace Chauffeur",
-          text: "Consultez vos missions quotidiennes, mettez à jour votre disponibilité et gardez le contact avec l’équipe.",
-        };
+        title: "Espace Chauffeur",
+        text: "Consultez vos missions quotidiennes, mettez à jour votre disponibilité et gardez le contact avec l’équipe.",
+      };
 
   return (
     <View style={styles.container}>
@@ -102,13 +103,13 @@ export default function IndexScreen() {
           onLayout={(event) => setToggleWidth(event.nativeEvent.layout.width)}
         >
           <Animated.View
-            pointerEvents="none"
             style={[
               styles.toggleIndicator,
               {
                 width:
                   toggleWidth > 0 ? Math.max(toggleWidth / 2 - 8, 0) : 0,
                 transform: [{ translateX: indicatorTranslate }],
+                pointerEvents: "none",
               },
             ]}
           />
@@ -178,6 +179,18 @@ export default function IndexScreen() {
     </View>
   );
 }
+
+// Styles shadow conditionnels pour éviter l'avertissement de dépréciation
+const primaryButtonShadow = Platform.select({
+  web: { boxShadow: '0 6px 12px rgba(0,121,107,0.25)' },
+  default: {
+    shadowColor: "#00796B",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -283,11 +296,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: "center",
-    shadowColor: "#00796B",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 6,
+    ...primaryButtonShadow,
   },
   primaryButtonText: {
     color: "#FFFFFF",

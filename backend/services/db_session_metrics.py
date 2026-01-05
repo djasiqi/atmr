@@ -23,10 +23,10 @@ _CounterType: Any = None
 _HistogramType: Any = None
 
 try:
-    from prometheus_client import (
+    from prometheus_client import (  # pyright: ignore[reportMissingImports]
         Counter as _Counter,
     )
-    from prometheus_client import (
+    from prometheus_client import (  # pyright: ignore[reportMissingImports]
         Histogram as _Histogram,
     )
 

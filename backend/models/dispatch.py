@@ -4,7 +4,8 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, List
 
 from sqlalchemy import (
     CheckConstraint,
@@ -167,7 +168,41 @@ class DispatchRun(db.Model):
 
     @property
     def serialize(self) -> Dict[str, Any]:
-        status_str = self.status.value
+        # #region agent log
+        try:
+            import json
+
+            with Path(r"c:\Users\jasiq\atmr\.cursor\debug.log").open(
+                "a", encoding="utf-8"
+            ) as f:
+                status_raw = getattr(self, "status", None)
+                f.write(
+                    json.dumps(
+                        {
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "D",
+                            "location": "dispatch.py:170",
+                            "message": "DispatchRun.serialize entry",
+                            "data": {
+                                "dispatch_run_id": self.id,
+                                "status_type": str(type(status_raw)),
+                                "status_value": str(status_raw),
+                                "has_value_attr": hasattr(status_raw, "value")
+                                if status_raw is not None
+                                else False,
+                            },
+                            "timestamp": int(__import__("time").time() * 1000),
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion
+        status_str = (
+            self.status.value if hasattr(self.status, "value") else str(self.status)
+        )
         return {
             "id": self.id,
             "company_id": self.company_id,
@@ -194,6 +229,12 @@ class Assignment(db.Model):
             "dispatch_run_id", "booking_id", name="uq_assignment_run_booking"
         ),
         Index("ix_assignment_driver_status", "driver_id", "status"),
+        # ✅ P1: Index composite pour requêtes driver + booking (optimise _get_driver_previous_booking)
+        Index("ix_assignment_driver_booking", "driver_id", "booking_id"),
+        # ✅ P1: Index composite pour requêtes booking + driver (optimise joins Assignment-Booking)
+        Index("ix_assignment_booking_driver", "booking_id", "driver_id"),
+        # ✅ P1: Index composite pour requêtes booking + status (optimise filtrage par statut)
+        Index("ix_assignment_booking_status", "booking_id", "status"),
         CheckConstraint(
             "delay_seconds >= DELAY_SECONDS_ZERO", name="ck_assignment_delay_nonneg"
         ),
@@ -220,23 +261,23 @@ class Assignment(db.Model):
         default=AssignmentStatus.SCHEDULED,
     )
 
-    planned_pickup_at: Mapped[Optional[datetime]] = mapped_column(
+    planned_pickup_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    planned_dropoff_at: Mapped[Optional[datetime]] = mapped_column(
+    planned_dropoff_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    actual_pickup_at: Mapped[Optional[datetime]] = mapped_column(
+    actual_pickup_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    actual_dropoff_at: Mapped[Optional[datetime]] = mapped_column(
+    actual_dropoff_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
-    eta_pickup_at: Mapped[Optional[datetime]] = mapped_column(
+    eta_pickup_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    eta_dropoff_at: Mapped[Optional[datetime]] = mapped_column(
+    eta_dropoff_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     delay_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -385,7 +426,7 @@ class DriverStatus(db.Model):
     longitude: Mapped[float] = mapped_column(Float, nullable=True)
     heading: Mapped[float] = mapped_column(Float, nullable=True)
     speed: Mapped[float] = mapped_column(Float, nullable=True)
-    next_free_at: Mapped[Optional[datetime]] = mapped_column(
+    next_free_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 

@@ -9,8 +9,8 @@ import os
 from functools import wraps
 from typing import Any, Callable, TypeVar, cast
 
-from flask import abort, request
-from flask_jwt_extended import get_jwt_identity
+from flask import abort, request  # pyright: ignore[reportMissingImports]
+from flask_jwt_extended import get_jwt_identity  # pyright: ignore[reportMissingImports]
 
 from security.ip_whitelist_alerts import send_ip_whitelist_alert
 
@@ -139,12 +139,11 @@ def ip_whitelist_required(
                         request.path,
                     )
                 else:
-                    logger.debug(
-                        (
-                            "[IP Whitelist] Pas de whitelist configurée, "
-                            "accès autorisé (dev)"
-                        )
+                    msg = (
+                        "[IP Whitelist] Pas de whitelist configurée, "
+                        "accès autorisé (dev)"
                     )
+                    logger.debug(msg)
                 return fn(*args, **kwargs)
 
             # Parser la whitelist

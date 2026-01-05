@@ -205,3 +205,41 @@ class DispatchMode(str, PyEnum):
     MANUAL = "manual"
     SEMI_AUTO = "semi_auto"
     FULLY_AUTO = "fully_auto"
+
+
+class TransferModel(str, PyEnum):
+    """Modèles de transfert de courses entre entreprises.
+    - SUBCONTRACT: A facture client, B facture A (sous-traitance classique)
+    - ASSIGN_TO_PARTNER: B facture directement le client (cession)
+    - MARKETPLACE: Plateforme comme tiers (pour plus tard)
+    """
+
+    SUBCONTRACT = "SUBCONTRACT"
+    ASSIGN_TO_PARTNER = "ASSIGN_TO_PARTNER"
+    MARKETPLACE = "MARKETPLACE"
+
+    @classmethod
+    def choices(cls):
+        return [e.value for e in cls]
+
+
+class PartnershipStatus(str, PyEnum):
+    """Statut d'une demande de partenariat."""
+
+    PENDING = "PENDING"  # En attente d'acceptation
+    ACCEPTED = "ACCEPTED"  # Acceptée (partenariat actif)
+    REJECTED = "REJECTED"  # Refusée
+
+
+class TransferStatus(str, PyEnum):
+    """Statut d'un transfert de course."""
+
+    PENDING = "PENDING"  # En attente d'acceptation
+    ACCEPTED = "ACCEPTED"  # Accepté par le partenaire
+    REJECTED = "REJECTED"  # Refusé par le partenaire
+    COMPLETED = "COMPLETED"  # Course terminée et validée
+    CANCELLED = "CANCELLED"  # Annulé
+
+    @classmethod
+    def choices(cls):
+        return [e.value for e in cls]

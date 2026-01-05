@@ -9,13 +9,19 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, Dict, List, cast
 
-from celery.result import AsyncResult
-from flask import current_app
+from cachetools import (  # pyright: ignore[reportMissingModuleSource]  # ✅ P1: Limiter caches in-memory
+    LRUCache,
+    TTLCache,
+)
+from celery.result import AsyncResult  # pyright: ignore[reportMissingImports]
+from flask import current_app  # pyright: ignore[reportMissingImports]
 from sqlalchemy.exc import IntegrityError
 
 from ext import db
 from models import Company, DispatchRun, DispatchStatus
 from models.base import _as_dt, _iso
+from repositories.company_repository import CompanyRepository
+from repositories.dispatch_run_repository import DispatchRunRepository
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +54,12 @@ DEBOUNCE_MS = int(os.getenv("UD_RTC_DEBOUNCE_MS", "800"))
 COALESCE_MS = int(os.getenv("UD_RTC_COALESCE_MS", "800"))
 LOCK_TTL_SEC = int(os.getenv("UD_RTC_LOCK_TTL_SEC", "30"))
 MAX_BACKLOG = int(os.getenv("UD_RTC_MAX_QUEUE_BACKLOG", "100"))
+
+# ✅ P1: Limites pour les caches in-memory (évite explosion mémoire)
+# Limite le nombre d'entreprises en cache (max 1000 entreprises actives)
+CACHE_MAX_COMPANIES = int(os.getenv("UD_CACHE_MAX_COMPANIES", "1000"))
+# TTL pour les données de statut (1 heure)
+CACHE_STATUS_TTL_SEC = int(os.getenv("UD_CACHE_STATUS_TTL_SEC", "3600"))
 
 # ============================================================
 # app Flask global
@@ -90,15 +102,26 @@ class CompanyDispatchState:
     last_task_id: str | None = None
 
 
-# Mémoire globale in-process (une entrée par company_id)
-_STATE: Dict[int, CompanyDispatchState] = {}
-# Statut observable par l'API /status
-_LAST_RESULT: Dict[int, Dict[str, Any]] = {}
-_LAST_ERROR: Dict[int, str | None] = {}
-_RUNNING: Dict[int, bool] = {}
-_PROGRESS: Dict[int, int] = {}  # 0..100 approximation de progression
+# ✅ P1: Mémoire globale in-process avec caches limités (évite explosion mémoire)
+# LRUCache pour l'état actif des entreprises (max 1000 entreprises)
+_STATE: LRUCache[int, CompanyDispatchState] = LRUCache(maxsize=CACHE_MAX_COMPANIES)
+# TTLCache pour les données de statut (expire après 1h)
+_LAST_RESULT: TTLCache[int, Dict[str, Any]] = TTLCache(
+    maxsize=CACHE_MAX_COMPANIES, ttl=CACHE_STATUS_TTL_SEC
+)
+_LAST_ERROR: TTLCache[int, str | None] = TTLCache(
+    maxsize=CACHE_MAX_COMPANIES, ttl=CACHE_STATUS_TTL_SEC
+)
+_RUNNING: TTLCache[int, bool] = TTLCache(
+    maxsize=CACHE_MAX_COMPANIES, ttl=CACHE_STATUS_TTL_SEC
+)
+_PROGRESS: TTLCache[int, int] = TTLCache(
+    maxsize=CACHE_MAX_COMPANIES, ttl=CACHE_STATUS_TTL_SEC
+)  # 0..100 approximation de progression
 # État Celery (PENDING, STARTED, SUCCESS, FAILURE, etc.)
-_CELERY_STATE: Dict[int, str] = {}
+_CELERY_STATE: TTLCache[int, str] = TTLCache(
+    maxsize=CACHE_MAX_COMPANIES, ttl=CACHE_STATUS_TTL_SEC
+)
 
 # Lock global pour l'accès au dict
 _STATE_LOCK = __import__("threading").Lock()
@@ -115,17 +138,93 @@ def _get_state(company_id: int) -> CompanyDispatchState:
         return st
 
 
+def _get_redis_for_status() -> Any | None:
+    """Récupère un client Redis pour le cache statut dispatch.
+
+    ✅ P1: Support Redis pour partage entre instances.
+
+    Returns:
+        Client Redis ou None si indisponible
+    """
+    try:
+        from ext import redis_client as ext_redis_client
+
+        if ext_redis_client is not None:
+            ext_redis_client.ping()
+            return ext_redis_client
+    except Exception:
+        pass
+
+    # Fallback : essayer de créer depuis REDIS_URL
+    try:
+        redis_url = os.getenv("REDIS_URL", None)
+        if redis_url:
+            import redis  # pyright: ignore[reportMissingImports]
+
+            socket_timeout = int(os.getenv("REDIS_SOCKET_TIMEOUT", "5"))
+            socket_connect_timeout = int(os.getenv("REDIS_SOCKET_CONNECT_TIMEOUT", "5"))
+            client = redis.from_url(
+                redis_url,
+                decode_responses=False,
+                socket_timeout=socket_timeout,
+                socket_connect_timeout=socket_connect_timeout,
+            )
+            client.ping()
+            return client
+    except Exception:
+        pass
+
+    return None
+
+
 def get_status(company_id: int, for_date: str | None = None) -> Dict[str, Any]:
     """Utilisé par GET /company_dispatch/status
     Enrichi avec des informations de diagnostic plus détaillées.
+
+    ✅ P1: Support Redis (L2) + TTLCache in-memory (L1) pour partage entre instances.
 
     Args:
         company_id: ID de l'entreprise
         for_date: Date optionnelle (YYYY-MM-DD) pour obtenir le statut
             d'un dispatch spécifique
     """
-    last = _LAST_RESULT.get(company_id) or {}
-    last_error = _LAST_ERROR.get(company_id)
+    # ✅ P1: Vérifier cache Redis (L2 cache) pour partage entre instances
+    redis_client = _get_redis_for_status()
+    cache_key = f"dispatch:status:{company_id}:{for_date or 'default'}"
+    last: Dict[str, Any] = {}
+    last_error: str | None = None
+
+    if redis_client:
+        try:
+            import json
+
+            cached_data = redis_client.get(cache_key)
+            if cached_data:
+                cached_str: str | None = None
+                if isinstance(cached_data, (bytes, bytearray)):
+                    cached_str = cached_data.decode("utf-8", errors="ignore")
+                elif isinstance(cached_data, str):
+                    cached_str = cached_data
+
+                if cached_str:
+                    try:
+                        cached_result = json.loads(cached_str)
+                        if isinstance(cached_result, dict):
+                            last = cached_result.get("last_result", {})
+                            last_error = cached_result.get("last_error")
+                            logger.debug(
+                                "[Queue] ✅ Redis cache hit for dispatch status (company=%s)",
+                                company_id,
+                            )
+                    except (json.JSONDecodeError, KeyError, TypeError) as e:
+                        logger.debug("[Queue] Failed to decode cached status: %s", e)
+        except Exception as e:
+            logger.debug("[Queue] Redis cache check failed: %s", e)
+
+    # ✅ P1: Fallback vers cache local (L1 cache) si Redis miss
+    if not last:
+        last = _LAST_RESULT.get(company_id) or {}
+        last_error = _LAST_ERROR.get(company_id)
 
     # Get counts from the last result
     bookings_count = len(last.get("bookings", []))
@@ -143,10 +242,14 @@ def get_status(company_id: int, for_date: str | None = None) -> Dict[str, Any]:
             from datetime import date as date_type
 
             day_date = date_type.fromisoformat(for_date)
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            dispatch_run_repo = DispatchRunRepository()
+            dispatch_run_dto = dispatch_run_repo.find_by_company_and_day(
+                company_id, day_date
+            )
+            # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
             dispatch_run = (
-                DispatchRun.query.filter_by(company_id=company_id, day=day_date)
-                .order_by(DispatchRun.created_at.desc())
-                .first()
+                DispatchRun.query.get(dispatch_run_dto.id) if dispatch_run_dto else None
             )
 
             if dispatch_run:
@@ -213,6 +316,33 @@ def get_status(company_id: int, for_date: str | None = None) -> Dict[str, Any]:
                         bookings_count = len(last.get("bookings", []))
                         drivers_count = len(last.get("drivers", []))
                         assignments_count = len(last.get("assignments", []))
+
+                        # ✅ P1: Mettre à jour cache Redis (L2 cache) pour partage entre instances
+                        redis_client = _get_redis_for_status()
+                        if redis_client:
+                            try:
+                                import json
+
+                                cache_key = f"dispatch:status:{company_id}:{for_date or 'default'}"
+                                cache_value = json.dumps(
+                                    {
+                                        "last_result": result,
+                                        "last_error": last_error,
+                                        "is_running": False,
+                                        "progress": 100,
+                                    }
+                                )
+                                redis_client.setex(
+                                    cache_key, CACHE_STATUS_TTL_SEC, cache_value
+                                )
+                                logger.debug(
+                                    "[Queue] ✅ Redis cache updated for dispatch status (company=%s)",
+                                    company_id,
+                                )
+                            except Exception as e:
+                                logger.debug(
+                                    "[Queue] Failed to update Redis cache: %s", e
+                                )
                 except Exception as e:
                     logger.exception("[Queue] Error getting task result: %s", e)
 
@@ -306,12 +436,13 @@ def trigger_job(company_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
         "regular_first": params.get("regular_first"),
         "allow_emergency": params.get("allow_emergency"),
     }
-    if isinstance(params.get("overrides"), dict):
-        snapshot["overrides_keys"] = sorted(params["overrides"].keys())
-    if isinstance(params.get("dispatch_overrides"), dict):
-        snapshot["dispatch_overrides_keys"] = sorted(
-            params["dispatch_overrides"].keys()
-        )
+    # ✅ P1: Protéger accès dictionnaires pour éviter KeyError
+    overrides = params.get("overrides")
+    if isinstance(overrides, dict):
+        snapshot["overrides_keys"] = sorted(overrides.keys())
+    dispatch_overrides = params.get("dispatch_overrides")
+    if isinstance(dispatch_overrides, dict):
+        snapshot["dispatch_overrides_keys"] = sorted(dispatch_overrides.keys())
     logger.info("[Queue] trigger_job params snapshot=%s", snapshot)
 
     # Créer le DispatchRun avec statut PENDING avant l'enfilage
@@ -350,10 +481,17 @@ def trigger_job(company_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
             try:
                 # ✅ Flask/SQLAlchemy gère automatiquement les transactions
                 # - pas besoin de begin()
-                # Vérifier si un DispatchRun existe déjà pour cette date
-                existing_run = DispatchRun.query.filter_by(
-                    company_id=company_id, day=day_date
-                ).first()
+                # ✅ Utilisation du repository pour découpler de SQLAlchemy
+                dispatch_run_repo = DispatchRunRepository()
+                existing_run_dto = dispatch_run_repo.find_by_company_and_day(
+                    company_id, day_date
+                )
+                # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+                existing_run = (
+                    DispatchRun.query.get(existing_run_dto.id)
+                    if existing_run_dto
+                    else None
+                )
 
                 if existing_run and existing_run.day != day_date:
                     existing_run = None
@@ -427,9 +565,17 @@ def trigger_job(company_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
 
                 # Race condition : un autre thread a créé le DispatchRun entre temps
                 db.session.rollback()
-                existing_run = DispatchRun.query.filter_by(
-                    company_id=company_id, day=day_date
-                ).first()
+                # ✅ Utilisation du repository pour découpler de SQLAlchemy
+                dispatch_run_repo = DispatchRunRepository()
+                existing_run_dto = dispatch_run_repo.find_by_company_and_day(
+                    company_id, day_date
+                )
+                # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+                existing_run = (
+                    DispatchRun.query.get(existing_run_dto.id)
+                    if existing_run_dto
+                    else None
+                )
                 if existing_run and existing_run.day != day_date:
                     existing_run = None
                 if existing_run:
@@ -440,10 +586,7 @@ def trigger_job(company_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
                     )
                 else:
                     logger.error(
-                        (
-                            "[Queue] Failed to create/reuse DispatchRun "
-                            "after IntegrityError"
-                        )
+                        "[Queue] Failed to create/reuse DispatchRun after IntegrityError"
                     )
             except Exception as e:
                 db.session.rollback()
@@ -461,7 +604,10 @@ def trigger_job(company_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
     # Appliquer les overrides de company.autonomous_config si absents
     if "overrides" not in params:
         try:
-            company_obj = Company.query.get(company_id)
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            company_repo = CompanyRepository()
+            company_dto = company_repo.find_by_id(company_id)
+            company_obj = Company.query.get(company_dto.id) if company_dto else None
             if company_obj:
                 auto_cfg = company_obj.get_autonomous_config()
                 dispatch_defaults = auto_cfg.get("dispatch_overrides")
@@ -538,6 +684,21 @@ def trigger(
     _schedule_run(st, mode=mode)
 
 
+def trigger_on_booking_change(
+    company_id: int,
+    mode: str = "auto",
+    params: Dict[str, Any] | None = None,
+) -> None:
+    """Déclenche un dispatch suite à un changement de booking.
+
+    Args:
+        company_id: ID de l'entreprise
+        mode: Mode de dispatch (défaut: "auto")
+        params: Paramètres additionnels pour le dispatch
+    """
+    trigger(company_id=company_id, reason="booking_change", mode=mode, params=params)
+
+
 def stop_all() -> None:
     """Arrête proprement tous les timers (à appeler lors du shutdown)."""
     _STOP_EVENT.set()
@@ -556,21 +717,27 @@ def stop_all() -> None:
 
 def _schedule_run(st: CompanyDispatchState, mode: str) -> None:
     """Programme (ou reprogramme) un timer pour exécuter _try_run
-    après DEBOUNCE+COALESCE."""
+    après DEBOUNCE+COALESCE.
+
+    ✅ P1: Tous les accès à st.timer sont protégés par st.lock pour éviter
+    les race conditions.
+    """
     delay_sec = (DEBOUNCE_MS + COALESCE_MS) / 1000.0
 
-    # Si un timer existe déjà, on le remplace pour prolonger la fenêtre de
-    # coalescence.
-    if st.timer is not None:
-        with suppress(Exception):
-            st.timer.cancel()
+    # ✅ P1: Protéger tous les accès à st.timer avec le lock de l'état
+    with st.lock:
+        # Si un timer existe déjà, on le remplace pour prolonger la fenêtre de
+        # coalescence.
+        if st.timer is not None:
+            with suppress(Exception):
+                st.timer.cancel()
 
-    # Utiliser threading.Timer pour le debounce/coalesce
-    timer_cls = __import__("threading").Timer
-    t = timer_cls(delay_sec, _try_run, kwargs={"st": st, "mode": mode})
-    t.daemon = True
-    t.start()
-    st.timer = t
+        # Utiliser threading.Timer pour le debounce/coalesce
+        timer_cls = __import__("threading").Timer
+        t = timer_cls(delay_sec, _try_run, kwargs={"st": st, "mode": mode})
+        t.daemon = True
+        t.start()
+        st.timer = t
 
 
 def _try_run(st: CompanyDispatchState, mode: str) -> None:
@@ -597,12 +764,17 @@ def _try_run(st: CompanyDispatchState, mode: str) -> None:
     acquired = st.lock.acquire(blocking=False)
     if not acquired:
         # Un autre thread tente de lancer (rare grâce au timer unique)
+        # ✅ P1: Pas besoin de lock ici car _schedule_run() l'acquiert lui-même
         _schedule_run(st, mode)  # replanifie un essai
         return
 
+    lock_released = False
     try:
         if st.running:
             # Déjà en cours (double sécurité). On replanifie.
+            # ✅ P1: Libérer le lock avant d'appeler _schedule_run() pour éviter deadlock
+            st.lock.release()
+            lock_released = True
             _schedule_run(st, mode)
             return
 
@@ -610,8 +782,24 @@ def _try_run(st: CompanyDispatchState, mode: str) -> None:
         st.last_start = now
         _RUNNING[st.company_id] = True
         _PROGRESS[st.company_id] = 5
+
+        # ✅ P1: Invalider cache Redis statut dispatch lors du démarrage
+        redis_client = _get_redis_for_status()
+        if redis_client:
+            try:
+                from services.cache_invalidation import invalidate_dispatch_status_cache
+
+                invalidate_dispatch_status_cache(
+                    st.company_id, st.params.get("for_date")
+                )
+            except Exception as e:
+                logger.debug(
+                    "[Queue] Failed to invalidate dispatch status cache: %s", e
+                )
     finally:
-        st.lock.release()
+        # ✅ P1: Ne libérer que si le lock n'a pas été libéré dans le if st.running
+        if not lock_released:
+            st.lock.release()
 
     # Lancer la tâche Celery au lieu d'un thread
     _enqueue_celery_task(st, mode)
@@ -781,7 +969,7 @@ def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
             try:
                 # Forcer la création d'une nouvelle connexion avec Redis
                 # en passant broker_url et transport explicitement
-                from kombu import Connection
+                from kombu import Connection  # pyright: ignore[reportMissingImports]
 
                 # Créer une nouvelle connexion Kombu avec Redis explicitement
                 redis_connection = Connection(

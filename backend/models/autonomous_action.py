@@ -7,7 +7,7 @@ Ce modèle est essentiel pour :
 - Compliance et traçabilité
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import Boolean, Float, Integer, String, Text
@@ -85,14 +85,14 @@ class AutonomousAction(db.Model):
     # Métadonnées
     created_at = db.Column(
         db.DateTime,
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
         index=True,
     )
     updated_at = db.Column(
         db.DateTime,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
 
@@ -151,7 +151,10 @@ class AutonomousAction(db.Model):
             Nombre d'actions dans la dernière heure
 
         """
-        one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+        # created_at est stocké en DateTime sans timezone (timestamp sans tz).
+        # On utilise donc un timestamp UTC "naïf" pour comparer de façon fiable
+        # en SQLite/PostgreSQL, et éviter les écarts tz-aware vs tz-naïf.
+        one_hour_ago = datetime.utcnow() - timedelta(hours=1)
 
         query = cls.query.filter(
             cls.company_id == company_id,
@@ -180,7 +183,8 @@ class AutonomousAction(db.Model):
             Nombre d'actions aujourd'hui
 
         """
-        today_start = datetime.now(timezone.utc).replace(
+        # Même remarque que ci-dessus: comparer en UTC "naïf" cohérent avec created_at.
+        today_start = datetime.utcnow().replace(
             hour=0, minute=0, second=0, microsecond=0
         )
 

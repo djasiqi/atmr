@@ -8,12 +8,18 @@ import logging
 import os
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-import requests
+import requests  # pyright: ignore[reportMissingModuleSource]
+from requests import (  # pyright: ignore[reportMissingModuleSource]
+    RequestException,
+    Timeout,
+)
+from sqlalchemy.exc import DBAPIError, OperationalError
 
 from ext import redis_client
-from models import Assignment, AssignmentStatus, DelayEvent
+from models import AssignmentStatus, DelayEvent
+from repositories.assignment_repository import AssignmentRepository
 from services.websocket_metrics import ws_metrics
 
 logger = logging.getLogger(__name__)
@@ -26,8 +32,8 @@ OSRM_DOWN_THRESHOLD_SECONDS = 60  # 1 minute
 REDIS_DOWN_THRESHOLD_SECONDS = 30  # 30 secondes
 
 # Configuration webhooks
-SLACK_WEBHOOK_URL = os.getenv("ALERTING_SLACK_WEBHOOK_URL")
-EMAIL_WEBHOOK_URL = os.getenv("ALERTING_EMAIL_WEBHOOK_URL")
+SLACK_WEBHOOK_URL = os.getenv("ALERTING_SLACK_WEBHOOK_URL", default=None)
+EMAIL_WEBHOOK_URL = os.getenv("ALERTING_EMAIL_WEBHOOK_URL", default=None)
 
 
 @dataclass
@@ -104,10 +110,10 @@ class AlertingService:
         """Initialise le service d'alertes."""
         self.slack_webhook_url = SLACK_WEBHOOK_URL
         self.email_webhook_url = EMAIL_WEBHOOK_URL
-        self._last_osrm_check: Optional[datetime] = None
-        self._last_redis_check: Optional[datetime] = None
-        self._osrm_down_since: Optional[datetime] = None
-        self._redis_down_since: Optional[datetime] = None
+        self._last_osrm_check: datetime | None = None
+        self._last_redis_check: datetime | None = None
+        self._osrm_down_since: datetime | None = None
+        self._redis_down_since: datetime | None = None
 
     def check_all_alerts(self) -> List[Alert]:
         """Vérifie toutes les alertes et retourne celles déclenchées.
@@ -144,7 +150,7 @@ class AlertingService:
 
         return alerts
 
-    def _check_websocket_disconnection_rate(self) -> Optional[Alert]:
+    def _check_websocket_disconnection_rate(self) -> Alert | None:
         """Vérifie le taux de déconnexion WebSocket."""
         try:
             stats = ws_metrics.get_stats()
@@ -180,12 +186,20 @@ class AlertingService:
                         "disconnections": disconnections,
                     },
                 )
-        except Exception as e:
-            logger.error("[AlertingService] Error checking WebSocket: %s", e)
+        except (KeyError, TypeError, AttributeError) as e:
+            # Erreurs de validation attendues : clés manquantes, types incorrects
+            logger.error(
+                "[AlertingService] Error checking WebSocket (validation error: %s): %s",
+                type(e).__name__,
+                e,
+            )
+        except Exception:
+            # Erreur inattendue : logger avec trace complète
+            logger.exception("[AlertingService] Error checking WebSocket")
 
         return None
 
-    def _check_eta_accuracy(self) -> Optional[Alert]:
+    def _check_eta_accuracy(self) -> Alert | None:
         """Vérifie la précision ETA depuis la base de données."""
         try:
             # ✅ 3.6.2: Calculer précision ETA depuis EtaAccuracyLog
@@ -262,12 +276,27 @@ class AlertingService:
             logger.debug(
                 "[AlertingService] EtaAccuracyLog non disponible pour vérification précision"
             )
-        except Exception as e:
-            logger.error("[AlertingService] Error checking ETA: %s", e)
+        except (OperationalError, DBAPIError) as e:
+            # Erreurs DB attendues : connexion, timeout
+            logger.error(
+                "[AlertingService] Error checking ETA (DB error: %s): %s",
+                type(e).__name__,
+                e,
+            )
+        except (ValueError, TypeError, AttributeError) as e:
+            # Erreurs de validation attendues : données invalides
+            logger.error(
+                "[AlertingService] Error checking ETA (validation error: %s): %s",
+                type(e).__name__,
+                e,
+            )
+        except Exception:
+            # Erreur inattendue : logger avec trace complète
+            logger.exception("[AlertingService] Error checking ETA")
 
         return None
 
-    def _check_dispatch_delay_rate(self) -> Optional[Alert]:
+    def _check_dispatch_delay_rate(self) -> Alert | None:
         """Vérifie le taux de retard dispatch depuis la base de données."""
         try:
             # ✅ 3.6.2: Calculer taux de retard depuis DelayEvent
@@ -327,15 +356,15 @@ class AlertingService:
 
             # Vérifier aussi le taux absolu de retards par rapport aux assignments
             # (nécessite de compter les assignments récents)
-            recent_assignments = Assignment.query.filter(
-                Assignment.status.in_(
-                    [
-                        AssignmentStatus.IN_PROGRESS,
-                        AssignmentStatus.COMPLETED,
-                        AssignmentStatus.EN_ROUTE_PICKUP,
-                    ]
-                )
-            ).count()
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            assignment_repo = AssignmentRepository()
+            recent_assignments = assignment_repo.count_by_statuses(
+                [
+                    AssignmentStatus.ONBOARD,
+                    AssignmentStatus.COMPLETED,
+                    AssignmentStatus.EN_ROUTE_PICKUP,
+                ]
+            )
 
             if recent_assignments > 0:
                 absolute_delay_rate = total_delays / recent_assignments
@@ -365,15 +394,30 @@ class AlertingService:
                         },
                     )
 
-        except Exception as e:
-            logger.error("[AlertingService] Error checking dispatch delay: %s", e)
+        except (OperationalError, DBAPIError) as e:
+            # Erreurs DB attendues : connexion, timeout
+            logger.error(
+                "[AlertingService] Error checking dispatch delay (DB error: %s): %s",
+                type(e).__name__,
+                e,
+            )
+        except (ValueError, TypeError, AttributeError) as e:
+            # Erreurs de validation attendues : données invalides
+            logger.error(
+                "[AlertingService] Error checking dispatch delay (validation error: %s): %s",
+                type(e).__name__,
+                e,
+            )
+        except Exception:
+            # Erreur inattendue : logger avec trace complète
+            logger.exception("[AlertingService] Error checking dispatch delay")
 
         return None
 
-    def _check_osrm_health(self) -> Optional[Alert]:
+    def _check_osrm_health(self) -> Alert | None:
         """Vérifie la santé OSRM."""
         try:
-            import requests
+            import requests  # pyright: ignore[reportMissingModuleSource]
 
             osrm_url = os.getenv("UD_OSRM_BASE_URL", "http://osrm:5000")
             timeout = 2
@@ -388,8 +432,8 @@ class AlertingService:
 
                 self._last_osrm_check = datetime.now(UTC)
                 return None
-            except Exception:
-                # OSRM est down
+            except (RequestException, Timeout, ConnectionError, OSError):
+                # OSRM est down : erreurs réseau attendues
                 now = datetime.now(UTC)
 
                 if self._osrm_down_since is None:
@@ -418,12 +462,20 @@ class AlertingService:
                         metadata={"osrm_url": osrm_url},
                     )
 
-        except Exception as e:
-            logger.error("[AlertingService] Error checking OSRM: %s", e)
+        except (RequestException, Timeout, ConnectionError, OSError) as e:
+            # Erreurs réseau attendues : connexion OSRM, timeout
+            logger.error(
+                "[AlertingService] Error checking OSRM (network error: %s): %s",
+                type(e).__name__,
+                e,
+            )
+        except Exception:
+            # Erreur inattendue : logger avec trace complète
+            logger.exception("[AlertingService] Error checking OSRM")
 
         return None
 
-    def _check_redis_health(self) -> Optional[Alert]:
+    def _check_redis_health(self) -> Alert | None:
         """Vérifie la santé Redis."""
         try:
             if not redis_client:
@@ -438,8 +490,8 @@ class AlertingService:
 
                 self._last_redis_check = datetime.now(UTC)
                 return None
-            except Exception:
-                # Redis est down
+            except (ConnectionError, OSError, TimeoutError):
+                # Redis est down : erreurs réseau attendues
                 now = datetime.now(UTC)
 
                 if self._redis_down_since is None:
@@ -467,8 +519,16 @@ class AlertingService:
                         timestamp=now,
                     )
 
-        except Exception as e:
-            logger.error("[AlertingService] Error checking Redis: %s", e)
+        except (ConnectionError, OSError, TimeoutError) as e:
+            # Erreurs réseau attendues : connexion Redis, timeout
+            logger.error(
+                "[AlertingService] Error checking Redis (network error: %s): %s",
+                type(e).__name__,
+                e,
+            )
+        except Exception:
+            # Erreur inattendue : logger avec trace complète
+            logger.exception("[AlertingService] Error checking Redis")
 
         return None
 
@@ -495,8 +555,23 @@ class AlertingService:
                 response.raise_for_status()
                 logger.info("[AlertingService] Alert sent to Slack: %s", alert.title)
                 success = True
-            except Exception as e:
-                logger.error("[AlertingService] Failed to send Slack alert: %s", e)
+            except (RequestException, Timeout, ConnectionError) as e:
+                # Erreurs réseau attendues : connexion HTTP, timeout
+                logger.error(
+                    "[AlertingService] Failed to send Slack alert (network error: %s): %s",
+                    type(e).__name__,
+                    e,
+                )
+            except (ValueError, TypeError, KeyError) as e:
+                # Erreurs de validation attendues : JSON invalide
+                logger.error(
+                    "[AlertingService] Failed to send Slack alert (validation error: %s): %s",
+                    type(e).__name__,
+                    e,
+                )
+            except Exception:
+                # Erreur inattendue : logger avec trace complète
+                logger.exception("[AlertingService] Failed to send Slack alert")
 
         # Envoyer à Email (via webhook)
         if self.email_webhook_url:
@@ -509,8 +584,23 @@ class AlertingService:
                 response.raise_for_status()
                 logger.info("[AlertingService] Alert sent to Email: %s", alert.title)
                 success = True
-            except Exception as e:
-                logger.error("[AlertingService] Failed to send Email alert: %s", e)
+            except (RequestException, Timeout, ConnectionError) as e:
+                # Erreurs réseau attendues : connexion HTTP, timeout
+                logger.error(
+                    "[AlertingService] Failed to send Email alert (network error: %s): %s",
+                    type(e).__name__,
+                    e,
+                )
+            except (ValueError, TypeError, KeyError) as e:
+                # Erreurs de validation attendues : JSON invalide
+                logger.error(
+                    "[AlertingService] Failed to send Email alert (validation error: %s): %s",
+                    type(e).__name__,
+                    e,
+                )
+            except Exception:
+                # Erreur inattendue : logger avec trace complète
+                logger.exception("[AlertingService] Failed to send Email alert")
 
         return success
 
@@ -531,7 +621,7 @@ class AlertingService:
 
 
 # Instance globale
-_alerting_service_instance: Optional[AlertingService] = None
+_alerting_service_instance: AlertingService | None = None
 
 
 def get_alerting_service() -> AlertingService:

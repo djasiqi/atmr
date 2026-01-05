@@ -4,7 +4,7 @@
 import logging
 from typing import Any
 
-from celery import shared_task
+from celery import shared_task  # pyright: ignore[reportMissingImports]
 
 from celery_app import get_flask_app
 

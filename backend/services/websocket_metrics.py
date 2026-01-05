@@ -4,10 +4,14 @@
 
 from collections import defaultdict
 from datetime import UTC, datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 try:
-    from prometheus_client import Counter, Gauge, Histogram
+    from prometheus_client import (  # pyright: ignore[reportMissingImports]
+        Counter,
+        Gauge,
+        Histogram,
+    )
 except ImportError:
     # Prometheus client non disponible (tests, dev sans prometheus)
     Counter = None
@@ -87,8 +91,8 @@ class WebSocketMetrics:
 
     def on_connect(
         self,
-        company_id: Optional[int] = None,
-        user_id: Optional[int] = None,  # noqa: ARG002
+        company_id: int | None = None,
+        user_id: int | None = None,  # noqa: ARG002
     ) -> None:
         """Enregistre une nouvelle connexion.
 
@@ -106,7 +110,7 @@ class WebSocketMetrics:
         if self._prom_connections_active and company_id:
             self._prom_connections_active.labels(company_id=str(company_id)).inc()
 
-    def on_disconnect(self, company_id: Optional[int] = None):
+    def on_disconnect(self, company_id: int | None = None):
         """Enregistre une déconnexion."""
         self.disconnections_total += 1
         if company_id:
@@ -120,7 +124,7 @@ class WebSocketMetrics:
         if self._prom_connections_active and company_id:
             self._prom_connections_active.labels(company_id=str(company_id)).dec()
 
-    def on_reconnect(self, user_id: Optional[int] = None, reason: Optional[str] = None):
+    def on_reconnect(self, user_id: int | None = None, reason: str | None = None):
         """Enregistre une reconnexion.
 
         Args:
@@ -163,7 +167,7 @@ class WebSocketMetrics:
         """
         self.rooms_active[room_name] += 1
 
-    def on_event_emit(self, event: str, room: Optional[str] = None):
+    def on_event_emit(self, event: str, room: str | None = None):
         """Enregistre l'émission d'un event (pour Prometheus).
 
         Args:

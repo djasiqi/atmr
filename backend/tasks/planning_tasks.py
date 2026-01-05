@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from celery import shared_task
+from celery import shared_task  # pyright: ignore[reportMissingImports]
 
 from ext import db
 from models import DriverShift

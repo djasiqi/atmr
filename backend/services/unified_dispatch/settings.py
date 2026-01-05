@@ -320,9 +320,9 @@ def _merge_dicts(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, An
 
 def _validate_merge_result(
     new_settings: Settings,
-    overrides: "Dict[str, Any]",
-    modified_keys: "List[Tuple[str, Any, Any]]",
-) -> "Dict[str, Any]":
+    overrides: Dict[str, Any],
+    modified_keys: List[Tuple[str, Any, Any]],
+) -> Dict[str, Any]:
     """Valide que les paramètres critiques demandés ont bien été appliqués.
 
     Args:
@@ -399,7 +399,7 @@ def _validate_merge_result(
                 logger.warning("[Settings] %s", error_msg)
 
     # Identifier les clés ignorées (inconnues mais demandées)
-    def _collect_requested_keys(ov: "Dict[str, Any]", path: str = "") -> "List[str]":
+    def _collect_requested_keys(ov: Dict[str, Any], path: str = "") -> List[str]:
         """Collecte toutes les clés demandées dans overrides."""
         requested = []
         for k, v in ov.items():

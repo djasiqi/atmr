@@ -4,7 +4,11 @@ Utilise Marshmallow pour une sérialisation cohérente et typée.
 Remplace les méthodes .serialize() et .to_dict() dispersées dans les modèles.
 """
 
-from marshmallow import Schema, fields, validate
+from marshmallow import (  # pyright: ignore[reportMissingImports]
+    Schema,
+    fields,
+    validate,
+)
 
 from schemas.validation_utils import ISO8601_DATE_REGEX
 
@@ -31,7 +35,7 @@ class DriverSchema(Schema):
     current_lat = fields.Float(allow_none=True)
     current_lon = fields.Float(allow_none=True)
 
-    class Meta:  # type: ignore
+    class Meta:
         ordered = True
 
 
@@ -79,7 +83,7 @@ class BookingSchema(Schema):
     distance_km = fields.Float(allow_none=True)
     duration_minutes = fields.Float(allow_none=True)
 
-    class Meta:  # type: ignore
+    class Meta:
         ordered = True
 
 
@@ -112,7 +116,7 @@ class AssignmentSchema(Schema):
     booking = fields.Nested(BookingSchema, allow_none=True)
     driver = fields.Nested(DriverSchema, allow_none=True)
 
-    class Meta:  # type: ignore
+    class Meta:
         ordered = True
 
 
@@ -136,8 +140,11 @@ class DispatchRunRequestSchema(Schema):
         allow_none=True,
     )
     overrides = fields.Dict(allow_none=True, load_default=None)
+    # Note: La validation stricte des clés overrides est effectuée
+    # dans routes/dispatch_routes.py via DispatchOverridesSchema
+    # lors de la validation de la requête complète
 
-    class Meta:  # type: ignore
+    class Meta:
         ordered = True
         unknown = "EXCLUDE"  # Rejeter les champs inconnus pour sécurité
 
@@ -171,7 +178,7 @@ class DispatchRunSchema(Schema):
         AssignmentSchema, many=True, exclude=("dispatch_run",), allow_none=True
     )
 
-    class Meta:  # type: ignore
+    class Meta:
         ordered = True
 
 
@@ -196,7 +203,7 @@ class DispatchSuggestionSchema(Schema):
     gain_minutes = fields.Float(allow_none=True)
     confidence = fields.Float(allow_none=True)
 
-    class Meta:  # type: ignore
+    class Meta:
         ordered = True
 
 
@@ -216,7 +223,7 @@ class DispatchProblemSchema(Schema):
     total_bookings = fields.Int()
     total_drivers = fields.Int()
 
-    class Meta:  # type: ignore
+    class Meta:
         ordered = True
 
 
@@ -244,7 +251,7 @@ class DispatchResultSchema(Schema):
     # Suggestions (si mode semi_auto ou fully_auto)
     suggestions = fields.Nested(DispatchSuggestionSchema, many=True, allow_none=True)
 
-    class Meta:  # type: ignore
+    class Meta:
         ordered = True
 
 

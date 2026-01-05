@@ -14,9 +14,7 @@ from contextlib import contextmanager
 from io import StringIO
 from typing import Any, Dict, List
 
-from backend.services.unified_dispatch.performance_metrics import (
-    DispatchPerformanceMetrics,
-)
+from services.unified_dispatch.performance_metrics import DispatchPerformanceMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -203,22 +201,18 @@ class DispatchProfiler:
             for stage, info in budget_check["budgets"].items():
                 status = "⚠️ EXCEEDED" if info["exceeded"] else "✅ OK"
                 lines.append(
-                    (
-                        f"{stage:20s}: {info['actual_ms']:8.0f}ms / "
-                        f"{info['budget_ms']:8.0f}ms "
-                        f"({info['pct_of_budget']:5.1f}%) {status}"
-                    )
+                    f"{stage:20s}: {info['actual_ms']:8.0f}ms / "
+                    f"{info['budget_ms']:8.0f}ms "
+                    f"({info['pct_of_budget']:5.1f}%) {status}"
                 )
 
             if budget_check["issues"]:
                 lines.append("\n⚠️ ALERTS:")
                 for issue in budget_check["issues"]:
                     lines.append(
-                        (
-                            f"  {issue['stage']}: {issue['actual_ms']:.0f}ms > "
-                            f"{issue['budget_ms']:.0f}ms "
-                            f"(+{issue['over_budget']:.0f}ms)"
-                        )
+                        f"  {issue['stage']}: {issue['actual_ms']:.0f}ms > "
+                        f"{issue['budget_ms']:.0f}ms "
+                        f"(+{issue['over_budget']:.0f}ms)"
                     )
 
         lines.append("=" * 80)

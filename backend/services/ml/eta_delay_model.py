@@ -12,17 +12,17 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List
 
-import numpy as np
-import pandas as pd
+import numpy as np  # pyright: ignore[reportMissingImports]
+import pandas as pd  # pyright: ignore[reportMissingImports]
 
 logger = logging.getLogger(__name__)
 
 try:
-    import joblib
+    import joblib  # pyright: ignore[reportMissingImports]
 except ImportError:
     # Fallback vers pickle si joblib n'est pas disponible (cas rare en production)
     # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
@@ -62,8 +62,14 @@ except ImportError:
     )
 
 try:
-    from sklearn.metrics import mean_absolute_error, mean_squared_error, roc_auc_score
-    from sklearn.preprocessing import StandardScaler
+    from sklearn.metrics import (  # pyright: ignore[reportMissingImports]
+        mean_absolute_error,
+        mean_squared_error,
+        roc_auc_score,
+    )
+    from sklearn.preprocessing import (  # pyright: ignore[reportMissingImports]
+        StandardScaler,
+    )
 except ImportError:
     mean_absolute_error = None
     mean_squared_error = None
@@ -247,24 +253,25 @@ class ETADelayModel:
 
         if driver:
             try:
-                from sqlalchemy import and_
-
-                from models import Booking, BookingStatus
+                from models import Booking
+                from repositories.booking_repository import BookingRepository
 
                 driver_id = getattr(driver, "id", None)
                 if driver_id:
-                    cutoff_date = datetime.now(timezone.utc) - timedelta(days=90)
+                    cutoff_date = datetime.now(UTC) - timedelta(days=90)
+                    # ✅ Utilisation du repository pour découpler de SQLAlchemy
+                    booking_repo = BookingRepository()
+                    booking_dtos = booking_repo.find_recent_completed_by_driver(
+                        driver_id, cutoff_date, limit=50
+                    )
+                    # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs pour la compatibilité
+                    booking_ids = [dto.id for dto in booking_dtos]
                     recent_bookings = (
-                        Booking.query.filter(
-                            and_(
-                                Booking.driver_id == driver_id,
-                                Booking.status == BookingStatus.COMPLETED,
-                                Booking.completed_at >= cutoff_date,
-                            )
-                        )
+                        Booking.query.filter(Booking.id.in_(booking_ids))
                         .order_by(Booking.completed_at.desc())
-                        .limit(50)
                         .all()
+                        if booking_ids
+                        else []
                     )
 
                     if len(recent_bookings) >= MIN_BOOKINGS_FOR_STATS:
@@ -523,9 +530,7 @@ class ETADelayModel:
             if not (pickup_lat and pickup_lon):
                 return 0.5
 
-            from sqlalchemy import and_
-
-            from models import Booking, BookingStatus
+            from models import BookingStatus
 
             # Définir zone: ~2km radius (environ 0.018 degrés latitude)
             # 1 degré latitude ≈ 111 km
@@ -541,25 +546,23 @@ class ETADelayModel:
             lon_max = pickup_lon + zone_radius_lon
 
             # Compter bookings dans cette zone (7 derniers jours)
-            cutoff_date = datetime.now(timezone.utc) - timedelta(
-                days=ZONE_DENSITY_LOOKBACK_DAYS
-            )
+            cutoff_date = datetime.now(UTC) - timedelta(days=ZONE_DENSITY_LOOKBACK_DAYS)
 
-            bookings_in_zone = Booking.query.filter(
-                and_(
-                    Booking.pickup_lat.between(lat_min, lat_max),
-                    Booking.pickup_lon.between(lon_min, lon_max),
-                    Booking.status.in_(
-                        [BookingStatus.COMPLETED, BookingStatus.ACCEPTED]
-                    ),
-                    Booking.scheduled_time >= cutoff_date,
-                )
-            ).count()
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            from repositories.booking_repository import BookingRepository
+
+            booking_repo = BookingRepository()
+            bookings_in_zone = booking_repo.find_by_zone_and_period(
+                lat_min=lat_min,
+                lat_max=lat_max,
+                lon_min=lon_min,
+                lon_max=lon_max,
+                cutoff_date=cutoff_date,
+                statuses=[BookingStatus.COMPLETED, BookingStatus.ACCEPTED],
+            )
 
             # Normaliser: 0 = vide, 1 = très dense
-            bookings_count = (
-                int(bookings_in_zone) if bookings_in_zone is not None else 0
-            )
+            bookings_count = int(bookings_in_zone)
             normalized_density: float = float(
                 min(1.0, bookings_count / ZONE_DENSITY_MAX_BOOKINGS)
             )
@@ -595,10 +598,7 @@ class ETADelayModel:
         """
         if not XGBOOST_AVAILABLE and not LIGHTGBM_AVAILABLE:
             raise ImportError(
-                (
-                    "XGBoost ou LightGBM requis. "
-                    "Installer avec: pip install xgboost lightgbm"
-                )
+                "XGBoost ou LightGBM requis. Installer avec: pip install xgboost lightgbm"
             )
 
         if not training_data:
@@ -642,6 +642,7 @@ class ETADelayModel:
         if StandardScaler is None:
             raise ImportError("scikit-learn requis pour l'entraînement")
         self.scaler = StandardScaler()
+        assert self.scaler is not None, "scaler should not be None after assignment"
         X_scaled = self.scaler.fit_transform(X_array)
 
         # Entraîner modèle

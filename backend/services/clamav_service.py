@@ -4,7 +4,6 @@
 import logging
 import os
 import socket
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +14,7 @@ CLAMAV_ENABLED = os.getenv("CLAMAV_ENABLED", "false").lower() in ("true", "1", "
 CLAMAV_TIMEOUT = int(os.getenv("CLAMAV_TIMEOUT", "5"))  # 5 secondes par défaut
 
 
-def scan_bytes(file_bytes: bytes) -> tuple[bool, Optional[str]]:
+def scan_bytes(file_bytes: bytes) -> tuple[bool, str | None]:
     """
     Scanne un fichier avec ClamAV.
 
@@ -71,7 +70,7 @@ def scan_bytes(file_bytes: bytes) -> tuple[bool, Optional[str]]:
             logger.warning("⚠️ ClamAV: Résultat inattendu - %s", result)
         return True, None
 
-    except (socket.timeout, ConnectionRefusedError) as e:
+    except (TimeoutError, ConnectionRefusedError) as e:
         # Fail-open: on accepte le fichier en cas de timeout ou connexion refusée
         error_type = "Timeout" if isinstance(e, socket.timeout) else "Connexion refusée"
         logger.warning("⏱️ ClamAV: %s - fichier accepté (fail-open)", error_type)

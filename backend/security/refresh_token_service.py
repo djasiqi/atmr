@@ -6,10 +6,9 @@ pour permettre la déconnexion forcée par l'admin.
 
 import hashlib
 import logging
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
-from flask import request
+from flask import request  # pyright: ignore[reportMissingImports]
 from sqlalchemy import and_
 
 from ext import db
@@ -34,8 +33,8 @@ def store_refresh_token(
     token: str,
     user_id: int,
     expires_at: datetime,
-    device_id: Optional[str] = None,
-    device_name: Optional[str] = None,
+    device_id: str | None = None,
+    device_name: str | None = None,
 ) -> RefreshToken:
     """Stocke un refresh token dans la base de données.
 
@@ -98,7 +97,7 @@ def is_token_revoked(token: str) -> bool:
         return True
 
     # Vérifier expiration
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if token_record.expires_at < now:
         logger.debug(
             "Token expiré (user_id=%d, expires_at=%s)",
@@ -110,7 +109,7 @@ def is_token_revoked(token: str) -> bool:
     return False
 
 
-def revoke_refresh_token(token: str, reason: Optional[str] = None) -> bool:
+def revoke_refresh_token(token: str, reason: str | None = None) -> bool:
     """Révoque un refresh token.
 
     Args:
@@ -128,7 +127,7 @@ def revoke_refresh_token(token: str, reason: Optional[str] = None) -> bool:
 
     if token_record:
         token_record.is_revoked = True
-        token_record.revoked_at = datetime.now(timezone.utc)
+        token_record.revoked_at = datetime.now(UTC)
         token_record.revoked_reason = reason
         db.session.commit()
         logger.info(
@@ -142,7 +141,7 @@ def revoke_refresh_token(token: str, reason: Optional[str] = None) -> bool:
     return False
 
 
-def revoke_all_user_tokens(user_id: int, reason: Optional[str] = None) -> int:
+def revoke_all_user_tokens(user_id: int, reason: str | None = None) -> int:
     """Révoque tous les refresh tokens actifs d'un utilisateur.
 
     Args:
@@ -152,7 +151,7 @@ def revoke_all_user_tokens(user_id: int, reason: Optional[str] = None) -> int:
     Returns:
         Nombre de tokens révoqués
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     revoked_reason = reason or "Révoqué par l'admin"
 
     # Trouver tous les tokens actifs et non expirés
@@ -192,7 +191,7 @@ def get_user_active_sessions(user_id: int) -> list[RefreshToken]:
     Returns:
         Liste des RefreshToken actifs (non révoqués et non expirés), triés par date de création décroissante
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     return (
         RefreshToken.query.filter(
@@ -217,5 +216,5 @@ def update_token_last_used(token: str) -> None:
 
     token_record = RefreshToken.query.filter_by(token_hash=token_hash).first()
     if token_record:
-        token_record.last_used_at = datetime.now(timezone.utc)
+        token_record.last_used_at = datetime.now(UTC)
         db.session.commit()

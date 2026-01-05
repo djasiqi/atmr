@@ -36,6 +36,7 @@ flower>=2.0.0
 
 # ========== Redis & Cache ==========
 redis>=4.0.0
+cachetools>=5.0.0  # ✅ P1: Pour limiter les caches in-memory (TTLCache, LRUCache)
 
 # ========== Optimization ==========
 ortools>=9.0.0

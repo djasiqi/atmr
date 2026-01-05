@@ -50,8 +50,8 @@ class AssignmentValidator:
         # Vérifier chaque assignation
         for assignment in assignments:
             try:
-                booking_id = int(assignment.booking_id)
-                driver_id = int(assignment.driver_id)
+                booking_id = int(assignment.booking_id)  # type: ignore[reportArgumentType]
+                driver_id = int(assignment.driver_id)  # type: ignore[reportArgumentType]
             except (ValueError, TypeError):
                 continue
             booking = bookings_dict.get(booking_id)
@@ -66,11 +66,9 @@ class AssignmentValidator:
             # Vérifier min_minutes_before_pickup
             if not self._check_min_minutes_before_pickup(booking, driver):
                 violations.append(
-                    (
-                        f"Assignment {assignment.id}: violates "
-                        f"min_minutes_before_pickup "
-                        f"({self.min_minutes_before_pickup} min)"
-                    )
+                    f"Assignment {assignment.id}: violates "
+                    + "min_minutes_before_pickup "
+                    + f"({self.min_minutes_before_pickup} min)"
                 )
 
         is_valid = len(violations) == 0

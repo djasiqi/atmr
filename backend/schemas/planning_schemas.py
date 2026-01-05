@@ -1,6 +1,10 @@
 """✅ Schemas Marshmallow pour validation des query params des endpoints planning."""
 
-from marshmallow import Schema, fields, validate
+from marshmallow import (  # pyright: ignore[reportMissingImports]
+    Schema,
+    fields,
+    validate,
+)
 
 
 class PlanningShiftsQuerySchema(Schema):

@@ -49,7 +49,7 @@ class TestAutonomousManagerInit:
     def test_init_with_invalid_company(self, db):
         """Test initialisation avec company inexistante."""
         with pytest.raises(ValueError, match=r"Company .* not found"):
-            AutonomousDispatchManager(company_id=0.99999)
+            AutonomousDispatchManager(company_id=999_999)
 
     def test_get_manager_for_company_factory(self, db):
         """Test factory function get_manager_for_company."""

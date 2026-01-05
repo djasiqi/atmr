@@ -11,94 +11,63 @@ class TestMLMonitoringService:
         """Test enregistrement d'une prédiction."""
         from services.ml_monitoring_service import MLMonitoringService
 
-        with app.app_context():
-            # Le booking est déjà persisté par le fixture sample_booking
-            # Utiliser directement son ID sans flush supplémentaire
-            booking_id = sample_booking.id
-            assert booking_id is not None, "Le booking doit avoir un ID"
+        # NOTE: Le fixture `db` maintient déjà un app context actif pendant le test.
+        # Éviter de ré-ouvrir un app_context ici, car cela peut créer une nouvelle
+        # session SQLAlchemy (scoped) et rendre les fixtures flushées invisibles,
+        # entraînant FK errors ou blocages (locks) lors de flush().
+        booking_id = sample_booking.id
+        assert booking_id is not None, "Le booking doit avoir un ID"
 
-            # Log une prédiction avec un booking réel
-            prediction = MLMonitoringService.log_prediction(
-                booking_id=booking_id,
-                driver_id=0,  # driver_id peut être 0 ou None pour les tests
-                predicted_delay=8.5,
-                confidence=0.85,
-                risk_level="medium",
-                contributing_factors={"distance_x_weather": 0.42},
-                prediction_time_ms=0.1325,
-                request_id="test_123",
-                model_version="v1.0",
-            )
+        prediction = MLMonitoringService.log_prediction(
+            booking_id=booking_id,
+            driver_id=None,
+            predicted_delay=8.5,
+            confidence=0.85,
+            risk_level="medium",
+            contributing_factors={"distance_x_weather": 0.42},
+            prediction_time_ms=0.1325,
+            request_id="test_123",
+            model_version="v1.0",
+        )
 
-            # Flush pour obtenir l'ID de la prédiction
-            # Utiliser expire_on_commit=False pour éviter les problèmes
-            # avec les savepoints
-            db.session.flush()
+        db.session.flush()
 
-            assert prediction.id is not None
-            assert prediction.booking_id == booking_id
-            assert prediction.predicted_delay_minutes == 8.5
-            assert prediction.confidence == 0.85
+        assert prediction.id is not None
+        assert prediction.booking_id == booking_id
+        assert prediction.predicted_delay_minutes == 8.5
+        assert prediction.confidence == 0.85
 
-            # Cleanup
-            db.session.delete(prediction)
-            # Pas besoin de flush pour le cleanup, le rollback du savepoint
-            # s'en occupera
+        db.session.delete(prediction)
 
         print("✅ Log prediction OK")
 
     def test_update_actual_delay(self, app, sample_booking, db):
         """Test mise à jour retard réel."""
-        from models.booking import Booking
         from services.ml_monitoring_service import MLMonitoringService
 
-        with app.app_context():
-            # ✅ FIX: S'assurer que le booking est bien flushé et visible
-            # dans la transaction avant de créer la prédiction
-            db.session.flush()
-            booking_id = sample_booking.id
+        booking_id = sample_booking.id
 
-            # ✅ FIX: Vérifier que le booking existe vraiment dans la DB
-            # en le rechargeant depuis la DB pour s'assurer qu'il est visible
-            booking_check = db.session.query(Booking).filter_by(id=booking_id).first()
-            if booking_check is None:
-                # Si le booking n'est pas trouvé, utiliser merge() pour l'attacher
-                # à la session au lieu de refresh() qui nécessite que l'objet soit
-                # déjà dans la session
-                sample_booking = db.session.merge(sample_booking)
-                db.session.flush()
-                booking_id = sample_booking.id
+        prediction = MLMonitoringService.log_prediction(
+            booking_id=booking_id,
+            driver_id=None,
+            predicted_delay=8.5,
+            confidence=0.85,
+            risk_level="medium",
+            contributing_factors={},
+            prediction_time_ms=0.1325,
+        )
 
-            # Log prédiction avec un booking réel
-            prediction = MLMonitoringService.log_prediction(
-                booking_id=booking_id,
-                driver_id=0,  # driver_id peut être 0 ou None pour les tests
-                predicted_delay=8.5,
-                confidence=0.85,
-                risk_level="medium",
-                contributing_factors={},
-                prediction_time_ms=0.1325,
-            )
+        db.session.flush()
 
-            # ✅ FIX: Flush explicitement pour obtenir l'ID de la prédiction
-            db.session.flush()
+        MLMonitoringService.update_actual_delay(booking_id=booking_id, actual_delay=9.2)
 
-            # Mettre à jour retard réel
-            MLMonitoringService.update_actual_delay(
-                booking_id=booking_id, actual_delay=9.2
-            )
+        db.session.refresh(prediction)
+        assert prediction.actual_delay_minutes == 9.2
+        assert prediction.prediction_error == pytest.approx(0.7, 0.01)
+        assert prediction.is_accurate is True  # < 3 min
 
-            # Vérifier
-            db.session.refresh(prediction)
-            assert prediction.actual_delay_minutes == 9.2
-            assert prediction.prediction_error == pytest.approx(0.7, 0.01)
-            assert prediction.is_accurate is True  # < 3 min
-
-            # Cleanup
-            # ✅ FIX: Utiliser flush() au lieu de commit() pour éviter les conflits
-            # avec les savepoints dans les tests
-            db.session.delete(prediction)
-            db.session.flush()
+        db.session.delete(prediction)
+        db.session.flush()
 
         print("✅ Update actual delay OK")
 
@@ -108,114 +77,64 @@ class TestMLMonitoringService:
         from models.enums import BookingStatus
         from services.ml_monitoring_service import MLMonitoringService
 
-        with app.app_context():
-            # ✅ FIX: S'assurer que sample_booking et ses dépendances sont bien flushés
-            # et visibles dans la transaction avant de créer de nouveaux bookings
-            db.session.flush()
-            booking_ref = sample_booking
+        # Le fixture `db` maintient déjà un app context actif (voir note plus haut).
+        db.session.flush()
+        booking_ref = sample_booking
 
-            # ✅ FIX: Vérifier que le client et la company existent vraiment dans la DB
-            # en les rechargeant depuis la DB pour s'assurer qu'ils sont visibles
-            from models.client import Client
-            from models.company import Company
+        bookings: list[Booking] = []
+        for i in range(5):
+            booking = Booking()
+            booking.customer_name = f"Test Customer {i}"
+            booking.pickup_location = f"Rue de Test {i}, 1000 Lausanne"
+            booking.dropoff_location = f"Rue de Test {i + 1}, 1000 Lausanne"
+            booking.pickup_lat = 46.2044
+            booking.pickup_lon = 6.1432
+            booking.dropoff_lat = 46.2100
+            booking.dropoff_lon = 6.1500
+            booking.booking_type = "standard"
+            booking.amount = 50.0
+            booking.status = BookingStatus.PENDING
+            booking.user_id = booking_ref.user_id
+            booking.client_id = booking_ref.client_id
+            booking.company_id = booking_ref.company_id
+            booking.duration_seconds = 1800
+            booking.distance_meters = 5000
+            db.session.add(booking)
+            bookings.append(booking)
 
-            client_check = (
-                db.session.query(Client).filter_by(id=booking_ref.client_id).first()
+        db.session.flush()
+        booking_ids = [b.id for b in bookings]
+        assert all(bid is not None for bid in booking_ids)
+
+        predictions = []
+        for i, booking_id in enumerate(booking_ids):
+            p = MLMonitoringService.log_prediction(
+                booking_id=int(booking_id),
+                driver_id=None,
+                predicted_delay=5.0 + i,
+                confidence=0.8,
+                risk_level="medium",
+                contributing_factors={},
+                prediction_time_ms=0.1300,
             )
-            if client_check is None:
-                # Si le client n'est pas trouvé, utiliser merge() pour attacher
-                # sample_booking à la session
-                sample_booking = db.session.merge(sample_booking)
-                db.session.flush()
-                booking_ref = sample_booking
+            p.actual_delay_minutes = 5.5 + i
+            p.prediction_error = 0.5
+            p.is_accurate = True
+            predictions.append(p)
 
-            company_check = (
-                db.session.query(Company).filter_by(id=booking_ref.company_id).first()
-            )
-            if company_check is None:
-                # Si la company n'est pas trouvée, utiliser merge() pour attacher
-                # sample_booking à la session
-                sample_booking = db.session.merge(sample_booking)
-                db.session.flush()
-                booking_ref = sample_booking
+        db.session.flush()
 
-            # Créer plusieurs bookings pour les tests
-            bookings = []
-            for i in range(5):
-                booking = Booking()
-                booking.customer_name = f"Test Customer {i}"
-                booking.pickup_location = f"Rue de Test {i}, 1000 Lausanne"
-                booking.dropoff_location = f"Rue de Test {i + 1}, 1000 Lausanne"
-                booking.pickup_lat = 46.2044
-                booking.pickup_lon = 6.1432
-                booking.dropoff_lat = 46.2100
-                booking.dropoff_lon = 6.1500
-                booking.booking_type = "standard"
-                booking.amount = 50.0
-                booking.status = BookingStatus.PENDING
-                booking.user_id = booking_ref.user_id
-                booking.client_id = booking_ref.client_id
-                booking.company_id = booking_ref.company_id
-                booking.duration_seconds = 1800
-                booking.distance_meters = 5000
-                db.session.add(booking)
-                bookings.append(booking)
+        metrics = MLMonitoringService.get_metrics(hours=24)
 
-            # ✅ FIX: Flush les bookings avant de créer les prédictions
-            # Utiliser flush() au lieu de commit() pour éviter les conflits
-            # avec les savepoints dans les tests
-            db.session.flush()
-            # ✅ FIX: Obtenir les IDs des bookings après flush
-            # Utiliser merge() pour s'assurer que les bookings sont attachés
-            # à la session avant d'accéder à leur ID
-            booking_ids = []
-            for b in bookings:
-                # Utiliser merge() pour s'assurer que le booking est dans la session
-                merged_booking = db.session.merge(b)
-                db.session.flush()
-                booking_ids.append(merged_booking.id)
-            # S'assurer que tous les bookings ont un ID
-            assert all(bid is not None for bid in booking_ids), (
-                "Tous les bookings doivent avoir un ID après flush"
-            )
+        assert metrics["count"] >= 5
+        assert metrics["mae"] is not None
+        assert metrics["r2"] is not None
 
-            # Créer quelques prédictions avec des bookings réels
-            predictions = []
-            for i, booking_id in enumerate(booking_ids):
-                p = MLMonitoringService.log_prediction(
-                    booking_id=booking_id,
-                    driver_id=0,  # driver_id peut être 0 ou None pour les tests
-                    predicted_delay=5.0 + i,
-                    confidence=0.8,
-                    risk_level="medium",
-                    contributing_factors={},
-                    prediction_time_ms=0.1300,
-                )
-                # Ajouter retard réel
-                p.actual_delay_minutes = 5.5 + i
-                p.prediction_error = 0.5
-                p.is_accurate = True
-                predictions.append(p)
-
-            # ✅ FIX: Flush explicitement après avoir créé toutes les prédictions
-            # pour éviter les blocages dans le service
-            db.session.flush()
-
-            # Calculer métriques
-            metrics = MLMonitoringService.get_metrics(hours=24)
-
-            assert metrics["count"] >= 5
-            assert metrics["mae"] is not None
-            assert metrics["r2"] is not None
-
-            # Cleanup
-            # ✅ FIX: Utiliser flush() au lieu de commit() pour éviter les conflits
-            # avec les savepoints dans les tests
-            for p in predictions:
-                db.session.delete(p)
-            for booking in bookings:
-                db.session.delete(booking)
-            db.session.flush()
+        for p in predictions:
+            db.session.delete(p)
+        for booking in bookings:
+            db.session.delete(booking)
+        db.session.flush()
 
         print(f"✅ Get metrics OK (MAE: {metrics['mae']}, R²: {metrics['r2']})")
 

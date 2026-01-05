@@ -8,7 +8,6 @@ d'un utilisateur (déconnexion forcée par l'admin).
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -48,19 +47,19 @@ class RefreshToken(db.Model):
     )
 
     # Informations sur l'appareil/session
-    device_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    device_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    user_agent: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
+    device_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    device_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
 
     # Statut
     is_revoked: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
     )
-    revoked_at: Mapped[Optional[datetime]] = mapped_column(
+    revoked_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    revoked_reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    revoked_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Dates
     created_at: Mapped[datetime] = mapped_column(
@@ -69,7 +68,7 @@ class RefreshToken(db.Model):
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, index=True
     )
-    last_used_at: Mapped[Optional[datetime]] = mapped_column(
+    last_used_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 

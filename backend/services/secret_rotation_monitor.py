@@ -71,7 +71,21 @@ def record_rotation(
         rotation_any.task_id = task_id
 
         db.session.add(rotation)
-        db.session.commit()
+        # ✅ Tests: éviter de commit pour conserver l'isolation via savepoints
+        # (conftest.py utilise transactions nested). En prod, on commit.
+        should_commit = True
+        try:
+            from flask import current_app  # pyright: ignore[reportMissingImports]
+
+            if current_app and bool(current_app.config.get("TESTING", False)):
+                should_commit = False
+        except Exception:
+            pass
+
+        if should_commit:
+            db.session.commit()
+        else:
+            db.session.flush()
 
         logger.info(
             (

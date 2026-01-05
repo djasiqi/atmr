@@ -29,7 +29,11 @@ class TestProactiveAlertsService:
 
     def setup_method(self):
         """Setup pour chaque test."""
-        self.alerts_service = ProactiveAlertsService()
+        # Forcer un comportement déterministe en tests: utiliser le fallback heuristique
+        # plutôt que le modèle ML (qui peut être entraîné ou non selon l'environnement).
+        self.alerts_service = ProactiveAlertsService(
+            delay_predictor=MagicMock(is_trained=False)
+        )
 
         # Données de test
         self.test_booking = {
@@ -483,7 +487,9 @@ class TestDebounceSystem:
 
     def setup_method(self):
         """Setup pour chaque test."""
-        self.alerts_service = ProactiveAlertsService()
+        self.alerts_service = ProactiveAlertsService(
+            delay_predictor=MagicMock(is_trained=False)
+        )
 
     def test_debounce_timing(self):
         """Test timing du système de debounce."""
@@ -588,7 +594,9 @@ class TestErrorHandling:
 
     def setup_method(self):
         """Setup pour chaque test."""
-        self.alerts_service = ProactiveAlertsService()
+        self.alerts_service = ProactiveAlertsService(
+            delay_predictor=MagicMock(is_trained=False)
+        )
 
     def test_check_delay_risk_error_handling(self):
         """Test gestion d'erreur dans check_delay_risk."""
@@ -649,7 +657,9 @@ class TestPerformanceMetrics:
 
     def setup_method(self):
         """Setup pour chaque test."""
-        self.alerts_service = ProactiveAlertsService()
+        self.alerts_service = ProactiveAlertsService(
+            delay_predictor=MagicMock(is_trained=False)
+        )
 
     def test_analysis_performance(self):
         """Test performance de l'analyse de risque."""

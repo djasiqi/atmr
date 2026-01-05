@@ -59,7 +59,17 @@ export const sendDriverLocation = async (payload: DriverLocationPayload) => {  t
     if (res?.message) console.log("ℹ️", res.message);
     return res;
     
-  } catch (e) {
+  } catch (e: any) {
+    // Supprimer les erreurs 401/403/404 car elles sont attendues si l'utilisateur n'est pas un chauffeur
+    const status = e?.response?.status;
+    if (status === 401 || status === 403 || status === 404) {
+      console.debug(
+        "[sendDriverLocation] Accès non autorisé (utilisateur n'est probablement pas un chauffeur):",
+        status
+      );
+      // Ne pas lancer d'erreur, juste retourner
+      return { ok: false, message: "Accès non autorisé" };
+    }
     console.error("❌ Erreur envoi localisation:", e);
     throw e;
   }

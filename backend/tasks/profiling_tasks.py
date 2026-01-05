@@ -23,7 +23,7 @@ except ImportError:
     psutil = None
     PSUTIL_AVAILABLE = False
 
-from celery import Task
+from celery import Task  # pyright: ignore[reportMissingImports]
 
 from celery_app import celery, get_flask_app
 
@@ -85,7 +85,7 @@ def _profile_endpoints(
     Returns:
         dict avec top_functions, total_time, stats
     """
-    from flask import Flask
+    from flask import Flask  # pyright: ignore[reportMissingImports]
 
     app = get_flask_app()
 

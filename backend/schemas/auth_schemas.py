@@ -1,6 +1,10 @@
 """✅ Schemas Marshmallow pour validation des endpoints d'authentification."""
 
-from marshmallow import Schema, fields, validate
+from marshmallow import (  # pyright: ignore[reportMissingImports]
+    Schema,
+    fields,
+    validate,
+)
 
 from schemas.validation_utils import (
     EMAIL_VALIDATOR,

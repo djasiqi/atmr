@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from sqlalchemy import BigInteger, DateTime, Index, Integer, String, Text
 
@@ -89,17 +89,17 @@ class AuditLogger:
     def log_action(
         action_type: str,
         action_category: str,
-        user_id: Optional[int] = None,
+        user_id: int | None = None,
         user_type: str = "system",
         result_status: str = "success",
-        result_message: Optional[str] = None,
-        action_details: Optional[Dict[str, Any]] = None,
-        company_id: Optional[int] = None,
-        booking_id: Optional[int] = None,
-        driver_id: Optional[int] = None,
-        ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        result_message: str | None = None,
+        action_details: Dict[str, Any] | None = None,
+        company_id: int | None = None,
+        booking_id: int | None = None,
+        driver_id: int | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> AuditLog:
         """✅ D2: Enregistre une action d'audit (insert-only).
 
@@ -158,7 +158,7 @@ class AuditLogger:
         assignments_count: int,
         unassigned_count: int,
         mode: str,
-        user_id: Optional[int] = None,
+        user_id: int | None = None,
         result_status: str = "success",
     ) -> AuditLog:
         """✅ D2: Log spécifique pour dispatch."""
@@ -187,8 +187,8 @@ class AuditLogger:
         user_type: str,
         data_type: str,
         data_id: int,
-        company_id: Optional[int] = None,
-        ip_address: Optional[str] = None,
+        company_id: int | None = None,
+        ip_address: str | None = None,
     ) -> AuditLog:
         """✅ D2: Log d'accès aux données sensibles."""
         return AuditLogger.log_action(
@@ -209,9 +209,9 @@ class AuditLogger:
     def log_security_event(
         event_type: str,
         severity: str,
-        details: Optional[Dict[str, Any]] = None,
-        user_id: Optional[int] = None,
-        ip_address: Optional[str] = None,
+        details: Dict[str, Any] | None = None,
+        user_id: int | None = None,
+        ip_address: str | None = None,
     ) -> AuditLog:
         """✅ D2: Log d'événement de sécurité."""
         return AuditLogger.log_action(

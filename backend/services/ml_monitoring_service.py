@@ -14,7 +14,7 @@ import logging
 from datetime import timedelta
 from typing import Any
 
-import numpy as np
+import numpy as np  # pyright: ignore[reportMissingImports]
 
 from db import db
 from feature_flags import FeatureFlags, get_feature_flags_status

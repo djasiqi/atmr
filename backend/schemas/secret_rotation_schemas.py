@@ -1,6 +1,9 @@
 """✅ Schemas Marshmallow pour validation des endpoints secret rotation."""
 
-from marshmallow import fields, validate
+from marshmallow import (  # pyright: ignore[reportMissingImports]
+    fields,
+    validate,
+)
 
 from schemas.query_schemas import LimitOffsetQuerySchema
 
@@ -28,5 +31,5 @@ class SecretRotationMonitoringQuerySchema(LimitOffsetQuerySchema):
         allow_none=True,
     )
 
-    class Meta:  # type: ignore
+    class Meta:
         unknown = "INCLUDE"  # Permettre des champs supplémentaires pour compatibilité

@@ -25,66 +25,83 @@ import { useAuth } from "@/hooks/useAuth";
 import {
   getDispatchRides,
   getDispatchStatus,
-  markRideUrgent,
   runDispatch,
-  getDispatchRideDetails,
-  assignRide,
-  reassignRide,
   fetchRealtimeDashboard,
+  runOptimizer,
+  resetAssignments,
+  applyOpportunity,
   type RealtimeDashboardData,
 } from "@/services/enterpriseDispatch";
 import {
   DispatchStatus,
   RideSummary,
-  DriverSuggestion,
-  RideDetail,
 } from "@/types/enterpriseDispatch";
 import { RideSnippetCard } from "@/components/enterprise/cards/RideSnippetCard";
 import { EnterpriseDriversMap } from "@/components/enterprise/EnterpriseDriversMap";
 import { useEnterpriseDriverTracking } from "@/hooks/useEnterpriseDriverTracking";
 import { useEnterpriseContext } from "@/context/EnterpriseContext";
+import { useRideActions } from "@/hooks/useRideActions";
+import { AssignDriverModal } from "@/components/enterprise/AssignDriverModal";
 
+// ✅ Palette professionnelle cohérente avec le dashboard driver
 const enterprisePalette = {
-  background: "#07130E",
-  heroGradient: ["#11412F", "#07130E"] as [string, string],
-  heroKpiSurface: "rgba(22,76,55,0.45)",
-  heroKpiBorder: "rgba(59,168,123,0.28)",
-  heroKicker: "rgba(226,242,233,0.7)",
-  heroTitle: "#E6F2EA",
-  heroMeta: "rgba(214,236,224,0.65)",
-  heroTick: "#79E0AE",
-  surface: "rgba(9,28,21,0.88)",
-  surfaceBorder: "rgba(52,143,105,0.18)",
-  surfaceMuted: "rgba(184,214,198,0.72)",
-  alertSurface: "rgba(241,104,104,0.16)",
-  alertBorder: "rgba(241,104,104,0.3)",
-  alertText: "rgba(234,246,240,0.85)",
-  hintText: "rgba(198,225,211,0.82)",
-  dispatchButton: "#1EB980",
-  dispatchButtonDisabled: "rgba(30,185,128,0.45)",
-  dispatchText: "#052015",
-  sectionSurface: "rgba(9,24,18,0.88)",
-  sectionBorder: "rgba(59,143,105,0.24)",
-  cardOverlay: "rgba(18,58,42,0.65)",
-  cardBorder: "rgba(61,147,110,0.26)",
-  textStrong: "#F1FFF9",
-  textSecondary: "rgba(200,231,213,0.78)",
-  // ✅ Couleurs modales alignées avec rides.tsx
-  modalOverlay: "rgba(5,22,16,0.82)",
-  modalBackground: "#08211A",
-  modalBorder: "rgba(46,128,94,0.4)",
-  modalTitle: "#E6F2EA",
-  modalText: "rgba(184,214,198,0.8)",
-  modalButton: "#1EB980",
-  modalButtonText: "#052015",
-  modalCancelText: "rgba(184,214,198,0.75)",
-  loadingText: "rgba(184,214,198,0.7)",
+  // Backgrounds - Clair et professionnel
+  background: "#F5F7F6",
+  card: "#FFFFFF",
+
+  // Hero section - Gradient élégant
+  heroGradient: ["#0A7F59", "#0D5F3F"] as [string, string],
+  heroKpiSurface: "rgba(255,255,255,0.25)",
+  heroKpiBorder: "rgba(255,255,255,0.35)",
+  heroKicker: "rgba(255,255,255,0.85)",
+  heroTitle: "#FFFFFF",
+  heroMeta: "rgba(255,255,255,0.9)",
+  heroTick: "#A8E6CF",
+
+  // Surfaces - Cartes et sections
+  surface: "#FFFFFF",
+  surfaceBorder: "rgba(15,54,43,0.08)",
+  surfaceMuted: "#5F7369",
+  sectionSurface: "#FFFFFF",
+  sectionBorder: "rgba(15,54,43,0.08)",
+
+  // Alertes et états
+  alertSurface: "rgba(239,68,68,0.1)",
+  alertBorder: "rgba(239,68,68,0.25)",
+  alertText: "#15362B",
+
+  // Texte
+  textStrong: "#15362B",
+  textSecondary: "#5F7369",
+  hintText: "#91A59D",
+
+  // Boutons et actions
+  dispatchButton: "#0A7F59",
+  dispatchButtonDisabled: "rgba(10,127,89,0.4)",
+  dispatchText: "#FFFFFF",
+
+  // Cards
+  cardOverlay: "#FFFFFF",
+  cardBorder: "rgba(15,54,43,0.08)",
+
+  // Modales
+  modalOverlay: "rgba(21,54,43,0.75)",
+  modalBackground: "#FFFFFF",
+  modalBorder: "rgba(15,54,43,0.12)",
+  modalTitle: "#15362B",
+  modalText: "#5F7369",
+  modalButton: "#0A7F59",
+  modalButtonText: "#FFFFFF",
+  modalCancelText: "#5F7369",
+  loadingText: "#91A59D",
 };
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.extend(relativeTime);
 dayjs.locale("fr");
+
+type RideFilter = "all" | "unassigned" | "assigned" | "completed" | "delayed";
 
 export default function EnterpriseDashboardScreen() {
   const { enterpriseSession, refreshEnterprise, enterpriseLoading } = useAuth();
@@ -103,31 +120,32 @@ export default function EnterpriseDashboardScreen() {
   const [urgentRides, setUrgentRides] = useState<RideSummary[]>([]);
   const [unassignedRides, setUnassignedRides] = useState<RideSummary[]>([]);
   const [allRides, setAllRides] = useState<RideSummary[]>([]);
-  const [pendingUrgentRide, setPendingUrgentRide] = useState<string | null>(
-    null
-  );
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [dispatching, setDispatching] = useState(false);
 
-  // ✅ États pour le modal d'assignation de chauffeur
-  const [assignModalVisible, setAssignModalVisible] = useState(false);
-  const [selectedRideForAssignment, setSelectedRideForAssignment] = useState<
-    RideSummary | null
-  >(null);
-  const [rideSuggestions, setRideSuggestions] = useState<DriverSuggestion[]>(
-    []
-  );
-  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
-  const [assigning, setAssigning] = useState(false);
-
   // ✅ 3.4.2: État pour dashboard temps réel
   const [realtimeDashboard, setRealtimeDashboard] = useState<RealtimeDashboardData | null>(null);
+
+  // ✅ États pour les nouvelles fonctionnalités
+  const [applyingOpportunity, setApplyingOpportunity] = useState<number | null>(null);
+  const [optimizerRunning, setOptimizerRunning] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  // ✅ État pour l'accordéon des courses (une seule ouverte à la fois)
+  const [expandedRideId, setExpandedRideId] = useState<string | null>(null);
+
+  // ✅ État pour le filtre des courses
+  const [rideFilter, setRideFilter] = useState<RideFilter>("all");
 
   const { markers: driverMarkers, refreshLocations } =
     useEnterpriseDriverTracking();
 
   const currentDate = useMemo(() => selectedDate, [selectedDate]);
+
+  // ✅ Utiliser le hook partagé pour les actions sur les courses
+  // Note: loadData est défini plus bas, on passe une fonction qui l'appelle
+  const rideActions = useRideActions(() => loadData());
 
   const formattedDay = useMemo(() => {
     const base = dayjs(selectedDate);
@@ -150,7 +168,7 @@ export default function EnterpriseDashboardScreen() {
         allResponse,
         realtimeResponse,
       ] = await Promise.all([
-        getDispatchStatus(),
+        getDispatchStatus(currentDate), // ✅ Passer la date pour obtenir dispatch_run
         getDispatchRides({
           date: currentDate,
           status: "urgent",
@@ -172,6 +190,8 @@ export default function EnterpriseDashboardScreen() {
         }),
       ]);
       setStatus(statusResponse);
+      // ✅ Mettre à jour le statut de l'optimiseur
+      setOptimizerRunning(statusResponse?.optimizer?.running ?? statusResponse?.optimizer?.active ?? false);
       setUrgentRides(urgentResponse.items);
       setUnassignedRides(unassignedResponse.items);
       setAllRides(allResponse.items);
@@ -195,134 +215,28 @@ export default function EnterpriseDashboardScreen() {
     loadData();
   }, [enterpriseSession, loadData, currentDate]);
 
+  // ✅ Actions sur les courses : utilisent le hook partagé
   const handleUrgentDelay = useCallback(
-    async (rideId: string) => {
-      setPendingUrgentRide(rideId);
-      try {
-        await markRideUrgent(rideId, {
-          extra_delay_minutes: 15,
-          reason: "Action mobile: urgence +15",
-        });
-        Alert.alert(
-          "Urgence",
-          "La course a été marquée urgente avec un délai +15 minutes."
-        );
-        await loadData();
-      } catch (error: any) {
-        const message =
-          error?.response?.data?.error ??
-          error?.message ??
-          "Impossible de marquer la course urgente.";
-        Alert.alert("Erreur", message);
-      } finally {
-        setPendingUrgentRide(null);
-      }
+    (rideId: string) => {
+      rideActions.handleMarkUrgent(rideId, 15);
     },
-    [loadData]
-  );
-
-  // ✅ Ouvrir le modal d'assignation et charger les suggestions de chauffeurs
-  const handleOpenAssignModal = useCallback(
-    async (ride: RideSummary) => {
-      // ✅ Vérifier si l'assignation/annulation est désactivée (completed ou in_board uniquement)
-      const statusLower = ride?.status?.toLowerCase() || "";
-      const isCompleted = statusLower === "completed";
-      const isInBoard = statusLower === "in_board";
-      const isActionDisabled = isCompleted || isInBoard;
-
-      if (isActionDisabled) {
-        Alert.alert(
-          "Action impossible",
-          isCompleted
-            ? "La course est terminée. L'assignation n'est plus possible."
-            : "Le client est à bord. L'assignation n'est plus possible."
-        );
-        return;
-      }
-
-      setSelectedRideForAssignment(ride);
-      setAssignModalVisible(true);
-      setLoadingSuggestions(true);
-      setRideSuggestions([]);
-
-      try {
-        const details: RideDetail = await getDispatchRideDetails(ride.id);
-        setRideSuggestions(details.suggestions || []);
-      } catch (error: any) {
-        const message =
-          error?.response?.data?.error ??
-          error?.message ??
-          "Impossible de charger les suggestions de chauffeurs.";
-        Alert.alert("Erreur", message);
-        setAssignModalVisible(false);
-        setSelectedRideForAssignment(null);
-      } finally {
-        setLoadingSuggestions(false);
-      }
-    },
-    []
-  );
-
-  // ✅ Fermer le modal d'assignation
-  const handleCloseAssignModal = useCallback(() => {
-    setAssignModalVisible(false);
-    setSelectedRideForAssignment(null);
-    setRideSuggestions([]);
-  }, []);
-
-  // ✅ Assigner un chauffeur depuis le modal
-  const handleAssignDriver = useCallback(
-    async (driverId: string, reason?: string) => {
-      if (!selectedRideForAssignment) return;
-
-      const isAssigned =
-        selectedRideForAssignment.status === "assigned" ||
-        !!selectedRideForAssignment.driver?.id;
-
-      setAssigning(true);
-      try {
-        if (isAssigned) {
-          await reassignRide(selectedRideForAssignment.id, {
-            driver_id: driverId,
-            reason: reason ?? undefined,
-            allow_emergency: false,
-            respect_preferences: true,
-            idempotency_key: Crypto.randomUUID(),
-          });
-        } else {
-          await assignRide(selectedRideForAssignment.id, {
-            driver_id: driverId,
-            reason: reason ?? undefined,
-            allow_emergency: false,
-            respect_preferences: true,
-            idempotency_key: Crypto.randomUUID(),
-          });
-        }
-        Alert.alert(
-          "Assignation effectuée",
-          "La course a été mise à jour avec succès."
-        );
-        handleCloseAssignModal();
-        await loadData();
-      } catch (error: any) {
-        const message =
-          error?.response?.data?.error ??
-          error?.response?.data?.message ??
-          error?.message ??
-          "Impossible de finaliser l'assignation.";
-        Alert.alert("Erreur", message);
-      } finally {
-        setAssigning(false);
-      }
-    },
-    [selectedRideForAssignment, handleCloseAssignModal, loadData]
+    [rideActions]
   );
 
   const manualStats = useMemo(() => {
     const total = allRides.length;
-    const unassigned = allRides.filter((ride) => ride.status === "unassigned");
-    const assigned = allRides.filter((ride) => ride.status === "assigned");
-    const completed = allRides.filter((ride) => ride.status === "completed");
+    const unassigned = allRides.filter((ride) => {
+      const status = ride.status ? String(ride.status).toLowerCase().trim() : undefined;
+      return status === "unassigned";
+    });
+    const assigned = allRides.filter((ride) => {
+      const status = ride.status ? String(ride.status).toLowerCase().trim() : undefined;
+      return status === "assigned";
+    });
+    const completed = allRides.filter((ride) => {
+      const status = ride.status ? String(ride.status).toLowerCase().trim() : undefined;
+      return status === "completed" || status === "return_completed";
+    });
     return {
       total,
       unassignedCount: unassigned.length,
@@ -389,23 +303,160 @@ export default function EnterpriseDashboardScreen() {
     return [...withTime, ...withoutTime];
   }, [allRides]);
 
+  // ✅ Calcul des compteurs et filtrage des courses
+  const { filteredRides, filterCounts } = useMemo(() => {
+    const counts = {
+      all: sortedManualRides.length,
+      unassigned: 0,
+      assigned: 0,
+      completed: 0,
+      delayed: 0,
+    };
+
+    sortedManualRides.forEach((ride) => {
+      const status = ride.status ? String(ride.status).toLowerCase().trim() : undefined;
+      if (status === "unassigned" || !ride.driver?.name) {
+        counts.unassigned++;
+      }
+      if (status === "assigned" && !!ride.driver?.name) {
+        counts.assigned++;
+      }
+      if (status === "completed" || status === "return_completed") {
+        counts.completed++;
+      }
+      // Vérifier si en retard (uniquement si la course n'est pas terminée)
+      const isCompleted = status === "completed" || status === "return_completed";
+      if (!isCompleted && ride.driver?.name && ride.time.pickup_at) {
+        const scheduledTime = dayjs(ride.time.pickup_at);
+        const now = dayjs();
+        if (scheduledTime.isValid() && scheduledTime.isBefore(now)) {
+          const delayMinutes = Math.max(0, now.diff(scheduledTime, "minute"));
+          if (delayMinutes > 0) {
+            counts.delayed++;
+          }
+        }
+      }
+    });
+
+    // Filtrer selon le filtre sélectionné
+    let filtered = [...sortedManualRides];
+    if (rideFilter === "unassigned") {
+      filtered = filtered.filter((r) => {
+        const status = r.status ? String(r.status).toLowerCase().trim() : undefined;
+        return status === "unassigned" || !r.driver?.name;
+      });
+    } else if (rideFilter === "assigned") {
+      filtered = filtered.filter((r) => {
+        const status = r.status ? String(r.status).toLowerCase().trim() : undefined;
+        return status === "assigned" && !!r.driver?.name;
+      });
+    } else if (rideFilter === "completed") {
+      filtered = filtered.filter((r) => {
+        const status = r.status ? String(r.status).toLowerCase().trim() : undefined;
+        return status === "completed" || status === "return_completed";
+      });
+    } else if (rideFilter === "delayed") {
+      filtered = filtered.filter((ride) => {
+        if (!ride.driver?.name || !ride.time.pickup_at) return false;
+        const scheduledTime = dayjs(ride.time.pickup_at);
+        const now = dayjs();
+        if (scheduledTime.isValid() && scheduledTime.isBefore(now)) {
+          const delayMinutes = Math.max(0, now.diff(scheduledTime, "minute"));
+          return delayMinutes > 0;
+        }
+        return false;
+      });
+    }
+    // "all" : pas de filtre
+
+    return { filteredRides: filtered, filterCounts: counts };
+  }, [sortedManualRides, rideFilter]);
+
   const manualRidesList = (
     <View style={styles.manualListSection}>
-      <Text style={styles.sectionTitle}>Courses du jour</Text>
-      {sortedManualRides.length === 0 ? (
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Courses du jour</Text>
+        {filteredRides.length > 0 && (
+          <Text style={styles.sectionCount}>
+            {filteredRides.length} course{filteredRides.length !== 1 ? "s" : ""}
+          </Text>
+        )}
+      </View>
+
+      {/* ✅ Filtres horizontaux compacts (tous visibles sur une ligne) */}
+      <View style={styles.filtersContainer}>
+        {[
+          { label: "Toutes", value: "all" as const, icon: "grid-outline" },
+          { label: "Non assignées", value: "unassigned" as const, icon: "alert-circle-outline" },
+          { label: "Assignées", value: "assigned" as const, icon: "checkmark-circle-outline" },
+          { label: "Terminées", value: "completed" as const, icon: "checkmark-done-circle-outline" },
+          { label: "En retard", value: "delayed" as const, icon: "alarm-outline" },
+        ].map((filter) => {
+          const isActive = rideFilter === filter.value;
+          const count = filterCounts[filter.value];
+          return (
+            <TouchableOpacity
+              key={filter.value}
+              style={[styles.filterChip, isActive && styles.filterChipActive]}
+              onPress={() => setRideFilter(filter.value)}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={filter.icon as any}
+                size={16}
+                color={isActive ? enterprisePalette.dispatchText : enterprisePalette.textSecondary}
+              />
+              {count > 0 && (
+                <View style={[styles.filterCount, isActive && styles.filterCountActive]}>
+                  <Text style={[styles.filterCountText, isActive && styles.filterCountTextActive]}>
+                    {count}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {filteredRides.length === 0 ? (
         <Text style={styles.muted}>
-          Aucune course planifiée pour cette date.
+          {rideFilter === "all"
+            ? "Aucune course planifiée pour cette date."
+            : rideFilter === "unassigned"
+              ? "Aucune course non assignée."
+              : rideFilter === "assigned"
+                ? "Aucune course assignée."
+                : rideFilter === "completed"
+                  ? "Aucune course terminée."
+                  : "Aucune course en retard."}
         </Text>
       ) : (
-        sortedManualRides.map((ride) => {
+        filteredRides.map((ride) => {
           let pickupTime: string | null = null;
           if (ride.time.pickup_at) {
             const pickupMoment = dayjs(ride.time.pickup_at);
+            // Si l'heure est à minuit (00:00), c'est probablement une heure non définie
+            // Afficher null pour montrer l'icône d'horloge au lieu de "00h00"
             pickupTime =
               pickupMoment.hour() === 0 && pickupMoment.minute() === 0
                 ? null
                 : pickupMoment.format("HH[h]mm");
           }
+
+          // ✅ Normaliser le statut en minuscules pour éviter les problèmes de casse (cohérence avec rides.tsx)
+          const normalizedStatus = ride.status ? String(ride.status).toLowerCase().trim() : undefined;
+
+          // ✅ Calcul du retard : uniquement si la course est assignée, l'heure prévue est passée, ET la course n'est pas terminée
+          let delayMinutes: number | null = null;
+          const isCompleted = normalizedStatus === "completed" || normalizedStatus === "return_completed";
+          if (!isCompleted && ride.driver?.name && ride.time.pickup_at) {
+            const scheduledTime = dayjs(ride.time.pickup_at);
+            const now = dayjs();
+            if (scheduledTime.isValid() && scheduledTime.isBefore(now)) {
+              delayMinutes = Math.max(0, now.diff(scheduledTime, "minute"));
+            }
+          }
+
           const priorityBadge =
             ride.client.priority === "HIGH"
               ? { label: "Priorité", tone: "danger" as const }
@@ -424,14 +475,20 @@ export default function EnterpriseDashboardScreen() {
                 pickup: ride.route.pickup_address,
                 dropoff: ride.route.dropoff_address,
                 assignedTo: ride.driver?.name ?? null,
+                status: normalizedStatus as "unassigned" | "assigned" | "completed" | "return_completed" | "in_progress" | "en_route" | undefined, // ✅ Passer le statut normalisé
+                delayMinutes: delayMinutes,
                 badges: priorityBadge ? [priorityBadge] : undefined,
                 onPress: () =>
                   router.push({
                     pathname: "/(enterprise)/ride-details",
                     params: { rideId: ride.id },
                   } as any),
-                onQuickAction: () => handleUrgentDelay(ride.id),
-                onPrimaryAction: () => handleOpenAssignModal(ride),
+                onQuickAction: isCompleted ? undefined : () => handleUrgentDelay(ride.id), // ✅ Désactiver si terminée
+                onPrimaryAction: isCompleted ? undefined : () => rideActions.handleOpenAssignModal(ride), // ✅ Désactiver si terminée
+              }}
+              expanded={expandedRideId === ride.id}
+              onToggle={() => {
+                setExpandedRideId(expandedRideId === ride.id ? null : ride.id);
               }}
             />
           );
@@ -492,6 +549,105 @@ export default function EnterpriseDashboardScreen() {
     );
   }, [currentDate, dispatching, formattedDay, loadData]);
 
+  // ✅ Appliquer une opportunité d'optimisation
+  const handleApplyOpportunity = useCallback(
+    async (opportunity: RealtimeDashboardData["opportunities"][0]) => {
+      if (applyingOpportunity === opportunity.assignment_id) return;
+      setApplyingOpportunity(opportunity.assignment_id);
+      try {
+        await applyOpportunity(opportunity);
+        Alert.alert(
+          "Opportunité appliquée",
+          "La réassignation a été effectuée avec succès."
+        );
+        await loadData();
+      } catch (error: any) {
+        const message =
+          error?.response?.data?.error ??
+          error?.response?.data?.message ??
+          error?.message ??
+          "Impossible d'appliquer l'opportunité.";
+        Alert.alert("Erreur", message);
+      } finally {
+        setApplyingOpportunity(null);
+      }
+    },
+    [applyingOpportunity, loadData]
+  );
+
+  // ✅ Contrôler l'optimiseur temps réel
+  const handleToggleOptimizer = useCallback(async () => {
+    if (optimizerRunning) {
+      // Arrêter l'optimiseur (nécessite un endpoint stop si disponible)
+      Alert.alert(
+        "Arrêter l'optimiseur",
+        "L'optimiseur temps réel sera arrêté. Les opportunités ne seront plus détectées automatiquement.",
+        [
+          { text: "Annuler", style: "cancel" },
+          {
+            text: "Arrêter",
+            style: "destructive",
+            onPress: async () => {
+              // Note: Il faudrait un endpoint pour arrêter l'optimiseur
+              // Pour l'instant, on ne peut que le démarrer
+              setOptimizerRunning(false);
+            },
+          },
+        ]
+      );
+    } else {
+      // Démarrer l'optimiseur
+      try {
+        await runOptimizer(currentDate);
+        setOptimizerRunning(true);
+        Alert.alert("Optimiseur démarré", "L'optimiseur temps réel est maintenant actif.");
+        await loadData();
+      } catch (error: any) {
+        const message =
+          error?.response?.data?.error ??
+          error?.message ??
+          "Impossible de démarrer l'optimiseur.";
+        Alert.alert("Erreur", message);
+      }
+    }
+  }, [optimizerRunning, currentDate, loadData]);
+
+  // ✅ Réinitialiser les assignations
+  const handleResetAssignments = useCallback(() => {
+    Alert.alert(
+      "Réinitialiser les assignations ?",
+      `Toutes les assignations pour le ${dayjs(currentDate).format(
+        "dddd D MMMM"
+      )} seront supprimées. Cette action est irréversible.`,
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Réinitialiser",
+          style: "destructive",
+          onPress: async () => {
+            setResetting(true);
+            try {
+              await resetAssignments(currentDate);
+              Alert.alert(
+                "Assignations réinitialisées",
+                "Toutes les assignations ont été supprimées."
+              );
+              await loadData();
+            } catch (error: any) {
+              const message =
+                error?.response?.data?.error ??
+                error?.message ??
+                "Impossible de réinitialiser les assignations.";
+              Alert.alert("Erreur", message);
+            } finally {
+              setResetting(false);
+            }
+          },
+        },
+      ]
+    );
+  }, [currentDate, loadData]);
+
   const semiAutoControls = (
     <View style={styles.semiAutoControls}>
       <Text style={styles.sectionTitle}>Mode semi-automatique</Text>
@@ -540,53 +696,7 @@ export default function EnterpriseDashboardScreen() {
     </Section>
   );
 
-  // ✅ 3.4.2: Section retards en cours depuis dashboard temps réel
-  const delaysSection =
-    realtimeDashboard?.current_delays && realtimeDashboard.current_delays.length > 0 ? (
-      <Section title="Retards en cours">
-        {realtimeDashboard.current_delays.slice(0, 5).map((delay) => (
-          <TouchableOpacity
-            key={delay.assignment_id}
-            style={[
-              styles.alertCard,
-              delay.status === "late" && {
-                backgroundColor: enterprisePalette.alertSurface,
-                borderColor: enterprisePalette.alertBorder,
-              },
-            ]}
-            onPress={() => {
-              router.push({
-                pathname: "/(enterprise)/ride-details",
-                params: { rideId: String(delay.booking_id) },
-              } as any);
-            }}
-          >
-            <View style={styles.alertHeader}>
-              <Text style={styles.alertBadge}>
-                {delay.status === "late" ? "Retard" : "En avance"}
-              </Text>
-              <Text style={styles.alertTime}>
-                {delay.delay_minutes > 0 ? "+" : ""}
-                {delay.delay_minutes} min
-              </Text>
-            </View>
-            <Text style={styles.alertClient}>{delay.customer_name || "Client"}</Text>
-            {delay.scheduled_time && (
-              <Text style={styles.alertRoute}>
-                Prévu: {dayjs(delay.scheduled_time).format("HH:mm")}
-              </Text>
-            )}
-          </TouchableOpacity>
-        ))}
-        {realtimeDashboard.current_delays.length > 5 && (
-          <Text style={styles.muted}>
-            +{realtimeDashboard.current_delays.length - 5} autre(s) retard(s)
-          </Text>
-        )}
-      </Section>
-    ) : null;
-
-  // ✅ 3.4.2: Section opportunités critiques
+  // ✅ 3.4.2: Section opportunités critiques avec bouton "Appliquer"
   const criticalOpportunitiesSection =
     realtimeDashboard?.opportunities &&
       realtimeDashboard.opportunities.filter(
@@ -597,44 +707,81 @@ export default function EnterpriseDashboardScreen() {
           .filter((opp) => opp.severity === "critical" || opp.severity === "high")
           .slice(0, 3)
           .map((opp) => (
-            <TouchableOpacity
+            <View
               key={opp.assignment_id}
               style={[
                 styles.alertCard,
                 opp.severity === "critical" && {
-                  backgroundColor: enterprisePalette.alertSurface,
-                  borderColor: enterprisePalette.alertBorder,
+                  backgroundColor: "rgba(239,68,68,0.08)",
+                  borderColor: "rgba(239,68,68,0.2)",
+                },
+                opp.severity === "high" && {
+                  backgroundColor: "rgba(251,191,36,0.08)",
+                  borderColor: "rgba(251,191,36,0.2)",
                 },
               ]}
-              onPress={() => {
-                router.push({
-                  pathname: "/(enterprise)/ride-details",
-                  params: { rideId: String(opp.booking_id) },
-                } as any);
-              }}
             >
-              <View style={styles.alertHeader}>
-                <Text
-                  style={[
-                    styles.alertBadge,
-                    { color: opp.severity === "critical" ? "#F87171" : "#FF9800" },
-                  ]}
-                >
-                  {opp.severity === "critical" ? "Critique" : "Élevée"}
-                </Text>
-                {opp.current_delay_minutes !== undefined && (
-                  <Text style={styles.alertTime}>
-                    {opp.current_delay_minutes > 0 ? "+" : ""}
-                    {opp.current_delay_minutes} min
+              <TouchableOpacity
+                onPress={() => {
+                  router.push({
+                    pathname: "/(enterprise)/ride-details",
+                    params: { rideId: String(opp.booking_id) },
+                  } as any);
+                }}
+                style={{ flex: 1 }}
+              >
+                <View style={styles.alertHeader}>
+                  <Text
+                    style={[
+                      styles.alertBadge,
+                      {
+                        color:
+                          opp.severity === "critical" ? "#EF4444" : "#F59E0B",
+                      },
+                    ]}
+                  >
+                    {opp.severity === "critical" ? "Critique" : "Élevée"}
+                  </Text>
+                  {opp.current_delay_minutes !== undefined && (
+                    <Text style={styles.alertTime}>
+                      {opp.current_delay_minutes > 0 ? "+" : ""}
+                      {opp.current_delay_minutes} min
+                    </Text>
+                  )}
+                </View>
+                {opp.suggestions && opp.suggestions.length > 0 && (
+                  <Text style={styles.alertRoute} numberOfLines={2}>
+                    {opp.suggestions[0].message || opp.suggestions[0].action}
                   </Text>
                 )}
-              </View>
-              {opp.suggestions && opp.suggestions.length > 0 && (
-                <Text style={styles.alertRoute} numberOfLines={2}>
-                  {opp.suggestions[0].message || opp.suggestions[0].action}
-                </Text>
-              )}
-            </TouchableOpacity>
+              </TouchableOpacity>
+              {/* ✅ Bouton "Appliquer" */}
+              <TouchableOpacity
+                style={[
+                  styles.applyOpportunityButton,
+                  applyingOpportunity === opp.assignment_id &&
+                  styles.applyOpportunityButtonDisabled,
+                ]}
+                onPress={() => handleApplyOpportunity(opp)}
+                disabled={applyingOpportunity === opp.assignment_id}
+              >
+                {applyingOpportunity === opp.assignment_id ? (
+                  <ActivityIndicator
+                    size="small"
+                    color={enterprisePalette.modalButtonText}
+                  />
+                ) : (
+                  <>
+                    <Ionicons
+                      name="checkmark-circle-outline"
+                      size={16}
+                      color={enterprisePalette.modalButtonText}
+                    />
+                    <Text style={styles.applyOpportunityText}>Appliquer</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
           ))}
       </Section>
     ) : null;
@@ -692,141 +839,157 @@ export default function EnterpriseDashboardScreen() {
 
       {dispatchMode === "fully_auto" && urgentSection}
 
+      {/* ✅ Statut dispatch en cours */}
+      {status?.dispatch_run && status.dispatch_run.status !== "completed" && (
+        <View style={styles.dispatchRunBanner}>
+          <View style={styles.dispatchRunHeader}>
+            <Ionicons
+              name="sync-outline"
+              size={18}
+              color={enterprisePalette.dispatchButton}
+            />
+            <Text style={styles.dispatchRunTitle}>Dispatch en cours</Text>
+            <View style={styles.dispatchRunStatus}>
+              <Text style={styles.dispatchRunStatusText}>
+                {status.dispatch_run.status}
+              </Text>
+            </View>
+          </View>
+          <Text style={styles.dispatchRunDetails}>
+            {status.dispatch_run.assignments_count} assignation(s) créée(s)
+            {status.dispatch_run.started_at &&
+              ` • Débuté ${dayjs(status.dispatch_run.started_at).fromNow()}`}
+          </Text>
+          {status.is_running && (
+            <View style={styles.dispatchRunProgress}>
+              <ActivityIndicator
+                size="small"
+                color={enterprisePalette.dispatchButton}
+              />
+              <Text style={styles.dispatchRunProgressText}>
+                Traitement en cours...
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* ✅ Statut optimiseur temps réel (mode fully-auto) */}
+      {dispatchMode === "fully_auto" && (
+        <View style={styles.optimizerSection}>
+          <View style={styles.optimizerHeader}>
+            <View style={styles.optimizerInfo}>
+              <Ionicons
+                name={optimizerRunning ? "flash" : "flash-outline"}
+                size={20}
+                color={
+                  optimizerRunning
+                    ? enterprisePalette.dispatchButton
+                    : enterprisePalette.surfaceMuted
+                }
+              />
+              <Text style={styles.optimizerTitle}>Optimiseur temps réel</Text>
+              <View
+                style={[
+                  styles.optimizerStatusBadge,
+                  optimizerRunning && styles.optimizerStatusBadgeActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.optimizerStatusText,
+                    optimizerRunning && styles.optimizerStatusTextActive,
+                  ]}
+                >
+                  {optimizerRunning ? "🟢 Actif" : "🔴 Inactif"}
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.optimizerToggleButton,
+                optimizerRunning && styles.optimizerToggleButtonActive,
+              ]}
+              onPress={handleToggleOptimizer}
+              disabled={resetting}
+            >
+              <Text
+                style={[
+                  styles.optimizerToggleText,
+                  optimizerRunning && styles.optimizerToggleTextActive,
+                ]}
+              >
+                {optimizerRunning ? "Arrêter" : "Démarrer"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.optimizerDescription}>
+            {optimizerRunning
+              ? "L'optimiseur détecte automatiquement les opportunités d'optimisation et les applique."
+              : "Démarrez l'optimiseur pour activer la détection automatique des opportunités."}
+          </Text>
+        </View>
+      )}
+
+      {/* ✅ Actions rapides (mode semi-auto et fully-auto) */}
+      {(isSemiAuto || dispatchMode === "fully_auto") && (
+        <View style={styles.quickActionsSection}>
+          <Text style={styles.sectionTitle}>Actions rapides</Text>
+          <View style={styles.quickActionsRow}>
+            {isSemiAuto && (
+              <TouchableOpacity
+                style={styles.quickActionButton}
+                onPress={handleRunDispatch}
+                disabled={dispatching}
+              >
+                <Ionicons
+                  name="flash-outline"
+                  size={18}
+                  color={enterprisePalette.dispatchButton}
+                />
+                <Text style={styles.quickActionText}>Relancer dispatch</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={[styles.quickActionButton, styles.quickActionButtonDanger]}
+              onPress={handleResetAssignments}
+              disabled={resetting}
+            >
+              <Ionicons
+                name="refresh-outline"
+                size={18}
+                color="#F87171"
+              />
+              <Text
+                style={[
+                  styles.quickActionText,
+                  styles.quickActionTextDanger,
+                ]}
+              >
+                {resetting ? "Réinitialisation..." : "Réinitialiser"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       {/* ✅ 3.4.2: Sections dashboard temps réel */}
-      {delaysSection}
       {criticalOpportunitiesSection}
 
       {errorMessage && <Text style={styles.error}>{errorMessage}</Text>}
 
-      {/* ✅ Modal pour sélectionner un chauffeur */}
-      <Modal
-        visible={assignModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={handleCloseAssignModal}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Assigner un chauffeur</Text>
-            {selectedRideForAssignment && (
-              <Text style={styles.modalSubtitle}>
-                Course #{selectedRideForAssignment.id}
-              </Text>
-            )}
-
-            {selectedRideForAssignment && (
-              <View style={styles.modalRideInfo}>
-                <Text style={styles.modalRideClient}>
-                  {selectedRideForAssignment.client.name}
-                </Text>
-                <Text style={styles.modalRideRoute} numberOfLines={1}>
-                  {selectedRideForAssignment.route.pickup_address}
-                </Text>
-                <Text style={styles.modalRideRoute} numberOfLines={1}>
-                  → {selectedRideForAssignment.route.dropoff_address}
-                </Text>
-              </View>
-            )}
-
-            {loadingSuggestions ? (
-              <View style={styles.modalLoading}>
-                <ActivityIndicator color={enterprisePalette.dispatchButton} />
-                <Text style={styles.modalLoadingText}>
-                  Chargement des suggestions...
-                </Text>
-              </View>
-            ) : rideSuggestions.length === 0 ? (
-              <Text style={styles.modalEmpty}>
-                Aucun chauffeur disponible pour cette course.
-              </Text>
-            ) : (
-              <ScrollView
-                style={styles.modalDriverList}
-                nestedScrollEnabled
-                showsVerticalScrollIndicator={false}
-              >
-                {rideSuggestions.map((suggestion: DriverSuggestion) => (
-                  <TouchableOpacity
-                    key={suggestion.driver_id}
-                    style={styles.modalDriverOption}
-                    onPress={() => handleAssignDriver(suggestion.driver_id)}
-                    disabled={assigning}
-                  >
-                    <View style={styles.modalDriverInfo}>
-                      <Text style={styles.modalDriverName}>
-                        {suggestion.driver_name}
-                      </Text>
-                      <Text style={styles.modalDriverMeta}>
-                        Score: {suggestion.score.toFixed(2)}
-                        {suggestion.preferred_match && " • Préféré"}
-                        {suggestion.is_emergency && " • Urgence"}
-                      </Text>
-                      {suggestion.reason && (
-                        <Text style={styles.modalDriverReason}>
-                          {suggestion.reason}
-                        </Text>
-                      )}
-                    </View>
-                    <Ionicons
-                      name="chevron-forward"
-                      size={20}
-                      color={enterprisePalette.dispatchButton}
-                    />
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
-
-            <View style={styles.modalActions}>
-              <Pressable
-                style={styles.modalCancelButton}
-                onPress={handleCloseAssignModal}
-                disabled={assigning}
-              >
-                <Text style={styles.modalCancelText}>Annuler</Text>
-              </Pressable>
-              {selectedRideForAssignment && (
-                <Pressable
-                  style={styles.modalViewDetailsButton}
-                  onPress={() => {
-                    handleCloseAssignModal();
-                    router.push({
-                      pathname: "/(enterprise)/ride-details",
-                      params: { rideId: selectedRideForAssignment.id },
-                    } as any);
-                  }}
-                  disabled={assigning}
-                >
-                  <Text style={styles.modalViewDetailsText}>
-                    Voir la fiche complète
-                  </Text>
-                </Pressable>
-              )}
-            </View>
-
-            {assigning && (
-              <View
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  backgroundColor: "rgba(0,0,0,0.8)",
-                  borderRadius: 24,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <ActivityIndicator color="#FFFFFF" size="large" />
-                <Text style={styles.modalAssigningText}>
-                  Assignation en cours...
-                </Text>
-              </View>
-            )}
-          </View>
-        </View>
-      </Modal>
+      {/* ✅ Modal d'assignation partagé */}
+      <AssignDriverModal
+        visible={rideActions.assignModalVisible}
+        ride={rideActions.selectedRide}
+        suggestions={rideActions.rideSuggestions}
+        loading={rideActions.loadingSuggestions}
+        assigning={rideActions.assigning}
+        allDrivers={rideActions.allDrivers}
+        loadingAllDrivers={rideActions.loadingAllDrivers}
+        onClose={rideActions.handleCloseAssignModal}
+        onAssign={rideActions.handleAssignDriver}
+      />
     </ScrollView>
   );
 }
@@ -878,7 +1041,15 @@ const RideAlert = ({ ride, badge }: { ride: RideSummary; badge: string }) => (
       <Text style={styles.alertBadge}>{badge}</Text>
       <Text style={styles.alertTime}>
         {ride.time.pickup_at
-          ? dayjs(ride.time.pickup_at).format("HH:mm")
+          ? (() => {
+            const time = dayjs(ride.time.pickup_at);
+            // Si l'heure est à minuit (00:00), c'est probablement une heure non définie
+            // Afficher une icône d'horloge au lieu de "00:00"
+            if (time.hour() === 0 && time.minute() === 0) {
+              return "⏱️";
+            }
+            return time.format("HH:mm");
+          })()
           : "⏱️"}
       </Text>
     </View>
@@ -899,65 +1070,77 @@ const styles = StyleSheet.create({
   },
   hero: {
     borderRadius: 24,
-    padding: 20,
-    marginBottom: 22,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    marginBottom: 6,
+    height: 150,
     overflow: "hidden",
+    shadowColor: "rgba(10,127,89,0.15)",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 1,
+    shadowRadius: 24,
+    elevation: 8,
+    justifyContent: "space-between",
   },
   heroHeader: {
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
     gap: 10,
+    marginBottom: 4,
   },
   heroKpiRow: {
     flexDirection: "row",
     gap: 8,
-    marginTop: 8,
+    marginTop: 0,
+    justifyContent: "flex-end",
   },
   heroKpiCard: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 999,
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 16,
     backgroundColor: enterprisePalette.heroKpiSurface,
     borderWidth: 1,
     borderColor: enterprisePalette.heroKpiBorder,
+    backdropFilter: "blur(10px)",
   },
   heroKpiValue: {
     color: enterprisePalette.heroTitle,
     fontWeight: "700",
-    fontSize: 14,
+    fontSize: 13,
   },
   heroKpiLabel: {
     color: enterprisePalette.heroMeta,
-    fontSize: 12,
+    fontSize: 11,
   },
   heroKicker: {
     color: enterprisePalette.heroKicker,
-    fontSize: 13,
+    fontSize: 11,
     textTransform: "uppercase",
-    letterSpacing: 1,
-    marginBottom: 6,
+    letterSpacing: 0.8,
+    marginBottom: 4,
   },
   heroCompany: {
     color: enterprisePalette.heroTitle,
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: "700",
+    lineHeight: 28,
   },
   heroMeta: {
     alignItems: "flex-end",
-    gap: 4,
+    gap: 2,
   },
   heroDate: {
     color: enterprisePalette.heroMeta,
-    fontSize: 13,
+    fontSize: 12,
     textTransform: "capitalize",
   },
   heroTick: {
     color: enterprisePalette.heroTick,
-    fontSize: 12,
+    fontSize: 11,
   },
   modeSwitch: {
     flexDirection: "row",
@@ -996,65 +1179,153 @@ const styles = StyleSheet.create({
     borderColor: enterprisePalette.cardBorder,
   },
   statusLabel: {
-    color: enterprisePalette.heroMeta,
-    fontSize: 13,
+    color: enterprisePalette.textSecondary,
+    fontSize: 12,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   statusValue: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "700",
-    marginTop: 6,
+    marginTop: 8,
+    letterSpacing: 0.2,
   },
   statusDetail: {
     color: enterprisePalette.textSecondary,
-    marginTop: 4,
+    marginTop: 6,
     fontSize: 13,
+    lineHeight: 18,
   },
   section: {
     backgroundColor: enterprisePalette.sectionSurface,
     borderRadius: 20,
-    padding: 18,
+    padding: 20,
     marginBottom: 20,
     borderWidth: 1,
     borderColor: enterprisePalette.sectionBorder,
+    shadowColor: "rgba(15,54,43,0.08)",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
   },
   sectionTitle: {
     color: enterprisePalette.textStrong,
     fontSize: 17,
     fontWeight: "600",
-    marginBottom: 12,
+  },
+  sectionCount: {
+    color: enterprisePalette.textSecondary,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  filtersContainer: {
+    flexDirection: "row",
+    flexWrap: "nowrap",
+    gap: 6,
+    marginBottom: 16,
+  },
+  filterChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    flex: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: enterprisePalette.card,
+    borderWidth: 1,
+    borderColor: enterprisePalette.surfaceBorder,
+    gap: 6,
+    minWidth: 0, // Permet au flex de réduire la taille
+  },
+  filterChipActive: {
+    backgroundColor: enterprisePalette.dispatchButton,
+    borderColor: enterprisePalette.dispatchButton,
+  },
+  filterCount: {
+    backgroundColor: enterprisePalette.surfaceBorder,
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    minWidth: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  filterCountActive: {
+    backgroundColor: "rgba(255,255,255,0.25)",
+  },
+  filterCountText: {
+    color: enterprisePalette.textSecondary,
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  filterCountTextActive: {
+    color: enterprisePalette.dispatchText,
   },
   muted: {
     color: enterprisePalette.surfaceMuted,
   },
   alertCard: {
-    backgroundColor: enterprisePalette.alertSurface,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 14,
+    backgroundColor: enterprisePalette.card,
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 8,
     borderWidth: 1,
-    borderColor: enterprisePalette.alertBorder,
+    borderColor: enterprisePalette.surfaceBorder,
+    shadowColor: "rgba(15,54,43,0.06)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 6,
+    elevation: 2,
   },
   alertHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 8,
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  alertBadgeContainer: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   alertBadge: {
-    color: "#F87171",
     fontWeight: "700",
+    fontSize: 11,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   alertTime: {
-    color: enterprisePalette.alertText,
+    color: enterprisePalette.textStrong,
+    fontSize: 14,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
+  alertContent: {
+    gap: 3,
   },
   alertClient: {
     color: enterprisePalette.textStrong,
-    fontWeight: "600",
-    fontSize: 15,
-    marginBottom: 4,
+    fontWeight: "700",
+    fontSize: 14,
+    letterSpacing: 0.1,
+  },
+  alertTimeRow: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   alertRoute: {
-    color: enterprisePalette.alertText,
-    fontSize: 13,
+    color: enterprisePalette.textSecondary,
+    fontSize: 12,
+    fontWeight: "500",
   },
   semiAutoControls: {
     marginTop: 24,
@@ -1076,13 +1347,13 @@ const styles = StyleSheet.create({
     gap: 8,
     alignSelf: "flex-start",
     backgroundColor: enterprisePalette.dispatchButton,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 16,
     shadowColor: enterprisePalette.dispatchButton,
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
     elevation: 6,
   },
   dispatchButtonDisabled: {
@@ -1098,11 +1369,16 @@ const styles = StyleSheet.create({
   },
   rideCard: {
     backgroundColor: enterprisePalette.cardOverlay,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 14,
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: enterprisePalette.cardBorder,
+    shadowColor: "rgba(15,54,43,0.06)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    elevation: 2,
   },
   rideTitle: {
     color: enterprisePalette.textStrong,
@@ -1123,7 +1399,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   manualListSection: {
-    marginTop: 24,
+    marginTop: 8,
     marginBottom: 24,
     gap: 12,
   },
@@ -1155,135 +1431,205 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   manualMapSection: {
-    marginTop: 14,
+    marginTop: 2,
     gap: 12,
-    marginBottom: 24,
+    marginBottom: 8,
   },
-  // ✅ Styles pour le modal d'assignation (alignés avec rides.tsx)
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: enterprisePalette.modalOverlay,
+  // ✅ Styles pour le statut dispatch en cours
+  dispatchRunBanner: {
+    backgroundColor: enterprisePalette.sectionSurface,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: enterprisePalette.sectionBorder,
+  },
+  dispatchRunHeader: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
+    gap: 10,
+    marginBottom: 8,
   },
-  modalCard: {
-    width: "100%",
-    maxWidth: 420,
-    backgroundColor: enterprisePalette.modalBackground,
-    borderRadius: 24,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: enterprisePalette.modalBorder,
-    maxHeight: "80%",
-    gap: 16,
-  },
-  modalTitle: {
-    color: enterprisePalette.modalTitle,
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  modalSubtitle: {
-    color: enterprisePalette.modalText,
-    fontSize: 14,
-    fontWeight: "400",
-  },
-  modalRideInfo: {
-    backgroundColor: "rgba(10,34,26,0.82)",
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: enterprisePalette.surfaceBorder,
-  },
-  modalRideClient: {
-    color: enterprisePalette.modalTitle,
-    fontSize: 15,
+  dispatchRunTitle: {
+    color: enterprisePalette.textStrong,
+    fontSize: 16,
     fontWeight: "600",
-    marginBottom: 6,
+    flex: 1,
   },
-  modalRideRoute: {
-    color: enterprisePalette.modalText,
+  dispatchRunStatus: {
+    backgroundColor: "rgba(10,127,89,0.12)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(10,127,89,0.2)",
+  },
+  dispatchRunStatusText: {
+    color: enterprisePalette.dispatchButton,
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  dispatchRunDetails: {
+    color: enterprisePalette.textSecondary,
     fontSize: 13,
-    marginTop: 4,
+    marginBottom: 8,
   },
-  modalLoading: {
+  dispatchRunProgress: {
+    flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 40,
-    gap: 12,
+    gap: 8,
+    marginTop: 8,
   },
-  modalLoadingText: {
-    color: enterprisePalette.loadingText,
-    fontSize: 14,
+  dispatchRunProgressText: {
+    color: enterprisePalette.dispatchButton,
+    fontSize: 13,
+    fontWeight: "500",
   },
-  modalEmpty: {
-    color: enterprisePalette.modalText,
-    fontSize: 14,
-    textAlign: "center",
-    paddingVertical: 40,
+  // ✅ Styles pour l'optimiseur temps réel
+  optimizerSection: {
+    backgroundColor: enterprisePalette.sectionSurface,
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: enterprisePalette.sectionBorder,
   },
-  modalDriverList: {
-    maxHeight: 400,
-    marginBottom: 16,
-  },
-  modalDriverOption: {
+  optimizerHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "rgba(10,34,26,0.6)",
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: enterprisePalette.surfaceBorder,
+    marginBottom: 12,
   },
-  modalDriverInfo: {
+  optimizerInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
     flex: 1,
-    marginRight: 12,
   },
-  modalDriverName: {
-    color: enterprisePalette.modalTitle,
+  optimizerTitle: {
+    color: enterprisePalette.textStrong,
     fontSize: 16,
     fontWeight: "600",
-    marginBottom: 4,
+    flex: 1,
   },
-  modalDriverMeta: {
-    color: enterprisePalette.modalText,
-    fontSize: 13,
-    marginBottom: 4,
+  optimizerStatusBadge: {
+    backgroundColor: "rgba(239,68,68,0.1)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(239,68,68,0.2)",
   },
-  modalDriverReason: {
-    color: enterprisePalette.loadingText,
-    fontSize: 12,
-    fontStyle: "italic",
+  optimizerStatusBadgeActive: {
+    backgroundColor: "rgba(10,127,89,0.12)",
+    borderColor: enterprisePalette.dispatchButton,
   },
-  modalActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 12,
-  },
-  modalCancelButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  modalCancelText: {
-    color: enterprisePalette.modalCancelText,
-    fontWeight: "600",
-    fontSize: 15,
-  },
-  modalViewDetailsButton: {
-    backgroundColor: enterprisePalette.modalButton,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 14,
-  },
-  modalViewDetailsText: {
-    color: enterprisePalette.modalButtonText,
+  optimizerStatusText: {
+    color: "#EF4444",
+    fontSize: 11,
     fontWeight: "700",
-    fontSize: 15,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
-  modalAssigningText: {
-    color: "#FFFFFF",
+  optimizerStatusTextActive: {
+    color: enterprisePalette.dispatchButton,
+  },
+  optimizerToggleButton: {
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: enterprisePalette.surfaceBorder,
+    shadowColor: "rgba(15,54,43,0.08)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  optimizerToggleButtonActive: {
+    backgroundColor: enterprisePalette.alertSurface,
+    borderColor: enterprisePalette.alertBorder,
+  },
+  optimizerToggleText: {
+    color: enterprisePalette.textStrong,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  optimizerToggleTextActive: {
+    color: "#EF4444",
+  },
+  optimizerDescription: {
+    color: enterprisePalette.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  // ✅ Styles pour les actions rapides
+  quickActionsSection: {
+    backgroundColor: enterprisePalette.sectionSurface,
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: enterprisePalette.sectionBorder,
+  },
+  quickActionsRow: {
+    flexDirection: "row",
+    gap: 12,
     marginTop: 12,
+  },
+  quickActionButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#FFFFFF",
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: enterprisePalette.surfaceBorder,
+    shadowColor: "rgba(15,54,43,0.08)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  quickActionButtonDanger: {
+    backgroundColor: enterprisePalette.alertSurface,
+    borderColor: enterprisePalette.alertBorder,
+  },
+  quickActionText: {
+    color: enterprisePalette.textStrong,
     fontSize: 14,
+    fontWeight: "600",
+    letterSpacing: 0.2,
+  },
+  quickActionTextDanger: {
+    color: "#EF4444",
+  },
+  // ✅ Styles pour le bouton "Appliquer" sur les opportunités
+  applyOpportunityButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: enterprisePalette.dispatchButton,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginTop: 12,
+    alignSelf: "flex-start",
+  },
+  applyOpportunityButtonDisabled: {
+    backgroundColor: enterprisePalette.dispatchButtonDisabled,
+  },
+  applyOpportunityText: {
+    color: enterprisePalette.dispatchText,
+    fontSize: 13,
+    fontWeight: "600",
   },
 });

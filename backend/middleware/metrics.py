@@ -8,14 +8,19 @@ Instrumente toutes les requêtes HTTP pour exposer:
 import time
 from typing import TYPE_CHECKING
 
-from flask import Flask, request
+from flask import Flask, request  # pyright: ignore[reportMissingImports]
 
 if TYPE_CHECKING:
-    from flask import Response
+    from flask import Response  # pyright: ignore[reportMissingImports]
 
 # Import optionnel prometheus_client (peut ne pas être installé en dev)
 try:
-    from prometheus_client import Counter, Gauge, Histogram, generate_latest
+    from prometheus_client import (  # pyright: ignore[reportMissingImports]
+        Counter,
+        Gauge,
+        Histogram,
+        generate_latest,
+    )
 
     PROMETHEUS_AVAILABLE = True
 except ImportError:
@@ -141,7 +146,7 @@ def prom_middleware(app: Flask) -> Flask:
     def metrics_http():  # pyright: ignore[reportUnusedFunction]
         """Exporte les métriques HTTP au format Prometheus."""
         if not PROMETHEUS_AVAILABLE or generate_latest is None:
-            from flask import jsonify
+            from flask import jsonify  # pyright: ignore[reportMissingImports]
 
             return jsonify(
                 {
@@ -150,7 +155,7 @@ def prom_middleware(app: Flask) -> Flask:
                 }
             ), 503
 
-        from flask import Response
+        from flask import Response  # pyright: ignore[reportMissingImports]
 
         return Response(
             generate_latest(), mimetype="text/plain; version=0.0.4; charset=utf-8"

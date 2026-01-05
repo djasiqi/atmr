@@ -1,23 +1,23 @@
 name: Backend Tests
 
-# ⏸️ Workflow suspendu temporairement - focus sur lint
-# Déclenchement manuel uniquement
-
 permissions:
   contents: read
   actions: read
 
 on:
-  workflow_dispatch: # Seulement déclenchement manuel autorisé
-  # push:
-  #   branches: [main, develop, audit/**]
-  #   paths:
-  #     - "backend/**"
-  #     - ".github/workflows/backend-tests.yml"
-  # pull_request:
-  #   branches: [main, develop]
-  #   paths:
-  #     - "backend/**"
+  workflow_dispatch: # Déclenchement manuel
+  push:
+    branches: [main, develop, audit/**]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-tests.yml"
+      - "scripts/detect_broad_exceptions.py"
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-tests.yml"
+      - "scripts/detect_broad_exceptions.py"
 
 jobs:
   lint:
@@ -87,6 +87,12 @@ jobs:
             --min-confidence 80 \
             --sort-by-size \
             --exclude venv,__pycache__,migrations,htmlcov,.pytest_cache,temp_*,instance,uploads,static/qrcodes,scripts/profiling,data/ml,data/rl
+
+      - name: Detect broad exceptions
+        working-directory: .
+        run: |
+          python scripts/detect_broad_exceptions.py --path backend
+        continue-on-error: false
 
   test:
     name: Tests (pytest)
@@ -305,6 +311,150 @@ jobs:
             backend/htmlcov/
             backend/coverage.xml
             backend/coverage_report.json
+          retention-days: 7
+
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    # Exécuter uniquement sur branches main/develop et pull requests
+    if: |
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')) ||
+      (github.event_name == 'pull_request' && (github.base_ref == 'main' || github.base_ref == 'develop')) ||
+      github.event_name == 'workflow_dispatch'
+
+    # ✅ Variables d'environnement au niveau du job
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/atmr_test
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: test
+      PGPASSWORD: test
+      PGDATABASE: atmr_test
+      REDIS_URL: redis://localhost:6379/0
+      FLASK_CONFIG: testing
+      SECRET_KEY: test-secret-key
+      JWT_SECRET_KEY: test-jwt-secret
+      APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+      API_LEGACY_ENABLED: "false"
+      PYTHONPATH: ${{ github.workspace }}
+      SOCKETIO_ASYNC_MODE: threading
+      SKIP_SOCKETIO: "true"
+      SKIP_ROUTES_INIT: "true"
+      RUN_E2E_TESTS: "1"
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: atmr_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d atmr_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcairo2-dev libffi-dev pkg-config postgresql-client
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-cov coverage pytest-timeout
+          # Dépendances de test
+          pip install factory-boy freezegun
+          # Dépendances base de données
+          pip install psycopg2-binary flask-migrate
+          if [ -f backend/requirements.txt ]; then
+            pip install -r backend/requirements.txt
+          fi
+          if [ -f backend/requirements-dev.txt ]; then
+            pip install -r backend/requirements-dev.txt
+          fi
+
+      - name: Wait for PostgreSQL to be ready
+        run: |
+          echo "⏳ Attente que PostgreSQL soit prêt..."
+          for i in $(seq 1 30); do
+            PGPASSWORD=test psql -h localhost -U test -d atmr_test -c 'SELECT 1' > /dev/null 2>&1 && break
+            echo "  Tentative $i/30..."
+            sleep 1
+          done
+          PGPASSWORD=test psql -h localhost -U test -d atmr_test -c 'SELECT 1' || exit 1
+          echo "✅ PostgreSQL est prêt"
+
+      - name: Wait for Redis to be ready
+        run: |
+          echo "⏳ Attente que Redis soit prêt..."
+          for i in $(seq 1 30); do
+            redis-cli -h localhost ping > /dev/null 2>&1 && break
+            echo "  Tentative $i/30..."
+            sleep 1
+          done
+          redis-cli -h localhost ping || exit 1
+          echo "✅ Redis est prêt"
+
+      - name: Run database migrations
+        env:
+          FLASK_APP: backend.wsgi
+        run: |
+          cd backend
+          echo "🔄 Exécution des migrations de base de données..."
+          flask db upgrade heads || {
+            echo "❌ Erreur lors de l'exécution des migrations"
+            exit 1
+          }
+          echo "✅ Migrations exécutées avec succès"
+
+      - name: Run E2E tests
+        timeout-minutes: 15
+        run: |
+          echo "🧪 Exécution des tests E2E..."
+          pytest backend/tests/e2e/ \
+            -v \
+            --tb=short \
+            --maxfail=5 \
+            --timeout=300 \
+            --timeout-method=thread \
+            -m e2e || {
+            echo "❌ Certains tests E2E ont échoué"
+            exit 1
+          }
+          echo "✅ Tous les tests E2E ont réussi"
+
+      - name: Upload E2E test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-test-results
+          path: |
+            backend/.pytest_cache/
           retention-days: 7
 
   security:

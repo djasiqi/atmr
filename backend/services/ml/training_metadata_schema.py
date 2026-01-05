@@ -372,7 +372,7 @@ class TrainingMetadataSchema:
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Sauvegarder
-        with Path(file_path, "w", encoding="utf-8").open() as f:
+        with file_path.open("w", encoding="utf-8") as f:
             json.dump(metadata, f, indent=2, ensure_ascii=False)
 
     @staticmethod
@@ -390,7 +390,7 @@ class TrainingMetadataSchema:
             msg = f"Fichier de métadonnées non trouvé: {file_path}"
             raise FileNotFoundError(msg)
 
-        with Path(file_path, encoding="utf-8").open() as f:
+        with file_path.open("r", encoding="utf-8") as f:
             metadata = json.load(f)
 
         # Valider après chargement

@@ -1,0 +1,300 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "backend/requirements*.txt"
+      - ".github/workflows/security-scan.yml"
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "backend/requirements*.txt"
+      - ".github/workflows/security-scan.yml"
+  schedule:
+    # Exécution hebdomadaire le lundi à 3h du matin UTC
+    - cron: "0 3 * * 1"
+  workflow_dispatch: # Permet l'exécution manuelle
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  scan-dependencies:
+    name: Scan Dependencies (pip-audit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        requirements-file:
+          - "backend/requirements.prod.txt"
+          - "backend/requirements-dev.txt"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Install pip-audit
+        run: |
+          python -m pip install --upgrade pip
+          pip install pip-audit>=2.7.0
+
+      - name: Scan dependencies
+        id: scan
+        continue-on-error: true
+        run: |
+          echo "🔍 Scanning ${{ matrix.requirements-file }} for vulnerabilities..."
+
+          # Vérifier que le fichier requirements existe
+          if [ ! -f "${{ matrix.requirements-file }}" ]; then
+            echo "⚠️ Requirements file not found: ${{ matrix.requirements-file }}"
+            echo "critical_count=0" >> $GITHUB_OUTPUT
+            echo "high_count=0" >> $GITHUB_OUTPUT
+            echo "medium_count=0" >> $GITHUB_OUTPUT
+            echo "low_count=0" >> $GITHUB_OUTPUT
+            echo "report_file=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Créer le nom du fichier de rapport basé sur le fichier requirements
+          REPORT_FILE="audit-report-$(basename ${{ matrix.requirements-file }} .txt).json"
+
+          # Scanner avec pip-audit
+          # Utiliser --desc pour avoir les descriptions des vulnérabilités
+          # Utiliser || true pour ne pas faire échouer le step si des vulnérabilités sont trouvées
+          pip-audit \
+            --requirement "${{ matrix.requirements-file }}" \
+            --format json \
+            --output "$REPORT_FILE" \
+            --desc 2>&1 || SCAN_EXIT_CODE=$?
+
+          # pip-audit retourne 1 si des vulnérabilités sont trouvées (c'est normal)
+          # On continue même si le scan trouve des vulnérabilités
+
+          # Afficher un résumé dans les logs
+          if [ -f "$REPORT_FILE" ] && [ -s "$REPORT_FILE" ]; then
+            echo "📊 Audit report generated: $REPORT_FILE"
+            
+            # Vérifier que le JSON est valide
+            if ! jq empty "$REPORT_FILE" 2>/dev/null; then
+              echo "⚠️ Invalid JSON in report file"
+              echo "critical_count=0" >> $GITHUB_OUTPUT
+              echo "high_count=0" >> $GITHUB_OUTPUT
+              echo "medium_count=0" >> $GITHUB_OUTPUT
+              echo "low_count=0" >> $GITHUB_OUTPUT
+              echo "report_file=" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+            
+            # Compter les vulnérabilités par sévérité
+            # Utiliser des valeurs par défaut si la structure JSON est différente
+            CRITICAL=$(jq '[.vulnerabilities[]? | select(.severity == "CRITICAL")] | length' "$REPORT_FILE" 2>/dev/null || echo "0")
+            HIGH=$(jq '[.vulnerabilities[]? | select(.severity == "HIGH")] | length' "$REPORT_FILE" 2>/dev/null || echo "0")
+            MEDIUM=$(jq '[.vulnerabilities[]? | select(.severity == "MEDIUM")] | length' "$REPORT_FILE" 2>/dev/null || echo "0")
+            LOW=$(jq '[.vulnerabilities[]? | select(.severity == "LOW")] | length' "$REPORT_FILE" 2>/dev/null || echo "0")
+            
+            # S'assurer que les valeurs sont numériques
+            CRITICAL=${CRITICAL:-0}
+            HIGH=${HIGH:-0}
+            MEDIUM=${MEDIUM:-0}
+            LOW=${LOW:-0}
+            
+            echo "📈 Vulnerabilities found:"
+            echo "  - CRITICAL: $CRITICAL"
+            echo "  - HIGH: $HIGH"
+            echo "  - MEDIUM: $MEDIUM"
+            echo "  - LOW: $LOW"
+            
+            # Sauvegarder les compteurs pour les steps suivants
+            echo "critical_count=$CRITICAL" >> $GITHUB_OUTPUT
+            echo "high_count=$HIGH" >> $GITHUB_OUTPUT
+            echo "medium_count=$MEDIUM" >> $GITHUB_OUTPUT
+            echo "low_count=$LOW" >> $GITHUB_OUTPUT
+            echo "report_file=$REPORT_FILE" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ No vulnerabilities found or report generation failed"
+            echo "critical_count=0" >> $GITHUB_OUTPUT
+            echo "high_count=0" >> $GITHUB_OUTPUT
+            echo "medium_count=0" >> $GITHUB_OUTPUT
+            echo "low_count=0" >> $GITHUB_OUTPUT
+            echo "report_file=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload audit report
+        if: steps.scan.outputs.report_file != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-report-${{ matrix.requirements-file }}
+          path: ${{ steps.scan.outputs.report_file }}
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Fail if critical vulnerabilities found
+        run: |
+          CRITICAL=${{ steps.scan.outputs.critical_count || '0' }}
+          HIGH=${{ steps.scan.outputs.high_count || '0' }}
+
+          # Convertir en entier pour la comparaison
+          CRITICAL=$((CRITICAL + 0))
+          HIGH=$((HIGH + 0))
+
+          if [ "$CRITICAL" -gt 0 ]; then
+            echo "🚨 CRITICAL vulnerabilities found in ${{ matrix.requirements-file }}!"
+            echo "Please review the audit report and update dependencies."
+            echo "Download the report from workflow artifacts to see details."
+            exit 1
+          fi
+
+          if [ "$HIGH" -gt 0 ]; then
+            echo "⚠️ HIGH severity vulnerabilities found in ${{ matrix.requirements-file }}"
+            echo "Consider reviewing and updating dependencies."
+            echo "Download the report from workflow artifacts to see details."
+            # Ne pas faire échouer le build pour HIGH, seulement avertir
+          fi
+
+          if [ "$CRITICAL" -eq 0 ] && [ "$HIGH" -eq 0 ]; then
+            echo "✅ No critical or high severity vulnerabilities found in ${{ matrix.requirements-file }}"
+          fi
+
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request' && steps.scan.outputs.report_file != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const reportFile = '${{ steps.scan.outputs.report_file }}';
+            const criticalCount = parseInt('${{ steps.scan.outputs.critical_count }}') || 0;
+            const highCount = parseInt('${{ steps.scan.outputs.high_count }}') || 0;
+            const mediumCount = parseInt('${{ steps.scan.outputs.medium_count }}') || 0;
+            const lowCount = parseInt('${{ steps.scan.outputs.low_count }}') || 0;
+
+            let comment = `## 🔍 Security Scan Results: ${{ matrix.requirements-file }}\n\n`;
+
+            if (criticalCount > 0) {
+              comment += `🚨 **CRITICAL**: ${criticalCount} vulnerabilities found\n`;
+            }
+            if (highCount > 0) {
+              comment += `⚠️ **HIGH**: ${highCount} vulnerabilities found\n`;
+            }
+            if (mediumCount > 0) {
+              comment += `📊 **MEDIUM**: ${mediumCount} vulnerabilities found\n`;
+            }
+            if (lowCount > 0) {
+              comment += `ℹ️ **LOW**: ${lowCount} vulnerabilities found\n`;
+            }
+
+            if (criticalCount === 0 && highCount === 0 && mediumCount === 0 && lowCount === 0) {
+              comment += `✅ No vulnerabilities found!\n`;
+            } else {
+              comment += `\n📥 Download the full audit report from the workflow artifacts.\n`;
+            }
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  summary:
+    name: Security Scan Summary
+    runs-on: ubuntu-latest
+    needs: scan-dependencies
+    if: always()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all audit reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: audit-report-*
+          merge-multiple: true
+          path: audit-reports
+
+      - name: Generate summary
+        run: |
+          echo "## 🔍 Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -d "audit-reports" ]; then
+            for report in audit-reports/*.json; do
+              if [ -f "$report" ]; then
+                filename=$(basename "$report")
+                echo "#### $filename" >> $GITHUB_STEP_SUMMARY
+                
+                CRITICAL=$(jq '[.vulnerabilities[]? | select(.severity == "CRITICAL")] | length' "$report" 2>/dev/null || echo "0")
+                HIGH=$(jq '[.vulnerabilities[]? | select(.severity == "HIGH")] | length' "$report" 2>/dev/null || echo "0")
+                MEDIUM=$(jq '[.vulnerabilities[]? | select(.severity == "MEDIUM")] | length' "$report" 2>/dev/null || echo "0")
+                LOW=$(jq '[.vulnerabilities[]? | select(.severity == "LOW")] | length' "$report" 2>/dev/null || echo "0")
+                
+                echo "- 🚨 **CRITICAL**: $CRITICAL" >> $GITHUB_STEP_SUMMARY
+                echo "- ⚠️ **HIGH**: $HIGH" >> $GITHUB_STEP_SUMMARY
+                echo "- 📊 **MEDIUM**: $MEDIUM" >> $GITHUB_STEP_SUMMARY
+                echo "- ℹ️ **LOW**: $LOW" >> $GITHUB_STEP_SUMMARY
+                echo "" >> $GITHUB_STEP_SUMMARY
+              fi
+            done
+          else
+            echo "No audit reports found." >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "📥 Download full reports from workflow artifacts." >> $GITHUB_STEP_SUMMARY
+
+  semgrep-scan:
+    name: Semgrep Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep scan
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/python
+            p/owasp-top-ten
+            p/r2c-security-audit
+          generateSarif: "1"
+          outputFormat: "sarif"
+          outputFile: "semgrep-results.sarif"
+        continue-on-error: true
+
+      - name: Upload Semgrep results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: "semgrep-results.sarif"
+          category: "semgrep"
+
+      - name: Upload Semgrep report as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-results
+          path: semgrep-results.sarif
+          retention-days: 30
+          if-no-files-found: ignore

@@ -82,8 +82,8 @@ export const DateSelectionModal: React.FC<DateSelectionModalProps> = ({
                           item.isToday
                             ? "sunny-outline"
                             : item.isTomorrow
-                            ? "partly-sunny-outline"
-                            : "calendar-outline"
+                              ? "partly-sunny-outline"
+                              : "calendar-outline"
                         }
                         size={18}
                         color={modalPalette.iconColor}
@@ -98,8 +98,8 @@ export const DateSelectionModal: React.FC<DateSelectionModalProps> = ({
                         {item.isToday
                           ? "Aujourd'hui"
                           : item.isTomorrow
-                          ? "Demain"
-                          : ""}
+                            ? "Demain"
+                            : ""}
                       </Text>
                     </View>
                   </View>
@@ -131,25 +131,26 @@ export const DateSelectionModal: React.FC<DateSelectionModalProps> = ({
   );
 };
 
+// ✅ Palette professionnelle claire cohérente avec le dashboard
 const modalPalette = {
   backdrop: "rgba(5,22,16,0.82)",
-  cardBackground: "#08211A",
-  cardBorder: "rgba(46,128,94,0.4)",
-  title: "#E6F2EA",
-  subtitle: "rgba(184,214,198,0.76)",
-  optionBackground: "rgba(10,34,26,0.9)",
-  optionBorder: "rgba(59,143,105,0.24)",
-  optionActiveBackground: "rgba(16,58,44,0.95)",
-  optionActiveBorder: "rgba(78,214,160,0.55)",
-  optionLabel: "#F4FFFA",
-  optionDescription: "rgba(184,214,198,0.7)",
-  iconCircle: "rgba(60,148,109,0.24)",
-  iconBorder: "rgba(62,155,116,0.36)",
-  check: "#4ADE80",
-  chevron: "rgba(180,218,201,0.7)",
-  cancelBackground: "rgba(255,255,255,0.06)",
-  cancelText: "rgba(214,236,224,0.92)",
-  iconColor: "#F4FFFA",
+  cardBackground: "#FFFFFF",
+  cardBorder: "rgba(15,54,43,0.08)",
+  title: "#15362B",
+  subtitle: "#5F7369",
+  optionBackground: "#FFFFFF",
+  optionBorder: "rgba(15,54,43,0.08)",
+  optionActiveBackground: "rgba(10,127,89,0.06)",
+  optionActiveBorder: "#0A7F59",
+  optionLabel: "#15362B",
+  optionDescription: "#5F7369",
+  iconCircle: "rgba(10,127,89,0.12)",
+  iconBorder: "rgba(10,127,89,0.2)",
+  check: "#0A7F59",
+  chevron: "#91A59D",
+  cancelBackground: "#F5F7F6",
+  cancelText: "#5F7369",
+  iconColor: "#0A7F59",
 };
 
 const styles = StyleSheet.create({
@@ -165,28 +166,29 @@ const styles = StyleSheet.create({
     maxWidth: 380,
     backgroundColor: modalPalette.cardBackground,
     borderRadius: 24,
-    padding: 20,
+    padding: 24,
     borderWidth: 1,
     borderColor: modalPalette.cardBorder,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.35,
+    shadowColor: "rgba(15,54,43,0.12)",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 1,
     shadowRadius: 24,
-    elevation: 12,
+    elevation: 8,
   },
   header: {
     marginBottom: 20,
   },
   title: {
     color: modalPalette.title,
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "700",
+    letterSpacing: 0.2,
   },
   subtitle: {
-    marginTop: 6,
+    marginTop: 8,
     color: modalPalette.subtitle,
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 20,
   },
   list: {
     maxHeight: 320,
@@ -194,17 +196,27 @@ const styles = StyleSheet.create({
   dateOption: {
     borderRadius: 18,
     backgroundColor: modalPalette.optionBackground,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
     borderWidth: 1,
     borderColor: modalPalette.optionBorder,
     flexDirection: "row",
     alignItems: "center",
     gap: 16,
+    shadowColor: "rgba(15,54,43,0.04)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    elevation: 1,
   },
   dateOptionActive: {
     borderColor: modalPalette.optionActiveBorder,
+    borderWidth: 2,
     backgroundColor: modalPalette.optionActiveBackground,
+    shadowColor: modalPalette.optionActiveBorder,
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 3,
   },
   optionLeft: {
     flexDirection: "row",
@@ -216,34 +228,39 @@ const styles = StyleSheet.create({
     color: modalPalette.optionLabel,
     fontSize: 16,
     fontWeight: "700",
+    letterSpacing: 0.2,
   },
   optionDescription: {
-    marginTop: 2,
+    marginTop: 4,
     color: modalPalette.optionDescription,
     fontSize: 13,
+    fontWeight: "500",
   },
   iconCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: modalPalette.iconCircle,
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: modalPalette.iconBorder,
   },
   cancelButton: {
-    marginTop: 16,
+    marginTop: 20,
     alignSelf: "stretch",
-    paddingVertical: 12,
-    borderRadius: 16,
+    paddingVertical: 14,
+    borderRadius: 18,
     backgroundColor: modalPalette.cancelBackground,
+    borderWidth: 1,
+    borderColor: modalPalette.optionBorder,
     alignItems: "center",
   },
   cancelLabel: {
     color: modalPalette.cancelText,
     fontSize: 15,
-    fontWeight: "600",
+    fontWeight: "700",
+    letterSpacing: 0.2,
   },
 });
 

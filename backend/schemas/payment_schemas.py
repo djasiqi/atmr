@@ -1,6 +1,10 @@
 """✅ Schemas Marshmallow pour validation des endpoints payments."""
 
-from marshmallow import Schema, fields, validate
+from marshmallow import (  # pyright: ignore[reportMissingImports]
+    Schema,
+    fields,
+    validate,
+)
 
 
 class PaymentCreateSchema(Schema):

@@ -3,12 +3,19 @@
 import logging
 import os
 
-from flask import request
-from flask_restx import Namespace, Resource, fields
+from flask import request  # pyright: ignore[reportMissingImports]
+from flask_restx import (  # pyright: ignore[reportMissingImports]
+    Namespace,
+    Resource,
+    fields,
+)
 
 from config import Config
 from ext import redis_client
+from schemas.osrm_schemas import OSRMRouteQuerySchema
+from schemas.validation_utils import validate_request
 from services.osrm_client import route_info
+from shared.error_handlers import APIErrorHandler
 
 logger = logging.getLogger(__name__)
 
@@ -43,14 +50,24 @@ class OSRMRoute(Resource):
     def get(self):
         """Obtient l'itinéraire réel entre deux points via OSRM."""
         try:
-            # Récupérer les paramètres
-            pickup_lat = request.args.get("pickup_lat", type=float)
-            pickup_lon = request.args.get("pickup_lon", type=float)
-            dropoff_lat = request.args.get("dropoff_lat", type=float)
-            dropoff_lon = request.args.get("dropoff_lon", type=float)
+            # ✅ Validation centralisée avec Marshmallow
+            from marshmallow import (  # pyright: ignore[reportMissingImports]
+                ValidationError,
+            )
 
-            if None in (pickup_lat, pickup_lon, dropoff_lat, dropoff_lon):
-                return {"error": "Paramètres manquants"}, 400
+            try:
+                validated_data = validate_request(
+                    OSRMRouteQuerySchema(), dict(request.args)
+                )
+            except ValidationError as e:
+                # handle_exception gère déjà ValidationError avec les messages détaillés
+                return APIErrorHandler.handle_exception(e, logger)
+
+            # Extraction des valeurs validées
+            pickup_lat = validated_data["pickup_lat"]
+            pickup_lon = validated_data["pickup_lon"]
+            dropoff_lat = validated_data["dropoff_lat"]
+            dropoff_lon = validated_data["dropoff_lon"]
 
             # URL du serveur OSRM (priorité Config -> env -> fallback service docker)
             config_base = getattr(Config, "UD_OSRM_URL", None)
@@ -75,12 +92,14 @@ class OSRMRoute(Resource):
 
             # Extraire les coordonnées de la géométrie
             route_coords = []
-            if result.get("geometry") and result["geometry"].get("coordinates"):
-                # OSRM retourne [lon, lat], on convertit en [lat, lon] pour
-                # Leaflet
-                route_coords = [
-                    [coord[1], coord[0]] for coord in result["geometry"]["coordinates"]
-                ]
+            # ✅ P1: Protéger accès dictionnaires pour éviter KeyError
+            geometry = result.get("geometry")
+            if geometry and isinstance(geometry, dict):
+                coordinates = geometry.get("coordinates")
+                if coordinates:
+                    # OSRM retourne [lon, lat], on convertit en [lat, lon] pour
+                    # Leaflet
+                    route_coords = [[coord[1], coord[0]] for coord in coordinates]
 
             return {
                 "duration": result.get("duration", 0),
@@ -90,4 +109,4 @@ class OSRMRoute(Resource):
 
         except Exception as e:
             logger.error("Erreur OSRM route: %s", e)
-            return {"error": str(e)}, 500
+            return APIErrorHandler.handle_exception(e, logger)

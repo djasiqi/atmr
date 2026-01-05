@@ -6,7 +6,7 @@ Métriques pour monitorer les événements de sécurité :
 - Événements de sécurité (tentatives échouées, accès refusés)
 """
 
-from prometheus_client import Counter
+from prometheus_client import Counter, Gauge  # pyright: ignore[reportMissingImports]
 
 # ========================
 # Métriques d'authentification
@@ -79,4 +79,54 @@ security_rate_limit_hits_total = Counter(
     "security_rate_limit_hits_total",
     "Nombre total de hits de rate limiting",
     ["endpoint"],  # endpoint: "/auth/login", "/api/...", etc.
+)
+
+# Compteur des rejets de tokens avec audience invalide
+security_invalid_audience_total = Counter(
+    "security_invalid_audience_total",
+    "Nombre total de tokens rejetés pour audience invalide",
+    ["reason"],  # reason: "missing", "wrong_audience"
+)
+
+# ✅ S3: Compteur des invalidations de tokens
+security_token_invalidations_total = Counter(
+    "security_token_invalidations_total",
+    "Nombre total d'invalidations de tokens",
+    ["reason"],  # reason: "logout", "password_change", "revoke_all", "admin_revoke"
+)
+
+# ✅ S3: Compteur des tentatives d'accès non autorisé (401/403)
+security_unauthorized_access_total = Counter(
+    "security_unauthorized_access_total",
+    "Nombre total de tentatives d'accès non autorisé",
+    ["status_code", "endpoint"],  # status_code: "401", "403", endpoint: "/api/..."
+)
+
+# ✅ S3: Gauge pour suivre les IPs suspectes (tentatives répétées)
+security_suspicious_ips = Gauge(
+    "security_suspicious_ips",
+    "Nombre d'IPs suspectes détectées",
+)
+
+# ========================
+# ✅ PHASE 3: Métriques de révocation et rotation
+# ========================
+
+# Compteur des tokens révoqués (par type)
+tokens_revoked_total = Counter(
+    "security_tokens_revoked_total",
+    "Nombre total de tokens révoqués",
+    ["token_type"],  # token_type: "access_token" ou "refresh_token"
+)
+
+# Compteur des rotations de refresh tokens
+tokens_rotation_total = Counter(
+    "security_tokens_rotated_total",
+    "Nombre total de rotations de refresh tokens",
+)
+
+# Compteur des échecs de validation CSRF
+csrf_validation_failures_total = Counter(
+    "security_csrf_validation_failures_total",
+    "Nombre total d'échecs de validation CSRF",
 )

@@ -1,18 +1,31 @@
 from __future__ import annotations
 
-from datetime import datetime
+import logging
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
-from flask import current_app, request
-from flask_jwt_extended import get_jwt_identity, jwt_required
-from flask_restx import Namespace, Resource
-from sqlalchemy.orm import joinedload
-from werkzeug.utils import secure_filename
+from flask import current_app, request  # pyright: ignore[reportMissingImports]
+from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
+    get_jwt_identity,
+    jwt_required,
+)
+from flask_restx import Namespace, Resource  # pyright: ignore[reportMissingImports]
+from werkzeug.utils import secure_filename  # pyright: ignore[reportMissingImports]
 
-from ext import app_logger  # si tu utilises un logger structuré
-from models import Company, Message, User, UserRole
+from models import UserRole
+from repositories.company_repository import CompanyRepository
+from repositories.message_repository import MessageRepository
+from repositories.user_repository import UserRepository
 from services.clamav_service import scan_bytes
+from shared.error_handlers import APIErrorHandler
+
+logger = logging.getLogger(__name__)
+
+# Initialisation des repositories
+user_repo = UserRepository()
+message_repo = MessageRepository()
+company_repo = CompanyRepository()
 
 messages_ns = Namespace("messages", description="Messagerie entreprise")
 
@@ -73,7 +86,11 @@ def _validate_file_upload(
     # Validation taille
     size_bytes = len(file_bytes)
     if size_bytes > MAX_FILE_SIZE_MB * 1024 * 1024:
-        return ({"error": f"Fichier trop volumineux (max {MAX_FILE_SIZE_MB} Mo)."}, 400)
+        error_response, status_code = APIErrorHandler.handle_validation_error(
+            f"Fichier trop volumineux (max {MAX_FILE_SIZE_MB} Mo).",
+            logger_instance=logger,
+        )
+        return (error_response, status_code)
 
     # Validation MIME type
     mime_type = file.content_type or ""
@@ -101,8 +118,12 @@ def _validate_file_upload(
     # Scan antivirus ClamAV
     is_safe, error_msg = scan_bytes(file_bytes)
     if not is_safe:
-        app_logger.warning(f"🦠 Fichier rejeté par ClamAV: {filename} - {error_msg}")
-        return ({"error": error_msg or "Fichier infecté - upload refusé"}, 400)
+        logger.warning("🦠 Fichier rejeté par ClamAV: %s - %s", filename, error_msg)
+        error_response, status_code = APIErrorHandler.handle_validation_error(
+            error_msg or "Fichier infecté - upload refusé",
+            logger_instance=logger,
+        )
+        return (error_response, status_code)
 
     return (None, 0)
 
@@ -118,17 +139,10 @@ class MessagesList(Resource):
         user_public_id = get_jwt_identity()
 
         # 🔍 Chargement de l'utilisateur + relations (avec cast pour Pylance)
-        user = (
-            User.query.options(
-                joinedload(cast("Any", User.driver)),
-                joinedload(cast("Any", User.company)),
-            )
-            .filter_by(public_id=user_public_id)
-            .first()
-        )
+        user = user_repo.find_by_public_id_with_driver_and_company(user_public_id)
         if not user:
-            app_logger.error(
-                f"❌ Utilisateur introuvable pour public_id: {user_public_id}"
+            logger.error(
+                "❌ Utilisateur introuvable pour public_id: %s", user_public_id
             )
             result = {"error": "Utilisateur introuvable"}
             status_code = 404
@@ -159,13 +173,12 @@ class MessagesList(Resource):
                     status_code = 400
                 else:
                     # 🔎 Construction de la requête
-                    query = Message.query.filter_by(company_id=company_id)
+                    dt_before = None
                     if before:
                         try:
                             # support basique ISO8601 avec 'Z'
                             before_str = before.rstrip("Z")
                             dt_before = datetime.fromisoformat(before_str)
-                            query = query.filter(Message.timestamp < dt_before)
                         except ValueError:
                             result = {"error": "Timestamp invalide"}
                             status_code = 400
@@ -173,20 +186,18 @@ class MessagesList(Resource):
                     if result is None:
                         # 🔄 Récupération des messages (avec relations préchargées)
                         messages = (
-                            query.options(
-                                joinedload(cast("Any", Message.sender)),
-                                joinedload(cast("Any", Message.receiver)),
+                            message_repo.find_models_by_company_with_eager_loading(
+                                company_id=company_id,
+                                before_timestamp=dt_before,
+                                limit=limit,
                             )
-                            .order_by(Message.timestamp.desc())
-                            .limit(limit)
-                            .all()
                         )
 
                         # ↩️ On remet en ordre ascendant
                         messages.reverse()
 
                         # Précharger l'entreprise (évite une requête par message)
-                        company = Company.query.get(company_id)
+                        company = company_repo.find_model_by_id(company_id)
                         company_name = (
                             company.name
                             if company and getattr(company, "name", None)
@@ -233,12 +244,12 @@ class MessagesList(Resource):
 
                             results.append(base)
 
-                        app_logger.info(
-                            (
-                                f"📨 {len(results)} messages "
-                                f"(limit={limit}, before={before}) "
-                                f"pour company_id={company_id}"
-                            )
+                        logger.info(
+                            "📨 %s messages (limit=%s, before=%s) pour company_id=%s",
+                            len(results),
+                            limit,
+                            before,
+                            company_id,
                         )
                         result = results
 
@@ -263,7 +274,7 @@ class MessageUpload(Resource):
         - file_type: "image" ou "pdf"
         """
         user_public_id = get_jwt_identity()
-        user = User.query.filter_by(public_id=user_public_id).first()
+        user = user_repo.find_by_public_id_first(user_public_id)
 
         # Validation utilisateur et rôle
         error_response = None
@@ -317,8 +328,6 @@ class MessageUpload(Resource):
         chat_dir.mkdir(parents=True, exist_ok=True)
 
         # Générer un nom de fichier unique (timestamp + nom original sécurisé)
-        from datetime import UTC, datetime
-
         timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S_%f")
         ext = (file.filename or "").rsplit(".", 1)[1].lower()
         safe_name = secure_filename(file.filename or "file")
@@ -345,11 +354,12 @@ class MessageUpload(Resource):
         elif is_pdf_file:
             response["file_type"] = "pdf"
 
-        app_logger.info(
-            (
-                f"📎 Fichier uploadé: {file.filename} ({size_bytes} bytes) "
-                f"-> {public_url} par user {user_public_id}"
-            )
+        logger.info(
+            "📎 Fichier uploadé: %s (%s bytes) -> %s par user %s",
+            file.filename,
+            size_bytes,
+            public_url,
+            user_public_id,
         )
 
         return response, 200

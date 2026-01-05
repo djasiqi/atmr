@@ -9,8 +9,8 @@ import logging
 from datetime import datetime
 from typing import Any
 
-import numpy as np
-import pandas as pd
+import numpy as np  # pyright: ignore[reportMissingImports]
+import pandas as pd  # pyright: ignore[reportMissingImports]
 
 logger = logging.getLogger(__name__)
 

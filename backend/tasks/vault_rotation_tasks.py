@@ -21,7 +21,7 @@ try:
 except ImportError:
     HVAC_AVAILABLE = False
 
-from celery import Task
+from celery import Task  # pyright: ignore[reportMissingImports]
 
 from celery_app import celery
 
@@ -136,8 +136,9 @@ def rotate_jwt_secret(self: Task) -> dict[str, Any]:
 
         new_secret = secrets.token_urlsafe(64)  # 64 bytes = ~86 caractères URL-safe
 
-        # Lire l'ancienne clé pour référence (optionnel)
+        # Lire l'ancienne clé pour la stocker comme legacy
         old_secret = None
+        legacy_keys = []
         try:
             old_secret_response = (
                 vault_client._client.secrets.kv.v2.read_secret_version(
@@ -145,13 +146,37 @@ def rotate_jwt_secret(self: Task) -> dict[str, Any]:
                 )
             )
             old_secret = old_secret_response["data"]["data"].get("value")
+
+            # ✅ S3: Récupérer les legacy keys existantes
+            try:
+                legacy_keys_response = (
+                    vault_client._client.secrets.kv.v2.read_secret_version(
+                        path=f"atmr/data/{env_path}/jwt/legacy_secret_keys"
+                    )
+                )
+                legacy_keys = legacy_keys_response["data"]["data"].get("keys", [])
+            except Exception:
+                pass  # Pas de legacy keys existantes
         except Exception:
             pass  # Première rotation, pas d'ancienne clé
 
-        # Stocker la nouvelle clé dans Vault
+        # ✅ S3: Stocker la nouvelle clé dans Vault
         vault_client._client.secrets.kv.v2.create_or_update_secret(
             path=f"atmr/data/{env_path}/jwt/secret_key", secret={"value": new_secret}
         )
+
+        # ✅ S3: Ajouter l'ancienne clé aux legacy keys si présente
+        if old_secret and old_secret not in legacy_keys:
+            legacy_keys.insert(0, old_secret)  # Ajouter au début
+            # Limiter à 3 clés legacy max (garder les plus récentes)
+            legacy_keys = legacy_keys[:3]
+
+        # ✅ S3: Stocker les legacy keys dans Vault
+        if legacy_keys:
+            vault_client._client.secrets.kv.v2.create_or_update_secret(
+                path=f"atmr/data/{env_path}/jwt/legacy_secret_keys",
+                secret={"keys": legacy_keys},
+            )
 
         logger.info(
             "[4.1 Vault Rotation] ✅ JWT secret roté avec succès (env=%s)", env_path
@@ -166,6 +191,7 @@ def rotate_jwt_secret(self: Task) -> dict[str, Any]:
             "rotated_at": datetime.now(UTC).isoformat(),
             "next_rotation_days": JWT_ROTATION_INTERVAL_DAYS,
             "old_secret_present": old_secret is not None,
+            "legacy_keys_count": len(legacy_keys),
         }
 
         # ✅ Enregistrer la rotation dans le monitoring
@@ -179,6 +205,7 @@ def rotate_jwt_secret(self: Task) -> dict[str, Any]:
                 metadata={
                     "next_rotation_days": JWT_ROTATION_INTERVAL_DAYS,
                     "old_secret_present": old_secret is not None,
+                    "legacy_keys_count": len(legacy_keys),
                 },
                 task_id=self.request.id if hasattr(self, "request") else None,
             )
@@ -701,7 +728,7 @@ def _notify_rotation_failure(results: dict[str, Any]) -> None:
         results: Dictionnaire des résultats de rotation
     """
     try:
-        import sentry_sdk
+        import sentry_sdk  # pyright: ignore[reportMissingImports]
 
         # Envoyer à Sentry si configuré
         failed_secrets = [

@@ -1,35 +1,57 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, TouchableOpacity, Alert } from "react-native";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import type { Booking as Mission } from "@/services/api";
+import type { Booking as Mission, BookingStatus } from "@/services/api";
 import { styles } from "@/styles/missionCardStyles";
+import { styles as groupStyles } from "@/styles/missionGroupStyles";
 import { updateTripStatus } from "@/services/api";
 import CancelJustificationModal from "./CancelJustificationModal";
 
 type Props = {
   mission: Mission | null;
+  missionNumber?: number; // Numéro de la mission dans le groupe
+  isGrouped?: boolean; // true si la mission fait partie d'un groupe
   onCall?: () => void;
   onNavigate?: (destination: string) => void;
-  onComplete?: () => void;
+  onComplete?: (missionId: number) => void; // Prend maintenant l'ID de la mission
   onPressDetails?: () => void;
+  onStatusChange?: (missionId: number, status: BookingStatus) => void;
 };
 
 interface MissionCardType extends React.FC<Props> {
   EmptyState: React.FC;
 }
 
+// ✅ Composant visuel réutilisable lorsqu'il n'y a pas de mission (style épuré)
+const EmptyStateComponent: React.FC = () => (
+  <View style={styles.containerEnhanced}>
+    <Text style={{ fontSize: 18, textAlign: "center", color: "#15362B", fontWeight: "600", letterSpacing: 0.2 }}>
+      🚗 En attente de mission
+    </Text>
+    <Text
+      style={{ fontSize: 15, textAlign: "center", color: "#5F7369", marginTop: 10, lineHeight: 22 }}
+    >
+      Vous serez notifié dès qu'une mission vous sera assignée.
+    </Text>
+  </View>
+);
+
 const MissionCard: MissionCardType = ({
   mission,
+  missionNumber,
+  isGrouped = false,
   onCall,
   onNavigate,
   onComplete,
   onPressDetails,
+  onStatusChange,
 }) => {
   const [status, setStatus] = useState<Mission["status"] | undefined>(
     mission?.status
   );
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
   const [releaseModalVisible, setReleaseModalVisible] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   useEffect(() => {
     setStatus(mission?.status);
@@ -56,12 +78,14 @@ const MissionCard: MissionCardType = ({
     newStatus: "en_route" | "in_progress" | "completed" | "canceled",
     cancelReason?: "CANCEL" | "RELEASE" | string
   ) => {
-    if (!mission) return;
+    if (!mission || isUpdatingStatus) return;
     try {
+      setIsUpdatingStatus(true);
       await updateTripStatus(mission.id, newStatus, cancelReason as any);
       setStatus(newStatus);
       Object.assign(mission, { status: newStatus });
-      if (newStatus === "completed") onComplete?.();
+      onStatusChange?.(mission.id, newStatus);
+      if (newStatus === "completed") onComplete?.(mission.id);
       if (newStatus === "canceled") {
         // ✅ Mission annulée : notifier selon le type
         if (cancelReason === "RELEASE") {
@@ -83,6 +107,8 @@ const MissionCard: MissionCardType = ({
         "Erreur",
         `Impossible de mettre à jour le statut : ${errorMsg}`
       );
+    } finally {
+      setIsUpdatingStatus(false);
     }
   };
 
@@ -97,25 +123,41 @@ const MissionCard: MissionCardType = ({
     setReleaseModalVisible(false);
   };
 
-  // Gérer le modal de libération avec un hook
+  const handleReleasePress = () => {
+    console.log("[MissionCard] Bouton Libérer pressé");
+    Alert.alert(
+      "Libérer la course",
+      "Êtes-vous sûr de vouloir libérer cette course pour réassignation ?",
+      [
+        {
+          text: "Non",
+          style: "cancel",
+          onPress: () => {
+            console.log("[MissionCard] Libération annulée");
+            setReleaseModalVisible(false);
+          },
+        },
+        {
+          text: "Oui, libérer",
+          style: "default",
+          onPress: () => {
+            console.log("[MissionCard] Confirmation de libération");
+            handleReleaseConfirm();
+          },
+        },
+      ],
+      { cancelable: true, onDismiss: () => setReleaseModalVisible(false) }
+    );
+  };
+
+  // Gérer le modal de libération avec un hook (fallback si appelé depuis ailleurs)
   React.useEffect(() => {
     if (releaseModalVisible) {
-      Alert.alert(
-        "Libérer la course",
-        "Êtes-vous sûr de vouloir libérer cette course pour réassignation ?",
-        [
-          {
-            text: "Non",
-            style: "cancel",
-            onPress: () => setReleaseModalVisible(false),
-          },
-          {
-            text: "Oui, libérer",
-            style: "default",
-            onPress: handleReleaseConfirm,
-          },
-        ]
-      );
+      // Délai pour éviter les doubles appels
+      const timer = setTimeout(() => {
+        handleReleasePress();
+      }, 100);
+      return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [releaseModalVisible]);
@@ -133,7 +175,7 @@ const MissionCard: MissionCardType = ({
     status !== "canceled";
 
   if (!mission) {
-    return <MissionCard.EmptyState />;
+    return <EmptyStateComponent />;
   }
 
   // DEBUG : Afficher les champs de durée
@@ -152,7 +194,19 @@ const MissionCard: MissionCardType = ({
   );
 
   return (
-    <View style={styles.containerEnhanced}>
+    <View
+      style={[
+        styles.containerEnhanced,
+        isGrouped && groupStyles.groupedCardBorder,
+      ]}
+    >
+      {/* Badge numéroté pour toutes les missions (utile pour référence) */}
+      {missionNumber && (
+        <View style={groupStyles.missionNumberBadge}>
+          <Text style={groupStyles.missionNumberText}>{missionNumber}</Text>
+        </View>
+      )}
+
       {/* Ligne 1 : Nom et Statut */}
       <View style={styles.headerRowEnhanced}>
         <View style={{ flex: 1 }}>
@@ -293,6 +347,7 @@ const MissionCard: MissionCardType = ({
           <TouchableOpacity
             onPress={() => onNavigate(getCurrentDestination())}
             style={styles.actionItemEnhanced}
+            disabled={isUpdatingStatus}
           >
             <MaterialIcons name="navigation" size={18} color="white" />
             <Text style={styles.actionLabel}>GPS</Text>
@@ -303,6 +358,7 @@ const MissionCard: MissionCardType = ({
           <TouchableOpacity
             onPress={() => handleStatusUpdate("en_route")}
             style={styles.actionItemEnhanced}
+            disabled={isUpdatingStatus}
           >
             <Ionicons name="walk" size={18} color="white" />
             <Text style={styles.actionLabel}>En route</Text>
@@ -313,6 +369,7 @@ const MissionCard: MissionCardType = ({
           <TouchableOpacity
             onPress={() => handleStatusUpdate("in_progress")}
             style={styles.actionItemEnhanced}
+            disabled={isUpdatingStatus}
           >
             <Ionicons name="person" size={18} color="white" />
             <Text style={styles.actionLabel}>À bord</Text>
@@ -321,7 +378,14 @@ const MissionCard: MissionCardType = ({
 
         {status === "in_progress" && (
           <TouchableOpacity
-            onPress={() => handleStatusUpdate("completed")}
+            onPress={() => {
+              // Ouvrir le modal de confirmation au lieu de terminer directement
+              if (mission && onComplete) {
+                onComplete(mission.id);
+              } else {
+                handleStatusUpdate("completed");
+              }
+            }}
             style={styles.actionItemEnhanced}
           >
             <Ionicons name="checkmark-done" size={18} color="white" />
@@ -348,7 +412,8 @@ const MissionCard: MissionCardType = ({
       {(status === "assigned" || status === "en_route") && (
         <View style={styles.actionsRowSecondary}>
           <TouchableOpacity
-            onPress={() => setReleaseModalVisible(true)}
+            onPress={handleReleasePress}
+            activeOpacity={0.7}
             style={[
               styles.actionItemEnhanced,
               { backgroundColor: "#6c757d", flex: 1, maxWidth: "48%" },
@@ -381,18 +446,7 @@ const MissionCard: MissionCardType = ({
   );
 };
 
-// ✅ Composant visuel réutilisable lorsqu'il n'y a pas de mission (style épuré)
-MissionCard.EmptyState = () => (
-  <View style={styles.containerEnhanced}>
-    <Text style={{ fontSize: 18, textAlign: "center", color: "#15362B", fontWeight: "600", letterSpacing: 0.2 }}>
-      🚗 En attente de mission
-    </Text>
-    <Text
-      style={{ fontSize: 15, textAlign: "center", color: "#5F7369", marginTop: 10, lineHeight: 22 }}
-    >
-      Vous serez notifié dès qu'une mission vous sera assignée.
-    </Text>
-  </View>
-);
+// ✅ Attacher EmptyStateComponent comme propriété statique pour compatibilité
+MissionCard.EmptyState = EmptyStateComponent;
 
 export default MissionCard;

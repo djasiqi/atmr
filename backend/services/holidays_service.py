@@ -3,7 +3,7 @@ from datetime import date
 from functools import cache
 from typing import Set
 
-from holidays import country_holidays
+from holidays import country_holidays  # pyright: ignore[reportMissingImports]
 
 
 @cache

@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 import re
 from decimal import Decimal
-from typing import Optional, cast
+from typing import cast
 
 from sqlalchemy import (
     Boolean,
@@ -61,7 +61,7 @@ class Client(db.Model):
     user_id: Mapped[int] = mapped_column(
         ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    company_id: Mapped[Optional[int]] = mapped_column(
+    company_id: Mapped[int | None] = mapped_column(
         ForeignKey("company.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
@@ -73,31 +73,23 @@ class Client(db.Model):
     )
 
     # Coordonnées de facturation/contacts
-    billing_address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    billing_lat: Mapped[Optional[Decimal]] = mapped_column(
-        Numeric(10, 7), nullable=True
-    )
-    billing_lon: Mapped[Optional[Decimal]] = mapped_column(
-        Numeric(10, 7), nullable=True
-    )
-    contact_email: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    contact_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    billing_address: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    billing_lat: Mapped[Decimal | None] = mapped_column(Numeric(10, 7), nullable=True)
+    billing_lon: Mapped[Decimal | None] = mapped_column(Numeric(10, 7), nullable=True)
+    contact_email: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    contact_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Domiciliation
-    domicile_address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    domicile_zip: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
-    domicile_city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    domicile_lat: Mapped[Optional[Decimal]] = mapped_column(
-        Numeric(10, 7), nullable=True
-    )
-    domicile_lon: Mapped[Optional[Decimal]] = mapped_column(
-        Numeric(10, 7), nullable=True
-    )
+    domicile_address: Mapped[str] = mapped_column(String(255), nullable=True)
+    domicile_zip: Mapped[str] = mapped_column(String(10), nullable=True)
+    domicile_city: Mapped[str] = mapped_column(String(100), nullable=True)
+    domicile_lat: Mapped[Decimal] = mapped_column(Numeric(10, 7), nullable=True)
+    domicile_lon: Mapped[Decimal] = mapped_column(Numeric(10, 7), nullable=True)
 
     # Accès logement
     door_code: Mapped[str] = mapped_column(String(50), nullable=True)
     floor: Mapped[str] = mapped_column(String(20), nullable=True)
-    access_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    access_notes: Mapped[str] = mapped_column(Text, nullable=True)
 
     # Médecin traitant
     gp_name: Mapped[str] = mapped_column(String(120), nullable=True)
@@ -107,7 +99,7 @@ class Client(db.Model):
     default_billed_to_type = Column(
         String(50), nullable=False, server_default="patient"
     )
-    default_billed_to_company_id: Mapped[Optional[int]] = mapped_column(
+    default_billed_to_company_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("company.id", ondelete="SET NULL"), nullable=True
     )
     default_billed_to_contact: Mapped[str] = mapped_column(String(120), nullable=True)
@@ -121,9 +113,7 @@ class Client(db.Model):
     residence_facility: Mapped[str] = mapped_column(String(200), nullable=True)
 
     # Tarif préférentiel
-    preferential_rate: Mapped[Optional[Decimal]] = mapped_column(
-        Numeric(10, 2), nullable=True
-    )
+    preferential_rate: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=True)
 
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="true"
@@ -133,12 +123,10 @@ class Client(db.Model):
     )
 
     # ✅ D2: Colonnes chiffrées
-    contact_phone_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    gp_name_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    gp_phone_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    billing_address_encrypted: Mapped[Optional[str]] = mapped_column(
-        Text, nullable=True
-    )
+    contact_phone_encrypted: Mapped[str] = mapped_column(Text, nullable=True)
+    gp_name_encrypted: Mapped[str] = mapped_column(Text, nullable=True)
+    gp_phone_encrypted: Mapped[str] = mapped_column(Text, nullable=True)
+    billing_address_encrypted: Mapped[str] = mapped_column(Text, nullable=True)
     encryption_migrated = Column(Boolean, default=False, nullable=False)
 
     # Relations
@@ -163,11 +151,8 @@ class Client(db.Model):
 
     # Validators
     @validates("contact_email")
-    def validate_contact_email(self, _key: str, email: Optional[str]) -> Optional[str]:
-        if (
-            cast("ClientType", self.client_type) == ClientType.SELF_SERVICE
-            and not email
-        ):
+    def validate_contact_email(self, _key: str, email: str) -> str:
+        if self.client_type == ClientType.SELF_SERVICE and not email:
             msg = "L'email est requis pour les clients self-service."
             raise ValueError(msg)
         if email:
@@ -179,16 +164,14 @@ class Client(db.Model):
         return email
 
     @validates("billing_address")
-    def validate_billing_address(
-        self, _key: str, value: Optional[str]
-    ) -> Optional[str]:
+    def validate_billing_address(self, _key: str, value: str) -> str:
         cid = _as_int(getattr(self, "company_id", None))
         if cid > CID_ZERO and (not value or not str(value).strip()):
             # Si pas d'adresse de facturation, utiliser l'adresse de domicile
             # comme fallback
             domicile = getattr(self, "domicile_address", None)
             if domicile and str(domicile).strip():
-                return cast(Optional[str], domicile)
+                return cast(str, domicile)
             msg = (
                 "L'adresse de facturation (ou de domicile) est obligatoire "
                 "pour les clients liés à une entreprise."
@@ -197,7 +180,7 @@ class Client(db.Model):
         return value
 
     @validates("contact_phone", "gp_phone")
-    def validate_phone_numbers(self, key: str, value: Optional[str]) -> Optional[str]:
+    def validate_phone_numbers(self, key: str, value: str) -> str:
         if value:
             v = value.strip()
             digits = re.sub(r"\D", "", v)
@@ -208,18 +191,18 @@ class Client(db.Model):
         return value
 
     @validates("default_billed_to_type")
-    def validate_default_billed_to_type(self, _key: str, val: Optional[str]) -> str:
+    def validate_default_billed_to_type(self, _key: str, val: str) -> str:
         val = (val or "patient").strip().lower()
         if val not in ("patient", "clinic", "insurance"):
             msg = "default_billed_to_type invalide (patient|clinic|insurance)"
             raise ValueError(msg)
         if val == "patient":
-            self.default_billed_to_company_id = None
+            self.default_billed_to_company_id = None  # type: ignore[assignment]
         return val
 
     # ✅ D2: Propriétés hybrides pour chiffrement/déchiffrement automatique
     @hybrid_property
-    def contact_phone_secure(self) -> Optional[str]:  # type: ignore[no-redef]
+    def contact_phone_secure(self) -> str:  # type: ignore[no-redef]
         """Téléphone de contact déchiffré."""
         try:
             from security.crypto import get_encryption_service
@@ -231,13 +214,13 @@ class Client(db.Model):
                     return get_encryption_service().decrypt_field(encrypted_val)
                 except Exception as e:
                     logger.error("[D2] Erreur déchiffrement contact_phone: %s", e)
-                    return None
-            return cast(Optional[str], getattr(self, "contact_phone", None))
+                    return None  # type: ignore[return]
+            return cast(str, getattr(self, "contact_phone", None))
         except ImportError:
-            return cast(Optional[str], getattr(self, "contact_phone", None))
+            return cast(str, getattr(self, "contact_phone", None))
 
     @contact_phone_secure.setter  # type: ignore[no-redef]
-    def contact_phone_secure(self, value: Optional[str]):
+    def contact_phone_secure(self, value: str):
         """Chiffre le téléphone de contact."""
         try:
             from security.crypto import get_encryption_service
@@ -249,13 +232,13 @@ class Client(db.Model):
                 self.encryption_migrated = True
                 self.contact_phone = None  # Ancienne colonne dépréciée
             else:
-                self.contact_phone_encrypted = None
+                self.contact_phone_encrypted = None  # type: ignore[assignment]
                 self.contact_phone = None
         except ImportError:
             self.contact_phone = value
 
     @hybrid_property
-    def gp_name_secure(self) -> Optional[str]:  # type: ignore[no-redef]
+    def gp_name_secure(self) -> str:  # type: ignore[no-redef]
         """Nom du médecin traitant déchiffré."""
         try:
             from security.crypto import get_encryption_service
@@ -266,13 +249,13 @@ class Client(db.Model):
                 try:
                     return get_encryption_service().decrypt_field(encrypted_val)
                 except Exception:
-                    return None
-            return cast(Optional[str], getattr(self, "gp_name", None))
+                    return None  # type: ignore[return]
+            return cast(str, getattr(self, "gp_name", None))
         except ImportError:
-            return cast(Optional[str], getattr(self, "gp_name", None))
+            return cast(str, getattr(self, "gp_name", None))
 
     @gp_name_secure.setter  # type: ignore[no-redef]
-    def gp_name_secure(self, value: Optional[str]):
+    def gp_name_secure(self, value: str):
         """Chiffre le nom du médecin traitant."""
         try:
             from security.crypto import get_encryption_service
@@ -281,12 +264,12 @@ class Client(db.Model):
                 self.gp_name_encrypted = get_encryption_service().encrypt_field(value)
                 self.encryption_migrated = True
             else:
-                self.gp_name_encrypted = None
+                self.gp_name_encrypted = None  # type: ignore[assignment]
         except ImportError:
-            self.gp_name = value
+            self.gp_name = value  # type: ignore[assignment]
 
     @hybrid_property
-    def gp_phone_secure(self) -> Optional[str]:  # type: ignore[no-redef]
+    def gp_phone_secure(self) -> str:  # type: ignore[no-redef]
         """Téléphone du médecin traitant déchiffré."""
         try:
             from security.crypto import get_encryption_service
@@ -297,13 +280,13 @@ class Client(db.Model):
                 try:
                     return get_encryption_service().decrypt_field(encrypted_val)
                 except Exception:
-                    return None
-            return cast(Optional[str], getattr(self, "gp_phone", None))
+                    return None  # type: ignore[return]
+            return cast(str, getattr(self, "gp_phone", None))
         except ImportError:
-            return cast(Optional[str], getattr(self, "gp_phone", None))
+            return cast(str, getattr(self, "gp_phone", None))
 
     @gp_phone_secure.setter  # type: ignore[no-redef]
-    def gp_phone_secure(self, value: Optional[str]):
+    def gp_phone_secure(self, value: str):
         """Chiffre le téléphone du médecin traitant."""
         try:
             from security.crypto import get_encryption_service
@@ -311,15 +294,15 @@ class Client(db.Model):
             if value:
                 self.gp_phone_encrypted = get_encryption_service().encrypt_field(value)
                 self.encryption_migrated = True
-                self.gp_phone = None  # Ancienne colonne dépréciée
+                self.gp_phone = None  # type: ignore[assignment]  # Ancienne colonne dépréciée
             else:
-                self.gp_phone_encrypted = None
-                self.gp_phone = None
+                self.gp_phone_encrypted = None  # type: ignore[assignment]
+                self.gp_phone = None  # type: ignore[assignment]
         except ImportError:
-            self.gp_phone = value
+            self.gp_phone = value  # type: ignore[assignment]
 
     @hybrid_property
-    def billing_address_secure(self) -> Optional[str]:  # type: ignore[no-redef]
+    def billing_address_secure(self) -> str:  # type: ignore[no-redef]
         """Adresse de facturation déchiffrée."""
         try:
             from security.crypto import get_encryption_service
@@ -330,13 +313,13 @@ class Client(db.Model):
                 try:
                     return get_encryption_service().decrypt_field(encrypted_val)
                 except Exception:
-                    return None
-            return cast(Optional[str], getattr(self, "billing_address", None))
+                    return None  # type: ignore[return]
+            return cast(str, getattr(self, "billing_address", None))
         except ImportError:
-            return cast(Optional[str], getattr(self, "billing_address", None))
+            return cast(str, getattr(self, "billing_address", None))
 
     @billing_address_secure.setter  # type: ignore[no-redef]
-    def billing_address_secure(self, value: Optional[str]):
+    def billing_address_secure(self, value: str):
         """Chiffre l'adresse de facturation."""
         try:
             from security.crypto import get_encryption_service
@@ -347,7 +330,7 @@ class Client(db.Model):
                 )
                 self.encryption_migrated = True
             else:
-                self.billing_address_encrypted = None
+                self.billing_address_encrypted = None  # type: ignore[assignment]
         except ImportError:
             self.billing_address = value
 
@@ -384,12 +367,16 @@ class Client(db.Model):
                 "address": self.domicile_address,
                 "zip": self.domicile_zip,
                 "city": self.domicile_city,
-                "lat": float(self.domicile_lat)
-                if self.domicile_lat is not None
-                else None,
-                "lon": float(self.domicile_lon)
-                if self.domicile_lon is not None
-                else None,
+                "lat": (
+                    float(domicile_lat)
+                    if (domicile_lat := getattr(self, "domicile_lat", None)) is not None
+                    else None
+                ),
+                "lon": (
+                    float(domicile_lon)
+                    if (domicile_lon := getattr(self, "domicile_lon", None)) is not None
+                    else None
+                ),
             },
             "access": {
                 "door_code": self.door_code,
@@ -412,9 +399,12 @@ class Client(db.Model):
             "is_institution": _as_bool(self.is_institution),
             "institution_name": self.institution_name,
             "residence_facility": self.residence_facility,
-            "preferential_rate": float(self.preferential_rate)
-            if self.preferential_rate is not None
-            else None,
+            "preferential_rate": (
+                float(preferential_rate)
+                if (preferential_rate := getattr(self, "preferential_rate", None))
+                is not None
+                else None
+            ),
             "is_active": _as_bool(self.is_active),
             "created_at": _iso(self.created_at),
         }
@@ -425,7 +415,7 @@ class Client(db.Model):
         return bool(self.is_active)
 
     def is_self_service(self) -> bool:
-        return cast("ClientType", self.client_type) == ClientType.SELF_SERVICE
+        return self.client_type == ClientType.SELF_SERVICE
 
     @override
     def __repr__(self) -> str:

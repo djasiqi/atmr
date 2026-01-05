@@ -9,8 +9,12 @@ import logging
 import threading
 from typing import Any
 
-from flask import current_app
-from flask_restx import Namespace, Resource, fields
+from flask import current_app  # pyright: ignore[reportMissingImports]
+from flask_restx import (  # pyright: ignore[reportMissingImports]
+    Namespace,
+    Resource,
+    fields,
+)
 
 from tasks.rl_tasks import (
     optuna_optimize_impl,

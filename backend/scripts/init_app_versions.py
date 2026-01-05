@@ -45,13 +45,14 @@ def init_or_update_config(
         print(f"✅ Configuration {platform} mise à jour")
     else:
         # Création
-        config = AppVersionConfig(
-            platform=platform,
-            min_required_version=min_required,
-            latest_version=latest,
-            store_url=store_url,
-            update_message=message,
-        )
+        config = AppVersionConfig()
+        config.platform = platform  # type: ignore[assignment]
+        config.min_required_version = min_required  # type: ignore[assignment]
+        config.latest_version = latest  # type: ignore[assignment]
+        if store_url:
+            config.store_url = store_url  # type: ignore[assignment]
+        if message:
+            config.update_message = message  # type: ignore[assignment]
         db.session.add(config)
         print(f"✅ Configuration {platform} créée")
 

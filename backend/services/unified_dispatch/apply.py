@@ -8,10 +8,14 @@ from collections import defaultdict
 from typing import Any, Dict, List, Tuple, cast
 
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
 from sqlalchemy.orm import joinedload, scoped_session, sessionmaker
 
 from ext import db
 from models import Assignment, AssignmentStatus, Booking, BookingStatus, Driver
+from repositories.assignment_repository import AssignmentRepository
+from repositories.booking_repository import BookingRepository
+from repositories.driver_repository import DriverRepository
 from services.unified_dispatch.transaction_helpers import _begin_tx, _in_tx
 from shared.time_utils import now_utc  # UTC centralisé
 
@@ -52,16 +56,70 @@ def _get_scoped_session(db_instance):
             return db_instance.session
 
         return scoped_session(sessionmaker(bind=engine))
-    except Exception as e:
+    except (OperationalError, DBAPIError, AttributeError) as e:
+        # Erreurs DB attendues : connexion, configuration
         logger.warning(
             (
-                "[Apply] Erreur lors de la création de scoped_session: %s, "
+                "[Apply] Erreur lors de la création de scoped_session (DB error: %s): %s, "
                 "utilisation de db.session"
             ),
+            type(e).__name__,
             e,
         )
         # Dernier recours : utiliser la session principale
         return db_instance.session
+    except Exception:
+        # Erreur inattendue lors de la création de scoped_session
+        logger.exception("[Apply] Erreur lors de la création de scoped_session")
+        # Dernier recours : utiliser la session principale
+        return db_instance.session
+
+
+@contextlib.contextmanager
+def scoped_session_context(db_instance):
+    """
+    ✅ P1: Context manager pour scoped sessions avec fermeture automatique.
+
+    Garantit que la session est fermée même en cas d'exception, évitant les
+    fuites de connexions DB.
+
+    Args:
+        db_instance: Instance SQLAlchemy de Flask-SQLAlchemy
+
+    Yields:
+        Scoped session pour requêtes indépendantes
+
+    Example:
+        with scoped_session_context(db) as session:
+            bookings = session.query(Booking).filter_by(company_id=1).all()
+            # Session fermée automatiquement à la sortie
+    """
+    session = None
+    try:
+        session = _get_scoped_session(db_instance)
+        yield session
+    finally:
+        if (
+            session is not None
+            and hasattr(session, "close")
+            and session is not db_instance.session
+        ):
+            # Vérifier si c'est une vraie scoped_session (a une méthode close)
+            # ou si c'est la session principale (ne doit pas être fermée)
+            try:
+                session.close()
+            except (OperationalError, DBAPIError, AttributeError) as e:
+                # Erreurs DB attendues : session déjà fermée, connexion perdue
+                logger.warning(
+                    "[Apply] Erreur lors de la fermeture de scoped_session (DB error: %s): %s",
+                    type(e).__name__,
+                    e,
+                )
+            except Exception:
+                # Erreur inattendue lors de la fermeture
+                logger.exception(
+                    "[Apply] Erreur lors de la fermeture de scoped_session"
+                )
 
 
 _Assignment = Any
@@ -71,14 +129,14 @@ _Assignment = Any
 class DBConflictCounter:
     """Compteur thread-safe pour les violations de contraintes uniques."""
 
-    _instance: "DBConflictCounter | None" = None
+    _instance: DBConflictCounter | None = None
 
     def __init__(self) -> None:
         super().__init__()
         self._counter: int = 0
 
     @classmethod
-    def get_instance(cls) -> "DBConflictCounter":
+    def get_instance(cls) -> DBConflictCounter:
         """Retourne l'instance singleton."""
         if cls._instance is None:
             cls._instance = cls()
@@ -142,11 +200,19 @@ def apply_assignments(
     try:
         # Tester si la transaction est valide
         db.session.execute(text("SELECT 1"))
-    except Exception as tx_error:
+    except (OperationalError, DBAPIError, IntegrityError) as tx_error:
         # Transaction en échec, essayer de fermer la session
         logger.warning(
-            "[Apply] Transaction en échec détectée: %s, tentative de nettoyage",
+            "[Apply] Transaction en échec détectée (DB error: %s): %s, tentative de nettoyage",
+            type(tx_error).__name__,
             tx_error,
+        )
+        with contextlib.suppress(Exception):
+            db.session.close()
+    except Exception:
+        # Erreur inattendue lors du test de transaction
+        logger.exception(
+            "[Apply] Transaction en échec détectée, tentative de nettoyage"
         )
         with contextlib.suppress(Exception):
             db.session.close()
@@ -177,24 +243,34 @@ def apply_assignments(
         if not had_existing_tx:
             db.session.commit()
         return result
-    except Exception as e:
-        logger.exception(
-            "[Apply] Transaction failed for company_id=%s: %s", company_id, e
+    except (OperationalError, DBAPIError, IntegrityError) as e:
+        # Erreurs DB attendues : connexion, contraintes, timeout
+        logger.error(
+            "[Apply] Transaction failed for company_id=%s (DB error: %s): %s",
+            company_id,
+            type(e).__name__,
+            e,
         )
-        # Rollback automatique en cas d'erreur
-        db.session.rollback()
-        # ✅ FIX RC2: Expirer tous les objets après rollback pour forcer le rechargement
-        db.session.expire_all()
-        # ✅ FIX RC2: S'assurer que tous les objets modifiés sont bien restaurés
-        # En expirant tous les objets, SQLAlchemy les rechargera depuis la DB
-        # au prochain accès
-        return {
-            "applied": [],
-            "skipped": {},
-            "conflicts": [],
-            "driver_load": {},
-            "error": str(e),
-        }
+        if not had_existing_tx:
+            db.session.rollback()
+        raise
+    except (ValueError, TypeError, AttributeError, KeyError) as e:
+        # Erreurs de validation attendues : données invalides
+        logger.error(
+            "[Apply] Transaction failed for company_id=%s (validation error: %s): %s",
+            company_id,
+            type(e).__name__,
+            e,
+        )
+        if not had_existing_tx:
+            db.session.rollback()
+        raise
+    except Exception:
+        # Erreur inattendue : logger avec trace complète
+        logger.exception("[Apply] Transaction failed for company_id=%s", company_id)
+        if not had_existing_tx:
+            db.session.rollback()
+        raise
 
 
 def _apply_assignments_inner(
@@ -216,7 +292,11 @@ def _apply_assignments_inner(
         if hasattr(obj, name):
             try:
                 return getattr(obj, name)
+            except (AttributeError, TypeError):
+                # Erreurs attendues : attribut non accessible, type incorrect
+                pass
             except Exception:
+                # Erreur inattendue lors de l'accès à l'attribut (ignorée silencieusement)
                 pass
         if isinstance(obj, dict):
             return obj.get(name, default)
@@ -253,11 +333,41 @@ def _apply_assignments_inner(
     # sont visibles
     db.session.flush()
 
-    bookings_q = Booking.query.options(joinedload(Booking.driver)).filter(
-        Booking.company_id == company_id, Booking.id.in_(booking_ids)
+    # ✅ Utilisation des repositories pour valider les IDs avant la requête
+    # Note: On garde la requête SQLAlchemy directe car with_for_update() nécessite une query SQLAlchemy
+    # mais on valide d'abord que les IDs existent via les repositories
+    booking_repo = BookingRepository()
+    driver_repo = DriverRepository()
+
+    # Valider que les bookings existent (la vérification company_id se fait dans la requête SQLAlchemy)
+    valid_booking_ids = []
+    if booking_ids:
+        booking_dtos = booking_repo.find_by_ids(booking_ids)
+        valid_booking_ids = [dto.id for dto in booking_dtos if dto]
+
+    # Valider que les drivers existent (la vérification company_id se fait dans la requête SQLAlchemy)
+    valid_driver_ids = []
+    if driver_ids:
+        for driver_id in driver_ids:
+            driver_dto = driver_repo.find_by_id(driver_id)
+            if driver_dto:
+                valid_driver_ids.append(driver_dto.id)
+
+    # Construire les requêtes SQLAlchemy avec les IDs validés
+    # (nécessaire pour with_for_update() qui est spécifique à SQLAlchemy)
+    bookings_q = (
+        Booking.query.options(joinedload(Booking.driver)).filter(
+            Booking.company_id == company_id, Booking.id.in_(valid_booking_ids)
+        )
+        if valid_booking_ids
+        else Booking.query.filter(Booking.id == -1)  # Query vide si aucun ID valide
     )
-    drivers_q = Driver.query.filter(
-        Driver.company_id == company_id, Driver.id.in_(driver_ids)
+    drivers_q = (
+        Driver.query.filter(
+            Driver.company_id == company_id, Driver.id.in_(valid_driver_ids)
+        )
+        if valid_driver_ids
+        else Driver.query.filter(Driver.id == -1)  # Query vide si aucun ID valide
     )
 
     # ✅ A2: Lock doux en lecture (read=True pour lock non-bloquant)
@@ -324,13 +434,27 @@ def _apply_assignments_inner(
                 company_id,
                 len(booking_map),
             )
-            skipped[b_id] = "booking_not_found_or_wrong_company"
+            reason = "booking_not_found_or_wrong_company"
+            skipped[b_id] = reason
             # ✅ FIX: Pas de métadonnées disponibles si le booking n'existe pas
             skipped_metadata[b_id] = {
                 "scheduled_time": None,
                 "time_confirmed": None,
                 "is_return": None,
             }
+            # ✅ Log détaillé pour debugging
+            driver_id = int(_aget(a, "driver_id")) if a else None
+            logger.warning(
+                (
+                    "⚠️ [Apply] Assignation skipped: booking_id=%d, driver_id=%s, "
+                    "reason=%s, company_id=%d, scheduled_time=None, "
+                    "time_confirmed=None, is_return=None"
+                ),
+                b_id,
+                driver_id,
+                reason,
+                company_id,
+            )
             continue
 
         if b.status not in (
@@ -338,37 +462,98 @@ def _apply_assignments_inner(
             BookingStatus.ACCEPTED,
             BookingStatus.ASSIGNED,
         ):
-            skipped[b_id] = f"status_is_{b.status}"
+            reason = f"status_is_{b.status}"
+            skipped[b_id] = reason
             # ✅ FIX: Capturer les métadonnées avant que la transaction soit fermée
+            scheduled_time = getattr(b, "scheduled_time", None)
+            time_confirmed = getattr(b, "time_confirmed", None)
+            is_return = getattr(b, "is_return", None)
             skipped_metadata[b_id] = {
-                "scheduled_time": getattr(b, "scheduled_time", None),
-                "time_confirmed": getattr(b, "time_confirmed", None),
-                "is_return": getattr(b, "is_return", None),
+                "scheduled_time": scheduled_time,
+                "time_confirmed": time_confirmed,
+                "is_return": is_return,
             }
+            # ✅ Log détaillé pour debugging
+            driver_id = int(_aget(a, "driver_id")) if a else None
+            logger.warning(
+                (
+                    "⚠️ [Apply] Assignation skipped: booking_id=%d, driver_id=%s, "
+                    "reason=%s, company_id=%d, scheduled_time=%s, "
+                    "time_confirmed=%s, is_return=%s"
+                ),
+                b_id,
+                driver_id,
+                reason,
+                company_id,
+                scheduled_time,
+                time_confirmed,
+                is_return,
+            )
             continue
 
         d_id = int(_aget(a, "driver_id"))
         d = driver_map.get(d_id)
         if d is None:
-            skipped[b_id] = "driver_not_found_or_wrong_company"
+            reason = "driver_not_found_or_wrong_company"
+            skipped[b_id] = reason
             # ✅ FIX: Capturer les métadonnées avant que la transaction soit fermée
+            scheduled_time = getattr(b, "scheduled_time", None)
+            time_confirmed = getattr(b, "time_confirmed", None)
+            is_return = getattr(b, "is_return", None)
             skipped_metadata[b_id] = {
-                "scheduled_time": getattr(b, "scheduled_time", None),
-                "time_confirmed": getattr(b, "time_confirmed", None),
-                "is_return": getattr(b, "is_return", None),
+                "scheduled_time": scheduled_time,
+                "time_confirmed": time_confirmed,
+                "is_return": is_return,
             }
+            # ✅ Log détaillé pour debugging
+            logger.warning(
+                (
+                    "⚠️ [Apply] Assignation skipped: booking_id=%d, driver_id=%d, "
+                    "reason=%s, company_id=%d, scheduled_time=%s, "
+                    "time_confirmed=%s, is_return=%s"
+                ),
+                b_id,
+                d_id,
+                reason,
+                company_id,
+                scheduled_time,
+                time_confirmed,
+                is_return,
+            )
             continue
         d_any = cast("Any", d)
         is_active = bool(getattr(d_any, "is_active", False))
         is_available = bool(getattr(d_any, "is_available", False))
         if enforce_driver_checks and (not is_active or not is_available):
-            skipped[b_id] = "driver_not_available"
+            reason = "driver_not_available"
+            skipped[b_id] = reason
             # ✅ FIX: Capturer les métadonnées avant que la transaction soit fermée
+            scheduled_time = getattr(b, "scheduled_time", None)
+            time_confirmed = getattr(b, "time_confirmed", None)
+            is_return = getattr(b, "is_return", None)
             skipped_metadata[b_id] = {
-                "scheduled_time": getattr(b, "scheduled_time", None),
-                "time_confirmed": getattr(b, "time_confirmed", None),
-                "is_return": getattr(b, "is_return", None),
+                "scheduled_time": scheduled_time,
+                "time_confirmed": time_confirmed,
+                "is_return": is_return,
             }
+            # ✅ Log détaillé pour debugging
+            logger.warning(
+                (
+                    "⚠️ [Apply] Assignation skipped: booking_id=%d, driver_id=%d, "
+                    "reason=%s, company_id=%d, scheduled_time=%s, "
+                    "time_confirmed=%s, is_return=%s, driver_is_active=%s, "
+                    "driver_is_available=%s"
+                ),
+                b_id,
+                d_id,
+                reason,
+                company_id,
+                scheduled_time,
+                time_confirmed,
+                is_return,
+                is_active,
+                is_available,
+            )
             continue
 
         # Enregistrer la cible d'Assignment (ETA incluse si fournie)
@@ -392,20 +577,43 @@ def _apply_assignments_inner(
             cur_driver_id: int | None = (
                 int(cur_driver_id_raw) if cur_driver_id_raw is not None else None
             )
+        except (ValueError, TypeError, OverflowError):
+            # Erreurs de conversion attendues : valeur non convertible en int
+            cur_driver_id = None
         except Exception:
+            # Erreur inattendue lors de la conversion (ignorée silencieusement)
             cur_driver_id = None
 
         is_assigned = b_status == BookingStatus.ASSIGNED
         same_driver = cur_driver_id == d_id
 
         if respect_existing and is_assigned and same_driver:
-            skipped[b_id] = "already_assigned_same_driver"
+            reason = "already_assigned_same_driver"
+            skipped[b_id] = reason
             # ✅ FIX: Capturer les métadonnées avant que la transaction soit fermée
+            scheduled_time = getattr(b, "scheduled_time", None)
+            time_confirmed = getattr(b, "time_confirmed", None)
+            is_return = getattr(b, "is_return", None)
             skipped_metadata[b_id] = {
-                "scheduled_time": getattr(b, "scheduled_time", None),
-                "time_confirmed": getattr(b, "time_confirmed", None),
-                "is_return": getattr(b, "is_return", None),
+                "scheduled_time": scheduled_time,
+                "time_confirmed": time_confirmed,
+                "is_return": is_return,
             }
+            # ✅ Log détaillé pour debugging
+            logger.warning(
+                (
+                    "⚠️ [Apply] Assignation skipped: booking_id=%d, driver_id=%d, "
+                    "reason=%s, company_id=%d, scheduled_time=%s, "
+                    "time_confirmed=%s, is_return=%s"
+                ),
+                b_id,
+                d_id,
+                reason,
+                company_id,
+                scheduled_time,
+                time_confirmed,
+                is_return,
+            )
             continue
 
         if (
@@ -415,13 +623,33 @@ def _apply_assignments_inner(
             and (not allow_reassign)
         ):
             conflicts.append(b_id)
-            skipped[b_id] = "reassign_blocked"
+            reason = "reassign_blocked"
+            skipped[b_id] = reason
             # ✅ FIX: Capturer les métadonnées avant que la transaction soit fermée
+            scheduled_time = getattr(b, "scheduled_time", None)
+            time_confirmed = getattr(b, "time_confirmed", None)
+            is_return = getattr(b, "is_return", None)
             skipped_metadata[b_id] = {
-                "scheduled_time": getattr(b, "scheduled_time", None),
-                "time_confirmed": getattr(b, "time_confirmed", None),
-                "is_return": getattr(b, "is_return", None),
+                "scheduled_time": scheduled_time,
+                "time_confirmed": time_confirmed,
+                "is_return": is_return,
             }
+            # ✅ Log détaillé pour debugging
+            logger.warning(
+                (
+                    "⚠️ [Apply] Assignation skipped: booking_id=%d, driver_id=%d, "
+                    "reason=%s, company_id=%d, scheduled_time=%s, "
+                    "time_confirmed=%s, is_return=%s, current_driver_id=%s"
+                ),
+                b_id,
+                d_id,
+                reason,
+                company_id,
+                scheduled_time,
+                time_confirmed,
+                is_return,
+                cur_driver_id,
+            )
             continue
 
         payload = {
@@ -452,9 +680,16 @@ def _apply_assignments_inner(
             # Upsert côté Assignment (y compris ETA si fournies)
             if desired_assignments:
                 target_bids = list(desired_assignments.keys())
-                existing = Assignment.query.filter(
-                    Assignment.booking_id.in_(target_bids)
-                ).all()
+                # ✅ Utilisation du repository pour découpler de SQLAlchemy
+                assignment_repo = AssignmentRepository()
+                existing_dtos = assignment_repo.find_by_booking_ids(target_bids)
+                # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs pour la compatibilité
+                existing_ids = [dto.id for dto in existing_dtos]
+                existing = (
+                    Assignment.query.filter(Assignment.id.in_(existing_ids)).all()
+                    if existing_ids
+                    else []
+                )
                 by_booking: Dict[int, Assignment] = {}
                 for a0 in existing:
                     cur = by_booking.get(a0.booking_id)
@@ -545,22 +780,32 @@ def _apply_assignments_inner(
                                     )
                                 )
                                 db.session.execute(stmt)
-                            except Exception as conflict_err:
+                            except IntegrityError as conflict_err:
                                 # ✅ A2: Compter les conflits de contrainte unique
-                                if "unique" in str(
-                                    conflict_err
-                                ).lower() or "uq_assignment" in str(conflict_err):
-                                    conflicts_count += 1
-                                    increment_db_conflict_counter()
-                                    logger.debug(
-                                        (
-                                            "[Apply] Conflit unique ignoré "
-                                            "(idempotence): %s"
-                                        ),
-                                        conflict_err,
-                                    )
-                                else:
-                                    raise
+                                # IntegrityError contient les détails de la contrainte
+                                conflicts_count += 1
+                                increment_db_conflict_counter()
+                                logger.debug(
+                                    (
+                                        "[Apply] Conflit unique ignoré "
+                                        "(idempotence, IntegrityError): %s"
+                                    ),
+                                    conflict_err,
+                                )
+                            except (OperationalError, DBAPIError) as e:
+                                # Erreurs DB non liées aux contraintes : re-lancer
+                                logger.warning(
+                                    "[Apply] DB error during UPSERT (DB error: %s): %s",
+                                    type(e).__name__,
+                                    e,
+                                )
+                                raise
+                            except Exception:
+                                # Erreur inattendue : re-lancer
+                                logger.exception(
+                                    "[Apply] Unexpected error during UPSERT"
+                                )
+                                raise
 
                         if conflicts_count > 0:
                             logger.info(
@@ -576,14 +821,30 @@ def _apply_assignments_inner(
                                 "[Apply] UPSERT inserted %d new assignments",
                                 len(new_assignments),
                             )
-                    except Exception as upsert_err:
-                        # Fallback sur bulk_insert si ON CONFLICT non supporté
+                    except (OperationalError, DBAPIError, IntegrityError) as upsert_err:
+                        # Erreurs DB attendues : ON CONFLICT non supporté, syntaxe SQL
                         logger.warning(
                             (
                                 "[Apply] ON CONFLICT not supported, falling back "
-                                "to bulk_insert: %s"
+                                "to bulk_insert (DB error: %s): %s"
                             ),
+                            type(upsert_err).__name__,
                             upsert_err,
+                        )
+                    except (ValueError, TypeError, AttributeError) as e:
+                        # Erreurs de validation attendues : données invalides
+                        logger.warning(
+                            (
+                                "[Apply] ON CONFLICT failed, falling back "
+                                "to bulk_insert (validation error: %s): %s"
+                            ),
+                            type(e).__name__,
+                            e,
+                        )
+                    except Exception:
+                        # Erreur inattendue : logger avec trace complète
+                        logger.exception(
+                            "[Apply] ON CONFLICT failed, falling back to bulk_insert"
                         )
                         db.session.bulk_insert_mappings(
                             cast("Any", Assignment), new_assignments
@@ -607,7 +868,33 @@ def _apply_assignments_inner(
         # La transaction principale sera commitée par apply_assignments()
         db.session.commit()
 
+    except (OperationalError, DBAPIError, IntegrityError) as e:
+        # Erreurs DB attendues : connexion, contraintes, timeout
+        logger.error(
+            "[Apply] DB error while applying assignments (company_id=%s, DB error: %s): %s",
+            company_id,
+            type(e).__name__,
+            e,
+        )
+        # Rollback du savepoint en cas d'erreur
+        # La transaction principale sera rollbackée par apply_assignments()
+        db.session.rollback()
+        # ✅ FIX RC2: Expirer tous les objets après rollback pour forcer le rechargement
+        db.session.expire_all()
+        raise  # Propager l'erreur pour que apply_assignments() gère le rollback global
+    except (ValueError, TypeError, AttributeError, KeyError) as e:
+        # Erreurs de validation attendues : données invalides
+        logger.error(
+            "[Apply] Validation error while applying assignments (company_id=%s, validation error: %s): %s",
+            company_id,
+            type(e).__name__,
+            e,
+        )
+        db.session.rollback()
+        db.session.expire_all()
+        raise
     except Exception:
+        # Erreur inattendue : logger avec trace complète
         logger.exception(
             "[Apply] DB error while applying assignments (company_id=%s)", company_id
         )
@@ -678,10 +965,9 @@ def _apply_assignments_inner(
         if applied_pairs:
             notif_booking_ids = [b_id for b_id, _ in applied_pairs]
 
-            # ⚠️ Utiliser une session indépendante pour éviter les transactions closes
-            # Compatibilité Flask-SQLAlchemy : utiliser get_scoped_session helper
-            session = _get_scoped_session(db)
-            try:
+            # ✅ P1: Utiliser context manager pour scoped session (fermeture automatique)
+            # Utiliser une session indépendante pour éviter les transactions closes
+            with scoped_session_context(db) as session:
                 notif_bookings = {
                     b.id: b
                     for b in session.query(Booking)
@@ -689,26 +975,55 @@ def _apply_assignments_inner(
                     .all()
                 }
 
-                from services.notification_service import notify_driver_new_booking
+                # ✅ Clean Architecture: Publier événements au lieu d'appels directs
+                from application.events.event_bus import publish_event
+                from domain.events.events import DriverNewBookingEvent
 
                 for b_id, d_id in applied_pairs:
                     try:
                         booking_obj = notif_bookings.get(b_id)
                         if booking_obj is None:
                             continue
-                        notify_driver_new_booking(int(d_id), booking_obj)
+                        # Publier événement
+                        publish_event(
+                            DriverNewBookingEvent(
+                                booking_id=int(b_id),
+                                driver_id=int(d_id),
+                                company_id=company_id,
+                            )
+                        )
+                    except (ValueError, TypeError, AttributeError, KeyError) as e:
+                        # Erreurs de validation attendues : données invalides
+                        logger.warning(
+                            (
+                                "[Apply] DriverNewBookingEvent publish failed "
+                                "booking_id=%s driver_id=%s (validation error: %s): %s"
+                            ),
+                            b_id,
+                            d_id,
+                            type(e).__name__,
+                            e,
+                        )
                     except Exception:
+                        # Erreur inattendue : logger avec trace complète
                         logger.exception(
                             (
-                                "[Apply] notify_driver_new_booking failed "
+                                "[Apply] DriverNewBookingEvent publish failed "
                                 "booking_id=%s driver_id=%s"
                             ),
                             b_id,
                             d_id,
                         )
-            finally:
-                session.close()
+    except (ValueError, TypeError, AttributeError, KeyError) as e:
+        # Erreurs de validation attendues : données invalides
+        logger.warning(
+            "[Apply] driver notifications failed (company_id=%s, validation error: %s): %s",
+            company_id,
+            type(e).__name__,
+            e,
+        )
     except Exception:
+        # Erreur inattendue : logger avec trace complète
         logger.exception(
             "[Apply] driver notifications failed (company_id=%s)", company_id
         )

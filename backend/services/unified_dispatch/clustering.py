@@ -7,8 +7,10 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
-import numpy as np
-from sklearn.cluster import KMeans
+import numpy as np  # pyright: ignore[reportMissingImports]
+from sklearn.cluster import KMeans  # pyright: ignore[reportMissingImports]
+
+from services.geolocation_service import get_geolocation_service
 
 logger = logging.getLogger(__name__)
 
@@ -234,6 +236,8 @@ class GeographicClustering:
     ) -> float:
         """Calcule la distance Haversine en km.
 
+        ✅ REFACTORING: Utilise GeolocationService au lieu d'une implémentation dupliquée.
+
         Args:
             lat1, lon1: Coordonnées du premier point
             lat2, lon2: Coordonnées du deuxième point
@@ -241,20 +245,9 @@ class GeographicClustering:
         Returns:
             Distance en kilomètres
         """
-        from math import atan2, cos, radians, sin, sqrt
-
-        R = 6371  # Rayon de la Terre en km
-
-        dlat = radians(lat2 - lat1)
-        dlon = radians(lon2 - lon1)
-
-        a = (
-            sin(dlat / 2) ** 2
-            + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2) ** 2
-        )
-        c = 2 * atan2(sqrt(a), sqrt(1 - a))
-
-        return R * c
+        # ✅ REFACTORING: Utilisation de GeolocationService pour éviter la duplication
+        geolocation_service = get_geolocation_service()
+        return geolocation_service.distance_km(lat1, lon1, lat2, lon2)
 
     def stitch_zones(
         self,
@@ -379,3 +372,160 @@ class GeographicClustering:
                 improvements += len(boundary_unassigned)
 
         return improvements
+
+    def dispatch_zones(
+        self,
+        zones: List[Zone],
+        company: Any,
+        problem: Dict[str, Any],
+        mode: str,
+        settings: Any,
+    ) -> Dict[str, Any]:
+        """✅ REFACTORING: Dispatch les zones géographiques indépendamment.
+
+        Cette méthode extrait la logique de dispatch par zone depuis engine.py
+        pour améliorer la modularité et la testabilité.
+
+        Args:
+            zones: Liste des zones géographiques créées
+            company: Objet Company
+            problem: Problème complet (pour extraire base_time, for_date, etc.)
+            mode: Mode de dispatch ("auto", "heuristic_only", "solver_only")
+            settings: Settings de dispatch
+
+        Returns:
+            Dictionnaire avec:
+            - assignments: Liste des assignations finales
+            - unassigned: Liste des IDs de bookings non assignés
+            - zone_results: Résultats par zone
+        """
+        from typing import cast
+
+        from services.unified_dispatch import data, heuristics, solver
+
+        zone_results: Dict[int, Dict[str, Any]] = {}
+        final_assignments = []
+        final_unassigned_ids = []
+
+        for zone in zones:
+            logger.info(
+                "[Clustering] Dispatching zone %d: %d bookings, %d drivers",
+                zone.zone_id,
+                len(zone.bookings),
+                len(zone.drivers),
+            )
+
+            # Créer un sous-problème pour cette zone
+            zone_problem = data.build_vrptw_problem(
+                company,
+                zone.bookings,
+                zone.drivers,
+                settings=settings,
+                base_time=problem.get("base_time"),
+                for_date=problem.get("for_date"),
+            )
+
+            # Dispatch avec heuristique
+            zone_assignments = []
+            zone_unassigned_ids = []
+
+            if mode in ("auto", "heuristic_only") and getattr(
+                settings.features, "enable_heuristics", True
+            ):
+                try:
+                    zone_h_res = heuristics.assign(zone_problem, settings=settings)
+                    zone_assignments.extend(zone_h_res.assignments)
+                    zone_unassigned_ids = zone_h_res.unassigned_booking_ids
+                    logger.info(
+                        ("[Clustering] Zone %d heuristic: %d assigned, %d unassigned"),
+                        zone.zone_id,
+                        len(zone_h_res.assignments),
+                        len(zone_unassigned_ids),
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "[Clustering] Zone %d heuristic failed: %s",
+                        zone.zone_id,
+                        e,
+                    )
+
+            # Dispatch avec solveur pour les restants
+            if (
+                zone_unassigned_ids
+                and mode in ("auto", "solver_only")
+                and getattr(settings.features, "enable_solver", True)
+            ):
+                try:
+                    # Filtrer le problème pour les bookings non assignés
+                    bookings_map = {b.id: b for b in zone_problem.get("bookings", [])}
+                    new_bookings = [
+                        bookings_map[bid]
+                        for bid in zone_unassigned_ids
+                        if bid in bookings_map
+                    ]
+                    zone_s_problem = data.build_vrptw_problem(
+                        company,
+                        new_bookings,
+                        zone.drivers,
+                        settings=settings,
+                        base_time=problem.get("base_time"),
+                        for_date=problem.get("for_date"),
+                    )
+
+                    zone_s_res = solver.solve(zone_s_problem, settings=settings)
+                    zone_assignments.extend(cast(List[Any], zone_s_res.assignments))
+                    zone_unassigned_ids = zone_s_res.unassigned_booking_ids
+                    logger.info(
+                        ("[Clustering] Zone %d solver: +%d assigned, %d unassigned"),
+                        zone.zone_id,
+                        len(zone_s_res.assignments),
+                        len(zone_unassigned_ids),
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "[Clustering] Zone %d solver failed: %s",
+                        zone.zone_id,
+                        e,
+                    )
+
+            # Fallback pour les restants
+            if zone_unassigned_ids:
+                try:
+                    zone_fb = heuristics.closest_feasible(
+                        zone_problem, zone_unassigned_ids, settings=settings
+                    )
+                    zone_assignments.extend(zone_fb.assignments)
+                    logger.info(
+                        "[Clustering] Zone %d fallback: +%d assigned",
+                        zone.zone_id,
+                        len(zone_fb.assignments),
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "[Clustering] Zone %d fallback failed: %s",
+                        zone.zone_id,
+                        e,
+                    )
+
+            zone_results[zone.zone_id] = {
+                "assignments": zone_assignments,
+                "unassigned": zone_unassigned_ids,
+            }
+            final_assignments.extend(zone_assignments)
+            final_unassigned_ids.extend(zone_unassigned_ids)
+
+        logger.info(
+            (
+                "[Clustering] Completed: %d total assignments, "
+                "%d unassigned across %d zones"
+            ),
+            len(final_assignments),
+            len(final_unassigned_ids),
+            len(zones),
+        )
+
+        return {
+            "assignments": final_assignments,
+            "unassigned": final_unassigned_ids,
+            "zone_results": zone_results,
+        }

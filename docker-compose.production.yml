@@ -14,6 +14,13 @@ services:
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # ✅ P1: Configuration PostgreSQL pour monitoring des performances
+      - ./backend/config/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./backend/config/postgres/init-postgres-monitoring.sql:/docker-entrypoint-initdb.d/01-monitoring.sql:ro
+    command:
+      - postgres
+      - -c
+      - config_file=/etc/postgresql/postgresql.conf
     ports:
       - "5432:5432"
     networks:
@@ -189,6 +196,12 @@ services:
       - "traefik.http.routers.backend.middlewares=backend-redirect"
       # Service backend (port interne du conteneur)
       - "traefik.http.services.backend.loadbalancer.server.port=5000"
+      # ✅ Sticky sessions pour Socket.IO (cookie-based)
+      # Garantit que les connexions Socket.IO restent sur le même worker
+      - "traefik.http.services.backend.loadbalancer.sticky.cookie=true"
+      - "traefik.http.services.backend.loadbalancer.sticky.cookie.name=ATMR_SOCKET_SESSION"
+      - "traefik.http.services.backend.loadbalancer.sticky.cookie.secure=true"
+      - "traefik.http.services.backend.loadbalancer.sticky.cookie.httpOnly=true"
       # Headers pour proxy
       - "traefik.http.middlewares.backend-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
       - "traefik.http.routers.backend-secure.middlewares=backend-headers"

@@ -1,14 +1,13 @@
 // src/services/adminService.js
 import apiClient from '../utils/apiClient';
 /**
- * Récupère le token JWT stocké en local.
+ * Récupère le token JWT stocké en local (si disponible).
+ * ✅ Si pas de token, on compte sur les cookies httpOnly (apiClient gère automatiquement).
  */
 const getAuthToken = () => {
   const token = localStorage.getItem('authToken');
-  if (!token) {
-    console.error("🚨 Erreur : Aucun token JWT trouvé. L'utilisateur doit être connecté.");
-  }
-  return token;
+  // ✅ Si pas de token, on retourne null et apiClient utilisera les cookies httpOnly
+  return token || null;
 };
 
 /**
@@ -16,10 +15,10 @@ const getAuthToken = () => {
  */
 export const fetchAdminStats = async () => {
   try {
+    // ✅ apiClient gère automatiquement l'authentification (token dans localStorage ou cookies httpOnly)
     const token = getAuthToken();
-    const response = await apiClient.get('/admin/stats', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const response = await apiClient.get('/admin/stats', { headers });
     return response.data;
   } catch (error) {
     console.error('❌ Erreur chargement stats admin :', error.response?.data || error.message);
@@ -32,10 +31,10 @@ export const fetchAdminStats = async () => {
  */
 export const fetchRecentBookings = async () => {
   try {
+    // ✅ apiClient gère automatiquement l'authentification (token dans localStorage ou cookies httpOnly)
     const token = getAuthToken();
-    const response = await apiClient.get('/admin/recent-bookings', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const response = await apiClient.get('/admin/recent-bookings', { headers });
     return response.data;
   } catch (error) {
     console.error(
@@ -51,10 +50,10 @@ export const fetchRecentBookings = async () => {
  */
 export const fetchRecentUsers = async () => {
   try {
+    // ✅ apiClient gère automatiquement l'authentification (token dans localStorage ou cookies httpOnly)
     const token = getAuthToken();
-    const response = await apiClient.get('/admin/recent-users', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const response = await apiClient.get('/admin/recent-users', { headers });
     return response.data;
   } catch (error) {
     console.error(
@@ -70,12 +69,12 @@ export const fetchRecentUsers = async () => {
  */
 export const fetchUsers = async () => {
   try {
+    // ✅ apiClient gère automatiquement l'authentification (token dans localStorage ou cookies httpOnly)
     const token = getAuthToken();
     console.log('📡 Envoi de la requête GET /admin/users...');
 
-    const response = await apiClient.get('/admin/users', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const response = await apiClient.get('/admin/users', { headers });
 
     console.log('📌 Données reçues de /admin/users :', response.data);
 
@@ -101,10 +100,10 @@ export const fetchUsers = async () => {
  */
 export const fetchCompanies = async () => {
   try {
+    // ✅ apiClient gère automatiquement l'authentification (token dans localStorage ou cookies httpOnly)
     const token = getAuthToken();
-    const response = await apiClient.get('/companies', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const response = await apiClient.get('/companies', { headers });
     console.log('📌 Données reçues de /companies :', response.data);
     // La réponse peut être un array ou un objet { companies: [...] }
     return response.data?.companies ?? (Array.isArray(response.data) ? response.data : []);
@@ -124,6 +123,7 @@ export const fetchCompanies = async () => {
  */
 export const updateUserRole = async (userId, updatedData) => {
   try {
+    // ✅ apiClient gère automatiquement l'authentification (token dans localStorage ou cookies httpOnly)
     const token = getAuthToken();
 
     if (!updatedData.role) {
@@ -140,9 +140,8 @@ export const updateUserRole = async (userId, updatedData) => {
       ...updatedData,
       role: String(updatedData.role).toLowerCase(), // <-- normalisation
     };
-    const response = await apiClient.put(`/admin/users/${userId}/role`, payload, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const response = await apiClient.put(`/admin/users/${userId}/role`, payload, { headers });
     return response.data;
   } catch (error) {
     console.error(
@@ -159,12 +158,11 @@ export const updateUserRole = async (userId, updatedData) => {
  */
 export const deleteUser = async (userId) => {
   try {
+    // ✅ apiClient gère automatiquement l'authentification (token dans localStorage ou cookies httpOnly)
     const token = getAuthToken();
-    if (!token) return;
     console.log(`📌 Tentative de suppression de l'utilisateur ID: ${userId}`);
-    const response = await apiClient.delete(`/admin/users/${userId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const response = await apiClient.delete(`/admin/users/${userId}`, { headers });
     console.log('✅ Utilisateur supprimé avec succès :', response.data);
     return response.data;
   } catch (error) {
@@ -186,18 +184,14 @@ export const resetUserPassword = async (userId) => {
     return;
   }
   try {
+    // ✅ apiClient gère automatiquement l'authentification (token dans localStorage ou cookies httpOnly)
     const token = getAuthToken();
-    if (!token) {
-      console.error("❌ Erreur : Aucun token JWT trouvé. L'utilisateur doit être connecté.");
-      return;
-    }
     console.log(`🔄 Réinitialisation du mot de passe pour user ID: ${userId}`);
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
     const response = await apiClient.post(
       `/admin/users/${userId}/reset-password`,
       {},
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      }
+      { headers }
     );
     console.log('✅ Mot de passe réinitialisé :', response.data);
     return response.data;
@@ -222,19 +216,15 @@ export const resetUserPassword = async (userId) => {
  */
 export const runOptunaOptimization = async (config = {}) => {
   try {
+    // ✅ apiClient gère automatiquement l'authentification (token dans localStorage ou cookies httpOnly)
     const token = getAuthToken();
-    if (!token) {
-      throw new Error("Aucun token JWT trouvé. L'utilisateur doit être connecté.");
-    }
-
     console.log('🚀 Démarrage de l\'optimisation Optuna...', config);
 
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
     const response = await apiClient.post(
       '/admin/optuna/optimize',
       config,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      }
+      { headers }
     );
 
     console.log('✅ Optimisation Optuna démarrée :', response.data);
@@ -260,19 +250,15 @@ export const runOptunaOptimization = async (config = {}) => {
  */
 export const trainModelWithOptimalParams = async (config = {}) => {
   try {
+    // ✅ apiClient gère automatiquement l'authentification (token dans localStorage ou cookies httpOnly)
     const token = getAuthToken();
-    if (!token) {
-      throw new Error("Aucun token JWT trouvé. L'utilisateur doit être connecté.");
-    }
-
     console.log('🎓 Démarrage de l\'entraînement du modèle avec hyperparamètres optimaux...', config);
 
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
     const response = await apiClient.post(
       '/admin/optuna/train',
       config,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      }
+      { headers }
     );
 
     console.log('✅ Entraînement du modèle démarré :', response.data);

@@ -1,7 +1,7 @@
 # Constantes pour éviter les valeurs magiques
 import logging
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request  # pyright: ignore[reportMissingImports]
 
 from services.ml_monitoring_service import MLMonitoringService
 
@@ -47,15 +47,26 @@ def get_metrics():
         hours = request.args.get("hours", 24, type=int)
 
         if hours < HOURS_ONE or hours > 24 * 30:  # Max 30 jours
-            return jsonify({"error": "hours must be between 1 and 720"}), 400
+            # ✅ REFACTORING: Utilisation de APIErrorHandler pour validation
+            from shared.error_handlers import APIErrorHandler
+
+            return APIErrorHandler.handle_validation_error(
+                "hours must be between 1 and 720",
+                field="hours",
+                provided_value=hours,
+                expected_format="1-720",
+                logger_instance=logger,
+            )
 
         metrics = MLMonitoringService.get_metrics(hours=hours)
 
         return jsonify(metrics), 200
 
     except Exception as e:
-        logger.error("[MLMonitoringAPI] Error getting metrics: %s", e)
-        return jsonify({"error": str(e)}), 500
+        # ✅ REFACTORING: Utilisation de APIErrorHandler pour centraliser la gestion des erreurs
+        from shared.error_handlers import APIErrorHandler
+
+        return APIErrorHandler.handle_exception(e, logger)
 
 
 @ml_monitoring_bp.route("/daily", methods=["GET"])
@@ -73,7 +84,16 @@ def get_daily_metrics():
         days = request.args.get("days", 7, type=int)
 
         if days < DAYS_ONE or days > MAX_DAYS_LIMIT:
-            return jsonify({"error": "days must be between 1 and 30"}), 400
+            # ✅ REFACTORING: Utilisation de APIErrorHandler pour validation
+            from shared.error_handlers import APIErrorHandler
+
+            return APIErrorHandler.handle_validation_error(
+                "days must be between 1 and 30",
+                field="days",
+                provided_value=days,
+                expected_format="1-30",
+                logger_instance=logger,
+            )
 
         daily_metrics = MLMonitoringService.get_daily_metrics(days=days)
 
@@ -85,8 +105,10 @@ def get_daily_metrics():
         ), 200
 
     except Exception as e:
-        logger.error("[MLMonitoringAPI] Error getting daily metrics: %s", e)
-        return jsonify({"error": str(e)}), 500
+        # ✅ REFACTORING: Utilisation de APIErrorHandler pour centraliser la gestion des erreurs
+        from shared.error_handlers import APIErrorHandler
+
+        return APIErrorHandler.handle_exception(e, logger)
 
 
 @ml_monitoring_bp.route("/predictions", methods=["GET"])
@@ -103,8 +125,17 @@ def get_recent_predictions():
     try:
         limit = request.args.get("limit", 100, type=int)
 
-        if limit < LIMIT_ONE or limit > LIMIT_ONE:
-            return jsonify({"error": "limit must be between 1 and 1000"}), 400
+        if limit < LIMIT_ONE or limit > LIMIT_THRESHOLD:
+            # ✅ REFACTORING: Utilisation de APIErrorHandler pour validation
+            from shared.error_handlers import APIErrorHandler
+
+            return APIErrorHandler.handle_validation_error(
+                "limit must be between 1 and 1000",
+                field="limit",
+                provided_value=limit,
+                expected_format="1-1000",
+                logger_instance=logger,
+            )
 
         predictions = MLMonitoringService.get_recent_predictions(limit=limit)
 
@@ -117,8 +148,10 @@ def get_recent_predictions():
         ), 200
 
     except Exception as e:
-        logger.error("[MLMonitoringAPI] Error getting predictions: %s", e)
-        return jsonify({"error": str(e)}), 500
+        # ✅ REFACTORING: Utilisation de APIErrorHandler pour centraliser la gestion des erreurs
+        from shared.error_handlers import APIErrorHandler
+
+        return APIErrorHandler.handle_exception(e, logger)
 
 
 @ml_monitoring_bp.route("/anomalies", methods=["GET"])
@@ -146,8 +179,10 @@ def get_anomalies():
         ), 200
 
     except Exception as e:
-        logger.error("[MLMonitoringAPI] Error getting anomalies: %s", e)
-        return jsonify({"error": str(e)}), 500
+        # ✅ REFACTORING: Utilisation de APIErrorHandler pour centraliser la gestion des erreurs
+        from shared.error_handlers import APIErrorHandler
+
+        return APIErrorHandler.handle_exception(e, logger)
 
 
 @ml_monitoring_bp.route("/summary", methods=["GET"])
@@ -164,5 +199,7 @@ def get_summary():
         return jsonify(summary), 200
 
     except Exception as e:
-        logger.error("[MLMonitoringAPI] Error getting summary: %s", e)
-        return jsonify({"error": str(e)}), 500
+        # ✅ REFACTORING: Utilisation de APIErrorHandler pour centraliser la gestion des erreurs
+        from shared.error_handlers import APIErrorHandler
+
+        return APIErrorHandler.handle_exception(e, logger)

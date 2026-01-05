@@ -1,31 +1,50 @@
+import json
 import logging
 import traceback
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from flask import request
-from flask_jwt_extended import get_jwt_identity, jwt_required
-from flask_restx import Namespace, Resource, fields, reqparse
+from flask import request  # pyright: ignore[reportMissingImports]
+from flask_jwt_extended import jwt_required  # pyright: ignore[reportMissingImports]
+from flask_restx import (  # pyright: ignore[reportMissingImports]
+    Namespace,
+    Resource,
+    fields,
+    reqparse,
+)
 from sqlalchemy import func, or_
+from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
 from sqlalchemy.orm import joinedload
 
+# ✅ DDD: Utilise use cases au lieu d'adapters
+from application.invoices import (
+    CancelInvoiceUseCase,
+    DuplicateInvoiceUseCase,
+    GenerateConsolidatedInvoiceUseCase,
+    GenerateInvoicePdfUseCase,
+    GenerateInvoiceReminderUseCase,
+    GenerateInvoiceUseCase,
+    GetInvoiceUseCase,
+)
+from application.invoices.duplicate_invoice import DuplicateInvoiceInput
+from application.invoices.generate_invoice_reminder import (
+    GenerateInvoiceReminderInput,
+)
 from ext import limiter, role_required
 from models import (
     Booking,
-    BookingStatus,
     Client,
-    Company,
-    CompanyBillingSettings,
     Invoice,
     InvoicePayment,
-    InvoiceStatus,
-    PaymentMethod,
     User,
     db,
 )
-from models.enums import ClientType
-from services.invoice_service import InvoiceService
-from services.pdf_service import PDFService
+from models.enums import BookingStatus, ClientType, InvoiceStatus, PaymentMethod
+from shared.error_handlers import APIErrorHandler
+from shared.response_helpers import paginated_response, success_response
+
+# Note: Modèles utilisés pour requêtes complexes (subqueries, joins)
+# TODO: Migrer vers repositories quand les méthodes nécessaires seront disponibles
 
 # Constantes pour éviter les valeurs magiques
 SOLDE_ZERO = 0
@@ -37,7 +56,7 @@ AMOUNT_PAID_ZERO = 0
 PERIOD_MONTH_THRESHOLD = 12
 
 # Configuration du logger
-app_logger = logging.getLogger("invoices")
+logger = logging.getLogger(__name__)
 
 # Namespace pour les factures
 invoices_ns = Namespace("invoices", description="Gestion des factures")
@@ -265,7 +284,7 @@ filter_parser.add_argument("with_reminders", type=bool, help="Avec rappels en co
 class InvoicesList(Resource):
     def get(self, company_id):
         """Récupère la liste des factures avec filtres et pagination."""
-        app_logger.info("🚀 InvoicesList.get() company_id=%s", company_id)
+        logger.info("🚀 InvoicesList.get() company_id=%s", company_id)
 
         args = request.args
         status_raw = (args.get("status") or "").strip().lower()
@@ -278,13 +297,8 @@ class InvoicesList(Resource):
         page = args.get("page", default=1, type=int)
         per_page = args.get("per_page", default=20, type=int)
 
-        # ✅ Eager load client + lines pour éviter N+1
-        query = Invoice.query.options(
-            joinedload(Invoice.client).joinedload(Client.user),
-            joinedload(Invoice.bill_to_client).joinedload(Client.user),
-            joinedload(Invoice.lines),
-            joinedload(Invoice.payments),
-        ).filter(Invoice.company_id == company_id)
+        # ✅ Utilisation du repository pour la requête avec filtres dynamiques
+        from repositories.invoice_repository import InvoiceRepository
 
         # Status mapping frontend -> enum value
         status_map = {
@@ -295,102 +309,593 @@ class InvoicesList(Resource):
             "overdue": InvoiceStatus.OVERDUE,
             "cancelled": InvoiceStatus.CANCELLED,
         }
-        if status_raw in status_map:
-            query = query.filter_by(status=status_map[status_raw])
+        status_enum = status_map.get(status_raw) if status_raw else None
 
+        invoice_repo = InvoiceRepository()
+
+        query = invoice_repo.find_models_by_company_with_filters_query(
+            company_id=company_id,
+            status=status_enum,
+            client_id=client_id,
+            year=year,
+            month=month,
+            with_balance=with_balance,
+            with_reminders=with_reminders,
+            search_query=q if q else None,
+        )
+
+        # Calculer les stats sur TOUTES les factures filtrées AVANT le tri et la pagination
+        from sqlalchemy import desc, func
+
+        # IMPORTANT: Créer une copie de la query pour les stats (with_entities modifie la query)
+        # Utiliser from_statement ou créer une nouvelle query depuis la même base
+        stats_base_query = invoice_repo.find_models_by_company_with_filters_query(
+            company_id=company_id,
+            status=status_enum,
+            client_id=client_id,
+            year=year,
+            month=month,
+            with_balance=with_balance,
+            with_reminders=with_reminders,
+            search_query=q if q else None,
+        )
+
+        # Stats avec toutes les factures filtrées (sans tri ni pagination)
+        stats_query = stats_base_query.with_entities(
+            func.sum(Invoice.total_amount).label("total_issued"),
+            func.sum(Invoice.amount_paid).label("total_paid"),
+            func.sum(Invoice.balance_due).label("total_balance"),
+            func.count(Invoice.id)
+            .filter(Invoice.status == InvoiceStatus.OVERDUE)
+            .label("overdue_count"),
+        )
+        stats_result = stats_query.first()
+
+        # Exclure les factures annulées du total émis (utiliser stats_base_query)
+        cancelled_query = stats_base_query.filter(
+            Invoice.status != InvoiceStatus.CANCELLED
+        )
+        total_issued_cancelled = cancelled_query.with_entities(
+            func.sum(Invoice.total_amount).label("total_issued")
+        ).first()
+        total_issued = (
+            float(total_issued_cancelled.total_issued or 0.0)
+            if total_issued_cancelled and total_issued_cancelled.total_issued
+            else 0.0
+        )
+        total_paid = (
+            float(stats_result.total_paid or 0.0)
+            if stats_result and stats_result.total_paid
+            else 0.0
+        )
+        total_balance = (
+            float(stats_result.total_balance or 0.0)
+            if stats_result and stats_result.total_balance
+            else 0.0
+        )
+        overdue_count = (
+            int(stats_result.overdue_count or 0)
+            if stats_result and stats_result.overdue_count
+            else 0
+        )
+
+        # Tri par émission récente et pagination
+        # IMPORTANT: Les joinedload sur relations one-to-many (lines, payments) créent des doublons
+        # Solution: Créer une copie de la query SANS les joinedload pour la pagination,
+        # puis charger les relations après avec subqueryload
+        # Créer une query de base sans les options de chargement pour éviter les doublons
+        # On clone la query en récupérant uniquement les filtres WHERE
+
+        # Créer une nouvelle query Invoice avec les mêmes filtres mais sans les joinedload
+        # On utilise query.statement pour obtenir les filtres WHERE, mais cela ne fonctionne pas bien
+        # Meilleure approche: créer une query basique avec les mêmes filtres
+        pagination_query = Invoice.query.filter(Invoice.company_id == company_id)
+
+        # Appliquer les mêmes filtres que la query originale
+        if status_enum:
+            pagination_query = pagination_query.filter_by(status=status_enum)
         if client_id:
-            query = query.filter(Invoice.client_id == client_id)
-
+            pagination_query = pagination_query.filter(Invoice.client_id == client_id)
         if year:
-            query = query.filter(Invoice.period_year == year)
-
+            pagination_query = pagination_query.filter(Invoice.period_year == year)
         if month:
-            query = query.filter(Invoice.period_month == month)
-
+            pagination_query = pagination_query.filter(Invoice.period_month == month)
         if with_balance:
-            # balance_due > BALANCE_DUE_ZERO
-            query = query.filter(Invoice.balance_due > BALANCE_DUE_ZERO)
-
+            pagination_query = pagination_query.filter(Invoice.balance_due > 0)
         if with_reminders:
-            # reminder_level > REMINDER_LEVEL_ZERO
-            query = query.filter(Invoice.reminder_level > REMINDER_LEVEL_ZERO)
-
+            pagination_query = pagination_query.filter(Invoice.reminder_level > 0)
         if q:
-            # Recherche sur numéro de facture + nom client/patient + nom
-            # institution
+            # Pour la recherche, on doit réappliquer les jointures
             from sqlalchemy import or_
             from sqlalchemy.orm import aliased
 
-            from models import User as MUser
-
-            # Alias pour distinguer client (patient) et institution (payeur)
+            # Client et User sont déjà importés en haut du fichier
             PatientClient = aliased(Client)
             BillToClient = aliased(Client)
-            PatientUser = aliased(MUser)
+            PatientUser = aliased(User)
 
-            # Jointure avec le client (patient)
-            query = query.join(PatientClient, Invoice.client_id == PatientClient.id)
-            query = query.join(PatientUser, PatientClient.user_id == PatientUser.id)
-
-            # Jointure OPTIONNELLE avec l'institution payeuse (bill_to_client)
-            query = query.outerjoin(
+            pagination_query = pagination_query.join(
+                PatientClient, Invoice.client_id == PatientClient.id
+            )
+            pagination_query = pagination_query.join(
+                PatientUser, PatientClient.user_id == PatientUser.id
+            )
+            pagination_query = pagination_query.outerjoin(
                 BillToClient, Invoice.bill_to_client_id == BillToClient.id
             )
 
             like = f"%{q}%"
-            query = query.filter(
+            pagination_query = pagination_query.filter(
                 or_(
                     Invoice.invoice_number.ilike(like),
                     PatientUser.first_name.ilike(like),
                     PatientUser.last_name.ilike(like),
                     PatientUser.username.ilike(like),
-                    # ✅ Rechercher aussi dans le nom de l'institution
                     BillToClient.institution_name.ilike(like),
                 )
             )
 
-        # Tri par émission récente
-        from sqlalchemy import desc
+        # Créer une sous-requête pour obtenir les IDs paginés (sans doublons)
+        # IMPORTANT: PostgreSQL exige que les colonnes ORDER BY soient dans le SELECT avec DISTINCT
+        # On sélectionne id et issued_at, on trie, puis on ne garde que id dans la sous-requête externe
+        # Note: Si issued_at est NULL, il sera trié en dernier (NULLS LAST par défaut en PostgreSQL)
+        ids_subquery = (
+            pagination_query.with_entities(Invoice.id, Invoice.issued_at)
+            .distinct()
+            .order_by(desc(Invoice.issued_at).nulls_last())
+            .subquery()
+        )
 
-        query = query.order_by(desc(Invoice.issued_at))
+        # Paginer sur les IDs
+        ids_pagination = db.session.query(ids_subquery.c.id).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+        paginated_ids = [row[0] for row in ids_pagination.items]
 
-        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
-        items = pagination.items
+        # Charger les objets complets avec les relations pour les IDs paginés
+        # IMPORTANT: Utiliser subqueryload au lieu de joinedload pour les relations one-to-many
+        # pour éviter les doublons qui faussent la pagination
+        if paginated_ids:
+            from sqlalchemy.orm import subqueryload
+
+            query = (
+                Invoice.query.options(
+                    joinedload(Invoice.client).joinedload(Client.user),
+                    joinedload(Invoice.bill_to_client).joinedload(Client.user),
+                    subqueryload(
+                        Invoice.lines
+                    ),  # Utiliser subqueryload pour one-to-many
+                    subqueryload(
+                        Invoice.payments
+                    ),  # Utiliser subqueryload pour one-to-many
+                )
+                .filter(Invoice.id.in_(paginated_ids))
+                .order_by(desc(Invoice.issued_at).nulls_last())
+            )
+
+        else:
+            # Aucun ID trouvé, créer une query vide
+            query = Invoice.query.filter(Invoice.id.in_([]))
+
+        # Charger les objets complets
+        items = query.all() if paginated_ids else []
+
+        # Créer un objet de pagination manuel pour compatibilité avec le reste du code
+        class PaginationObject:
+            """Objet de pagination manuel pour compatibilité avec le code existant."""
+
+            def __init__(self, items, total, page, per_page):  # pyright: ignore[reportMissingSuperCall]
+                self.items = items
+                self.total = total
+                self.page = page
+                self.per_page = per_page
+                self.pages = (total + per_page - 1) // per_page if per_page > 0 else 0
+                # Attributs pour compatibilité avec Flask-SQLAlchemy pagination
+                self.has_next = page < self.pages
+                self.has_prev = page > 1
+                self.next_num = page + 1 if self.has_next else None
+                self.prev_num = page - 1 if self.has_prev else None
+
+        # Calculer le total pour la pagination (utiliser ids_pagination.total qui est déjà calculé)
+        total_count = ids_pagination.total if paginated_ids else 0
 
         result_invoices = [inv.to_dict() for inv in items]
 
-        # Stats sur l'ensemble filtré (pas seulement la page)
-        # Pour efficience on calcule sur la page si volumineux; ici simple sum
-        # sur items
-        # Exclure les factures annulées du total émis
-        total_issued = sum(
-            float(inv["total_amount"])
-            for inv in result_invoices
-            if inv["status"] != "cancelled"
+        # ✅ Inclure les factures partenaires (PartnerInvoice)
+        # Une facture partenaire appartient à l'entreprise si :
+        # - L'entreprise est owner_company_id ou partner_company_id du partenariat
+        # - ET l'entreprise est executing_company_id dans les transferts associés à la facture
+        from models.booking_transfer import BookingTransfer
+        from models.company import Company
+        from models.enums import TransferStatus
+        from models.partner_invoice import (
+            PartnerInvoice,
+            PartnerInvoiceStatus,
+            partner_invoice_transfers,
         )
-        total_paid = sum(float(inv["amount_paid"]) for inv in result_invoices)
-        total_balance = sum(float(inv["balance_due"]) for inv in result_invoices)
-        overdue_count = len(
-            [inv for inv in result_invoices if inv["status"] == "OVERDUE"]
+        from models.partnership import Partnership
+
+        # Récupérer tous les partenariats où l'entreprise est impliquée
+        partnerships = Partnership.query.filter(
+            (Partnership.owner_company_id == company_id)
+            | (Partnership.partner_company_id == company_id)
+        ).all()
+
+        # Mapping des statuts PartnerInvoice vers Invoice pour le filtrage
+        partner_status_map = {
+            "draft": PartnerInvoiceStatus.DRAFT,
+            "sent": PartnerInvoiceStatus.SENT,
+            "partially_paid": PartnerInvoiceStatus.PARTIALLY_PAID,
+            "paid": PartnerInvoiceStatus.PAID,
+            "overdue": PartnerInvoiceStatus.OVERDUE,
+            "cancelled": PartnerInvoiceStatus.CANCELLED,
+        }
+        partner_status_enum = partner_status_map.get(status_raw) if status_raw else None
+
+        partner_invoice_ids = []
+        for partnership in partnerships:
+            # Récupérer les factures partenaires pour ce partenariat avec filtres
+            partner_invoices_query = PartnerInvoice.query.filter_by(
+                partnership_id=partnership.id
+            )
+
+            # Appliquer le filtre de statut si spécifié
+            if partner_status_enum is not None:
+                partner_invoices_query = partner_invoices_query.filter_by(
+                    status=partner_status_enum
+                )
+
+            # Appliquer le filtre d'année si spécifié
+            if year:
+                partner_invoices_query = partner_invoices_query.filter_by(
+                    period_year=year
+                )
+
+            # Appliquer le filtre de mois si spécifié
+            if month:
+                partner_invoices_query = partner_invoices_query.filter_by(
+                    period_month=month
+                )
+
+            partner_invoices = partner_invoices_query.all()
+
+            for partner_invoice in partner_invoices:
+                # Vérifier que l'entreprise est executing_company_id dans les transferts
+                # associés à cette facture
+                transfers = (
+                    db.session.query(BookingTransfer)
+                    .join(
+                        partner_invoice_transfers,
+                        BookingTransfer.id
+                        == partner_invoice_transfers.c.booking_transfer_id,
+                    )
+                    .filter(
+                        partner_invoice_transfers.c.partner_invoice_id
+                        == partner_invoice.id,
+                        BookingTransfer.executing_company_id == company_id,
+                        BookingTransfer.status == TransferStatus.COMPLETED,
+                    )
+                    .count()
+                )
+
+                if transfers > 0:
+                    partner_invoice_ids.append(partner_invoice.id)
+
+        # Charger les factures partenaires avec les relations nécessaires
+        partner_invoices_items = []
+        if partner_invoice_ids:
+            partner_invoices_items = (
+                PartnerInvoice.query.options(
+                    joinedload(PartnerInvoice.partnership).joinedload(
+                        Partnership.owner_company
+                    ),
+                    joinedload(PartnerInvoice.partnership).joinedload(
+                        Partnership.partner_company
+                    ),
+                )
+                .filter(PartnerInvoice.id.in_(partner_invoice_ids))
+                .all()
+            )
+
+        # #region agent log (désactivé par défaut, activable via DEBUG_AGENT_LOGS=1)
+        import os
+
+        if os.getenv("DEBUG_AGENT_LOGS", "0") == "1":
+            import json
+            from pathlib import Path
+
+            try:
+                debug_log_path = os.getenv("DEBUG_AGENT_LOG_PATH", ".cursor/debug.log")
+                with Path(debug_log_path).open("a", encoding="utf-8") as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "E",
+                                "location": "routes/invoices.py:InvoicesList.get",
+                                "message": "Factures partenaires trouvées",
+                                "data": {
+                                    "company_id": company_id,
+                                    "partner_invoice_ids": partner_invoice_ids,
+                                    "partner_invoices_count": len(
+                                        partner_invoices_items
+                                    ),
+                                },
+                                "timestamp": int(__import__("time").time() * 1000),
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+        # #endregion
+
+        # Convertir les factures partenaires en format compatible avec Invoice
+        # pour l'affichage dans le tableau
+        partner_invoices_dict = []
+        for pi in partner_invoices_items:
+            # Calculer amount_paid et balance_due
+            amount_paid = float(pi.amount_paid or 0)
+            balance_due = float(pi.total_amount) - amount_paid
+
+            # Si le statut n'est pas à jour, le mettre à jour en fonction des paiements
+            # (pour les factures existantes qui n'ont pas encore amount_paid)
+            if pi.status != PartnerInvoiceStatus.CANCELLED:
+                if balance_due <= 0:
+                    if pi.status != PartnerInvoiceStatus.PAID:
+                        pi.status = PartnerInvoiceStatus.PAID
+                        if not pi.paid_at:
+                            pi.paid_at = datetime.now(UTC)
+                elif amount_paid > 0:
+                    if pi.status not in (
+                        PartnerInvoiceStatus.PARTIALLY_PAID,
+                        PartnerInvoiceStatus.PAID,
+                    ):
+                        pi.status = PartnerInvoiceStatus.PARTIALLY_PAID
+                elif pi.status == PartnerInvoiceStatus.PAID:
+                    # Si le statut est PAID mais qu'il n'y a pas de paiement, revenir à SENT
+                    pi.status = PartnerInvoiceStatus.SENT
+                    pi.paid_at = None
+
+            # Appliquer le filtre with_balance si spécifié
+            if with_balance and balance_due <= 0:
+                continue
+
+            # Déterminer quelle entreprise afficher (l'autre entreprise du partenariat)
+            partner_company_name = None
+            if pi.partnership:
+                if (
+                    pi.partnership.owner_company_id == company_id
+                    and pi.partnership.partner_company
+                ):
+                    # L'entreprise actuelle est owner, afficher partner
+                    partner_company_name = pi.partnership.partner_company.name
+                elif (
+                    pi.partnership.partner_company_id == company_id
+                    and pi.partnership.owner_company
+                ):
+                    # L'entreprise actuelle est partner, afficher owner
+                    partner_company_name = pi.partnership.owner_company.name
+
+            # Si le nom n'est toujours pas déterminé, essayer une approche alternative
+            if not partner_company_name and pi.partnership:
+                # En dernier recours, récupérer le nom de l'autre entreprise
+                # en utilisant directement les IDs
+                other_company_id = None
+                if pi.partnership.owner_company_id == company_id:
+                    other_company_id = pi.partnership.partner_company_id
+                elif pi.partnership.partner_company_id == company_id:
+                    other_company_id = pi.partnership.owner_company_id
+
+                if other_company_id:
+                    other_company = Company.query.get(other_company_id)
+                    if other_company:
+                        partner_company_name = other_company.name
+
+            # Appliquer le filtre de recherche textuelle (q) si spécifié
+            if q:
+                search_lower = q.lower()
+                invoice_number_match = (
+                    pi.invoice_number.lower().find(search_lower) >= 0
+                    if pi.invoice_number
+                    else False
+                )
+                company_name_match = (
+                    partner_company_name.lower().find(search_lower) >= 0
+                    if partner_company_name
+                    else False
+                )
+                if not invoice_number_match and not company_name_match:
+                    continue  # Ne pas inclure cette facture si elle ne correspond pas à la recherche
+
+            # Créer un dictionnaire compatible avec Invoice.to_dict()
+            # mais avec un type spécial pour identifier les factures partenaires
+            partner_invoices_dict.append(
+                {
+                    "id": pi.id,
+                    "invoice_number": pi.invoice_number,
+                    "period_year": pi.period_year,
+                    "period_month": pi.period_month,
+                    "total_amount": float(pi.total_amount),
+                    "amount_paid": amount_paid,
+                    "balance_due": balance_due,
+                    "status": pi.status,
+                    "issued_at": pi.issued_at.isoformat() if pi.issued_at else None,
+                    "due_date": pi.due_date.isoformat() if pi.due_date else None,
+                    "paid_at": pi.paid_at.isoformat() if pi.paid_at else None,
+                    "pdf_url": pi.pdf_url,
+                    "currency": pi.currency,
+                    "client": {
+                        "id": None,
+                        "first_name": "",
+                        "last_name": "",
+                        "username": "",
+                        "is_institution": True,
+                        "institution_name": partner_company_name
+                        or "Entreprise partenaire",
+                    },
+                    "bill_to_client": None,
+                    "lines": [],
+                    "payments": [],
+                    "reminders": [],
+                    "reminder_level": 0,  # Les factures partenaires n'ont pas de rappels
+                    "last_reminder_at": None,  # Les factures partenaires n'ont pas de rappels
+                    "is_partner_invoice": True,  # Flag pour identifier les factures partenaires
+                    "partnership_id": pi.partnership_id,
+                }
+            )
+
+        # Combiner les factures normales et partenaires
+        all_invoices = result_invoices + partner_invoices_dict
+
+        # Trier par issued_at (les plus récentes en premier)
+        all_invoices.sort(
+            key=lambda x: (
+                datetime.fromisoformat(x["issued_at"].replace("Z", "+00:00"))
+                if x.get("issued_at")
+                else datetime.min.replace(tzinfo=UTC)
+            ),
+            reverse=True,
         )
 
-        return {
-            "invoices": result_invoices,
-            "pagination": {
-                "page": pagination.page,
-                "per_page": pagination.per_page,
-                "total": pagination.total,
-                "pages": pagination.pages,
-                "has_next": pagination.has_next,
-                "has_prev": pagination.has_prev,
-            },
-            "stats": {
-                "total_issued": total_issued,
-                "total_paid": total_paid,
-                "total_balance": total_balance,
-                "overdue_count": overdue_count,
-            },
+        # Paginer manuellement sur toutes les factures (normales + partenaires)
+        total_count_with_partners = len(all_invoices)
+        start_idx = (page - 1) * per_page
+        end_idx = start_idx + per_page
+        paginated_invoices = all_invoices[start_idx:end_idx]
+
+        # Calculer le total pour la pagination
+        total_count = total_count_with_partners
+
+        pagination = PaginationObject(paginated_invoices, total_count, page, per_page)
+
+        # Construire les liens de pagination
+        links = {}
+        if pagination.has_next:
+            links["next"] = (
+                f"/api/invoices?page={pagination.page + 1}&per_page={pagination.per_page}"
+            )
+        if pagination.has_prev:
+            links["prev"] = (
+                f"/api/invoices?page={pagination.page - 1}&per_page={pagination.per_page}"
+            )
+        links["first"] = f"/api/invoices?page=1&per_page={pagination.per_page}"
+        if pagination.pages > 0:
+            links["last"] = (
+                f"/api/invoices?page={pagination.pages}&per_page={pagination.per_page}"
+            )
+
+        # Retourner réponse paginée avec stats
+        response_data = paginated_response(
+            items=paginated_invoices,
+            total=pagination.total or 0,
+            page=pagination.page,
+            per_page=pagination.per_page,
+            links=links if links else None,
+        )
+        # Calculer les stats incluant les factures partenaires
+        partner_total_issued = sum(
+            float(pi.total_amount)
+            for pi in partner_invoices_items
+            if pi.status != PartnerInvoiceStatus.CANCELLED
+        )
+        partner_total_paid = sum(
+            float(pi.total_amount)
+            for pi in partner_invoices_items
+            if pi.status == PartnerInvoiceStatus.PAID
+        )
+        partner_total_balance = sum(
+            float(pi.total_amount)
+            for pi in partner_invoices_items
+            if pi.status != PartnerInvoiceStatus.PAID
+        )
+        partner_overdue_count = sum(
+            1
+            for pi in partner_invoices_items
+            if pi.status == PartnerInvoiceStatus.OVERDUE
+        )
+
+        # Ajouter les stats au response_data (incluant factures normales + partenaires)
+        response_data[0]["stats"] = {
+            "total_issued": total_issued + partner_total_issued,
+            "total_paid": total_paid + partner_total_paid,
+            "total_balance": total_balance + partner_total_balance,
+            "overdue_count": overdue_count + partner_overdue_count,
         }
+        return response_data
+
+
+@invoices_ns.route("/companies/<int:company_id>/invoices/debug")
+class InvoicesDebug(Resource):
+    """Endpoint de debug temporaire pour identifier les factures."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def get(self, company_id):
+        """Debug: Liste toutes les factures de l'entreprise."""
+        from sqlalchemy import func
+
+        from models.enums import InvoiceStatus
+
+        all_invoices = Invoice.query.filter_by(company_id=company_id).all()
+        non_cancelled = (
+            Invoice.query.filter_by(company_id=company_id)
+            .filter(Invoice.status != InvoiceStatus.CANCELLED)
+            .all()
+        )
+
+        total_calculated = (
+            db.session.query(func.sum(Invoice.total_amount))
+            .filter_by(company_id=company_id)
+            .filter(Invoice.status != InvoiceStatus.CANCELLED)
+            .scalar()
+        )
+
+        # Test avec les filtres year=2026, month=None
+        from repositories.invoice_repository import InvoiceRepository
+
+        repo = InvoiceRepository()
+        filtered_query = repo.find_models_by_company_with_filters_query(
+            company_id=company_id,
+            year=2026,
+            month=None,
+        )
+        filtered_invoices = filtered_query.all()
+
+        result = {
+            "total_invoices": len(all_invoices),
+            "non_cancelled_count": len(non_cancelled),
+            "total_calculated": float(total_calculated or 0.0),
+            "filtered_2026_count": len(filtered_invoices),
+            "invoices": [
+                {
+                    "id": inv.id,
+                    "period_year": inv.period_year,
+                    "period_month": inv.period_month,
+                    "total_amount": float(inv.total_amount),
+                    "status": inv.status.value
+                    if hasattr(inv.status, "value")
+                    else str(inv.status),
+                    "issued_at": inv.issued_at.isoformat() if inv.issued_at else None,
+                    "client_id": inv.client_id,
+                }
+                for inv in all_invoices
+            ],
+            "filtered_2026": [
+                {
+                    "id": inv.id,
+                    "period_year": inv.period_year,
+                    "period_month": inv.period_month,
+                    "total_amount": float(inv.total_amount),
+                    "status": inv.status.value
+                    if hasattr(inv.status, "value")
+                    else str(inv.status),
+                }
+                for inv in filtered_invoices
+            ],
+        }
+        return result, 200
 
 
 @invoices_ns.route("/companies/<int:company_id>/billing-settings")
@@ -399,14 +904,32 @@ class CompanyBillingSettingsResource(Resource):
     @role_required(["ADMIN", "COMPANY"])
     def get(self, company_id):
         """Récupère les paramètres de facturation d'une entreprise."""
-        user_public_id = get_jwt_identity()
-        user = User.query.filter_by(public_id=user_public_id).first()
-        if not user:
-            return {"error": "Utilisateur non trouvé"}, 404
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        from routes.companies import _get_current_company_via_use_case
 
-        company = Company.query.filter_by(id=company_id).first()
-        if not company or company.user_id != user.id:
-            return {"error": "Entreprise non trouvée ou accès refusé"}, 404
+        company, error_response, status_code = _get_current_company_via_use_case()
+        if error_response or not company:
+            return error_response, status_code
+
+        # Vérifier que l'ID de l'entreprise correspond
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except (ValueError, TypeError, OverflowError):
+            # Erreurs de conversion attendues : valeur invalide, type incorrect, overflow
+            cid = None
+        except Exception:
+            # Erreur inattendue : logger et utiliser None
+            logger.debug("Unexpected error converting company.id to int: %s", cid_obj)
+            cid = None
+        if cid != company_id:
+            return APIErrorHandler.handle_permission_error(
+                "Entreprise non trouvée ou accès refusé",
+                logger_instance=logger,
+            )
+
+        # ✅ Récupérer directement le modèle SQLAlchemy (pas via repository qui retourne un DTO)
+        from models import CompanyBillingSettings
 
         billing_settings = CompanyBillingSettings.query.filter_by(
             company_id=company_id
@@ -417,33 +940,59 @@ class CompanyBillingSettingsResource(Resource):
             billing_settings.company_id = company_id
             db.session.add(billing_settings)
             db.session.commit()
-        return billing_settings.to_dict()
+        return success_response(data=billing_settings.to_dict())
 
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
     @invoices_ns.expect(billing_settings_model, validate=False)
-    def put(self, company_id):
+    def put(self, company_id):  # noqa: PLR0911
         """Met à jour les paramètres de facturation d'une entreprise."""
         try:
-            user_public_id = get_jwt_identity()
-            user = User.query.filter_by(public_id=user_public_id).first()
-            if not user:
-                return {"error": "Utilisateur non trouvé"}, 404
+            # ✅ DDD: Utilise use-case au lieu de service directement
+            from routes.companies import _get_current_company_via_use_case
 
-            company = Company.query.filter_by(id=company_id).first()
-            if not company or company.user_id != user.id:
-                return {"error": "Entreprise non trouvée ou accès refusé"}, 404
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                return error_response, status_code
+
+            # Vérifier que l'ID de l'entreprise correspond
+            cid_obj = getattr(company, "id", None)
+            try:
+                cid = int(cid_obj) if cid_obj is not None else None
+            except (ValueError, TypeError, OverflowError):
+                # Erreurs de conversion attendues : valeur invalide, type incorrect, overflow
+                cid = None
+            except Exception:
+                # Erreur inattendue : logger et utiliser None
+                logger.debug(
+                    "Unexpected error converting company.id to int: %s", cid_obj
+                )
+                cid = None
+            if cid != company_id:
+                return APIErrorHandler.handle_permission_error(
+                    "Entreprise non trouvée ou accès refusé",
+                    logger_instance=logger,
+                )
+
+            # ✅ Récupérer directement le modèle SQLAlchemy (pas via repository qui retourne un DTO)
+            from models import CompanyBillingSettings
 
             billing_settings = CompanyBillingSettings.query.filter_by(
                 company_id=company_id
             ).first()
             if not billing_settings:
-                return {"error": "Paramètres de facturation non trouvés"}, 404
+                return APIErrorHandler.handle_not_found(
+                    "Paramètres de facturation",
+                    company_id if "company_id" in locals() else None,
+                    logger,
+                )
 
             data = request.get_json() or {}
 
             # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-            from marshmallow import ValidationError
+            from marshmallow import (  # pyright: ignore[reportMissingImports]
+                ValidationError,
+            )
 
             from schemas.invoice_schemas import BillingSettingsUpdateSchema
             from schemas.validation_utils import (
@@ -458,7 +1007,7 @@ class CompanyBillingSettingsResource(Resource):
             except ValidationError as e:
                 return handle_validation_error(e)
 
-            app_logger.info(
+            logger.info(
                 "Données reçues pour les paramètres de facturation: %s", validated_data
             )
 
@@ -482,9 +1031,7 @@ class CompanyBillingSettingsResource(Resource):
                                 float(value) if "." in str(value) else int(value),
                             )
                         except (ValueError, TypeError):
-                            app_logger.warning(
-                                "Valeur invalide pour %s: %s", field, value
-                            )
+                            logger.warning("Valeur invalide pour %s: %s", field, value)
                             setattr(billing_settings, field, None)
 
             # Mettre à jour les autres champs - utilise données validées
@@ -516,8 +1063,6 @@ class CompanyBillingSettingsResource(Resource):
                 sched = validated_data["reminder_schedule_days"]
                 try:
                     if isinstance(sched, str):
-                        import json
-
                         sched = json.loads(sched)
                     # Normaliser en dict str->int ex: {"1": 30, "2": 10, "3":
                     # 5}
@@ -527,9 +1072,23 @@ class CompanyBillingSettingsResource(Resource):
                     elif isinstance(sched, dict):
                         sched = {str(k): int(v) for k, v in sched.items()}
                     billing_settings.reminder_schedule_days = sched
-                except Exception:
-                    app_logger.warning(
-                        "reminder_schedule_days invalide, valeur ignorée"
+                except json.JSONDecodeError as e:
+                    # Erreurs de parsing JSON attendues (doit être avant ValueError)
+                    logger.warning(
+                        "reminder_schedule_days invalide (JSON decode error), valeur ignorée: %s",
+                        e,
+                    )
+                except (ValueError, TypeError, KeyError) as e:
+                    # Erreurs de parsing/validation attendues : valeurs invalides, types incorrects
+                    logger.warning(
+                        "reminder_schedule_days invalide (validation error: %s), valeur ignorée",
+                        type(e).__name__,
+                    )
+                except Exception as e:
+                    # Erreur inattendue : logger mais continuer
+                    logger.warning(
+                        "reminder_schedule_days invalide (unexpected error: %s), valeur ignorée",
+                        e,
                     )
 
             # auto_reminders_enabled si fourni - utilise données validées
@@ -546,7 +1105,24 @@ class CompanyBillingSettingsResource(Resource):
                 if rate_value is None:
                     billing_settings.vat_rate = None
                 else:
-                    billing_settings.vat_rate = Decimal(str(rate_value))
+                    try:
+                        billing_settings.vat_rate = Decimal(str(rate_value))
+                    except (ValueError, TypeError) as e:
+                        # Erreurs de conversion Decimal attendues
+                        logger.warning(
+                            "vat_rate invalide (validation error: %s), valeur ignorée: %s",
+                            type(e).__name__,
+                            rate_value,
+                        )
+                        billing_settings.vat_rate = None
+                    except Exception as e:
+                        # Erreur inattendue : logger et utiliser None
+                        logger.warning(
+                            "vat_rate invalide (unexpected error: %s), valeur ignorée: %s",
+                            e,
+                            rate_value,
+                        )
+                        billing_settings.vat_rate = None
 
             if "vat_label" in validated_data:
                 billing_settings.vat_label = validated_data.get("vat_label")
@@ -554,14 +1130,35 @@ class CompanyBillingSettingsResource(Resource):
             if "vat_number" in validated_data:
                 billing_settings.vat_number = validated_data.get("vat_number")
 
-            app_logger.info("Paramètres mis à jour avec succès")
+            logger.info("Paramètres mis à jour avec succès")
             db.session.commit()
-            return billing_settings.to_dict()
+            return success_response(data=billing_settings.to_dict())
 
-        except Exception as e:
-            app_logger.error("Erreur lors de la mise à jour des paramètres: %s", str(e))
+        except (OperationalError, DBAPIError, IntegrityError) as e:
+            # Erreurs DB attendues : connexion, contraintes, timeout
+            logger.error(
+                "Erreur DB lors de la mise à jour des paramètres (DB error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
             db.session.rollback()
-            return {"error": f"Erreur interne du serveur: {e!s}"}, 500
+            return APIErrorHandler.handle_exception(e, logger)
+        except (ValueError, TypeError, AttributeError) as e:
+            # Erreurs de validation attendues : données invalides, attributs manquants
+            logger.error(
+                "Erreur de validation lors de la mise à jour des paramètres (validation error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+            db.session.rollback()
+            return APIErrorHandler.handle_validation_error(
+                str(e), logger_instance=logger
+            )
+        except Exception as e:
+            # Erreur inattendue : logger avec trace complète
+            logger.exception("Erreur inattendue lors de la mise à jour des paramètres")
+            db.session.rollback()
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 @invoices_ns.route("/companies/<int:company_id>/clients/eligible")
@@ -580,39 +1177,88 @@ class EligibleClients(Resource):
     def get(self, company_id: int):
         """Liste les clients ayant des trajets non facturés,
         avec possibilité de recherche."""
-        user_public_id = get_jwt_identity()
-        user = User.query.filter_by(public_id=user_public_id).first()
-        if not user or not user.company or user.company.id != company_id:
-            return {"error": "Entreprise non trouvée ou accès refusé"}, 404
+        # ✅ DDD: Utilise use-case au lieu de service directement
+        from routes.companies import _get_current_company_via_use_case
+
+        company, error_response, status_code = _get_current_company_via_use_case()
+        if error_response or not company:
+            return error_response, status_code
+
+        # Vérifier que l'ID de l'entreprise correspond
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except (ValueError, TypeError, OverflowError):
+            # Erreurs de conversion attendues : valeur invalide, type incorrect, overflow
+            cid = None
+        except Exception:
+            # Erreur inattendue : logger et utiliser None
+            logger.debug("Unexpected error converting company.id to int: %s", cid_obj)
+            cid = None
+        if cid != company_id:
+            return APIErrorHandler.handle_permission_error(
+                "Entreprise non trouvée ou accès refusé",
+                logger_instance=logger,
+            )
 
         search = (request.args.get("search") or "").strip()
+        period_year = request.args.get("year", type=int)
+        period_month = request.args.get("month", type=int)
         try:
             limit = int(request.args.get("limit", 50))
         except ValueError:
             limit = 50
         limit = max(1, min(limit, 200))
 
-        unbilled_subquery = (
-            db.session.query(
-                Booking.client_id.label("client_id"),
-                func.count(Booking.id).label("unbilled_count"),
-                func.max(
-                    func.coalesce(Booking.completed_at, Booking.scheduled_time)
-                ).label("last_ride_at"),
-            )
-            .filter(
-                Booking.company_id == company_id,
-                Booking.status.in_(
-                    [
-                        BookingStatus.COMPLETED.value,
-                        BookingStatus.RETURN_COMPLETED.value,
-                    ]
-                ),
-                Booking.invoice_line_id.is_(None),
-            )
-            .group_by(Booking.client_id)
-            .subquery()
+        # Log pour debug
+        logger.info(
+            "🔍 [EligibleClients] Paramètres reçus: company_id=%s, year=%s, month=%s, search=%s, limit=%s",
+            company_id,
+            period_year,
+            period_month,
+            search,
+            limit,
         )
+
+        # ✅ Pour les courses transférées :
+        # - L'entreprise propriétaire (company_id) peut facturer le client
+        # - L'entreprise exécutante (executing_company_id) peut facturer l'entreprise propriétaire
+        # Ici, on cherche les clients avec courses où l'entreprise est propriétaire
+        unbilled_query = db.session.query(
+            Booking.client_id.label("client_id"),
+            func.count(Booking.id).label("unbilled_count"),
+            func.max(func.coalesce(Booking.completed_at, Booking.scheduled_time)).label(
+                "last_ride_at"
+            ),
+        ).filter(
+            Booking.company_id == company_id,  # Entreprise propriétaire
+            Booking.status.in_(
+                [
+                    BookingStatus.COMPLETED.value,
+                    BookingStatus.RETURN_COMPLETED.value,
+                ]
+            ),
+            Booking.invoice_line_id.is_(None),
+        )
+
+        # Filtrer par période si fournie
+        if period_year and period_month:
+            PERIOD_MONTH_THRESHOLD = 12
+            # Créer des dates timezone-naive pour la comparaison (scheduled_time est timezone-naive dans la DB)
+            start_date = datetime(period_year, period_month, 1)
+            if period_month == PERIOD_MONTH_THRESHOLD:
+                end_date = datetime(period_year + 1, 1, 1)
+            else:
+                end_date = datetime(period_year, period_month + 1, 1)
+
+            unbilled_query = unbilled_query.filter(
+                Booking.scheduled_time >= start_date,
+                Booking.scheduled_time < end_date,
+            )
+
+        unbilled_subquery = unbilled_query.group_by(Booking.client_id).subquery()
+        # Note: Les courses transférées ont toujours company_id = entreprise propriétaire,
+        # donc elles sont incluses automatiquement dans cette requête
 
         query = (
             db.session.query(
@@ -653,7 +1299,16 @@ class EligibleClients(Resource):
             )
             clients.append(payload)
 
-        return {"clients": clients, "total": len(clients)}, 200
+        # Log pour debug
+        logger.info(
+            "🔍 [EligibleClients] Résultats: %s clients trouvés pour company_id=%s, year=%s, month=%s",
+            len(clients),
+            company_id,
+            period_year,
+            period_month,
+        )
+
+        return success_response(data={"clients": clients, "total": len(clients)})
 
 
 @invoices_ns.route("/companies/<int:company_id>/invoices/generate")
@@ -669,164 +1324,269 @@ class GenerateInvoice(Resource):
         status_code = 200
 
         try:
-            user_public_id = get_jwt_identity()
-            user = User.query.filter_by(public_id=user_public_id).first()
-            if not user or not user.company or user.company.id != company_id:
-                result = {"error": "Entreprise non trouvée ou accès refusé"}
-                status_code = 404
-            else:
-                data = request.get_json() or {}
+            # ✅ DDD: Utilise use-case au lieu de service directement
+            from routes.companies import _get_current_company_via_use_case
 
-                # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-                from marshmallow import ValidationError
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                return error_response, status_code
 
-                from schemas.invoice_schemas import InvoiceGenerateSchema
-                from schemas.validation_utils import (
-                    handle_validation_error,
-                    validate_request,
+            # Continuer avec la génération de facture
+            data = request.get_json() or {}
+
+            # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
+            from marshmallow import (  # type: ignore[reportMissingImports]
+                ValidationError,
+            )
+
+            from schemas.invoice_schemas import InvoiceGenerateSchema
+            from schemas.validation_utils import validate_request
+
+            try:
+                validated_data = validate_request(
+                    InvoiceGenerateSchema(), data, strict=False
+                )
+            except ValidationError as e:
+                result, status_code = APIErrorHandler.handle_validation_error(
+                    str(e),
+                    logger_instance=logger,
+                )
+                return result, status_code
+
+            client_id = validated_data.get("client_id")
+            # NOUVEAU: pour facturation groupée
+            client_ids = validated_data.get("client_ids", [])
+            # NOUVEAU: support facturation tierce
+            bill_to_client_id = validated_data.get("bill_to_client_id")
+            period_year = validated_data["period_year"]
+            period_month = validated_data["period_month"]
+
+            # period_year et period_month sont déjà validés par le schema,
+            # donc toujours présents
+            # ✅ DDD: Utilise adapter au lieu de service directement
+            client_reservations = validated_data.get("client_reservations")
+            overrides = validated_data.get("overrides")
+
+            # Cas 1: Facturation groupée de plusieurs clients vers une
+            # institution
+            if client_ids and bill_to_client_id:
+                logger.info(
+                    ("Génération factures consolidées: %s clients vers institution %s"),
+                    len(client_ids),
+                    bill_to_client_id,
                 )
 
-                try:
-                    validated_data = validate_request(
-                        InvoiceGenerateSchema(), data, strict=False
+                # Vérifier que l'institution existe et appartient à
+                # l'entreprise
+                # Imports locaux pour éviter dépendances circulaires
+                from repositories.client_repository import ClientRepository
+
+                client_repo = ClientRepository()
+                institution = client_repo.find_model_by_id_and_company(
+                    bill_to_client_id, company_id
+                )
+                if not institution:
+                    result, status_code = APIErrorHandler.handle_not_found(
+                        "Institution",
+                        bill_to_client_id if "bill_to_client_id" in locals() else None,
+                        logger,
                     )
-                except ValidationError as e:
-                    result = handle_validation_error(e)
-                    status_code = 400
-                    return result, status_code
-
-                client_id = validated_data.get("client_id")
-                # NOUVEAU: pour facturation groupée
-                client_ids = validated_data.get("client_ids", [])
-                # NOUVEAU: support facturation tierce
-                bill_to_client_id = validated_data.get("bill_to_client_id")
-                period_year = validated_data["period_year"]
-                period_month = validated_data["period_month"]
-
-                # period_year et period_month sont déjà validés par le schema,
-                # donc toujours présents
-                invoice_service = InvoiceService()
-
-                client_reservations = validated_data.get("client_reservations")
-                overrides = validated_data.get("overrides")
-
-                # Cas 1: Facturation groupée de plusieurs clients vers une
-                # institution
-                if client_ids and bill_to_client_id:
-                    app_logger.info(
-                        (
-                            "Génération factures consolidées: %s clients "
-                            "vers institution %s"
-                        ),
-                        len(client_ids),
-                        bill_to_client_id,
+                elif not bool(institution.is_institution):
+                    result, status_code = APIErrorHandler.handle_validation_error(
+                        "Le client sélectionné n'est pas une institution",
+                        logger_instance=logger,
+                    )
+                else:
+                    # ✅ DDD: Générer les factures via use case
+                    from application.invoices.generate_consolidated_invoice import (
+                        GenerateConsolidatedInvoiceInput,
                     )
 
-                    # Vérifier que l'institution existe et appartient à
-                    # l'entreprise
-                    institution = Client.query.filter_by(
-                        id=bill_to_client_id, company_id=company_id
-                    ).first()
-                    if not institution:
-                        result = {"error": "Institution non trouvée"}
-                        status_code = 404
-                    elif not institution.is_institution:
-                        result = {
-                            "error": "Le client sélectionné n'est pas une institution"
-                        }
-                        status_code = 400
-                    else:
-                        # Générer les factures
-                        invoice_result = invoice_service.generate_consolidated_invoice(
-                            company_id,
-                            client_ids,
-                            period_year,
-                            period_month,
-                            bill_to_client_id,
-                            client_reservations,
-                            overrides,
+                    uc = GenerateConsolidatedInvoiceUseCase()
+                    input_data = GenerateConsolidatedInvoiceInput(
+                        company_id=company_id,
+                        client_ids=client_ids,
+                        period_year=period_year,
+                        period_month=period_month,
+                        bill_to_client_id=bill_to_client_id,
+                        client_reservations=client_reservations,
+                        overrides=overrides,
+                    )
+                    invoice_result = uc.execute(input_data)
+
+                    if not invoice_result.success:
+                        result, status_code = (
+                            invoice_result.error,
+                            invoice_result.status_code or 400,
                         )
-
+                    else:
                         result = {
                             "message": (
-                                f"{invoice_result['success_count']} "
+                                f"{invoice_result.success_count} "
                                 f"facture(s) générée(s), "
-                                f"{invoice_result['error_count']} erreur(s)"
+                                f"{invoice_result.error_count} erreur(s)"
                             ),
                             "invoices": [
-                                inv.to_dict() for inv in invoice_result["invoices"]
+                                inv.to_dict() for inv in (invoice_result.invoices or [])
                             ],
-                            "errors": invoice_result["errors"],
-                            "success_count": invoice_result["success_count"],
-                            "error_count": invoice_result["error_count"],
+                            "errors": invoice_result.errors,
+                            "success_count": invoice_result.success_count,
+                            "error_count": invoice_result.error_count,
                         }
                         status_code = 201
 
-                # Cas 2: Facturation simple (avec ou sans tierce)
-                elif client_id:
-                    # Vérifier que le client appartient à l'entreprise
-                    client = Client.query.filter_by(
-                        id=client_id, company_id=company_id
-                    ).first()
-                    if not client:
-                        result = {"error": "Client non trouvé"}
-                        status_code = 404
-                    # Si facturation tierce, vérifier l'institution
-                    elif bill_to_client_id:
-                        institution = Client.query.filter_by(
-                            id=bill_to_client_id, company_id=company_id
-                        ).first()
-                        if not institution:
-                            result = {"error": "Institution payeuse non trouvée"}
-                            status_code = 404
-                        elif not institution.is_institution:
-                            result = {
-                                "error": (
-                                    "Le client sélectionné n'est pas une institution"
-                                )
-                            }
-                            status_code = 400
-                        else:
-                            # Générer la facture
-                            invoice = invoice_service.generate_invoice(
-                                company_id,
-                                client_id,
-                                period_year,
-                                period_month,
-                                bill_to_client_id,
-                                validated_data.get("reservation_ids"),
-                                overrides,
-                            )
-                            result = invoice.to_dict()
-                            status_code = 201
-                    else:
-                        # Générer la facture sans facturation tierce
-                        invoice = invoice_service.generate_invoice(
-                            company_id,
-                            client_id,
-                            period_year,
-                            period_month,
-                            bill_to_client_id,
-                            validated_data.get("reservation_ids"),
-                            overrides,
+            # Cas 2: Facturation simple (avec ou sans tierce)
+            elif client_id:
+                # Vérifier que le client appartient à l'entreprise
+                # Imports locaux pour éviter dépendances circulaires
+                from repositories.client_repository import ClientRepository
+
+                client_repo = ClientRepository()
+                client = client_repo.find_model_by_id_and_company(client_id, company_id)
+                if not client:
+                    result, status_code = APIErrorHandler.handle_not_found(
+                        "Client",
+                        client_id if "client_id" in locals() else None,
+                        logger,
+                    )
+                # Si facturation tierce, vérifier l'institution
+                elif bill_to_client_id:
+                    institution = client_repo.find_model_by_id_and_company(
+                        bill_to_client_id, company_id
+                    )
+                    if not institution:
+                        result, status_code = APIErrorHandler.handle_not_found(
+                            "Institution payeuse",
+                            bill_to_client_id
+                            if "bill_to_client_id" in locals()
+                            else None,
+                            logger,
                         )
-                        result = invoice.to_dict()
-                        status_code = 201
+                    elif not bool(institution.is_institution):
+                        result, status_code = APIErrorHandler.handle_validation_error(
+                            "Le client sélectionné n'est pas une institution",
+                            logger_instance=logger,
+                        )
+                    else:
+                        # ✅ DDD: Générer la facture via use case
+                        from application.invoices import GenerateInvoiceInput
+
+                        uc = GenerateInvoiceUseCase()
+                        input_data = GenerateInvoiceInput(
+                            company_id=company_id,
+                            client_id=client_id,
+                            period_year=period_year,
+                            period_month=period_month,
+                            bill_to_client_id=bill_to_client_id,
+                            reservation_ids=validated_data.get("reservation_ids"),
+                            overrides=overrides,
+                        )
+                        invoice_result = uc.execute(input_data)
+                        if not invoice_result.success:
+                            result, status_code = (
+                                invoice_result.error,
+                                invoice_result.status_code or 400,
+                            )
+                        elif invoice_result.invoice:
+                            result = invoice_result.invoice.to_dict()
+                            status_code = 201
+                        elif invoice_result.invoice_id:
+                            # Facture créée mais non retournée (cas normal pour brouillon)
+                            # Récupérer la facture depuis la base de données
+                            invoice_repo = (
+                                ClientRepository()
+                            )  # Utiliser le repo déjà importé
+                            from repositories.invoice_repository import (
+                                InvoiceRepository,
+                            )
+
+                            invoice_repo = InvoiceRepository()
+                            invoice_model = invoice_repo.find_model_by_id_and_company(
+                                invoice_result.invoice_id, company_id
+                            )
+                            if invoice_model:
+                                result = invoice_model.to_dict()
+                                status_code = 201
+                            else:
+                                result = {"error": "Facture générée mais non trouvée"}
+                                status_code = 500
+                        else:
+                            result = {"error": "Facture générée mais non retournée"}
+                            status_code = 500
                 else:
-                    result = {"error": "client_id ou client_ids requis"}
-                    status_code = 400
+                    # ✅ DDD: Générer la facture sans facturation tierce via use case
+                    from application.invoices import GenerateInvoiceInput
+
+                    uc = GenerateInvoiceUseCase()
+                    input_data = GenerateInvoiceInput(
+                        company_id=company_id,
+                        client_id=client_id,
+                        period_year=period_year,
+                        period_month=period_month,
+                        bill_to_client_id=bill_to_client_id,
+                        reservation_ids=validated_data.get("reservation_ids"),
+                        overrides=overrides,
+                    )
+                    invoice_result = uc.execute(input_data)
+                    if not invoice_result.success:
+                        result, status_code = (
+                            invoice_result.error,
+                            invoice_result.status_code or 400,
+                        )
+                    elif invoice_result.invoice:
+                        result = invoice_result.invoice.to_dict()
+                        status_code = 201
+                    elif invoice_result.invoice_id:
+                        # Facture créée mais non retournée (cas normal pour brouillon)
+                        # Récupérer la facture depuis la base de données
+                        from repositories.invoice_repository import InvoiceRepository
+
+                        invoice_repo = InvoiceRepository()
+                        invoice_model = invoice_repo.find_model_by_id_and_company(
+                            invoice_result.invoice_id, company_id
+                        )
+                        if invoice_model:
+                            result = invoice_model.to_dict()
+                            status_code = 201
+                        else:
+                            result = {"error": "Facture générée mais non trouvée"}
+                            status_code = 500
+                    else:
+                        result = {"error": "Facture générée mais non retournée"}
+                        status_code = 500
+
+            else:
+                result, status_code = APIErrorHandler.handle_validation_error(
+                    "client_id ou client_ids requis",
+                    logger_instance=logger,
+                )
 
         except ValueError as e:
-            app_logger.error("Erreur de validation: %s", str(e))
-            result = {"error": str(e)}
-            status_code = 400
-        except Exception as e:
-            error_trace = traceback.format_exc()
-            app_logger.error(
-                "Erreur lors de la génération de facture: %s\n%s", str(e), error_trace
+            # Erreur de validation métier
+            logger.error("Erreur de validation: %s", str(e))
+            result, status_code = APIErrorHandler.handle_validation_error(
+                str(e),
+                logger_instance=logger,
             )
-            result = {"error": "Erreur interne du serveur"}
-            status_code = 500
+        except (OperationalError, DBAPIError, IntegrityError) as e:
+            # Erreurs DB attendues : connexion, contraintes, timeout
+            error_trace = traceback.format_exc()
+            logger.error(
+                "Erreur DB lors de la génération de facture (DB error: %s): %s\n%s",
+                type(e).__name__,
+                str(e),
+                error_trace,
+            )
+            result, status_code = APIErrorHandler.handle_exception(e, logger)
+        except Exception as e:
+            # Erreur inattendue : logger avec trace complète
+            error_trace = traceback.format_exc()
+            logger.exception(
+                "Erreur inattendue lors de la génération de facture: %s\n%s",
+                str(e),
+                error_trace,
+            )
+            result, status_code = APIErrorHandler.handle_exception(e, logger)
 
         return result, status_code
 
@@ -835,33 +1595,92 @@ class GenerateInvoice(Resource):
 class InvoiceDetail(Resource):
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
-    def get(self, company_id, invoice_id):
+    def get(self, company_id, invoice_id):  # noqa: PLR0911
         """Récupère les détails d'une facture."""
         try:
-            user_id = get_jwt_identity()
-            company = Company.query.filter_by(id=company_id).first()
-            if not company or company.user_id != user_id:
-                return {"error": "Entreprise non trouvée ou accès refusé"}, 404
+            # ✅ DDD: Utilise use-case au lieu de service directement
+            from routes.companies import _get_current_company_via_use_case
 
-            invoice = (
-                Invoice.query.filter_by(id=invoice_id, company_id=company_id)
-                .options(
-                    joinedload(Invoice.client),
-                    joinedload(Invoice.lines),
-                    joinedload(Invoice.payments),
-                    joinedload(Invoice.reminders),
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                return error_response, status_code
+
+            # Vérifier que l'ID de l'entreprise correspond
+            cid_obj = getattr(company, "id", None)
+            try:
+                cid = int(cid_obj) if cid_obj is not None else None
+            except (ValueError, TypeError, OverflowError):
+                # Erreurs de conversion attendues : valeur invalide, type incorrect, overflow
+                cid = None
+            except Exception:
+                # Erreur inattendue : logger et utiliser None
+                logger.debug(
+                    "Unexpected error converting company.id to int: %s", cid_obj
                 )
-                .first()
+                cid = None
+            if cid != company_id:
+                return APIErrorHandler.handle_permission_error(
+                    "Entreprise non trouvée ou accès refusé",
+                    logger_instance=logger,
+                )
+
+            # Validation
+            if invoice_id <= 0:
+                return APIErrorHandler.handle_validation_error(
+                    "invoice_id must be positive",
+                    field="invoice_id",
+                    logger_instance=logger,
+                )
+
+            # ✅ DDD: Utiliser le use case pour récupérer la facture
+            from repositories.invoice_repository import InvoiceRepository
+
+            invoice_repo = InvoiceRepository()
+            from application.invoices import GetInvoiceInput
+
+            uc = GetInvoiceUseCase(invoice_repo=invoice_repo)
+            input_data = GetInvoiceInput(invoice_id=invoice_id, company_id=company_id)
+            result = uc.execute(input_data)
+
+            if not result.found:
+                return APIErrorHandler.handle_validation_error(
+                    result.error.get("message", "Erreur inconnue")
+                    if result.error
+                    else "Erreur inconnue",
+                    logger_instance=logger,
+                )
+
+            if result.invoice is None:
+                return APIErrorHandler.handle_not_found(
+                    "Facture",
+                    resource_id=invoice_id,
+                    logger_instance=logger,
+                )
+
+            return success_response(data=result.invoice.to_dict())
+
+        except (OperationalError, DBAPIError) as e:
+            # Erreurs DB attendues : connexion, timeout
+            logger.error(
+                "Erreur DB lors de la récupération de la facture (DB error: %s): %s",
+                type(e).__name__,
+                str(e),
             )
-
-            if not invoice:
-                return {"error": "Facture non trouvée"}, 404
-
-            return invoice.to_dict()
-
+            return APIErrorHandler.handle_exception(e, logger)
+        except (ValueError, TypeError, AttributeError) as e:
+            # Erreurs de validation attendues : données invalides, attributs manquants
+            logger.error(
+                "Erreur de validation lors de la récupération de la facture (validation error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+            return APIErrorHandler.handle_validation_error(
+                str(e), logger_instance=logger
+            )
         except Exception as e:
-            app_logger.error("Erreur lors de la récupération de la facture: %s", str(e))
-            return {"error": "Erreur interne du serveur"}, 500
+            # Erreur inattendue : logger avec trace complète
+            logger.exception("Erreur inattendue lors de la récupération de la facture")
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 @invoices_ns.route("/companies/<int:company_id>/invoices/<int:invoice_id>/send")
@@ -870,36 +1689,82 @@ class SendInvoice(Resource):
 
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
-    def post(self, company_id, invoice_id):
+    def post(self, company_id, invoice_id):  # noqa: PLR0911
         """Marquer une facture comme envoyée."""
         try:
-            # Vérifier l'autorisation
-            user_public_id = get_jwt_identity()
-            user = User.query.filter_by(public_id=user_public_id).first()
-            if not user or not user.company or user.company.id != company_id:
-                return {"error": "Non autorisé"}, 403
+            # ✅ DDD: Utilise use-case au lieu de service directement
+            from routes.companies import _get_current_company_via_use_case
 
-            # Récupérer la facture
-            invoice = Invoice.query.filter_by(
-                id=invoice_id, company_id=company_id
-            ).first()
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                return error_response, status_code
+
+            # Vérifier que l'ID de l'entreprise correspond
+            cid_obj = getattr(company, "id", None)
+            try:
+                cid = int(cid_obj) if cid_obj is not None else None
+            except (ValueError, TypeError, OverflowError):
+                # Erreurs de conversion attendues : valeur invalide, type incorrect, overflow
+                cid = None
+            except Exception:
+                # Erreur inattendue : logger et utiliser None
+                logger.debug(
+                    "Unexpected error converting company.id to int: %s", cid_obj
+                )
+                cid = None
+            if cid != company_id:
+                return APIErrorHandler.handle_permission_error(
+                    "Non autorisé",
+                    logger_instance=logger,
+                )
+
+            # Utiliser le repository pour récupérer la facture
+            from repositories.invoice_repository import InvoiceRepository
+
+            invoice_repo = InvoiceRepository()
+            invoice = invoice_repo.find_model_by_id_and_company(invoice_id, company_id)
             if not invoice:
-                return {"error": "Facture non trouvée"}, 404
+                return APIErrorHandler.handle_not_found(
+                    "Facture",
+                    invoice_id if "invoice_id" in locals() else None,
+                    logger,
+                )
 
             # Marquer comme envoyée
             invoice.status = InvoiceStatus.SENT
             invoice.sent_at = datetime.now(UTC)
             db.session.commit()
 
-            return {
-                "message": "Facture marquée comme envoyée",
-                "status": invoice.status.value,
-            }
+            return success_response(
+                data={"status": invoice.status.value},
+                message="Facture marquée comme envoyée",
+            )
 
-        except Exception as e:
-            app_logger.error("Erreur lors de l'envoi de la facture: %s", str(e))
+        except (OperationalError, DBAPIError, IntegrityError) as e:
+            # Erreurs DB attendues : connexion, contraintes, timeout
+            logger.error(
+                "Erreur DB lors de l'envoi de la facture (DB error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
             db.session.rollback()
-            return {"error": "Erreur interne du serveur"}, 500
+            return APIErrorHandler.handle_exception(e, logger)
+        except (ValueError, TypeError, AttributeError) as e:
+            # Erreurs de validation attendues : données invalides, attributs manquants
+            logger.error(
+                "Erreur de validation lors de l'envoi de la facture (validation error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+            db.session.rollback()
+            return APIErrorHandler.handle_validation_error(
+                str(e), logger_instance=logger
+            )
+        except Exception as e:
+            # Erreur inattendue : logger avec trace complète
+            logger.exception("Erreur inattendue lors de l'envoi de la facture")
+            db.session.rollback()
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 @invoices_ns.route("/companies/<int:company_id>/invoices/<int:invoice_id>/payments")
@@ -908,28 +1773,174 @@ class InvoicePayments(Resource):
 
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
-    def post(self, company_id, invoice_id):
+    def post(self, company_id, invoice_id):  # noqa: PLR0911
         """Enregistrer un paiement pour une facture."""
         try:
-            # Vérifier l'autorisation
-            user_public_id = get_jwt_identity()
-            user = User.query.filter_by(public_id=user_public_id).first()
-            if not user or not user.company or user.company.id != company_id:
-                return {"error": "Non autorisé"}, 403
+            # ✅ DDD: Utilise use-case au lieu de service directement
+            from routes.companies import _get_current_company_via_use_case
 
-            # Récupérer la facture
-            invoice = Invoice.query.filter_by(
-                id=invoice_id, company_id=company_id
-            ).first()
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                return error_response, status_code
+
+            # Vérifier que l'ID de l'entreprise correspond et récupérer la facture
+            cid_obj = getattr(company, "id", None)
+            try:
+                cid = int(cid_obj) if cid_obj is not None else None
+            except (ValueError, TypeError, OverflowError):
+                # Erreurs de conversion attendues : valeur invalide, type incorrect, overflow
+                cid = None
+            except Exception:
+                # Erreur inattendue : logger et utiliser None
+                logger.debug(
+                    "Unexpected error converting company.id to int: %s", cid_obj
+                )
+                cid = None
+
+            # Utiliser le repository pour récupérer la facture
+            from repositories.invoice_repository import InvoiceRepository
+
+            invoice_repo = InvoiceRepository()
+            invoice = invoice_repo.find_model_by_id_and_company(invoice_id, company_id)
+
+            # Si ce n'est pas une facture normale, vérifier si c'est une facture partenaire
             if not invoice:
-                return {"error": "Facture non trouvée"}, 404
+                from models.booking_transfer import BookingTransfer
+                from models.enums import TransferStatus
+                from models.partner_invoice import (
+                    PartnerInvoice,
+                    PartnerInvoiceStatus,
+                    partner_invoice_transfers,
+                )
 
+                # Chercher une facture partenaire
+                partner_invoice = PartnerInvoice.query.get(invoice_id)
+                if partner_invoice:
+                    # Vérifier que l'entreprise est associée à cette facture partenaire
+                    transfers_count = (
+                        db.session.query(BookingTransfer)
+                        .join(
+                            partner_invoice_transfers,
+                            BookingTransfer.id
+                            == partner_invoice_transfers.c.booking_transfer_id,
+                        )
+                        .filter(
+                            partner_invoice_transfers.c.partner_invoice_id
+                            == partner_invoice.id,
+                            BookingTransfer.executing_company_id == company_id,
+                            BookingTransfer.status == TransferStatus.COMPLETED,
+                        )
+                        .count()
+                    )
+
+                    if transfers_count > 0:
+                        # Gérer le paiement pour une facture partenaire
+                        data = request.get_json()
+                        raw_amount = data.get("amount", 0)
+                        try:
+                            amount = Decimal(str(raw_amount))
+                            if amount <= AMOUNT_ZERO:
+                                return APIErrorHandler.handle_validation_error(
+                                    "Le montant doit être positif",
+                                    field="amount",
+                                    logger_instance=logger,
+                                )
+                        except (ValueError, TypeError, Exception):
+                            return APIErrorHandler.handle_validation_error(
+                                "Montant invalide",
+                                field="amount",
+                                logger_instance=logger,
+                            )
+
+                        # Vérifier que la facture n'est pas déjà payée
+                        if partner_invoice.status == PartnerInvoiceStatus.PAID:
+                            return APIErrorHandler.handle_validation_error(
+                                "La facture partenaire est déjà payée.",
+                                logger_instance=logger,
+                            ), 400
+
+                        # Calculer le solde dû
+                        balance_due = (
+                            partner_invoice.total_amount - partner_invoice.amount_paid
+                        )
+
+                        # Récupérer le type d'excédent (crédit ou pourboire)
+                        is_tip = data.get(
+                            "is_tip", False
+                        )  # Par défaut, c'est un crédit
+
+                        # Calculer le montant excédentaire si le paiement dépasse le solde dû
+                        excess_amount = Decimal("0")
+                        if amount > balance_due:
+                            excess_amount = amount - balance_due
+                            # Si c'est un pourboire, l'ajouter au tip_amount
+                            if is_tip:
+                                partner_invoice.tip_amount = (
+                                    partner_invoice.tip_amount or Decimal("0")
+                                ) + excess_amount
+                            else:
+                                # Sinon, c'est un crédit à déduire de la prochaine facture
+                                # Stocker le crédit dans la facture actuelle
+                                # Le crédit sera récupéré lors de la génération de la prochaine facture
+                                partner_invoice.credit_balance = (
+                                    partner_invoice.credit_balance or Decimal("0")
+                                ) + excess_amount
+
+                        # Mettre à jour amount_paid (cumulatif)
+                        # Pour le paiement, on utilise seulement le montant nécessaire pour payer la facture
+                        payment_amount = min(amount, balance_due)
+                        current_amount_paid = float(partner_invoice.amount_paid or 0)
+                        new_amount_paid = current_amount_paid + float(payment_amount)
+                        partner_invoice.amount_paid = Decimal(str(new_amount_paid))
+
+                        # Mettre à jour le statut en fonction du montant payé
+                        if new_amount_paid >= float(partner_invoice.total_amount):
+                            partner_invoice.status = PartnerInvoiceStatus.PAID
+                            partner_invoice.paid_at = datetime.now(UTC)
+                        elif new_amount_paid > 0:
+                            partner_invoice.status = PartnerInvoiceStatus.PARTIALLY_PAID
+                            # Ne pas mettre paid_at si ce n'est pas complètement payé
+                            if partner_invoice.paid_at:
+                                partner_invoice.paid_at = None
+
+                        db.session.commit()
+
+                        return {
+                            "message": "Paiement enregistré avec succès",
+                            "invoice": partner_invoice.to_dict(),
+                        }, 200
+
+            # Combiner les vérifications : ID entreprise et existence facture
+            if cid != company_id or not invoice:
+                if cid != company_id:
+                    return APIErrorHandler.handle_permission_error(
+                        "Non autorisé",
+                        logger_instance=logger,
+                    )
+                return APIErrorHandler.handle_not_found(
+                    "Facture",
+                    invoice_id,
+                    logger,
+                )
+
+            # Valider le montant (combiner validation format et valeur)
             data = request.get_json()
             raw_amount = data.get("amount", 0)
             try:
                 amount = Decimal(str(raw_amount))
-            except Exception:
-                return {"error": "Montant invalide"}, 400
+                # Vérifier que le montant est positif dans le même bloc try
+                if amount <= AMOUNT_ZERO:
+                    return APIErrorHandler.handle_validation_error(
+                        "Le montant doit être positif",
+                        field="amount",
+                        logger_instance=logger,
+                    )
+            except (ValueError, TypeError, Exception):
+                return APIErrorHandler.handle_validation_error(
+                    "Montant invalide",
+                    field="amount",
+                    logger_instance=logger,
+                )
             method = data.get("method", "bank_transfer")
             # Normaliser le libellé/valeur provenant du frontend (labels FR ou
             # constantes uppercase)
@@ -952,16 +1963,13 @@ class InvoicePayments(Resource):
                 method_norm = "bank_transfer"
             payment_method = PaymentMethod(method_norm)
             method_value = payment_method.value
-            app_logger.info(
+            logger.info(
                 "Paiement: method reçu='%s', normalisé='%s', value='%s'",
                 method,
                 method_norm,
                 method_value,
             )
             waive_reminder_fees = bool(data.get("waive_reminder_fees", False))
-
-            if amount <= AMOUNT_ZERO:
-                return {"error": "Le montant doit être positif"}, 400
 
             # Optionnel: annuler les frais de rappel avant d'appliquer le
             # paiement
@@ -970,7 +1978,19 @@ class InvoicePayments(Resource):
                     current_reminder_fee = Decimal(
                         str(invoice.reminder_fee_amount or 0)
                     )
-                except Exception:
+                except (ValueError, TypeError) as e:
+                    # Erreurs de conversion Decimal attendues : valeur invalide, type incorrect
+                    logger.debug(
+                        "Failed to convert reminder_fee_amount to Decimal (expected: %s), using 0",
+                        type(e).__name__,
+                    )
+                    current_reminder_fee = Decimal("0")
+                except Exception as e:
+                    # Erreur inattendue : logger et utiliser 0
+                    logger.debug(
+                        "Unexpected error converting reminder_fee_amount to Decimal: %s, using 0",
+                        e,
+                    )
                     current_reminder_fee = Decimal("0")
                 if current_reminder_fee > CURRENT_REMINDER_FEE_ZERO:
                     invoice.reminder_fee_amount = Decimal("0")
@@ -1009,17 +2029,40 @@ class InvoicePayments(Resource):
 
             db.session.commit()
 
-            return {
-                "message": "Paiement enregistré",
-                "balance_due": float(invoice.balance_due),
-                "amount_paid": float(invoice.amount_paid),
-                "status": invoice.status.value,
-            }
+            return success_response(
+                data={
+                    "balance_due": float(invoice.balance_due),
+                    "amount_paid": float(invoice.amount_paid),
+                    "status": invoice.status.value,
+                },
+                message="Paiement enregistré",
+            )
 
-        except Exception as e:
-            app_logger.error("Erreur lors de l'enregistrement du paiement: %s", str(e))
+        except (OperationalError, DBAPIError, IntegrityError) as e:
+            # Erreurs DB attendues : connexion, contraintes, timeout
+            logger.error(
+                "Erreur DB lors de l'enregistrement du paiement (DB error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
             db.session.rollback()
-            return {"error": "Erreur interne du serveur"}, 500
+            return APIErrorHandler.handle_exception(e, logger)
+        except (ValueError, TypeError, AttributeError) as e:
+            # Erreurs de validation attendues : données invalides, attributs manquants
+            logger.error(
+                "Erreur de validation lors de l'enregistrement du paiement (validation error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+            db.session.rollback()
+            return APIErrorHandler.handle_validation_error(
+                str(e), logger_instance=logger
+            )
+        except Exception as e:
+            # Erreur inattendue : logger avec trace complète
+            logger.exception("Erreur inattendue lors de l'enregistrement du paiement")
+            db.session.rollback()
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 @invoices_ns.route("/companies/<int:company_id>/invoices/<int:invoice_id>/reminders")
@@ -1028,48 +2071,97 @@ class InvoiceReminders(Resource):
 
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
-    def post(self, company_id, invoice_id):
+    def post(self, company_id, invoice_id):  # noqa: PLR0911
         """Générer un rappel pour une facture."""
         try:
-            # Vérifier l'autorisation
-            user_public_id = get_jwt_identity()
-            user = User.query.filter_by(public_id=user_public_id).first()
-            if not user or not user.company or user.company.id != company_id:
-                return {"error": "Non autorisé"}, 403
+            # ✅ DDD: Utilise use-case au lieu de service directement
+            from routes.companies import _get_current_company_via_use_case
 
-            # Récupérer la facture
-            invoice = Invoice.query.filter_by(
-                id=invoice_id, company_id=company_id
-            ).first()
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                return error_response, status_code
+
+            # Vérifier que l'ID de l'entreprise correspond
+            cid_obj = getattr(company, "id", None)
+            try:
+                cid = int(cid_obj) if cid_obj is not None else None
+            except (ValueError, TypeError, OverflowError):
+                # Erreurs de conversion attendues : valeur invalide, type incorrect, overflow
+                cid = None
+            except Exception:
+                # Erreur inattendue : logger et utiliser None
+                logger.debug(
+                    "Unexpected error converting company.id to int: %s", cid_obj
+                )
+                cid = None
+            if cid != company_id:
+                return APIErrorHandler.handle_permission_error(
+                    "Non autorisé",
+                    logger_instance=logger,
+                )
+
+            # Utiliser le repository pour récupérer la facture
+            from repositories.invoice_repository import InvoiceRepository
+
+            invoice_repo = InvoiceRepository()
+            invoice = invoice_repo.find_model_by_id_and_company(invoice_id, company_id)
             if not invoice:
-                return {"error": "Facture non trouvée"}, 404
+                return APIErrorHandler.handle_not_found(
+                    "Facture",
+                    invoice_id if "invoice_id" in locals() else None,
+                    logger,
+                )
 
             data = request.get_json()
             level = int(data.get("level", 1))
 
-            # Générer le rappel
-            invoice_service = InvoiceService()
-            reminder = invoice_service.generate_reminder(invoice_id, level)
+            # ✅ DDD: Générer le rappel via use case
+            uc_reminder = GenerateInvoiceReminderUseCase()
+            reminder_result = uc_reminder.execute(
+                GenerateInvoiceReminderInput(invoice_id=invoice_id, level=level)
+            )
 
-            if reminder:
-                # Régénérer le PDF pour inclure les frais de rappel
-                pdf_service = PDFService()
-                pdf_url = pdf_service.generate_invoice_pdf(invoice)
+            if reminder_result.success and reminder_result.reminder:
+                # ✅ DDD: Régénérer le PDF via use case
+                uc_pdf = GenerateInvoicePdfUseCase()
+                pdf_result = uc_pdf.execute(invoice=invoice)
 
-                if pdf_url:
-                    invoice.pdf_url = pdf_url
+                if pdf_result.ok and pdf_result.pdf_url:
+                    invoice.pdf_url = pdf_result.pdf_url
                     db.session.commit()
 
-                return {
-                    "message": f"Rappel niveau {level} généré et PDF mis à jour",
-                    "reminder_level": invoice.reminder_level,
-                    "pdf_url": pdf_url,
-                }
-            return {"error": "Erreur lors de la génération du rappel"}, 500
+                    return {
+                        "message": f"Rappel niveau {level} généré et PDF mis à jour",
+                        "reminder_level": invoice.reminder_level,
+                        "pdf_url": pdf_result.pdf_url,
+                    }
+            return reminder_result.error or APIErrorHandler.handle_validation_error(
+                "Impossible de générer le rappel",
+                logger_instance=logger,
+            ), reminder_result.status_code or 400
 
+        except (OperationalError, DBAPIError, IntegrityError) as e:
+            # Erreurs DB attendues : connexion, contraintes, timeout
+            logger.error(
+                "Erreur DB lors de la génération du rappel (DB error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+            return APIErrorHandler.handle_exception(e, logger)
+        except (ValueError, TypeError, AttributeError) as e:
+            # Erreurs de validation attendues : données invalides, attributs manquants
+            logger.error(
+                "Erreur de validation lors de la génération du rappel (validation error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+            return APIErrorHandler.handle_validation_error(
+                str(e), logger_instance=logger
+            )
         except Exception as e:
-            app_logger.error("Erreur lors de la génération du rappel: %s", str(e))
-            return {"error": "Erreur interne du serveur"}, 500
+            # Erreur inattendue : logger avec trace complète
+            logger.exception("Erreur inattendue lors de la génération du rappel")
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 @invoices_ns.route(
@@ -1080,35 +2172,129 @@ class RegenerateInvoicePdf(Resource):
 
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
-    def post(self, company_id, invoice_id):
+    def post(self, company_id, invoice_id):  # noqa: PLR0911
         """Régénérer le PDF d'une facture."""
         try:
-            # Vérifier l'autorisation
-            user_public_id = get_jwt_identity()
-            user = User.query.filter_by(public_id=user_public_id).first()
-            if not user or not user.company or user.company.id != company_id:
-                return {"error": "Non autorisé"}, 403
+            # ✅ DDD: Utilise use-case au lieu de service directement
+            from routes.companies import _get_current_company_via_use_case
 
-            # Récupérer la facture
-            invoice = Invoice.query.filter_by(
-                id=invoice_id, company_id=company_id
-            ).first()
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                return error_response, status_code
+
+            # Vérifier que l'ID de l'entreprise correspond
+            cid_obj = getattr(company, "id", None)
+            try:
+                cid = int(cid_obj) if cid_obj is not None else None
+            except (ValueError, TypeError, OverflowError):
+                # Erreurs de conversion attendues : valeur invalide, type incorrect, overflow
+                cid = None
+            except Exception:
+                # Erreur inattendue : logger et utiliser None
+                logger.debug(
+                    "Unexpected error converting company.id to int: %s", cid_obj
+                )
+                cid = None
+            if cid != company_id:
+                return APIErrorHandler.handle_permission_error(
+                    "Non autorisé",
+                    logger_instance=logger,
+                )
+
+            # Utiliser le repository pour récupérer la facture
+            from models.booking_transfer import BookingTransfer
+            from models.enums import TransferStatus
+            from models.partner_invoice import PartnerInvoice, partner_invoice_transfers
+            from repositories.invoice_repository import InvoiceRepository
+
+            invoice_repo = InvoiceRepository()
+            invoice = invoice_repo.find_model_by_id_and_company(invoice_id, company_id)
+
+            # Si ce n'est pas une facture normale, vérifier si c'est une facture partenaire
             if not invoice:
-                return {"error": "Facture non trouvée"}, 404
+                # Chercher une facture partenaire
+                partner_invoice = PartnerInvoice.query.get(invoice_id)
+                if partner_invoice:
+                    # Vérifier que l'entreprise est associée à cette facture partenaire
+                    # (via les transferts où elle est executing_company_id)
+                    transfers_count = (
+                        db.session.query(BookingTransfer)
+                        .join(
+                            partner_invoice_transfers,
+                            BookingTransfer.id
+                            == partner_invoice_transfers.c.booking_transfer_id,
+                        )
+                        .filter(
+                            partner_invoice_transfers.c.partner_invoice_id
+                            == partner_invoice.id,
+                            BookingTransfer.executing_company_id == company_id,
+                            BookingTransfer.status == TransferStatus.COMPLETED,
+                        )
+                        .count()
+                    )
 
-            # Régénérer le PDF
-            pdf_service = PDFService()
-            pdf_url = pdf_service.generate_invoice_pdf(invoice)
+                    if transfers_count > 0:
+                        # Régénérer le PDF pour les factures partenaires
+                        from services.partner_invoice_service import (
+                            PartnerInvoiceService,
+                        )
 
-            if pdf_url:
-                invoice.pdf_url = pdf_url
+                        try:
+                            partner_service = PartnerInvoiceService()
+                            pdf_url = partner_service.regenerate_pdf(partner_invoice.id)
+                            return {"message": "PDF régénéré", "pdf_url": pdf_url}
+                        except ValueError as e:
+                            return APIErrorHandler.handle_validation_error(
+                                str(e), logger_instance=logger
+                            ), 400
+                        except Exception as e:
+                            logger.exception(
+                                "Erreur lors de la régénération PDF pour facture partenaire %s",
+                                partner_invoice.id,
+                            )
+                            return APIErrorHandler.handle_exception(e, logger)
+
+                return APIErrorHandler.handle_not_found(
+                    "Facture",
+                    invoice_id if "invoice_id" in locals() else None,
+                    logger,
+                )
+
+            # ✅ DDD: Régénérer le PDF via use case
+            uc = GenerateInvoicePdfUseCase()
+            pdf_result = uc.execute(invoice=invoice)
+
+            if pdf_result.ok and pdf_result.pdf_url:
+                invoice.pdf_url = pdf_result.pdf_url
                 db.session.commit()
-                return {"message": "PDF régénéré", "pdf_url": pdf_url}
-            return {"error": "Erreur lors de la génération du PDF"}, 500
+                return {"message": "PDF régénéré", "pdf_url": pdf_result.pdf_url}
+            return pdf_result.error or APIErrorHandler.handle_validation_error(
+                "Impossible de régénérer le PDF",
+                logger_instance=logger,
+            ), pdf_result.status_code or 400
 
+        except (OperationalError, DBAPIError, IntegrityError) as e:
+            # Erreurs DB attendues : connexion, contraintes, timeout
+            logger.error(
+                "Erreur DB lors de la régénération du PDF (DB error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+            return APIErrorHandler.handle_exception(e, logger)
+        except (ValueError, TypeError, AttributeError) as e:
+            # Erreurs de validation attendues : données invalides, attributs manquants
+            logger.error(
+                "Erreur de validation lors de la régénération du PDF (validation error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+            return APIErrorHandler.handle_validation_error(
+                str(e), logger_instance=logger
+            )
         except Exception as e:
-            app_logger.error("Erreur lors de la régénération du PDF: %s", str(e))
-            return {"error": "Erreur interne du serveur"}, 500
+            # Erreur inattendue : logger avec trace complète
+            logger.exception("Erreur inattendue lors de la régénération du PDF")
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 @invoices_ns.route("/companies/<int:company_id>/invoices/<int:invoice_id>/cancel")
@@ -1117,24 +2303,59 @@ class CancelInvoice(Resource):
 
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
-    def post(self, company_id, invoice_id):
+    def post(self, company_id, invoice_id):  # noqa: PLR0911
         """Annuler une facture."""
         try:
-            # Vérifier l'autorisation
-            user_public_id = get_jwt_identity()
-            user = User.query.filter_by(public_id=user_public_id).first()
-            if not user or not user.company or user.company.id != company_id:
-                return {"error": "Non autorisé"}, 403
+            # ✅ DDD: Utilise use-case au lieu de service directement
+            from routes.companies import _get_current_company_via_use_case
 
-            # Récupérer la facture
-            invoice = Invoice.query.filter_by(
-                id=invoice_id, company_id=company_id
-            ).first()
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                return error_response, status_code
+
+            # Vérifier que l'ID de l'entreprise correspond
+            cid_obj = getattr(company, "id", None)
+            try:
+                cid = int(cid_obj) if cid_obj is not None else None
+            except (ValueError, TypeError, OverflowError):
+                # Erreurs de conversion attendues : valeur invalide, type incorrect, overflow
+                cid = None
+            except Exception:
+                # Erreur inattendue : logger et utiliser None
+                logger.debug(
+                    "Unexpected error converting company.id to int: %s", cid_obj
+                )
+                cid = None
+            if cid != company_id:
+                return APIErrorHandler.handle_permission_error(
+                    "Non autorisé",
+                    logger_instance=logger,
+                )
+
+            # Utiliser le repository pour récupérer la facture
+            from repositories.invoice_repository import InvoiceRepository
+
+            invoice_repo = InvoiceRepository()
+            invoice = invoice_repo.find_model_by_id_and_company(invoice_id, company_id)
             if not invoice:
-                return {"error": "Facture non trouvée"}, 404
+                return APIErrorHandler.handle_not_found(
+                    "Facture",
+                    invoice_id if "invoice_id" in locals() else None,
+                    logger,
+                )
 
-            invoice_service = InvoiceService()
-            invoice_service.cancel_invoice(invoice)
+            # ✅ DDD: Annuler la facture via use case
+            from repositories.booking_repository import BookingRepository
+
+            booking_repo = BookingRepository()
+            from application.invoices import CancelInvoiceInput
+
+            uc = CancelInvoiceUseCase(booking_repo=booking_repo)
+            input_data = CancelInvoiceInput(invoice=invoice)
+            cancel_result = uc.execute(input_data)
+
+            if not cancel_result.success:
+                return cancel_result.error, cancel_result.status_code or 400
 
             return {
                 "message": "Facture annulée",
@@ -1142,15 +2363,29 @@ class CancelInvoice(Resource):
             }
 
         except ValueError as e:
-            app_logger.warning(
+            # Erreur de validation métier
+            logger.warning(
                 "Erreur métier lors de l'annulation de la facture %s: %s", invoice_id, e
             )
             db.session.rollback()
-            return {"error": str(e)}, 400
-        except Exception as e:
-            app_logger.error("Erreur lors de l'annulation de la facture: %s", str(e))
+            return APIErrorHandler.handle_validation_error(
+                str(e),
+                logger_instance=logger,
+            )
+        except (OperationalError, DBAPIError, IntegrityError) as e:
+            # Erreurs DB attendues : connexion, contraintes, timeout
+            logger.error(
+                "Erreur DB lors de l'annulation de la facture (DB error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
             db.session.rollback()
-            return {"error": "Erreur interne du serveur"}, 500
+            return APIErrorHandler.handle_exception(e, logger)
+        except Exception as e:
+            # Erreur inattendue : logger avec trace complète
+            logger.exception("Erreur inattendue lors de l'annulation de la facture")
+            db.session.rollback()
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 @invoices_ns.route("/companies/<int:company_id>/invoices/<int:invoice_id>/duplicate")
@@ -1159,21 +2394,140 @@ class DuplicateInvoice(Resource):
 
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
-    def post(self, company_id, invoice_id):
+    def post(self, company_id, invoice_id):  # noqa: PLR0911
         try:
-            user_public_id = get_jwt_identity()
-            user = User.query.filter_by(public_id=user_public_id).first()
-            if not user or not user.company or user.company.id != company_id:
-                return {"error": "Non autorisé"}, 403
+            # ✅ DDD: Utilise use-case au lieu de service directement
+            from routes.companies import _get_current_company_via_use_case
 
-            invoice = Invoice.query.filter_by(
-                id=invoice_id, company_id=company_id
-            ).first()
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                return error_response, status_code
+
+            # Vérifier que l'ID de l'entreprise correspond
+            cid_obj = getattr(company, "id", None)
+            try:
+                cid = int(cid_obj) if cid_obj is not None else None
+            except (ValueError, TypeError, OverflowError):
+                # Erreurs de conversion attendues : valeur invalide, type incorrect, overflow
+                cid = None
+            except Exception:
+                # Erreur inattendue : logger et utiliser None
+                logger.debug(
+                    "Unexpected error converting company.id to int: %s", cid_obj
+                )
+                cid = None
+            if cid != company_id:
+                return APIErrorHandler.handle_permission_error(
+                    "Non autorisé",
+                    logger_instance=logger,
+                )
+
+            # Utiliser le repository pour récupérer la facture normale
+            from repositories.invoice_repository import InvoiceRepository
+
+            invoice_repo = InvoiceRepository()
+            invoice = invoice_repo.find_model_by_id_and_company(invoice_id, company_id)
+
+            # Si ce n'est pas une facture normale, vérifier si c'est une facture partenaire
             if not invoice:
-                return {"error": "Facture non trouvée"}, 404
+                from models.booking_transfer import BookingTransfer
+                from models.enums import TransferStatus
+                from models.partner_invoice import (
+                    PartnerInvoice,
+                    PartnerInvoiceStatus,
+                    partner_invoice_transfers,
+                )
 
-            invoice_service = InvoiceService()
-            draft_context = invoice_service.duplicate_invoice(invoice)
+                # Chercher une facture partenaire
+                partner_invoice = PartnerInvoice.query.get(invoice_id)
+                if partner_invoice:
+                    # Vérifier que l'entreprise est associée à cette facture partenaire
+                    # Soit via les transferts où elle est executing_company_id,
+                    # soit si elle est l'entreprise qui a généré la facture (executing_company_id)
+                    transfers_count = (
+                        db.session.query(BookingTransfer)
+                        .join(
+                            partner_invoice_transfers,
+                            BookingTransfer.id
+                            == partner_invoice_transfers.c.booking_transfer_id,
+                        )
+                        .filter(
+                            partner_invoice_transfers.c.partner_invoice_id
+                            == partner_invoice.id,
+                            BookingTransfer.executing_company_id == company_id,
+                            BookingTransfer.status == TransferStatus.COMPLETED,
+                        )
+                        .count()
+                    )
+
+                    # Vérifier aussi si l'entreprise est celle qui a généré la facture
+                    is_executing_company = (
+                        partner_invoice.executing_company_id == company_id
+                    )
+
+                    if transfers_count > 0 or is_executing_company:
+                        # Vérifier que la facture peut être annulée
+                        if partner_invoice.status == PartnerInvoiceStatus.CANCELLED:
+                            return APIErrorHandler.handle_validation_error(
+                                "La facture partenaire est déjà annulée.",
+                                logger_instance=logger,
+                            ), 400
+
+                        # Vérifier que la facture n'est pas réellement payée
+                        # (vérifier amount_paid > 0, pas seulement le statut)
+                        if (
+                            partner_invoice.status == PartnerInvoiceStatus.PAID
+                            and partner_invoice.amount_paid > 0
+                        ):
+                            return APIErrorHandler.handle_validation_error(
+                                "Impossible de dupliquer une facture partenaire déjà payée.",
+                                logger_instance=logger,
+                            ), 400
+
+                        # Sauvegarder les valeurs nécessaires avant la suppression
+                        partnership_id = partner_invoice.partnership_id
+                        period_year = partner_invoice.period_year
+                        period_month = partner_invoice.period_month
+                        executing_company_id = partner_invoice.executing_company_id
+
+                        # Supprimer la facture partenaire (au lieu de la marquer comme CANCELLED)
+                        # car la contrainte unique ne permet pas deux factures pour la même période
+                        # Les relations dans partner_invoice_transfers seront supprimées automatiquement
+                        # grâce à ondelete="CASCADE"
+                        db.session.delete(partner_invoice)
+                        db.session.commit()
+
+                        # Construire le contexte pour régénérer la facture partenaire
+                        # Utiliser l'executing_company_id original de la facture
+                        draft_context = {
+                            "billing_type": "partner",
+                            "partnership_id": partnership_id,
+                            "period_year": period_year,
+                            "period_month": period_month,
+                            "executing_company_id": executing_company_id,
+                        }
+
+                        return {
+                            "message": (
+                                "La facture partenaire a été annulée. "
+                                "Vous pouvez régénérer une nouvelle facture "
+                                "avec les mêmes paramètres."
+                            ),
+                            "draft": draft_context,
+                        }, 200
+
+                return APIErrorHandler.handle_not_found(
+                    "Facture",
+                    invoice_id if "invoice_id" in locals() else None,
+                    logger,
+                )
+
+            # ✅ DDD: Dupliquer la facture normale via use case
+            uc = DuplicateInvoiceUseCase()
+            duplicate_result = uc.execute(DuplicateInvoiceInput(invoice=invoice))
+
+            if not duplicate_result.success:
+                return duplicate_result.error, duplicate_result.status_code or 400
 
             return {
                 "message": (
@@ -1181,23 +2535,35 @@ class DuplicateInvoice(Resource):
                     "Veuillez corriger le brouillon puis générer "
                     "une nouvelle facture."
                 ),
-                "draft": draft_context,
+                "draft": duplicate_result.draft_context,
             }, 200
 
         except ValueError as e:
-            app_logger.warning(
+            # Erreur de validation métier
+            logger.warning(
                 "Erreur métier lors de la duplication de la facture %s: %s",
                 invoice_id,
                 e,
             )
             db.session.rollback()
-            return {"error": str(e)}, 400
-        except Exception as e:
-            app_logger.error(
-                "Erreur lors de la duplication de la facture %s: %s", invoice_id, e
+            return APIErrorHandler.handle_validation_error(
+                str(e),
+                logger_instance=logger,
+            )
+        except (OperationalError, DBAPIError, IntegrityError) as e:
+            # Erreurs DB attendues : connexion, contraintes, timeout
+            logger.error(
+                "Erreur DB lors de la duplication de la facture (DB error: %s): %s",
+                type(e).__name__,
+                str(e),
             )
             db.session.rollback()
-            return {"error": "Erreur interne du serveur"}, 500
+            return APIErrorHandler.handle_exception(e, logger)
+        except Exception as e:
+            # Erreur inattendue : logger avec trace complète
+            logger.exception("Erreur inattendue lors de la duplication de la facture")
+            db.session.rollback()
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 @invoices_ns.route("/companies/<int:company_id>/clients/institutions")
@@ -1209,15 +2575,40 @@ class InstitutionsList(Resource):
     def get(self, company_id):
         """Liste les institutions (cliniques) pour la facturation tierce."""
         try:
-            user_public_id = get_jwt_identity()
-            user = User.query.filter_by(public_id=user_public_id).first()
-            if not user or not user.company or user.company.id != company_id:
-                return {"error": "Non autorisé"}, 403
+            # ✅ DDD: Utilise use-case au lieu de service directement
+            from routes.companies import _get_current_company_via_use_case
+
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                return error_response, status_code
+
+            # Vérifier que l'ID de l'entreprise correspond
+            cid_obj = getattr(company, "id", None)
+            try:
+                cid = int(cid_obj) if cid_obj is not None else None
+            except (ValueError, TypeError, OverflowError):
+                # Erreurs de conversion attendues : valeur invalide, type incorrect, overflow
+                cid = None
+            except Exception:
+                # Erreur inattendue : logger et utiliser None
+                logger.debug(
+                    "Unexpected error converting company.id to int: %s", cid_obj
+                )
+                cid = None
+            if cid != company_id:
+                return APIErrorHandler.handle_permission_error(
+                    "Non autorisé",
+                    logger_instance=logger,
+                )
 
             # Récupérer toutes les institutions actives de l'entreprise
-            institutions = Client.query.filter_by(
-                company_id=company_id, is_institution=True, is_active=True
-            ).all()
+            # Imports locaux pour éviter dépendances circulaires
+            from repositories.client_repository import ClientRepository
+
+            client_repo = ClientRepository()
+            institutions = client_repo.find_models_by_company_and_institution_status(
+                company_id, is_institution=True, is_active=True
+            )
 
             return {
                 "institutions": [
@@ -1240,11 +2631,30 @@ class InstitutionsList(Resource):
                 ]
             }
 
-        except Exception as e:
-            app_logger.error(
-                "Erreur lors de la récupération des institutions: %s", str(e)
+        except (OperationalError, DBAPIError) as e:
+            # Erreurs DB attendues : connexion, timeout
+            logger.error(
+                "Erreur DB lors de la récupération des institutions (DB error: %s): %s",
+                type(e).__name__,
+                str(e),
             )
-            return {"error": "Erreur interne du serveur"}, 500
+            return APIErrorHandler.handle_exception(e, logger)
+        except (ValueError, TypeError, AttributeError) as e:
+            # Erreurs de validation attendues : données invalides, attributs manquants
+            logger.error(
+                "Erreur de validation lors de la récupération des institutions (validation error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+            return APIErrorHandler.handle_validation_error(
+                str(e), logger_instance=logger
+            )
+        except Exception as e:
+            # Erreur inattendue : logger avec trace complète
+            logger.exception(
+                "Erreur inattendue lors de la récupération des institutions"
+            )
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 @invoices_ns.route(
@@ -1255,20 +2665,49 @@ class ToggleInstitution(Resource):
 
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
-    def post(self, company_id, client_id):
+    def post(self, company_id, client_id):  # noqa: PLR0911
         """Bascule le statut d'institution d'un client."""
         try:
-            user_public_id = get_jwt_identity()
-            user = User.query.filter_by(public_id=user_public_id).first()
-            if not user or not user.company or user.company.id != company_id:
-                return {"error": "Non autorisé"}, 403
+            # ✅ DDD: Utilise use-case au lieu de service directement
+            from routes.companies import _get_current_company_via_use_case
 
-            client = Client.query.filter_by(id=client_id, company_id=company_id).first()
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                return error_response, status_code
+
+            # Vérifier que l'ID de l'entreprise correspond
+            cid_obj = getattr(company, "id", None)
+            try:
+                cid = int(cid_obj) if cid_obj is not None else None
+            except (ValueError, TypeError, OverflowError):
+                # Erreurs de conversion attendues : valeur invalide, type incorrect, overflow
+                cid = None
+            except Exception:
+                # Erreur inattendue : logger et utiliser None
+                logger.debug(
+                    "Unexpected error converting company.id to int: %s", cid_obj
+                )
+                cid = None
+            if cid != company_id:
+                return APIErrorHandler.handle_permission_error(
+                    "Non autorisé",
+                    logger_instance=logger,
+                )
+
+            # Utiliser le repository pour récupérer le client
+            from repositories.client_repository import ClientRepository
+
+            client_repo = ClientRepository()
+            client = client_repo.find_model_by_id_and_company(client_id, company_id)
             if not client:
-                return {"error": "Client non trouvé"}, 404
+                return APIErrorHandler.handle_not_found(
+                    "Client",
+                    client_id if "client_id" in locals() else None,
+                    logger,
+                )
 
             data = request.get_json() or {}
-            is_institution = data.get("is_institution", not client.is_institution)
+            is_institution = data.get("is_institution", not bool(client.is_institution))
             institution_name = data.get("institution_name")
 
             client.is_institution = is_institution
@@ -1288,12 +2727,33 @@ class ToggleInstitution(Resource):
                 "client": client.serialize,
             }
 
-        except Exception as e:
-            app_logger.error(
-                "Erreur lors de la modification du statut d'institution: %s", str(e)
+        except (OperationalError, DBAPIError, IntegrityError) as e:
+            # Erreurs DB attendues : connexion, contraintes, timeout
+            logger.error(
+                "Erreur DB lors de la modification du statut d'institution (DB error: %s): %s",
+                type(e).__name__,
+                str(e),
             )
             db.session.rollback()
-            return {"error": "Erreur interne du serveur"}, 500
+            return APIErrorHandler.handle_exception(e, logger)
+        except (ValueError, TypeError, AttributeError) as e:
+            # Erreurs de validation attendues : données invalides, attributs manquants
+            logger.error(
+                "Erreur de validation lors de la modification du statut d'institution (validation error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+            db.session.rollback()
+            return APIErrorHandler.handle_validation_error(
+                str(e), logger_instance=logger
+            )
+        except Exception as e:
+            # Erreur inattendue : logger avec trace complète
+            logger.exception(
+                "Erreur inattendue lors de la modification du statut d'institution"
+            )
+            db.session.rollback()
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 @invoices_ns.route(
@@ -1312,30 +2772,42 @@ class UnbilledReservations(Resource):
         - billed_to_type: Type de facturation ('patient', 'clinic', 'insurance').
         """
         try:
-            user_public_id = get_jwt_identity()
-            user = User.query.filter_by(public_id=user_public_id).first()
-            if not user or not user.company or user.company.id != company_id:
-                return {"error": "Non autorisé"}, 403
+            # ✅ DDD: Utilise use-case au lieu de service directement
+            from routes.companies import _get_current_company_via_use_case
+
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                return error_response, status_code
+
+            # Vérifier que l'ID de l'entreprise correspond
+            cid_obj = getattr(company, "id", None)
+            try:
+                cid = int(cid_obj) if cid_obj is not None else None
+            except (ValueError, TypeError, OverflowError):
+                # Erreurs de conversion attendues : valeur invalide, type incorrect, overflow
+                cid = None
+            except Exception:
+                # Erreur inattendue : logger et utiliser None
+                logger.debug(
+                    "Unexpected error converting company.id to int: %s", cid_obj
+                )
+                cid = None
+            if cid != company_id:
+                return APIErrorHandler.handle_permission_error(
+                    "Non autorisé",
+                    logger_instance=logger,
+                )
 
             # Récupérer les paramètres
             period_year = request.args.get("year", type=int)
             period_month = request.args.get("month", type=int)
             billed_to_filter = request.args.get("billed_to_type", type=str)
 
-            # Query de base : réservations TERMINÉES non facturées (seulement
-            # COMPLETED et RETURN_COMPLETED)
-            query = Booking.query.filter(
-                Booking.company_id == company_id,
-                Booking.client_id == client_id,
-                # ✅ Seulement les courses TERMINÉES
-                Booking.status.in_(
-                    [BookingStatus.COMPLETED, BookingStatus.RETURN_COMPLETED]
-                ),
-                Booking.invoice_line_id.is_(None),  # Pas encore facturé
-            )
+            # ✅ Utilisation du repository pour la requête avec filtres dynamiques
+            from repositories.booking_repository import BookingRepository
 
             # 🔍 LOG : Debug pour voir ce qui est trouvé
-            app_logger.warning(
+            logger.warning(
                 (
                     "🔍 [Unbilled] Recherche pour client_id=%s, "
                     "company_id=%s, year=%s, month=%s, "
@@ -1348,22 +2820,17 @@ class UnbilledReservations(Resource):
                 billed_to_filter,
             )
 
-            # Filtrer par période si fournie
-            if period_year and period_month:
-                start_date = datetime(period_year, period_month, 1)
-                if period_month == PERIOD_MONTH_THRESHOLD:
-                    end_date = datetime(period_year + 1, 1, 1)
-                else:
-                    end_date = datetime(period_year, period_month + 1, 1)
-
-                query = query.filter(
-                    Booking.scheduled_time >= start_date,
-                    Booking.scheduled_time < end_date,
-                )
+            booking_repo = BookingRepository()
+            reservations = booking_repo.find_models_unbilled_by_company_and_client(
+                company_id=company_id,
+                client_id=client_id,
+                period_year=period_year,
+                period_month=period_month,
+            )
 
             # 🔍 LOG : Compter AVANT filtre billed_to_type
-            count_before_filter = query.count()
-            app_logger.warning(
+            count_before_filter = len(reservations)
+            logger.warning(
                 "🔍 [Unbilled] Avant filtre billed_to_type: %s bookings trouvés",
                 count_before_filter,
             )
@@ -1375,26 +2842,19 @@ class UnbilledReservations(Resource):
             # if billed_to_filter and billed_to_filter in [
             #     'patient', 'clinic', 'insurance'
             # ]:
-            #     query = query.filter(Booking.billed_to_type == billed_to_filter)
-            #     app_logger.warning(
+            #     reservations = [r for r in reservations if r.billed_to_type == billed_to_filter]
+            #     logger.warning(
             #         "🔍 [Unbilled] Filtre appliqué: billed_to_type=%s",
             #         billed_to_filter
             #     )
 
-            # Trier par date
-            from sqlalchemy import asc
-
-            query = query.order_by(asc(Booking.scheduled_time))
-
-            reservations = query.all()
-
             # 🔍 LOG : Afficher les résultats trouvés
-            app_logger.warning(
+            logger.warning(
                 "🔍 [Unbilled] FINAL: Trouvé %s réservations non facturées",
                 len(reservations),
             )
             for r in reservations:
-                app_logger.warning(
+                logger.warning(
                     (
                         "   - Booking #%s: %s, %s, status=%s, "
                         "billed_to_type=%s, invoice_line_id=%s"
@@ -1432,20 +2892,709 @@ class UnbilledReservations(Resource):
                 "count": len(reservations),
                 "summary_by_type": {
                     "patient": sum(
-                        1 for r in reservations if r.billed_to_type == "patient"
+                        1 for r in reservations if bool(r.billed_to_type == "patient")
                     ),
                     "clinic": sum(
-                        1 for r in reservations if r.billed_to_type == "clinic"
+                        1 for r in reservations if bool(r.billed_to_type == "clinic")
                     ),
                     "insurance": sum(
-                        1 for r in reservations if r.billed_to_type == "insurance"
+                        1 for r in reservations if bool(r.billed_to_type == "insurance")
                     ),
                 },
             }
 
-        except Exception as e:
-            app_logger.error(
-                "Erreur lors de la récupération des réservations non facturées: %s",
+        except (OperationalError, DBAPIError) as e:
+            # Erreurs DB attendues : connexion, timeout
+            logger.error(
+                "Erreur DB lors de la récupération des réservations non facturées (DB error: %s): %s",
+                type(e).__name__,
                 str(e),
             )
-            return {"error": "Erreur interne du serveur"}, 500
+            return APIErrorHandler.handle_exception(e, logger)
+        except (ValueError, TypeError, AttributeError) as e:
+            # Erreurs de validation attendues : données invalides, attributs manquants
+            logger.error(
+                "Erreur de validation lors de la récupération des réservations non facturées (validation error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+            return APIErrorHandler.handle_validation_error(
+                str(e), logger_instance=logger
+            )
+        except Exception as e:
+            # Erreur inattendue : logger avec trace complète
+            logger.exception(
+                "Erreur inattendue lors de la récupération des réservations non facturées"
+            )
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@invoices_ns.route("/companies/<int:company_id>/partners/billable")
+class BillablePartners(Resource):
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def get(self, company_id: int):  # noqa: ARG002
+        """Récupère les partenaires actifs avec leurs transferts facturables."""
+        # company_id est requis par Flask-RESTX pour le routage mais n'est pas utilisé
+        # car l'entreprise est récupérée via _get_current_company_via_use_case()
+        try:
+            from routes.companies import _get_current_company_via_use_case
+
+            company, error_response, status_code = _get_current_company_via_use_case()
+            logger.info(
+                (
+                    "🔍 [BillablePartners] After _get_current_company - "
+                    "has_company=%s, "
+                    "company_id=%s, "
+                    "has_error=%s, "
+                    "status_code=%s"
+                ),
+                company is not None,
+                company.id if company else None,
+                error_response is not None,
+                status_code,
+            )
+            if error_response or not company:
+                return error_response, status_code
+
+            from models.booking_transfer import BookingTransfer
+            from models.enums import PartnershipStatus, TransferStatus
+            from models.partnership import Partnership
+
+            # Récupérer les partenariats actifs où l'entreprise est l'exécutante
+            # (elle peut facturer l'entreprise propriétaire)
+            # Seule l'entreprise partenaire (exécutante) peut facturer l'entreprise propriétaire
+            # Vérifier aussi si l'entreprise est owner (pour debug)
+            all_partnerships = (
+                db.session.query(Partnership)
+                .filter(
+                    (
+                        (Partnership.owner_company_id == company.id)
+                        | (Partnership.partner_company_id == company.id)
+                    ),
+                    Partnership.status == PartnershipStatus.ACCEPTED,
+                )
+                .all()
+            )
+
+            # Log détaillé pour debug
+            partnerships_as_owner = [
+                p for p in all_partnerships if p.owner_company_id == company.id
+            ]
+            partnerships_as_partner = [
+                p for p in all_partnerships if p.partner_company_id == company.id
+            ]
+
+            logger.info(
+                (
+                    "🔍 [BillablePartners] Partnerships analysis - "
+                    "all_count=%s, "
+                    "as_owner_count=%s, "
+                    "as_partner_count=%s, "
+                    "company_id=%s"
+                ),
+                len(all_partnerships),
+                len(partnerships_as_owner),
+                len(partnerships_as_partner),
+                company.id if company else None,
+            )
+
+            # Log détaillé de chaque partenariat
+            for p in all_partnerships:
+                logger.info(
+                    (
+                        "🔍 [BillablePartners] Partnership ID %s - "
+                        "owner_company_id=%s, "
+                        "partner_company_id=%s, "
+                        "status=%s"
+                    ),
+                    p.id,
+                    p.owner_company_id,
+                    p.partner_company_id,
+                    p.status.value if hasattr(p.status, "value") else p.status,
+                )
+
+            # Filtrer ceux où l'entreprise est partenaire (exécutante)
+            partnerships = partnerships_as_partner
+
+            # Si l'entreprise est owner mais pas partner, vérifier si elle est executing_company_id
+            # dans les transferts (cas où le partenariat a été créé dans le mauvais sens)
+            if not partnerships and partnerships_as_owner:
+                logger.info(
+                    (
+                        "🔍 [BillablePartners] Company %s est owner dans %s partenariats. "
+                        "Vérification si elle est executing_company_id dans les transferts..."
+                    ),
+                    company.id if company else None,
+                    len(partnerships_as_owner),
+                )
+                # Vérifier si l'entreprise est executing_company_id dans les transferts
+                # de ces partenariats (indique que le partenariat a été créé dans le mauvais sens)
+                for p in partnerships_as_owner:
+                    transfers_as_executing = (
+                        db.session.query(BookingTransfer)
+                        .filter(
+                            BookingTransfer.partnership_id == p.id,
+                            BookingTransfer.executing_company_id == company.id,
+                            BookingTransfer.status == TransferStatus.COMPLETED,
+                        )
+                        .count()
+                    )
+                    logger.info(
+                        (
+                            "🔍 [BillablePartners] Partnership %s - "
+                            "transfers avec executing_company_id=%s: %s"
+                        ),
+                        p.id,
+                        company.id if company else None,
+                        transfers_as_executing,
+                    )
+                    if transfers_as_executing > 0:
+                        # L'entreprise est owner dans le partenariat mais executing dans les transferts
+                        # Cela indique que le partenariat a été créé dans le mauvais sens
+                        # On peut quand même permettre la facturation en utilisant ce partenariat
+                        logger.warning(
+                            (
+                                "⚠️ [BillablePartners] Partnership %s créé dans le mauvais sens: "
+                                "company %s est owner mais executing dans les transferts. "
+                                "Permettant la facturation quand même."
+                            ),
+                            p.id,
+                            company.id if company else None,
+                        )
+                        partnerships.append(p)
+
+            # Si aucun partenariat trouvé, retourner une liste vide avec un log
+            if not partnerships:
+                if partnerships_as_owner:
+                    logger.warning(
+                        (
+                            "⚠️ [BillablePartners] Company %s est owner dans %s partenariats "
+                            "mais n'est pas partner et n'est pas executing dans les transferts. "
+                            "Elle ne peut pas facturer, seulement être facturée."
+                        ),
+                        company.id if company else None,
+                        len(partnerships_as_owner),
+                    )
+                else:
+                    logger.warning(
+                        (
+                            "⚠️ [BillablePartners] Aucun partenariat trouvé où "
+                            "company_id=%s est partenaire (partner_company_id) ou owner. "
+                            "Vérifiez que les partenariats existent et sont ACCEPTED."
+                        ),
+                        company.id if company else None,
+                    )
+                return success_response(data=[])
+
+            result = []
+            for partnership in partnerships:
+                # Déterminer quelle entreprise est facturée
+                # Si l'entreprise actuelle est partner dans le partenariat, elle facture l'owner
+                # Si l'entreprise actuelle est owner mais executing dans les transferts,
+                # elle facture le partner (partenariat créé dans le mauvais sens)
+                if partnership.partner_company_id == company.id:
+                    # Cas normal : l'entreprise est partner, elle facture l'owner
+                    partner_company = partnership.owner_company
+                else:
+                    # Cas où l'entreprise est owner mais executing dans les transferts
+                    # Elle facture le partner
+                    partner_company = partnership.partner_company
+
+                # Récupérer les transferts validés et non facturés
+                from models.partner_invoice import (
+                    PartnerInvoice,
+                    partner_invoice_transfers,
+                )
+
+                # Log pour debug - compter les transferts déjà facturés
+                billed_count = (
+                    db.session.query(partner_invoice_transfers.c.booking_transfer_id)
+                    .join(PartnerInvoice)
+                    .filter(PartnerInvoice.partnership_id == partnership.id)
+                    .count()
+                )
+                logger.info(
+                    "🔍 [BillablePartners] Partnership %s - billed_transfers_count=%s",
+                    partnership.id,
+                    billed_count,
+                )
+
+                # Vérifier tous les transferts pour ce partenariat (pour debug)
+                all_transfers = (
+                    db.session.query(BookingTransfer)
+                    .filter(BookingTransfer.partnership_id == partnership.id)
+                    .all()
+                )
+
+                completed_transfers = (
+                    db.session.query(BookingTransfer)
+                    .filter(
+                        BookingTransfer.partnership_id == partnership.id,
+                        BookingTransfer.status == TransferStatus.COMPLETED,
+                    )
+                    .all()
+                )
+
+                accepted_transfers = (
+                    db.session.query(BookingTransfer)
+                    .filter(
+                        BookingTransfer.partnership_id == partnership.id,
+                        BookingTransfer.status == TransferStatus.ACCEPTED,
+                    )
+                    .all()
+                )
+
+                validated_transfers = (
+                    db.session.query(BookingTransfer)
+                    .filter(
+                        BookingTransfer.partnership_id == partnership.id,
+                        BookingTransfer.status == TransferStatus.COMPLETED,
+                        BookingTransfer.is_validated == True,  # noqa: E712
+                    )
+                    .all()
+                )
+
+                # Log détaillé de tous les transferts pour debug
+                logger.info(
+                    (
+                        "🔍 [BillablePartners] Partnership %s - "
+                        "all_transfers=%s, "
+                        "accepted=%s, "
+                        "completed=%s, "
+                        "validated=%s"
+                    ),
+                    partnership.id,
+                    len(all_transfers),
+                    len(accepted_transfers),
+                    len(completed_transfers),
+                    len(validated_transfers),
+                )
+                for t in all_transfers:
+                    logger.info(
+                        (
+                            "🔍 [BillablePartners] Transfer %s - "
+                            "status=%s, "
+                            "is_validated=%s, "
+                            "executing_company_id=%s, "
+                            "owner_company_id=%s"
+                        ),
+                        t.id,
+                        t.status.value if hasattr(t.status, "value") else t.status,
+                        t.is_validated,
+                        t.executing_company_id,
+                        t.owner_company_id,
+                    )
+
+                # Chercher les transferts facturables :
+                # - Statut COMPLETED (les transferts ACCEPTED ne sont pas encore facturables)
+                # - executing_company_id == company.id (l'entreprise actuelle est l'exécutante)
+                # - Non facturés
+                # Note: On inclut les transferts COMPLETED même s'ils ne sont pas encore validés,
+                # pour que l'entreprise puisse voir ce qui sera facturable une fois validé.
+                # Le service de génération de facture vérifiera que seuls les transferts validés
+                # sont inclus dans la facture.
+
+                # D'abord, chercher tous les transferts pour ce partenariat avec executing_company_id
+                all_transfers_for_billing = (
+                    db.session.query(BookingTransfer)
+                    .filter(
+                        BookingTransfer.partnership_id == partnership.id,
+                        BookingTransfer.executing_company_id
+                        == company.id,  # L'entreprise actuelle est l'exécutante
+                        BookingTransfer.status
+                        == TransferStatus.COMPLETED,  # ✅ Seulement COMPLETED
+                    )
+                    .all()
+                )
+
+                # Récupérer les IDs des transferts déjà facturés (non annulés)
+                from models.partner_invoice import PartnerInvoiceStatus
+
+                billed_ids_list = [
+                    row[0]
+                    for row in db.session.query(
+                        partner_invoice_transfers.c.booking_transfer_id
+                    )
+                    .join(PartnerInvoice)
+                    .filter(
+                        PartnerInvoice.partnership_id == partnership.id,
+                        PartnerInvoice.status != PartnerInvoiceStatus.CANCELLED,
+                    )
+                    .all()
+                ]
+
+                # Filtrer pour exclure ceux déjà facturés
+                unbilled_transfers = [
+                    t for t in all_transfers_for_billing if t.id not in billed_ids_list
+                ]
+
+                logger.info(
+                    (
+                        "🔍 [BillablePartners] Partnership %s - "
+                        "all_transfers_for_billing=%s, "
+                        "billed_ids=%s, "
+                        "unbilled=%s"
+                    ),
+                    partnership.id,
+                    len(all_transfers_for_billing),
+                    len(billed_ids_list),
+                    len(unbilled_transfers),
+                )
+
+                logger.info(
+                    (
+                        "🔍 [BillablePartners] Partnership %s (%s) - "
+                        "all_transfers=%s, "
+                        "accepted=%s, "
+                        "completed=%s, "
+                        "validated=%s, "
+                        "unbilled=%s"
+                    ),
+                    partnership.id,
+                    partner_company.name,
+                    len(all_transfers),
+                    len(accepted_transfers),
+                    len(completed_transfers),
+                    len(validated_transfers),
+                    len(unbilled_transfers),
+                )
+
+                # Log détaillé si aucun transfert facturable
+                if not unbilled_transfers and all_transfers_for_billing:
+                    logger.warning(
+                        (
+                            "⚠️ [BillablePartners] Partnership %s - "
+                            "Transferts trouvés mais tous déjà facturés: "
+                            "all_for_billing=%s, billed=%s"
+                        ),
+                        partnership.id,
+                        len(all_transfers_for_billing),
+                        len(billed_ids_list),
+                    )
+                elif not all_transfers_for_billing:
+                    logger.warning(
+                        (
+                            "⚠️ [BillablePartners] Partnership %s - "
+                            "Aucun transfert COMPLETED et validé trouvé "
+                            "avec executing_company_id=%s. "
+                            "Total transfers: %s, Completed: %s, Validated: %s"
+                        ),
+                        partnership.id,
+                        company.id,
+                        len(all_transfers),
+                        len(completed_transfers),
+                        len(validated_transfers),
+                    )
+
+                # Filtrer les transferts validés pour le calcul du montant facturable
+                validated_unbilled_transfers = [
+                    t for t in unbilled_transfers if t.is_validated
+                ]
+
+                if unbilled_transfers:
+                    # Montant total des transferts validés et non facturés
+                    total_amount = sum(
+                        float(t.partner_cost or 0) for t in validated_unbilled_transfers
+                    )
+                    result.append(
+                        {
+                            "partnership_id": partnership.id,
+                            "partner_company_id": partner_company.id,
+                            "partner_company_name": partner_company.name,
+                            "unbilled_transfers_count": len(
+                                unbilled_transfers
+                            ),  # Total (validés + non validés)
+                            "validated_unbilled_transfers_count": len(
+                                validated_unbilled_transfers
+                            ),  # Seulement validés (facturables)
+                            "total_amount": total_amount,  # Montant des transferts validés uniquement
+                            "currency": unbilled_transfers[0].currency
+                            if unbilled_transfers
+                            else "CHF",
+                        }
+                    )
+
+            logger.info(
+                "🔍 [BillablePartners] Returning result - count=%s, company_id=%s",
+                len(result),
+                company.id if company else None,
+            )
+            return success_response(data=result)
+        except Exception as e:
+            logger.exception(
+                "Erreur lors de la récupération des partenaires facturables"
+            )
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@invoices_ns.route("/companies/<int:company_id>/partners/invoices/generate")
+class GeneratePartnerInvoice(Resource):
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    @invoices_ns.param(
+        "partnership_id", "ID du partenariat", type="integer", required=True
+    )
+    @invoices_ns.param(
+        "period_year", "Année de la période", type="integer", required=True
+    )
+    @invoices_ns.param(
+        "period_month", "Mois de la période (1-12)", type="integer", required=True
+    )
+    def post(self, company_id: int):  # noqa: ARG002
+        """Génère une facture partenaire pour un partenariat."""
+        try:
+            from routes.companies import _get_current_company_via_use_case
+
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                return error_response, status_code
+
+            data = request.get_json() or {}
+            partnership_id = data.get("partnership_id")
+            period_year = data.get("period_year")
+            period_month = data.get("period_month")
+
+            # Validation des paramètres requis
+            if not partnership_id or not period_year or not period_month:
+                return APIErrorHandler.handle_validation_error(
+                    "partnership_id, period_year et period_month sont requis",
+                    logger_instance=logger,
+                )
+
+            # Vérifier que l'entreprise est bien partenaire du partenariat
+            from models.booking_transfer import BookingTransfer
+            from models.enums import TransferStatus
+            from models.partnership import Partnership
+            from services.partner_invoice_service import PartnerInvoiceService
+
+            partnership = Partnership.query.get(int(partnership_id))
+            if not partnership:
+                return APIErrorHandler.handle_validation_error(
+                    f"Partenariat {partnership_id} introuvable",
+                    logger_instance=logger,
+                )
+
+            # Seule l'entreprise partenaire (exécutante) peut générer une facture
+            # OU l'entreprise owner mais executing dans les transferts (partenariat créé dans le mauvais sens)
+            is_partner = company.id == partnership.partner_company_id
+            is_owner_executing = company.id == partnership.owner_company_id
+
+            # Vérifier si l'entreprise est owner mais executing dans les transferts
+            if is_owner_executing:
+                transfers_as_executing = BookingTransfer.query.filter(
+                    BookingTransfer.partnership_id == partnership.id,
+                    BookingTransfer.executing_company_id == company.id,
+                    BookingTransfer.status == TransferStatus.COMPLETED,
+                ).count()
+                if transfers_as_executing == 0:
+                    is_owner_executing = False
+
+            if not is_partner and not is_owner_executing:
+                return APIErrorHandler.handle_validation_error(
+                    "Seule l'entreprise partenaire peut générer une facture pour ce partenariat",
+                    logger_instance=logger,
+                )
+
+            service = PartnerInvoiceService()
+
+            # #region agent log
+            import json
+            from pathlib import Path
+
+            try:
+                with Path(r"c:\Users\jasiq\atmr\.cursor\debug.log").open(
+                    "a", encoding="utf-8"
+                ) as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "D",
+                                "location": "routes/invoices.py:GeneratePartnerInvoice.post",
+                                "message": "Appel generate_monthly_invoice",
+                                "data": {
+                                    "company_id": company.id,
+                                    "partnership_id": int(partnership_id),
+                                    "year": int(period_year),
+                                    "month": int(period_month),
+                                    "executing_company_id": company.id,
+                                },
+                                "timestamp": int(__import__("time").time() * 1000),
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
+
+            service = PartnerInvoiceService()
+            partner_invoice = service.generate_monthly_invoice(
+                partnership_id=int(partnership_id),
+                year=int(period_year),
+                month=int(period_month),
+                executing_company_id=company.id,  # ✅ Passer l'ID de l'entreprise exécutante
+            )
+
+            return success_response(
+                data={
+                    "id": partner_invoice.id,
+                    "invoice_number": partner_invoice.invoice_number,
+                    "pdf_url": partner_invoice.pdf_url,
+                    "total_amount": float(partner_invoice.total_amount),
+                    "currency": partner_invoice.currency,
+                },
+                message="Facture partenaire générée avec succès",
+            )
+        except (ValueError, Exception) as e:
+            error_response = (
+                APIErrorHandler.handle_validation_error(str(e), logger_instance=logger)
+                if isinstance(e, ValueError)
+                else None
+            )
+            if not error_response:
+                logger.exception(
+                    "Erreur lors de la génération de la facture partenaire"
+                )
+                error_response = APIErrorHandler.handle_exception(e, logger)
+            return error_response
+
+
+@invoices_ns.route("/companies/<int:company_id>/partners/debug")
+class BillablePartnersDebug(Resource):
+    """Endpoint de debug temporaire pour vérifier les partenariats et transferts."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def get(self, company_id: int):  # noqa: ARG002
+        """Debug: Vérifie les partenariats et transferts pour l'entreprise connectée."""
+        try:
+            from routes.companies import _get_current_company_via_use_case
+
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                return error_response, status_code
+
+            from models.booking_transfer import BookingTransfer
+            from models.enums import PartnershipStatus, TransferStatus
+            from models.partner_invoice import PartnerInvoice, partner_invoice_transfers
+            from models.partnership import Partnership
+
+            # Récupérer tous les partenariats
+            all_partnerships = Partnership.query.filter(
+                Partnership.status == PartnershipStatus.ACCEPTED
+            ).all()
+
+            # Partenariats où l'entreprise est partenaire
+            partnerships_as_partner = [
+                p for p in all_partnerships if p.partner_company_id == company.id
+            ]
+
+            # Partenariats où l'entreprise est owner
+            partnerships_as_owner = [
+                p for p in all_partnerships if p.owner_company_id == company.id
+            ]
+
+            debug_data = {
+                "company_id": company.id,
+                "company_name": company.name,
+                "all_partnerships_count": len(all_partnerships),
+                "partnerships_as_partner_count": len(partnerships_as_partner),
+                "partnerships_as_owner_count": len(partnerships_as_owner),
+                "partnerships_as_partner": [
+                    {
+                        "id": p.id,
+                        "owner_company_id": p.owner_company_id,
+                        "owner_company_name": p.owner_company.name
+                        if p.owner_company
+                        else None,
+                        "partner_company_id": p.partner_company_id,
+                        "partner_company_name": p.partner_company.name
+                        if p.partner_company
+                        else None,
+                        "status": p.status.value
+                        if hasattr(p.status, "value")
+                        else str(p.status),
+                    }
+                    for p in partnerships_as_partner
+                ],
+            }
+
+            # Pour chaque partenariat où l'entreprise est partenaire, vérifier les transferts
+            for p in partnerships_as_partner:
+                all_transfers = BookingTransfer.query.filter(
+                    BookingTransfer.partnership_id == p.id
+                ).all()
+
+                transfers_executing = [
+                    t for t in all_transfers if t.executing_company_id == company.id
+                ]
+
+                transfers_completed = [
+                    t
+                    for t in transfers_executing
+                    if t.status == TransferStatus.COMPLETED
+                ]
+
+                transfers_validated = [t for t in transfers_completed if t.is_validated]
+
+                # Transferts déjà facturés
+                billed_ids = [
+                    row[0]
+                    for row in db.session.query(
+                        partner_invoice_transfers.c.booking_transfer_id
+                    )
+                    .join(PartnerInvoice)
+                    .filter(PartnerInvoice.partnership_id == p.id)
+                    .all()
+                ]
+
+                transfers_billable = [
+                    t for t in transfers_validated if t.id not in billed_ids
+                ]
+
+                partnership_debug = {
+                    "partnership_id": p.id,
+                    "total_transfers": len(all_transfers),
+                    "transfers_executing_company": len(transfers_executing),
+                    "transfers_completed": len(transfers_completed),
+                    "transfers_validated": len(transfers_validated),
+                    "transfers_billed": len(billed_ids),
+                    "transfers_billable": len(transfers_billable),
+                    "transfers_details": [
+                        {
+                            "id": t.id,
+                            "status": t.status.value
+                            if hasattr(t.status, "value")
+                            else str(t.status),
+                            "is_validated": t.is_validated,
+                            "validated_at": t.validated_at.isoformat()
+                            if t.validated_at
+                            else None,
+                            "executing_company_id": t.executing_company_id,
+                            "owner_company_id": t.owner_company_id,
+                            "partner_cost": float(t.partner_cost)
+                            if t.partner_cost
+                            else 0,
+                            "is_billed": t.id in billed_ids,
+                        }
+                        for t in transfers_executing[
+                            :10
+                        ]  # Limiter à 10 pour la lisibilité
+                    ],
+                }
+
+                # Trouver l'index du partenariat dans la liste
+                for idx, pd in enumerate(debug_data["partnerships_as_partner"]):
+                    if pd["id"] == p.id:
+                        debug_data["partnerships_as_partner"][idx].update(
+                            partnership_debug
+                        )
+                        break
+
+            return success_response(data=debug_data)
+        except Exception as e:
+            logger.exception("Erreur lors du debug des partenaires facturables")
+            return APIErrorHandler.handle_exception(e, logger)

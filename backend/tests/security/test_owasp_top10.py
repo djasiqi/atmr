@@ -231,7 +231,11 @@ class TestA06VulnerableComponents:
         """Test que les dépendances sont documentées (requirements.txt)."""
         from pathlib import Path
 
-        requirements_file = Path("backend/requirements.txt")
+        requirements_file = (
+            Path("requirements.txt")
+            if Path("requirements.txt").exists()
+            else Path("backend/requirements.txt")
+        )
         # Vérifier que requirements.txt existe
         assert requirements_file.exists(), "requirements.txt doit exister"
         # Vérifier qu'il contient des dépendances
@@ -242,8 +246,26 @@ class TestA06VulnerableComponents:
         """Test que les dépendances critiques sont listées."""
         from pathlib import Path
 
-        requirements_file = Path("backend/requirements.txt")
+        requirements_file = (
+            Path("requirements.txt")
+            if Path("requirements.txt").exists()
+            else Path("backend/requirements.txt")
+        )
         content = requirements_file.read_text().lower()
+        # Support des fichiers requirements "meta" qui incluent d'autres fichiers via `-r`
+        if "-r requirements.base.txt" in content:
+            included = requirements_file.parent / "requirements.base.txt"
+            if included.exists():
+                content += "\n" + included.read_text().lower()
+        if "-r requirements.prod.txt" in content:
+            included = requirements_file.parent / "requirements.prod.txt"
+            if included.exists():
+                content += "\n" + included.read_text().lower()
+        # Second pass: requirements.prod.txt inclut souvent requirements.base.txt
+        if "-r requirements.base.txt" in content:
+            included = requirements_file.parent / "requirements.base.txt"
+            if included.exists():
+                content += "\n" + included.read_text().lower()
         # Vérifier que les dépendances critiques sont présentes
         critical_deps = ["flask", "sqlalchemy", "flask-jwt-extended"]
         for dep in critical_deps:

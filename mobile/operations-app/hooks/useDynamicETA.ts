@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/services/api";
+import { useAuth } from "@/hooks/useAuth";
 
 export interface BookingETA {
   id: number;
@@ -20,12 +21,16 @@ export interface ETAResponse {
  * Mise à jour automatique toutes les 30 secondes
  */
 export function useDynamicETA(enabled: boolean = true) {
+  const { driver, authMode } = useAuth();
   const [etas, setEtas] = useState<Map<number, BookingETA>>(new Map());
   const [hasGPS, setHasGPS] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Vérifier que l'utilisateur est bien un chauffeur avant d'appeler l'API
+  const isDriverMode = authMode === "driver" && !!driver;
+
   const fetchETAs = useCallback(async () => {
-    if (!enabled) return;
+    if (!enabled || !isDriverMode) return;
 
     try {
       setIsLoading(true);
@@ -49,7 +54,17 @@ export function useDynamicETA(enabled: boolean = true) {
         count: data.bookings.length,
         driver_pos: data.driver_position,
       });
-    } catch (error) {
+    } catch (error: any) {
+      // Supprimer les erreurs 401/403/404 car elles sont attendues si l'utilisateur n'est pas un chauffeur
+      const status = error?.response?.status;
+      if (status === 401 || status === 403 || status === 404) {
+        console.debug(
+          "[useDynamicETA] Accès non autorisé (utilisateur n'est probablement pas un chauffeur):",
+          status
+        );
+        // Désactiver le hook si l'utilisateur n'a pas les permissions
+        return;
+      }
       console.error(
         "[useDynamicETA] Erreur lors de la récupération des ETAs:",
         error
@@ -57,25 +72,26 @@ export function useDynamicETA(enabled: boolean = true) {
     } finally {
       setIsLoading(false);
     }
-  }, [enabled]);
+  }, [enabled, isDriverMode]);
 
   // Charger au montage
   useEffect(() => {
-    if (enabled) {
+    if (enabled && isDriverMode) {
       fetchETAs();
     }
-  }, [enabled, fetchETAs]);
+  }, [enabled, isDriverMode, fetchETAs]);
 
   // Recharger toutes les 30 secondes
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !isDriverMode) return;
 
     const interval = setInterval(() => {
       fetchETAs();
     }, 30000); // 30 secondes
 
     return () => clearInterval(interval);
-  }, [enabled, fetchETAs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, isDriverMode]); // Ne pas inclure fetchETAs pour éviter les re-renders infinis
 
   return {
     etas,

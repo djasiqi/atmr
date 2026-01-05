@@ -1,14 +1,20 @@
 """Routes API pour les paramètres avancés de l'entreprise."""
 
 import logging
+from http import HTTPStatus
 
-from flask import request
-from flask_jwt_extended import jwt_required
-from flask_restx import Namespace, Resource, fields
+from flask import request  # pyright: ignore[reportMissingImports]
+from flask_jwt_extended import jwt_required  # pyright: ignore[reportMissingImports]
+from flask_restx import (  # pyright: ignore[reportMissingImports]
+    Namespace,
+    Resource,
+    fields,
+)
 
 from ext import db, role_required
 from models import CompanyBillingSettings, CompanyPlanningSettings, UserRole
 from routes.companies import get_company_from_token
+from shared.error_handlers import APIErrorHandler
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +78,23 @@ class OperationalSettings(Resource):
         """Récupérer les paramètres opérationnels."""
         company, err, code = get_company_from_token()
         if err:
-            return {"success": False, "error": err}, code
+            error_msg = err.get("error", "Company not found")
+            error_response, status_code = (
+                APIErrorHandler.handle_not_found(
+                    "Company",
+                    None,
+                    logger,
+                )
+                if code == HTTPStatus.NOT_FOUND
+                else APIErrorHandler.handle_validation_error(
+                    error_msg,
+                    logger_instance=logger,
+                )
+            )
+            return {
+                "success": False,
+                "error": error_response.get("error", error_msg),
+            }, status_code
 
         if company:
             return {
@@ -85,7 +107,11 @@ class OperationalSettings(Resource):
                     "longitude": company.longitude,
                 },
             }, 200
-        return {"success": False, "error": "Company not found"}, 404
+        return APIErrorHandler.handle_not_found(
+            "Company",
+            None,
+            logger,
+        )
 
     @jwt_required()
     @role_required(UserRole.company)
@@ -94,10 +120,30 @@ class OperationalSettings(Resource):
         """Mettre à jour les paramètres opérationnels."""
         company, err, code = get_company_from_token()
         if err:
-            return {"success": False, "error": err}, code
+            error_msg = err.get("error", "Company not found")
+            error_response, status_code = (
+                APIErrorHandler.handle_not_found(
+                    "Company",
+                    None,
+                    logger,
+                )
+                if code == HTTPStatus.NOT_FOUND
+                else APIErrorHandler.handle_validation_error(
+                    error_msg,
+                    logger_instance=logger,
+                )
+            )
+            return {
+                "success": False,
+                "error": error_response.get("error", error_msg),
+            }, status_code
 
         if not company:
-            return {"success": False, "error": "Company not found"}, 404
+            return APIErrorHandler.handle_not_found(
+                "Company",
+                None,
+                logger,
+            )
 
         data = request.get_json()
 
@@ -134,7 +180,7 @@ class OperationalSettings(Resource):
         except Exception as e:
             db.session.rollback()
             logger.error("[Settings] Error updating operational settings: %s", e)
-            return {"success": False, "error": str(e)}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 @settings_ns.route("/billing")
@@ -146,32 +192,195 @@ class BillingSettings(Resource):
         """Récupérer les paramètres de facturation."""
         company, err, code = get_company_from_token()
         if err:
-            return {"success": False, "error": err}, code
+            error_msg = err.get("error", "Company not found")
+            error_response, status_code = (
+                APIErrorHandler.handle_not_found(
+                    "Company",
+                    None,
+                    logger,
+                )
+                if code == HTTPStatus.NOT_FOUND
+                else APIErrorHandler.handle_validation_error(
+                    error_msg,
+                    logger_instance=logger,
+                )
+            )
+            return {
+                "success": False,
+                "error": error_response.get("error", error_msg),
+            }, status_code
 
         # Récupérer ou créer les billing settings
         if not company:
-            return {"success": False, "error": "Company not found"}, 404
+            return APIErrorHandler.handle_not_found(
+                "Company",
+                None,
+                logger,
+            )
 
-        billing = CompanyBillingSettings.query.filter_by(company_id=company.id).first()
+        # ✅ Récupérer directement le modèle SQLAlchemy (pas via repository qui retourne un DTO)
+        try:
+            # #region agent log
+            import json
+            import time
+            from pathlib import Path
 
-        if not billing:
-            # Créer avec valeurs par défaut
-            billing = CompanyBillingSettings()
-            billing.company_id = company.id
-            billing.payment_terms_days = 10
-            billing.overdue_fee = 15.00
-            billing.reminder1_fee = 0.00
-            billing.reminder2_fee = 40.00
-            billing.reminder3_fee = 0.00
-            billing.reminder_schedule_days = {"1": 10, "2": 5, "3": 5}
-            billing.auto_reminders_enabled = True
-            billing.invoice_number_format = "{PREFIX}-{YYYY}-{MM}-{SEQ4}"
-            billing.invoice_prefix = "EM"
-            billing.pdf_template_variant = "default"
-            db.session.add(billing)
-            db.session.commit()
+            log_path = Path("/app/.cursor/debug.log")
+            log_data = {
+                "location": "company_settings.py:BillingSettings.get",
+                "message": "Fetching billing settings",
+                "data": {"company_id": company.id},
+                "timestamp": int(time.time() * 1000),
+                "sessionId": "debug-session",
+                "runId": "run1",
+                "hypothesisId": "A",
+            }
+            try:
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(json.dumps(log_data) + "\n")
+            except Exception:
+                pass
+            # #endregion
+            billing = CompanyBillingSettings.query.filter_by(
+                company_id=company.id
+            ).first()
+            # #region agent log
+            log_data = {
+                "location": "company_settings.py:BillingSettings.get",
+                "message": "Billing settings query result",
+                "data": {
+                    "billing_found": billing is not None,
+                    "billing_id": billing.id if billing else None,
+                },
+                "timestamp": int(time.time() * 1000),
+                "sessionId": "debug-session",
+                "runId": "run1",
+                "hypothesisId": "A",
+            }
+            try:
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(json.dumps(log_data) + "\n")
+            except Exception:
+                pass
+            # #endregion
 
-        return billing.to_dict(), 200
+            if not billing:
+                # Créer avec valeurs par défaut
+                # #region agent log
+                log_data = {
+                    "location": "company_settings.py:BillingSettings.get",
+                    "message": "Creating default billing settings",
+                    "data": {"company_id": company.id},
+                    "timestamp": int(time.time() * 1000),
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "B",
+                }
+                try:
+                    with log_path.open("a", encoding="utf-8") as f:
+                        f.write(json.dumps(log_data) + "\n")
+                except Exception:
+                    pass
+                # #endregion
+                billing = CompanyBillingSettings()
+                billing.company_id = company.id
+                billing.payment_terms_days = 10
+                billing.overdue_fee = 15.00
+                billing.reminder1_fee = 0.00
+                billing.reminder2_fee = 40.00
+                billing.reminder3_fee = 0.00
+                billing.reminder_schedule_days = {"1": 10, "2": 5, "3": 5}
+                billing.auto_reminders_enabled = True
+                billing.invoice_number_format = "{PREFIX}-{YYYY}-{MM}-{SEQ4}"
+                billing.invoice_prefix = "EM"
+                billing.pdf_template_variant = "default"
+                db.session.add(billing)
+                db.session.commit()
+                # #region agent log
+                log_data = {
+                    "location": "company_settings.py:BillingSettings.get",
+                    "message": "Default billing settings created",
+                    "data": {"billing_id": billing.id},
+                    "timestamp": int(time.time() * 1000),
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "B",
+                }
+                try:
+                    with log_path.open("a", encoding="utf-8") as f:
+                        f.write(json.dumps(log_data) + "\n")
+                except Exception:
+                    pass
+                # #endregion
+
+            # #region agent log
+            log_data = {
+                "location": "company_settings.py:BillingSettings.get",
+                "message": "Calling to_dict on billing",
+                "data": {
+                    "billing_id": billing.id,
+                    "has_to_dict": hasattr(billing, "to_dict"),
+                },
+                "timestamp": int(time.time() * 1000),
+                "sessionId": "debug-session",
+                "runId": "run1",
+                "hypothesisId": "C",
+            }
+            try:
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(json.dumps(log_data) + "\n")
+            except Exception:
+                pass
+            # #endregion
+            result = billing.to_dict()
+            # #region agent log
+            log_data = {
+                "location": "company_settings.py:BillingSettings.get",
+                "message": "to_dict result",
+                "data": {
+                    "result_keys": list(result.keys()) if result else [],
+                    "result_type": type(result).__name__,
+                },
+                "timestamp": int(time.time() * 1000),
+                "sessionId": "debug-session",
+                "runId": "run1",
+                "hypothesisId": "C",
+            }
+            try:
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(json.dumps(log_data) + "\n")
+            except Exception:
+                pass
+            # #endregion
+            return result, 200
+        except Exception as e:
+            # #region agent log
+            import json
+            import time
+            from pathlib import Path
+
+            log_path = Path("/app/.cursor/debug.log")
+            log_data = {
+                "location": "company_settings.py:BillingSettings.get",
+                "message": "Error in get method",
+                "data": {
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                },
+                "timestamp": int(time.time() * 1000),
+                "sessionId": "debug-session",
+                "runId": "run1",
+                "hypothesisId": "D",
+            }
+            try:
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(json.dumps(log_data) + "\n")
+            except Exception:
+                pass
+            # #endregion
+            logger.exception("[Settings] Error fetching billing settings: %s", e)
+            return APIErrorHandler.handle_exception(e, logger)
 
     @jwt_required()
     @role_required(UserRole.company)
@@ -180,12 +389,32 @@ class BillingSettings(Resource):
         """Mettre à jour les paramètres de facturation."""
         company, err, code = get_company_from_token()
         if err:
-            return {"success": False, "error": err}, code
+            error_msg = err.get("error", "Company not found")
+            error_response, status_code = (
+                APIErrorHandler.handle_not_found(
+                    "Company",
+                    None,
+                    logger,
+                )
+                if code == HTTPStatus.NOT_FOUND
+                else APIErrorHandler.handle_validation_error(
+                    error_msg,
+                    logger_instance=logger,
+                )
+            )
+            return {
+                "success": False,
+                "error": error_response.get("error", error_msg),
+            }, status_code
 
         data = request.get_json() or {}
 
         if not company:
-            return {"success": False, "error": "Company not found"}, 404
+            return APIErrorHandler.handle_not_found(
+                "Company",
+                None,
+                logger,
+            )
 
         logger.info(
             "[Settings] Billing settings update request for company %s: %s",
@@ -194,6 +423,7 @@ class BillingSettings(Resource):
         )
 
         try:
+            # ✅ Récupérer directement le modèle SQLAlchemy (pas via repository qui retourne un DTO)
             billing = CompanyBillingSettings.query.filter_by(
                 company_id=company.id
             ).first()
@@ -307,7 +537,7 @@ class BillingSettings(Resource):
         except Exception as e:
             db.session.rollback()
             logger.exception("[Settings] Error updating billing settings: %s", e)
-            return {"success": False, "error": str(e)}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 @settings_ns.route("/planning")
@@ -318,11 +548,32 @@ class PlanningSettings(Resource):
         """Récupérer les paramètres de planning."""
         company, err, code = get_company_from_token()
         if err:
-            return {"success": False, "error": err}, code
+            error_msg = err.get("error", "Company not found")
+            error_response, status_code = (
+                APIErrorHandler.handle_not_found(
+                    "Company",
+                    None,
+                    logger,
+                )
+                if code == HTTPStatus.NOT_FOUND
+                else APIErrorHandler.handle_validation_error(
+                    error_msg,
+                    logger_instance=logger,
+                )
+            )
+            return {
+                "success": False,
+                "error": error_response.get("error", error_msg),
+            }, status_code
 
         if not company:
-            return {"success": False, "error": "Company not found"}, 404
+            return APIErrorHandler.handle_not_found(
+                "Company",
+                None,
+                logger,
+            )
 
+        # ✅ Récupérer directement le modèle SQLAlchemy (pas via repository qui retourne un DTO)
         planning = CompanyPlanningSettings.query.filter_by(
             company_id=company.id
         ).first()
@@ -342,14 +593,35 @@ class PlanningSettings(Resource):
         """Mettre à jour les paramètres de planning."""
         company, err, code = get_company_from_token()
         if err:
-            return {"success": False, "error": err}, code
+            error_msg = err.get("error", "Company not found")
+            error_response, status_code = (
+                APIErrorHandler.handle_not_found(
+                    "Company",
+                    None,
+                    logger,
+                )
+                if code == HTTPStatus.NOT_FOUND
+                else APIErrorHandler.handle_validation_error(
+                    error_msg,
+                    logger_instance=logger,
+                )
+            )
+            return {
+                "success": False,
+                "error": error_response.get("error", error_msg),
+            }, status_code
 
         data = request.get_json()
 
         if not company:
-            return {"success": False, "error": "Company not found"}, 404
+            return APIErrorHandler.handle_not_found(
+                "Company",
+                None,
+                logger,
+            )
 
         try:
+            # ✅ Récupérer directement le modèle SQLAlchemy (pas via repository qui retourne un DTO)
             planning = CompanyPlanningSettings.query.filter_by(
                 company_id=company.id
             ).first()
@@ -375,4 +647,4 @@ class PlanningSettings(Resource):
         except Exception as e:
             db.session.rollback()
             logger.error("[Settings] Error updating planning settings: %s", e)
-            return {"success": False, "error": str(e)}, 500
+            return APIErrorHandler.handle_exception(e, logger)

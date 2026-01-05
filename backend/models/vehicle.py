@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -59,18 +58,18 @@ class Vehicle(db.Model):
     # Infos véhicule
     model: Mapped[str] = mapped_column(String(120), nullable=False)
     license_plate: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
-    year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    year: Mapped[int | None] = mapped_column(Integer, nullable=True)
     vin: Mapped[str] = mapped_column(String(32), nullable=True)
 
     # Capacités
-    seats: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    seats: Mapped[int | None] = mapped_column(Integer, nullable=True)
     wheelchair_accessible = Column(Boolean, nullable=False, server_default="false")
 
     # Suivi administratif
-    insurance_expires_at: Mapped[Optional[datetime]] = mapped_column(
+    insurance_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    inspection_expires_at: Mapped[Optional[datetime]] = mapped_column(
+    inspection_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 

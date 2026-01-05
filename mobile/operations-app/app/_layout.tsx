@@ -2,6 +2,7 @@
 import * as Sentry from "@sentry/react-native";
 import React, { useEffect, useRef } from "react";
 import { Slot, useSegments, useRouter } from "expo-router";
+import * as Linking from "expo-linking";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import {
   configureNotifications,
@@ -15,6 +16,7 @@ import {
   startAdaptiveLocationTracking,
   stopAdaptiveLocationTracking,
 } from "@/services/locationTracker";
+import { validateDeepLink } from "@/services/deepLinkHandler";
 // Version check - gestion des mises à jour obligatoires/recommandées
 import { VersionProvider, useVersion } from "@/contexts/VersionContext";
 import { UpdateRequiredScreen } from "@/components/version/UpdateRequiredScreen";
@@ -70,6 +72,53 @@ function RootNav() {
   const router = useRouter();
   const registeringRef = useRef(false);
 
+  // ✅ Deep link handler: parse atmr:// URLs and navigate to appropriate routes
+  const handleDeepLink = React.useCallback((url: string) => {
+    try {
+      console.log("🔗 Handling deep link:", url);
+
+      // ✅ Valider le deep link (sécurité: anti-injection, anti-open-redirect)
+      const validation = validateDeepLink(url);
+      if (!validation.valid) {
+        console.warn("⚠️ Deep link invalide:", validation.error, url);
+        return;
+      }
+
+      // Utiliser les valeurs validées
+      const route = validation.type; // "booking", "bookings", "chat", "dispatch"
+      const id = validation.id; // ID validé (entier positif) ou undefined
+
+      // Only navigate if driver is authenticated
+      if (!isDriverAuthenticated || loading) {
+        console.log("⏳ Driver not authenticated yet, deferring deep link navigation");
+        return;
+      }
+
+      // Map deep link paths to app routes (utiliser les valeurs validées)
+      if (route === "booking" && id) {
+        // Navigate to trip details
+        console.log("📍 Navigating to trip details for booking:", id);
+        router.push(`/(dashboard)/trip-details?id=${id}` as any);
+      } else if (route === "bookings") {
+        // Navigate to trips list
+        console.log("📍 Navigating to trips list");
+        router.push("/(tabs)/trips" as any);
+      } else if (route === "chat" && id) {
+        // Navigate to chat (le format chat/message/{id} est validé comme chat/{id})
+        console.log("📍 Navigating to chat with message:", id);
+        router.push(`/(tabs)/chat?messageId=${id}` as any);
+      } else if (route === "dispatch" && id) {
+        // Navigate to schedule/dispatch (le format dispatch/run/{id} est validé comme dispatch/{id})
+        console.log("📍 Navigating to schedule with dispatch run:", id);
+        router.push(`/(dashboard)/schedule?dispatchRunId=${id}` as any);
+      } else {
+        console.warn("⚠️ Deep link route non gérée:", route, id);
+      }
+    } catch (error) {
+      console.error("❌ Error handling deep link:", error);
+    }
+  }, [isDriverAuthenticated, loading, router]);
+
   // Si une mise à jour est REQUIRED, afficher l'écran bloquant
   // (avant même l'authentification)
   if (updateStatus === "UPDATE_REQUIRED") {
@@ -107,22 +156,29 @@ function RootNav() {
         router.replace("/(enterprise)/dashboard" as any);
       }
     } else {
-      if (!isDriverAuthenticated) {
+      // En mode driver, attendre que le chargement soit terminé avant de naviguer
+      // pour éviter de naviguer vers login pendant un switch de compte
+      if (!isDriverAuthenticated && !loading) {
+        // Ne pas naviguer vers login si on est dans un contexte d'entreprise
+        // (cela peut arriver lors d'un switch de compte)
         if (
           !isDriverAuthGroup &&
+          !isEnterpriseGroup &&
+          !isEnterpriseAuthGroup &&
           firstSegment !== "" &&
           firstSegment !== "index"
         ) {
-          router.replace("/(auth)/login");
+          router.replace("/(auth)/login" as any);
         }
       } else if (
-        isDriverAuthGroup ||
-        firstSegment === "" ||
-        firstSegment === "index" ||
-        isEnterpriseAuthGroup ||
-        isEnterpriseGroup
+        isDriverAuthenticated &&
+        (isDriverAuthGroup ||
+          firstSegment === "" ||
+          firstSegment === "index" ||
+          isEnterpriseAuthGroup ||
+          isEnterpriseGroup)
       ) {
-        router.replace("/(tabs)/mission");
+        router.replace("/(tabs)/mission" as any);
       }
     }
   }, [
@@ -211,6 +267,36 @@ function RootNav() {
       cancelled = true;
     };
   }, [driver, isDriverAuthenticated, loading]);
+
+  // ✅ Deep link handling: listen for deep links when app is running
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+
+    // Handle initial deep link when app opens from notification
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        console.log("🔗 Initial deep link detected:", url);
+        // Wait for auth to complete before handling
+        setTimeout(() => {
+          if (isDriverAuthenticated && !loading) {
+            handleDeepLink(url);
+          }
+        }, 1000);
+      }
+    });
+
+    // Listen for deep links when app is already running
+    const subscription = Linking.addEventListener("url", (event) => {
+      console.log("🔗 Deep link received while app running:", event.url);
+      if (isDriverAuthenticated && !loading) {
+        handleDeepLink(event.url);
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isDriverAuthenticated, loading, handleDeepLink]);
 
   // ✅ 4. Fréquence GPS Adaptative Mobile : Démarrer tracking adaptatif pour les drivers
   useEffect(() => {

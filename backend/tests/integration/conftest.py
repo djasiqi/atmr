@@ -1,0 +1,216 @@
+"""
+Fixtures spécifiques pour les tests d'intégration DDD.
+
+Ces fixtures étendent celles de backend/tests/conftest.py avec des données
+spécifiques pour tester les flux complets route → use case → repository → DB.
+"""
+
+from __future__ import annotations
+
+import uuid
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+
+import pytest
+
+from models import (
+    Booking,
+    Client,
+    CompanyBillingSettings,
+    Driver,
+    Invoice,
+    User,
+)
+from models.enums import BookingStatus, ClientType, InvoiceStatus
+
+
+@pytest.fixture
+def test_company(db, sample_user):
+    """Entreprise de test avec toutes les données nécessaires."""
+    # Vérifier si une company existe déjà
+    existing_company = db.session.query(User).filter_by(id=sample_user.id).first()
+    if (
+        existing_company
+        and hasattr(existing_company, "companies")
+        and existing_company.companies
+    ):
+        return existing_company.companies[0]
+
+    company = db.session.query(User).filter_by(id=sample_user.id).first()
+    if not company:
+        return None
+
+    # Créer l'entreprise si elle n'existe pas
+    from models import Company
+
+    unique_suffix = str(uuid.uuid4())[:8]
+    test_company = Company()
+    test_company.name = f"Test Company {unique_suffix}"
+    test_company.address = "Rue de Test 1, 1000 Lausanne"
+    test_company.contact_phone = "0211234567"
+    test_company.contact_email = f"company_{unique_suffix}@test.ch"
+    test_company.user_id = sample_user.id
+    db.session.add(test_company)
+    db.session.flush()
+
+    # Créer les paramètres de facturation
+    billing_settings = CompanyBillingSettings()
+    billing_settings.company_id = test_company.id
+    billing_settings.payment_terms_days = 30
+    billing_settings.invoice_prefix = "INV"
+    billing_settings.overdue_fee = Decimal("10.00")
+    billing_settings.reminder1_fee = Decimal("5.00")
+    billing_settings.reminder2_fee = Decimal("10.00")
+    billing_settings.reminder3_fee = Decimal("15.00")
+    db.session.add(billing_settings)
+    db.session.flush()
+
+    return test_company
+
+
+@pytest.fixture
+def test_client(db, test_company):
+    """Client de test associé à l'entreprise."""
+    if not test_company:
+        pytest.skip("test_company required")
+
+    unique_suffix = str(uuid.uuid4())[:8]
+    client = Client()
+    client.company_id = test_company.id
+    client.first_name = f"Test{unique_suffix}"
+    client.last_name = "Client"
+    client.email = f"client_{unique_suffix}@test.ch"
+    client.phone = "0211234567"
+    client.client_type = ClientType.INDIVIDUAL
+    db.session.add(client)
+    db.session.flush()
+    return client
+
+
+@pytest.fixture
+def test_driver(db, test_company):
+    """Chauffeur de test associé à l'entreprise."""
+    if not test_company:
+        pytest.skip("test_company required")
+
+    unique_suffix = str(uuid.uuid4())[:8]
+    driver = Driver()
+    driver.company_id = test_company.id
+    driver.first_name = f"Test{unique_suffix}"
+    driver.last_name = "Driver"
+    driver.email = f"driver_{unique_suffix}@test.ch"
+    driver.phone = "0211234567"
+    driver.is_active = True
+    db.session.add(driver)
+    db.session.flush()
+    return driver
+
+
+@pytest.fixture
+def test_booking(db, test_company, test_client):
+    """Réservation de test complète."""
+    if not test_company or not test_client:
+        pytest.skip("test_company and test_client required")
+
+    booking = Booking()
+    booking.company_id = test_company.id
+    booking.client_id = test_client.id
+    booking.customer_name = f"{test_client.first_name} {test_client.last_name}"
+    booking.pickup_location = "Rue de Test 1, 1000 Lausanne"
+    booking.dropoff_location = "Rue de Test 2, 1000 Lausanne"
+    booking.scheduled_time = datetime.now(UTC) + timedelta(hours=1)
+    booking.status = BookingStatus.PENDING
+    booking.amount = Decimal("50.00")
+    booking.vat_rate = Decimal("7.70")
+    db.session.add(booking)
+    db.session.flush()
+    return booking
+
+
+@pytest.fixture
+def test_completed_booking(db, test_company, test_client):
+    """Réservation complétée pour tests de facturation."""
+    if not test_company or not test_client:
+        pytest.skip("test_company and test_client required")
+
+    booking = Booking()
+    booking.company_id = test_company.id
+    booking.client_id = test_client.id
+    booking.customer_name = f"{test_client.first_name} {test_client.last_name}"
+    booking.pickup_location = "Rue de Test 1, 1000 Lausanne"
+    booking.dropoff_location = "Rue de Test 2, 1000 Lausanne"
+    booking.scheduled_time = datetime.now(UTC) - timedelta(days=1)
+    booking.completed_at = datetime.now(UTC) - timedelta(hours=1)
+    booking.status = BookingStatus.COMPLETED
+    booking.amount = Decimal("100.00")
+    booking.vat_rate = Decimal("7.70")
+    booking.invoice_line_id = None  # Pas encore facturée
+    db.session.add(booking)
+    db.session.flush()
+    return booking
+
+
+@pytest.fixture
+def test_invoice(db, test_company, test_client):
+    """Facture de test."""
+    if not test_company or not test_client:
+        pytest.skip("test_company and test_client required")
+
+    invoice = Invoice()
+    invoice.company_id = test_company.id
+    invoice.client_id = test_client.id
+    invoice.invoice_number = f"INV-TEST-{uuid.uuid4().hex[:8]}"
+    invoice.period_year = datetime.now(UTC).year
+    invoice.period_month = datetime.now(UTC).month
+    invoice.status = InvoiceStatus.DRAFT
+    invoice.subtotal_amount = Decimal("100.00")
+    invoice.vat_total_amount = Decimal("7.70")
+    invoice.total_amount = Decimal("107.70")
+    invoice.balance_due = Decimal("107.70")
+    invoice.issued_at = datetime.now(UTC)
+    invoice.due_date = datetime.now(UTC) + timedelta(days=30)
+    db.session.add(invoice)
+    db.session.flush()
+    return invoice
+
+
+@pytest.fixture
+def authenticated_client(client, auth_headers):
+    """Client Flask authentifié avec token JWT."""
+
+    class AuthenticatedClient:  # noqa: D101
+        """Wrapper pour client Flask avec authentification automatique.
+
+        Note: Cette classe n'hérite d'aucune classe, donc pas besoin d'appeler super().__init__().
+        Le warning basedpyright est un faux positif.
+        """
+
+        def __init__(self, client, headers):  # noqa: D107  # pyright: ignore[reportMissingSuperCall]
+            self._client = client
+            self._headers = headers
+
+        def get(self, url, **kwargs):
+            """GET request avec authentification."""
+            kwargs.setdefault("headers", {}).update(self._headers)
+            return self._client.get(url, **kwargs)
+
+        def post(self, url, **kwargs):
+            """POST request avec authentification."""
+            kwargs.setdefault("headers", {}).update(self._headers)
+            return self._client.post(url, **kwargs)
+
+        def put(self, url, **kwargs):
+            """PUT request avec authentification."""
+            kwargs.setdefault("headers", {}).update(self._headers)
+            return self._client.put(url, **kwargs)
+
+        def delete(self, url, **kwargs):
+            """DELETE request avec authentification."""
+            kwargs.setdefault("headers", {}).update(self._headers)
+            return self._client.delete(url, **kwargs)
+
+        def __getattr__(self, name):
+            """Déléguer les autres méthodes au client original."""
+            return getattr(self._client, name)
+
+    return AuthenticatedClient(client, auth_headers)

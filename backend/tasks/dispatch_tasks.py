@@ -7,9 +7,12 @@ from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Any, Dict, cast
 
-from celery import shared_task
-from celery.exceptions import MaxRetriesExceededError
+from celery import shared_task  # pyright: ignore[reportMissingImports]
+from celery.exceptions import (  # pyright: ignore[reportMissingImports]
+    MaxRetriesExceededError,
+)
 from sqlalchemy import exc as sa_exc
+from sqlalchemy.exc import DBAPIError, OperationalError
 
 from celery_app import get_flask_app
 from ext import db
@@ -38,7 +41,15 @@ def _safe_int(v: Any) -> int | None:
     task_soft_time_limit=540,  # 9 minutes soft limit (540 secondes)
     max_retries=3,
     default_retry_delay=30,
-    autoretry_for=(Exception,),
+    # ✅ P1: Limiter retry aux exceptions retryables (évite retries inutiles
+    # pour ValueError, TypeError, etc.)
+    autoretry_for=(
+        OperationalError,  # Erreurs DB transitoires (connexion perdue, timeout)
+        DBAPIError,  # Erreurs DBAPI (connexion invalidée)
+        TimeoutError,  # Timeouts généraux
+        ConnectionError,  # Erreurs de connexion réseau
+        OSError,  # Erreurs système (ex: "No route to host")
+    ),
     retry_backoff=True,
     retry_backoff_max=300,  # 5 minutes max (300 secondes)
     retry_jitter=True,

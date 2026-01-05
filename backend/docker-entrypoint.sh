@@ -352,8 +352,14 @@ start_application() {
         exec python app.py
     else
         echo "  Mode production: démarrage avec Gunicorn"
+        # ✅ FIX Socket.IO multi-workers: Pour diagnostiquer "Invalid session" errors,
+        # définir GUNICORN_WORKERS=1 pour forcer un seul worker (évite le problème de SID
+        # partagé entre workers). En production avec Redis message_queue, utiliser 4+ workers.
         WORKERS="${GUNICORN_WORKERS:-4}"
         echo "  Workers configurés: $WORKERS"
+        if [ "$WORKERS" = "1" ]; then
+            echo "  ⚠️  Mode single-worker (diagnostic Socket.IO multi-workers)"
+        fi
         exec gunicorn wsgi:app \
             --bind 0.0.0.0:5000 \
             --worker-class eventlet \

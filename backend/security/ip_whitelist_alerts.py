@@ -9,8 +9,8 @@ import os
 from datetime import UTC, datetime, timedelta
 from typing import Any, Dict
 
-import sentry_sdk
-from flask import request
+import sentry_sdk  # pyright: ignore[reportMissingImports]
+from flask import request  # pyright: ignore[reportMissingImports]
 
 from ext import redis_client
 from security.audit_log import AuditLogger

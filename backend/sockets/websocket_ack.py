@@ -13,7 +13,7 @@ import hashlib
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from ext import socketio
 
@@ -36,8 +36,8 @@ class PendingMessage:
     payload: Dict[str, Any]
     room: str
     retries: int = 0
-    first_sent: Optional[datetime] = None
-    last_sent: Optional[datetime] = None
+    first_sent: datetime | None = None
+    last_sent: datetime | None = None
 
     def __post_init__(self):
         """Initialise first_sent si None."""

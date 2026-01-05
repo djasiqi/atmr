@@ -19,6 +19,9 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from models import Assignment, AssignmentStatus, Booking, Driver
+from repositories.assignment_repository import AssignmentRepository
+from repositories.booking_repository import BookingRepository
+from repositories.driver_repository import DriverRepository
 from services.unified_dispatch.apply import apply_assignments
 from services.unified_dispatch.data import calculate_eta
 from services.unified_dispatch.reactive_suggestions import SuggestionEngine
@@ -119,7 +122,14 @@ class AutoReassignmentService:
         threshold = delay_threshold_minutes or self.delay_threshold_minutes
 
         try:
-            assignment = Assignment.query.get(assignment_id)
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            assignment_repo = AssignmentRepository()
+            assignment_dto = assignment_repo.find_by_id(assignment_id)
+            if not assignment_dto:
+                assignment = None
+            else:
+                # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+                assignment = Assignment.query.get(assignment_dto.id)
             if not assignment:
                 return ReassignmentResult(
                     success=False,
@@ -133,7 +143,11 @@ class AutoReassignmentService:
                     reason="Assignment introuvable",
                 )
 
-            booking = Booking.query.get(assignment.booking_id)
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            booking_repo = BookingRepository()
+            booking_dto = booking_repo.find_by_id(assignment.booking_id)
+            # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+            booking = Booking.query.get(booking_dto.id) if booking_dto else None
             if not booking:
                 return ReassignmentResult(
                     success=False,
@@ -162,9 +176,14 @@ class AutoReassignmentService:
                 return None
 
             # Trouver meilleur chauffeur alternatif
-            current_driver = (
-                Driver.query.get(assignment.driver_id) if assignment.driver_id else None
-            )
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            driver_repo = DriverRepository()
+            current_driver = None
+            if assignment.driver_id:
+                driver_dto = driver_repo.find_by_id(assignment.driver_id)
+                if driver_dto:
+                    # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+                    current_driver = Driver.query.get(driver_dto.id)
             best_alternative = self._find_best_alternative_driver(
                 booking, current_driver, booking.company_id
             )
@@ -282,18 +301,28 @@ class AutoReassignmentService:
             return int(delay_seconds / 60)
 
         # Sinon, calculer ETA depuis position actuelle du chauffeur
-        if assignment.driver_id:
-            driver = Driver.query.get(assignment.driver_id)
+        if bool(assignment.driver_id):
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            driver_repo = DriverRepository()
+            driver_dto = (
+                driver_repo.find_by_id(int(assignment.driver_id))  # type: ignore[reportArgumentType]
+                if bool(assignment.driver_id)
+                else None
+            )
+            driver = Driver.query.get(driver_dto.id) if driver_dto else None
             if (
                 driver
-                and driver.latitude
-                and driver.longitude
-                and booking.pickup_lat
-                and booking.pickup_lon
+                and bool(driver.latitude)
+                and bool(driver.longitude)
+                and bool(booking.pickup_lat)
+                and bool(booking.pickup_lon)
             ):
                 try:
-                    driver_position = (driver.latitude, driver.longitude)
-                    pickup_position = (booking.pickup_lat, booking.pickup_lon)
+                    driver_position = (float(driver.latitude), float(driver.longitude))
+                    pickup_position = (
+                        float(booking.pickup_lat),  # type: ignore[reportArgumentType]
+                        float(booking.pickup_lon),  # type: ignore[reportArgumentType]
+                    )
                     eta_seconds = calculate_eta(
                         driver_position=driver_position,
                         destination=pickup_position,
@@ -414,7 +443,7 @@ class AutoReassignmentService:
             ReassignmentResult avec succès/échec
         """
         try:
-            old_driver_id = assignment.driver_id
+            old_driver_id = int(assignment.driver_id) if assignment.driver_id else None  # type: ignore[reportArgumentType,reportGeneralTypeIssues]
 
             # Créer nouvelle assignation avec nouveau chauffeur
             new_assignment = {
@@ -424,7 +453,7 @@ class AutoReassignmentService:
 
             # Appliquer la réassignation
             result = apply_assignments(
-                company_id=booking.company_id,
+                company_id=int(booking.company_id),  # type: ignore[reportArgumentType]
                 assignments=[new_assignment],
                 allow_reassign=True,
                 respect_existing=False,  # Forcer réassignation
@@ -471,7 +500,9 @@ class AutoReassignmentService:
                 success=False,
                 reassigned=False,
                 assignment_id=assignment.id,
-                old_driver_id=assignment.driver_id,
+                old_driver_id=int(assignment.driver_id)  # type: ignore[reportArgumentType]
+                if bool(assignment.driver_id)
+                else None,
                 new_driver_id=new_driver_id,
                 delay_minutes=0,
                 projected_delay_minutes=0,
@@ -498,7 +529,10 @@ class AutoReassignmentService:
             from app import socketio
 
             # Émettre vers la room de l'entreprise
-            booking = Booking.query.get(booking_id)
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            booking_repo = BookingRepository()
+            booking_dto = booking_repo.find_by_id(booking_id)
+            booking = Booking.query.get(booking_dto.id) if booking_dto else None
             if booking:
                 company_room = f"company_{booking.company_id}"
                 socketio.emit(

@@ -1,4 +1,15 @@
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Platform } from 'react-native';
+
+// Styles shadow conditionnels pour éviter l'avertissement de dépréciation
+const modalContainerShadow = Platform.OS === 'web'
+  ? { boxShadow: '0 2px 4px rgba(0,0,0,0.25)' }
+  : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      elevation: 5,
+    };
 
 export const modalStyles = StyleSheet.create({
   overlay: {
@@ -14,11 +25,7 @@ export const modalStyles = StyleSheet.create({
     padding: 24,
     width: '100%',
     maxWidth: 400,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+    ...modalContainerShadow,
   },
   iconWrapper: {
     flexDirection: 'row',

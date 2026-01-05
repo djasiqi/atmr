@@ -1,21 +1,33 @@
 # backend/ext.py
 # pyright: reportImportCycles = false
 
+import json
 import logging
 import os
+from datetime import UTC, datetime
 from functools import wraps
+from pathlib import Path
 from typing import Any, Literal, cast
 
-import redis
-from flask import abort, jsonify, request
-from flask_bcrypt import Bcrypt
-from flask_jwt_extended import JWTManager, get_jwt_identity
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
-from flask_mail import Mail
-from flask_migrate import Migrate
-from flask_socketio import SocketIO
-from flask_sqlalchemy import SQLAlchemy
+import redis  # pyright: ignore[reportMissingImports]
+from flask import (  # pyright: ignore[reportMissingImports]
+    abort,
+    jsonify,
+    request,
+)
+from flask_bcrypt import Bcrypt  # pyright: ignore[reportMissingImports]
+from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
+    JWTManager,
+    get_jwt_identity,
+)
+from flask_limiter import Limiter  # pyright: ignore[reportMissingImports]
+from flask_limiter.util import (  # pyright: ignore[reportMissingImports]
+    get_remote_address,
+)
+from flask_mail import Mail  # pyright: ignore[reportMissingImports]
+from flask_migrate import Migrate  # pyright: ignore[reportMissingModuleSource]
+from flask_socketio import SocketIO  # pyright: ignore[reportMissingModuleSource]
+from flask_sqlalchemy import SQLAlchemy  # pyright: ignore[reportMissingImports]
 
 # Initialisation des extensions (singleton importables partout)
 db = SQLAlchemy()
@@ -24,21 +36,45 @@ mail = Mail()
 bcrypt = Bcrypt()
 migrate = Migrate()
 
+# Logger (défini tôt pour être disponible partout)
+app_logger = logging.getLogger("app")
+
 # Redis
 REDIS_URL = os.getenv("REDIS_URL", default="redis://redis:6379/0")
 
+# ✅ P1: Timeouts Redis pour éviter blocages si Redis indisponible
+REDIS_SOCKET_TIMEOUT = int(os.getenv("REDIS_SOCKET_TIMEOUT", "5"))  # 5s par défaut
+REDIS_SOCKET_CONNECT_TIMEOUT = int(
+    os.getenv("REDIS_SOCKET_CONNECT_TIMEOUT", "5")
+)  # 5s par défaut
+
 redis_client: redis.Redis | None = None
 try:
-    redis_client = redis.Redis.from_url(REDIS_URL)
-    redis_client.ping()
+    # ✅ P1: Configurer timeouts pour éviter blocages
+    redis_client = redis.Redis.from_url(
+        REDIS_URL,
+        socket_timeout=REDIS_SOCKET_TIMEOUT,
+        socket_connect_timeout=REDIS_SOCKET_CONNECT_TIMEOUT,
+    )
+    # ✅ P1: Ping avec timeout pour vérifier connexion sans bloquer
+    if redis_client is not None:
+        redis_client.ping()
     limiter_storage = REDIS_URL
-except Exception:
+except Exception as e:
+    app_logger.warning(
+        "[Redis] Connexion échouée ou timeout: %s. Fallback vers memory storage.",
+        e,
+    )
     redis_client = None
     limiter_storage = "memory://"
 
 # ⚠️ Ne fixe PAS CORS/path ici pour éviter les conflits
 # - tout est défini dans app.py (socketio.init_app)
-# Active la file Redis si disponible (scaling multi-workers).
+# ✅ FIX Socket.IO multi-workers: Active la file Redis si disponible (scaling multi-workers).
+# CRITIQUE: Utiliser REDIS_URL directement (pas redis_client) car Flask-SocketIO
+# se connectera à Redis quand nécessaire. Si redis_client est None au démarrage
+# (Redis pas encore disponible), message_queue=None causerait "Invalid session"
+# en multi-workers car les SIDs ne sont pas partagés entre workers.
 # Typage strict de async_mode pour contenter Pylance/pyright.
 AsyncMode = Literal["threading", "eventlet", "gevent", "gevent_uwsgi"]
 _env_async = os.getenv("SOCKETIO_ASYNC_MODE", default="eventlet").strip().lower()
@@ -48,19 +84,92 @@ if _env_async not in _allowed_modes:
     _env_async = "eventlet"
 ASYNC_MODE: AsyncMode = cast("AsyncMode", _env_async)
 
+# ✅ FIX: Utiliser REDIS_URL directement si disponible (même si redis_client est None)
+# Flask-SocketIO se connectera à Redis automatiquement quand nécessaire.
+# Si REDIS_URL est vide ou "memory://", alors message_queue=None (mode single-worker).
+_socketio_message_queue: str | None = None
+if REDIS_URL and REDIS_URL.strip() and not REDIS_URL.startswith("memory://"):
+    _socketio_message_queue = REDIS_URL
+    app_logger.info(
+        "[Socket.IO] ✅ Message queue Redis configurée: %s (multi-workers support)",
+        REDIS_URL.split("@")[-1] if "@" in REDIS_URL else REDIS_URL,
+    )
+else:
+    app_logger.warning(
+        "[Socket.IO] ⚠️  Message queue Redis non configurée - mode single-worker uniquement. Pour multi-workers, définissez REDIS_URL."
+    )
+
 socketio = SocketIO(
     async_mode=ASYNC_MODE,
-    message_queue=REDIS_URL if redis_client else None,
+    message_queue=_socketio_message_queue,
 )
 
+# #region agent log
+try:
+    # Utiliser variable d'environnement ou chemin par défaut (Windows/Docker)
+    debug_log_path = os.getenv(
+        "DEBUG_LOG_PATH", r"c:\Users\jasiq\atmr\.cursor\debug.log"
+    )
+    log_path = Path(debug_log_path)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("a", encoding="utf-8") as f:
+        log_data = {
+            "id": f"log_{int(datetime.now(UTC).timestamp() * 1000)}_socketio_init",
+            "timestamp": int(datetime.now(UTC).timestamp() * 1000),
+            "location": "ext.py:socketio_init",
+            "message": "SocketIO initialized with message_queue",
+            "data": {
+                "async_mode": ASYNC_MODE,
+                "message_queue_configured": _socketio_message_queue is not None,
+                "message_queue": _socketio_message_queue.split("@")[-1]
+                if _socketio_message_queue and "@" in _socketio_message_queue
+                else (_socketio_message_queue or "None"),
+                "worker_pid": os.getpid(),
+                "redis_url_available": bool(REDIS_URL and REDIS_URL.strip()),
+            },
+            "sessionId": "debug-session",
+            "runId": "run1",
+            "hypothesisId": "A",
+        }
+        f.write(json.dumps(log_data) + "\n")
+except Exception:
+    pass
+# #endregion
+
+
+# ✅ S2: Fonction key_func pour rate limiting par utilisateur (si authentifié) ou par IP
+def get_rate_limit_key() -> str:
+    """Génère une clé pour le rate limiting basée sur l'utilisateur (si authentifié) ou l'IP.
+
+    ✅ S2: Rate limiting par utilisateur pour éviter qu'un utilisateur malveillant
+    puisse contourner les limites en changeant d'IP.
+
+    Returns:
+        Clé de rate limiting (format: "user:{user_id}" ou "ip:{ip_address}")
+    """
+    # Essayer de récupérer l'utilisateur authentifié
+    try:
+        user_public_id = get_jwt_identity()
+        if user_public_id:
+            # Utiliser l'ID utilisateur comme clé (plus sécurisé que l'IP seule)
+            return f"user:{user_public_id}"
+    except Exception:
+        # Si l'authentification échoue, fallback sur IP
+        pass
+
+    # Fallback : utiliser l'adresse IP
+    ip_address = get_remote_address()
+    return f"ip:{ip_address}"
+
+
+# ✅ S2: Rate limiting amélioré - limite par défaut réduite (5000 → 1000/heure)
 limiter = Limiter(
-    key_func=get_remote_address,
-    default_limits=["5000 per hour"],
+    key_func=get_rate_limit_key,
+    default_limits=["1000 per hour"],  # ✅ S2: Réduit de 5000 à 1000/heure
     storage_uri=limiter_storage,
 )
 
 dispatch_status = {"is_running": False, "last_run_time": None}
-app_logger = logging.getLogger("app")
 
 # ✅ 2.7: Constantes pour DB Profiler
 DB_PROFILER_N_PLUS_1_THRESHOLD = 10  # Seuil pour détecter pattern N+1
@@ -163,7 +272,59 @@ def expired_token_callback(_jwt_header, _jwt_payload):
 
 
 @jwt.invalid_token_loader
-def invalid_token_callback(_error):
+def invalid_token_callback(error):
+    """Callback pour tokens invalides (inclut audience invalide).
+
+    ✅ S3: Détecte si une legacy key pourrait fonctionner (pour audit).
+
+    Note: Flask-JWT-Extended ne permet pas de re-décoder avec une autre clé dans ce callback.
+    Les tokens signés avec des legacy keys nécessiteront une reconnexion de l'utilisateur.
+    Ce callback sert principalement à détecter et logger l'utilisation de legacy keys.
+
+    Note: Les tokens avec audience invalide sont rejetés via check_if_token_revoked()
+    et déclenchent ce callback avec une erreur générique.
+    """
+    # ✅ S3: Détecter si une legacy key pourrait fonctionner (pour audit uniquement)
+    error_str = str(error) if error else ""
+    if "signature" in error_str.lower() or "Invalid signature" in str(error):
+        try:
+            from flask import request  # pyright: ignore[reportMissingImports]
+
+            from security.jwt_legacy_keys import try_decode_with_legacy_keys
+
+            # Récupérer le token depuis le header Authorization
+            auth_header = request.headers.get("Authorization", "")
+            if auth_header and auth_header.startswith("Bearer "):
+                token = auth_header.split(" ", 1)[1].strip()
+                payload, used_key = try_decode_with_legacy_keys(token)
+
+                if payload and used_key:
+                    # Token décodé avec une legacy key - logger pour audit
+                    # Note: Flask-JWT-Extended ne permet pas de "re-décoder" avec une autre
+                    # clé dans ce callback. Le token sera rejeté et l'utilisateur devra se reconnecter.
+                    app_logger.info(
+                        "[JWT Legacy] ✅ Token décodé avec legacy key (user_id: %s, endpoint: %s)",
+                        payload.get("sub") or payload.get("identity"),
+                        request.path,
+                    )
+                    # Incrémenter métrique pour monitoring
+                    try:
+                        from security.security_metrics import (
+                            security_token_invalidations_total,
+                        )
+
+                        security_token_invalidations_total.labels(
+                            reason="legacy_key_detected"
+                        ).inc()
+                    except Exception:
+                        pass  # Ne pas bloquer si métriques indisponibles
+        except Exception as legacy_error:
+            app_logger.debug(
+                "[JWT Legacy] Erreur lors de la détection legacy keys: %s", legacy_error
+            )
+
+    # Le message d'erreur est générique pour ne pas révéler trop d'informations
+    # Les détails spécifiques (audience invalide) sont dans les logs
     return jsonify({"error": "Token invalide. Veuillez vous reconnecter."}), 422
 
 
@@ -182,23 +343,46 @@ def token_not_fresh_callback(_jwt_header, _jwt_payload):
 
 
 # ✅ Phase 3: Callback pour vérifier la blacklist des tokens
+# ✅ SECURITY: Validation audience intégrée pour rejeter automatiquement les tokens avec audience invalide
 @jwt.token_in_blocklist_loader
 def check_if_token_revoked(_jwt_header, jwt_payload):
-    """Vérifie si le token JWT est dans la blacklist.
+    """Vérifie si le token JWT est dans la blacklist et valide l'audience.
 
     Args:
         _jwt_header: En-tête JWT (non utilisé)
         jwt_payload: Payload JWT
 
     Returns:
-        True si le token est révoqué (blacklisté), False sinon
+        True si le token est révoqué (blacklisté) ou a une audience invalide, False sinon
     """
+    from security.security_metrics import security_invalid_audience_total
     from security.token_blacklist import is_token_blacklisted
 
+    # ✅ SECURITY: Valider audience AVANT de vérifier la blacklist
+    audience_valid, reason = validate_jwt_audience(jwt_payload)
+    if not audience_valid:
+        app_logger.warning(
+            "[JWT Security] Token avec audience invalide rejeté (raison: %s)", reason
+        )
+        # Incrémenter métrique Prometheus
+        security_invalid_audience_total.labels(reason=reason).inc()
+        return True  # Rejeter token avec audience invalide
+
+    # Vérifier si le token est dans la blacklist
+    # ✅ SECURITY: Flask-JWT-Extended génère automatiquement un jti pour chaque token
+    # Tous les tokens créés via create_access_token/create_refresh_token ont un jti unique
     jti = jwt_payload.get("jti")
     if jti:
         return is_token_blacklisted(jti=jti)
 
+    # ⚠️ FALLBACK: Si pas de jti (cas théorique, ne devrait pas arriver)
+    # La blacklist utilisera le hash du token comme fallback
+    # Ce cas ne devrait jamais se produire avec Flask-JWT-Extended moderne
+    app_logger.warning(
+        "[JWT Security] Token sans jti détecté dans check_if_token_revoked. Ce cas ne devrait pas se produire avec Flask-JWT-Extended moderne."
+    )
+    # Ne pas vérifier la blacklist si pas de jti (le token sera accepté)
+    # car on ne peut pas l'identifier de manière fiable sans jti
     return False
 
 
@@ -217,31 +401,34 @@ def add_claims_to_access_token(_identity):
     return {}
 
 
-def validate_jwt_audience(jwt_payload: dict[str, Any]) -> bool:
+def validate_jwt_audience(jwt_payload: dict[str, Any]) -> tuple[bool, str]:
     """Valide que l'audience du token JWT correspond à l'audience attendue.
 
     Args:
         jwt_payload: Payload JWT décodé
 
     Returns:
-        True si l'audience est valide, False sinon
+        Tuple (is_valid, reason):
+        - is_valid: True si l'audience est valide, False sinon
+        - reason: Raison de l'échec ("missing" ou "wrong_audience") ou "valid" si OK
     """
-    expected_audience = "atmr-api"
+    # ✅ Accepter les deux audiences : API standard et entreprise mobile
+    valid_audiences = {"atmr-api", "atmr-mobile-enterprise"}
     token_audience = jwt_payload.get("aud")
 
     if not token_audience:
         app_logger.warning("[JWT Security] Token sans claim 'aud' (audience)")
-        return False
+        return False, "missing"
 
-    if token_audience != expected_audience:
+    if token_audience not in valid_audiences:
         app_logger.warning(
-            "[JWT Security] Audience invalide: %s (attendu: %s)",
+            "[JWT Security] Audience invalide: %s (attendues: %s)",
             token_audience,
-            expected_audience,
+            valid_audiences,
         )
-        return False
+        return False, "wrong_audience"
 
-    return True
+    return True, "valid"
 
 
 #  Decorator role_required
@@ -252,6 +439,23 @@ def role_required(*roles):
             from models import User  # import local pour éviter les cycles
 
             user_public_id = get_jwt_identity()
+
+            # ✅ Vérifier d'abord le claim du token JWT (priorité pour les switchs de rôle)
+            # Cela permet aux tokens créés lors d'un switch (driver <-> company) de fonctionner
+            # même si l'utilisateur dans la DB a un rôle différent
+            token_role = None
+            try:
+                from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
+                    get_jwt,
+                )
+
+                jwt_data = get_jwt()
+                if jwt_data and "role" in jwt_data:
+                    token_role = jwt_data["role"]
+            except Exception:
+                # Si on ne peut pas récupérer le claim, continuer avec la vérification DB
+                pass
+
             user = User.query.filter_by(public_id=user_public_id).first()
 
             if not user:
@@ -268,6 +472,7 @@ def role_required(*roles):
             # Gérer les deux formats :
             # @role_required(['ADMIN', 'COMPANY']) et
             # @role_required(UserRole.company)
+            role_list: list[str] = []
             if roles and len(roles) > 0:
                 first_arg = roles[0]
                 if isinstance(first_arg, list):
@@ -288,7 +493,21 @@ def role_required(*roles):
                             "Rôle invalide dans la configuration : %s", role_str
                         )
 
-            if user.role not in allowed_roles:
+            # ✅ Vérifier d'abord le claim du token, puis le rôle de l'utilisateur dans la DB
+            # Cela permet aux tokens créés lors d'un switch de fonctionner
+            role_check_passed = False
+            if token_role:
+                # Vérifier si le claim du token correspond à un des rôles autorisés
+                try:
+                    token_user_role = UserRole[token_role.upper()]
+                    if token_user_role in allowed_roles:
+                        role_check_passed = True
+                except KeyError:
+                    # Le claim du token n'est pas un rôle valide, continuer avec la vérification DB
+                    pass
+
+            # Si le claim du token n'a pas passé, vérifier le rôle de l'utilisateur dans la DB
+            if not role_check_passed and user.role not in allowed_roles:
                 warning_msg = (
                     "⛔ Accès refusé : %s (%s) a tenté d'accéder "
                     + "à une route restreinte."

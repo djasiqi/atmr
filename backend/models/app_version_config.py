@@ -8,7 +8,6 @@ pour chaque plateforme (Android/iOS), permettant de forcer ou recommander des mi
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import DateTime, String, func
 from sqlalchemy.orm import Mapped, mapped_column
@@ -37,10 +36,10 @@ class AppVersionConfig(db.Model):
     latest_version: Mapped[str] = mapped_column(String(20), nullable=False)
 
     # URL du store pour la mise à jour
-    store_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    store_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # Message personnalisé pour la mise à jour (optionnel)
-    update_message: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    update_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

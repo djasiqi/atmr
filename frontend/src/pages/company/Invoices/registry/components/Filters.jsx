@@ -111,11 +111,18 @@ const Filters = ({ filters, onFilterChange, companyId }) => {
             disabled={loadingClients}
           >
             <option value="">Tous les clients</option>
-            {clients.map((client) => (
+            {clients.map((client) => {
+              const displayName =
+                client.institution_name ||
+                `${client.first_name || ''} ${client.last_name || ''}`.trim() ||
+                client.username ||
+                `Client ${client.id}`;
+              return (
               <option key={client.id} value={client.id}>
-                {`${client.first_name || ''} ${client.last_name || ''}`.trim() || client.username}
+                  {displayName}
               </option>
-            ))}
+              );
+            })}
           </select>
         </div>
 

@@ -1,25 +1,53 @@
 import hashlib
+import json
 import logging
-from datetime import datetime, timezone
+import os
+from contextlib import suppress
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import cast
 
-import sentry_sdk  # CORRECTION : Importer directement
-from flask import current_app, make_response, request
-from flask_jwt_extended import (
+import sentry_sdk  # pyright: ignore[reportMissingImports]
+from flask import (  # pyright: ignore[reportMissingImports]
+    current_app,
+    make_response,
+    request,
+)
+from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
     create_access_token,
     create_refresh_token,
     decode_token,
+    get_jwt,
     get_jwt_identity,
     jwt_required,
 )
-from flask_mail import Message
-from flask_restx import Namespace, Resource, fields
-from itsdangerous import URLSafeTimedSerializer
-from marshmallow import Schema, ValidationError
-from marshmallow import fields as ma_fields
+from flask_mail import Message  # pyright: ignore[reportMissingImports]
+from flask_restx import (  # pyright: ignore[reportMissingImports]
+    Namespace,
+    Resource,
+    fields,
+)
+from itsdangerous import URLSafeTimedSerializer  # pyright: ignore[reportMissingImports]
+from marshmallow import (  # pyright: ignore[reportMissingImports]
+    Schema,
+    ValidationError,
+)
+from marshmallow import fields as ma_fields  # pyright: ignore[reportMissingImports]
 
+from application.users import (
+    AuthenticateUserInput,
+    AuthenticateUserUseCase,
+    GetCurrentUserUseCase,
+    RegisterUserInput,
+    RegisterUserUseCase,
+)
 from ext import db, limiter, mail, role_required
-from models import Client, User, UserRole
+from models import (
+    Client,
+    User,
+)  # Client utilisé pour création directe, User pour type annotations
+from models.enums import UserRole
+from repositories.user_repository import UserRepository
 from schemas.auth_schemas import LoginSchema, RegisterSchema
 from schemas.validation_utils import handle_validation_error, validate_request
 from security.audit_log import AuditLogger
@@ -37,11 +65,43 @@ from security.security_metrics import (
     security_logout_total,
     security_token_refreshes_total,
 )
+from services.csrf_protection import generate_csrf_token
+from services.refresh_token_service import RefreshTokenService
+from shared.error_handlers import APIErrorHandler
 from shared.logging_utils import mask_email
 
-app_logger = logging.getLogger("app")
+logger = logging.getLogger(__name__)
+
+# Initialisation des repositories
+user_repo = UserRepository()
 
 auth_ns = Namespace("auth", description="Opérations liées à l'authentification")
+
+# ✅ S1: Modèle Swagger pour la réponse CSRF token
+csrf_token_response_model = auth_ns.model(
+    "CSRFTokenResponse",
+    {
+        "csrf_token": fields.String(
+            required=True, description="Token CSRF à inclure dans les requêtes mutantes"
+        ),
+        "ttl": fields.Integer(
+            required=True, description="Durée de vie du token en secondes"
+        ),
+    },
+)
+
+# ✅ S1: Modèle Swagger pour la réponse CSRF token
+csrf_token_response_model = auth_ns.model(
+    "CSRFTokenResponse",
+    {
+        "csrf_token": fields.String(
+            required=True, description="Token CSRF à inclure dans les requêtes mutantes"
+        ),
+        "ttl": fields.Integer(
+            required=True, description="Durée de vie du token en secondes"
+        ),
+    },
+)
 
 # Constante pour la longueur du hash de version du mot de passe
 PASSWORD_HASH_VERSION_LENGTH = 16
@@ -57,6 +117,29 @@ login_model = auth_ns.model(
         "password": fields.String(
             required=True, description="Le mot de passe de l'utilisateur", min_length=6
         ),
+    },
+)
+
+# Modèle Swagger pour obtenir un token fresh
+fresh_token_request_model = auth_ns.model(
+    "FreshTokenRequest",
+    {
+        "password": fields.String(
+            required=True,
+            description="Le mot de passe de l'utilisateur pour vérification",
+            min_length=6,
+        ),
+    },
+)
+
+# Modèle Swagger pour la réponse de fresh token
+fresh_token_response_model = auth_ns.model(
+    "FreshTokenResponse",
+    {
+        "access_token": fields.String(
+            required=True, description="Nouveau token d'accès 'fresh'"
+        ),
+        "message": fields.String(description="Message de confirmation"),
     },
 )
 
@@ -198,8 +281,72 @@ class Login(Resource):
     @limiter.limit("5 per minute")
     def post(self):
         """Authentifie un utilisateur et renvoie un token d'accès."""
+        # #region agent log
+        log_path = Path(r"c:\Users\jasiq\atmr\.cursor\debug.log")
+        try:
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "location": "auth.py:Login.post",
+                            "message": "POST /auth/login entry",
+                            "data": {
+                                "headers": {
+                                    k: v
+                                    for k, v in request.headers
+                                    if k.lower()
+                                    in [
+                                        "authorization",
+                                        "x-device-id",
+                                        "x-requested-with",
+                                        "content-type",
+                                    ]
+                                },
+                                "has_json": request.is_json,
+                                "x_requested_with": request.headers.get(
+                                    "X-Requested-With"
+                                ),
+                                "is_mobile_request": request.headers.get(
+                                    "X-Requested-With"
+                                )
+                                == "Expo",
+                            },
+                            "timestamp": datetime.now(UTC).isoformat(),
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "B",
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion
         try:
             data = request.get_json() or {}
+            # #region agent log
+            try:
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "location": "auth.py:Login.post",
+                                "message": "payload received",
+                                "data": {
+                                    "has_email": "email" in data,
+                                    "has_password": "password" in data,
+                                },
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "C",
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
 
             # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
             try:
@@ -210,8 +357,14 @@ class Login(Resource):
             email = validated_data["email"]
             password = validated_data["password"]
 
-            user = User.query.filter_by(email=email).first()
-            if not user or not user.check_password(password):
+            # ✅ DDD: Utiliser le use case pour authentifier l'utilisateur
+            uc = AuthenticateUserUseCase()
+            input_data = AuthenticateUserInput(email=email, password=password)
+            auth_result = uc.execute(input_data)
+
+            user = None if not auth_result.success else auth_result.user
+
+            if not user:
                 # ✅ Priorité 7: Audit logging pour login échoué
                 try:
                     AuditLogger.log_action(
@@ -232,10 +385,25 @@ class Login(Resource):
                     security_login_failures_total.inc()
                 except Exception as audit_error:
                     # Ne pas bloquer la réponse si l'audit logging échoue
-                    app_logger.warning(
-                        "Échec audit logging login_failed: %s", audit_error
+                    logger.warning("Échec audit logging login_failed: %s", audit_error)
+
+                # ✅ S3: Enregistrer tentative échouée pour détection d'alertes
+                try:
+                    from security.security_alerts import SecurityAlertService
+
+                    SecurityAlertService.record_login_failure(
+                        ip_address=request.remote_addr or "unknown", email=email
                     )
-                return {"error": "Email ou mot de passe invalide."}, 401
+                except Exception as alert_error:
+                    logger.debug(
+                        "[SecurityAlerts] Failed to record login failure: %s",
+                        alert_error,
+                    )
+
+                return APIErrorHandler.handle_permission_error(
+                    "Email ou mot de passe invalide.",
+                    logger_instance=logger,
+                )
 
             # Création du token avec le rôle dans additional_claims
             # ✅ SECURITY: Ajout claim 'aud' (audience) pour prévenir token replay
@@ -250,6 +418,7 @@ class Login(Resource):
                 # ⚠️ ID numérique attendu par dispatch_routes
                 additional_claims=claims,
                 expires_delta=current_app.config["JWT_ACCESS_TOKEN_EXPIRES"],
+                fresh=True,  # ✅ Token fresh lors de la connexion initiale
             )
 
             # Création du refresh token
@@ -266,9 +435,14 @@ class Login(Resource):
                 expires_delta=refresh_expires_delta,
             )
 
-            # ✅ SECURITY: Stocker le refresh token dans la DB pour permettre la révocation
+            # ✅ PHASE 2: Stocker le refresh token dans Redis et DB
             try:
-                refresh_expires_at = datetime.now(timezone.utc) + refresh_expires_delta
+                # Stocker dans Redis pour rotation et limitation
+                token_service = RefreshTokenService()
+                token_service.store_token(user.id, refresh_token)
+
+                # Stocker aussi dans la DB pour compatibilité et audit
+                refresh_expires_at = datetime.now(UTC) + refresh_expires_delta
                 store_refresh_token(
                     token=refresh_token,
                     user_id=user.id,
@@ -276,10 +450,14 @@ class Login(Resource):
                     device_id=request.headers.get("X-Device-ID"),
                     device_name=request.headers.get("X-Device-Name"),
                 )
+
+                # Limiter le nombre de tokens actifs (max 5 par défaut)
+                max_active_tokens = int(os.getenv("MAX_ACTIVE_REFRESH_TOKENS", "5"))
+                token_service.limit_active_tokens(user.id, max_active_tokens)
             except Exception as store_error:
                 # Ne pas bloquer le login si le stockage échoue (fallback)
-                app_logger.warning(
-                    "Échec stockage refresh token dans DB: %s - %s",
+                logger.warning(
+                    "Échec stockage refresh token: %s - %s",
                     type(store_error).__name__,
                     str(store_error),
                 )
@@ -305,12 +483,12 @@ class Login(Resource):
                 security_login_attempts_total.labels(type="success").inc()
             except Exception as audit_error:
                 # Ne pas bloquer le login si l'audit logging échoue
-                app_logger.warning("Échec audit logging login_success: %s", audit_error)
+                logger.warning("Échec audit logging login_success: %s", audit_error)
 
-            return {
+            # ✅ Migration localStorage → cookies httpOnly
+            # Créer la réponse JSON
+            response_data = {
                 "message": "Connexion réussie",
-                "token": access_token,
-                "refresh_token": refresh_token,
                 "user": {
                     "id": user.id,
                     "public_id": user.public_id,
@@ -319,11 +497,120 @@ class Login(Resource):
                     "role": user.role.value,
                     "force_password_change": user.force_password_change,
                 },
-            }, 200
+            }
+
+            # ✅ Compatibilité mobile : retourner tokens en JSON (même modèle que company_mobile)
+            # Toujours retourner les tokens dans le JSON pour les applications mobiles
+            # Le header X-Requested-With: Expo est optionnel mais recommandé pour identifier les requêtes mobiles
+            is_mobile_request = request.headers.get("X-Requested-With") == "Expo"
+            # ✅ Même modèle que company_mobile : toujours retourner les tokens dans le JSON
+            response_data["token"] = access_token
+            response_data["refresh_token"] = refresh_token
+            # #region agent log
+            try:
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "location": "auth.py:Login.post",
+                                "message": "response_data before make_response",
+                                "data": {
+                                    "is_mobile_request": is_mobile_request,
+                                    "has_token_in_response": "token" in response_data,
+                                    "has_refresh_token_in_response": "refresh_token"
+                                    in response_data,
+                                    "response_data_keys": list(response_data.keys()),
+                                },
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "B",
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
+
+            # Créer la réponse avec make_response pour pouvoir définir les cookies
+            response = make_response(response_data, 200)
+
+            # ✅ Définir cookies httpOnly pour web (pas pour mobile)
+            if not is_mobile_request:
+                # Cookie access_token
+                response.set_cookie(
+                    current_app.config["COOKIE_ACCESS_TOKEN_NAME"],
+                    access_token,
+                    httponly=current_app.config["COOKIE_HTTP_ONLY"],
+                    secure=current_app.config["COOKIE_SECURE"],
+                    samesite=current_app.config["COOKIE_SAME_SITE"],
+                    max_age=int(
+                        current_app.config["JWT_ACCESS_TOKEN_EXPIRES"].total_seconds()
+                    ),
+                    path=current_app.config["COOKIE_PATH"],
+                    domain=current_app.config["COOKIE_DOMAIN"],
+                )
+
+                # Cookie refresh_token
+                response.set_cookie(
+                    current_app.config["COOKIE_REFRESH_TOKEN_NAME"],
+                    refresh_token,
+                    httponly=current_app.config["COOKIE_HTTP_ONLY"],
+                    secure=current_app.config["COOKIE_SECURE"],
+                    samesite=current_app.config["COOKIE_SAME_SITE"],
+                    max_age=int(
+                        current_app.config["JWT_REFRESH_TOKEN_EXPIRES"].total_seconds()
+                    ),
+                    path=current_app.config["COOKIE_PATH"],
+                    domain=current_app.config["COOKIE_DOMAIN"],
+                )
+                # #region agent log
+                try:
+                    with log_path.open("a", encoding="utf-8") as f:
+                        f.write(
+                            json.dumps(
+                                {
+                                    "location": "auth.py:Login.post",
+                                    "message": "cookies set for web",
+                                    "data": {
+                                        "has_access_token_cookie": bool(access_token),
+                                        "has_refresh_token_cookie": bool(refresh_token),
+                                        "cookie_secure": current_app.config[
+                                            "COOKIE_SECURE"
+                                        ],
+                                        "cookie_httponly": current_app.config[
+                                            "COOKIE_HTTP_ONLY"
+                                        ],
+                                        "cookie_samesite": current_app.config[
+                                            "COOKIE_SAME_SITE"
+                                        ],
+                                        "cookie_path": current_app.config[
+                                            "COOKIE_PATH"
+                                        ],
+                                        "cookie_domain": current_app.config[
+                                            "COOKIE_DOMAIN"
+                                        ],
+                                        "response_headers_set_cookie": "Set-Cookie"
+                                        in dict(response.headers),
+                                    },
+                                    "timestamp": datetime.now(UTC).isoformat(),
+                                    "sessionId": "debug-session",
+                                    "runId": "run1",
+                                    "hypothesisId": "F",
+                                }
+                            )
+                            + "\n"
+                        )
+                except Exception:
+                    pass
+                # #endregion
+
+            return response
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error("❌ ERREUR login: %s - %s", type(e).__name__, str(e))
+            logger.error("❌ ERREUR login: %s - %s", type(e).__name__, str(e))
             # ✅ Priorité 7: Audit logging pour erreur interne login
             try:
                 data = request.get_json() or {}
@@ -343,7 +630,10 @@ class Login(Resource):
                 # Ignorer les erreurs d'audit logging
                 # dans le gestionnaire d'erreurs
                 pass
-            return {"error": "Une erreur interne est survenue."}, 500
+            return APIErrorHandler.handle_exception(
+                Exception("Erreur lors de la connexion"),
+                logger,
+            )
 
 
 # ========================
@@ -428,41 +718,56 @@ def _validate_refresh_token(
         is_access_token = "role" in decoded or "company_id" in decoded
 
         if token_type != "refresh" and is_access_token:
-            return None, {"error": "Le token fourni n'est pas un refresh token"}
+            error_response, _ = APIErrorHandler.handle_validation_error(
+                "Le token fourni n'est pas un refresh token",
+                logger_instance=logger,
+            )
+            return None, error_response
 
         if not user_public_id:
-            return None, {"error": "Refresh token invalide (identity manquante)"}
+            error_response, _ = APIErrorHandler.handle_validation_error(
+                "Refresh token invalide (identity manquante)",
+                logger_instance=logger,
+            )
+            return None, error_response
 
         # ✅ SECURITY: Vérifier que le mot de passe n'a pas changé
         # Récupérer l'utilisateur pour vérifier le hash du mot de passe
-        user = User.query.filter_by(public_id=user_public_id).first()
-        if user:
-            # Vérifier si le token a un claim pwd_hash (nouveaux tokens)
-            token_pwd_hash = decoded.get("pwd_hash")
-            if token_pwd_hash:
-                current_pwd_hash = _get_password_hash_version(user)
-                if token_pwd_hash != current_pwd_hash:
-                    app_logger.warning(
-                        "Refresh token rejeté : mot de passe modifié pour user %s",
-                        user_public_id,
-                    )
-                    return None, {
-                        "error": "Refresh token invalide (mot de passe modifié)"
-                    }
+        user_dto = user_repo.find_by_public_id(user_public_id)
+        if user_dto:
+            # Récupérer le modèle User pour accéder aux méthodes de hash
+            user = user_repo.find_model_by_public_id(user_public_id)
+            if user:
+                # Vérifier si le token a un claim pwd_hash (nouveaux tokens)
+                token_pwd_hash = decoded.get("pwd_hash")
+                if token_pwd_hash:
+                    current_pwd_hash = _get_password_hash_version(user)
+                    if token_pwd_hash != current_pwd_hash:
+                        logger.warning(
+                            "Refresh token rejeté : mot de passe modifié pour user %s",
+                            user_public_id,
+                        )
+                        return None, {
+                            "error": "Refresh token invalide (mot de passe modifié)"
+                        }
 
         # ✅ SECURITY: Vérifier si le token est révoqué dans la DB (Phase 2)
         # Cette vérification permet la déconnexion forcée par l'admin
         try:
             if is_token_revoked(refresh_token):
-                app_logger.warning(
+                logger.warning(
                     "Refresh token rejeté : token révoqué pour user %s",
                     user_public_id,
                 )
-                return None, {"error": "Refresh token révoqué"}
+                error_response, _ = APIErrorHandler.handle_permission_error(
+                    "Refresh token révoqué",
+                    logger_instance=logger,
+                )
+                return None, error_response
         except Exception as revoke_check_error:
             # Si la vérification DB échoue, on continue quand même
             # (pour rétrocompatibilité avec les tokens non stockés)
-            app_logger.debug(
+            logger.debug(
                 "Erreur vérification révocation token (ignorée): %s",
                 str(revoke_check_error),
             )
@@ -472,15 +777,19 @@ def _validate_refresh_token(
             update_token_last_used(refresh_token)
         except Exception as update_error:
             # Ne pas bloquer le refresh si la mise à jour échoue
-            app_logger.debug(
+            logger.debug(
                 "Erreur mise à jour last_used_at (ignorée): %s", str(update_error)
             )
 
         return user_public_id, None
 
     except Exception as decode_error:
-        app_logger.warning("Erreur décodage refresh token: %s", str(decode_error))
-        return None, {"error": "Refresh token invalide ou expiré"}
+        logger.warning("Erreur décodage refresh token: %s", str(decode_error))
+        error_response, _ = APIErrorHandler.handle_validation_error(
+            "Refresh token invalide ou expiré",
+            logger_instance=logger,
+        )
+        return None, error_response
 
 
 # ========================
@@ -541,7 +850,9 @@ class RefreshToken(Resource):
     @auth_ns.response(403, "Compte désactivé")
     @auth_ns.response(404, "Utilisateur non trouvé")
     @auth_ns.response(500, "Erreur interne")
-    def post(self):
+    # ✅ S2: Rate limiting plus strict pour refresh token (protection contre abus)
+    @limiter.limit("20 per minute")
+    def post(self):  # noqa: PLR0911
         """Rafraîchit l'access token à partir d'un refresh token.
 
         Accepte le refresh_token en body (JSON) ou dans le header Authorization Bearer.
@@ -551,11 +862,23 @@ class RefreshToken(Resource):
         minimales de l'utilisateur.
         """
         try:
-            # 1. Récupérer le refresh_token depuis body ou header
-            data = request.get_json() or {}
-            refresh_token = data.get("refresh_token")
+            # ✅ Migration localStorage → cookies httpOnly
+            # 1. Récupérer le refresh_token depuis cookie (priorité), body ou header
+            refresh_token = None
+            is_mobile_request = request.headers.get("X-Requested-With") == "Expo"
 
-            # 2. Si pas dans body, essayer depuis header (rétrocompatibilité)
+            # Priorité 1 : Cookie (pour web)
+            if not is_mobile_request:
+                refresh_token = request.cookies.get(
+                    current_app.config["COOKIE_REFRESH_TOKEN_NAME"]
+                )
+
+            # Priorité 2 : Body JSON (pour mobile ou fallback)
+            if not refresh_token:
+                data = request.get_json(silent=True) or {}
+                refresh_token = data.get("refresh_token")
+
+            # Priorité 3 : Header Authorization (rétrocompatibilité)
             if not refresh_token:
                 auth_header = request.headers.get("Authorization", "")
                 if auth_header and auth_header.startswith("Bearer "):
@@ -564,28 +887,43 @@ class RefreshToken(Resource):
             # 3. Validation : refresh_token requis
             if not refresh_token:
                 return {
-                    "error": "refresh_token requis (body ou Authorization header)"
+                    "error": "refresh_token requis (cookie, body ou Authorization header)"
                 }, 400
 
             # 4. Valider le refresh token (inclut vérification révocation, pwd_hash, etc.)
             user_public_id, error_response = _validate_refresh_token(refresh_token)
-            if error_response:
-                return error_response, 401
+            if error_response or not user_public_id:
+                return error_response or {"error": "Refresh token invalide"}, 401
 
             # 5. Vérifier que l'utilisateur existe
-            user = User.query.filter_by(public_id=user_public_id).first()
-            if not user:
-                return {"error": "Utilisateur non trouvé"}, 404
+            user_dto = user_repo.find_by_public_id(user_public_id)
+            if not user_dto:
+                return APIErrorHandler.handle_not_found(
+                    "Utilisateur",
+                    user_public_id,
+                    logger,
+                )
 
             # ✅ SECURITY: Vérifier que le profil (Driver/Client) est actif
+            # Récupérer le modèle User pour accéder aux méthodes de profil
+            user = user_repo.find_model_by_public_id(user_public_id)
+            if not user:
+                return APIErrorHandler.handle_not_found(
+                    "Utilisateur",
+                    user_public_id,
+                    logger,
+                )
             is_active, error_message = _check_user_profile_active(user)
             if not is_active:
-                app_logger.warning(
+                logger.warning(
                     "Refresh token rejeté : compte désactivé pour user %s (role: %s)",
                     user_public_id,
                     user.role.value if user.role else "unknown",
                 )
-                return {"error": error_message or "Compte désactivé"}, 403
+                return APIErrorHandler.handle_permission_error(
+                    error_message or "Compte désactivé",
+                    logger_instance=logger,
+                )
 
             # ✅ SECURITY: Ajout claim 'aud' (audience) pour prévenir token replay
             claims = {
@@ -603,6 +941,7 @@ class RefreshToken(Resource):
             )
 
             # 7. ✅ ROTATION AUTOMATIQUE : Générer toujours un nouveau refresh_token
+            # Utiliser le modèle User déjà récupéré pour accéder aux méthodes de hash
             pwd_hash_version = _get_password_hash_version(user)
             refresh_expires_delta = current_app.config["JWT_REFRESH_TOKEN_EXPIRES"]
             new_refresh_token = create_refresh_token(
@@ -614,21 +953,38 @@ class RefreshToken(Resource):
                 expires_delta=refresh_expires_delta,
             )
 
-            # ✅ SECURITY: Révoquer l'ancien token lors de la rotation automatique
+            # ✅ PHASE 2: Utiliser RefreshTokenService pour rotation et limitation
+            token_service = RefreshTokenService()
+
+            # ✅ SECURITY: Révoquer l'ancien token via Redis (rotation automatique)
             try:
+                token_service.revoke_token(refresh_token)
+                # Révoquer aussi dans la DB pour compatibilité
                 revoke_refresh_token(
                     refresh_token, reason="Rotation automatique du token"
                 )
+
+                # ✅ PHASE 3: Métrique Prometheus pour rotation
+                try:
+                    from security.security_metrics import tokens_rotation_total
+
+                    tokens_rotation_total.inc()
+                except Exception:
+                    pass  # Ne pas bloquer si métriques indisponibles
             except Exception as revoke_error:
                 # Ne pas bloquer la rotation si la révocation échoue
-                app_logger.warning(
+                logger.warning(
                     "Échec révocation ancien token lors rotation automatique: %s",
                     str(revoke_error),
                 )
 
-            # ✅ SECURITY: Stocker le nouveau token dans la DB
+            # ✅ SECURITY: Stocker le nouveau token dans Redis et DB
             try:
-                refresh_expires_at = datetime.now(timezone.utc) + refresh_expires_delta
+                # Stocker dans Redis pour rotation et limitation
+                token_service.store_token(user.id, new_refresh_token)
+
+                # Stocker aussi dans la DB pour compatibilité et audit
+                refresh_expires_at = datetime.now(UTC) + refresh_expires_delta
                 store_refresh_token(
                     token=new_refresh_token,
                     user_id=user.id,
@@ -636,9 +992,13 @@ class RefreshToken(Resource):
                     device_id=request.headers.get("X-Device-ID"),
                     device_name=request.headers.get("X-Device-Name"),
                 )
+
+                # Limiter le nombre de tokens actifs (max 5 par défaut)
+                max_active_tokens = int(os.getenv("MAX_ACTIVE_REFRESH_TOKENS", "5"))
+                token_service.limit_active_tokens(user.id, max_active_tokens)
             except Exception as store_error:
                 # Ne pas bloquer la rotation si le stockage échoue
-                app_logger.warning(
+                logger.warning(
                     "Échec stockage nouveau refresh token lors rotation automatique: %s",
                     str(store_error),
                 )
@@ -653,9 +1013,16 @@ class RefreshToken(Resource):
                     result_status="success",
                     action_details={
                         "rotation_automatic": True,
-                        "token_source": "body"
-                        if data.get("refresh_token")
-                        else "header",
+                        "token_source": (
+                            "cookie"
+                            if not is_mobile_request
+                            and request.cookies.get(
+                                current_app.config["COOKIE_REFRESH_TOKEN_NAME"]
+                            )
+                            else "body"
+                            if (request.get_json() or {}).get("refresh_token")
+                            else "header"
+                        ),
                     },
                     ip_address=request.remote_addr,
                     user_agent=request.headers.get("User-Agent"),
@@ -663,12 +1030,11 @@ class RefreshToken(Resource):
                 # ✅ Priorité 7: Métrique Prometheus pour token refresh
                 security_token_refreshes_total.inc()
             except Exception as audit_error:
-                app_logger.warning("Échec audit logging token_refresh: %s", audit_error)
+                logger.warning("Échec audit logging token_refresh: %s", audit_error)
 
-            # 9. Construire la réponse (toujours avec nouveau refresh_token)
+            # 9. ✅ Migration localStorage → cookies httpOnly
+            # Construire la réponse JSON
             response_data = {
-                "access_token": new_access_token,
-                "refresh_token": new_refresh_token,  # ✅ Toujours retourné (rotation automatique)
                 "user": {
                     "public_id": user.public_id,
                     "role": user.role.value,
@@ -677,18 +1043,151 @@ class RefreshToken(Resource):
                 },
             }
 
+            # ✅ Compatibilité mobile : retourner tokens en JSON si header X-Requested-With: Expo
+            if is_mobile_request:
+                response_data["access_token"] = new_access_token
+                response_data["refresh_token"] = new_refresh_token
+
+            # Créer la réponse avec make_response pour pouvoir définir les cookies
+            response = make_response(response_data, 200)
+
+            # ✅ Définir cookies httpOnly pour web (pas pour mobile)
+            if not is_mobile_request:
+                # Cookie access_token
+                response.set_cookie(
+                    current_app.config["COOKIE_ACCESS_TOKEN_NAME"],
+                    new_access_token,
+                    httponly=current_app.config["COOKIE_HTTP_ONLY"],
+                    secure=current_app.config["COOKIE_SECURE"],
+                    samesite=current_app.config["COOKIE_SAME_SITE"],
+                    max_age=int(
+                        current_app.config["JWT_ACCESS_TOKEN_EXPIRES"].total_seconds()
+                    ),
+                    path=current_app.config["COOKIE_PATH"],
+                    domain=current_app.config["COOKIE_DOMAIN"],
+                )
+
+                # Cookie refresh_token (rotation automatique)
+                response.set_cookie(
+                    current_app.config["COOKIE_REFRESH_TOKEN_NAME"],
+                    new_refresh_token,
+                    httponly=current_app.config["COOKIE_HTTP_ONLY"],
+                    secure=current_app.config["COOKIE_SECURE"],
+                    samesite=current_app.config["COOKIE_SAME_SITE"],
+                    max_age=int(
+                        current_app.config["JWT_REFRESH_TOKEN_EXPIRES"].total_seconds()
+                    ),
+                    path=current_app.config["COOKIE_PATH"],
+                    domain=current_app.config["COOKIE_DOMAIN"],
+                )
+
+            return response
+
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+# ========================
+# 3. Obtenir un token "fresh"
+# ========================
+@auth_ns.route("/fresh-token")
+class FreshToken(Resource):
+    @auth_ns.expect(fresh_token_request_model)
+    @auth_ns.response(200, "Token fresh obtenu avec succès", fresh_token_response_model)
+    @auth_ns.response(401, "Mot de passe incorrect ou utilisateur non authentifié")
+    @jwt_required()  # Nécessite un token valide (mais pas fresh)
+    @limiter.limit("5 per minute")  # Protection contre brute force
+    def post(self):  # noqa: PLR0911
+        """Obtient un token 'fresh' en vérifiant le mot de passe de l'utilisateur.
+
+        Permet d'obtenir un token 'fresh' sans se déconnecter complètement.
+        Utile pour effectuer des actions sensibles qui nécessitent un token fresh.
+        """
+        try:
+            # 1. Récupérer l'utilisateur actuel
+            user_public_id = get_jwt_identity()
+            if not user_public_id:
+                return {"error": "Utilisateur non authentifié"}, 401
+
+            user_dto = user_repo.find_by_public_id(user_public_id)
+            if not user_dto or not user_dto.email:
+                return {"error": "Utilisateur non trouvé"}, 401
+
+            user = user_repo.find_model_by_email(user_dto.email)
+            if not user:
+                return {"error": "Utilisateur non trouvé"}, 401
+
+            # 2. Récupérer le mot de passe depuis la requête
+            data = request.get_json(silent=True) or {}
+            password = data.get("password")
+            if not password:
+                return {"error": "Mot de passe requis"}, 400
+
+            # 3. Vérifier le mot de passe
+            if not user.check_password(password):
+                logger.warning(
+                    "[Auth] Échec vérification mot de passe pour fresh token (user: %s)",
+                    user_public_id,
+                )
+                return {"error": "Mot de passe incorrect"}, 401
+
+            # 4. Créer un token fresh
+            claims = {
+                "role": user.role.value
+                if hasattr(user.role, "value")
+                else str(user.role),
+                "company_id": getattr(user, "company_id", None),
+                "driver_id": getattr(user, "driver_id", None),
+                "aud": "atmr-api",
+            }
+            fresh_token = create_access_token(
+                identity=str(user.public_id),
+                additional_claims=claims,
+                expires_delta=current_app.config["JWT_ACCESS_TOKEN_EXPIRES"],
+                fresh=True,  # ✅ Token fresh
+            )
+
+            logger.info(
+                "[Auth] Token fresh généré pour user %s (public_id: %s)",
+                user.id,
+                user_public_id,
+            )
+
+            # 5. Retourner le token
+            response_data = {
+                "access_token": fresh_token,
+                "message": "Token fresh obtenu avec succès",
+            }
+
+            # Si on utilise des cookies, mettre à jour le cookie
+            is_mobile_request = request.headers.get("X-Requested-With") == "Expo"
+            if not is_mobile_request:
+                response = make_response(response_data)
+                response.set_cookie(
+                    current_app.config["COOKIE_ACCESS_TOKEN_NAME"],
+                    fresh_token,
+                    httponly=current_app.config["COOKIE_HTTP_ONLY"],
+                    secure=current_app.config["COOKIE_SECURE"],
+                    samesite=current_app.config["COOKIE_SAME_SITE"],
+                    max_age=int(
+                        current_app.config["JWT_ACCESS_TOKEN_EXPIRES"].total_seconds()
+                    ),
+                    path=current_app.config["COOKIE_PATH"],
+                    domain=current_app.config["COOKIE_DOMAIN"],
+                )
+                return response
+
             return response_data, 200
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(
-                "❌ ERREUR refresh_token: %s - %s", type(e).__name__, str(e)
-            )
-            return {"error": "Une erreur interne est survenue."}, 500
+            logger.error("[Auth] Erreur lors de la génération du token fresh: %s", e)
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 # ========================
-# 3. Logout / Révoquer Token
+# 4. Logout / Révoquer Token
 # ========================
 @auth_ns.route("/logout")
 class Logout(Resource):
@@ -713,29 +1212,98 @@ class Logout(Resource):
             current_user_id = get_jwt_identity()
             user = None
             if current_user_id:
-                user = User.query.filter_by(public_id=current_user_id).first()
+                user = user_repo.find_by_public_id(current_user_id)
 
-            # ✅ SECURITY: Récupérer le refresh token depuis body (Phase 2)
-            # Le refresh token peut être envoyé dans le body JSON
-            data = request.get_json() or {}
-            refresh_token = data.get("refresh_token")
+            # ✅ Migration localStorage → cookies httpOnly
+            # Récupérer le refresh token depuis cookie (priorité), body ou header
+            refresh_token = None
+            is_mobile_request = request.headers.get("X-Requested-With") == "Expo"
 
-            # Révoquer le refresh token dans la DB si fourni
-            if refresh_token:
-                try:
+            # Priorité 1 : Cookie (pour web)
+            if not is_mobile_request:
+                refresh_token = request.cookies.get(
+                    current_app.config["COOKIE_REFRESH_TOKEN_NAME"]
+                )
+
+            # Priorité 2 : Body JSON (pour mobile ou fallback)
+            if not refresh_token:
+                data = request.get_json(silent=True) or {}
+                refresh_token = data.get("refresh_token")
+
+            # Priorité 3 : Header Authorization (rétrocompatibilité)
+            if not refresh_token:
+                auth_header = request.headers.get("Authorization", "")
+                if auth_header and auth_header.startswith("Bearer "):
+                    refresh_token = auth_header.split(" ", 1)[1].strip()
+
+            # ✅ PHASE 2: Révoquer tous les tokens via RefreshTokenService
+            token_service = RefreshTokenService()
+            try:
+                if user:
+                    # Révoquer tous les tokens de l'utilisateur dans Redis
+                    token_service.revoke_all_user_tokens(user.id)
+
+                    # Révoquer aussi dans la DB pour compatibilité
+                    revoke_all_user_tokens(user.id, reason="Logout utilisateur")
+
+                # Si un refresh token spécifique est présent, le révoquer aussi
+                if refresh_token:
+                    token_service.revoke_token(refresh_token)
                     revoke_refresh_token(refresh_token, reason="Logout utilisateur")
-                    app_logger.debug(
+                    logger.debug(
                         "Refresh token révoqué lors du logout pour user %s",
                         current_user_id,
                     )
-                except Exception as revoke_error:
-                    # Ne pas bloquer le logout si la révocation du refresh token échoue
-                    app_logger.warning(
-                        "Échec révocation refresh token lors logout (ignoré): %s",
-                        str(revoke_error),
-                    )
+            except Exception as revoke_error:
+                # Ne pas bloquer le logout si la révocation échoue
+                logger.warning(
+                    "Échec révocation refresh tokens lors logout (ignoré): %s",
+                    str(revoke_error),
+                )
+
+            # ✅ PHASE 3: Révoquer l'access token actuel (optionnel mais recommandé)
+            try:
+                from datetime import UTC, datetime
+
+                from services.access_token_service import AccessTokenService
+
+                access_token_service = AccessTokenService()
+                jwt_claims = get_jwt()
+
+                # Obtenir le jti (JWT ID) et l'expiration
+                token_jti = jwt_claims.get("jti")
+                exp = jwt_claims.get("exp")
+
+                if token_jti and exp:
+                    # Calculer le temps restant avant expiration
+                    now = datetime.now(UTC).timestamp()
+                    ttl = int(exp - now)
+
+                    if ttl > 0:
+                        access_token_service.revoke_token(token_jti, ttl)
+                        logger.debug(
+                            "Access token révoqué lors du logout pour user %s, jti=%s",
+                            current_user_id,
+                            token_jti,
+                        )
+            except Exception as access_revoke_error:
+                # Ne pas bloquer le logout si la révocation de l'access token échoue
+                logger.warning(
+                    "Échec révocation access token lors logout (ignoré): %s",
+                    str(access_revoke_error),
+                )
 
             if revoke_token():
+                # ✅ S3: Métrique Prometheus pour invalidation de token
+                try:
+                    from security.security_metrics import (
+                        security_token_invalidations_total,
+                    )
+
+                    security_token_invalidations_total.labels(reason="logout").inc()
+                except Exception:
+                    pass  # Ne pas bloquer si métriques indisponibles
+
                 # ✅ Priorité 7: Audit logging pour logout réussi
                 try:
                     AuditLogger.log_action(
@@ -753,14 +1321,38 @@ class Logout(Resource):
                     # ✅ Priorité 7: Métrique Prometheus pour logout
                     security_logout_total.inc()
                 except Exception as audit_error:
-                    app_logger.warning("Échec audit logging logout: %s", audit_error)
-                return {"message": "Déconnexion réussie"}, 200
-            return {"error": "Impossible de révoquer le token"}, 500
+                    logger.warning("Échec audit logging logout: %s", audit_error)
+
+                # ✅ Migration localStorage → cookies httpOnly
+                # Créer la réponse avec make_response pour pouvoir supprimer les cookies
+                response = make_response({"message": "Déconnexion réussie"}, 200)
+
+                # Supprimer les cookies (web uniquement)
+                if not is_mobile_request:
+                    response.set_cookie(
+                        current_app.config["COOKIE_ACCESS_TOKEN_NAME"],
+                        "",
+                        expires=0,
+                        path=current_app.config["COOKIE_PATH"],
+                        domain=current_app.config["COOKIE_DOMAIN"],
+                    )
+                    response.set_cookie(
+                        current_app.config["COOKIE_REFRESH_TOKEN_NAME"],
+                        "",
+                        expires=0,
+                        path=current_app.config["COOKIE_PATH"],
+                        domain=current_app.config["COOKIE_DOMAIN"],
+                    )
+
+                return response
+            return APIErrorHandler.handle_exception(
+                Exception("Impossible de révoquer le token"),
+                logger,
+            )
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error("❌ ERREUR logout: %s - %s", type(e).__name__, str(e))
-            return {"error": "Une erreur interne est survenue."}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 # ========================
@@ -772,11 +1364,21 @@ class UserInfo(Resource):
     def get(self):
         """Retourne les informations de l'utilisateur connecté."""
         try:
-            current_user_id = get_jwt_identity()
-            user = User.query.filter_by(public_id=current_user_id).first()
-            if not user:
-                return {"error": "User not found"}, 404
+            # ✅ DDD: Utiliser le use case pour récupérer l'utilisateur courant
+            uc = GetCurrentUserUseCase()
+            result = uc.execute()
 
+            if not result.found:
+                return result.error, result.status_code or 404
+
+            if result.user is None:
+                return APIErrorHandler.handle_not_found(
+                    "User",
+                    None,
+                    logger,
+                )
+
+            user = result.user
             return {
                 "id": user.id,
                 "public_id": user.public_id,
@@ -787,10 +1389,7 @@ class UserInfo(Resource):
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(
-                "❌ ERREUR get_user_info: %s - %s", type(e).__name__, str(e)
-            )
-            return {"error": "Une erreur interne est survenue."}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 # ========================
@@ -799,6 +1398,9 @@ class UserInfo(Resource):
 @auth_ns.route("/register")
 class Register(Resource):
     @auth_ns.expect(register_model, validate=True)
+    @limiter.limit(
+        "10 per minute"
+    )  # ✅ SECURITY: Rate limiting pour prévenir spam d'inscriptions
     def post(self):
         """Inscrit un nouvel utilisateur avec le rôle 'client' par défaut
         et crée un profil client associé.
@@ -816,7 +1418,7 @@ class Register(Resource):
 
         try:
             data = request.get_json() or {}
-            app_logger.info("Données reçues dans /auth/register : %s", data)
+            logger.info("Données reçues dans /auth/register : %s", data)
 
             # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
             try:
@@ -827,71 +1429,74 @@ class Register(Resource):
                 auth_ns.abort(code or 400, body.get("error", "Validation error"))
                 validated_data = {}  # Never reached, but satisfies type checker
 
-            app_logger.info("Données validées : %s", validated_data)
+            logger.info("Données validées : %s", validated_data)
 
-            email: str = cast("str", validated_data.get("email"))
-            if User.query.filter_by(email=email).first():
-                app_logger.warning("Utilisateur déjà existant pour l'email : %s", email)
-                # Utiliser abort au lieu de return pour réduire le nombre de returns
-                auth_ns.abort(409, "User already exists")
-
-            # Création de l'utilisateur
+            # ✅ DDD: Utiliser le use case pour enregistrer l'utilisateur
             username: str = cast("str", validated_data.get("username"))
             password: str = cast("str", validated_data.get("password"))
-            # NB: birth_date vient déjà en objet date (schéma marshmallow)
-            import uuid
+            email: str = cast("str", validated_data.get("email"))
 
-            user = User()
-            user.username = username
-            user.email = email
-            user.role = (
-                UserRole.client
-            )  # SQLAlchemy SAEnum peut accepter l'enum directement
-            user.public_id = str(uuid.uuid4())
-            user.first_name = validated_data.get("first_name")
-            user.last_name = validated_data.get("last_name")
-            user.phone = validated_data.get("phone")
-            user.address = validated_data.get("address")
-            user.birth_date = validated_data.get("birth_date")
-            user.gender = validated_data.get("gender")
-            user.profile_image = validated_data.get("profile_image")
+            # ✅ S3: Validation explicite du mot de passe avec politique renforcée
+            from security.password_policy import (
+                PasswordPolicyError,
+                PasswordPolicyService,
+            )
 
-            # Validation explicite du mot de passe avant set_password (sécurité)
-            from routes.utils import validate_password
-
-            # Valider explicitement le mot de passe avant de le définir
-            # (imite django.contrib.auth.password_validation.validate_password)
-            if not validate_password(password):
-                auth_ns.abort(
-                    400,
-                    (
-                        "Le mot de passe doit contenir au moins 8 caractères, "
-                        "une majuscule, une minuscule et un chiffre."
-                    ),
+            try:
+                # Valider avec la politique stricte (complexité + HIBP)
+                PasswordPolicyService.validate_password(
+                    password, user_id=None, check_history=False
                 )
+            except PasswordPolicyError as e:
+                auth_ns.abort(400, e.message)
 
-            # Le mot de passe est validé explicitement par validate_password()
-            # avant set_password() - satisfait les exigences de sécurité
-            user.set_password(
-                password, force_change=False
-            )  # nosemgrep: python.django.security.audit.unvalidated-password
-            db.session.add(user)
-            db.session.flush()
+            uc = RegisterUserUseCase()
+            input_data = RegisterUserInput(
+                username=username,
+                email=email,
+                password=password,
+                first_name=validated_data.get("first_name"),
+                last_name=validated_data.get("last_name"),
+                phone=validated_data.get("phone"),
+                address=validated_data.get("address"),
+                birth_date=validated_data.get("birth_date"),
+                gender=validated_data.get("gender"),
+                profile_image=validated_data.get("profile_image"),
+            )
+            register_result = uc.execute(input_data)
+
+            if not register_result.success:
+                HTTP_BAD_REQUEST = 400
+                if register_result.status_code == HTTP_BAD_REQUEST:
+                    error_msg = (
+                        register_result.error.get("error", "Validation error")
+                        if register_result.error
+                        else "Validation error"
+                    )
+                    auth_ns.abort(HTTP_BAD_REQUEST, error_msg)
+                error_msg = (
+                    register_result.error.get("error", "Registration error")
+                    if register_result.error
+                    else "Registration error"
+                )
+                auth_ns.abort(register_result.status_code or 500, error_msg)
+
+            user = register_result.user
+            if not user:
+                auth_ns.abort(500, "User created but not returned")
 
             # Création du profil client associé
+            # user est garanti non-None après la vérification ci-dessus
+            assert user is not None  # Pour le type checker
             client = Client()
             client.user_id = user.id
             client.is_active = True
             client.contact_email = email
             db.session.add(client)
             db.session.commit()
-            app_logger.info(
-                "Client créé : user_id=%s, client_id=%s", user.id, client.id
-            )
+            logger.info("Client créé : user_id=%s, client_id=%s", user.id, client.id)
 
-            app_logger.info(
-                "Utilisateur et client enregistrés avec succès : %s", user.id
-            )
+            logger.info("Utilisateur et client enregistrés avec succès : %s", user.id)
             return {
                 "message": "User registered successfully!",
                 "user_id": user.public_id,
@@ -899,13 +1504,21 @@ class Register(Resource):
             }, 201
 
         except ValidationError as e:
-            app_logger.error("Erreur de validation : %s", e.messages)
+            logger.error("Erreur de validation : %s", e.messages)
             auth_ns.abort(400, "Validation failed")
         except Exception as e:
+            # Flask-RESTX abort() lève une HTTPException (ex: 400/409).
+            # Ne pas transformer ces erreurs attendues en 500.
+            from werkzeug.exceptions import (  # pyright: ignore[reportMissingImports]
+                HTTPException,
+            )
+
+            if isinstance(e, HTTPException):
+                raise
             sentry_sdk.capture_exception(e)
             # Utiliser repr() pour éviter les problèmes de formatage avec %
             exception_message = repr(e) if "%" in str(e) else str(e)
-            app_logger.exception(
+            logger.exception(
                 "❌ ERREUR register_user: %s - %s", type(e).__name__, exception_message
             )
             auth_ns.abort(500, "Une erreur interne est survenue.")
@@ -916,23 +1529,35 @@ class Register(Resource):
 # ========================
 @auth_ns.route("/forgot-password")
 class ForgotPassword(Resource):
-    @limiter.limit("5 per minute")
+    # ✅ S2: Rate limiting strict pour forgot-password (protection brute force)
+    @limiter.limit("3 per minute")
     def post(self):
         """Envoie un email de réinitialisation de mot de passe."""
         try:
             data = request.get_json() or {}
             email = data.get("email")
             if not email:
-                return {"error": "Email is required"}, 400
+                return APIErrorHandler.handle_validation_error(
+                    "Email is required",
+                    field="email",
+                    logger_instance=logger,
+                )
 
-            user = User.query.filter_by(email=email).first()
+            user = user_repo.find_by_email(email)
             if not user:
-                return {"error": "No account found with this email"}, 404
+                return APIErrorHandler.handle_not_found(
+                    "Account",
+                    email,
+                    logger,
+                )
 
             # Accéder explicitement à la configuration via current_app
             secret_key = current_app.config.get("SECRET_KEY")
             if not secret_key:
-                return {"error": "Configuration error: SECRET_KEY not set"}, 500
+                return APIErrorHandler.handle_exception(
+                    Exception("Configuration error: SECRET_KEY not set"),
+                    logger,
+                )
 
             serializer = URLSafeTimedSerializer(secret_key)
             reset_token = serializer.dumps(user.email, salt="password-reset-salt")
@@ -950,10 +1575,7 @@ class ForgotPassword(Resource):
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(
-                "❌ ERREUR forgot_password: %s - %s", type(e).__name__, str(e)
-            )
-            return {"error": "Une erreur interne est survenue."}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 # ========================
@@ -963,44 +1585,83 @@ class ForgotPassword(Resource):
 
 @auth_ns.route("/reset-password/<string:public_id>")
 class ResetPassword(Resource):
+    # ✅ S2: Rate limiting strict pour reset-password (protection brute force)
+    @limiter.limit("3 per minute")
     def post(self, public_id):
         """Réinitialise le mot de passe via un lien contenant le public_id."""
         try:
             data = request.get_json() or {}
             new_password = data.get("new_password")
             if not new_password:
-                return {"error": "Un nouveau mot de passe est requis."}, 400
+                return APIErrorHandler.handle_validation_error(
+                    "Un nouveau mot de passe est requis.",
+                    field="new_password",
+                    logger_instance=logger,
+                )
 
-            user = User.query.filter_by(public_id=public_id).first()
+            user_dto = user_repo.find_by_public_id(public_id)
+            if not user_dto:
+                return APIErrorHandler.handle_not_found(
+                    "Utilisateur",
+                    public_id,
+                    logger,
+                )
+
+            # Obtenir le modèle User pour les opérations de modification
+            user = User.query.filter(User.public_id == public_id).first()
             if not user:
-                return {"error": "Utilisateur non trouvé."}, 404
+                return APIErrorHandler.handle_not_found(
+                    "Utilisateur",
+                    public_id,
+                    logger,
+                )
 
-            # Validation explicite du mot de passe avant set_password (sécurité)
-            from routes.utils import validate_password
+            # ✅ S3: Validation avec politique renforcée (complexité + HIBP + historique)
+            from security.password_policy import (
+                PasswordPolicyError,
+                PasswordPolicyService,
+            )
 
-            # Valider explicitement le mot de passe avant de le définir
-            # (imite django.contrib.auth.password_validation.validate_password)
-            if not validate_password(new_password):
-                return {
-                    "error": (
-                        "Le mot de passe doit contenir au moins 8 caractères, "
-                        "une majuscule, une minuscule et un chiffre."
-                    )
-                }, 400
+            try:
+                PasswordPolicyService.validate_password(
+                    new_password, user_id=user.id, check_history=True
+                )
+            except PasswordPolicyError as e:
+                return APIErrorHandler.handle_validation_error(
+                    e.message,
+                    field="new_password",
+                    logger_instance=logger,
+                )
 
             # Le mot de passe est validé explicitement par validate_password()
             # avant set_password() - satisfait les exigences de sécurité
             user.set_password(new_password)  # nosem
             user.force_password_change = False
+
+            # ✅ S3: Révoquer tous les tokens lors du changement de mot de passe
+            try:
+                from security.security_metrics import (
+                    security_token_invalidations_total,
+                )
+                # revoke_all_user_tokens est déjà importé depuis security.refresh_token_service
+
+                revoke_all_user_tokens(user.id, reason="Changement de mot de passe")
+                security_token_invalidations_total.labels(
+                    reason="password_change"
+                ).inc()
+            except Exception as revoke_error:
+                # Ne pas bloquer le changement de mot de passe si la révocation échoue
+                logger.warning(
+                    "Échec révocation tokens lors changement mot de passe (ignoré): %s",
+                    str(revoke_error),
+                )
+
             db.session.commit()
             return {"message": "Mot de passe réinitialisé avec succès."}, 200
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(
-                "❌ ERREUR reset_password: %s - %s", type(e).__name__, str(e)
-            )
-            return {"error": "Une erreur interne est survenue."}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 # ========================
@@ -1017,7 +1678,8 @@ class RevokeAllSessions(Resource):
     @auth_ns.response(403, "Accès refusé (admin uniquement)")
     @auth_ns.response(404, "Utilisateur non trouvé")
     @auth_ns.response(500, "Erreur interne")
-    @limiter.limit("50 per hour")  # Rate limiting pour endpoint admin
+    # ✅ S2: Rate limiting strict pour revoke-all-sessions (action sensible)
+    @limiter.limit("10 per hour")
     def post(self, user_id: int):
         """Révoque toutes les sessions actives d'un utilisateur (admin uniquement).
 
@@ -1026,15 +1688,29 @@ class RevokeAllSessions(Resource):
         """
         try:
             # 1. Vérifier que l'utilisateur existe
-            user = User.query.get(user_id)
+            user = user_repo.find_by_id(user_id)
             if not user:
-                return {"error": "Utilisateur non trouvé"}, 404
+                return APIErrorHandler.handle_not_found(
+                    "Utilisateur",
+                    user_id,
+                    logger,
+                )
 
             # 2. Récupérer l'admin qui effectue l'action (pour audit logging)
             admin_public_id = get_jwt_identity()
-            admin_user = User.query.filter_by(public_id=admin_public_id).first()
+            admin_user = user_repo.find_by_public_id(admin_public_id)
 
             # 3. Révoquer tous les tokens de l'utilisateur
+            # ✅ S3: Métrique Prometheus pour invalidation de tokens
+            try:
+                from security.security_metrics import (
+                    security_token_invalidations_total,
+                )
+
+                security_token_invalidations_total.labels(reason="admin_revoke").inc()
+            except Exception:
+                pass  # Ne pas bloquer si métriques indisponibles
+
             count = revoke_all_user_tokens(
                 user_id=user_id, reason="Révoqué par l'admin"
             )
@@ -1060,12 +1736,12 @@ class RevokeAllSessions(Resource):
                 )
             except Exception as audit_error:
                 # Ne pas bloquer l'action si l'audit logging échoue
-                app_logger.warning(
+                logger.warning(
                     "Échec audit logging revoke_all_sessions: %s", audit_error
                 )
 
             # 5. Retourner la réponse
-            app_logger.info(
+            logger.info(
                 "Admin %s a révoqué %d session(s) pour user_id=%d",
                 admin_public_id,
                 count,
@@ -1078,10 +1754,7 @@ class RevokeAllSessions(Resource):
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(
-                "❌ ERREUR revoke_all_sessions: %s - %s", type(e).__name__, str(e)
-            )
-            return {"error": "Une erreur interne est survenue."}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 # ========================
@@ -1096,7 +1769,8 @@ class ListSessions(Resource):
     @auth_ns.response(401, "Non autorisé")
     @auth_ns.response(404, "Utilisateur non trouvé")
     @auth_ns.response(500, "Erreur interne")
-    @limiter.limit("100 per hour")  # Rate limiting pour endpoint utilisateur
+    # ✅ S2: Rate limiting pour sessions (endpoint utilisateur)
+    @limiter.limit("50 per hour")
     def get(self):
         """Liste les sessions actives de l'utilisateur connecté.
 
@@ -1107,10 +1781,14 @@ class ListSessions(Resource):
         try:
             # 1. Récupérer l'utilisateur connecté
             current_user_public_id = get_jwt_identity()
-            user = User.query.filter_by(public_id=current_user_public_id).first()
+            user = user_repo.find_by_public_id(current_user_public_id)
 
             if not user:
-                return {"error": "Utilisateur non trouvé"}, 404
+                return APIErrorHandler.handle_not_found(
+                    "Utilisateur",
+                    current_user_public_id,
+                    logger,
+                )
 
             # 2. Récupérer les sessions actives
             sessions = get_user_active_sessions(user.id)
@@ -1126,7 +1804,74 @@ class ListSessions(Resource):
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(
-                "❌ ERREUR list_sessions: %s - %s", type(e).__name__, str(e)
-            )
-            return {"error": "Une erreur interne est survenue."}, 500
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+# ========================
+# Endpoint : Obtenir un token CSRF
+# ========================
+@auth_ns.route("/csrf-token")
+@auth_ns.doc(
+    security=None,  # Endpoint public (pas besoin d'authentification)
+    description="Récupère un token CSRF pour protéger les requêtes mutantes",
+)
+class CSRFTokenResource(Resource):
+    """Endpoint pour obtenir un token CSRF."""
+
+    @auth_ns.marshal_with(csrf_token_response_model)
+    @auth_ns.response(200, "Token CSRF généré avec succès")
+    @auth_ns.response(500, "Erreur interne")
+    # ✅ S2: Rate limiting plus strict pour endpoint CSRF (protection contre abus)
+    @limiter.limit("50 per hour")
+    def get(self):
+        """Génère et retourne un token CSRF.
+
+        Le token doit être inclus dans toutes les requêtes mutantes (POST/PUT/PATCH/DELETE)
+        via le header `X-CSRF-Token` ou dans le body JSON avec la clé `csrf_token`.
+
+        Returns:
+            Dict avec le token CSRF et sa durée de vie
+        """
+        import os
+
+        try:
+            # Récupérer user_id depuis JWT si disponible (optionnel)
+            user_id = None
+            try:
+                jwt_identity = get_jwt_identity()
+                if jwt_identity:
+                    if isinstance(jwt_identity, dict):
+                        # Extraire user_id depuis les claims JWT
+                        from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
+                            get_jwt,
+                        )
+
+                        jwt_claims = get_jwt()
+                        user_id = jwt_claims.get("user_id") or jwt_claims.get("id")
+                        if not user_id:
+                            user_id = jwt_identity.get("user_id") or jwt_identity.get(
+                                "id"
+                            )
+                    elif isinstance(jwt_identity, (int, str)):
+                        with suppress(ValueError, TypeError):
+                            user_id = int(jwt_identity)
+            except Exception:
+                # JWT non disponible, générer token sans user_id
+                pass
+
+            # Générer le token CSRF
+            csrf_token = generate_csrf_token(user_id=user_id)
+
+            # TTL du token (en secondes)
+            csrf_ttl = int(os.getenv("CSRF_TOKEN_TTL_SECONDS", "3600"))
+
+            logger.debug("[CSRF] Token généré pour user_id=%s", user_id)
+
+            return {
+                "csrf_token": csrf_token,
+                "ttl": csrf_ttl,
+            }, 200
+
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            return APIErrorHandler.handle_exception(e, logger)

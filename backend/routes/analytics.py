@@ -5,22 +5,31 @@ import csv
 import io
 import logging
 from datetime import date, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
-from flask import make_response, request
-from flask_jwt_extended import jwt_required
-from flask_restx import Namespace, Resource
+from flask import make_response, request  # pyright: ignore[reportMissingImports]
+from flask_jwt_extended import jwt_required  # pyright: ignore[reportMissingImports]
+from flask_restx import Namespace, Resource  # pyright: ignore[reportMissingImports]
 from sqlalchemy import and_
 
 from ext import db, role_required
-from models import Booking, EtaAccuracyLog, UserRole
+from models import Booking, EtaAccuracyLog
+from models.enums import UserRole
+from repositories.assignment_repository import AssignmentRepository
 from routes.companies import get_company_from_token
 from services.analytics.aggregator import get_period_analytics, get_weekly_summary
 from services.analytics.insights import detect_patterns, generate_insights
+from shared.error_handlers import APIErrorHandler
+
+# Note: Modèles (Booking, EtaAccuracyLog) utilisés pour requêtes complexes
+# TODO: Migrer vers repositories quand les méthodes nécessaires seront disponibles
 
 logger = logging.getLogger(__name__)
 
 analytics_ns = Namespace("analytics", description="Analytics et métriques de dispatch")
+
+# Initialisation des repositories
+assignment_repo = AssignmentRepository()
 
 
 @analytics_ns.route("/dashboard")
@@ -69,12 +78,18 @@ class AnalyticsDashboard(Resource):
                     (err or {}).get("error")
                     if isinstance(err, dict)
                     else "Company not found"
-                )
+                ) or "Company not found"
                 logger.warning("[Analytics] Company not found: %s", msg)
-                return {"success": False, "error": msg}, code or 404
+                return APIErrorHandler.handle_not_found(
+                    msg,
+                    None,
+                    logger,
+                )
 
             # ✅ 2.4: Validation Marshmallow pour query params
-            from marshmallow import ValidationError
+            from marshmallow import (  # pyright: ignore[reportMissingImports]
+                ValidationError,
+            )
 
             from schemas.analytics_schemas import AnalyticsDashboardQuerySchema
             from schemas.validation_utils import (
@@ -134,7 +149,7 @@ class AnalyticsDashboard(Resource):
 
         except Exception as e:
             logger.error("[Analytics] Error in dashboard endpoint: %s", e)
-            return {"success": False, "error": f"Failed to fetch analytics: {e!s}"}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 @analytics_ns.route("/insights")
@@ -156,17 +171,23 @@ class AnalyticsInsights(Resource):
             - lookback_days: Nombre de jours à analyser en arrière (1-365), défaut: 30
         """
         try:
-            company, err, code = get_company_from_token()
+            company, err, _ = get_company_from_token()
             if err or company is None:
                 msg = (
                     (err or {}).get("error")
                     if isinstance(err, dict)
                     else "Company not found"
+                ) or "Company not found"
+                return APIErrorHandler.handle_not_found(
+                    msg,
+                    None,
+                    logger,
                 )
-                return {"success": False, "error": msg}, code or 404
 
             # ✅ 2.4: Validation Marshmallow pour query params
-            from marshmallow import ValidationError
+            from marshmallow import (  # pyright: ignore[reportMissingImports]
+                ValidationError,
+            )
 
             from schemas.analytics_schemas import AnalyticsInsightsQuerySchema
             from schemas.validation_utils import (
@@ -211,17 +232,23 @@ class WeeklySummary(Resource):
             - week_start: Date de début de semaine (YYYY-MM-DD), optionnel
         """
         try:
-            company, err, code = get_company_from_token()
+            company, err, _ = get_company_from_token()
             if err or company is None:
                 msg = (
                     (err or {}).get("error")
                     if isinstance(err, dict)
                     else "Company not found"
+                ) or "Company not found"
+                return APIErrorHandler.handle_not_found(
+                    msg,
+                    None,
+                    logger,
                 )
-                return {"success": False, "error": msg}, code or 404
 
             # ✅ 2.4: Validation Marshmallow pour query params
-            from marshmallow import ValidationError
+            from marshmallow import (  # pyright: ignore[reportMissingImports]
+                ValidationError,
+            )
 
             from schemas.analytics_schemas import AnalyticsWeeklySummaryQuerySchema
             from schemas.validation_utils import (
@@ -295,17 +322,23 @@ class ExportAnalytics(Resource):
             - format: Format d'export (csv|json), défaut: csv
         """
         try:
-            company, err, code = get_company_from_token()
+            company, err, _ = get_company_from_token()
             if err or company is None:
                 msg = (
                     (err or {}).get("error")
                     if isinstance(err, dict)
                     else "Company not found"
+                ) or "Company not found"
+                return APIErrorHandler.handle_not_found(
+                    msg,
+                    None,
+                    logger,
                 )
-                return {"success": False, "error": msg}, code or 404
 
             # ✅ 2.4: Validation Marshmallow pour query params
-            from marshmallow import ValidationError
+            from marshmallow import (  # pyright: ignore[reportMissingImports]
+                ValidationError,
+            )
 
             from schemas.analytics_schemas import AnalyticsExportQuerySchema
             from schemas.validation_utils import (
@@ -419,14 +452,18 @@ class EtaAccuracy(Resource):
         """
         try:
             # Récupérer la company depuis le token JWT
-            company, err, code = get_company_from_token()
+            company, err, _ = get_company_from_token()
             if err or company is None:
                 msg = (
                     (err or {}).get("error")
                     if isinstance(err, dict)
                     else "Company not found"
+                ) or "Company not found"
+                return APIErrorHandler.handle_not_found(
+                    msg,
+                    None,
+                    logger,
                 )
-                return {"success": False, "error": msg}, code or 404
 
             # Paramètres de requête
             start_str = request.args.get("start_date")
@@ -575,7 +612,7 @@ class EtaAccuracy(Resource):
 
         except Exception as e:
             logger.exception("[Analytics] Erreur ETA accuracy: %s", e)
-            return {"success": False, "error": str(e)}, 500
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 @analytics_ns.route("/dispatch")
@@ -606,9 +643,20 @@ class DispatchAnalytics(Resource):
         - Taux réassignation
         """
         try:
-            company, err, code = get_company_from_token()
+            company, err, _ = get_company_from_token()
             if err or company is None:
-                return {"error": err or "Company not found"}, code or 404
+                error_message = (
+                    err.get("error", "Company not found")
+                    if isinstance(err, dict)
+                    else str(err)
+                    if err
+                    else "Company not found"
+                )
+                return APIErrorHandler.handle_not_found(
+                    error_message,
+                    None,
+                    logger,
+                )
 
             # Période par défaut: 30 derniers jours
             end_date = date.today()
@@ -619,7 +667,11 @@ class DispatchAnalytics(Resource):
                 try:
                     start_date = date.fromisoformat(start_date_str)
                 except ValueError:
-                    return {"error": "Invalid start_date format. Use YYYY-MM-DD"}, 400
+                    return APIErrorHandler.handle_validation_error(
+                        "Invalid start_date format. Use YYYY-MM-DD",
+                        field="start_date",
+                        logger_instance=logger,
+                    )
             else:
                 start_date = end_date - timedelta(days=30)
 
@@ -627,27 +679,29 @@ class DispatchAnalytics(Resource):
                 try:
                     end_date = date.fromisoformat(end_date_str)
                 except ValueError:
-                    return {"error": "Invalid end_date format. Use YYYY-MM-DD"}, 400
+                    return APIErrorHandler.handle_validation_error(
+                        "Invalid end_date format. Use YYYY-MM-DD",
+                        field="end_date",
+                        logger_instance=logger,
+                    )
 
             # Récupérer les assignments de la période
             from datetime import UTC as UTC_TZ
 
-            from models import Assignment, BookingStatus
+            from models import BookingStatus
 
-            assignments = (
-                Assignment.query.join(Booking, Booking.id == Assignment.booking_id)
-                .filter(
-                    Booking.company_id == company.id,
-                    Booking.scheduled_time
-                    >= datetime.combine(start_date, datetime.min.time()).replace(
-                        tzinfo=UTC_TZ
-                    ),
-                    Booking.scheduled_time
-                    < datetime.combine(
-                        end_date + timedelta(days=1), datetime.min.time()
-                    ).replace(tzinfo=UTC_TZ),
-                )
-                .all()
+            start_datetime = datetime.combine(start_date, datetime.min.time()).replace(
+                tzinfo=UTC_TZ
+            )
+            end_datetime = datetime.combine(
+                end_date + timedelta(days=1), datetime.min.time()
+            ).replace(tzinfo=UTC_TZ)
+
+            assignments = assignment_repo.find_models_by_company_with_time_range_and_excluded_statuses(
+                company_id=company.id,
+                start_datetime=start_datetime,
+                end_datetime=end_datetime,
+                excluded_statuses=[],  # Pas d'exclusion de statuts
             )
 
             if not assignments:
@@ -746,8 +800,8 @@ class DispatchAnalytics(Resource):
 
             driver_loads: dict[int, int] = defaultdict(int)
             for a in assignments:
-                if a.driver_id:
-                    driver_loads[a.driver_id] += 1
+                if bool(a.driver_id):
+                    driver_loads[cast(int, a.driver_id)] += 1
 
             if driver_loads:
                 loads = list(driver_loads.values())
@@ -765,12 +819,12 @@ class DispatchAnalytics(Resource):
             # Taux réassignation (approximation: assignments avec updated_at > created_at)
             reassigned_count = 0
             for a in assignments:
+                updated_at = getattr(a, "updated_at", None)
+                created_at = getattr(a, "created_at", None)
                 if (
-                    hasattr(a, "updated_at")
-                    and hasattr(a, "created_at")
-                    and a.updated_at
-                    and a.created_at
-                    and a.updated_at > a.created_at
+                    updated_at is not None
+                    and created_at is not None
+                    and updated_at > created_at
                 ):
                     # Vérifier si c'est une vraie réassignation (changement driver)
                     # Note: Cette heuristique est approximative
@@ -808,4 +862,4 @@ class DispatchAnalytics(Resource):
 
         except Exception as e:
             logger.exception("[Analytics] Error in dispatch analytics: %s", e)
-            return {"error": f"Failed to fetch dispatch analytics: {e!s}"}, 500
+            return APIErrorHandler.handle_exception(e, logger)

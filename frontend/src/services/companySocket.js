@@ -1,75 +1,199 @@
 import { io } from 'socket.io-client';
 import { getAccessToken } from '../hooks/useAuthToken';
+import { SOCKET_CONFIG, SOCKET_PATH, getSocketTransports, isDevelopmentLocalhost } from '../config/socketConfig';
+import { sendDebugLog } from '../utils/debugLogger';
 
 let socket = null;
 let connectPromise = null;
 const listeners = new Map(); // event -> callback
 let currentCompanyId = null; // company to (re)join on connect/reconnect
-let lastHeartbeat = Date.now(); // Track last heartbeat timestamp
-let heartbeatInterval = null; // Interval for sending pings
-const pingTimestamps = new Map(); // Track ping timestamps for latency metrics
+// ✅ Heartbeat géré nativement par Socket.IO (ping_interval=25s, ping_timeout=60s)
+// Suppression du heartbeat applicatif redondant
 let networkListenersSetup = false; // Track if network listeners are set up
 
-// En mode développement (localhost:3000), utiliser le proxy (plus fiable sur Windows/Docker)
-const isDevelopmentLocalhost =
-  typeof window !== 'undefined' && window.location && /localhost:3000$/i.test(window.location.host);
+// ✅ isDevelopmentLocalhost importé depuis socketConfig.js
 
-const API_URL = (() => {
-  if (isDevelopmentLocalhost) {
-    return 'http://127.0.0.1:5000';
+// ✅ Socket.IO doit utiliser le proxy en développement pour éviter les problèmes CORS/cookies
+// Le proxy est configuré dans setupProxy.js pour /socket.io
+const getSocketUrl = () => {
+  const isProduction = process.env.NODE_ENV === 'production';
+  
+  // ✅ Détecter dynamiquement si on est en développement localhost
+  const isDevLocalhost = isDevelopmentLocalhost();
+  
+  // ✅ PRIORITÉ 1: En développement localhost, TOUJOURS utiliser le proxy
+  // (même si REACT_APP_SOCKET_URL est définie, pour éviter les problèmes CORS/cookies)
+  if (!isProduction && isDevLocalhost) {
+    // ✅ Utiliser le proxy relatif pour Socket.IO (via setupProxy.js)
+    // Cela permet d'envoyer les cookies httpOnly correctement
+    if (typeof window !== 'undefined' && window.location) {
+      // Utiliser le proxy relatif pour Socket.IO
+      const proxyUrl = window.location.origin;
+      // eslint-disable-next-line no-console
+      console.log('[CompanySocket] Mode développement détecté, utilisation du proxy:', proxyUrl);
+      return proxyUrl;
+    }
+    // Fallback si window n'est pas disponible
+    const devSocketUrl = process.env.REACT_APP_SOCKET_URL || 'http://127.0.0.1:5000';
+    // eslint-disable-next-line no-console
+    console.warn('[CompanySocket] window.location non disponible, fallback:', devSocketUrl);
+    return devSocketUrl;
   }
-
-  const baseUrl =
-    process.env.REACT_APP_SOCKET_URL ||
-    process.env.REACT_APP_API_BASE_URL ||
-    process.env.REACT_APP_API_URL;
-  if (baseUrl && baseUrl.startsWith('http')) {
+  
+  // ✅ DEBUG: Log toutes les valeurs pour comprendre le comportement
+  // eslint-disable-next-line no-console
+  console.log('[CompanySocket] getSocketUrl() - Debug:', {
+    isProduction,
+    isDevelopmentLocalhost: isDevLocalhost,
+    NODE_ENV: process.env.NODE_ENV,
+    REACT_APP_SOCKET_URL: process.env.REACT_APP_SOCKET_URL,
+    REACT_APP_API_BASE_URL: process.env.REACT_APP_API_BASE_URL,
+    REACT_APP_API_URL: process.env.REACT_APP_API_URL,
+    windowLocation: typeof window !== 'undefined' && window.location ? window.location.host : 'N/A',
+    windowOrigin: typeof window !== 'undefined' && window.location ? window.location.origin : 'N/A',
+  });
+  
+  // ✅ PRIORITÉ 2: Variable d'environnement dédiée pour Socket.IO (production uniquement)
+  const socketUrl = process.env.REACT_APP_SOCKET_URL;
+  if (socketUrl && socketUrl.startsWith('http')) {
+    // eslint-disable-next-line no-console
+    console.log('[CompanySocket] REACT_APP_SOCKET_URL trouvée:', socketUrl);
     try {
-      const url = new URL(baseUrl);
+      const url = new URL(socketUrl);
+      // Validation en production : doit être HTTPS
+      if (isProduction && !socketUrl.startsWith('https://')) {
+        console.error(
+          'REACT_APP_SOCKET_URL doit commencer par "https://" en production. ' +
+          `Valeur actuelle: ${socketUrl}`
+        );
+        throw new Error('REACT_APP_SOCKET_URL invalide en production');
+      }
       return url.origin;
     } catch (e) {
-      console.error('Invalid SOCKET URL:', baseUrl);
-      return window.location.origin;
+      console.error('Invalid REACT_APP_SOCKET_URL:', socketUrl, e);
     }
   }
 
-  return window.location.origin;
-})();
+  // ✅ PRIORITÉ 3: Variables d'environnement API (fallback)
+  const baseUrl =
+    process.env.REACT_APP_API_BASE_URL ||
+    process.env.REACT_APP_API_URL;
+  if (baseUrl && baseUrl.startsWith('http')) {
+    // eslint-disable-next-line no-console
+    console.log('[CompanySocket] REACT_APP_API_BASE_URL/API_URL trouvée:', baseUrl);
+    try {
+      const url = new URL(baseUrl);
+      // Validation en production : doit être HTTPS
+      if (isProduction && !baseUrl.startsWith('https://')) {
+        console.error(
+          'REACT_APP_API_BASE_URL doit commencer par "https://" en production. ' +
+          `Valeur actuelle: ${baseUrl}`
+        );
+        throw new Error('REACT_APP_API_BASE_URL invalide en production');
+      }
+      return url.origin;
+    } catch (e) {
+      console.error('Invalid API URL:', baseUrl, e);
+    }
+  }
+  
+  // Log pour déboguer si on n'utilise pas le proxy
+  if (!isProduction && !isDevLocalhost) {
+    // eslint-disable-next-line no-console
+    console.log('[CompanySocket] Mode développement mais isDevelopmentLocalhost=false', {
+      isDevelopmentLocalhost: isDevLocalhost,
+      windowLocation: typeof window !== 'undefined' && window.location ? window.location.host : 'N/A',
+    });
+  }
+
+  // ✅ PRIORITÉ 4: Production - erreur si aucune variable n'est définie
+  if (isProduction) {
+    const errorMsg =
+      'REACT_APP_SOCKET_URL ou REACT_APP_API_BASE_URL est requis en production. ' +
+      'Définissez au moins une de ces variables d\'environnement avec une URL HTTPS valide.';
+    console.error(errorMsg);
+    throw new Error(errorMsg);
+  }
+
+  // Fallback pour développement (si NODE_ENV n'est pas 'production')
+  return 'http://127.0.0.1:5000';
+};
+
+// ✅ Validation au démarrage en production
+if (process.env.NODE_ENV === 'production' && typeof window !== 'undefined') {
+  if (!process.env.REACT_APP_SOCKET_URL && !process.env.REACT_APP_API_BASE_URL) {
+    console.error(
+      '[Socket.IO] ⚠️ Variables d\'environnement manquantes en production: ' +
+      'REACT_APP_SOCKET_URL ou REACT_APP_API_BASE_URL doit être défini.'
+    );
+  }
+}
+
+// ✅ SOCKET_PATH importé depuis socketConfig.js
 
 function buildSocketOptions() {
   // ✅ Jitter anti-storm: ajouter variation aléatoire pour éviter reconnexions simultanées
   const jitterDelay = Math.random() * 100; // 0-100ms
   const jitterMax = Math.random() * 500; // 0-500ms
   
-  const base = {
-    path: '/socket.io',
+  return {
+    ...SOCKET_CONFIG,
+    // ✅ Override path pour utiliser SOCKET_PATH (peut être différent de SOCKET_CONFIG.path)
+    path: SOCKET_PATH,
+    // ✅ Appliquer jitter aux délais de reconnexion
+    reconnectionDelay: SOCKET_CONFIG.reconnectionDelay + jitterDelay,
+    reconnectionDelayMax: SOCKET_CONFIG.reconnectionDelayMax + jitterMax,
+    // ✅ Utiliser transports adaptés (polling d'abord en dev localhost)
+    transports: getSocketTransports(),
     // 🔒 Auth dynamique : sera rappelé à chaque (re)connexion
+    // ✅ Support cookies httpOnly : si pas de token dans localStorage, utiliser uniquement les cookies
     auth: (cb) => {
+      // #region agent log
       const token = getAccessToken();
-      cb({ token });
+      sendDebugLog({location:'companySocket.js:buildSocketOptions',message:'Token before auth callback',data:{has_token:!!token,token_length:token?token.length:0,token_preview:token?token.substring(0,20)+'...':null,using_cookies:!token},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'});
+      // #endregion
+      // ✅ Si token disponible (mode mobile), l'envoyer dans le payload
+      // ✅ Sinon, envoyer objet vide pour utiliser uniquement les cookies httpOnly (mode web)
+      if (token) {
+        cb({ token });
+      } else {
+        // Mode cookies httpOnly : ne pas envoyer de payload auth, le serveur lira les cookies
+        cb({});
+      }
+      // #region agent log
+      sendDebugLog({location:'companySocket.js:buildSocketOptions',message:'Auth callback called',data:{token_sent:!!token,using_cookies:!token},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'});
+      // #endregion
     },
-    reconnection: true,
-    reconnectionAttempts: Infinity,   // ✅ Changé de 5 à Infinity pour reconnexion infinie
-    reconnectionDelay: 1000 + jitterDelay,  // ✅ Jitter: 1000-1100ms
-    reconnectionDelayMax: 10000 + jitterMax,  // ✅ Jitter: 10000-10500ms
-    timeout: 20000,
-    forceNew: false,
-    withCredentials: true,
-    transports: isDevelopmentLocalhost ? ['websocket', 'polling'] : ['websocket', 'polling'],
   };
-  return base;
 }
 
 export function getCompanySocket() {
+  // ✅ Feature flag : désactiver Socket.IO si SOCKET_ENABLED=false
+  const socketEnabled = process.env.REACT_APP_SOCKET_ENABLED !== 'false';
+  if (!socketEnabled) {
+    console.log('[CompanySocket] Socket.IO désactivé (REACT_APP_SOCKET_ENABLED=false)');
+    return null;
+  }
+  
   if (socket && socket.connected) return socket;
 
   if (!connectPromise) {
     connectPromise = new Promise((resolve, reject) => {
       try {
         // token lu dynamiquement via buildSocketOptions.auth()
+        const socketOptions = buildSocketOptions();
+        // ✅ Obtenir l'URL Socket.IO dynamiquement (pour utiliser le proxy en dev)
+        const socketUrl = getSocketUrl();
         // eslint-disable-next-line no-console
-        console.log('[CompanySocket] Connexion à:', API_URL);
-        socket = io(API_URL, buildSocketOptions());
+        console.log('[CompanySocket] Connexion à:', socketUrl, 'avec path:', socketOptions.path);
+        // #region agent log
+        sendDebugLog({location:'companySocket.js:getCompanySocket',message:'Creating socket connection',data:{api_url:socketUrl,socket_path:socketOptions.path,is_dev:isDevelopmentLocalhost(),env_socket_url:process.env.REACT_APP_SOCKET_URL},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'H'});
+        // #endregion
+        socket = io(socketUrl, socketOptions);
+        
+        // #region agent log
+        sendDebugLog({location:'companySocket.js:getCompanySocket',message:'Socket.IO instance created',data:{socket_url:socketUrl,socket_path:socketOptions.path,transports:socketOptions.transports,has_auth:typeof socketOptions.auth === 'function',socket_id:socket?.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'});
+        // #endregion
 
         socket.on('connect', () => {
           // ✅ Logs structurés
@@ -87,68 +211,8 @@ export function getCompanySocket() {
             } catch {}
           }
           
-          // ✅ Heartbeat : envoyer ping toutes les 30s et écouter pong
-          lastHeartbeat = Date.now();
-          
-          // Écouter les pong du serveur avec tracking latence
-          socket.on('pong', (data) => {
-            const pingTime = pingTimestamps.get('last_ping');
-            if (pingTime) {
-              const latency = Date.now() - pingTime;
-              
-              // ✅ Métriques latence
-              console.log(JSON.stringify({
-                event: 'heartbeat_pong',
-                latency_ms: latency,
-                timestamp: data?.timestamp,
-                received_at: new Date().toISOString()
-              }));
-              
-              // Warning si latence élevée
-              if (latency > 500) {
-                console.warn(JSON.stringify({
-                  event: 'heartbeat_high_latency',
-                  latency_ms: latency,
-                  threshold_ms: 500,
-                  timestamp: new Date().toISOString()
-                }));
-              }
-              
-              pingTimestamps.delete('last_ping');
-            }
-            lastHeartbeat = Date.now();
-          });
-          
-          // Envoyer des ping toutes les 30s
-          if (heartbeatInterval) {
-            clearInterval(heartbeatInterval);
-          }
-          heartbeatInterval = setInterval(() => {
-            if (socket && socket.connected) {
-              const timeSinceLastHeartbeat = Date.now() - lastHeartbeat;
-              // Si pas de pong depuis >60s, forcer reconnexion
-              if (timeSinceLastHeartbeat > 60000) {
-                console.warn(JSON.stringify({
-                  event: 'heartbeat_timeout',
-                  time_since_last_ms: timeSinceLastHeartbeat,
-                  threshold_ms: 60000,
-                  action: 'force_reconnect',
-                  timestamp: new Date().toISOString()
-                }));
-                socket.disconnect();
-                socket.connect();
-                lastHeartbeat = Date.now();
-              } else {
-                socket.emit('ping');
-                // ✅ Track timestamp avant ping
-                pingTimestamps.set('last_ping', Date.now());
-                console.log(JSON.stringify({
-                  event: 'heartbeat_ping',
-                  timestamp: new Date().toISOString()
-                }));
-              }
-            }
-          }, 30000); // Toutes les 30s
+          // ✅ Heartbeat géré nativement par Socket.IO (ping_interval=25s, ping_timeout=60s)
+          // Le heartbeat applicatif a été supprimé car redondant
           
           // ✅ Détection réseau (online/offline)
           if (!networkListenersSetup && typeof window !== 'undefined') {
@@ -180,7 +244,7 @@ export function getCompanySocket() {
           resolve(socket);
         });
 
-        // ✅ Handler reconnect : rejoin automatiquement les rooms et relancer heartbeat
+        // ✅ Handler reconnect : rejoin automatiquement les rooms
         socket.on('reconnect', (attempt) => {
           // ✅ Logs structurés
           console.log(JSON.stringify({
@@ -188,7 +252,6 @@ export function getCompanySocket() {
             attempt: attempt,
             timestamp: new Date().toISOString()
           }));
-          lastHeartbeat = Date.now();
           
           // Rejoin automatique des rooms
           if (currentCompanyId) {
@@ -209,32 +272,7 @@ export function getCompanySocket() {
             }
           }
           
-          // Relancer heartbeat si pas déjà actif
-          if (!heartbeatInterval) {
-            heartbeatInterval = setInterval(() => {
-              if (socket && socket.connected) {
-                const timeSinceLastHeartbeat = Date.now() - lastHeartbeat;
-                if (timeSinceLastHeartbeat > 60000) {
-                  console.warn(JSON.stringify({
-                    event: 'heartbeat_timeout',
-                    time_since_last_ms: timeSinceLastHeartbeat,
-                    action: 'force_reconnect',
-                    timestamp: new Date().toISOString()
-                  }));
-                  socket.disconnect();
-                  socket.connect();
-                  lastHeartbeat = Date.now();
-                } else {
-                  socket.emit('ping');
-                  pingTimestamps.set('last_ping', Date.now());
-                  console.log(JSON.stringify({
-                    event: 'heartbeat_ping',
-                    timestamp: new Date().toISOString()
-                  }));
-                }
-              }
-            }, 30000);
-          }
+          // ✅ Heartbeat géré nativement par Socket.IO, pas besoin de relancer
         });
 
         socket.on('disconnect', (reason) => {
@@ -245,14 +283,28 @@ export function getCompanySocket() {
             timestamp: new Date().toISOString()
           }));
           connectPromise = null;
-          // Nettoyer l'interval heartbeat
-          if (heartbeatInterval) {
-            clearInterval(heartbeatInterval);
-            heartbeatInterval = null;
+          
+          // ✅ Ne pas reconnecter si serveur a déconnecté volontairement
+          if (reason === 'io server disconnect' || reason === 'unauthorized') {
+            console.log(JSON.stringify({
+              event: 'socket_disconnect_stop_reconnect',
+              reason: reason,
+              timestamp: new Date().toISOString()
+            }));
+            // Désactiver la reconnexion automatique
+            socket.io.reconnect = false;
+            return; // Pas de reconnexion auto
           }
+          
+          // ✅ Heartbeat géré nativement par Socket.IO, pas de nettoyage nécessaire
         });
 
         socket.on('connect_error', (err) => {
+          // #region agent log
+          const errorDescription = err?.description;
+          const upgradeError = typeof errorDescription === 'string' ? errorDescription.includes('upgrade') : false;
+          sendDebugLog({location:'companySocket.js:connect_error',message:'Connection error received',data:{error_message:err?.message||String(err),error_type:err?.type,error_description:errorDescription,error_description_type:typeof errorDescription,has_token:!!getAccessToken(),transport:socket.io.engine?.transport?.name,upgrade_error:upgradeError,socket_url:socketUrl,socket_path:socketOptions.path,current_transport:socket.io?.engine?.transport?.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'});
+          // #endregion
           console.error(JSON.stringify({
             event: 'socket_connect_error',
             error: err?.message || String(err),
@@ -263,6 +315,9 @@ export function getCompanySocket() {
         });
 
         socket.on('unauthorized', (err) => {
+          // #region agent log
+          sendDebugLog({location:'companySocket.js:unauthorized',message:'Unauthorized event received',data:{error:err?.error||String(err),error_type:typeof err,has_token:!!getAccessToken()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'});
+          // #endregion
           console.error(JSON.stringify({
             event: 'socket_unauthorized',
             error: err?.error || String(err),
@@ -382,11 +437,7 @@ export function disconnectCompanySocket() {
     });
     listeners.clear();
     connectPromise = null;
-    if (heartbeatInterval) {
-      clearInterval(heartbeatInterval);
-      heartbeatInterval = null;
-    }
-    pingTimestamps.clear(); // Nettoyer timestamps
+    // ✅ Heartbeat géré nativement par Socket.IO, pas de nettoyage nécessaire
     if (socket) {
       socket.disconnect();
       socket = null;
@@ -410,3 +461,4 @@ export function disconnectCompanySocket() {
     }));
   }
 }
+

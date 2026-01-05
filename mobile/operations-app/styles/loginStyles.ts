@@ -1,5 +1,5 @@
 // src/styles/loginStyles.ts
-import { StyleSheet } from "react-native";
+import { StyleSheet, Platform } from "react-native";
 
 export type LoginMode = "driver" | "enterprise";
 
@@ -38,6 +38,32 @@ const palettes: Record<
 export const getLoginStyles = (mode: LoginMode) => {
   const palette = palettes[mode];
 
+  // Styles shadow conditionnels pour éviter l'avertissement de dépréciation
+  const cardShadow = Platform.OS === 'web'
+    ? {
+        boxShadow: mode === "driver" 
+          ? '0 28px 40px rgba(16,39,30,0.12)' 
+          : '0 28px 40px rgba(0,0,0,0.45)',
+      }
+    : {
+        shadowColor:
+          mode === "driver" ? "rgba(16,39,30,0.12)" : "rgba(0,0,0,0.45)",
+        shadowOffset: { width: 0, height: 28 },
+        shadowOpacity: mode === "driver" ? 0.14 : 0.32,
+        shadowRadius: 40,
+        elevation: mode === "driver" ? 8 : 14,
+      };
+
+  const primaryButtonShadow = Platform.OS === 'web'
+    ? { boxShadow: '0 10px 18px rgba(0,121,107,0.24)' }
+    : {
+        shadowColor: "#00796B",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.24,
+        shadowRadius: 18,
+        elevation: 6,
+      };
+
   const styles = StyleSheet.create({
     safeArea: {
       flex: 1,
@@ -55,12 +81,7 @@ export const getLoginStyles = (mode: LoginMode) => {
       padding: 28,
       borderWidth: 1,
       borderColor: palette.border,
-      shadowColor:
-        mode === "driver" ? "rgba(16,39,30,0.12)" : "rgba(0,0,0,0.45)",
-      shadowOffset: { width: 0, height: 28 },
-      shadowOpacity: mode === "driver" ? 0.14 : 0.32,
-      shadowRadius: 40,
-      elevation: mode === "driver" ? 8 : 14,
+      ...cardShadow,
     },
     header: {
       marginBottom: 28,
@@ -134,11 +155,7 @@ export const getLoginStyles = (mode: LoginMode) => {
       borderRadius: 16,
       paddingVertical: 16,
       alignItems: "center",
-      shadowColor: "#00796B",
-      shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: 0.24,
-      shadowRadius: 18,
-      elevation: 6,
+      ...primaryButtonShadow,
       marginBottom: 22,
     },
     primaryButtonText: {

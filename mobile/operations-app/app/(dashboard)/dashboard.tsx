@@ -5,9 +5,22 @@ import {
   RefreshControl,
   Alert,
   Linking,
+  Platform,
 } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
 import { useRouter } from 'expo-router';
+
+// MapView n'est pas disponible sur web
+let MapView: any = null;
+let Marker: any = null;
+if (Platform.OS !== 'web') {
+  try {
+    const maps = require('react-native-maps');
+    MapView = maps.default;
+    Marker = maps.Marker;
+  } catch (e) {
+    // react-native-maps non disponible
+  }
+}
 import { useAuth } from '@/hooks/useAuth';
 import { useSocket } from '@/hooks/useSocket';
 import { useLocation } from '@/hooks/useLocation';
@@ -133,7 +146,7 @@ export default function DashboardScreen() {
       }
     >
       <View className="h-64">
-        {location && (
+        {location && MapView ? (
           <MapView
             style={{ flex: 1 }}
             initialRegion={{
@@ -152,7 +165,15 @@ export default function DashboardScreen() {
               title="Vous êtes ici"
             />
           </MapView>
-        )}
+        ) : location ? (
+          <View className="flex-1 bg-gray-100 justify-center items-center">
+            <ThemedText className="text-center">
+              📍 Position: {location.coords.latitude.toFixed(4)}, {location.coords.longitude.toFixed(4)}
+              {'\n'}
+              🗺️ Carte non disponible
+            </ThemedText>
+          </View>
+        ) : null}
       </View>
 
       <View className="px-4 py-3">

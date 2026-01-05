@@ -38,7 +38,11 @@ export const useDispatchDelays = (date = null, refreshInterval = 0) => {
       setDelays(response.delays || []);
       setSummary(response.summary || null);
     } catch (err) {
-      console.error('[useDispatchDelays] Error:', err);
+      // Ne pas logger les erreurs 403/404/401 comme des erreurs critiques (permissions manquantes)
+      const status = err?.response?.status;
+      if (status !== 403 && status !== 404 && status !== 401) {
+        console.error('[useDispatchDelays] Error:', err);
+      }
       setError(err.message || 'Erreur lors du chargement des retards');
     } finally {
       setLoading(false);
@@ -51,7 +55,11 @@ export const useDispatchDelays = (date = null, refreshInterval = 0) => {
       const status = await getOptimizerStatus();
       setOptimizerStatus(status);
     } catch (err) {
-      console.error('[useDispatchDelays] Error fetching optimizer status:', err);
+      // Ne pas logger les erreurs 403/404/401 comme des erreurs critiques (permissions manquantes)
+      const status = err?.response?.status;
+      if (status !== 403 && status !== 404 && status !== 401) {
+        console.error('[useDispatchDelays] Error fetching optimizer status:', err);
+      }
     }
   }, []);
 

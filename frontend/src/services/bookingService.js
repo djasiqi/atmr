@@ -1,7 +1,7 @@
 import apiClient from '../utils/apiClient';
 // ✅ SUPPRIMÉ: mergeInvoiceAndQRBill - Génération PDF via API backend
 
-const API_URL = process.env.REACT_APP_API_URL;
+const _API_URL = process.env.REACT_APP_API_URL;
 
 export const fetchBookings = async (publicId) => {
   try {
@@ -52,25 +52,14 @@ export const exportBookingsPDF = async (month, bookings, _client, _company) => {
 
 export const cancelBooking = async (bookingId) => {
   try {
-    const token = localStorage.getItem('authToken');
-
-    const response = await fetch(`${API_URL}/bookings/${bookingId}`, {
-      method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ status: 'canceled' }), // 🔥 Ajout du statut si requis par l'API
+    // ✅ Utiliser apiClient au lieu de fetch directement pour bénéficier des cookies httpOnly
+    const response = await apiClient.delete(`/bookings/${bookingId}`, {
+      data: { status: 'canceled' }, // 🔥 Ajout du statut si requis par l'API
     });
 
-    const responseData = await response.json();
-    console.log('📢 API Response (Annulation) :', responseData); // ✅ Debug ici
+    console.log('📢 API Response (Annulation) :', response.data); // ✅ Debug ici
 
-    if (!response.ok) {
-      throw new Error(responseData.message || "Échec de l'annulation de la réservation.");
-    }
-
-    return responseData; // ✅ Retourne les données mises à jour
+    return response.data; // ✅ Retourne les données mises à jour
   } catch (error) {
     console.error("Erreur lors de l'annulation :", error);
     throw error;

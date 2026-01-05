@@ -4,9 +4,9 @@ Exposé uniquement pour les admins système (ou en interne).
 
 import logging
 
-from flask import jsonify
-from flask_jwt_extended import jwt_required
-from flask_restx import Namespace, Resource
+from flask import jsonify  # pyright: ignore[reportMissingImports]
+from flask_jwt_extended import jwt_required  # pyright: ignore[reportMissingImports]
+from flask_restx import Namespace, Resource  # pyright: ignore[reportMissingImports]
 
 from services.osrm_client import _osrm_circuit_breaker
 

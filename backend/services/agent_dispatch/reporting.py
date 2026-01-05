@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Dict
 
-from flask import current_app
+from flask import current_app  # pyright: ignore[reportMissingImports]
 
 from models.autonomous_action import AutonomousAction
 
@@ -25,7 +25,7 @@ def generate_daily_report(company_id: int) -> Dict[str, Any]:
     """
     with current_app.app_context():
         # Date du jour
-        today_start = datetime.now(timezone.utc).replace(
+        today_start = datetime.now(UTC).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
 

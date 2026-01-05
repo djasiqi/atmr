@@ -9,7 +9,10 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
-from ortools.constraint_solver import pywrapcp, routing_enums_pb2
+from ortools.constraint_solver import (  # pyright: ignore[reportMissingImports]
+    pywrapcp,
+    routing_enums_pb2,
+)
 
 from services.unified_dispatch.settings import Settings
 

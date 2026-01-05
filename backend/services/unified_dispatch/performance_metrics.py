@@ -35,7 +35,7 @@ class DispatchPerformanceMetrics:
     total_time: float = 0.0
 
     # Compteurs
-    sql_queries_count: int = 0
+    sql_queries_count: int = 0  # ✅ Phase 7 N+1: Nombre de requêtes SQL exécutées
     cache_hits: int = 0
     cache_misses: int = 0
     bookings_processed: int = 0
@@ -170,7 +170,7 @@ class DispatchPerformanceMetrics:
         return self.osrm_cache_hits / total
 
 
-class DispatchMetricsCollector(object):
+class DispatchMetricsCollector:
     """Collecteur de métriques de performance pour un dispatch."""
 
     def __init__(self, company_id: int, dispatch_run_id: int | None = None):
@@ -295,6 +295,41 @@ class DispatchMetricsCollector(object):
         if feature_flags:
             self.metrics.feature_flags = feature_flags
 
+        # ✅ Phase 7 N+1: Alerter si nombre de requêtes SQL > seuil
+        # Seuils par taille de batch (approximatifs basés sur le nombre de bookings)
+        SMALL_BATCH_THRESHOLD = 50
+        MEDIUM_BATCH_THRESHOLD = 200
+        SMALL_BATCH_QUERY_THRESHOLD = 10
+        MEDIUM_BATCH_QUERY_THRESHOLD = 20
+        LARGE_BATCH_QUERY_THRESHOLD = 30
+        DEFAULT_QUERY_THRESHOLD = 50
+
+        bookings_count = self.metrics.bookings_processed
+        if bookings_count > 0:
+            if bookings_count < SMALL_BATCH_THRESHOLD:
+                query_threshold = SMALL_BATCH_QUERY_THRESHOLD
+            elif bookings_count < MEDIUM_BATCH_THRESHOLD:
+                query_threshold = MEDIUM_BATCH_QUERY_THRESHOLD
+            else:
+                query_threshold = LARGE_BATCH_QUERY_THRESHOLD
+        else:
+            query_threshold = (
+                DEFAULT_QUERY_THRESHOLD  # Seuil par défaut si bookings_count inconnu
+            )
+
+        if self.metrics.sql_queries_count > query_threshold:
+            logger.warning(
+                (
+                    "[PerformanceMetrics] ⚠️ Nombre élevé de requêtes SQL (%d) "
+                    "pour dispatch %s (seuil: %d, bookings: %d). "
+                    "Vérifier les optimisations N+1."
+                ),
+                self.metrics.sql_queries_count,
+                self.dispatch_run_id or "?",
+                query_threshold,
+                bookings_count,
+            )
+
         # Log final
         logger.info(
             (
@@ -320,17 +355,17 @@ class DispatchMetricsCollector(object):
 
 
 # Instance globale pour tracking SQL queries (à intégrer avec SQLAlchemy events)
-class SQLCounter(object):
+class SQLCounter:
     """Compteur SQL thread-safe."""
 
-    _instance: "SQLCounter | None" = None
+    _instance: SQLCounter | None = None
 
     def __init__(self):
         super().__init__()
         self._counter = defaultdict(int)
 
     @classmethod
-    def get_instance(cls) -> "SQLCounter":
+    def get_instance(cls) -> SQLCounter:
         """Retourne l'instance singleton."""
         if cls._instance is None:
             cls._instance = cls()

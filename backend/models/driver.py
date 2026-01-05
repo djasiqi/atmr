@@ -4,7 +4,8 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any, Optional
+from pathlib import Path
+from typing import Any
 
 from sqlalchemy import (
     JSON,
@@ -98,7 +99,7 @@ class Driver(db.Model):
     # Localisation
     latitude: Mapped[float] = mapped_column(Float, nullable=True)
     longitude: Mapped[float] = mapped_column(Float, nullable=True)
-    last_position_update: Mapped[Optional[datetime]] = mapped_column(
+    last_position_update: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
@@ -109,14 +110,14 @@ class Driver(db.Model):
 
     # HR / Contrats & Qualifications
     contract_type = Column(String(20), nullable=False, server_default="CDI")
-    weekly_hours: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    hourly_rate_cents: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    employment_start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    employment_end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    weekly_hours: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    hourly_rate_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    employment_start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    employment_end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     license_categories = Column(JSON, nullable=False, server_default=text("'[]'"))
-    license_valid_until: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    license_valid_until: Mapped[date | None] = mapped_column(Date, nullable=True)
     trainings = Column(JSON, nullable=False, server_default=text("'[]'"))
-    medical_valid_until: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    medical_valid_until: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # Relations
     user = relationship("User", back_populates="driver", passive_deletes=True)
@@ -131,6 +132,39 @@ class Driver(db.Model):
 
     @property
     def serialize(self):
+        # Définir driver_type_raw avant utilisation
+        driver_type_raw = getattr(self, "driver_type", None)
+        # #region agent log
+        try:
+            import json
+
+            with Path(r"c:\Users\jasiq\atmr\.cursor\debug.log").open(
+                "a", encoding="utf-8"
+            ) as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "A",
+                            "location": "driver.py:134",
+                            "message": "Driver.serialize entry",
+                            "data": {
+                                "driver_id": self.id,
+                                "driver_type_type": str(type(driver_type_raw)),
+                                "driver_type_value": str(driver_type_raw),
+                                "has_value_attr": hasattr(driver_type_raw, "value")
+                                if driver_type_raw is not None
+                                else False,
+                            },
+                            "timestamp": int(__import__("time").time() * 1000),
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion
         try:
             user = getattr(self, "user", None)
             last_pos = getattr(self, "last_position_update", None)
@@ -176,10 +210,12 @@ class Driver(db.Model):
                 "email": email,
                 "is_active": _as_bool(getattr(self, "is_active", False)),
                 "is_available": _as_bool(getattr(self, "is_available", False)),
-                "driver_type": getattr(
-                    getattr(self, "driver_type", None),
-                    "value",
-                    getattr(self, "driver_type", None),
+                "driver_type": (
+                    driver_type_raw.value
+                    if driver_type_raw is not None and hasattr(driver_type_raw, "value")
+                    else str(driver_type_raw)
+                    if driver_type_raw is not None
+                    else None
                 ),
                 "vehicle_assigned": getattr(self, "vehicle_assigned", None),
                 "brand": getattr(self, "brand", None),
@@ -306,8 +342,8 @@ class DriverShift(db.Model):
         index=True,
     )
 
-    notes_internal: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    notes_employee: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    notes_internal: Mapped[str | None] = mapped_column(Text, nullable=True)
+    notes_employee: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_by_user_id = Column(
         Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True
@@ -358,7 +394,7 @@ class DriverUnavailability(db.Model):
         nullable=False,
         server_default=UnavailabilityReason.OTHER.value,
     )
-    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     company = relationship("Company")
     driver = relationship("Driver")
@@ -389,8 +425,8 @@ class DriverWeeklyTemplate(db.Model):
     start_time = Column(Time, nullable=False)
     end_time = Column(Time, nullable=False)
 
-    effective_from: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    effective_to: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    effective_from: Mapped[date | None] = mapped_column(Date, nullable=True)
+    effective_to: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     company = relationship("Company")
     driver = relationship("Driver")
@@ -597,8 +633,8 @@ class DriverVacation(db.Model):
     driver_id = Column(
         Integer, ForeignKey("driver.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     vacation_type: Mapped[VacationType] = mapped_column(
         SAEnum(VacationType, name="vacation_type"),
         nullable=False,

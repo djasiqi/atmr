@@ -7,10 +7,11 @@ Extrait depuis models.py (lignes 249-418).
 from __future__ import annotations
 
 import logging
+import os
 import re
 import uuid
-from datetime import date
-from typing import Optional, cast
+from datetime import UTC, date, datetime, timedelta
+from typing import cast
 
 from sqlalchemy import (
     Boolean,
@@ -27,7 +28,10 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from typing_extensions import override
-from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.security import (  # pyright: ignore[reportMissingImports]
+    check_password_hash,
+    generate_password_hash,
+)
 
 from ext import db
 
@@ -58,7 +62,7 @@ class User(db.Model):
     # ↓ Champs présents pour tous les rôles (client, driver, etc.)
     phone: Mapped[str] = mapped_column(String(255), nullable=True)
     address: Mapped[str] = mapped_column(String(200), nullable=True)
-    birth_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    birth_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     gender: Mapped[GenderEnum] = mapped_column(
         SAEnum(GenderEnum, name="gender"), nullable=True
     )
@@ -78,13 +82,15 @@ class User(db.Model):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     force_password_change = Column(Boolean, default=False, nullable=False)
+    # ✅ S3: Date d'expiration du mot de passe (optionnel)
+    password_expires_at = Column(DateTime(timezone=True), nullable=True, index=True)
 
     # ✅ D2: Colonnes chiffrées (stockage)
-    phone_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    email_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    first_name_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    last_name_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    address_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    phone_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    email_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    first_name_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_name_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    address_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     encryption_migrated = Column(Boolean, default=False, nullable=False)
 
     # ✅ Ajout de l'index sur `public_id` pour optimiser les recherches
@@ -111,8 +117,35 @@ class User(db.Model):
 
     # 🔒 Gestion des mots de passe
     def set_password(self, password, force_change=False):
+        """✅ S3: Définit un nouveau mot de passe et l'ajoute à l'historique.
+
+        Args:
+            password: Nouveau mot de passe en clair
+            force_change: Si True, force le changement au prochain login
+        """
+        # Sauvegarder l'ancien hash dans l'historique avant de le changer
+        old_password_hash = getattr(self, "password", None)
+        if old_password_hash and hasattr(self, "id") and self.id:
+            try:
+                from security.password_history import PasswordHistoryService
+
+                PasswordHistoryService.add_password_to_history(
+                    self.id, old_password_hash
+                )
+            except Exception as e:
+                logger.warning("[User] ⚠️ Erreur lors de l'ajout à l'historique: %s", e)
+                # Ne pas bloquer le changement de mot de passe si l'historique échoue
+
+        # Générer le nouveau hash
         self.password = generate_password_hash(password)
         self.force_password_change = force_change
+
+        # ✅ S3: Mettre à jour la date d'expiration si configuré
+        password_expiration_days = int(os.getenv("PASSWORD_EXPIRATION_DAYS", "0"))
+        if password_expiration_days > 0:
+            self.password_expires_at = datetime.now(UTC) + timedelta(
+                days=password_expiration_days
+            )
 
     def check_password(self, password: str) -> bool:
         # Récupère la valeur runtime (qui sera bien une string en pratique)
@@ -213,7 +246,7 @@ class User(db.Model):
 
     # ✅ D2: Propriétés hybrides pour chiffrement/déchiffrement automatique
     @hybrid_property
-    def phone_secure(self) -> Optional[str]:  # type: ignore[no-redef]
+    def phone_secure(self) -> str | None:  # type: ignore[no-redef]
         """Récupère le téléphone déchiffré."""
         try:
             from security.crypto import get_encryption_service
@@ -233,7 +266,7 @@ class User(db.Model):
             return getattr(self, "phone", None)
 
     @phone_secure.setter  # type: ignore[no-redef]
-    def phone_secure(self, value: Optional[str]):
+    def phone_secure(self, value: str | None):
         """Chiffre et stocke le téléphone."""
         try:
             from security.crypto import get_encryption_service
@@ -242,16 +275,16 @@ class User(db.Model):
                 self.phone_encrypted = get_encryption_service().encrypt_field(value)
                 self.encryption_migrated = True
                 # Garder l'ancienne colonne vide (dépréciée)
-                self.phone = None
+                self.phone = None  # type: ignore[assignment]
             else:
                 self.phone_encrypted = None
-                self.phone = None
+                self.phone = None  # type: ignore[assignment]
         except ImportError:
             # Fallback si le service n'est pas disponible
-            self.phone = value
+            self.phone = value  # type: ignore[assignment]
 
     @hybrid_property
-    def email_secure(self) -> Optional[str]:  # type: ignore[no-redef]
+    def email_secure(self) -> str | None:  # type: ignore[no-redef]
         """Récupère l'email déchiffré."""
         try:
             from security.crypto import get_encryption_service
@@ -263,12 +296,12 @@ class User(db.Model):
                     return get_encryption_service().decrypt_field(encrypted_val)
                 except Exception:
                     return None
-            return cast(Optional[str], getattr(self, "email", None))
+            return cast(str | None, getattr(self, "email", None))
         except ImportError:
-            return cast(Optional[str], getattr(self, "email", None))
+            return cast(str | None, getattr(self, "email", None))
 
     @email_secure.setter  # type: ignore[no-redef]
-    def email_secure(self, value: Optional[str]):
+    def email_secure(self, value: str | None):
         """Chiffre et stocke l'email."""
         try:
             from security.crypto import get_encryption_service
@@ -284,7 +317,7 @@ class User(db.Model):
     @hybrid_property
     def first_name_secure(  # type: ignore[no-redef]
         self,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Récupère le prénom déchiffré."""
         try:
             from security.crypto import get_encryption_service
@@ -296,12 +329,12 @@ class User(db.Model):
                     return get_encryption_service().decrypt_field(encrypted_val)
                 except Exception:
                     return None
-            return cast(Optional[str], getattr(self, "first_name", None))
+            return cast(str | None, getattr(self, "first_name", None))
         except ImportError:
-            return cast(Optional[str], getattr(self, "first_name", None))
+            return cast(str | None, getattr(self, "first_name", None))
 
     @first_name_secure.setter  # type: ignore[no-redef]
-    def first_name_secure(self, value: Optional[str]):
+    def first_name_secure(self, value: str | None):
         """Chiffre et stocke le prénom."""
         try:
             from security.crypto import get_encryption_service
@@ -314,10 +347,10 @@ class User(db.Model):
             else:
                 self.first_name_encrypted = None
         except ImportError:
-            self.first_name = value
+            self.first_name = value  # type: ignore[assignment]
 
     @hybrid_property
-    def last_name_secure(self) -> Optional[str]:  # type: ignore[no-redef]
+    def last_name_secure(self) -> str | None:  # type: ignore[no-redef]
         """Récupère le nom déchiffré."""
         try:
             from security.crypto import get_encryption_service
@@ -329,12 +362,12 @@ class User(db.Model):
                     return get_encryption_service().decrypt_field(encrypted_val)
                 except Exception:
                     return None
-            return cast(Optional[str], getattr(self, "last_name", None))
+            return cast(str | None, getattr(self, "last_name", None))
         except ImportError:
-            return cast(Optional[str], getattr(self, "last_name", None))
+            return cast(str | None, getattr(self, "last_name", None))
 
     @last_name_secure.setter  # type: ignore[no-redef]
-    def last_name_secure(self, value: Optional[str]):
+    def last_name_secure(self, value: str | None):
         """Chiffre et stocke le nom."""
         try:
             from security.crypto import get_encryption_service
@@ -345,10 +378,10 @@ class User(db.Model):
             else:
                 self.last_name_encrypted = None
         except ImportError:
-            self.last_name = value
+            self.last_name = value  # type: ignore[assignment]
 
     @hybrid_property
-    def address_secure(self) -> Optional[str]:  # type: ignore[no-redef]
+    def address_secure(self) -> str | None:  # type: ignore[no-redef]
         """Récupère l'adresse déchiffrée."""
         try:
             from security.crypto import get_encryption_service
@@ -360,12 +393,12 @@ class User(db.Model):
                     return get_encryption_service().decrypt_field(encrypted_val)
                 except Exception:
                     return None
-            return cast(Optional[str], getattr(self, "address", None))
+            return cast(str | None, getattr(self, "address", None))
         except ImportError:
-            return cast(Optional[str], getattr(self, "address", None))
+            return cast(str | None, getattr(self, "address", None))
 
     @address_secure.setter  # type: ignore[no-redef]
-    def address_secure(self, value: Optional[str]):
+    def address_secure(self, value: str | None):
         """Chiffre et stocke l'adresse."""
         try:
             from security.crypto import get_encryption_service
@@ -376,7 +409,7 @@ class User(db.Model):
             else:
                 self.address_encrypted = None
         except ImportError:
-            self.address = value
+            self.address = value  # type: ignore[assignment]
 
     # Propriété pour la sérialisation
     @property
