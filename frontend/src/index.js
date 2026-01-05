@@ -5,7 +5,7 @@ import './styles/globals.css';
 import 'leaflet/dist/leaflet.css';
 import reportWebVitals from './reportWebVitals';
 import * as Sentry from '@sentry/react';
-import { onCLS, onFID, onFCP, onLCP, onTTFB } from 'web-vitals';
+import { onCLS, onINP, onFCP, onLCP, onTTFB } from 'web-vitals';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 
 // ===== SENTRY CONFIGURATION =====
@@ -70,7 +70,7 @@ function sendWebVitalToSentry({ name, delta, value, id }) {
 
 // Mesurer les Web Vitals
 onCLS(sendWebVitalToSentry);
-onFID(sendWebVitalToSentry);
+onINP(sendWebVitalToSentry);
 onFCP(sendWebVitalToSentry);
 onLCP(sendWebVitalToSentry);
 onTTFB(sendWebVitalToSentry);

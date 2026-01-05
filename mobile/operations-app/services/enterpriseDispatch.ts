@@ -460,3 +460,48 @@ export const applyOpportunity = async (
     idempotency_key: `${Date.now()}-${opportunity.assignment_id}`,
   });
 };
+
+export interface CreateClientPayload {
+  client_type?: "PRIVATE";
+  first_name: string;
+  last_name: string;
+  phone?: string;
+  address?: string;
+  birth_date?: string;
+  is_institution?: boolean;
+  institution_name?: string;
+  domicile_address?: string;
+  domicile_zip?: string;
+  domicile_city?: string;
+  domicile_lat?: number | null;
+  domicile_lon?: number | null;
+  billing_address?: string;
+  billing_lat?: number | null;
+  billing_lon?: number | null;
+  contact_email?: string;
+  contact_phone?: string;
+  preferential_rate?: number;
+}
+
+export const createClient = async (
+  payload: CreateClientPayload
+): Promise<ClientOption> => {
+  // Générer un email interne unique pour le User
+  const randomId = Math.random().toString(36).substring(2, 10);
+  const timestamp = Date.now().toString(36);
+  const email = payload.is_institution
+    ? `institution-${randomId}-${timestamp}@internal.atmr.local`
+    : `client-${randomId}-${timestamp}@internal.atmr.local`;
+
+  const fullPayload = {
+    ...payload,
+    email,
+    client_type: payload.client_type || "PRIVATE",
+  };
+
+  const response = await enterpriseApi.post<{ data: ClientOption }>(
+    "/companies/me/clients",
+    fullPayload
+  );
+  return response.data.data || response.data;
+};

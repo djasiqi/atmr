@@ -40,12 +40,16 @@ interface RideCreateModalProps {
     visible: boolean;
     onClose: () => void;
     onSuccess?: () => Promise<void>;
+    onOpenClientCreate?: () => void;
+    onClientCreated?: (client: ClientOption) => void;
 }
 
 export const RideCreateModal: React.FC<RideCreateModalProps> = ({
     visible,
     onClose,
     onSuccess,
+    onOpenClientCreate,
+    onClientCreated,
 }) => {
     const { setSelectedDate } = useEnterpriseContext();
     const { loading, create } = useRideCreate(onSuccess);
@@ -66,7 +70,7 @@ export const RideCreateModal: React.FC<RideCreateModalProps> = ({
         if (client?.domicile_address) {
             // ✅ Construire l'adresse complète avec code postal et ville si disponibles
             let fullAddress = client.domicile_address;
-            
+
             // Si l'adresse ne contient pas déjà le code postal et la ville,
             // les ajouter depuis domicile_zip et domicile_city
             if (client.domicile_zip || client.domicile_city) {
@@ -79,7 +83,7 @@ export const RideCreateModal: React.FC<RideCreateModalProps> = ({
                 }
                 fullAddress = addressParts.join(", ");
             }
-            
+
             setPickupAddress(fullAddress);
             if (client.domicile_lat !== null && client.domicile_lat !== undefined &&
                 client.domicile_lon !== null && client.domicile_lon !== undefined) {
@@ -282,7 +286,9 @@ export const RideCreateModal: React.FC<RideCreateModalProps> = ({
                             value={client}
                             onChange={setClient}
                             onNewClient={() => {
-                                // TODO: Ouvrir modal création client
+                                if (onOpenClientCreate) {
+                                    onOpenClientCreate();
+                                }
                             }}
                         />
                         {!client && (
