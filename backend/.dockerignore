@@ -1,0 +1,59 @@
+# Fichiers de développement et IDE
+.cursor/
+.cursor-server/
+.vscode/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Fichiers Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Fichiers de logs
+*.log
+logs/
+.cursor/debug.log
+
+# Fichiers de test
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Fichiers de build
+build/
+dist/
+*.egg-info/
+
+# Fichiers temporaires
+*.tmp
+*.bak
+*.swp
+*~
+
+# Fichiers de configuration locale
+.env.local
+.env.*.local
+
+# Fichiers Git
+.git/
+.gitignore
+
+# Fichiers système
+.bash_history
+.devcontainer/
+.gitconfig
+.local/
+.ssh/
+
