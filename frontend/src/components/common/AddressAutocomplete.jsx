@@ -1,5 +1,5 @@
 // frontend/src/components/common/AddressAutocomplete.jsx
-import React, { useEffect, useMemo, useRef, useState, useDeferredValue, useTransition } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useDeferredValue, useTransition, useCallback } from 'react';
 // Using fetch with relative '/api' path to leverage CRA proxy in dev and avoid CORS
 
 export default function AddressAutocomplete({
@@ -130,7 +130,7 @@ export default function AddressAutocomplete({
   }
 
   // Fetch proxy backend puis fallback Photon direct
-  async function fetchSuggestions(queryText, signal) {
+  const fetchSuggestions = useCallback(async (queryText, signal) => {
     // #region agent log
     fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:136',message:'fetchSuggestions entry',data:{queryText,signalAborted:signal?.aborted},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
     // #endregion
@@ -215,7 +215,7 @@ export default function AddressAutocomplete({
       console.error(`[AddressAutocomplete] ❌ Erreur Photon fallback:`, error);
       return [];
     }
-  }
+  }, [BIAS.lat, BIAS.lon, PHOTON_BASE, maxResults]);
 
   // Charger les suggestions (debounce + abort)
   useEffect(() => {
@@ -323,7 +323,7 @@ export default function AddressAutocomplete({
       abortRef.current?.abort();
       abortRef.current = null;
     };
-  }, [query, minChars, debounceMs, BIAS.lat, BIAS.lon, PHOTON_BASE, maxResults, justSelected]);
+  }, [query, minChars, debounceMs, BIAS.lat, BIAS.lon, PHOTON_BASE, maxResults, justSelected, debounce, deferredQuery, fetchSuggestions, userIsTyping]);
 
   function handleInputChange(e) {
     const v = e.target.value;
