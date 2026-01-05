@@ -52,6 +52,74 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
   const [domicileAddress, setDomicileAddress] = useState("");
   const [domicileSuggestion, setDomicileSuggestion] = useState<AddressSuggestion | undefined>();
 
+  // Fonction utilitaire pour nettoyer les adresses avec doublons
+  const cleanAddressString = (address: string): string => {
+    if (!address) return address;
+
+    // Séparer par virgules
+    const parts = address.split(",").map((p) => p.trim()).filter((p) => p.length > 0);
+
+    if (parts.length < 3) {
+      return address; // Pas assez de parties pour nettoyer
+    }
+
+    // Normaliser les abréviations de rue pour comparaison (retirer le préfixe)
+    const normalizeStreet = (street: string): string => {
+      return street
+        .toLowerCase()
+        .replace(/^(av\.|av|ave|avenue)\s+/i, "")
+        .replace(/^(rue|r\.)\s+/i, "")
+        .replace(/^(chemin|ch\.)\s+/i, "")
+        .replace(/^(boulevard|bd|bvd|bd\.)\s+/i, "")
+        .replace(/^(place|pl\.)\s+/i, "")
+        .trim();
+    };
+
+    // Extraire le numéro d'une partie
+    const extractNumber = (part: string): string | null => {
+      const match = part.match(/(\d+[a-z]?)$/i);
+      return match ? match[1].toLowerCase() : null;
+    };
+
+    // Extraire la rue d'une partie (sans le numéro)
+    const extractStreet = (part: string): string => {
+      return part.replace(/\s+\d+[a-z]?$/i, "").trim();
+    };
+
+    // Pattern de duplication: "Rue abrégée + numéro, Rue complète, Numéro, ..."
+    // Exemple: "Av. Ernest-Pictet 9, Avenue Ernest-Pictet, 9, 1203, Genève"
+    const firstPart = parts[0]; // "Av. Ernest-Pictet 9"
+    const secondPart = parts[1]; // "Avenue Ernest-Pictet"
+    const thirdPart = parts.length > 2 ? parts[2] : null; // "9"
+
+    const firstNum = extractNumber(firstPart); // "9"
+    const thirdNum = thirdPart ? extractNumber(thirdPart) : null; // "9"
+
+    // Si la première partie a un numéro et la troisième partie est juste un numéro identique
+    if (firstNum && thirdNum && firstNum === thirdNum) {
+      const firstStreetRaw = extractStreet(firstPart); // "Av. Ernest-Pictet"
+      const firstStreet = normalizeStreet(firstStreetRaw); // "ernest-pictet"
+      const secondStreet = normalizeStreet(secondPart); // "ernest-pictet"
+
+      // Vérifier si c'est la même rue (normalisée, sans le préfixe)
+      if (firstStreet === secondStreet && firstStreet.length > 0) {
+        // Construire l'adresse nettoyée: "Rue complète + numéro, code postal, ville"
+        const fullStreet = secondPart; // Garder la version complète "Avenue Ernest-Pictet"
+        const cleanedParts = [`${fullStreet} ${firstNum}`]; // "Avenue Ernest-Pictet 9"
+
+        // Ajouter le reste (code postal, ville, etc.) en sautant le numéro dupliqué (index 2)
+        for (let i = 3; i < parts.length; i++) {
+          cleanedParts.push(parts[i]);
+        }
+
+        return cleanedParts.join(", ");
+      }
+    }
+
+    // Si pas de pattern de duplication détecté, retourner l'adresse originale
+    return address;
+  };
+
   useEffect(() => {
     if (!visible) {
       // Reset form when modal closes
@@ -87,21 +155,47 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
     setError(null);
 
     try {
-      // Construire l'adresse complète
+      // Construire l'adresse complète (déjà nettoyée lors de la sélection)
       let fullAddress = domicileAddress;
-      if (domicileSuggestion) {
-        // Utiliser l'adresse complète de la suggestion
-        fullAddress = domicileSuggestion.address || domicileAddress;
+      if (domicileSuggestion && !domicileAddress) {
+        // Si l'adresse n'est pas encore définie, utiliser la suggestion et la nettoyer
+        fullAddress = cleanAddressString(domicileSuggestion.label || domicileSuggestion.address || "");
       }
 
       // Parser l'adresse pour extraire code postal et ville
+      // Format attendu: "Rue Numéro, Code postal, Ville" ou "Rue Numéro, Code postal Ville"
+      let domicileStreet = fullAddress;
       let domicileZip = "";
       let domicileCity = "";
-      const addressMatch = fullAddress.match(/,\s*(\d{4})\s+([^,]+?)(?:\s*,\s*Suisse)?$/);
+
+      // Essayer de parser le format "Rue, Code postal, Ville" ou "Rue, Code postal Ville"
+      const addressMatch = fullAddress.match(/^(.+?),\s*(\d{4})\s+([^,]+?)(?:\s*,\s*Suisse)?$/);
       if (addressMatch) {
-        domicileZip = addressMatch[1];
-        domicileCity = addressMatch[2].trim();
+        domicileStreet = addressMatch[1].trim();
+        domicileZip = addressMatch[2];
+        domicileCity = addressMatch[3].trim();
+      } else {
+        // Si le parsing échoue, essayer de trouver le code postal ailleurs dans l'adresse
+        const zipMatch = fullAddress.match(/(\d{4})/);
+        if (zipMatch) {
+          const zipIndex = fullAddress.indexOf(zipMatch[1]);
+          domicileStreet = fullAddress.substring(0, zipIndex).replace(/,\s*$/, "").trim();
+          domicileZip = zipMatch[1];
+          const afterZip = fullAddress.substring(zipIndex + 4).trim();
+          const cityMatch = afterZip.match(/^,\s*([^,]+?)(?:\s*,\s*Suisse)?$/);
+          if (cityMatch) {
+            domicileCity = cityMatch[1].trim();
+          }
+        }
       }
+
+      // Construire l'adresse complète au format frontend: "Rue, Code postal, Ville"
+      const addressComplete = domicileZip && domicileCity
+        ? `${domicileStreet}, ${domicileZip}, ${domicileCity}`.trim()
+        : fullAddress;
+
+      // Construire l'adresse de facturation (même que domicile pour l'instant)
+      const billingAddressComplete = addressComplete;
 
       const payload: CreateClientPayload = {
         client_type: "PRIVATE",
@@ -110,25 +204,38 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
         phone: phone.trim() || undefined,
         is_institution: isInstitution,
         institution_name: isInstitution ? institutionName.trim() : undefined,
-        domicile_address: fullAddress,
+        // Adresse complète (comme dans le frontend)
+        address: addressComplete,
+        // Adresse de domicile structurée
+        domicile_address: domicileStreet || undefined,
         domicile_zip: domicileZip || undefined,
         domicile_city: domicileCity || undefined,
+        // Coordonnées GPS du domicile
         domicile_lat: domicileSuggestion?.lat || null,
         domicile_lon: domicileSuggestion?.lon || null,
-        // Pour l'instant, utiliser la même adresse pour la facturation
-        billing_address: fullAddress,
+        // Adresse de facturation (même que domicile pour l'instant)
+        billing_address: billingAddressComplete,
         billing_lat: domicileSuggestion?.lat || null,
         billing_lon: domicileSuggestion?.lon || null,
       };
 
+      console.log("[ClientCreateModal] Payload avant envoi:", JSON.stringify(payload, null, 2));
+      console.log("[ClientCreateModal] Adresse parsée:", {
+        fullAddress,
+        domicileStreet,
+        domicileZip,
+        domicileCity,
+        addressComplete,
+      });
+
       const newClient = await createClient(payload);
-      
+
       // Appeler onSuccess immédiatement avec toutes les données du client
       onSuccess({
         id: newClient.id,
         name: newClient.name,
       });
-      
+
       Alert.alert(
         "Client créé",
         `Le client ${newClient.name} a été créé avec succès.`,
@@ -142,13 +249,37 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
         ]
       );
     } catch (err: any) {
-      const errorMessage =
-        err?.response?.data?.error ||
-        err?.response?.data?.message ||
-        err?.message ||
-        "Erreur lors de la création du client";
+      console.error("[ClientCreateModal] Erreur complète:", err);
+      console.error("[ClientCreateModal] Response data:", err?.response?.data);
+      console.error("[ClientCreateModal] Response status:", err?.response?.status);
+
+      // Essayer d'extraire les messages d'erreur de validation
+      let errorMessage = "Erreur lors de la création du client";
+
+      if (err?.response?.data) {
+        const data = err.response.data;
+
+        // Si c'est une erreur de validation Marshmallow
+        if (data.errors) {
+          const validationErrors = Object.entries(data.errors)
+            .map(([field, messages]: [string, any]) => {
+              const msg = Array.isArray(messages) ? messages.join(", ") : String(messages);
+              return `${field}: ${msg}`;
+            })
+            .join("\n");
+          errorMessage = `Erreurs de validation:\n${validationErrors}`;
+        } else if (data.error) {
+          errorMessage = data.error;
+        } else if (data.message) {
+          errorMessage = data.message;
+        } else if (typeof data === "string") {
+          errorMessage = data;
+        }
+      } else if (err?.message) {
+        errorMessage = err.message;
+      }
+
       setError(errorMessage);
-      console.error("[ClientCreateModal] Erreur:", err);
     } finally {
       setLoading(false);
     }
@@ -285,7 +416,14 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
                 label="Adresse complète *"
                 value={domicileAddress}
                 onChange={(address, suggestion) => {
-                  setDomicileAddress(address);
+                  // Nettoyer l'adresse dès la sélection pour éviter les doublons
+                  let cleanedAddress = address;
+                  if (suggestion?.label) {
+                    cleanedAddress = cleanAddressString(suggestion.label);
+                  } else if (address) {
+                    cleanedAddress = cleanAddressString(address);
+                  }
+                  setDomicileAddress(cleanedAddress);
                   setDomicileSuggestion(suggestion);
                 }}
                 icon="location-outline"
