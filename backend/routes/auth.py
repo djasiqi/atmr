@@ -347,7 +347,21 @@ class Login(Resource):
             except Exception:
                 pass
             # #endregion
-            data = request.get_json() or {}
+            try:
+                data = request.get_json() or {}
+            except Exception as json_error:
+                # Gérer spécifiquement les erreurs de parsing JSON (BadRequest 400)
+                # pour éviter qu'elles soient transformées en 500 par le gestionnaire global
+                from werkzeug.exceptions import BadRequest
+
+                if isinstance(json_error, BadRequest):
+                    logger.warning("Erreur parsing JSON dans login: %s", json_error)
+                    return APIErrorHandler.handle_validation_error(
+                        "Format JSON invalide dans la requête",
+                        logger_instance=logger,
+                    )
+                # Si ce n'est pas une BadRequest, laisser le gestionnaire global la gérer
+                raise
             # #region agent log
             try:
                 with log_path.open("a", encoding="utf-8") as f:
@@ -382,7 +396,9 @@ class Login(Resource):
                             {
                                 "location": "auth.py:Login.post",
                                 "message": "before validate_request",
-                                "data": {"data_keys": list(data.keys()) if data else []},
+                                "data": {
+                                    "data_keys": list(data.keys()) if data else []
+                                },
                                 "timestamp": datetime.now(UTC).isoformat(),
                                 "sessionId": "debug-session",
                                 "runId": "run1",
@@ -406,7 +422,11 @@ class Login(Resource):
                             {
                                 "location": "auth.py:Login.post",
                                 "message": "after validate_request",
-                                "data": {"validated_keys": list(validated_data.keys()) if validated_data else []},
+                                "data": {
+                                    "validated_keys": list(validated_data.keys())
+                                    if validated_data
+                                    else []
+                                },
                                 "timestamp": datetime.now(UTC).isoformat(),
                                 "sessionId": "debug-session",
                                 "runId": "run1",
@@ -455,8 +475,12 @@ class Login(Resource):
                                 "location": "auth.py:Login.post",
                                 "message": "after AuthenticateUserUseCase.execute",
                                 "data": {
-                                    "success": auth_result.success if auth_result else None,
-                                    "has_user": auth_result.user is not None if auth_result else None,
+                                    "success": auth_result.success
+                                    if auth_result
+                                    else None,
+                                    "has_user": auth_result.user is not None
+                                    if auth_result
+                                    else None,
                                     "error": auth_result.error if auth_result else None,
                                 },
                                 "timestamp": datetime.now(UTC).isoformat(),
@@ -527,7 +551,9 @@ class Login(Resource):
                                 "data": {
                                     "user_id": user.id if user else None,
                                     "user_public_id": user.public_id if user else None,
-                                    "user_role": user.role.value if user and user.role else None,
+                                    "user_role": user.role.value
+                                    if user and user.role
+                                    else None,
                                 },
                                 "timestamp": datetime.now(UTC).isoformat(),
                                 "sessionId": "debug-session",
@@ -563,7 +589,9 @@ class Login(Resource):
                                 "message": "after create_access_token",
                                 "data": {
                                     "has_access_token": access_token is not None,
-                                    "token_length": len(access_token) if access_token else 0,
+                                    "token_length": len(access_token)
+                                    if access_token
+                                    else 0,
                                 },
                                 "timestamp": datetime.now(UTC).isoformat(),
                                 "sessionId": "debug-session",
@@ -776,7 +804,9 @@ class Login(Resource):
                                 "data": {
                                     "exception_type": type(e).__name__,
                                     "exception_message": str(e),
-                                    "exception_args": str(e.args) if hasattr(e, "args") else None,
+                                    "exception_args": str(e.args)
+                                    if hasattr(e, "args")
+                                    else None,
                                 },
                                 "timestamp": datetime.now(UTC).isoformat(),
                                 "sessionId": "debug-session",
