@@ -741,6 +741,10 @@ jobs:
                 docker_exec flask db current || true
                 docker_exec flask db heads || true
                 docker_exec flask db history | head -50 || true
+                # 🔍 Debug: Afficher les colonnes de la table booking en cas d'erreur
+                echo "🔍 Debug: Colonnes de la table 'booking':"
+                docker compose -f docker-compose.production.yml exec -T postgres psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -c "SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name='booking' ORDER BY ordinal_position;" || true
+                echo ""
                 docker compose -f docker-compose.production.yml logs backend | tail -100 || true
                 exit 1
               fi
