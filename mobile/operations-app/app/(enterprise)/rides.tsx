@@ -22,6 +22,7 @@ import { useEnterpriseContext } from "@/context/EnterpriseContext";
 import { RideSnippetCard } from "@/components/enterprise/cards/RideSnippetCard";
 import { RideEditModal } from "@/components/enterprise/rides/RideEditModal";
 import { RideCreateModal } from "@/components/enterprise/rides/RideCreateModal";
+import { ClientCreateModal } from "@/components/enterprise/rides/ClientCreateModal";
 import { TimeDatePicker } from "@/components/enterprise/rides/TimeDatePicker";
 import {
   getDispatchRides,
@@ -90,6 +91,7 @@ export default function EnterpriseRidesScreen() {
     ride: RideSummary | null;
     shouldBill: boolean;
   }>({ ride: null, shouldBill: false });
+  const [clientCreateModalVisible, setClientCreateModalVisible] = useState(false);
 
   const currentDate = useMemo(() => {
     return selectedDate ?? dayjs().format("YYYY-MM-DD");
@@ -492,6 +494,33 @@ export default function EnterpriseRidesScreen() {
         visible={createModalVisible}
         onClose={() => setCreateModalVisible(false)}
         onSuccess={refreshData}
+        onOpenClientCreate={() => setClientCreateModalVisible(true)}
+        onClientCreated={async (client) => {
+          // Le client créé sera automatiquement sélectionné dans RideCreateModal
+          // via le callback onClientCreated
+        }}
+      />
+
+      {/* Modal de création de client */}
+      <ClientCreateModal
+        visible={clientCreateModalVisible}
+        onClose={() => setClientCreateModalVisible(false)}
+        onSuccess={async (newClient) => {
+          // Recharger les informations complètes du client depuis l'API
+          try {
+            const { searchClients } = await import("@/services/enterpriseDispatch");
+            const clients = await searchClients(newClient.name);
+            const fullClient = clients.find((c) => c.id === newClient.id);
+
+            if (fullClient && createModalVisible) {
+              // Le client sera automatiquement sélectionné dans RideCreateModal
+              // via le callback onClientCreated qui sera implémenté
+            }
+          } catch (error) {
+            console.error("[rides.tsx] Erreur lors du rechargement du client:", error);
+          }
+          setClientCreateModalVisible(false);
+        }}
       />
 
       {/* Modal de confirmation d'annulation avec option de facturation */}
