@@ -18,32 +18,32 @@ app_logger = logging.getLogger("pdf_service")
 
 def _format_address_for_display(address: str) -> str:
     """Formate une adresse pour l'affichage dans le PDF.
-    
+
     Format de sortie :
     - Ligne 1 : Rue et numéro
     - Ligne 2 : Code postal et ville
-    
+
     Args:
-        address: Adresse complète (peut être au format "Rue, Numéro, Code Postal, Ville" 
+        address: Adresse complète (peut être au format "Rue, Numéro, Code Postal, Ville"
                  ou "Rue Numéro, Code Postal Ville" ou autres formats)
-    
+
     Returns:
         Adresse formatée avec <br/> pour les retours à la ligne
     """
     if not address or address == "Adresse non renseignée":
         return "Adresse non renseignée"
-    
+
     # Nettoyer l'adresse
     clean_address = address.strip()
-    
+
     # Essayer différents formats d'adresse
     # Format 1: "Rue, Numéro, Code Postal, Ville" (avec virgules)
     parts = [p.strip() for p in clean_address.split(",")]
-    
+
     MIN_ADDRESS_PARTS = 2
     MIN_ADDRESS_PARTS_POSTAL = 3
     MIN_ADDRESS_PARTS_CITY = 4
-    
+
     if len(parts) >= MIN_ADDRESS_PARTS_CITY:
         # Format: "Rue, Numéro, Code Postal, Ville"
         street_and_number = f"{parts[0]}, {parts[1]}"
@@ -69,18 +69,19 @@ def _format_address_for_display(address: str) -> str:
         else:
             # Si on ne peut pas parser, retourner tel quel avec un <br/> au milieu
             return f"{street}<br/>{last_part}"
-    
+
     # Si le format n'est pas reconnu, essayer de trouver un code postal (4 chiffres)
     import re
-    postal_match = re.search(r'\b(\d{4})\b', clean_address)
+
+    postal_match = re.search(r"\b(\d{4})\b", clean_address)
     if postal_match:
         postal_code = postal_match.group(1)
         postal_pos = clean_address.find(postal_code)
         street = clean_address[:postal_pos].strip().rstrip(",")
-        city = clean_address[postal_pos + len(postal_code):].strip()
+        city = clean_address[postal_pos + len(postal_code) :].strip()
         if street and city:
             return f"{street}<br/>{postal_code} {city}"
-    
+
     # Fallback : retourner l'adresse telle quelle
     return clean_address
 

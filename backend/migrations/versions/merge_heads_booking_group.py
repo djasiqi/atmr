@@ -26,4 +26,3 @@ def downgrade():
     """
     Downgrade - aucune modification de schéma nécessaire.
     """
-

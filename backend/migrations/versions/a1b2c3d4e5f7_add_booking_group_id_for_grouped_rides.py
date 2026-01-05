@@ -23,9 +23,7 @@ def upgrade():
     """
     # Ajouter le champ booking_group_id à la table booking
     with op.batch_alter_table("booking", schema=None) as batch_op:
-        batch_op.add_column(
-            sa.Column("booking_group_id", sa.Integer(), nullable=True)
-        )
+        batch_op.add_column(sa.Column("booking_group_id", sa.Integer(), nullable=True))
         batch_op.create_foreign_key(
             "fk_booking_booking_group",
             "booking",
@@ -48,4 +46,3 @@ def downgrade():
         batch_op.drop_index("ix_booking_booking_group_id")
         batch_op.drop_constraint("fk_booking_booking_group", type_="foreignkey")
         batch_op.drop_column("booking_group_id")
-

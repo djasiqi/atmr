@@ -99,4 +99,3 @@ def downgrade():
 
     # Supprimer la colonne executing_company_id
     op.drop_column("partner_invoices", "executing_company_id")
-
