@@ -323,6 +323,30 @@ class Login(Resource):
             pass
         # #endregion
         try:
+            # #region agent log
+            try:
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "location": "auth.py:Login.post",
+                                "message": "before request.get_json",
+                                "data": {
+                                    "is_json": request.is_json,
+                                    "content_type": request.content_type,
+                                    "content_length": request.content_length,
+                                },
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "A",
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
             data = request.get_json() or {}
             # #region agent log
             try:
@@ -331,10 +355,109 @@ class Login(Resource):
                         json.dumps(
                             {
                                 "location": "auth.py:Login.post",
-                                "message": "payload received",
+                                "message": "after request.get_json",
                                 "data": {
                                     "has_email": "email" in data,
                                     "has_password": "password" in data,
+                                    "data_type": type(data).__name__,
+                                },
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "A",
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
+
+            # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
+            # #region agent log
+            try:
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "location": "auth.py:Login.post",
+                                "message": "before validate_request",
+                                "data": {"data_keys": list(data.keys()) if data else []},
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "B",
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
+            try:
+                validated_data = validate_request(LoginSchema(), data)
+            except ValidationError as e:
+                return handle_validation_error(e)
+            # #region agent log
+            try:
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "location": "auth.py:Login.post",
+                                "message": "after validate_request",
+                                "data": {"validated_keys": list(validated_data.keys()) if validated_data else []},
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "B",
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
+
+            email = validated_data["email"]
+            password = validated_data["password"]
+
+            # ✅ DDD: Utiliser le use case pour authentifier l'utilisateur
+            # #region agent log
+            try:
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "location": "auth.py:Login.post",
+                                "message": "before AuthenticateUserUseCase.execute",
+                                "data": {"email": mask_email(email) if email else None},
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "C",
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
+            uc = AuthenticateUserUseCase()
+            input_data = AuthenticateUserInput(email=email, password=password)
+            auth_result = uc.execute(input_data)
+            # #region agent log
+            try:
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "location": "auth.py:Login.post",
+                                "message": "after AuthenticateUserUseCase.execute",
+                                "data": {
+                                    "success": auth_result.success if auth_result else None,
+                                    "has_user": auth_result.user is not None if auth_result else None,
+                                    "error": auth_result.error if auth_result else None,
                                 },
                                 "timestamp": datetime.now(UTC).isoformat(),
                                 "sessionId": "debug-session",
@@ -347,20 +470,6 @@ class Login(Resource):
             except Exception:
                 pass
             # #endregion
-
-            # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-            try:
-                validated_data = validate_request(LoginSchema(), data)
-            except ValidationError as e:
-                return handle_validation_error(e)
-
-            email = validated_data["email"]
-            password = validated_data["password"]
-
-            # ✅ DDD: Utiliser le use case pour authentifier l'utilisateur
-            uc = AuthenticateUserUseCase()
-            input_data = AuthenticateUserInput(email=email, password=password)
-            auth_result = uc.execute(input_data)
 
             user = None if not auth_result.success else auth_result.user
 
@@ -407,6 +516,30 @@ class Login(Resource):
 
             # Création du token avec le rôle dans additional_claims
             # ✅ SECURITY: Ajout claim 'aud' (audience) pour prévenir token replay
+            # #region agent log
+            try:
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "location": "auth.py:Login.post",
+                                "message": "before create_access_token",
+                                "data": {
+                                    "user_id": user.id if user else None,
+                                    "user_public_id": user.public_id if user else None,
+                                    "user_role": user.role.value if user and user.role else None,
+                                },
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "D",
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
             claims = {
                 "role": user.role.value,
                 "company_id": getattr(user, "company_id", None),
@@ -420,6 +553,29 @@ class Login(Resource):
                 expires_delta=current_app.config["JWT_ACCESS_TOKEN_EXPIRES"],
                 fresh=True,  # ✅ Token fresh lors de la connexion initiale
             )
+            # #region agent log
+            try:
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "location": "auth.py:Login.post",
+                                "message": "after create_access_token",
+                                "data": {
+                                    "has_access_token": access_token is not None,
+                                    "token_length": len(access_token) if access_token else 0,
+                                },
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "D",
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
 
             # Création du refresh token
             # (durée configurée dans JWT_REFRESH_TOKEN_EXPIRES)
@@ -609,6 +765,30 @@ class Login(Resource):
             return response
 
         except Exception as e:
+            # #region agent log
+            try:
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "location": "auth.py:Login.post",
+                                "message": "EXCEPTION caught in login",
+                                "data": {
+                                    "exception_type": type(e).__name__,
+                                    "exception_message": str(e),
+                                    "exception_args": str(e.args) if hasattr(e, "args") else None,
+                                },
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "A,B,C,D,E",
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
             sentry_sdk.capture_exception(e)
             logger.error("❌ ERREUR login: %s - %s", type(e).__name__, str(e))
             # ✅ Priorité 7: Audit logging pour erreur interne login
