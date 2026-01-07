@@ -2345,7 +2345,7 @@ def calculate_eta(
     """
     try:
         # ✅ Utiliser EtaService unifié
-        from services.eta_service import EtaContext, get_eta_service
+        from services.business.eta import EtaContext, get_eta_service
 
         eta_service = get_eta_service()
 
@@ -2366,7 +2366,7 @@ def calculate_eta(
         # ✅ Vérifier feature flag ML avant de passer use_ml
         # Le feature flag est vérifié dans EtaService, mais on peut aussi le vérifier ici
         # pour éviter des appels inutiles si ML est désactivé globalement
-        from services.feature_flags import FeatureFlags
+        from services.infrastructure.feature_flags import FeatureFlags
 
         # Si ML est désactivé globalement, forcer use_ml=False
         if use_ml and not FeatureFlags.is_ml_enabled():
@@ -2525,4 +2525,5 @@ def get_next_free_at(dropoff_time: datetime, settings=DEFAULT_SETTINGS) -> datet
         )
         buf = 15
     return dropoff_time + timedelta(minutes=buf)
+
 

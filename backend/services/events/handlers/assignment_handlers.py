@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from services.socketio_service import emit_assignment_cancelled
+from services.realtime.socketio import emit_assignment_cancelled
 
 logger = logging.getLogger(__name__)
 
@@ -70,3 +70,4 @@ def handle_assignment_cancelled(event: dict[str, Any]) -> None:
     except Exception:
         # Erreur inattendue : logger avec trace complète
         logger.exception("❌ Failed to send assignment cancelled notification")
+

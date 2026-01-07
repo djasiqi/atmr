@@ -330,7 +330,7 @@ def assert_notification_sent(user_id: int, event_type: str) -> None:
     Exemple:
         ```python
         # Avec mock de socketio
-        with patch("services.socketio_service.socketio") as mock_socketio:
+        with patch("services.realtime.socketio.socketio") as mock_socketio:
             # ... faire une action qui déclenche une notification ...
             assert_notification_sent(user_id, "booking:assigned")
             # Vérifier que mock_socketio.emit a été appelé
@@ -389,3 +389,4 @@ def assert_dispatch_run_created(
         )
 
     return dispatch_run
+

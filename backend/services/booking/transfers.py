@@ -10,7 +10,7 @@ from models.booking import Booking
 from models.booking_transfer import BookingTransfer
 from models.enums import BookingStatus, TransferModel, TransferStatus
 from models.partnership import Partnership
-from services.socketio_service import emit_company_event
+from services.realtime.socketio import emit_company_event
 
 logger = logging.getLogger(__name__)
 
@@ -551,3 +551,4 @@ class BookingTransferService:
         if status:
             query = query.filter_by(status=status)
         return query.all()
+

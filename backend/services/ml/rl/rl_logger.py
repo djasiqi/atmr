@@ -29,7 +29,7 @@ MAX_Q_VALUES_LOG = 64
 # disponibles
 db: Any = None
 try:
-    from services.db_context import db as _db
+    from services.infrastructure.db_context import db as _db
 
     db = _db
 except ImportError:
@@ -544,3 +544,4 @@ def log_rl_decision(
         constraints=constraints,
         metadata=metadata,
     )
+

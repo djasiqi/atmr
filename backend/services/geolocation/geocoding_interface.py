@@ -103,8 +103,8 @@ class GeocodingServiceLocal(GeocodingServiceInterface):
 
     @override
     def invalidate_cache(self, address: str, country: str | None = None) -> None:
-        """Implémentation locale via services.cache_invalidation."""
-        from services.cache_invalidation import invalidate_geocoding_cache
+        """Implémentation locale via services.infrastructure.cache."""
+        from services.infrastructure.cache import invalidate_geocoding_cache
 
         invalidate_geocoding_cache(address, country=country, provider="both")
 
@@ -138,4 +138,5 @@ def set_geocoding_service(service: GeocodingServiceInterface) -> None:
     import services.interfaces.geocoding_interface as module
 
     module._default_geocoding_service = service
+
 

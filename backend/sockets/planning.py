@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from services.socketio_service import emit_company_event
+from services.realtime.socketio import emit_company_event
 
 if TYPE_CHECKING:
     from flask_socketio import SocketIO  # pyright: ignore[reportMissingModuleSource]
@@ -23,3 +23,4 @@ def emit_shift_deleted(company_id: int, payload: dict[str, Any]) -> None:
 def init_planning_socket(socketio: SocketIO) -> None:  # noqa: ARG001
     # Pas d'events à écouter côté serveur pour l'instant (uniquement émission côté HTTP)
     return None
+

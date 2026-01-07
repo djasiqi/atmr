@@ -5,7 +5,7 @@ from typing import Any
 from flask import Blueprint, jsonify, request  # pyright: ignore[reportMissingImports]
 from werkzeug.exceptions import BadRequest  # pyright: ignore[reportMissingImports]
 
-from services.feature_flags import FeatureFlags, get_feature_flags_status
+from services.infrastructure.feature_flags import FeatureFlags, get_feature_flags_status
 
 PERCENTAGE_PERCENT = 100
 MIN_SUCCESS_RATE = 0.95
@@ -255,3 +255,4 @@ def ml_health() -> tuple[dict[str, Any], int]:
         error_response["status"] = "error"
         error_response["healthy"] = False
         return jsonify(error_response), status_code
+

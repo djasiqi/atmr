@@ -44,7 +44,7 @@ def handle_booking_created(event: dict[str, Any]) -> None:
     # ✅ NOUVEAU : Notifier la company via SocketIO
     if company_id:
         try:
-            from services.socketio_service import emit_company_event
+            from services.realtime.socketio import emit_company_event
 
             emit_company_event(
                 company_id=int(company_id),
@@ -176,3 +176,4 @@ def handle_booking_cancelled(event: dict[str, Any]) -> None:
         logger.exception(
             "[EventBus] Failed to notify driver about booking cancellation"
         )
+
