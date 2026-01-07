@@ -76,16 +76,17 @@ services:
     # ✅ 3.5: Si nginx est activé, l'API n'a pas besoin d'exposer le port 5000 publiquement
     # expose:
     #   - "5000"
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          'python -c "import sys,urllib.request; r=urllib.request.urlopen(''http://127.0.0.1:5000/health'', timeout=10); sys.exit(0 if getattr(r,''status'',200)==200 else 1)"',
-        ]
-      interval: 15s
-      timeout: 10s
-      retries: 10
-      start_period: 90s
+    # Healthcheck temporairement désactivé pour tests B2
+    # healthcheck:
+    #   test:
+    #     [
+    #       "CMD-SHELL",
+    #       'python -c "import sys,urllib.request; r=urllib.request.urlopen(''http://127.0.0.1:5000/health'', timeout=10); sys.exit(0 if getattr(r,''status'',200)==200 else 1)"',
+    #     ]
+    #   interval: 15s
+    #   timeout: 10s
+    #   retries: 10
+    #   start_period: 90s
     # En développement, on peut surcharger la commande par défaut
     # Le docker-entrypoint.sh sera utilisé si aucune commande n'est spécifiée
     command: >

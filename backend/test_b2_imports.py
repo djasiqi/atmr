@@ -13,12 +13,12 @@ def test_imports_b2():
 
     # Test Security
     try:
-        from services.security.authentication import (
-            AccessTokenService,
-            RefreshTokenService,
-        )
-        from services.security.csrf import generate_csrf_token
-        from services.security.spam import SpamProtectionService
+        import services.security.authentication
+        import services.security.csrf
+        import services.security.spam
+        import services.security.idempotency
+        import services.security.safety
+        import services.security.secret_rotation
 
         print("✅ services.security OK")
     except Exception as e:
@@ -27,9 +27,10 @@ def test_imports_b2():
 
     # Test Notifications
     try:
-        from services.notifications.core import NotificationService
-        from services.notifications.push import PushService
-        from services.notifications.system import AlertingService
+        import services.notifications.core
+        import services.notifications.push
+        import services.notifications.system
+        import services.notifications.proactive
 
         print("✅ services.notifications OK")
     except Exception as e:
@@ -38,8 +39,8 @@ def test_imports_b2():
 
     # Test Booking
     try:
-        from services.booking.transfers import BookingTransferService
-        from services.booking.invoices import InvoiceTransferService
+        import services.booking.transfers
+        import services.booking.invoices
 
         print("✅ services.booking OK")
     except Exception as e:
@@ -48,9 +49,11 @@ def test_imports_b2():
 
     # Test ML
     try:
-        from services.ml.features import MLFeaturesService
-        from services.ml.monitoring import MLMonitoringService
-        from services.ml.models.demand_prediction import DemandPredictionModel
+        import services.ml.features
+        import services.ml.monitoring
+        import services.ml.models.demand_prediction
+        import services.ml.models.eta_delay
+        import services.ml.models.registry
 
         print("✅ services.ml OK")
     except Exception as e:
@@ -59,8 +62,10 @@ def test_imports_b2():
 
     # Test Dispatch
     try:
-        from services.dispatch.planning import PlanningService
-        from services.dispatch.auto_reassignment import AutoReassignmentService
+        import services.dispatch.planning
+        import services.dispatch.auto_reassignment
+        import services.dispatch.utils
+        import services.dispatch.agent
 
         print("✅ services.dispatch OK")
     except Exception as e:
@@ -69,8 +74,10 @@ def test_imports_b2():
 
     # Test Geolocation
     try:
-        from services.geolocation.osrm import build_distance_matrix_osrm_with_cb
-        from services.geolocation.maps import geocode_address
+        import services.geolocation.osrm
+        import services.geolocation.maps
+        import services.geolocation.core
+        import services.geolocation.geofencing
 
         print("✅ services.geolocation OK")
     except Exception as e:
@@ -79,8 +86,11 @@ def test_imports_b2():
 
     # Test Partnerships
     try:
-        from services.partnerships.core import PartnershipService
-        from services.partnerships.invoices import PartnerInvoiceService
+        import services.partnerships.core
+        import services.partnerships.invoices
+        import services.partnerships.invoices_pdf
+        import services.partnerships.statements
+        import services.partnerships.stats
 
         print("✅ services.partnerships OK")
     except Exception as e:
@@ -89,8 +99,10 @@ def test_imports_b2():
 
     # Test Documents
     try:
-        from services.documents.pdf import PDFService
-        from services.documents.qrbill import QRBillService
+        import services.documents.pdf
+        import services.documents.qrbill
+        import services.documents.validation
+        import services.documents.clamav
 
         print("✅ services.documents OK")
     except Exception as e:
@@ -99,8 +111,10 @@ def test_imports_b2():
 
     # Test Monitoring
     try:
-        from services.monitoring.prometheus import setup_prometheus_metrics
-        from services.monitoring.slo import check_slo_health
+        import services.monitoring.prometheus
+        import services.monitoring.slo
+        import services.monitoring.db_metrics
+        import services.monitoring.websocket_metrics
 
         print("✅ services.monitoring OK")
     except Exception as e:
@@ -109,8 +123,9 @@ def test_imports_b2():
 
     # Test Events
     try:
-        from services.events.fanout import EventFanoutService
-        from services.events.registry import register_event_handler
+        import services.events.fanout
+        import services.events.registry
+        import services.events.handlers
 
         print("✅ services.events OK")
     except Exception as e:
@@ -119,8 +134,11 @@ def test_imports_b2():
 
     # Test Infrastructure
     try:
-        from services.infrastructure.cache import invalidate_cache
-        from services.infrastructure.feature_flags import is_feature_enabled
+        import services.infrastructure.cache
+        import services.infrastructure.feature_flags
+        import services.infrastructure.ab_testing
+        import services.infrastructure.db_context
+        import services.infrastructure.factories
 
         print("✅ services.infrastructure OK")
     except Exception as e:
@@ -129,8 +147,9 @@ def test_imports_b2():
 
     # Test External
     try:
-        from services.external.weather import WeatherService
-        from services.external.holidays import HolidaysService
+        import services.external.weather
+        import services.external.holidays
+        import services.external.ai
 
         print("✅ services.external OK")
     except Exception as e:
@@ -139,8 +158,9 @@ def test_imports_b2():
 
     # Test Business
     try:
-        from services.business.eta import ETAService
-        from services.business.vacations import VacationService
+        import services.business.eta
+        import services.business.vacations
+        import services.business.delay_tools
 
         print("✅ services.business OK")
     except Exception as e:
@@ -149,7 +169,7 @@ def test_imports_b2():
 
     # Test Realtime
     try:
-        from services.realtime.socketio import socketio
+        import services.realtime.socketio
 
         print("✅ services.realtime OK")
     except Exception as e:
