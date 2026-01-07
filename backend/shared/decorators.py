@@ -60,7 +60,7 @@ def csrf_required(f):
                 )
 
             # Vérifier le token (utiliser le service CSRF existant)
-            from services.csrf_protection import validate_csrf_token
+            from services.security.csrf import validate_csrf_token
 
             # Récupérer user_id depuis JWT si disponible
             user_id = None

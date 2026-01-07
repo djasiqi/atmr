@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 from services.rl.dispatch_env import DispatchEnv
 from services.rl.improved_dqn_agent import ImprovedDQNAgent
 from services.rl.optimal_hyperparameters import OptimalHyperparameters
-from services.safety_guards import get_safety_guards
+from services.security.safety import get_safety_guards
 
 if TYPE_CHECKING:
     import numpy as np  # pyright: ignore[reportMissingImports]

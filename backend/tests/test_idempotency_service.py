@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from services.idempotency_service import IdempotencyService
+from services.security.idempotency import IdempotencyService
 
 
 class TestIdempotencyService:

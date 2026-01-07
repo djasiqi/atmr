@@ -38,7 +38,7 @@ from routes.api_error_models import (
     create_validation_error_model,
 )
 from routes.db_error_utils import format_integrity_error
-from services.idempotency_service import IdempotencyService
+from services.security.idempotency import IdempotencyService
 from infrastructure.dispatch import queue_adapter as queue
 from shared.error_handlers import APIErrorHandler
 from shared.notifications import notify_booking_update

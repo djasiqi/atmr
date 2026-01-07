@@ -50,16 +50,23 @@ from services.security.pii import mask_pii
 **Date :** 7 janvier 2025
 """
 
-# Exports publics (à compléter au fur et à mesure de la migration)
-# from .authentication import AccessTokenService, RefreshTokenService
+# ========== Exports publics ==========
+
+from .authentication import AccessTokenService, RefreshTokenService
+
+# Exports CSRF (fonctions principales à identifier dans le fichier)
 # from .csrf import generate_csrf_token, validate_csrf_token, csrf_protection_middleware
+
+# Exports autres modules (à compléter selon les APIs publiques)
 # from .spam import SpamProtection
 # from .idempotency import IdempotencyService
 # from .safety import SafetyGuards
 # from .secret_rotation import SecretRotationMonitor
 
 __all__ = [
-    # Les exports seront ajoutés au fur et à mesure de la migration
+    "AccessTokenService",
+    "RefreshTokenService",
+    # Les autres exports seront ajoutés après vérification des APIs publiques
 ]
 
 __version__ = "1.0.0"

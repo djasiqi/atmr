@@ -15,7 +15,7 @@ import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 
-from services.refresh_token_service import RefreshTokenService
+from services.security.authentication import RefreshTokenService
 
 
 class FakeRedis:
@@ -112,7 +112,7 @@ def mock_redis(monkeypatch, app):
             return patched_init
 
         # Patcher __init__ de RefreshTokenService
-        from services.refresh_token_service import RefreshTokenService
+        from services.security.authentication import RefreshTokenService
 
         monkeypatch.setattr(
             RefreshTokenService,

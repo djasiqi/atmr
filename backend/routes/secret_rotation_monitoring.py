@@ -18,7 +18,7 @@ from flask_restx import (  # pyright: ignore[reportMissingImports]
 
 from ext import role_required
 from models import UserRole
-from services.secret_rotation_monitor import (
+from services.security.secret_rotation import (
     get_days_since_last_rotation,
     get_last_rotation,
     get_rotation_history,

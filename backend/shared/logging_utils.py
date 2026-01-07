@@ -8,8 +8,8 @@ existantes qui utilisent maintenant le service centralisé PIIMaskingService.
 
 from typing import Any
 
-from services.pii_masking import PIIFilter as _PIIFilter
-from services.pii_masking import PIIMaskingService
+from services.security.pii import PIIFilter as _PIIFilter
+from services.security.pii import PIIMaskingService
 
 
 # ✅ Compatibilité rétroactive : Exposer les fonctions via le service
