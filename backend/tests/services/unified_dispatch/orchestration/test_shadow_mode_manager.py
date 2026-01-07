@@ -13,7 +13,7 @@ from flask import Flask
 from unittest.mock import MagicMock, patch
 
 from tests.factories import CompanyFactory, DispatchRunFactory
-from services.unified_dispatch.orchestration.shadow_mode_manager import (
+from services.unified_dispatch.shadow_mode.manager import (
     ShadowModeManager,
 )
 

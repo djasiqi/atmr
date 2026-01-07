@@ -39,7 +39,7 @@ from services.unified_dispatch.orchestration.pipeline_executor import (
 )
 from services.unified_dispatch.orchestration.problem_builder import ProblemBuilder
 from services.unified_dispatch.orchestration.result_builder import ResultBuilder
-from services.unified_dispatch.orchestration.shadow_mode_manager import (
+from services.unified_dispatch.shadow_mode.manager import (
     ShadowModeManager,
 )
 
