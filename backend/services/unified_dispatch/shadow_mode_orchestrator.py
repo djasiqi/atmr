@@ -12,7 +12,7 @@ from datetime import date
 from typing import Any, Dict, List
 
 from services.unified_dispatch.ab_router import ABRouter
-from services.unified_dispatch.dispatch_metrics import (
+from services.unified_dispatch.metrics.dispatch import (
     QUALITY_THRESHOLD,
     DispatchMetricsCollector,
 )

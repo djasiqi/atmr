@@ -258,7 +258,7 @@ class MetricsFinalizer:
 
         # Collecter les métriques de qualité du dispatch
         try:
-            from services.unified_dispatch.dispatch_metrics import (
+            from services.unified_dispatch.metrics.dispatch import (
                 collect_dispatch_metrics as collect_quality_metrics,
             )
 
@@ -428,7 +428,7 @@ class MetricsFinalizer:
             - Métriques: Enregistrement Prometheus (si disponible)
         """
         try:
-            from services.unified_dispatch.dispatch_prometheus_metrics import (
+            from services.unified_dispatch.metrics.prometheus import (
                 record_assignment_rate,
                 record_assignments_created,
                 record_bookings_processed,
