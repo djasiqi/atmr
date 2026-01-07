@@ -80,12 +80,12 @@ services:
       test:
         [
           "CMD-SHELL",
-          'python -c "import sys,urllib.request; r=urllib.request.urlopen(''http://127.0.0.1:5000/health'', timeout=3); sys.exit(0 if getattr(r,''status'',200)==200 else 1)"',
+          'python -c "import sys,urllib.request; r=urllib.request.urlopen(''http://127.0.0.1:5000/health'', timeout=10); sys.exit(0 if getattr(r,''status'',200)==200 else 1)"',
         ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
     # En développement, on peut surcharger la commande par défaut
     # Le docker-entrypoint.sh sera utilisé si aucune commande n'est spécifiée
     command: >
@@ -153,15 +153,15 @@ services:
       osrm:
         condition: service_started
     restart: unless-stopped
-    # ✅ 3.6: Limits CPU/mémoire pour API
+    # ✅ 3.6: Limits CPU/mémoire pour API (augmentées pour tests B2)
     deploy:
       resources:
         limits:
-          cpus: "3.0"
-          memory: 6G
+          cpus: "4.0"
+          memory: 8G
         reservations:
-          cpus: "1.5"
-          memory: 3G
+          cpus: "2.0"
+          memory: 4G
 
   celery-worker:
     build:
