@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, cast
 
-from services.unified_dispatch.types import DispatchResult
+from services.unified_dispatch.core.types import DispatchResult
 
 logger = logging.getLogger(__name__)
 
