@@ -2332,7 +2332,7 @@ class RegenerateInvoicePdf(Resource):
 
                     if transfers_count > 0:
                         # Régénérer le PDF pour les factures partenaires
-                        from services.partner_invoice_service import (
+                        from services.partnerships.invoices import (
                             PartnerInvoiceService,
                         )
 
@@ -3463,7 +3463,7 @@ class GeneratePartnerInvoice(Resource):
             from models.booking_transfer import BookingTransfer
             from models.enums import TransferStatus
             from models.partnership import Partnership
-            from services.partner_invoice_service import PartnerInvoiceService
+            from services.partnerships.invoices import PartnerInvoiceService
 
             partnership = Partnership.query.get(int(partnership_id))
             if not partnership:
@@ -3695,3 +3695,4 @@ class BillablePartnersDebug(Resource):
         except Exception as e:
             logger.exception("Erreur lors du debug des partenaires facturables")
             return APIErrorHandler.handle_exception(e, logger)
+

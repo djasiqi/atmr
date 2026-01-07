@@ -8,7 +8,7 @@ import pytest
 from ext import db
 from models.enums import TransferModel
 from models.partnership import Partnership
-from services.partnership_service import PartnershipService
+from services.partnerships.core import PartnershipService
 from tests.factories import CompanyFactory
 
 
@@ -165,3 +165,4 @@ class TestPartnershipService:
             db.session.refresh(partnership)
 
             assert partnership.is_active is False
+

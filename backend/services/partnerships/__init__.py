@@ -28,7 +28,7 @@ from services.partnerships.statements import PartnershipStatementService
 from services.partnerships.stats import PartnershipStatsService
 
 # Imports de compatibilité (DEPRECATED, à migrer)
-# from services.partnership_service import PartnershipService
+# from services.partnerships.core import PartnershipService
 ```
 
 ---
@@ -41,4 +41,5 @@ __all__ = []
 
 __version__ = "1.0.0"
 __refactoring__ = "B2 - Services Consolidation"
+
 

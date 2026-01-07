@@ -427,7 +427,7 @@ class PartnerInvoiceService:
 
         from flask import current_app  # pyright: ignore[reportMissingImports]
 
-        from services.partner_invoice_pdf_service import (
+        from services.partnerships.invoices_pdf import (
             generate_partner_invoice_pdf_content,
         )
 
@@ -632,3 +632,4 @@ class PartnerInvoiceService:
                 total += transfer.partner_cost
 
         return total
+

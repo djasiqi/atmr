@@ -9,7 +9,7 @@ from ext import db
 from models.booking import Booking
 from models.enums import BookingStatus, TransferModel, TransferStatus
 from services.booking.transfers import BookingTransferService
-from services.partnership_service import PartnershipService
+from services.partnerships.core import PartnershipService
 from tests.factories import (
     BookingFactory,
     ClientFactory,
@@ -318,3 +318,4 @@ class TestBookingTransferService:
                     transfer_id=transfer.id,
                     validator_user_id=1,
                 )
+
