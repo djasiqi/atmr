@@ -1491,6 +1491,7 @@ IMPLEMENTATION_A3_ALERTING.md     ✅ Documentation (450 lignes)
 **Status:** ✅ **ANALYSÉ** - Option B recommandée
 
 **État actuel :**
+
 - ✅ 4 Bounded Contexts DDD opérationnels (bookings, companies, dispatch, drivers)
 - ⚠️ Code legacy coexiste (33 models, 51 routes, 177 services, 24 repositories)
 - ✅ Après B1+B2 : Dette technique réduite de ~60%
@@ -1510,6 +1511,7 @@ IMPLEMENTATION_A3_ALERTING.md     ✅ Documentation (450 lignes)
 - Effort: 1 dev pendant 6 semaines (30 jours·dev)
 
 **Recommandation:** **Option B** ✅ - Justification :
+
 - Code déjà bien structuré après B1+B2
 - 13x plus rapide (1.5 mois vs 12 mois)
 - 7-13x moins cher (€12K vs €80K-€160K)
@@ -1518,6 +1520,7 @@ IMPLEMENTATION_A3_ALERTING.md     ✅ Documentation (450 lignes)
 **Rapport :** `C1_DECISION_DDD_ANALYSE.md`
 
 **Plan Option B (6 semaines) :**
+
 1. Analyse frontières DDD ↔ Legacy
 2. Créer adapters propres
 3. Documentation (DDD_ARCHITECTURE.md, guides)
@@ -1526,9 +1529,11 @@ IMPLEMENTATION_A3_ALERTING.md     ✅ Documentation (450 lignes)
 
 ---
 
-#### 🟡 C2: Load Testing Dispatch
+#### 🔵 C2: Load Testing Dispatch
 
 **Objectif:** Valider performance sous charge
+
+**Status:** 🔵 **EN COURS** - Setup Locust complété (Jour 1/7)
 
 **Scénarios:**
 
@@ -1536,9 +1541,15 @@ IMPLEMENTATION_A3_ALERTING.md     ✅ Documentation (450 lignes)
 2. **Test 2:** 10 entreprises en parallèle
 3. **Test 3:** OSRM lent (500ms latency)
 
-**Outil:** Locust ou K6
+**Outil:** **Locust** ✅ (meilleure intégration Python)
 
-**Effort:** ⏱️ **1 semaine** (setup + run + analyse)
+**Progression :**
+- ✅ Plan détaillé créé (`C2_LOAD_TESTING_DISPATCH_PLAN.md`)
+- ✅ Locust installé
+- ✅ Structure tests créée (`tests/load_testing/`)
+- 🔲 Scénarios à implémenter (Jours 2-7)
+
+**Effort:** ⏱️ **1 semaine** (7 jours)
 
 ---
 
