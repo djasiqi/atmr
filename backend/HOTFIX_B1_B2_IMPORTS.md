@@ -233,15 +233,153 @@ Invoke-WebRequest -Uri "http://localhost:5000/health"
 
 ---
 
+---
+
+## 🔧 Hotfixes Celery (7 janvier 2025 - 22h40)
+
+### 8. ✅ Engine Module (B1)
+
+**Problème :** `ImportError: cannot import name 'engine' from 'services.unified_dispatch'`
+
+**Cause :** Module `engine` non exporté après B1
+
+**Solution :** Ajout de l'export :
+```python
+from .core import engine  # noqa: F401
+
+__all__ = [
+    "engine",  # Compatibilité tasks/dispatch_tasks.py
+    "locking",
+    "orchestration",
+    "queue",
+]
+```
+
+**Fichiers corrigés (1) :**
+- `backend/services/unified_dispatch/__init__.py`
+
+**Commit :** `[HOTFIX] Exporter engine pour Celery tasks`
+
+---
+
+### 9. ✅ Imports Circulaires unified_dispatch_engine (B1)
+
+**Problème :** `ImportError: cannot import name 'settings' from partially initialized module 'services.unified_dispatch' (circular import)`
+
+**Cause :** Imports incorrects créant des cycles :
+- `__init__.py` → `engine` → `unified_dispatch_engine` → `settings` (depuis racine)
+
+**Solution :** Utiliser chemins complets :
+```python
+# Avant
+from services.unified_dispatch import settings as ud_settings
+from services.unified_dispatch.analysis import UnassignedAnalyzer
+
+# Après
+from services.unified_dispatch.core import settings as ud_settings
+from services.unified_dispatch.validation.analysis import UnassignedAnalyzer
+```
+
+**Fichiers corrigés (1) :**
+- `backend/infrastructure/dispatch/unified_dispatch_engine.py`
+
+**Commit :** `[HOTFIX] Corriger imports circulaires unified_dispatch_engine`
+
+---
+
+### 10. ✅ UnassignedAnalyzer Import (B1)
+
+**Problème :** `ModuleNotFoundError: No module named 'services.unified_dispatch.analysis'`
+
+**Cause :** Import obsolète dans `validation/analysis/__init__.py`
+
+**Solution :** Import relatif :
+```python
+# Avant
+from services.unified_dispatch.analysis.unassigned_analyzer import UnassignedAnalyzer
+
+# Après
+from .unassigned_analyzer import UnassignedAnalyzer
+```
+
+**Fichiers corrigés (1) :**
+- `backend/services/unified_dispatch/validation/analysis/__init__.py`
+
+**Commit :** `[HOTFIX] Corriger import UnassignedAnalyzer (B1 refactoring)`
+
+---
+
+## ✅ Validation Finale (Complète)
+
+### Services Docker
+
+```powershell
+docker-compose ps
+```
+
+**Résultats :**
+- ✅ **celery-worker** : UP + healthy
+- ✅ **celery-beat** : UP + healthy
+- ✅ **flower** : UP + health starting
+- ✅ **api** : UP (unhealthy mais fonctionnel, `/health` OK)
+- ✅ **postgres, redis, osrm** : UP + healthy
+
+### Tests Fonctionnels
+
+```powershell
+# Backend API
+Invoke-WebRequest -Uri "http://localhost:5000/health"
+# ✅ {"status": "healthy", "models_loaded": true}
+
+# Celery Worker
+docker-compose logs celery-worker | Select-String "ready"
+# ✅ [INFO/MainProcess] celery@9ebcb6fb991d ready.
+
+# Celery Beat
+docker-compose logs celery-beat | Select-String "beat v"
+# ✅ celery beat v5.6.2 (recovery) is starting.
+
+# Flower
+docker-compose logs flower | Select-String "Connected"
+# ✅ [I 260107 22:41:22] Connected to redis://redis:6379/0
+```
+
+---
+
+## 📊 Impact Final
+
+### Fichiers Affectés Total
+
+| Refactoring | Fichiers Migrés | Imports Cassés | Hotfixes |
+|-------------|-----------------|----------------|----------|
+| **B1** (unified_dispatch) | 32 fichiers | 16 imports | 15 fichiers |
+| **B2** (services) | 177 fichiers | 1 import | 1 fichier |
+| **Total** | 209 fichiers | 17 imports | 16 fichiers |
+
+### Répartition Hotfixes
+
+- **Backend API** : 7 fichiers (shadow_mode, queue, validation, heuristics, slo, BookingTransferService)
+- **Celery/Flower** : 3 fichiers (engine, unified_dispatch_engine, UnassignedAnalyzer)
+- **Tests** : 6 fichiers (heuristics, slo, shadow_mode)
+
+### Temps de Résolution
+
+- **Total hotfixes** : 10 commits sur ~2h
+- **Détection** : Runtime (Docker startup)
+- **Stratégie** : Correction itérative (identify → fix → test → repeat)
+
+---
+
 ## 🚀 Prochaines Étapes
 
-1. ✅ **Hotfixes appliqués** → Backend fonctionnel
+1. ✅ **Hotfixes appliqués** → Backend + Celery fonctionnels
 2. 🔵 **C2 Load Testing** → Continuer implémentation scénarios Locust
 3. 🟡 **Healthcheck Docker** → Ajuster timeout (optionnel)
 4. 🟡 **Tests automatisés** → Valider imports post-refactoring (CI/CD)
 
 ---
 
-**Status Final :** ✅ **RÉSOLU** - Application opérationnelle  
-**Prêt pour :** C2 Load Testing Dispatch (Jours 2-7)
+**Status Final :** ✅ **RÉSOLU** - Stack complète opérationnelle  
+**Prêt pour :** C2 Load Testing Dispatch (Jours 2-7)  
+**Date/Heure :** 7 janvier 2025 - 22h42
 
