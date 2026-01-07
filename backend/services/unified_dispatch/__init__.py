@@ -47,6 +47,10 @@ from services.unified_dispatch.optimization import solver
 **Status :** 🔵 EN COURS
 """
 
+# ========== Imports ==========
+from . import locking
+from . import orchestration
+
 # ========== Exports Publics (Nouvelle API) ==========
 
 # Note: Ces exports seront complétés lors de la migration (Semaine 2)
@@ -74,10 +78,6 @@ from services.unified_dispatch.optimization import solver
 
 # Validation
 # from .validation import constraints, assignment
-
-# Modules existants (locking, orchestration)
-from . import locking
-from . import orchestration
 
 # ========== Imports de Compatibilité (DEPRECATED) ==========
 
