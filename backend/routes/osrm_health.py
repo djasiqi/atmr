@@ -8,7 +8,7 @@ from typing import Any, Dict, Tuple
 
 from flask_restx import Namespace, Resource  # pyright: ignore[reportMissingImports]
 
-from services.osrm_client import _osrm_circuit_breaker
+from services.geolocation.osrm import _osrm_circuit_breaker
 from infrastructure.dispatch.osrm_cache_metrics_adapter import get_cache_metrics_dict
 
 logger = logging.getLogger(__name__)
@@ -107,3 +107,4 @@ class OsrmHealth(Resource):
                 "status": "error",
                 "error": str(e),
             }, 500
+

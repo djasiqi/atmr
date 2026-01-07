@@ -34,7 +34,7 @@ from ext import db, redis_client
 from models import Assignment, AssignmentStatus, Driver, TripTracking
 from repositories.assignment_repository import AssignmentRepository
 from repositories.driver_repository import DriverRepository
-from services.geofencing_service import get_geofencing_service
+from services.geolocation.geofencing import get_geofencing_service
 
 logger = logging.getLogger(__name__)
 
@@ -600,3 +600,4 @@ def get_location_service() -> LocationService:
         osrm_url = os.getenv("UD_OSRM_BASE_URL", DEFAULT_OSRM_BASE_URL)
         _location_service_instance = LocationService(osrm_base_url=osrm_url)
     return _location_service_instance
+

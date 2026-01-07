@@ -8,7 +8,7 @@ import requests
 
 def test_osrm_haversine_fallback():
     """Calcul de distance haversine pour fallback."""
-    from services.osrm_client import _haversine_km
+    from services.geolocation.osrm import _haversine_km
 
     # Lausanne (46.52, 6.63) -> Genève (46.20, 6.15)
     lausanne = (46.52, 6.63)
@@ -22,7 +22,7 @@ def test_osrm_haversine_fallback():
 
 def test_osrm_fallback_matrix():
     """Matrice de fallback avec haversine."""
-    from services.osrm_client import _fallback_matrix
+    from services.geolocation.osrm import _fallback_matrix
 
     coords = [
         (46.52, 6.63),  # Lausanne
@@ -47,7 +47,7 @@ def test_osrm_table_mock_success(monkeypatch):
     """Mock OSRM table renvoie matrice de durées."""
     from datetime import timedelta
 
-    from services.osrm_client import _table
+    from services.geolocation.osrm import _table
 
     def mock_requests_get(*args, **kwargs):
         class MockResponse:
@@ -80,7 +80,7 @@ def test_osrm_table_mock_success(monkeypatch):
 
 def test_osrm_timeout_raises_exception(monkeypatch):
     """Timeout OSRM lève une exception après retries."""
-    from services.osrm_client import _table
+    from services.geolocation.osrm import _table
 
     def mock_requests_get(*args, **kwargs):
         msg = "Connection timeout"
@@ -101,7 +101,7 @@ def test_osrm_timeout_raises_exception(monkeypatch):
 
 def test_osrm_cache_key_generation():
     """Clés de cache sont stables et identiques pour mêmes coords."""
-    from services.osrm_client import _canonical_key_table
+    from services.geolocation.osrm import _canonical_key_table
 
     coords1 = [(46.52, 6.63), (46.20, 6.15)]
     coords2 = [(46.52, 6.63), (46.20, 6.15)]  # Identiques
@@ -122,7 +122,7 @@ def test_osrm_cache_key_generation():
 
 def test_osrm_eta_fallback():
     """ETA fallback avec haversine si OSRM échoue."""
-    from services.osrm_client import _fallback_eta_seconds
+    from services.geolocation.osrm import _fallback_eta_seconds
 
     lausanne = (46.52, 6.63)
     geneva = (46.20, 6.15)
@@ -132,3 +132,4 @@ def test_osrm_eta_fallback():
     # Distance ~50 km à 60 km/h = ~50 minutes = ~3000 secondes
     assert 2000 < eta < 5000
     assert isinstance(eta, int)
+

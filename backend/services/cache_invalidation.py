@@ -170,7 +170,7 @@ def invalidate_osrm_matrix_cache(
         # Invalider matrice basée sur coords si fourni
         if coords:
             # Calculer la clé de cache comme dans osrm_client.py
-            from services.osrm_client import _canonical_key_table
+            from services.geolocation.osrm import _canonical_key_table
 
             try:
                 n = len(coords)
@@ -313,3 +313,4 @@ def set_cache_with_tag(
         )
     except Exception as e:
         logger.warning("[Cache] Failed to set cache with tag: %s", e)
+

@@ -8,7 +8,7 @@ from flask import jsonify  # pyright: ignore[reportMissingImports]
 from flask_jwt_extended import jwt_required  # pyright: ignore[reportMissingImports]
 from flask_restx import Namespace, Resource  # pyright: ignore[reportMissingImports]
 
-from services.osrm_client import _osrm_circuit_breaker
+from services.geolocation.osrm import _osrm_circuit_breaker
 
 logger = logging.getLogger(__name__)
 
@@ -73,3 +73,4 @@ class OsrmReset(Resource):
         return jsonify(
             {"status": "ok", "message": "Circuit-breaker reset to CLOSED state"}
         )
+

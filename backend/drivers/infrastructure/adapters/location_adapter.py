@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from services.location_service import LocationService, get_location_service
+from services.geolocation.location import LocationService, get_location_service
 
 
 class LocationServiceAdapter:
@@ -59,3 +59,4 @@ def create_location_update_fn() -> Callable[..., Any]:
     """
     adapter = LocationServiceAdapter()
     return adapter.update_driver_location
+

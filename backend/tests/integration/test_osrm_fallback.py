@@ -22,7 +22,7 @@ class TestOSRMFallback:
 
     def test_osrm_build_distance_matrix_osrm_success(self):
         """Test que build_distance_matrix_osrm fonctionne normalement avec mock."""
-        from services.osrm_client import build_distance_matrix_osrm
+        from services.geolocation.osrm import build_distance_matrix_osrm
 
         # Coordonnées de test (Lausanne)
         coords = [(46.2044, 6.1432), (46.2100, 6.1500), (46.2200, 6.1600)]
@@ -46,7 +46,7 @@ class TestOSRMFallback:
     def test_osrm_build_distance_matrix_osrm_fallback_on_error(self):
         """Test que build_distance_matrix_osrm utilise le fallback haversine
         quand OSRM échoue."""
-        from services.osrm_client import build_distance_matrix_osrm
+        from services.geolocation.osrm import build_distance_matrix_osrm
 
         # Coordonnées de test (Lausanne)
         coords = [(46.2044, 6.1432), (46.2100, 6.1500)]
@@ -83,7 +83,7 @@ class TestOSRMFallback:
 
     def test_osrm_route_info_success(self):
         """Test que route_info fonctionne normalement avec mock."""
-        from services.osrm_client import route_info
+        from services.geolocation.osrm import route_info
 
         # Coordonnées de test (Lausanne)
         origin = (46.2044, 6.1432)
@@ -106,7 +106,7 @@ class TestOSRMFallback:
 
     def test_osrm_route_info_fallback_on_error(self):
         """Test que route_info utilise le fallback haversine quand OSRM échoue."""
-        from services.osrm_client import (
+        from services.geolocation.osrm import (
             _fallback_eta_seconds,
             _haversine_km,
             route_info,
@@ -148,7 +148,7 @@ class TestOSRMFallback:
 
     def test_osrm_fallback_matrix_symmetry(self):
         """Test que la matrice de fallback est symétrique."""
-        from services.osrm_client import _fallback_matrix
+        from services.geolocation.osrm import _fallback_matrix
 
         # Coordonnées de test
         coords = [(46.2044, 6.1432), (46.2100, 6.1500), (46.2200, 6.1600)]
@@ -166,7 +166,7 @@ class TestOSRMFallback:
 
     def test_osrm_fallback_matrix_diagonal_zero(self):
         """Test que la diagonale de la matrice de fallback est à zéro."""
-        from services.osrm_client import _fallback_matrix
+        from services.geolocation.osrm import _fallback_matrix
 
         # Coordonnées de test
         coords = [(46.2044, 6.1432), (46.2100, 6.1500), (46.2200, 6.1600)]
@@ -185,7 +185,7 @@ class TestOSRMFallbackIntegration:
 
     def test_osrm_fallback_with_dispatch_data(self):
         """Test que le fallback OSRM fonctionne avec les données du dispatch."""
-        from services.osrm_client import build_distance_matrix_osrm
+        from services.geolocation.osrm import build_distance_matrix_osrm
 
         # Simuler des coordonnées de drivers et bookings
         driver_coords = [(46.2044, 6.1432), (46.2100, 6.1500)]
@@ -233,3 +233,4 @@ if __name__ == "__main__":
 
     print("=" * 50)
     print("✅ TOUS LES TESTS DE FALLBACK OSRM RÉUSSIS")
+

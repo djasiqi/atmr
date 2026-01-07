@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Tuple, cast
 from cachetools import LRUCache  # pyright: ignore[reportMissingModuleSource]
 
 from models import Booking, BookingStatus, Driver
-from services.geolocation_service import get_geolocation_service
+from services.geolocation.core import get_geolocation_service
 from services.unified_dispatch.core.settings import Settings
 from shared.constants import DispatchHeuristicsConstants, GeoConstants
 from shared.time_utils import minutes_from_now, now_local, sort_key_utc, to_utc
@@ -3826,3 +3826,4 @@ def estimate_wait_or_require_extra(
         suggestions.append("Élargir légèrement les fenêtres ou ajuster les priorités.")
 
     return {"summary": "ok", "items": items, "suggestions": suggestions}
+

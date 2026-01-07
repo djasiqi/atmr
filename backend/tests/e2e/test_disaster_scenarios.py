@@ -461,7 +461,7 @@ class TestDisasterScenarios:
         import logging
         from io import StringIO
 
-        from services.osrm_client import get_matrix
+        from services.geolocation.osrm import get_matrix
 
         # Capturer les logs pour détecter les retries
         log_capture = StringIO()
@@ -826,3 +826,4 @@ class TestDisasterScenarios:
         )
 
         logger.info("[D3] ✅ Test de non-régression : pas de redirections 302 confirmé")
+

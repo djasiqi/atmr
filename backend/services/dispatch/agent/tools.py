@@ -230,7 +230,7 @@ class AgentTools:
 
             import requests  # pyright: ignore[reportMissingModuleSource]
 
-            from services.osrm_client import _osrm_circuit_breaker
+            from services.geolocation.osrm import _osrm_circuit_breaker
 
             # Récupérer état circuit breaker
             cb_state = _osrm_circuit_breaker.state
@@ -1235,3 +1235,4 @@ class AgentTools:
         except Exception as e:
             logger.exception("[AgentTools] Error in notify: %s", e)
             return {"ok": False, "error": str(e)}
+

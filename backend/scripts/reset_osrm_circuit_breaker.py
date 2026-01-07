@@ -9,7 +9,7 @@ from pathlib import Path
 backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
-from services.osrm_client import _osrm_circuit_breaker  # noqa: E402
+from services.geolocation.osrm import _osrm_circuit_breaker  # noqa: E402
 
 
 def reset_circuit_breaker():
@@ -31,3 +31,4 @@ def reset_circuit_breaker():
 
 if __name__ == "__main__":
     reset_circuit_breaker()
+

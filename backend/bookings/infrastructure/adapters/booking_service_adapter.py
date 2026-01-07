@@ -20,7 +20,7 @@ from infrastructure.bookings.fallback_coords import get_booking_fallback_coords
 from infrastructure.persistence.bookings.booking_writer import SqlAlchemyBookingWriter
 from repositories.client_repository import ClientRepository
 from repositories.company_repository import CompanyRepository
-from services.interfaces.geocoding_interface import get_geocoding_service
+from services.geolocation.geocoding_interface import get_geocoding_service
 
 
 def create_booking_use_case() -> CreateBookingUseCase:
@@ -60,3 +60,4 @@ def create_booking_via_use_case(
     use_case = create_booking_use_case()
     cmd = CreateBookingCommand(user_id=user_id, client_id=client_id, data=data)
     return use_case.execute(cmd)
+

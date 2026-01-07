@@ -10,7 +10,7 @@ from typing import Any, Dict, List
 import numpy as np  # pyright: ignore[reportMissingImports]
 from sklearn.cluster import KMeans  # pyright: ignore[reportMissingImports]
 
-from services.geolocation_service import get_geolocation_service
+from services.geolocation.core import get_geolocation_service
 
 logger = logging.getLogger(__name__)
 
@@ -529,3 +529,4 @@ class GeographicClustering:
             "unassigned": final_unassigned_ids,
             "zone_results": zone_results,
         }
+

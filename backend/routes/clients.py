@@ -877,7 +877,7 @@ class ClientsList(Resource):
             # Géocodage de l'adresse de domicile
             if main_address:
                 try:
-                    from services.maps import geocode_address
+                    from services.geolocation.maps import geocode_address
 
                     coords = geocode_address(main_address.strip(), country="CH")
                     if coords:
@@ -913,7 +913,7 @@ class ClientsList(Resource):
             billing_address = data.get("billing_address")
             if billing_address and billing_address.strip():
                 try:
-                    from services.maps import geocode_address
+                    from services.geolocation.maps import geocode_address
 
                     coords = geocode_address(billing_address.strip(), country="CH")
                     if coords:
@@ -983,3 +983,4 @@ class ClientsList(Resource):
                 "❌ ERREUR clients POST / : %s - %s", type(e).__name__, str(e)
             )
             return APIErrorHandler.handle_exception(e, logger)
+
