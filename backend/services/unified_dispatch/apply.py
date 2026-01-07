@@ -790,7 +790,7 @@ def _apply_assignments_inner(
         else Booking.query.filter(Booking.id == -1)  # Query vide si aucun ID valide
     )
     drivers_q = (
-        Driver.query.filter(
+        Driver.query.options(joinedload(Driver.company)).filter(
             Driver.company_id == company_id, Driver.id.in_(valid_driver_ids)
         )
         if valid_driver_ids
