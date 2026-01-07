@@ -655,7 +655,7 @@ class CompanyPartnerships(Resource):
 
             # ✅ Dédupliquer par paire d'entreprises (peu importe qui est owner/partner)
             # On garde le partenariat le plus récent ou celui avec le meilleur statut
-            from services.partnership_stats_service import PartnershipStatsService
+            from services.partnerships.stats import PartnershipStatsService
 
             # Créer un dictionnaire pour dédupliquer par paire d'entreprises
             partnerships_by_pair = {}
@@ -814,7 +814,7 @@ class CompanyPartnership(Resource):
             data = request.get_json(silent=True) or {}
 
             # Valider et mettre à jour via le service
-            from services.partnership_service import PartnershipService
+            from services.partnerships.core import PartnershipService
             from models.enums import TransferModel
 
             update_data = {}
@@ -934,7 +934,7 @@ class CompanyPartnership(Resource):
             )
 
             # Supprimer le partenariat via le service
-            from services.partnership_service import PartnershipService
+            from services.partnerships.core import PartnershipService
 
             PartnershipService.delete_partnership(partnership_id, company.id)
 
@@ -1036,7 +1036,7 @@ class CompanyPartnershipsStatement(Resource):
                     )
 
             # Générer le décompte
-            from services.partnership_statement_service import (
+            from services.partnerships.statements import (
                 PartnershipStatementService,
             )
 
@@ -1131,7 +1131,7 @@ class CompanyPartnershipStatement(Resource):
                     )
 
             # Générer le décompte
-            from services.partnership_statement_service import (
+            from services.partnerships.statements import (
                 PartnershipStatementService,
             )
 
@@ -1174,7 +1174,7 @@ class CompanyPartnershipsStats(Resource):
                     "Company", None, logger
                 ), status_code or 404
 
-            from services.partnership_stats_service import PartnershipStatsService
+            from services.partnerships.stats import PartnershipStatsService
 
             # Récupérer les paramètres de période (optionnels)
             month = request.args.get("month", type=int)
@@ -5389,4 +5389,5 @@ class DebugBookingTransfer(Resource):
         }
 
         return result, 200
+
 
