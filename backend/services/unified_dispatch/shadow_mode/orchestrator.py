@@ -176,7 +176,7 @@ class ShadowModeOrchestrator:
             return 0
 
         try:
-            from services.rl.shadow_mode_manager import ShadowModeManager
+            from services.ml.rl.shadow_mode_manager import ShadowModeManager
 
             shadow_manager = ShadowModeManager()
 

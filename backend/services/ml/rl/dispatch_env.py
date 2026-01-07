@@ -176,7 +176,7 @@ class DispatchEnv(gym.Env):
         # Initialiser le système de reward shaping avancé
         self.reward_shaping: Any | None = None
         try:
-            from services.rl.reward_shaping import (
+            from services.ml.rl.reward_shaping import (
                 AdvancedRewardShaping,
                 RewardShapingConfig,
             )

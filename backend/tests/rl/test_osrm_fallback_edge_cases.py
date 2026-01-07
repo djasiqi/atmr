@@ -21,7 +21,7 @@ import requests
 
 # Imports conditionnels
 try:
-    from services.rl.dispatch_env import DispatchEnv
+    from services.ml.rl.dispatch_env import DispatchEnv
 except ImportError:
     DispatchEnv = None
 

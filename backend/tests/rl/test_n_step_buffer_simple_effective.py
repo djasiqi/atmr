@@ -4,7 +4,7 @@ Tests simples et efficaces pour améliorer la couverture de n_step_buffer.py
 
 import numpy as np
 
-from services.rl.n_step_buffer import NStepBuffer, NStepPrioritizedBuffer
+from services.ml.rl.n_step_buffer import NStepBuffer, NStepPrioritizedBuffer
 
 
 class TestNStepBufferSimple:

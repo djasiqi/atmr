@@ -3,7 +3,7 @@ import logging
 
 from flask import Blueprint, jsonify, request  # pyright: ignore[reportMissingImports]
 
-from services.ml_monitoring_service import MLMonitoringService
+from services.ml.monitoring import MLMonitoringService
 
 HOURS_THRESHOLD = 24
 HOURS_ONE = 1

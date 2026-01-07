@@ -5,7 +5,7 @@ Tests minimaux pour RLSuggestionGenerator - Version corrigée
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 
-from services.rl.suggestion_generator import RLSuggestionGenerator
+from services.ml.rl.suggestion_generator import RLSuggestionGenerator
 
 
 class MockBooking:
@@ -43,7 +43,7 @@ class TestRLSuggestionGeneratorMinimal:
         # ✅ FIX: Patcher les classes à la source (services.rl) plutôt que
         # dans suggestion_generator car les imports sont faits dans _load_model()
         # ✅ FIX: Réinitialiser _model_loaded et créer le générateur dans le bloc with
-        import services.rl.suggestion_generator as sg_module
+        import services.ml.rl.suggestion_generator as sg_module
 
         original_model_loaded = sg_module._model_loaded
         try:
@@ -97,7 +97,7 @@ class TestRLSuggestionGeneratorMinimal:
     def test_lazy_import_rl_success(self):
         """Test import paresseux RL réussi"""
         # ✅ FIX: Réinitialiser _model_loaded et créer le générateur dans le bloc with
-        import services.rl.suggestion_generator as sg_module
+        import services.ml.rl.suggestion_generator as sg_module
 
         original_model_loaded = sg_module._model_loaded
         try:

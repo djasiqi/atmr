@@ -13,9 +13,9 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
-from services.rl.dispatch_env import DispatchEnv
-from services.rl.improved_dqn_agent import ImprovedDQNAgent
-from services.rl.optimal_hyperparameters import OptimalHyperparameters
+from services.ml.rl.dispatch_env import DispatchEnv
+from services.ml.rl.improved_dqn_agent import ImprovedDQNAgent
+from services.ml.rl.optimal_hyperparameters import OptimalHyperparameters
 from services.security.safety import get_safety_guards
 
 if TYPE_CHECKING:
@@ -258,7 +258,7 @@ class RLDispatchOptimizer:
 
         # Import conditionnel du RLLogger pour logging des décisions
         try:
-            from services.rl.rl_logger import get_rl_logger
+            from services.ml.rl.rl_logger import get_rl_logger
 
             rl_logger = get_rl_logger()
             enable_logging = True

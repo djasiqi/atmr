@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from services.rl.suggestion_generator import RLSuggestionGenerator
+from services.ml.rl.suggestion_generator import RLSuggestionGenerator
 
 
 class TestRLSuggestionGeneratorInternalMethods:
@@ -13,8 +13,8 @@ class TestRLSuggestionGeneratorInternalMethods:
 
     def test_lazy_import_rl_success(self):
         """Test import RL réussi."""
-        import services.rl.suggestion_generator as sg_module
-        from services.rl.suggestion_generator import _lazy_import_rl
+        import services.ml.rl.suggestion_generator as sg_module
+        from services.ml.rl.suggestion_generator import _lazy_import_rl
 
         original_dqn = sg_module._dqn_agent
         original_env = sg_module._dispatch_env
@@ -51,8 +51,8 @@ class TestRLSuggestionGeneratorInternalMethods:
 
     def test_lazy_import_rl_failure(self):
         """Test import RL échec."""
-        import services.rl.suggestion_generator as sg_module
-        from services.rl.suggestion_generator import _lazy_import_rl
+        import services.ml.rl.suggestion_generator as sg_module
+        from services.ml.rl.suggestion_generator import _lazy_import_rl
 
         original_dqn = sg_module._dqn_agent
         original_env = sg_module._dispatch_env
@@ -82,7 +82,7 @@ class TestRLSuggestionGeneratorInternalMethods:
     def test_load_model_success(self):
         """Test chargement modèle réussi."""
         # ✅ FIX: Réinitialiser _model_loaded et créer le générateur dans le bloc with
-        import services.rl.suggestion_generator as sg_module
+        import services.ml.rl.suggestion_generator as sg_module
 
         original_model_loaded = sg_module._model_loaded
         try:

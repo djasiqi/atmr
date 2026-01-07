@@ -24,7 +24,7 @@ except ImportError:
 
 # Import conditionnel pour éviter les erreurs si les modules ne sont pas disponibles
 try:
-    from services.rl.rl_logger import RLLogger, get_rl_logger, log_rl_decision
+    from services.ml.rl.rl_logger import RLLogger, get_rl_logger, log_rl_decision
 except ImportError:
     RLLogger = None
     get_rl_logger = None

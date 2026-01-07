@@ -3,7 +3,7 @@
 import math
 from datetime import datetime
 
-from services.rl.shadow_mode_manager import ShadowModeManager
+from services.ml.rl.shadow_mode_manager import ShadowModeManager
 
 
 class TestShadowModeManagerUncovered:

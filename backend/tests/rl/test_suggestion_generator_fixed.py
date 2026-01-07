@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from services.rl.suggestion_generator import RLSuggestionGenerator, _lazy_import_rl
+from services.ml.rl.suggestion_generator import RLSuggestionGenerator, _lazy_import_rl
 
 
 class TestLazyImport:
@@ -16,7 +16,7 @@ class TestLazyImport:
 
     def test_lazy_import_success(self):
         """Test import réussi des modules RL."""
-        import services.rl.suggestion_generator as sg_module
+        import services.ml.rl.suggestion_generator as sg_module
 
         original_dqn = sg_module._dqn_agent
         original_env = sg_module._dispatch_env
@@ -53,8 +53,8 @@ class TestLazyImport:
 
     def test_lazy_import_failure(self):
         """Test échec d'import des modules RL."""
-        import services.rl.suggestion_generator as sg_module
-        from services.rl.suggestion_generator import _lazy_import_rl
+        import services.ml.rl.suggestion_generator as sg_module
+        from services.ml.rl.suggestion_generator import _lazy_import_rl
 
         original_dqn = sg_module._dqn_agent
         original_env = sg_module._dispatch_env
@@ -156,7 +156,7 @@ class TestRLSuggestionGenerator:
         # ✅ FIX: Réinitialiser _model_loaded et créer le générateur dans le bloc with
         # ✅ FIX: Patcher les classes à la source (services.rl) car les imports
         # sont faits localement dans _load_model()
-        import services.rl.suggestion_generator as sg_module
+        import services.ml.rl.suggestion_generator as sg_module
 
         original_model_loaded = sg_module._model_loaded
         try:

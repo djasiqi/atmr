@@ -7,7 +7,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from services.rl.hyperparameter_tuner import HyperparameterTuner
+from services.ml.rl.hyperparameter_tuner import HyperparameterTuner
 
 
 class TestHyperparameterTuner:

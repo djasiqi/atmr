@@ -6,7 +6,7 @@ Tests pour noisy_networks.py - couverture de base
 import pytest
 import torch
 
-from services.rl.noisy_networks import NoisyDuelingQNetwork, NoisyLinear, NoisyQNetwork
+from services.ml.rl.noisy_networks import NoisyDuelingQNetwork, NoisyLinear, NoisyQNetwork
 
 
 class TestNoisyLinear:

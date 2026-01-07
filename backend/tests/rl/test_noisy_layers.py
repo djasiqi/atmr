@@ -21,13 +21,13 @@ sys.path.insert(0, str(backend_dir))
 
 # Import des modules à tester
 try:
-    from services.rl.improved_q_network import (
+    from services.ml.rl.improved_q_network import (
         ImprovedQNetwork,
         NoisyDuelingImprovedQNetwork,
         NoisyImprovedQNetwork,
         create_q_network,
     )
-    from services.rl.noisy_networks import (
+    from services.ml.rl.noisy_networks import (
         NoisyDuelingQNetwork,
         NoisyLinear,
         NoisyQNetwork,
@@ -349,7 +349,7 @@ class TestNoisyImprovedQNetwork:
 
         assert network.use_noisy is False
         # Le réseau interne devrait être ImprovedQNetwork
-        from services.rl.improved_q_network import ImprovedQNetwork
+        from services.ml.rl.improved_q_network import ImprovedQNetwork
 
         assert isinstance(network.network, ImprovedQNetwork)
 
@@ -439,7 +439,7 @@ class TestFactoryFunctions:
         dueling_network = create_q_network(
             network_type="dueling", state_dim=10, action_dim=5
         )
-        from services.rl.improved_q_network import DuelingQNetwork
+        from services.ml.rl.improved_q_network import DuelingQNetwork
 
         assert isinstance(dueling_network, DuelingQNetwork)
 

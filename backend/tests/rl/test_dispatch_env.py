@@ -12,7 +12,7 @@ Teste:
 
 import numpy as np
 
-from services.rl.dispatch_env import DispatchEnv
+from services.ml.rl.dispatch_env import DispatchEnv
 
 
 class TestDispatchEnvBasics:

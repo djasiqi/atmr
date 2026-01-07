@@ -7,7 +7,7 @@ Vérifie que le shadow mode fonctionne correctement en production.
 import tempfile
 from pathlib import Path
 
-from services.rl.shadow_mode_manager import ShadowModeManager
+from services.ml.rl.shadow_mode_manager import ShadowModeManager
 
 
 class TestShadowModeManagerCreation:

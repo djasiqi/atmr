@@ -39,7 +39,7 @@ class TestMLFeatures:
 
     def test_extract_base_features(self):
         """Test extraction features de base."""
-        from services.ml_features import extract_base_features
+        from services.ml.features import extract_base_features
 
         booking = MockBooking()
         driver = MockDriver()
@@ -63,7 +63,7 @@ class TestMLFeatures:
 
     def test_create_interaction_features(self):
         """Test création features d'interaction."""
-        from services.ml_features import create_interaction_features
+        from services.ml.features import create_interaction_features
 
         base_features = {
             "distance_km": 10.0,
@@ -88,7 +88,7 @@ class TestMLFeatures:
 
     def test_create_temporal_features(self):
         """Test création features temporelles."""
-        from services.ml_features import create_temporal_features
+        from services.ml.features import create_temporal_features
 
         base_features = {
             "time_of_day": 17.0,  # Heure de pointe
@@ -113,7 +113,7 @@ class TestMLFeatures:
 
     def test_complete_pipeline(self):
         """Test pipeline complet de feature engineering."""
-        from services.ml_features import engineer_features
+        from services.ml.features import engineer_features
 
         booking = MockBooking()
         driver = MockDriver()

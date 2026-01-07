@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from services.ml.model_registry import ModelRegistry
+from services.ml.models.registry import ModelRegistry
 
 
 class TestOSRMClientSHA256:

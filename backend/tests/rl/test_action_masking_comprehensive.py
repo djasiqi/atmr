@@ -15,12 +15,12 @@ import pytest
 
 # Import conditionnel pour éviter les erreurs si les modules ne sont pas disponibles
 try:
-    from services.rl.dispatch_env import DispatchEnv
+    from services.ml.rl.dispatch_env import DispatchEnv
 except ImportError:
     DispatchEnv = None
 
 try:
-    from services.rl.improved_dqn_agent import ImprovedDQNAgent
+    from services.ml.rl.improved_dqn_agent import ImprovedDQNAgent
 except ImportError:
     ImprovedDQNAgent = None
 

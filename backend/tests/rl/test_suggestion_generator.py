@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 import pytest
 import torch
 
-from services.rl.suggestion_generator import RLSuggestionGenerator, _lazy_import_rl
+from services.ml.rl.suggestion_generator import RLSuggestionGenerator, _lazy_import_rl
 
 
 class TestLazyImport:
@@ -18,7 +18,7 @@ class TestLazyImport:
     def test_lazy_import_success(self):
         """Test import réussi des modules RL."""
         # Réinitialiser les variables globales
-        import services.rl.suggestion_generator as sg_module
+        import services.ml.rl.suggestion_generator as sg_module
 
         original_dqn = sg_module._dqn_agent
         original_env = sg_module._dispatch_env
@@ -61,7 +61,7 @@ class TestLazyImport:
     def test_lazy_import_failure(self):
         """Test échec d'import des modules RL."""
         # Réinitialiser les variables globales
-        import services.rl.suggestion_generator as sg_module
+        import services.ml.rl.suggestion_generator as sg_module
 
         original_dqn = sg_module._dqn_agent
         original_env = sg_module._dispatch_env

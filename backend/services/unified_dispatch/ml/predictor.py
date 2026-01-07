@@ -462,7 +462,7 @@ class DelayMLPredictor:
 
         try:
             # Utiliser le nouveau pipeline de feature engineering
-            from services.ml_features import (
+            from services.ml.features import (
                 engineer_features,
                 features_to_dataframe,
                 normalize_features,

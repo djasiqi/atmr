@@ -17,7 +17,7 @@ import pytest
 
 # Imports conditionnels
 try:
-    from services.rl.replay_buffer import PrioritizedReplayBuffer
+    from services.ml.rl.replay_buffer import PrioritizedReplayBuffer
 except ImportError:
     PrioritizedReplayBuffer = None
 

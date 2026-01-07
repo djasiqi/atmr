@@ -11,7 +11,7 @@ import sys
 import optuna
 import pytest
 
-from services.rl.hyperparameter_tuner import HyperparameterTuner
+from services.ml.rl.hyperparameter_tuner import HyperparameterTuner
 
 
 class TestHyperparameterTunerSanity:

@@ -5,7 +5,7 @@ Tests minimaux pour RLSuggestionGenerator
 from datetime import datetime
 from unittest.mock import patch
 
-from services.rl.suggestion_generator import RLSuggestionGenerator
+from services.ml.rl.suggestion_generator import RLSuggestionGenerator
 
 
 class MockBooking:

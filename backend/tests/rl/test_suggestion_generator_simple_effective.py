@@ -3,7 +3,7 @@
 import builtins
 from unittest.mock import Mock, patch
 
-from services.rl.suggestion_generator import RLSuggestionGenerator
+from services.ml.rl.suggestion_generator import RLSuggestionGenerator
 
 
 class TestRLSuggestionGeneratorSimple:
@@ -25,7 +25,7 @@ class TestRLSuggestionGeneratorSimple:
 
     def test_lazy_import_rl_success(self):
         """Test import RL réussi"""
-        import services.rl.suggestion_generator as sg_module
+        import services.ml.rl.suggestion_generator as sg_module
 
         with (
             patch("services.rl.improved_dqn_agent"),
@@ -35,7 +35,7 @@ class TestRLSuggestionGeneratorSimple:
             sg_module._dqn_agent = None
             sg_module._dispatch_env = None
 
-            from services.rl.suggestion_generator import _lazy_import_rl
+            from services.ml.rl.suggestion_generator import _lazy_import_rl
 
             _lazy_import_rl()
 
@@ -44,7 +44,7 @@ class TestRLSuggestionGeneratorSimple:
 
     def test_lazy_import_rl_failure(self):
         """Test import RL échoué"""
-        import services.rl.suggestion_generator as sg_module
+        import services.ml.rl.suggestion_generator as sg_module
 
         original_dqn = sg_module._dqn_agent
         original_env = sg_module._dispatch_env
@@ -65,7 +65,7 @@ class TestRLSuggestionGeneratorSimple:
 
             import pytest
 
-            from services.rl.suggestion_generator import _lazy_import_rl
+            from services.ml.rl.suggestion_generator import _lazy_import_rl
 
             with (
                 patch("builtins.__import__", side_effect=mock_import),
@@ -79,7 +79,7 @@ class TestRLSuggestionGeneratorSimple:
     def test_load_model_success(self):
         """Test chargement modèle réussi"""
         # ✅ FIX: Réinitialiser _model_loaded et créer le générateur dans le bloc with
-        import services.rl.suggestion_generator as sg_module
+        import services.ml.rl.suggestion_generator as sg_module
 
         original_model_loaded = sg_module._model_loaded
         try:

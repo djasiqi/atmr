@@ -18,7 +18,7 @@ import torch
 backend_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(backend_dir))
 
-from services.rl.distributional_dqn import (  # noqa: E402
+from services.ml.rl.distributional_dqn import (  # noqa: E402
     C51Network,
     DistributionalLoss,
     QRNetwork,

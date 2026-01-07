@@ -88,7 +88,7 @@ except (ImportError, ModuleNotFoundError):
 
 # Shadow Mode ( Monitoring seulement)
 try:
-    from services.rl.shadow_mode_manager import ShadowModeManager
+    from services.ml.rl.shadow_mode_manager import ShadowModeManager
 
     SHADOW_MODE_AVAILABLE = True
     _shadow_manager = None
@@ -3969,7 +3969,7 @@ class RLDispatchSuggestions(Resource):
                                 }
                             else:
                                 # Utiliser le générateur RL pour créer des suggestions
-                                from services.rl.suggestion_generator import (
+                                from services.ml.rl.suggestion_generator import (
                                     get_suggestion_generator,
                                 )
 

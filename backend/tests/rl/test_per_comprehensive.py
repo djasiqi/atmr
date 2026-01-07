@@ -15,12 +15,12 @@ import torch
 
 # Import conditionnel pour éviter les erreurs si les modules ne sont pas disponibles
 try:
-    from services.rl.replay_buffer import PrioritizedReplayBuffer
+    from services.ml.rl.replay_buffer import PrioritizedReplayBuffer
 except ImportError:
     PrioritizedReplayBuffer = None
 
 try:
-    from services.rl.improved_dqn_agent import ImprovedDQNAgent
+    from services.ml.rl.improved_dqn_agent import ImprovedDQNAgent
 except ImportError:
     ImprovedDQNAgent = None
 

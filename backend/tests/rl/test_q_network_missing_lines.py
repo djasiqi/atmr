@@ -6,7 +6,7 @@ Tests supplémentaires pour couvrir les lignes manquantes dans improved_q_networ
 import pytest
 import torch
 
-from services.rl.improved_q_network import DuelingQNetwork, ImprovedQNetwork
+from services.ml.rl.improved_q_network import DuelingQNetwork, ImprovedQNetwork
 
 
 class TestImprovedQNetworkMissingLines:

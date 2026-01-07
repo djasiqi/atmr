@@ -10,7 +10,7 @@ class TestSimpleCoverage:
 
     def test_suggestion_generator_init(self):
         """Test initialisation RLSuggestionGenerator"""
-        from services.rl.suggestion_generator import RLSuggestionGenerator
+        from services.ml.rl.suggestion_generator import RLSuggestionGenerator
 
         # Mock le chargement du modèle pour éviter les erreurs
         with patch("services.rl.suggestion_generator.Path") as mock_path:
@@ -24,7 +24,7 @@ class TestSimpleCoverage:
 
     def test_suggestion_generator_init_with_custom_path(self):
         """Test initialisation avec chemin personnalisé"""
-        from services.rl.suggestion_generator import RLSuggestionGenerator
+        from services.ml.rl.suggestion_generator import RLSuggestionGenerator
 
         with patch("services.rl.suggestion_generator.Path") as mock_path:
             mock_path.return_value.exists.return_value = False
@@ -37,7 +37,7 @@ class TestSimpleCoverage:
         """Test génération de suggestions avec données vides"""
         from datetime import datetime
 
-        from services.rl.suggestion_generator import RLSuggestionGenerator
+        from services.ml.rl.suggestion_generator import RLSuggestionGenerator
 
         with patch("services.rl.suggestion_generator.Path") as mock_path:
             mock_path.return_value.exists.return_value = False
@@ -54,7 +54,7 @@ class TestSimpleCoverage:
         """Test génération de suggestions avec date passée"""
         from datetime import datetime, timedelta
 
-        from services.rl.suggestion_generator import RLSuggestionGenerator
+        from services.ml.rl.suggestion_generator import RLSuggestionGenerator
 
         with patch("services.rl.suggestion_generator.Path") as mock_path:
             mock_path.return_value.exists.return_value = False
@@ -72,7 +72,7 @@ class TestSimpleCoverage:
         """Test génération de suggestions avec company_id invalide"""
         from datetime import datetime
 
-        from services.rl.suggestion_generator import RLSuggestionGenerator
+        from services.ml.rl.suggestion_generator import RLSuggestionGenerator
 
         with patch("services.rl.suggestion_generator.Path") as mock_path:
             mock_path.return_value.exists.return_value = False
@@ -87,7 +87,7 @@ class TestSimpleCoverage:
 
     def test_rl_logger_init(self):
         """Test initialisation RLLogger"""
-        from services.rl.rl_logger import RLLogger
+        from services.ml.rl.rl_logger import RLLogger
 
         logger = RLLogger()
 
@@ -98,7 +98,7 @@ class TestSimpleCoverage:
 
     def test_rl_logger_init_custom(self):
         """Test initialisation RLLogger avec paramètres personnalisés"""
-        from services.rl.rl_logger import RLLogger
+        from services.ml.rl.rl_logger import RLLogger
 
         logger = RLLogger(
             redis_key_prefix="custom",
@@ -114,7 +114,7 @@ class TestSimpleCoverage:
 
     def test_rl_logger_hash_state(self):
         """Test hachage d'état"""
-        from services.rl.rl_logger import RLLogger
+        from services.ml.rl.rl_logger import RLLogger
 
         logger = RLLogger()
 
@@ -126,7 +126,7 @@ class TestSimpleCoverage:
 
     def test_rl_logger_get_stats(self):
         """Test récupération des statistiques"""
-        from services.rl.rl_logger import RLLogger
+        from services.ml.rl.rl_logger import RLLogger
 
         logger = RLLogger()
 
@@ -138,7 +138,7 @@ class TestSimpleCoverage:
 
     def test_rl_logger_get_recent_logs(self):
         """Test récupération des logs récents"""
-        from services.rl.rl_logger import RLLogger
+        from services.ml.rl.rl_logger import RLLogger
 
         logger = RLLogger()
 
@@ -148,7 +148,7 @@ class TestSimpleCoverage:
 
     def test_distributional_dqn_c51_init(self):
         """Test initialisation C51Network"""
-        from services.rl.distributional_dqn import C51Network
+        from services.ml.rl.distributional_dqn import C51Network
 
         network = C51Network(state_size=10, action_size=5)
 
@@ -159,7 +159,7 @@ class TestSimpleCoverage:
         """Test forward C51Network"""
         import torch
 
-        from services.rl.distributional_dqn import C51Network
+        from services.ml.rl.distributional_dqn import C51Network
 
         network = C51Network(state_size=10, action_size=5)
 
@@ -170,7 +170,7 @@ class TestSimpleCoverage:
 
     def test_distributional_dqn_qr_init(self):
         """Test initialisation QRNetwork"""
-        from services.rl.distributional_dqn import QRNetwork
+        from services.ml.rl.distributional_dqn import QRNetwork
 
         network = QRNetwork(state_size=10, action_size=5)
 
@@ -181,7 +181,7 @@ class TestSimpleCoverage:
         """Test forward QRNetwork"""
         import torch
 
-        from services.rl.distributional_dqn import QRNetwork
+        from services.ml.rl.distributional_dqn import QRNetwork
 
         network = QRNetwork(state_size=10, action_size=5)
 
@@ -192,7 +192,7 @@ class TestSimpleCoverage:
 
     def test_distributional_dqn_loss_init(self):
         """Test initialisation DistributionalLoss"""
-        from services.rl.distributional_dqn import DistributionalLoss
+        from services.ml.rl.distributional_dqn import DistributionalLoss
 
         loss_fn = DistributionalLoss()
 
@@ -200,7 +200,7 @@ class TestSimpleCoverage:
 
     def test_distributional_dqn_uncertainty_init(self):
         """Test initialisation UncertaintyCapture"""
-        from services.rl.distributional_dqn import UncertaintyCapture
+        from services.ml.rl.distributional_dqn import UncertaintyCapture
 
         uncertainty = UncertaintyCapture()
 
@@ -208,7 +208,7 @@ class TestSimpleCoverage:
 
     def test_hyperparameter_tuner_init(self):
         """Test initialisation HyperparameterTuner"""
-        from services.rl.hyperparameter_tuner import HyperparameterTuner
+        from services.ml.rl.hyperparameter_tuner import HyperparameterTuner
 
         tuner = HyperparameterTuner()
 
@@ -216,7 +216,7 @@ class TestSimpleCoverage:
 
     def test_shadow_mode_manager_init(self):
         """Test initialisation ShadowModeManager"""
-        from services.rl.shadow_mode_manager import ShadowModeManager
+        from services.ml.rl.shadow_mode_manager import ShadowModeManager
 
         manager = ShadowModeManager()
 
@@ -224,7 +224,7 @@ class TestSimpleCoverage:
 
     def test_noisy_networks_init(self):
         """Test initialisation NoisyLinear"""
-        from services.rl.noisy_networks import NoisyLinear
+        from services.ml.rl.noisy_networks import NoisyLinear
 
         layer = NoisyLinear(10, 5)
 
@@ -233,7 +233,7 @@ class TestSimpleCoverage:
 
     def test_noisy_q_network_init(self):
         """Test initialisation NoisyQNetwork"""
-        from services.rl.noisy_networks import NoisyQNetwork
+        from services.ml.rl.noisy_networks import NoisyQNetwork
 
         network = NoisyQNetwork(state_size=10, action_size=5)
 
@@ -242,7 +242,7 @@ class TestSimpleCoverage:
 
     def test_noisy_dueling_network_init(self):
         """Test initialisation NoisyDuelingQNetwork"""
-        from services.rl.noisy_networks import NoisyDuelingQNetwork
+        from services.ml.rl.noisy_networks import NoisyDuelingQNetwork
 
         network = NoisyDuelingQNetwork(state_size=10, action_size=5)
 
@@ -251,7 +251,7 @@ class TestSimpleCoverage:
 
     def test_reward_shaping_init(self):
         """Test initialisation AdvancedRewardShaping"""
-        from services.rl.reward_shaping import AdvancedRewardShaping
+        from services.ml.rl.reward_shaping import AdvancedRewardShaping
 
         reward_shaping = AdvancedRewardShaping()
 
@@ -259,7 +259,7 @@ class TestSimpleCoverage:
 
     def test_reward_shaping_config_init(self):
         """Test initialisation RewardShapingConfig"""
-        from services.rl.reward_shaping import RewardShapingConfig
+        from services.ml.rl.reward_shaping import RewardShapingConfig
 
         config = RewardShapingConfig()
 
@@ -267,7 +267,7 @@ class TestSimpleCoverage:
 
     def test_n_step_buffer_init(self):
         """Test initialisation NStepBuffer"""
-        from services.rl.n_step_buffer import NStepBuffer
+        from services.ml.rl.n_step_buffer import NStepBuffer
 
         buffer = NStepBuffer(capacity=1000, n_step=3)
 
@@ -276,7 +276,7 @@ class TestSimpleCoverage:
 
     def test_n_step_prioritized_buffer_init(self):
         """Test initialisation NStepPrioritizedBuffer"""
-        from services.rl.n_step_buffer import NStepPrioritizedBuffer
+        from services.ml.rl.n_step_buffer import NStepPrioritizedBuffer
 
         buffer = NStepPrioritizedBuffer(capacity=1000, n_step=3)
 
@@ -285,7 +285,7 @@ class TestSimpleCoverage:
 
     def test_replay_buffer_init(self):
         """Test initialisation PrioritizedReplayBuffer"""
-        from services.rl.replay_buffer import PrioritizedReplayBuffer
+        from services.ml.rl.replay_buffer import PrioritizedReplayBuffer
 
         buffer = PrioritizedReplayBuffer(capacity=1000)
 
@@ -293,7 +293,7 @@ class TestSimpleCoverage:
 
     def test_improved_q_network_init(self):
         """Test initialisation ImprovedQNetwork"""
-        from services.rl.improved_q_network import ImprovedQNetwork
+        from services.ml.rl.improved_q_network import ImprovedQNetwork
 
         network = ImprovedQNetwork(state_dim=10, action_dim=5)
 
@@ -302,7 +302,7 @@ class TestSimpleCoverage:
 
     def test_dueling_q_network_init(self):
         """Test initialisation DuelingQNetwork"""
-        from services.rl.improved_q_network import DuelingQNetwork
+        from services.ml.rl.improved_q_network import DuelingQNetwork
 
         network = DuelingQNetwork(state_dim=10, action_dim=5)
 
@@ -311,7 +311,7 @@ class TestSimpleCoverage:
 
     def test_improved_dqn_agent_init(self):
         """Test initialisation ImprovedDQNAgent"""
-        from services.rl.improved_dqn_agent import ImprovedDQNAgent
+        from services.ml.rl.improved_dqn_agent import ImprovedDQNAgent
 
         agent = ImprovedDQNAgent(state_dim=10, action_dim=5)
 
@@ -320,7 +320,7 @@ class TestSimpleCoverage:
 
     def test_dispatch_env_init(self):
         """Test initialisation DispatchEnv"""
-        from services.rl.dispatch_env import DispatchEnv
+        from services.ml.rl.dispatch_env import DispatchEnv
 
         env = DispatchEnv()
 
