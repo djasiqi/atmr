@@ -28,7 +28,8 @@ from collections.abc import Iterable
 from typing import Any, Dict, List, cast
 
 from models import Company, Driver, DriverType
-from services.unified_dispatch import data, heuristics, solver
+from services.unified_dispatch.data import loader as data
+from services.unified_dispatch.optimization import heuristics, solver
 from services.unified_dispatch.orchestration.clustering_manager import (
     ClusteringManager,
 )

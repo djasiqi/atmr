@@ -4,7 +4,9 @@ from typing import Any
 
 
 def validate_assignments(*args: Any, **kwargs: Any) -> Any:
-    from services.unified_dispatch.validation.constraints import validate_assignments as _fn
+    from services.unified_dispatch.validation.constraints import (
+        validate_assignments as _fn,
+    )
 
     return _fn(*args, **kwargs)
 
