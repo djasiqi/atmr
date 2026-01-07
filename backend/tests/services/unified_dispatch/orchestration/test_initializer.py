@@ -12,7 +12,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from tests.factories import CompanyFactory
-from services.unified_dispatch.exceptions import CompanyNotFoundError
+from services.unified_dispatch.core.exceptions import CompanyNotFoundError
 from services.unified_dispatch.orchestration.initializer import DispatchInitializer
 
 
