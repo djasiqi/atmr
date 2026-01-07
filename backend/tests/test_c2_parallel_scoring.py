@@ -10,7 +10,7 @@ import time
 
 import pytest
 
-from services.unified_dispatch.heuristics import assign
+from services.unified_dispatch.optimization.heuristics import assign
 from services.unified_dispatch.settings import Settings
 
 logger = logging.getLogger(__name__)

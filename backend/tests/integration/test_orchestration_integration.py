@@ -301,7 +301,7 @@ class TestPipelineExecutorIntegration:
         db.session.commit()
 
         # Mock closest_feasible pour retourner un objet avec assignments
-        from services.unified_dispatch.heuristics import HeuristicResult
+        from services.unified_dispatch.optimization.heuristics import HeuristicResult
 
         mock_result = HeuristicResult(
             assignments=[(booking.id, driver.id, 1.0, 10, 20)],
