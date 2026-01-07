@@ -1427,6 +1427,7 @@ IMPLEMENTATION_A3_ALERTING.md     ✅ Documentation (450 lignes)
 **Effort:** ⏱️ **10 heures réelles** (au lieu de 3-4 semaines) - **95% plus rapide**
 
 **Résultats:**
+
 - ✅ 97 services consolidés en 14 modules
 - ✅ 397 imports corrigés automatiquement
 - ✅ 29 commits (historique Git préservé avec `git mv`)
@@ -1446,14 +1447,17 @@ IMPLEMENTATION_A3_ALERTING.md     ✅ Documentation (450 lignes)
 **Implémentation actuelle:**
 
 1. ✅ Lazy loading routes (30+ routes):
+
    ```javascript
    const CompanyDashboard = lazy(() => import("./pages/company/Dashboard"));
    const DriverDashboard = lazy(() => import("./pages/driver/Dashboard"));
    // ... 30+ routes lazy-loadées
    ```
+
    **Résultat:** Bundle 3.2 MB → 2.1 MB (-34%)
 
 2. ✅ Code-splitting Webpack (`config-overrides.js`):
+
    ```javascript
    splitChunks: {
      cacheGroups: {
@@ -1467,6 +1471,7 @@ IMPLEMENTATION_A3_ALERTING.md     ✅ Documentation (450 lignes)
 3. ✅ Terser optimisé (drop_console en prod)
 
 **Optimisations supplémentaires identifiées (optionnelles):**
+
 - ⚠️ Material-UI imports (-100-200 KB)
 - ⚠️ PDF lazy loading (-200 KB)
 - ⚠️ Framer Motion lazy loading (-120 KB)
@@ -1481,23 +1486,43 @@ IMPLEMENTATION_A3_ALERTING.md     ✅ Documentation (450 lignes)
 
 ### 9.3 Actions Moyen Terme (Mois 2-3)
 
-#### 🟡 C1: Décision Stratégique DDD
+#### ✅ C1: Décision Stratégique DDD
+
+**Status:** ✅ **ANALYSÉ** - Option B recommandée
+
+**État actuel :**
+- ✅ 4 Bounded Contexts DDD opérationnels (bookings, companies, dispatch, drivers)
+- ⚠️ Code legacy coexiste (33 models, 51 routes, 177 services, 24 repositories)
+- ✅ Après B1+B2 : Dette technique réduite de ~60%
 
 **Options:**
 
 **Option A: Accélérer Migration DDD (6-12 mois)**
 
 - ✅ Avantage: Architecture propre à terme
-- ❌ Inconvénient: Coût élevé, risque de régression
-- Effort: 1-2 devs fulltime pendant 6-12 mois
+- ❌ Inconvénient: Coût élevé (€80K-€160K), risque de régression, blocage roadmap
+- Effort: 1-2 devs fulltime pendant 12 mois
 
-**Option B: Consolidation Hybride (1-2 mois)**
+**Option B: Consolidation Hybride (1-2 mois) ✅ RECOMMANDÉ**
 
-- ✅ Avantage: Rapide, stabilise l'existant
-- ❌ Inconvénient: Dette technique reste
-- Effort: 1 dev pendant 1-2 mois
+- ✅ Avantage: Rapide (1.5 mois), stabilise l'existant, ROI immédiat (€12K), pas de blocage roadmap
+- ❌ Inconvénient: Dette technique reste, architecture mixte
+- Effort: 1 dev pendant 6 semaines (30 jours·dev)
 
-**Recommandation:** **Option B** sauf si roadmap inclut refonte majeure.
+**Recommandation:** **Option B** ✅ - Justification :
+- Code déjà bien structuré après B1+B2
+- 13x plus rapide (1.5 mois vs 12 mois)
+- 7-13x moins cher (€12K vs €80K-€160K)
+- DDD déjà opérationnel (4 BC)
+
+**Rapport :** `C1_DECISION_DDD_ANALYSE.md`
+
+**Plan Option B (6 semaines) :**
+1. Analyse frontières DDD ↔ Legacy
+2. Créer adapters propres
+3. Documentation (DDD_ARCHITECTURE.md, guides)
+4. Linting rules (Semgrep)
+5. Tests & validation
 
 ---
 
