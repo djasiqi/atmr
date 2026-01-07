@@ -1544,6 +1544,7 @@ IMPLEMENTATION_A3_ALERTING.md     ✅ Documentation (450 lignes)
 **Outil:** **Locust** ✅ (meilleure intégration Python)
 
 **Progression :**
+
 - ✅ Plan détaillé créé (`C2_LOAD_TESTING_DISPATCH_PLAN.md`)
 - ✅ Locust installé
 - ✅ Structure tests créée (`tests/load_testing/`)
