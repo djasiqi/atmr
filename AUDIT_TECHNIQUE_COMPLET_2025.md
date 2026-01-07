@@ -1533,13 +1533,13 @@ IMPLEMENTATION_A3_ALERTING.md     ✅ Documentation (450 lignes)
 
 **Objectif:** Valider performance sous charge
 
-**Status:** 🔵 **EN COURS** - Setup complété + Hotfixes B1/B2 (Jour 1/7)
+**Status:** 🔵 **EN COURS** - Scénarios implémentés (Jour 2/7)
 
 **Scénarios:**
 
-1. **Test 1:** 100 bookings + 50 drivers (matrices 100x50)
-2. **Test 2:** 10 entreprises en parallèle
-3. **Test 3:** OSRM lent (500ms latency)
+1. ✅ **Test 1:** 100 bookings + 50 drivers (matrices 100x50)
+2. ✅ **Test 2:** 10 entreprises en parallèle
+3. ✅ **Test 3:** OSRM lent (500ms latency)
 
 **Outil:** **Locust** ✅ (meilleure intégration Python)
 
@@ -1548,12 +1548,23 @@ IMPLEMENTATION_A3_ALERTING.md     ✅ Documentation (450 lignes)
 - ✅ Plan détaillé créé (`C2_LOAD_TESTING_DISPATCH_PLAN.md`)
 - ✅ Locust installé
 - ✅ Structure tests créée (`tests/load_testing/`)
-- ✅ **Hotfixes B1/B2** : 15 fichiers corrigés (6 commits)
-  - Imports `shadow_mode`, `queue`, `validation`, `heuristics`, `slo`
-  - Backend fonctionnel ✅ (voir `backend/HOTFIX_B1_B2_IMPORTS.md`)
-- 🔲 Scénarios à implémenter (Jours 2-7)
+- ✅ **Hotfixes B1/B2** : 16 fichiers corrigés (10 commits)
+  - Imports Backend (7 fichiers) + Celery (3 fichiers)
+  - Stack complète opérationnelle ✅ (voir `backend/HOTFIX_B1_B2_IMPORTS.md`)
+- ✅ **Scénarios implémentés** (Jour 2) :
+  - `dispatch_load_test.py` : Charge standard (100x50)
+  - `multi_company_test.py` : Multi-entreprises (10 parallèles)
+  - `slow_osrm_test.py` : OSRM lent (500ms résilience)
+  - `README.md` : Documentation complète
+- 🔲 Exécution tests & analyse résultats (Jours 3-7)
 
-**Effort:** ⏱️ **1 semaine** (7 jours)
+**Fichiers :**
+- `backend/tests/load_testing/dispatch_load_test.py` (390 lignes)
+- `backend/tests/load_testing/multi_company_test.py` (450 lignes)
+- `backend/tests/load_testing/slow_osrm_test.py` (480 lignes)
+- `backend/tests/load_testing/README.md` (documentation complète)
+
+**Effort:** ⏱️ **1 semaine** (7 jours, Jour 2/7 complété)
 
 ---
 
