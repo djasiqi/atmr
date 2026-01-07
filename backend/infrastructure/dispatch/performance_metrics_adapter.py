@@ -6,7 +6,7 @@ from typing import Any
 
 
 def collect_performance_metrics(*args: Any, **kwargs: Any) -> Any:
-    from services.unified_dispatch.performance_metrics import (
+    from services.unified_dispatch.metrics.performance import (
         collect_performance_metrics as _fn,
     )
 
@@ -15,7 +15,7 @@ def collect_performance_metrics(*args: Any, **kwargs: Any) -> Any:
 
 def DispatchPerformanceMetrics(*args: Any, **kwargs: Any) -> Any:
     """Adapter: classe DispatchPerformanceMetrics (proxy)."""
-    from services.unified_dispatch.performance_metrics import (
+    from services.unified_dispatch.metrics.performance import (
         DispatchPerformanceMetrics as _cls,
     )
 

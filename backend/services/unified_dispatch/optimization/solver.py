@@ -533,7 +533,7 @@ def solve(
     heuristic_assignments = problem.get("heuristic_assignments")
     if heuristic_assignments and getattr(settings.solver, "enable_warm_start", True):
         try:
-            from services.unified_dispatch.warm_start import apply_warm_start
+            from services.unified_dispatch.data.warm_start import apply_warm_start
 
             # Enrichir le problème avec les informations nécessaires
             enriched_problem = {
@@ -553,7 +553,7 @@ def solve(
     # ✅ B5: Mesurer le gain warm-start (optionnel, pour taille 100-200)
     try:
         # Taille cible pour mesure gain
-        from services.unified_dispatch.warm_start_gain_tracker import (
+        from services.unified_dispatch.optimization.warm_start_tracker import (
             TARGET_SIZE_MAX,
             TARGET_SIZE_MIN,
             measure_warm_start_gain,

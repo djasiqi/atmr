@@ -17,8 +17,8 @@ import pytest
 
 from models.autonomous_action import AutonomousAction
 from models.enums import DispatchMode
-from services.unified_dispatch.autonomous_manager import AutonomousDispatchManager
-from services.unified_dispatch.reactive_suggestions import Suggestion
+from services.unified_dispatch.utils.autonomous import AutonomousDispatchManager
+from services.unified_dispatch.utils.suggestions import Suggestion
 from tests.factories import BookingFactory, CompanyFactory, DriverFactory
 
 

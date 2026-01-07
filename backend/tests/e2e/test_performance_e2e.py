@@ -16,7 +16,7 @@ from sqlalchemy import event
 from sqlalchemy.engine import Engine
 
 from models import BookingStatus
-from services.unified_dispatch.engine import run as dispatch_run
+from services.unified_dispatch.core.engine import run as dispatch_run
 from services.unified_dispatch.slo import get_slo_for_batch_size
 from tests.e2e.helpers.e2e_helpers import (
     create_test_booking,

@@ -4,7 +4,7 @@ from typing import Any
 
 
 def generate_reactive_suggestions(*args: Any, **kwargs: Any) -> Any:
-    from services.unified_dispatch.reactive_suggestions import (
+    from services.unified_dispatch.utils.suggestions import (
         generate_reactive_suggestions as _fn,
     )
 

@@ -27,7 +27,7 @@ from services.notification_service import notify_dispatcher_optimization_opportu
 from services.osrm_client import _table
 from services.unified_dispatch.data import calculate_eta
 from services.unified_dispatch.delay_predictor import DelayPredictor
-from services.unified_dispatch.reactive_suggestions import Suggestion, SuggestionEngine
+from services.unified_dispatch.utils.suggestions import Suggestion, SuggestionEngine
 from shared.time_utils import day_local_bounds, now_local
 
 TIME_DIFFERENCE_ZERO = 0

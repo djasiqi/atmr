@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from services.unified_dispatch.shadow_mode_orchestrator import ShadowModeOrchestrator
+from services.unified_dispatch.shadow_mode.orchestrator import ShadowModeOrchestrator
 
 logger = logging.getLogger(__name__)
 

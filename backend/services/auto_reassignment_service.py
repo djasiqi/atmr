@@ -24,7 +24,7 @@ from repositories.booking_repository import BookingRepository
 from repositories.driver_repository import DriverRepository
 from services.unified_dispatch.apply import apply_assignments
 from services.unified_dispatch.data import calculate_eta
-from services.unified_dispatch.reactive_suggestions import SuggestionEngine
+from services.unified_dispatch.utils.suggestions import SuggestionEngine
 from shared.time_utils import now_local
 
 logger = logging.getLogger(__name__)

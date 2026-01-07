@@ -23,9 +23,9 @@ from typing import Any, Dict, cast
 from ext import db
 from models import Company, DispatchRun, DispatchStatus
 from repositories.dispatch_run_repository import DispatchRunRepository
-from services.unified_dispatch.error_metrics import track_integrity_error
+from services.unified_dispatch.metrics.errors import track_integrity_error
 from services.unified_dispatch.orchestration.utils import safe_int, to_date_ymd
-from services.unified_dispatch.transaction_helpers import _begin_tx
+from services.unified_dispatch.utils.transactions import _begin_tx
 from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
 
 logger = logging.getLogger(__name__)

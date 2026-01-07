@@ -25,7 +25,7 @@ from repositories.company_repository import CompanyRepository
 from services.unified_dispatch.core import settings as ud_settings
 from services.unified_dispatch.core.exceptions import CompanyNotFoundError
 from services.unified_dispatch.core.types import DispatchResult
-from services.unified_dispatch.error_metrics import track_company_not_found
+from services.unified_dispatch.metrics.errors import track_company_not_found
 
 logger = logging.getLogger(__name__)
 

@@ -454,7 +454,7 @@ def autorun_tick() -> Dict[str, Any]:
             try:
                 # 🆕 Utiliser le gestionnaire autonome pour décider
                 # si le dispatch doit tourner
-                from services.unified_dispatch.autonomous_manager import (
+                from services.unified_dispatch.utils.autonomous import (
                     get_manager_for_company,
                 )
 
@@ -583,7 +583,7 @@ def realtime_monitoring_tick() -> Dict[str, Any]:
 
             try:
                 # Créer le gestionnaire autonome
-                from services.unified_dispatch.autonomous_manager import (
+                from services.unified_dispatch.utils.autonomous import (
                     get_manager_for_company,
                 )
 
@@ -604,7 +604,7 @@ def realtime_monitoring_tick() -> Dict[str, Any]:
                 results["companies_checked"] += 1
 
                 # Vérifier les opportunités d'optimisation
-                from services.unified_dispatch.realtime_optimizer import (
+                from services.unified_dispatch.utils.realtime import (
                     check_opportunities_manual,
                 )
 

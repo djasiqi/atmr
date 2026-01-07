@@ -10,8 +10,8 @@ import os
 
 import pytest
 
-from services.unified_dispatch.ab_router import ABRouter
-from services.unified_dispatch.rl_ab_tracking import (
+from services.unified_dispatch.ml.ab_router import ABRouter
+from services.unified_dispatch.ml.ab_tracking import (
     RLABResult,
     evaluate_rl_gain,
     get_or_create_rl_tracker,

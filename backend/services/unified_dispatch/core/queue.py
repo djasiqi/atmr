@@ -550,7 +550,7 @@ def trigger_job(company_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
                 )
             except IntegrityError as e:
                 # ✅ P2.2: Track métrique IntegrityError (race condition)
-                from services.unified_dispatch.error_metrics import (
+                from services.unified_dispatch.metrics.errors import (
                     track_integrity_error,
                 )
 

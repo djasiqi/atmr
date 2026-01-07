@@ -129,7 +129,7 @@ class DispatchOrchestrator:
 
         from services.unified_dispatch import performance_metrics
         from services.unified_dispatch.locking import RedisLockManager
-        from services.unified_dispatch.rl_kpi_monitor import RLKPIMonitor
+        from services.unified_dispatch.ml.rl_kpi_monitor import RLKPIMonitor
 
         # 1. Initialisation et validation
         company, error_result = self._initializer.find_and_validate_company(
