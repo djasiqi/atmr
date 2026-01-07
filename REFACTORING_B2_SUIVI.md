@@ -20,16 +20,16 @@ Consolider ~80 services fragmentés en ~15 modules thématiques pour améliorer 
 
 #### Services à Migrer
 
-| #   | Ancien Fichier               | Nouveau Fichier                         | Status | Commit   |
-| --- | ---------------------------- | --------------------------------------- | ------ | -------- |
-| 1   | `access_token_service.py`    | `security/authentication.py` (partie 1) | ✅     | 07a66c4  |
-| 2   | `refresh_token_service.py`   | `security/authentication.py` (partie 2) | ✅     | 07a66c4  |
-| 3   | `csrf_protection.py`         | `security/csrf.py`                      | ✅     | f7a420d  |
-| 4   | `spam_protection.py`         | `security/spam.py`                      | ✅     | f7a420d  |
-| 5   | `idempotency_service.py`     | `security/idempotency.py`               | ✅     | f7a420d  |
-| 6   | `safety_guards.py`           | `security/safety.py`                    | ✅     | f7a420d  |
-| 7   | `secret_rotation_monitor.py` | `security/secret_rotation.py`           | ✅     | f7a420d  |
-| 8   | `pii_masking/__init__.py`    | `security/pii/__init__.py`              | ✅     | f7a420d  |
+| #   | Ancien Fichier               | Nouveau Fichier                         | Status | Commit  |
+| --- | ---------------------------- | --------------------------------------- | ------ | ------- |
+| 1   | `access_token_service.py`    | `security/authentication.py` (partie 1) | ✅     | 07a66c4 |
+| 2   | `refresh_token_service.py`   | `security/authentication.py` (partie 2) | ✅     | 07a66c4 |
+| 3   | `csrf_protection.py`         | `security/csrf.py`                      | ✅     | f7a420d |
+| 4   | `spam_protection.py`         | `security/spam.py`                      | ✅     | f7a420d |
+| 5   | `idempotency_service.py`     | `security/idempotency.py`               | ✅     | f7a420d |
+| 6   | `safety_guards.py`           | `security/safety.py`                    | ✅     | f7a420d |
+| 7   | `secret_rotation_monitor.py` | `security/secret_rotation.py`           | ✅     | f7a420d |
+| 8   | `pii_masking/__init__.py`    | `security/pii/__init__.py`              | ✅     | f7a420d |
 
 #### Structure Cible
 
@@ -131,6 +131,7 @@ backend/services/security/
 - ✅ **10 services consolidés → 1 module `security/`** 🎯
 
 **Commits :**
+
 - `07a66c4` - Création module + authentication
 - `1320f9d` - Document suivi
 - `f7a420d` - Migration 6 services
