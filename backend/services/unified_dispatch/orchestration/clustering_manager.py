@@ -22,7 +22,7 @@ import logging
 from typing import Any
 
 from models import Company
-from services.unified_dispatch.clustering import GeographicClustering
+from services.unified_dispatch.data.clustering import GeographicClustering
 
 logger = logging.getLogger(__name__)
 
