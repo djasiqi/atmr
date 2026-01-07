@@ -4,7 +4,7 @@ import logging
 from typing import Any, cast
 
 from services.unified_dispatch import heuristics, solver
-from services.unified_dispatch import settings as ud_settings
+from services.unified_dispatch.core import settings as ud_settings
 
 logger = logging.getLogger(__name__)
 

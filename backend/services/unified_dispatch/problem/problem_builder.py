@@ -5,7 +5,7 @@ from typing import Any
 
 from models import Company
 from services.unified_dispatch import data
-from services.unified_dispatch import settings as ud_settings
+from services.unified_dispatch.core import settings as ud_settings
 from shared.geo_utils import GeoValidator
 
 logger = logging.getLogger(__name__)

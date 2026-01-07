@@ -22,7 +22,7 @@ from typing import Any, Dict
 from ext import db
 from models import Company
 from repositories.company_repository import CompanyRepository
-from services.unified_dispatch import settings as ud_settings
+from services.unified_dispatch.core import settings as ud_settings
 from services.unified_dispatch.core.exceptions import CompanyNotFoundError
 from services.unified_dispatch.core.types import DispatchResult
 from services.unified_dispatch.error_metrics import track_company_not_found
