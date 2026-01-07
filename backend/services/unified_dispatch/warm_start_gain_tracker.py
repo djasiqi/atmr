@@ -134,7 +134,7 @@ def measure_warm_start_gain(
     Returns:
         Dict avec 'gain_pct', 'with_time', 'without_time', 'size'
     """
-    from services.unified_dispatch.settings import Settings
+    from services.unified_dispatch.core.settings import Settings
 
     tracker = get_gain_tracker()
 
