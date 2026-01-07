@@ -9,7 +9,7 @@ const ReservationDetailsModal = ({ reservation, onClose }) => {
       <div className={styles.modalContent}>
         <h3>Détails de la réservation #{reservation.id}</h3>
         <p>
-          <strong>Client :</strong> {reservation.customer_name}
+          <strong>Client :</strong> {reservation.client_name}
         </p>
         {reservation.client?.birth_date && (
           <p>

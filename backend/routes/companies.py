@@ -30,7 +30,15 @@ from models.enums import BookingStatus, ClientType, PartnershipStatus, UserRole
 # TODO: Migrer vers repositories quand les méthodes nécessaires seront disponibles
 from models import Booking, Company, DelayEvent
 from models.partnership import Partnership
+from middleware.trace_id import get_trace_id
+from routes.api_error_models import (
+    create_api_error_model,
+    create_not_found_error_model,
+    create_permission_error_model,
+    create_validation_error_model,
+)
 from routes.db_error_utils import format_integrity_error
+from services.idempotency_service import IdempotencyService
 from infrastructure.dispatch import queue_adapter as queue
 from shared.error_handlers import APIErrorHandler
 from shared.notifications import notify_booking_update
@@ -62,6 +70,12 @@ companies_ns = Namespace(
     "companies",
     description="Opérations liées aux entreprises et à la gestion des réservations",
 )
+
+# ✅ P0: Modèles d'erreur standardisés
+api_error_model = create_api_error_model(companies_ns)
+validation_error_model = create_validation_error_model(companies_ns)
+not_found_error_model = create_not_found_error_model(companies_ns)
+permission_error_model = create_permission_error_model(companies_ns)
 
 MAX_LOGO_MB = 2  # taille max
 MAX_LOGO_BYTES = MAX_LOGO_MB * 1024 * 1024
@@ -566,6 +580,53 @@ class CompanyMe(Resource):
                 result = {"error": "Erreur interne"}
                 status_code = 500
         return result, status_code
+
+
+@companies_ns.route("/search")
+class CompanySearch(Resource):
+    # Longueur minimale requise pour une requête de recherche
+    MIN_SEARCH_QUERY_LENGTH = 2
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        """Recherche d'entreprises par nom pour les partenariats."""
+        try:
+            query = request.args.get("q", "").strip()
+            if not query or len(query) < self.MIN_SEARCH_QUERY_LENGTH:
+                return {"data": []}, 200
+
+            # Recherche par nom (insensible à la casse)
+            companies = (
+                Company.query.filter(Company.name.ilike(f"%{query}%"))
+                .filter(Company.is_active == True)  # noqa: E712
+                .limit(20)
+                .all()
+            )
+
+            # Exclure la propre entreprise de l'utilisateur
+            current_user_id = get_jwt_identity()
+            from models.user import User
+
+            current_user = User.query.filter_by(public_id=current_user_id).first()
+            if current_user and current_user.company_id:
+                companies = [c for c in companies if c.id != current_user.company_id]
+
+            result = [
+                {
+                    "id": c.id,
+                    "name": c.name,
+                    "contact_email": c.contact_email,
+                    "contact_phone": c.contact_phone,
+                    "address": c.address,
+                }
+                for c in companies
+            ]
+
+            return {"data": result}, 200
+        except Exception as e:
+            logger.exception("Erreur lors de la recherche d'entreprises: %s", e)
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 @companies_ns.route("/me/partnerships")
@@ -3361,15 +3422,41 @@ class CompanyClients(Resource):
     @role_required(UserRole.company)
     @limiter.limit("50 per hour")  # ✅ 2.8: Rate limiting création client
     @companies_ns.expect(client_create_model, validate=False)
-    def post(self):
+    @companies_ns.response(200, "Client créé avec succès (idempotency)")
+    @companies_ns.response(201, "Client créé avec succès")
+    @companies_ns.response(400, "Erreur de validation", validation_error_model)
+    @companies_ns.response(401, "Non authentifié", permission_error_model)
+    @companies_ns.response(403, "Non autorisé", permission_error_model)
+    @companies_ns.response(409, "Client déjà existant (idempotency)", api_error_model)
+    @companies_ns.response(500, "Erreur serveur", api_error_model)
+    def post(self):  # noqa: PLR0911
         """POST /companies/me/clients
         Crée un nouveau client (SELF_SERVICE, PRIVATE ou CORPORATE)
         pour l'entreprise courante, avec date de naissance optionnelle.
+
+        ✅ P0: Support idempotency-key pour éviter les doublons.
         """
         # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        # ✅ P0: Vérifier idempotency-key
+        idempotency_key = IdempotencyService.get_idempotency_key_from_request()
+        if idempotency_key:
+            cached_response = IdempotencyService.check_key(idempotency_key)
+            if cached_response[0]:  # Key exists
+                logger.info(
+                    "Idempotency key found, returning cached response",
+                    extra={
+                        "trace_id": get_trace_id(),
+                        "idempotency_key": idempotency_key,
+                    },
+                )
+                return cached_response[1], 201
+
         # ✅ DDD: Utilise use-case au lieu de service directement
         company, err, code = _get_current_company_via_use_case()
         if err:
+            # ✅ P0: Ajouter trace_id dans l'erreur
+            trace_id = get_trace_id()
+            err["trace_id"] = trace_id
             return err, code
         # 🔒 company.id → int sûr
         cid_obj = getattr(company, "id", None)
@@ -3483,7 +3570,25 @@ class CompanyClients(Resource):
         # send_welcome_email(str(user.email), generated_pwd)
         _ = generated_pwd
 
-        return client.serialize, 201
+        # ✅ P0: Ajouter trace_id dans la réponse
+        trace_id = get_trace_id()
+        logger.info(
+            "✅ Client créé avec succès pour company %s: %s (ID: %s)",
+            cid,
+            getattr(user, "email", ""),
+            client.id,
+            extra={"trace_id": trace_id, "client_id": client.id, "company_id": cid},
+        )
+
+        # ✅ P0: Stocker la réponse pour idempotency
+        response_data = client.serialize
+        if isinstance(response_data, dict):
+            response_data["trace_id"] = trace_id
+
+        if idempotency_key:
+            IdempotencyService.store_response(idempotency_key, response_data, 201)
+
+        return response_data, 201
 
 
 @companies_ns.route("/me/clients/<int:client_id>")

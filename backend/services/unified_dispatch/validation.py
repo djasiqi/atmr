@@ -474,12 +474,24 @@ def check_existing_assignment_conflict(
                 trip_time_min + 15
             )  # +15 min pour pickup + dropoff + marge
 
+        # ✅ Assouplir la validation : ne pas vérifier les conflits si les courses sont trop éloignées
+        # Limiter la fenêtre de validation à un maximum raisonnable (par exemple 3 heures)
+        MAX_VALIDATION_WINDOW_HOURS = 3
+        MAX_VALIDATION_WINDOW_MINUTES = MAX_VALIDATION_WINDOW_HOURS * 60
+
+        # Calculer l'écart absolu entre les deux courses
+        time_diff_minutes = abs((scheduled_time - existing_time).total_seconds() / 60)
+
+        # Si les courses sont à plus de MAX_VALIDATION_WINDOW_HOURS heures d'écart, pas de conflit possible
+        if time_diff_minutes > MAX_VALIDATION_WINDOW_MINUTES:
+            continue  # Passer à la prochaine assignation, pas de conflit possible
+
         time_start = existing_time - timedelta(minutes=tolerance_minutes)
         time_end = existing_time + timedelta(
             minutes=estimated_duration + tolerance_minutes
         )
 
-        # Vérifier si conflit temporel
+        # Vérifier si conflit temporel (seulement si dans la fenêtre de validation)
         if time_start <= scheduled_time <= time_end:
             # Calculer le temps nécessaire et l'écart disponible pour un message plus informatif
             existing_end_time = existing_time + timedelta(minutes=estimated_duration)

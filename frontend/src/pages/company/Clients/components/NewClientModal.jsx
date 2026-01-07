@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import styles from './ClientFormModal.module.css';
 import AddressAutocomplete from '../../../../components/common/AddressAutocomplete';
+import { parseAddressWithEstablishment } from '../../../../utils/addressParser';
 
 const NewClientModal = ({ onClose, onSave }) => {
   const [formData, setFormData] = useState({
@@ -47,94 +48,32 @@ const NewClientModal = ({ onClose, onSave }) => {
   const handleDomicileAddressSelect = (item) => {
     console.log('📍 [Domicile] Adresse sélectionnée:', item);
 
-    // Extraire les composants de l'adresse
-    // Priorité : utiliser les composants extraits (street, street_number) si disponibles
-    let streetNumber = item.street_number || '';
-    let street = item.street || '';
-    let postcode = item.postcode || '';
-    let city = item.city || '';
-
-    // Si les composants ne sont pas disponibles, parser depuis le label
-    if (!street && !postcode && !city && item.label) {
-      const label = item.label;
-      console.log('📍 [Domicile] Parsing depuis label:', label);
-      
-      // Pattern pour parser : "Rue Numéro, Code postal Ville" ou "Rue Numéro, Code postal, Ville"
-      // Exemples:
-      // - "Chemin des Campanules 2, 1219 Aïre, Suisse"
-      // - "Rue de Vermont 6bis, 1202, Genève"
-      // - "Avenue Ernest-Pictet 9, 1203, Genève"
-      
-      // Regex pour extraire: rue+numéro, code postal, ville
-      // Format attendu: "Rue Numéro, CP Ville" ou "Rue Numéro, CP, Ville"
-      const addressMatch = label.match(/^(.+?),\s*(\d{4})\s+([^,]+?)(?:\s*,\s*Suisse)?$/);
-      
-      if (addressMatch) {
-        const [, fullStreet, zip, town] = addressMatch;
-        // Séparer la rue et le numéro si possible
-        const streetMatch = fullStreet.match(/^(.+?)\s+(\d+[a-z]*)$/);
-        if (streetMatch) {
-          street = streetMatch[1].trim();
-          streetNumber = streetMatch[2].trim();
-        } else {
-          // Si pas de numéro séparé, garder tout comme rue
-          street = fullStreet.trim();
-        }
-        postcode = zip.trim();
-        city = town.trim();
-      } else {
-        // Fallback: essayer de séparer par virgules
-        const parts = label.split(',').map(p => p.trim());
-        if (parts.length >= 3) {
-          // Format: "Rue Numéro, CP, Ville"
-          const streetPart = parts[0];
-          const streetMatch = streetPart.match(/^(.+?)\s+(\d+[a-z]*)$/);
-          if (streetMatch) {
-            street = streetMatch[1].trim();
-            streetNumber = streetMatch[2].trim();
-          } else {
-            street = streetPart;
-          }
-          postcode = parts[1];
-          city = parts[2].replace(/\s*Suisse\s*$/, '').trim();
-        } else if (parts.length === 2) {
-          // Format: "Rue Numéro, CP Ville"
-          const streetPart = parts[0];
-          const streetMatch = streetPart.match(/^(.+?)\s+(\d+[a-z]*)$/);
-          if (streetMatch) {
-            street = streetMatch[1].trim();
-            streetNumber = streetMatch[2].trim();
-          } else {
-            street = streetPart;
-          }
-          const zipCityMatch = parts[1].match(/^(\d{4})\s+(.+?)(?:\s*,\s*Suisse)?$/);
-          if (zipCityMatch) {
-            postcode = zipCityMatch[1];
-            city = zipCityMatch[2].trim();
-          }
-        }
-      }
-    }
+    // ✅ Utiliser la fonction utilitaire pour parser l'adresse avec détection d'établissement
+    const label = item.label || '';
+    const parsed = parseAddressWithEstablishment(label, item);
 
     // Construire l'adresse complète (rue + numéro)
     const address =
-      streetNumber && street
-        ? `${street} ${streetNumber}`.trim()
-        : street || item.address || '';
+      parsed.streetNumber && parsed.street
+        ? `${parsed.street} ${parsed.streetNumber}`.trim()
+        : parsed.street || item.address || '';
 
     console.log('📍 [Domicile] Composants extraits:', {
-      streetNumber,
-      street,
+      establishment: parsed.establishment,
+      streetNumber: parsed.streetNumber,
+      street: parsed.street,
       address,
-      postcode,
-      city,
+      postcode: parsed.postcode,
+      city: parsed.city,
     });
 
     setFormData((prev) => ({
       ...prev,
+      // ✅ Si un établissement est détecté, le mettre dans residence_facility
+      residence_facility: parsed.establishment || prev.residence_facility,
       domicile_address: address,
-      domicile_zip: postcode,
-      domicile_city: city,
+      domicile_zip: parsed.postcode,
+      domicile_city: parsed.city,
       // ✅ NE PAS toucher au champ address global ici
       // Il sera construit dans le payload si nécessaire
     }));

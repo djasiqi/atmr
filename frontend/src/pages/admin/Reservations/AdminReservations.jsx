@@ -69,7 +69,7 @@ const AdminReservations = () => {
                         <td>
                           {booking.date_formatted ?? '--'} {booking.time_formatted ?? ''}
                         </td>
-                        <td>{booking.customer_name ?? '--'}</td>
+                        <td>{booking.client_name ?? '--'}</td>
                         <td>{booking.pickup_location ?? '--'}</td>
                         <td>{booking.dropoff_location ?? '--'}</td>
                         <td>{booking.amount != null ? `${booking.amount} CHF` : '--'}</td>

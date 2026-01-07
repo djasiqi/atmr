@@ -121,6 +121,63 @@ try {
   // ignore
 }
 
+// ✅ P2-2: CSRF Mobile - Support optionnel
+let csrfToken: string | null = null;
+let csrfTokenPromise: Promise<string | null> | null = null;
+
+/**
+ * ✅ P2-2: Récupère le token CSRF depuis le backend (optionnel pour mobile).
+ * Le token est mis en cache et réutilisé pour toutes les requêtes mutantes.
+ */
+async function fetchCSRFToken(): Promise<string | null> {
+  // Si déjà en cours de récupération, attendre la promesse existante
+  if (csrfTokenPromise) {
+    return csrfTokenPromise;
+  }
+
+  // Si déjà en cache, retourner immédiatement
+  if (csrfToken) {
+    return csrfToken;
+  }
+
+  // Créer une nouvelle promesse pour récupérer le token
+  csrfTokenPromise = (async () => {
+    try {
+      // ✅ P2-2: Récupérer le token CSRF depuis l'endpoint backend
+      // Note: Cet endpoint doit exister dans backend/routes/auth.py
+      const response = await axios.get(`${baseURL.replace("/api/v1", "")}/auth/csrf-token`, {
+        withCredentials: false, // Pas de cookies sur mobile
+      });
+
+      const token = response.data?.csrf_token || null;
+      if (token) {
+        csrfToken = token;
+        console.log("✅ [CSRF] Token CSRF récupéré avec succès");
+      } else {
+        console.warn("⚠️ [CSRF] Token CSRF non reçu du backend");
+      }
+
+      return token;
+    } catch (error) {
+      // ✅ P2-2: En cas d'erreur, ne pas bloquer l'application (CSRF optionnel)
+      console.warn("⚠️ [CSRF] Impossible de récupérer le token CSRF:", error);
+      return null;
+    } finally {
+      csrfTokenPromise = null; // Réinitialiser pour permettre un nouveau fetch si nécessaire
+    }
+  })();
+
+  return csrfTokenPromise;
+}
+
+/**
+ * ✅ P2-2: Invalide le token CSRF (utile lors du logout ou changement de session).
+ */
+export const invalidateCSRFToken = () => {
+  csrfToken = null;
+  csrfTokenPromise = null;
+};
+
 // --- instance axios ---
 export const api = axios.create({
   baseURL,
@@ -193,6 +250,14 @@ export const invalidateInterceptorCache = () => {
 // --- Authorization bearer + Device ID ---
 api.interceptors.request.use(
   async (config) => {
+    // ✅ P2-2: Ajouter le token CSRF pour les requêtes mutantes (optionnel, mobile uniquement)
+    const isMutatingMethod = ["POST", "PUT", "DELETE", "PATCH"].includes(
+      config.method?.toUpperCase() || ""
+    );
+    if (isMutatingMethod && Platform.OS !== "web" && csrfToken) {
+      config.headers["X-CSRF-Token"] = csrfToken;
+    }
+
     // #region agent log
     const isLoginRequest = config.url === "/auth/login" || config.url?.endsWith("/auth/login");
     // #endregion
@@ -935,6 +1000,8 @@ export type Booking = {
   estimated_duration?: string;
   duration_seconds?: number; // Durée estimée du trajet en secondes
   distance_meters?: number; // Distance en mètres
+  // ✅ P1-4 Phase 3.3: Déprécié - utiliser client_name à la place
+  /** @deprecated Utiliser client_name à la place */
   customer_name?: string;
   client?: {
     id: number;
@@ -942,8 +1009,14 @@ export type Booking = {
     last_name: string;
     full_name: string;
     birth_date?: string;
+    contact_phone?: string; // ✅ P1-4 Phase 3.1: Utiliser client.contact_phone au lieu de client_phone au niveau racine
+    door_code?: string;
+    floor?: string;
+    access_notes?: string;
   };
-  client_phone: string;
+  // ✅ P1-4 Phase 3.1: Déprécié - utiliser client.contact_phone à la place
+  /** @deprecated Utiliser client.contact_phone à la place */
+  client_phone?: string;
   medical_destination?: string;
   wheelchair?: boolean;
   notes?: string;
@@ -956,6 +1029,22 @@ export type Booking = {
   // Nouveaux champs pour la chaise roulante
   wheelchair_client_has?: boolean;
   wheelchair_need?: boolean;
+  // ✅ P1-4 Phase 3.2: Ajouter champs manquants
+  boarded_at?: string; // ISO 8601
+  completed_at?: string; // ISO 8601
+  // ✅ P1-4 Phase 3.4: Ajouter company_id et company_name
+  company_id?: number;
+  company_name?: string;
+  // ✅ P1-4 Phase 3.5: Ajouter timestamps ISO
+  created_at?: string; // ISO 8601
+  updated_at?: string; // ISO 8601
+  created_at_formatted?: string; // Formaté pour affichage (optionnel)
+  updated_at_formatted?: string; // Formaté pour affichage (optionnel)
+  // ✅ P1-4 Phase 3.6: Ajouter coordonnées GPS
+  pickup_lat?: number;
+  pickup_lon?: number;
+  dropoff_lat?: number;
+  dropoff_lon?: number;
   [key: string]: any;
 };
 
@@ -986,10 +1075,8 @@ export const getCompletedTrips = async (
 ): Promise<Booking[]> => {
   const response = await api.get<Booking[]>("/driver/me/bookings/all");
   // Filtrer uniquement les courses complétées
-  return response.data.filter(
-    (booking) =>
-      booking.status === "completed" || booking.status === "return_completed"
-  );
+  // ✅ P0-1: Utiliser la fonction de normalisation
+  return response.data.filter((booking) => isCompletedStatus(booking.status));
 };
 
 // Détail d’une course : route conforme à backend driver.py
@@ -998,20 +1085,20 @@ export const getTripDetails = async (bookingId: number): Promise<Booking> => {
   return response.data;
 };
 
-export type BookingStatus =
-  | "en_route"
-  | "in_progress"
-  | "completed"
-  | "return_completed"
-  | "canceled"; // ✅ Annulation par le chauffeur
+// ✅ P0-1: Import depuis utils pour cohérence
+import type { BookingStatus } from "@/utils/bookingStatus";
+import { isCompletedStatus } from "@/utils/bookingStatus";
+export type { BookingStatus };
 
 export const updateTripStatus = async (
   bookingId: number,
   status: BookingStatus,
   cancelReason?: "CANCEL" | "RELEASE" | string
 ): Promise<void> => {
-  const payload: { status: BookingStatus; cancel_reason?: string } = { status };
-  if (cancelReason && status === "canceled") {
+  // ✅ P0-1: Normaliser le statut avant envoi
+  const normalizedStatus = status.toUpperCase() as BookingStatus;
+  const payload: { status: BookingStatus; cancel_reason?: string } = { status: normalizedStatus };
+  if (cancelReason && normalizedStatus === "CANCELED") {
     payload.cancel_reason = cancelReason;
   }
   await api.put(`/driver/me/bookings/${bookingId}/status`, payload);
@@ -1021,7 +1108,7 @@ export const completeTrip = async (
   bookingId: number,
   isReturn = false
 ): Promise<void> => {
-  const status: BookingStatus = isReturn ? "return_completed" : "completed";
+  const status: BookingStatus = isReturn ? "RETURN_COMPLETED" : "COMPLETED";
   await updateTripStatus(bookingId, status);
 };
 

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import styles from './ClientFormModal.module.css';
 import AddressAutocomplete from '../../../../components/common/AddressAutocomplete';
+import { parseAddressWithEstablishment } from '../../../../utils/addressParser';
 
 const EditClientModal = ({ client, onClose, onSave }) => {
   const [formData, setFormData] = useState({
@@ -45,15 +46,32 @@ const EditClientModal = ({ client, onClose, onSave }) => {
   const handleDomicileAddressSelect = (item) => {
     console.log('📍 [Domicile] Adresse sélectionnée:', item);
 
-    const address = item.address || item.label || '';
-    const postcode = item.postcode || '';
-    const city = item.city || '';
+    // ✅ Utiliser la fonction utilitaire pour parser l'adresse avec détection d'établissement
+    const label = item.label || '';
+    const parsed = parseAddressWithEstablishment(label, item);
+
+    // Construire l'adresse complète (rue + numéro)
+    const address =
+      parsed.streetNumber && parsed.street
+        ? `${parsed.street} ${parsed.streetNumber}`.trim()
+        : parsed.street || item.address || '';
+
+    console.log('📍 [Domicile] Composants extraits:', {
+      establishment: parsed.establishment,
+      streetNumber: parsed.streetNumber,
+      street: parsed.street,
+      address,
+      postcode: parsed.postcode,
+      city: parsed.city,
+    });
 
     setFormData((prev) => ({
       ...prev,
+      // ✅ Si un établissement est détecté, le mettre dans residence_facility
+      residence_facility: parsed.establishment || prev.residence_facility,
       domicile_address: address,
-      domicile_zip: postcode,
-      domicile_city: city,
+      domicile_zip: parsed.postcode,
+      domicile_city: parsed.city,
     }));
 
     setDomicileCoords({

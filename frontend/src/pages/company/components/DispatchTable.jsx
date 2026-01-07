@@ -752,7 +752,7 @@ const DispatchTable = ({
               return (
                 <tr key={b.id}>
                   <td>{b.id}</td>
-                  <td>{b.customer_name || b.client?.full_name || '—'}</td>
+                  <td>{b.client_name || b.client?.full_name || '—'}</td>
                   <td>{renderBookingDateTime(b)}</td>
                   <td>{b.pickup_location || '—'}</td>
                   <td>{b.dropoff_location || '—'}</td>
@@ -875,7 +875,7 @@ const DispatchTable = ({
                 <strong>Course #{selectedBooking.id}</strong>
                 <div>
                   Client :{' '}
-                  {selectedBooking.customer_name || selectedBooking.client?.full_name || '—'}
+                  {selectedBooking.client_name || selectedBooking.client?.full_name || '—'}
                 </div>
                 <div>Pickup : {selectedBooking.pickup_location || '—'}</div>
                 <div>Dropoff : {selectedBooking.dropoff_location || '—'}</div>
@@ -964,7 +964,7 @@ DispatchTable.propTypes = {
     PropTypes.arrayOf(
       PropTypes.shape({
         id: PropTypes.number.isRequired,
-        customer_name: PropTypes.string,
+        client_name: PropTypes.string,
         client: PropTypes.shape({ full_name: PropTypes.string }),
         scheduled_time: PropTypes.string, // ISO
         pickup_location: PropTypes.string,

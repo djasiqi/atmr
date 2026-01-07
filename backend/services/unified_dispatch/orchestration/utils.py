@@ -13,7 +13,7 @@ Fonctions:
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime
+from datetime import date
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -41,11 +41,32 @@ def to_date_ymd(s: str) -> date:
     """
     DATE_FORMAT_LENGTH = 10  # Longueur du format YYYY-MM-DD
     try:
-        if len(s) == DATE_FORMAT_LENGTH and s[4] == "-" and s[7] == "-":
-            return date.fromisoformat(s)
-        return datetime.fromisoformat(s).date()
+        # Si la chaîne contient 'T' ou '+' ou 'Z', c'est un format ISO complet
+        # Extraire seulement la partie date (les 10 premiers caractères)
+        if "T" in s or "+" in s or s.endswith("Z"):
+            # Extraire la partie date (YYYY-MM-DD) avant le 'T' ou le '+'
+            date_part = s.split("T")[0].split("+")[0].split("Z")[0]
+            if len(date_part) == DATE_FORMAT_LENGTH:
+                s = date_part
+            else:
+                raise ValueError(
+                    f"for_date invalide: {s!r} (attendu 'YYYY-MM-DD' ou format ISO)"
+                )
+
+        # Vérifier que la longueur est correcte et que les séparateurs sont présents
+        if len(s) != DATE_FORMAT_LENGTH:
+            raise ValueError(
+                f"for_date invalide: {s!r} (attendu 'YYYY-MM-DD', longueur incorrecte)"
+            )
+        if s[4] != "-" or s[7] != "-":
+            raise ValueError(
+                f"for_date invalide: {s!r} (attendu 'YYYY-MM-DD', séparateurs manquants)"
+            )
+        return date.fromisoformat(s)
     except (ValueError, TypeError) as err:
         # Erreurs de parsing de date attendues
+        if isinstance(err, ValueError) and "for_date invalide" in str(err):
+            raise
         msg = f"for_date invalide: {s!r} (attendu 'YYYY-MM-DD')"
         raise ValueError(msg) from err
     except Exception as err:

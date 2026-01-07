@@ -20,6 +20,8 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
   StyleSheet,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
@@ -28,6 +30,8 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { useAuth } from "@/hooks/useAuth";
 import { useEnterpriseSocket } from "@/hooks/useEnterpriseSocket";
+import { useEnterpriseNotifications } from "@/hooks/useEnterpriseNotifications";
+import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import {
   getDispatchMessages,
   sendDispatchMessage,
@@ -88,12 +92,20 @@ type ListItem =
 
 export default function EnterpriseChatScreen() {
   const { enterpriseSession } = useAuth();
+
+  // Activer les notifications push pour l'entreprise
+  useEnterpriseNotifications();
+
+  // Gérer les messages non lus
+  const { markAsRead, countUnreadInMessages } = useUnreadMessages();
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isTeamTyping, setIsTeamTyping] = useState(false);
   const [showAttachment, setShowAttachment] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [pdfPreview, setPdfPreview] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Mesure réelle de la barre d'input
   const [inputContainerHeight, setInputContainerHeight] = useState(
@@ -192,8 +204,17 @@ export default function EnterpriseChatScreen() {
 
   const handleSendImage = useCallback(
     async (imageUri: string) => {
-      if (!socket || !enterpriseSession?.company?.id) return;
+      if (!socket || !enterpriseSession?.company?.id) {
+        Alert.alert("Erreur", "Connexion non disponible. Veuillez réessayer.");
+        return;
+      }
 
+      if (!socket.connected) {
+        Alert.alert("Erreur", "Connexion au serveur perdue. Veuillez réessayer.");
+        return;
+      }
+
+      setIsUploading(true);
       try {
         const formData = new FormData();
         formData.append("file", {
@@ -207,13 +228,24 @@ export default function EnterpriseChatScreen() {
         });
 
         const { url } = uploadRes.data;
+        if (!url) {
+          throw new Error("URL de l'image non reçue du serveur");
+        }
+
         socket.emit("team_chat_message", {
           content: "",
           image_url: url,
           receiver_id: null,
         });
-      } catch (error) {
-        console.log("[EnterpriseChat] Erreur upload image:", error);
+      } catch (error: any) {
+        console.error("[EnterpriseChat] Erreur upload image:", error);
+        const errorMessage =
+          error?.response?.data?.error ||
+          error?.message ||
+          "Erreur lors de l'envoi de l'image. Veuillez réessayer.";
+        Alert.alert("Erreur", errorMessage);
+      } finally {
+        setIsUploading(false);
       }
     },
     [socket, enterpriseSession?.company?.id]
@@ -221,8 +253,17 @@ export default function EnterpriseChatScreen() {
 
   const handleSendPdf = useCallback(
     async (pdfUri: string, filename: string) => {
-      if (!socket || !enterpriseSession?.company?.id) return;
+      if (!socket || !enterpriseSession?.company?.id) {
+        Alert.alert("Erreur", "Connexion non disponible. Veuillez réessayer.");
+        return;
+      }
 
+      if (!socket.connected) {
+        Alert.alert("Erreur", "Connexion au serveur perdue. Veuillez réessayer.");
+        return;
+      }
+
+      setIsUploading(true);
       try {
         const formData = new FormData();
         formData.append("file", {
@@ -236,6 +277,10 @@ export default function EnterpriseChatScreen() {
         });
 
         const { url, filename: uploadedFilename, size_bytes } = uploadRes.data;
+        if (!url) {
+          throw new Error("URL du PDF non reçue du serveur");
+        }
+
         socket.emit("team_chat_message", {
           content: "",
           pdf_url: url,
@@ -243,8 +288,15 @@ export default function EnterpriseChatScreen() {
           pdf_size: size_bytes,
           receiver_id: null,
         });
-      } catch (error) {
-        console.log("[EnterpriseChat] Erreur upload PDF:", error);
+      } catch (error: any) {
+        console.error("[EnterpriseChat] Erreur upload PDF:", error);
+        const errorMessage =
+          error?.response?.data?.error ||
+          error?.message ||
+          "Erreur lors de l'envoi du PDF. Veuillez réessayer.";
+        Alert.alert("Erreur", errorMessage);
+      } finally {
+        setIsUploading(false);
       }
     },
     [socket, enterpriseSession?.company?.id]
@@ -332,6 +384,11 @@ export default function EnterpriseChatScreen() {
         isAtBottomRef.current = true;
         setShowScrollButton(false);
         setHasMoreMessages(fetched.length >= CHAT_FETCH_LIMIT);
+
+        // Compter les messages non lus parmi les messages chargés
+        if (countUnreadInMessages) {
+          countUnreadInMessages(sorted);
+        }
 
         // Scroll vers le bas après un délai
         requestAnimationFrame(() => {
@@ -462,25 +519,59 @@ export default function EnterpriseChatScreen() {
 
   const sendMessage = useCallback(() => {
     const content = input.trim();
-    if (!content || !socket) return;
+    if (!content) return;
 
-    socket.emit("team_chat_message", {
-      content,
-      receiver_id: null,
-    });
-
-    setInput("");
-    if (typingTimeout.current) {
-      clearTimeout(typingTimeout.current);
-      typingTimeout.current = null;
+    if (!socket) {
+      Alert.alert("Erreur", "Connexion non disponible. Veuillez réessayer.");
+      return;
     }
-    socket.emit("typing_stop");
+
+    if (!socket.connected) {
+      Alert.alert("Erreur", "Connexion au serveur perdue. Veuillez réessayer.");
+      return;
+    }
+
+    try {
+      socket.emit("team_chat_message", {
+        content,
+        receiver_id: null,
+      });
+
+      setInput("");
+      if (typingTimeout.current) {
+        clearTimeout(typingTimeout.current);
+        typingTimeout.current = null;
+      }
+      socket.emit("typing_stop");
+    } catch (error: any) {
+      console.error("[EnterpriseChat] Erreur envoi message:", error);
+      Alert.alert(
+        "Erreur",
+        error?.message || "Erreur lors de l'envoi du message. Veuillez réessayer."
+      );
+    }
   }, [input, socket]);
 
   // =============== FOCUS SCREEN ===============
 
   useFocusEffect(
     useCallback(() => {
+      // Marquer tous les messages comme lus quand l'écran est au focus
+      if (messages.length > 0) {
+        const lastMessage = messages[messages.length - 1];
+        if (lastMessage?.id) {
+          const messageId = typeof lastMessage.id === "string"
+            ? parseInt(lastMessage.id, 10)
+            : lastMessage.id;
+          const messageTimestamp = lastMessage.timestamp
+            ? new Date(lastMessage.timestamp).getTime()
+            : Date.now();
+          if (!isNaN(messageId)) {
+            markAsRead(messageId, messageTimestamp);
+          }
+        }
+      }
+
       if (messages.length > 0 && isAtBottomRef.current) {
         const t = setTimeout(() => {
           scrollToBottom(false);
@@ -491,7 +582,7 @@ export default function EnterpriseChatScreen() {
         return () => clearTimeout(t);
       }
       return () => { };
-    }, [messages.length, scrollToBottom])
+    }, [messages.length, scrollToBottom, markAsRead])
   );
 
   // =============== KEYBOARD LISTENERS (Android uniquement) ===============
@@ -783,13 +874,18 @@ export default function EnterpriseChatScreen() {
         <TouchableOpacity
           onPress={() => setShowAttachment(true)}
           style={{ marginRight: 8 }}
+          disabled={isUploading}
         >
-          <Ionicons
-            name="attach"
-            size={22}
-            color="#0A7F59"
-            style={{ transform: [{ rotate: "45deg" }] }}
-          />
+          {isUploading ? (
+            <ActivityIndicator size="small" color="#0A7F59" />
+          ) : (
+            <Ionicons
+              name="attach"
+              size={22}
+              color="#0A7F59"
+              style={{ transform: [{ rotate: "45deg" }] }}
+            />
+          )}
         </TouchableOpacity>
 
         <TextInput
@@ -811,8 +907,13 @@ export default function EnterpriseChatScreen() {
         <TouchableOpacity
           onPress={sendMessage}
           style={chatStyles.sendButton}
+          disabled={isUploading || !input.trim()}
         >
-          <Ionicons name="send" size={20} color="#FFFFFF" />
+          {isUploading ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <Ionicons name="send" size={20} color="#FFFFFF" />
+          )}
         </TouchableOpacity>
       </View>
     </View>

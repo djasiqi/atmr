@@ -6,6 +6,7 @@ import { styles } from "@/styles/missionCardStyles";
 import { styles as groupStyles } from "@/styles/missionGroupStyles";
 import { updateTripStatus } from "@/services/api";
 import CancelJustificationModal from "./CancelJustificationModal";
+import { isCompletedStatus, isCanceledStatus, normalizeBookingStatus } from "@/utils/bookingStatus";
 
 type Props = {
   mission: Mission | null;
@@ -57,25 +58,28 @@ const MissionCard: MissionCardType = ({
     setStatus(mission?.status);
   }, [mission?.status]);
 
+  // ✅ P0-1: Normaliser les statuts pour correspondre au backend (uppercase)
   const formatStatus = (s?: string): string => {
-    switch (s) {
-      case "assigned":
+    const normalized = s?.toUpperCase();
+    switch (normalized) {
+      case "ASSIGNED":
         return "📦 Assignée";
-      case "en_route":
+      case "EN_ROUTE":
         return "🚗 En route";
-      case "in_progress":
+      case "IN_PROGRESS":
         return "🟡 En cours";
-      case "completed":
+      case "COMPLETED":
         return "✅ Terminée";
-      case "canceled":
+      case "CANCELED":
         return "❌ Annulée";
       default:
         return "🕓 À venir";
     }
   };
 
+  // ✅ P0-1: Utiliser les statuts en uppercase
   const handleStatusUpdate = async (
-    newStatus: "en_route" | "in_progress" | "completed" | "canceled",
+    newStatus: "EN_ROUTE" | "IN_PROGRESS" | "COMPLETED" | "CANCELED",
     cancelReason?: "CANCEL" | "RELEASE" | string
   ) => {
     if (!mission || isUpdatingStatus) return;
@@ -85,8 +89,8 @@ const MissionCard: MissionCardType = ({
       setStatus(newStatus);
       Object.assign(mission, { status: newStatus });
       onStatusChange?.(mission.id, newStatus);
-      if (newStatus === "completed") onComplete?.(mission.id);
-      if (newStatus === "canceled") {
+      if (newStatus === "COMPLETED") onComplete?.(mission.id);
+      if (newStatus === "CANCELED") {
         // ✅ Mission annulée : notifier selon le type
         if (cancelReason === "RELEASE") {
           Alert.alert(
@@ -114,12 +118,13 @@ const MissionCard: MissionCardType = ({
 
   const handleCancelJustification = (reason: string, isClientFault: boolean) => {
     // La raison sera envoyée au backend qui décidera de la facturation
-    handleStatusUpdate("canceled", reason);
+    // ✅ P0-1: Utiliser uppercase
+    handleStatusUpdate("CANCELED", reason);
     setCancelModalVisible(false);
   };
 
   const handleReleaseConfirm = () => {
-    handleStatusUpdate("canceled", "RELEASE");
+    handleStatusUpdate("CANCELED", "RELEASE");
     setReleaseModalVisible(false);
   };
 
@@ -162,17 +167,18 @@ const MissionCard: MissionCardType = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [releaseModalVisible]);
 
+  // ✅ P0-1: Normaliser le statut pour les comparaisons
+  const normalizedStatus = normalizeBookingStatus(status) as BookingStatus;
+
   const getCurrentDestination = (): string => {
     if (!mission) return "";
-    if (status === "in_progress") return mission.dropoff_location || "";
-    if (status === "en_route") return mission.pickup_location || "";
+    if (normalizedStatus === "IN_PROGRESS") return mission.dropoff_location || "";
+    if (normalizedStatus === "EN_ROUTE") return mission.pickup_location || "";
     return "";
   };
 
   const shouldShowNavigation =
-    status !== "completed" &&
-    status !== "return_completed" &&
-    status !== "canceled";
+    !isCompletedStatus(status) && !isCanceledStatus(status);
 
   if (!mission) {
     return <EmptyStateComponent />;
@@ -212,7 +218,8 @@ const MissionCard: MissionCardType = ({
         <View style={{ flex: 1 }}>
           <Text style={styles.clientName}>
             {mission.client_name ||
-              mission.customer_name ||
+              // ✅ P1-4 Phase 3.3: Utiliser client_name au lieu de customer_name
+              mission.client_name ||
               mission.client?.full_name ||
               "Non spécifié"}
           </Text>
@@ -274,7 +281,7 @@ const MissionCard: MissionCardType = ({
       {/* Infos supplémentaires */}
       <View style={styles.metaInfoSection}>
         {/* AVANT le client à bord (assigned, en_route) : Afficher les infos chaise roulante */}
-        {status !== "in_progress" && (mission.wheelchair_client_has || mission.wheelchair_need) && (
+        {normalizedStatus !== "IN_PROGRESS" && (mission.wheelchair_client_has || mission.wheelchair_need) && (
           <View style={styles.wheelchairSection}>
             {mission.wheelchair_client_has && (
               <Text style={styles.wheelchairAlert}>
@@ -290,7 +297,7 @@ const MissionCard: MissionCardType = ({
         )}
 
         {/* Ancien champ wheelchair (gardé pour compatibilité) - seulement avant client à bord */}
-        {status !== "in_progress" &&
+        {normalizedStatus !== "IN_PROGRESS" &&
           mission.wheelchair &&
           !mission.wheelchair_client_has &&
           !mission.wheelchair_need && (
@@ -300,7 +307,7 @@ const MissionCard: MissionCardType = ({
           )}
 
         {/* APRÈS le client à bord (in_progress) : Afficher les infos médicales */}
-        {status === "in_progress" && (mission.medical_facility ||
+        {normalizedStatus === "IN_PROGRESS" && (mission.medical_facility ||
           mission.doctor_name ||
           mission.hospital_service) && (
             <View style={styles.medicalInfoSection}>
@@ -354,9 +361,9 @@ const MissionCard: MissionCardType = ({
           </TouchableOpacity>
         )}
 
-        {status === "assigned" && (
+        {normalizedStatus === "ASSIGNED" && (
           <TouchableOpacity
-            onPress={() => handleStatusUpdate("en_route")}
+            onPress={() => handleStatusUpdate("EN_ROUTE")}
             style={styles.actionItemEnhanced}
             disabled={isUpdatingStatus}
           >
@@ -365,9 +372,9 @@ const MissionCard: MissionCardType = ({
           </TouchableOpacity>
         )}
 
-        {status === "en_route" && (
+        {normalizedStatus === "EN_ROUTE" && (
           <TouchableOpacity
-            onPress={() => handleStatusUpdate("in_progress")}
+            onPress={() => handleStatusUpdate("IN_PROGRESS")}
             style={styles.actionItemEnhanced}
             disabled={isUpdatingStatus}
           >
@@ -376,14 +383,14 @@ const MissionCard: MissionCardType = ({
           </TouchableOpacity>
         )}
 
-        {status === "in_progress" && (
+        {normalizedStatus === "IN_PROGRESS" && (
           <TouchableOpacity
             onPress={() => {
               // Ouvrir le modal de confirmation au lieu de terminer directement
               if (mission && onComplete) {
                 onComplete(mission.id);
               } else {
-                handleStatusUpdate("completed");
+                handleStatusUpdate("COMPLETED");
               }
             }}
             style={styles.actionItemEnhanced}
@@ -409,7 +416,7 @@ const MissionCard: MissionCardType = ({
       </View>
 
       {/* Actions secondaires : Annuler (en dessous) */}
-      {(status === "assigned" || status === "en_route") && (
+      {(normalizedStatus === "ASSIGNED" || normalizedStatus === "EN_ROUTE") && (
         <View style={styles.actionsRowSecondary}>
           <TouchableOpacity
             onPress={handleReleasePress}

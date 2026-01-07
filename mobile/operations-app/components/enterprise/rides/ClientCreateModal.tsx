@@ -51,6 +51,7 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
   // Adresse de domicile
   const [domicileAddress, setDomicileAddress] = useState("");
   const [domicileSuggestion, setDomicileSuggestion] = useState<AddressSuggestion | undefined>();
+  const [residenceFacility, setResidenceFacility] = useState(""); // Établissement de résidence
 
   // Fonction utilitaire pour nettoyer les adresses avec doublons
   const cleanAddressString = (address: string): string => {
@@ -130,6 +131,7 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
       setInstitutionName("");
       setDomicileAddress("");
       setDomicileSuggestion(undefined);
+      setResidenceFacility("");
       setError(null);
     }
   }, [visible]);
@@ -162,27 +164,100 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
         fullAddress = cleanAddressString(domicileSuggestion.label || domicileSuggestion.address || "");
       }
 
-      // Parser l'adresse pour extraire code postal et ville
-      // Format attendu: "Rue Numéro, Code postal, Ville" ou "Rue Numéro, Code postal Ville"
+      // ✅ Parser l'adresse avec détection d'établissement
+      // Mots-clés pour détecter les établissements
+      const establishmentKeywords = [
+        'clinique', 'hôpital', 'hopital', 'hospital', 'ems', 'foyer', 'centre',
+        'maison', 'résidence', 'residence', 'institut', 'institution',
+        'établissement', 'etablissement', 'cabinet', 'dispensaire',
+        'polyclinique', 'sanatorium', 'maison de santé', 'maison de retraite',
+      ];
+
+      const isEstablishment = (text: string): boolean => {
+        if (!text) return false;
+        const lowerText = text.toLowerCase();
+        return establishmentKeywords.some((keyword) => lowerText.includes(keyword));
+      };
+
+      // Parser l'adresse pour extraire établissement, rue, code postal et ville
+      // Format attendu: "Établissement, Rue Numéro, Code postal, Ville" ou "Rue Numéro, Code postal, Ville"
+      let establishment = "";
       let domicileStreet = fullAddress;
       let domicileZip = "";
       let domicileCity = "";
 
-      // Essayer de parser le format "Rue, Code postal, Ville" ou "Rue, Code postal Ville"
-      const addressMatch = fullAddress.match(/^(.+?),\s*(\d{4})\s+([^,]+?)(?:\s*,\s*Suisse)?$/);
-      if (addressMatch) {
-        domicileStreet = addressMatch[1].trim();
-        domicileZip = addressMatch[2];
-        domicileCity = addressMatch[3].trim();
+      // Séparer par virgules
+      const parts = fullAddress.split(',').map((p) => p.trim()).filter((p) => p.length > 0);
+
+      if (parts.length >= 3) {
+        // Vérifier si la première partie est un établissement
+        if (isEstablishment(parts[0])) {
+          establishment = parts[0];
+          // La deuxième partie est la rue (avec ou sans numéro)
+          domicileStreet = parts[1];
+          // La troisième partie peut être le code postal ou la ville
+          if (/^\d{4}$/.test(parts[2])) {
+            domicileZip = parts[2];
+            // La quatrième partie est la ville
+            if (parts.length >= 4) {
+              domicileCity = parts[3].replace(/\s*(Suisse|Switzerland|France|Deutschland|Germany|Italy|Italia)\s*$/i, '').trim();
+            }
+          } else {
+            // La troisième partie est la ville (code postal manquant ou dans la deuxième partie)
+            domicileCity = parts[2].replace(/\s*(Suisse|Switzerland|France|Deutschland|Germany|Italy|Italia)\s*$/i, '').trim();
+            // Essayer d'extraire le code postal de la deuxième partie si possible
+            const zipMatch = parts[1].match(/\b(\d{4})\b/);
+            if (zipMatch) {
+              domicileZip = zipMatch[1];
+              // Retirer le code postal de la rue
+              domicileStreet = parts[1].replace(/\b\d{4}\b/, '').trim();
+            }
+          }
+        } else {
+          // Pas d'établissement : format classique "Rue Numéro, CP, Ville"
+          domicileStreet = parts[0];
+          if (/^\d{4}$/.test(parts[1])) {
+            domicileZip = parts[1];
+            if (parts.length >= 3) {
+              domicileCity = parts[2].replace(/\s*(Suisse|Switzerland|France|Deutschland|Germany|Italy|Italia)\s*$/i, '').trim();
+            }
+          } else {
+            // Format "Rue, CP Ville"
+            const zipCityMatch = parts[1].match(/^(\d{4})\s+(.+?)(?:\s*,\s*(?:Suisse|Switzerland|France|Deutschland|Germany|Italy|Italia))?$/i);
+            if (zipCityMatch) {
+              domicileZip = zipCityMatch[1];
+              domicileCity = zipCityMatch[2].trim();
+            } else {
+              domicileCity = parts[1].replace(/\s*(Suisse|Switzerland|France|Deutschland|Germany|Italy|Italia)\s*$/i, '').trim();
+            }
+          }
+        }
+      } else if (parts.length === 2) {
+        // Format "Rue Numéro, CP Ville" ou "Établissement, Rue"
+        if (isEstablishment(parts[0])) {
+          establishment = parts[0];
+          domicileStreet = parts[1];
+          // Code postal et ville manquants dans ce format
+        } else {
+          // Format classique "Rue Numéro, CP Ville"
+          domicileStreet = parts[0];
+          const zipCityMatch = parts[1].match(/^(\d{4})\s+(.+?)(?:\s*,\s*(?:Suisse|Switzerland|France|Deutschland|Germany|Italy|Italia))?$/i);
+          if (zipCityMatch) {
+            domicileZip = zipCityMatch[1];
+            domicileCity = zipCityMatch[2].trim();
+          } else {
+            domicileCity = parts[1].replace(/\s*(Suisse|Switzerland|France|Deutschland|Germany|Italy|Italia)\s*$/i, '').trim();
+          }
+        }
       } else {
-        // Si le parsing échoue, essayer de trouver le code postal ailleurs dans l'adresse
+        // Format simple : essayer de trouver le code postal
         const zipMatch = fullAddress.match(/(\d{4})/);
         if (zipMatch) {
           const zipIndex = fullAddress.indexOf(zipMatch[1]);
           domicileStreet = fullAddress.substring(0, zipIndex).replace(/,\s*$/, "").trim();
           domicileZip = zipMatch[1];
           const afterZip = fullAddress.substring(zipIndex + 4).trim();
-          const cityMatch = afterZip.match(/^,\s*([^,]+?)(?:\s*,\s*Suisse)?$/);
+          const cityMatch = afterZip.match(/^,\s*([^,]+?)(?:\s*,\s*(?:Suisse|Switzerland|France|Deutschland|Germany|Italy|Italia))?$/i);
           if (cityMatch) {
             domicileCity = cityMatch[1].trim();
           }
@@ -204,6 +279,8 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
         phone: phone.trim() || undefined,
         is_institution: isInstitution,
         institution_name: isInstitution ? institutionName.trim() : undefined,
+        // ✅ Établissement de résidence si détecté
+        residence_facility: establishment || undefined,
         // Adresse complète (comme dans le frontend)
         address: addressComplete,
         // Adresse de domicile structurée

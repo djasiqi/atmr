@@ -1,6 +1,7 @@
 // frontend/src/utils/apiClient.js
 import axios from 'axios';
-import { getRefreshToken } from '../hooks/useAuthToken';
+// ✅ P1-1: getRefreshToken n'est plus utilisé (cookies httpOnly)
+// import { getRefreshToken } from '../hooks/useAuthToken';
 
 let baseApiRest = process.env.REACT_APP_API_BASE_URL || process.env.REACT_APP_API_URL || '/api/v1';
 
@@ -72,26 +73,16 @@ const addAuthHeader = async (cfg = {}) => {
     cfg.headers = {};
   }
 
-  const token = localStorage.getItem('authToken');
-  const hasAuthHeader = cfg.headers.Authorization;
-
   if (cfg.baseURL && cfg.baseURL.endsWith('/')) {
     cfg.baseURL = cfg.baseURL.slice(0, -1);
   }
 
-  // ✅ Si on utilise des cookies httpOnly (pas de token dans localStorage),
-  // on ne doit pas envoyer le header Authorization car le backend lit automatiquement le cookie
-  // Si on a un token dans localStorage (mode mobile/compatibilité), on l'envoie dans le header
-  if (
-    token &&
-    typeof token === 'string' &&
-    !hasAuthHeader &&
-    !cfg.url?.includes('/auth/refresh-token') &&
-    !(cfg.headers['X-Skip-Auth'] || cfg.headers['x-skip-auth'])
-  ) {
-    cfg.headers.Authorization = `Bearer ${token}`;
-  }
-  // Si pas de token dans localStorage, on compte sur les cookies httpOnly (avecCredentials: true)
+  // ✅ P1-1: Standardisation sur cookies httpOnly uniquement
+  // Les tokens sont stockés dans des cookies httpOnly définis par le backend
+  // Les cookies sont envoyés automatiquement avec withCredentials: true
+  // On ne doit PAS envoyer le header Authorization car le backend lit automatiquement les cookies
+  // Exception: uniquement pour /auth/refresh-token qui peut nécessiter le refresh_token dans le header
+  // mais pour le web, le backend lit le refresh_token depuis les cookies automatiquement
 
   // ✅ Ajouter le token CSRF pour les requêtes mutantes (POST, PUT, DELETE, PATCH)
   const method = cfg.method?.toUpperCase() || (cfg.url ? 'GET' : 'GET');
@@ -126,10 +117,12 @@ const processQueue = (error, token = null) => {
 };
 
 export const cleanLocalSession = () => {
-  localStorage.removeItem('authToken');
-  localStorage.removeItem('refreshToken');
+  // ✅ P1-1: Ne plus stocker tokens dans localStorage
+  // localStorage.removeItem('authToken'); // ❌ Déprécié
+  // localStorage.removeItem('refreshToken'); // ❌ Déprécié
   localStorage.removeItem('user');
   localStorage.removeItem('public_id');
+  // Les cookies httpOnly sont supprimés automatiquement par le backend lors du logout
 };
 
 export const logoutUser = async (options = { redirect: true }) => {
@@ -201,10 +194,12 @@ apiClient.interceptors.response.use(
         });
       }
       
-      const refreshToken = getRefreshToken();
-
-      // Si pas de refresh token ou déjà en train de refresh une requête /auth/refresh-token
-      if (!refreshToken || cfg.url?.includes('/auth/refresh-token')) {
+      // ✅ P1-1: Pour le web, le refresh_token est dans les cookies httpOnly
+      // Le backend lit automatiquement le refresh_token depuis les cookies
+      // Pas besoin de récupérer depuis localStorage
+      
+      // Si déjà en train de refresh une requête /auth/refresh-token, éviter boucle
+      if (cfg.url?.includes('/auth/refresh-token')) {
         logoutUser();
         return Promise.reject(error);
       }
@@ -214,8 +209,9 @@ apiClient.interceptors.response.use(
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         })
-          .then((token) => {
-            cfg.headers.Authorization = `Bearer ${token}`;
+          .then(() => {
+            // ✅ P1-1: Les nouveaux tokens sont dans les cookies
+            // Pas besoin d'ajouter Authorization header
             return apiClient(cfg); // Retry requête originale
           })
           .catch((err) => {
@@ -227,31 +223,33 @@ apiClient.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const response = await apiClient.post(
+        // ✅ P1-1: Le refresh_token est dans les cookies httpOnly
+        // Le backend lit automatiquement le refresh_token depuis les cookies
+        // Pas besoin d'envoyer dans le header Authorization
+        await apiClient.post(
           '/auth/refresh-token',
           {},
           {
-            headers: {
-              Authorization: `Bearer ${refreshToken}`,
-            },
             skipAuthRedirect: true, // Éviter boucle
           }
         );
 
-        const newToken = response.data.access_token;
-        localStorage.setItem('authToken', newToken);
+        // ✅ P1-1: Les nouveaux tokens sont dans les cookies httpOnly
+        // Pas besoin de les stocker dans localStorage
+        // Le backend a déjà mis à jour les cookies
 
-        // Process queued requests
-        processQueue(null, newToken);
+        // Process queued requests (pas besoin de token, les cookies sont automatiques)
+        processQueue(null, null);
 
-        // Retry requête originale avec nouveau token
-        cfg.headers.Authorization = `Bearer ${newToken}`;
+        // ✅ P1-1: Retry requête originale
+        // Les nouveaux cookies sont automatiquement envoyés avec withCredentials: true
+        // Pas besoin d'ajouter Authorization header
         // ⚡ Marquer que c'est un retry après refresh réussi pour éviter logs d'erreur
         cfg._retryAfterRefresh = true;
         // ⚡ Supprimer l'erreur de la config pour éviter les logs Axios
         delete cfg._isRetry;
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'apiClient.js:retry_after_refresh',message:'Retrying request after successful refresh',data:{url:cfg.url,has_new_token:!!newToken},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'apiClient.js:retry_after_refresh',message:'Retrying request after successful refresh',data:{url:cfg.url,using_cookies:true},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
         // #endregion
         try {
           const retryResponse = await apiClient(cfg);

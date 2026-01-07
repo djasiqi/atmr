@@ -31,6 +31,7 @@ from application.invoices.generate_invoice_reminder import (
     GenerateInvoiceReminderInput,
 )
 from ext import limiter, role_required
+from middleware.trace_id import get_trace_id
 from models import (
     Booking,
     Client,
@@ -40,6 +41,13 @@ from models import (
     db,
 )
 from models.enums import BookingStatus, ClientType, InvoiceStatus, PaymentMethod
+from routes.api_error_models import (
+    create_api_error_model,
+    create_not_found_error_model,
+    create_permission_error_model,
+    create_validation_error_model,
+)
+from services.idempotency_service import IdempotencyService
 from shared.error_handlers import APIErrorHandler
 from shared.response_helpers import paginated_response, success_response
 
@@ -60,6 +68,12 @@ logger = logging.getLogger(__name__)
 
 # Namespace pour les factures
 invoices_ns = Namespace("invoices", description="Gestion des factures")
+
+# ✅ P0: Modèles d'erreur standardisés
+api_error_model = create_api_error_model(invoices_ns)
+validation_error_model = create_validation_error_model(invoices_ns)
+not_found_error_model = create_not_found_error_model(invoices_ns)
+permission_error_model = create_permission_error_model(invoices_ns)
 
 # Modèles de sérialisation
 invoice_model = invoices_ns.model(
@@ -1773,14 +1787,46 @@ class InvoicePayments(Resource):
 
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
+    @invoices_ns.expect(payment_model)
+    @invoices_ns.response(200, "Paiement enregistré avec succès")
+    @invoices_ns.response(400, "Erreur de validation", validation_error_model)
+    @invoices_ns.response(401, "Non authentifié", permission_error_model)
+    @invoices_ns.response(403, "Non autorisé", permission_error_model)
+    @invoices_ns.response(404, "Facture non trouvée", not_found_error_model)
+    @invoices_ns.response(
+        409, "Paiement déjà enregistré (idempotency)", api_error_model
+    )
+    @invoices_ns.response(500, "Erreur serveur", api_error_model)
     def post(self, company_id, invoice_id):  # noqa: PLR0911
-        """Enregistrer un paiement pour une facture."""
+        """Enregistrer un paiement pour une facture.
+
+        ✅ P0: Support idempotency-key pour éviter les doublons de paiement.
+        """
         try:
+            # ✅ P0: Vérifier idempotency-key (CRITIQUE pour les paiements)
+            idempotency_key = IdempotencyService.get_idempotency_key_from_request()
+            if idempotency_key:
+                cached_response = IdempotencyService.check_key(idempotency_key)
+                if cached_response[0]:  # Key exists
+                    logger.info(
+                        "Idempotency key found for payment, returning cached response",
+                        extra={
+                            "trace_id": get_trace_id(),
+                            "idempotency_key": idempotency_key,
+                            "invoice_id": invoice_id,
+                        },
+                    )
+                    return cached_response[1], 200
+
             # ✅ DDD: Utilise use-case au lieu de service directement
             from routes.companies import _get_current_company_via_use_case
 
             company, error_response, status_code = _get_current_company_via_use_case()
             if error_response or not company:
+                # ✅ P0: Ajouter trace_id dans l'erreur
+                trace_id = get_trace_id()
+                if isinstance(error_response, dict):
+                    error_response["trace_id"] = trace_id
                 return error_response, status_code
 
             # Vérifier que l'ID de l'entreprise correspond et récupérer la facture
@@ -1905,10 +1951,34 @@ class InvoicePayments(Resource):
 
                         db.session.commit()
 
-                        return {
+                        # ✅ P0: Ajouter trace_id dans la réponse (facture partenaire)
+                        trace_id = get_trace_id()
+                        logger.info(
+                            "✅ Paiement partenaire enregistré: invoice_id=%s, amount=%s, company_id=%s",
+                            invoice_id,
+                            float(amount),
+                            company_id,
+                            extra={
+                                "trace_id": trace_id,
+                                "invoice_id": invoice_id,
+                                "amount": float(amount),
+                                "company_id": company_id,
+                            },
+                        )
+
+                        response_data = {
                             "message": "Paiement enregistré avec succès",
                             "invoice": partner_invoice.to_dict(),
-                        }, 200
+                            "trace_id": trace_id,
+                        }
+
+                        # ✅ P0: Stocker la réponse pour idempotency
+                        if idempotency_key:
+                            IdempotencyService.store_response(
+                                idempotency_key, response_data, 200
+                            )
+
+                        return response_data, 200
 
             # Combiner les vérifications : ID entreprise et existence facture
             if cid != company_id or not invoice:
@@ -2029,14 +2099,41 @@ class InvoicePayments(Resource):
 
             db.session.commit()
 
-            return success_response(
+            # ✅ P0: Ajouter trace_id dans la réponse
+            trace_id = get_trace_id()
+            logger.info(
+                "✅ Paiement enregistré avec succès: invoice_id=%s, amount=%s, company_id=%s",
+                invoice_id,
+                float(amount),
+                company_id,
+                extra={
+                    "trace_id": trace_id,
+                    "invoice_id": invoice_id,
+                    "amount": float(amount),
+                    "company_id": company_id,
+                },
+            )
+
+            response_data = success_response(
                 data={
                     "balance_due": float(invoice.balance_due),
                     "amount_paid": float(invoice.amount_paid),
                     "status": invoice.status.value,
+                    "trace_id": trace_id,
                 },
                 message="Paiement enregistré",
             )
+
+            # ✅ P0: Stocker la réponse pour idempotency
+            if idempotency_key:
+                # success_response retourne toujours un tuple (data, status_code)
+                IdempotencyService.store_response(
+                    idempotency_key,
+                    response_data[0],
+                    200,
+                )
+
+            return response_data
 
         except (OperationalError, DBAPIError, IntegrityError) as e:
             # Erreurs DB attendues : connexion, contraintes, timeout

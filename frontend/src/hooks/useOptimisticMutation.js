@@ -101,12 +101,7 @@ export function useOptimisticMutation({
         const hasConflict = detectConflict(optimisticStateRef.current, result);
         
         if (hasConflict) {
-          console.warn('[useOptimisticMutation] Conflict detected:', {
-            optimistic: optimisticStateRef.current,
-            server: result,
-          });
-          
-          // Résoudre le conflit selon la stratégie
+          // Résoudre le conflit selon la stratégie (silencieusement si stratégie automatique)
           const resolvedState = await resolveConflict(
             conflictResolution,
             optimisticStateRef.current,
@@ -124,10 +119,31 @@ export function useOptimisticMutation({
             queryClient.invalidateQueries(Array.isArray(key) ? key : [key]);
           });
           
-          if (showToast) {
-            toast.warning(createConflictMessage(optimisticStateRef.current, result), {
-              autoClose: 5000,
+          // Seulement logger/afficher un toast si la stratégie nécessite une attention utilisateur
+          if (conflictResolution === 'user-choice' || conflictResolution === 'client-wins') {
+            console.warn('[useOptimisticMutation] Conflict detected and resolved:', {
+              strategy: conflictResolution,
+              optimistic: optimisticStateRef.current,
+              server: result,
+              resolved: resolvedState,
             });
+            
+            if (showToast) {
+              toast.warning(createConflictMessage(optimisticStateRef.current, result), {
+                autoClose: 5000,
+              });
+            }
+          } else {
+            // Pour 'server-wins' et 'merge', résoudre silencieusement (comportement attendu)
+            // Logger seulement en mode debug
+            if (process.env.NODE_ENV === 'development') {
+              console.debug('[useOptimisticMutation] Conflict auto-resolved (server-wins/merge):', {
+                strategy: conflictResolution,
+                differences: Object.keys(optimisticStateRef.current).filter(
+                  key => JSON.stringify(optimisticStateRef.current[key]) !== JSON.stringify(result[key])
+                ),
+              });
+            }
           }
         } else {
           // Pas de conflit: utiliser la réponse du serveur

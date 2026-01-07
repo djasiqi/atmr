@@ -1,0 +1,73 @@
+name: API Validation
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "mobile/**"
+      - "scripts/**"
+      - "package.json"
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "backend/**"
+      - "scripts/**"
+      - "package.json"
+
+jobs:
+  validate-api:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Generate OpenAPI spec
+        run: |
+          docker-compose run --rm api python scripts/generate_openapi.py --output /app/docs/openapi.json
+        continue-on-error: true
+
+      - name: Validate OpenAPI format
+        run: node scripts/validate-openapi-format.js
+
+      - name: Validate Swagger
+        run: node scripts/validate-swagger.js
+
+      - name: Generate API clients
+        run: npm run api:generate
+
+      - name: Check API clients (fail if outdated)
+        run: npm run api:check
+        # ✅ C6: Échoue si les clients générés ne sont pas à jour
+
+      - name: Detect breaking changes
+        run: node scripts/detect-breaking-changes.js
+        continue-on-error: true
+
+      - name: Generate coverage matrix
+        run: node scripts/api-coverage-matrix.js
+        continue-on-error: true
+
+      - name: Upload coverage matrix
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: api-coverage-matrix
+          path: docs/API_COVERAGE_MATRIX.md

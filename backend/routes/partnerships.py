@@ -3,6 +3,7 @@
 
 import logging
 from pathlib import Path
+from typing import Any
 
 from flask import request  # pyright: ignore[reportMissingImports]
 from flask_jwt_extended import jwt_required  # pyright: ignore[reportMissingImports]
@@ -338,6 +339,43 @@ class PartnershipsForTransfer(Resource):
             return APIErrorHandler.handle_exception(e, logger)
 
 
+def _validate_transfer_request(
+    company, booking_id: int
+) -> tuple[dict[str, Any] | None, int | None]:
+    """Valide la requête de transfert et vérifie les permissions.
+
+    Returns:
+        (error_response, status_code) ou (None, None) si OK
+    """
+    from models.booking import Booking
+
+    booking = Booking.query.get(booking_id)
+    if not booking:
+        # APIErrorHandler.handle_not_found retourne déjà (dict, int)
+        error_response, _ = APIErrorHandler.handle_not_found(
+            "Booking", booking_id, logger
+        )
+        return error_response, 404
+
+    # ✅ P0-2: Vérifier que la company authentifiée est propriétaire de la course
+    if booking.company_id != company.id:
+        logger.warning(
+            "[PartnershipTransfers] ⛔ Company %s attempted to transfer booking %s owned by company %s",
+            company.id,
+            booking_id,
+            booking.company_id,
+        )
+        # APIErrorHandler.handle_validation_error retourne déjà (dict, int)
+        error_response, _ = APIErrorHandler.handle_validation_error(
+            "Vous ne pouvez transférer que les courses de votre entreprise",
+            field="booking_id",
+            logger_instance=logger,
+        )
+        return error_response, 403
+
+    return None, None
+
+
 @partnerships_ns.route("/<int:partnership_id>/transfers")
 class PartnershipTransfers(Resource):
     @jwt_required()
@@ -399,6 +437,13 @@ class PartnershipTransfers(Resource):
                 booking_id,
                 transfer_model,
             )
+
+            # ✅ P0-2: Valider la requête et vérifier les permissions
+            error_response, status_code = _validate_transfer_request(
+                company, booking_id
+            )
+            if error_response:
+                return error_response, status_code
 
             # Utiliser le service pour créer le transfert
             transfer = BookingTransferService.propose_transfer(

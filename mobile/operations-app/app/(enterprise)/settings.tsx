@@ -244,13 +244,13 @@ export default function EnterpriseSettingsScreen() {
         </View>
       )}
 
-      {/* Message de débogage si pas de compte chauffeur */}
-      {!checkingDriverAccount && driverAccount && !driverAccount.has_driver_account && (
+      {/* Message informatif si pas de compte chauffeur - seulement si on a vérifié et qu'il n'y a vraiment pas de compte */}
+      {!checkingDriverAccount && driverAccount && driverAccount.has_driver_account === false && (
         <View style={styles.card}>
           <View style={styles.switchAccountHeader}>
             <Ionicons name="information-circle-outline" size={24} color={palette.muted} />
             <Text style={[styles.sectionDescription, { marginLeft: 12, flex: 1 }]}>
-              Aucun compte chauffeur associé à votre compte entreprise.
+              Aucun compte chauffeur associé à votre compte entreprise. Vous pouvez demander à votre administrateur d'en créer un.
             </Text>
           </View>
         </View>
@@ -371,7 +371,8 @@ export default function EnterpriseSettingsScreen() {
                 onPress={async () => {
                   setShowLogoutModal(false);
                   await logoutEnterprise();
-                  await switchMode("driver");
+                  // Rediriger vers l'écran de connexion entreprise après déconnexion
+                  router.replace("/(enterprise-auth)/login" as any);
                 }}
               >
                 <Text style={styles.modalConfirmText}>Se déconnecter</Text>

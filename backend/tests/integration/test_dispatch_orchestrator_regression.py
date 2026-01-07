@@ -16,7 +16,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from factories import BookingFactory, CompanyFactory, DriverFactory
+from tests.factories import BookingFactory, CompanyFactory, DriverFactory
 from services.unified_dispatch.orchestration.dispatch_orchestrator import (
     DispatchOrchestrator,
 )
@@ -25,15 +25,8 @@ from services.unified_dispatch.orchestration.dispatch_orchestrator import (
 class TestResultsConsistency:
     """Tests de cohérence des résultats."""
 
-    @patch(
-        "services.unified_dispatch.orchestration.dispatch_orchestrator.RedisLockManager"
-    )
-    @patch(
-        "services.unified_dispatch.orchestration.dispatch_orchestrator.performance_metrics"
-    )
-    def test_result_structure_consistency(
-        self, mock_perf_metrics, mock_lock_manager, db
-    ):
+    @patch("services.unified_dispatch.locking.RedisLockManager")
+    def test_result_structure_consistency(self, mock_lock_manager, db):
         """Test : Structure du résultat est cohérente."""
         company = CompanyFactory()
         db.session.add(company)
@@ -42,9 +35,6 @@ class TestResultsConsistency:
         mock_lock_instance = MagicMock()
         mock_lock_instance.acquire_lock.return_value = True
         mock_lock_manager.return_value = mock_lock_instance
-
-        mock_perf_collector = MagicMock()
-        mock_perf_metrics.DispatchMetricsCollector.return_value = mock_perf_collector
 
         orchestrator = DispatchOrchestrator()
         result = orchestrator.execute(
@@ -70,13 +60,8 @@ class TestResultsConsistency:
         assert isinstance(result["meta"], dict)
         assert isinstance(result["debug"], dict)
 
-    @patch(
-        "services.unified_dispatch.orchestration.dispatch_orchestrator.RedisLockManager"
-    )
-    @patch(
-        "services.unified_dispatch.orchestration.dispatch_orchestrator.performance_metrics"
-    )
-    def test_metrics_consistency(self, mock_perf_metrics, mock_lock_manager, db):
+    @patch("services.unified_dispatch.locking.RedisLockManager")
+    def test_metrics_consistency(self, mock_lock_manager, db):
         """Test : Métriques sont cohérentes."""
         company = CompanyFactory()
         db.session.add(company)
@@ -85,9 +70,6 @@ class TestResultsConsistency:
         mock_lock_instance = MagicMock()
         mock_lock_instance.acquire_lock.return_value = True
         mock_lock_manager.return_value = mock_lock_instance
-
-        mock_perf_collector = MagicMock()
-        mock_perf_metrics.DispatchMetricsCollector.return_value = mock_perf_collector
 
         orchestrator = DispatchOrchestrator()
         result = orchestrator.execute(
@@ -108,9 +90,7 @@ class TestResultsConsistency:
 class TestErrorHandlingConsistency:
     """Tests de cohérence de la gestion des erreurs."""
 
-    @patch(
-        "services.unified_dispatch.orchestration.dispatch_orchestrator.RedisLockManager"
-    )
+    @patch("services.unified_dispatch.locking.RedisLockManager")
     def test_company_not_found_error(self, mock_lock_manager, db):
         """Test : Company inexistante retourne error_result cohérent."""
         mock_lock_instance = MagicMock()
@@ -130,9 +110,7 @@ class TestErrorHandlingConsistency:
         assert result.get("assignments") == []
         assert result.get("unassigned") == []
 
-    @patch(
-        "services.unified_dispatch.orchestration.dispatch_orchestrator.RedisLockManager"
-    )
+    @patch("services.unified_dispatch.locking.RedisLockManager")
     def test_lock_failed_error(self, mock_lock_manager, db):
         """Test : Échec de verrouillage retourne error_result cohérent."""
         company = CompanyFactory()
@@ -160,13 +138,8 @@ class TestErrorHandlingConsistency:
 class TestEdgeCases:
     """Tests des cas limites."""
 
-    @patch(
-        "services.unified_dispatch.orchestration.dispatch_orchestrator.RedisLockManager"
-    )
-    @patch(
-        "services.unified_dispatch.orchestration.dispatch_orchestrator.performance_metrics"
-    )
-    def test_no_bookings(self, mock_perf_metrics, mock_lock_manager, db):
+    @patch("services.unified_dispatch.locking.RedisLockManager")
+    def test_no_bookings(self, mock_lock_manager, db):
         """Test : Aucun booking."""
         company = CompanyFactory()
         db.session.add(company)
@@ -175,9 +148,6 @@ class TestEdgeCases:
         mock_lock_instance = MagicMock()
         mock_lock_instance.acquire_lock.return_value = True
         mock_lock_manager.return_value = mock_lock_instance
-
-        mock_perf_collector = MagicMock()
-        mock_perf_metrics.DispatchMetricsCollector.return_value = mock_perf_collector
 
         orchestrator = DispatchOrchestrator()
         result = orchestrator.execute(
@@ -191,13 +161,8 @@ class TestEdgeCases:
         assert isinstance(result["assignments"], list)
         assert isinstance(result["unassigned"], list)
 
-    @patch(
-        "services.unified_dispatch.orchestration.dispatch_orchestrator.RedisLockManager"
-    )
-    @patch(
-        "services.unified_dispatch.orchestration.dispatch_orchestrator.performance_metrics"
-    )
-    def test_no_drivers(self, mock_perf_metrics, mock_lock_manager, db):
+    @patch("services.unified_dispatch.locking.RedisLockManager")
+    def test_no_drivers(self, mock_lock_manager, db):
         """Test : Aucun driver."""
         company = CompanyFactory()
         db.session.add(company)
@@ -208,16 +173,13 @@ class TestEdgeCases:
         booking.pickup_lon = 6.1
         booking.dropoff_lat = 46.3
         booking.dropoff_lon = 6.2
-        booking.scheduled_time = datetime.now(UTC) + timedelta(hours=1)
+        booking.scheduled_time = datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)
         db.session.add(booking)
         db.session.commit()
 
         mock_lock_instance = MagicMock()
         mock_lock_instance.acquire_lock.return_value = True
         mock_lock_manager.return_value = mock_lock_instance
-
-        mock_perf_collector = MagicMock()
-        mock_perf_metrics.DispatchMetricsCollector.return_value = mock_perf_collector
 
         orchestrator = DispatchOrchestrator()
         result = orchestrator.execute(
@@ -232,15 +194,8 @@ class TestEdgeCases:
         # Tous les bookings devraient être non assignés
         assert len(result["unassigned"]) >= 0
 
-    @patch(
-        "services.unified_dispatch.orchestration.dispatch_orchestrator.RedisLockManager"
-    )
-    @patch(
-        "services.unified_dispatch.orchestration.dispatch_orchestrator.performance_metrics"
-    )
-    def test_bookings_without_geographic_coordinates(
-        self, mock_perf_metrics, mock_lock_manager, db
-    ):
+    @patch("services.unified_dispatch.locking.RedisLockManager")
+    def test_bookings_without_geographic_coordinates(self, mock_lock_manager, db):
         """Test : Bookings sans coordonnées géographiques."""
         company = CompanyFactory()
         db.session.add(company)
@@ -251,16 +206,13 @@ class TestEdgeCases:
         booking.pickup_lon = None
         booking.dropoff_lat = None
         booking.dropoff_lon = None
-        booking.scheduled_time = datetime.now(UTC) + timedelta(hours=1)
+        booking.scheduled_time = datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)
         db.session.add(booking)
         db.session.commit()
 
         mock_lock_instance = MagicMock()
         mock_lock_instance.acquire_lock.return_value = True
         mock_lock_manager.return_value = mock_lock_instance
-
-        mock_perf_collector = MagicMock()
-        mock_perf_metrics.DispatchMetricsCollector.return_value = mock_perf_collector
 
         orchestrator = DispatchOrchestrator()
         result = orchestrator.execute(
@@ -274,15 +226,8 @@ class TestEdgeCases:
         assert isinstance(result["assignments"], list)
         assert isinstance(result["unassigned"], list)
 
-    @patch(
-        "services.unified_dispatch.orchestration.dispatch_orchestrator.RedisLockManager"
-    )
-    @patch(
-        "services.unified_dispatch.orchestration.dispatch_orchestrator.performance_metrics"
-    )
-    def test_drivers_without_geographic_coordinates(
-        self, mock_perf_metrics, mock_lock_manager, db
-    ):
+    @patch("services.unified_dispatch.locking.RedisLockManager")
+    def test_drivers_without_geographic_coordinates(self, mock_lock_manager, db):
         """Test : Drivers sans coordonnées géographiques."""
         company = CompanyFactory()
         db.session.add(company)
@@ -297,9 +242,6 @@ class TestEdgeCases:
         mock_lock_instance = MagicMock()
         mock_lock_instance.acquire_lock.return_value = True
         mock_lock_manager.return_value = mock_lock_instance
-
-        mock_perf_collector = MagicMock()
-        mock_perf_metrics.DispatchMetricsCollector.return_value = mock_perf_collector
 
         orchestrator = DispatchOrchestrator()
         result = orchestrator.execute(
@@ -317,13 +259,8 @@ class TestEdgeCases:
 class TestDispatchRunConsistency:
     """Tests de cohérence de la création des DispatchRun."""
 
-    @patch(
-        "services.unified_dispatch.orchestration.dispatch_orchestrator.RedisLockManager"
-    )
-    @patch(
-        "services.unified_dispatch.orchestration.dispatch_orchestrator.performance_metrics"
-    )
-    def test_dispatch_run_created(self, mock_perf_metrics, mock_lock_manager, db):
+    @patch("services.unified_dispatch.locking.RedisLockManager")
+    def test_dispatch_run_created(self, mock_lock_manager, db):
         """Test : DispatchRun est créé correctement."""
         company = CompanyFactory()
         db.session.add(company)
@@ -332,9 +269,6 @@ class TestDispatchRunConsistency:
         mock_lock_instance = MagicMock()
         mock_lock_instance.acquire_lock.return_value = True
         mock_lock_manager.return_value = mock_lock_instance
-
-        mock_perf_collector = MagicMock()
-        mock_perf_metrics.DispatchMetricsCollector.return_value = mock_perf_collector
 
         orchestrator = DispatchOrchestrator()
         result = orchestrator.execute(

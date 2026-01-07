@@ -196,7 +196,8 @@ export default function DashboardScreen() {
           <MissionCard
             mission={currentMission}
             onCall={() =>
-              Linking.openURL(`tel:${currentMission.client_phone}`)
+              // ✅ P1-4 Phase 3.1: Utiliser client.contact_phone au lieu de client_phone
+              Linking.openURL(`tel:${currentMission.client?.contact_phone || currentMission.client_phone || ''}`)
             }
             onNavigate={() =>
               openNavigation(currentMission.pickup_location)

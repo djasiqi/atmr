@@ -1,1 +1,14 @@
-{}
+{
+  "name": "atmr-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "api:generate": "node scripts/generate-api-clients.js",
+    "api:check": "node scripts/check-api-clients.js",
+    "api:spec": "docker-compose run --rm api python scripts/generate_openapi.py --output /app/docs/openapi.json",
+    "api:validate": "node scripts/validate-swagger.js && node scripts/validate-openapi-format.js"
+  },
+  "devDependencies": {
+    "@openapitools/openapi-generator-cli": "^2.14.0"
+  }
+}

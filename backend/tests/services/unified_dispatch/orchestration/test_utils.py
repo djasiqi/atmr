@@ -128,9 +128,10 @@ class TestSafeInt:
         assert result is None or isinstance(result, int)
 
     def test_from_whitespace_string_returns_none(self):
-        """Test : Conversion depuis str avec espaces retourne None."""
-        assert safe_int("  42  ") is None  # Espaces non gérés par int()
-        assert safe_int("  ") is None
+        """Test : Conversion depuis str avec espaces."""
+        # int() en Python supprime automatiquement les espaces
+        assert safe_int("  42  ") == 42  # Espaces supprimés par int()
+        assert safe_int("  ") is None  # Chaîne vide après strip retourne None
 
     def test_from_hex_string_returns_none(self):
         """Test : Conversion depuis str hexadécimal retourne None."""

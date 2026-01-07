@@ -285,7 +285,7 @@ const VirtualizedReservationTable = ({
           onClick={handleRowClick}
         >
           <div style={{ ...cellStyle, ...getCellWidth(0) }} className={styles.clientCell}>
-            {r.client?.full_name || r.customer_name || '—'}
+            {r.client?.full_name || r.client_name || '—'}
           </div>
           <div style={{ ...cellStyle, ...getCellWidth(1) }}>
             {renderBookingDateTime(r)}
@@ -534,7 +534,7 @@ VirtualizedReservationTable.propTypes = {
     PropTypes.shape({
       id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
       client: PropTypes.shape({ full_name: PropTypes.string }),
-      customer_name: PropTypes.string,
+      client_name: PropTypes.string,
       scheduled_time: PropTypes.string,
       pickup_location: PropTypes.string,
       dropoff_location: PropTypes.string,

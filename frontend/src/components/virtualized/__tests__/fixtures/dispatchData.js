@@ -5,7 +5,7 @@
 export const mockDispatches = [
   {
     id: 1,
-    customer_name: 'Jean Dupont',
+    client_name: 'Jean Dupont',
     client: { full_name: 'Jean Dupont' },
     scheduled_time: '2025-01-14T10:00:00Z',
     pickup_location: 'Hôpital de Genève',

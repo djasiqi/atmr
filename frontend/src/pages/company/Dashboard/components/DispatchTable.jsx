@@ -122,7 +122,7 @@ const DispatchTable = ({
                 }`}
               >
                 <td className={styles.clientCell}>
-                  {r.client?.full_name || r.customer_name}
+                  {r.client?.full_name || r.client_name}
                   {delayInfo && delayStatus && (
                     <span 
                       className={`${styles.delayBadge} ${

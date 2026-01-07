@@ -167,8 +167,9 @@ export const RideCreateModal: React.FC<RideCreateModalProps> = ({
 
         const payload: RideCreatePayload = {
             // Si un client est sélectionné, on envoie seulement client_id
-            // Sinon, on envoie customer_name
-            ...(client?.id ? { client_id: client.id } : { customer_name: customerName || "" }),
+            // ✅ P1-4 Phase 3.3: Utiliser client_name au lieu de customer_name
+            // Sinon, on envoie client_name
+            ...(client?.id ? { client_id: client.id } : { client_name: customerName || "" }),
             pickup_address: pickupAddress,
             dropoff_address: dropoffAddress,
             pickup_lat: pickupSuggestion?.lat,

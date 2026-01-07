@@ -15,11 +15,26 @@ export const useRideEdit = (onSuccess?: () => Promise<void>) => {
             setRideDetail(detail);
             return detail;
         } catch (error: any) {
+            const status = error?.response?.status;
+            const errorData = error?.response?.data;
+            
+            // ✅ Ne pas afficher d'alerte pour les erreurs 500 - on utilisera les données de base
+            // L'utilisateur peut quand même éditer avec les données disponibles
+            if (status === 500) {
+                console.warn("[useRideEdit] Erreur 500 lors du chargement des détails, utilisation des données de base");
+                // Ne pas définir rideDetail, le modal utilisera les données de ride (RideSummary)
+                return null;
+            }
+            
+            // Pour les autres erreurs (404, 403, etc.), afficher un message
             const message =
-                error?.response?.data?.error ??
+                errorData?.error ??
+                errorData?.message ??
                 error?.message ??
                 "Impossible de charger les détails de la course.";
-            Alert.alert("Erreur", message);
+            
+            // Ne pas bloquer l'édition - l'utilisateur peut toujours modifier avec les données de base
+            console.warn("[useRideEdit] Erreur lors du chargement des détails:", message);
             return null;
         } finally {
             setLoadingDetail(false);

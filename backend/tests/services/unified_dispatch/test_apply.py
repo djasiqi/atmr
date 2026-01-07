@@ -199,6 +199,8 @@ class TestRollbackTransactionnel:
         db.session.flush()
 
         # Créer une assignation existante pour créer un conflit
+        # Mettre à jour le booking aussi pour que l'assignation soit cohérente
+        bookings[0].driver_id = driver.id
         existing_assignment = Assignment(
             booking_id=bookings[0].id,
             driver_id=driver.id,
@@ -235,13 +237,16 @@ class TestRollbackTransactionnel:
             company_id=company.id,
             assignments=assignments,
             dispatch_run_id=dispatch_run.id,
+            return_pairs=True,
+            respect_existing=False,
+            enforce_driver_checks=False,
         )
 
         # Vérifier que le conflit est géré (idempotence)
         # Le booking[0] devrait garder son assignment existant
         # Le booking[1] devrait être assigné
-        # ✅ FIX: Utiliser query au lieu de refresh pour éviter
-        # "Instance is not persistent"
+        # ✅ FIX: Utiliser expire_all() pour forcer le rechargement depuis la DB
+        db.session.expire_all()
         booking0 = db.session.query(Booking).get(bookings[0].id)
         booking1 = db.session.query(Booking).get(bookings[1].id)
 
@@ -347,6 +352,9 @@ class TestRollbackTransactionnel:
         result = apply_assignments(
             company_id=company.id,
             assignments=assignments,
+            return_pairs=True,
+            respect_existing=False,
+            enforce_driver_checks=False,
         )
 
         # Vérifier que les assignations sont appliquées
@@ -354,8 +362,8 @@ class TestRollbackTransactionnel:
         assert len(result["applied"]) == 3
 
         # Vérifier que les changements sont persistés
-        # ✅ FIX: Utiliser query au lieu de refresh pour éviter
-        # "Instance is not persistent"
+        # ✅ FIX: Utiliser expire_all() pour forcer le rechargement depuis la DB
+        db.session.expire_all()
         booking0 = db.session.query(Booking).get(bookings[0].id)
         booking1 = db.session.query(Booking).get(bookings[1].id)
         booking2 = db.session.query(Booking).get(bookings[2].id)

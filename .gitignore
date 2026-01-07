@@ -41,6 +41,10 @@ backend/node_modules/
 frontend/node_modules/
 mobile/**/node_modules/
 
+# ===== Clients API générés (optionnel - peut être commité) =====
+# frontend/src/generated/
+# mobile/operations-app/src/generated/
+
 # Builds / caches
 frontend/build/
 dist/
@@ -123,6 +127,8 @@ patches/
 *.bak
 *.swp
 *~
+.tmp/
+backend/docs/openapi.baseline.json
 
 # ===== Tests - Artifacts uniquement (garder les fichiers de tests) =====
 # Cache pytest

@@ -62,7 +62,7 @@ const ReservationTable = ({
 
             return (
               <tr key={r.id} onClick={() => onRowClick?.(r)} className={styles.tableRow}>
-                <td className={styles.clientCell}>{r.client?.full_name || r.customer_name}</td>
+                <td className={styles.clientCell}>{r.client?.full_name || r.client_name}</td>
                 <td>{renderBookingDateTime(r)}</td>
                 <td className={styles.locationCell}>
                   <div>

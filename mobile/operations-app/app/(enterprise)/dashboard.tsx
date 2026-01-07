@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import {
   Alert,
   Modal,
@@ -10,7 +10,10 @@ import {
   TouchableOpacity,
   View,
   ActivityIndicator,
+  AppState,
 } from "react-native";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useFocusEffect } from "@react-navigation/native";
 import * as Crypto from "expo-crypto";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
@@ -22,6 +25,8 @@ import "dayjs/locale/fr";
 import { Ionicons } from "@expo/vector-icons";
 
 import { useAuth } from "@/hooks/useAuth";
+import { useEnterpriseNotifications } from "@/hooks/useEnterpriseNotifications";
+import { isCompletedStatus } from "@/utils/bookingStatus";
 import {
   getDispatchRides,
   getDispatchStatus,
@@ -106,6 +111,10 @@ type RideFilter = "all" | "unassigned" | "assigned" | "completed" | "delayed";
 export default function EnterpriseDashboardScreen() {
   const { enterpriseSession, refreshEnterprise, enterpriseLoading } = useAuth();
   const { selectedDate } = useEnterpriseContext();
+  const tabBarHeight = useBottomTabBarHeight();
+
+  // Activer les notifications push pour l'entreprise
+  useEnterpriseNotifications();
 
   const dispatchMode =
     (enterpriseSession?.company.dispatchMode as
@@ -210,10 +219,89 @@ export default function EnterpriseDashboardScreen() {
     }
   }, [currentDate, enterpriseSession, refreshLocations]);
 
+  // Référence pour le polling automatique
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const appStateRef = useRef(AppState.currentState);
+
   useEffect(() => {
     if (!enterpriseSession) return;
     loadData();
   }, [enterpriseSession, loadData, currentDate]);
+
+  // Polling automatique : récupérer les données toutes les 30 secondes quand l'app est active
+  useEffect(() => {
+    if (!enterpriseSession) {
+      // Nettoyer le polling si pas de session
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      return;
+    }
+
+    // Fonction pour démarrer le polling
+    const startPolling = () => {
+      // Nettoyer l'intervalle existant si présent
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+
+      // Démarrer le polling toutes les 30 secondes
+      pollingIntervalRef.current = setInterval(() => {
+        const currentAppState = AppState.currentState;
+        // Seulement charger si l'app est active
+        if (currentAppState === "active") {
+          console.log("[dashboard.tsx] Polling automatique : rechargement des données");
+          loadData();
+        }
+      }, 30000); // 30 secondes
+    };
+
+    // Démarrer le polling si l'app est active
+    if (appStateRef.current === "active") {
+      startPolling();
+    }
+
+    // Écouter les changements d'état de l'application
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (
+        appStateRef.current.match(/inactive|background/) &&
+        nextAppState === "active"
+      ) {
+        // L'app revient au premier plan : recharger immédiatement et redémarrer le polling
+        console.log("[dashboard.tsx] Application revenue au premier plan : rechargement des données");
+        loadData();
+        startPolling();
+      } else if (nextAppState.match(/inactive|background/)) {
+        // L'app passe en arrière-plan : arrêter le polling
+        console.log("[dashboard.tsx] Application en arrière-plan : arrêt du polling");
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+      }
+      appStateRef.current = nextAppState;
+    });
+
+    // Cleanup
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      subscription.remove();
+    };
+  }, [enterpriseSession, loadData, currentDate]);
+
+  // Recharger les données quand l'écran revient au focus
+  useFocusEffect(
+    useCallback(() => {
+      if (enterpriseSession) {
+        console.log("[dashboard.tsx] Écran au focus : rechargement des données");
+        loadData();
+      }
+    }, [enterpriseSession, loadData])
+  );
 
   // ✅ Actions sur les courses : utilisent le hook partagé
   const handleUrgentDelay = useCallback(
@@ -233,9 +321,10 @@ export default function EnterpriseDashboardScreen() {
       const status = ride.status ? String(ride.status).toLowerCase().trim() : undefined;
       return status === "assigned";
     });
+    // ✅ P0-1: Utiliser la fonction de normalisation
+    const { isCompletedStatus } = require("@/utils/bookingStatus");
     const completed = allRides.filter((ride) => {
-      const status = ride.status ? String(ride.status).toLowerCase().trim() : undefined;
-      return status === "completed" || status === "return_completed";
+      return isCompletedStatus(ride.status);
     });
     return {
       total,
@@ -321,11 +410,12 @@ export default function EnterpriseDashboardScreen() {
       if (status === "assigned" && !!ride.driver?.name) {
         counts.assigned++;
       }
-      if (status === "completed" || status === "return_completed") {
+      // ✅ P0-1: Utiliser la fonction de normalisation
+      if (isCompletedStatus(status)) {
         counts.completed++;
       }
       // Vérifier si en retard (uniquement si la course n'est pas terminée)
-      const isCompleted = status === "completed" || status === "return_completed";
+      const isCompleted = isCompletedStatus(status);
       if (!isCompleted && ride.driver?.name && ride.time.pickup_at) {
         const scheduledTime = dayjs(ride.time.pickup_at);
         const now = dayjs();
@@ -351,9 +441,9 @@ export default function EnterpriseDashboardScreen() {
         return status === "assigned" && !!r.driver?.name;
       });
     } else if (rideFilter === "completed") {
+      // ✅ P0-1: Utiliser la fonction de normalisation
       filtered = filtered.filter((r) => {
-        const status = r.status ? String(r.status).toLowerCase().trim() : undefined;
-        return status === "completed" || status === "return_completed";
+        return isCompletedStatus(r.status);
       });
     } else if (rideFilter === "delayed") {
       filtered = filtered.filter((ride) => {
@@ -443,12 +533,12 @@ export default function EnterpriseDashboardScreen() {
                 : pickupMoment.format("HH[h]mm");
           }
 
-          // ✅ Normaliser le statut en minuscules pour éviter les problèmes de casse (cohérence avec rides.tsx)
+          // ✅ P0-1: Normaliser le statut pour éviter les problèmes de casse
           const normalizedStatus = ride.status ? String(ride.status).toLowerCase().trim() : undefined;
 
           // ✅ Calcul du retard : uniquement si la course est assignée, l'heure prévue est passée, ET la course n'est pas terminée
           let delayMinutes: number | null = null;
-          const isCompleted = normalizedStatus === "completed" || normalizedStatus === "return_completed";
+          const isCompleted = isCompletedStatus(ride.status);
           if (!isCompleted && ride.driver?.name && ride.time.pickup_at) {
             const scheduledTime = dayjs(ride.time.pickup_at);
             const now = dayjs();
@@ -789,7 +879,7 @@ export default function EnterpriseDashboardScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { paddingBottom: Math.max(80, tabBarHeight + 40) }]}
       refreshControl={
         <RefreshControl refreshing={isRefreshing} onRefresh={loadData} />
       }
@@ -987,6 +1077,7 @@ export default function EnterpriseDashboardScreen() {
         assigning={rideActions.assigning}
         allDrivers={rideActions.allDrivers}
         loadingAllDrivers={rideActions.loadingAllDrivers}
+        isManualMode={dispatchMode === "manual"}
         onClose={rideActions.handleCloseAssignModal}
         onAssign={rideActions.handleAssignDriver}
       />

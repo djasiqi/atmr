@@ -38,6 +38,13 @@ from models.enums import AssignmentStatus, BookingStatus, UserRole
 # Modèles - utilisés pour types/annotations dans ce fichier
 # TODO: Vérifier si des requêtes directes existent et les migrer vers repositories
 from models import Assignment, Booking, Company, DispatchRun, Driver
+from middleware.trace_id import get_trace_id
+from routes.api_error_models import (
+    create_api_error_model,
+    create_not_found_error_model,
+    create_permission_error_model,
+    create_validation_error_model,
+)
 from shared.error_handlers import APIErrorHandler
 
 # ✅ REFACTORING: get_company_from_token() n'est plus importé directement
@@ -110,6 +117,12 @@ dispatch_ns = Namespace(
     "company_dispatch", description="Dispatch par journée (contrat unifié)"
 )
 logger = logging.getLogger(__name__)
+
+# ✅ P0: Modèles d'erreur standardisés
+api_error_model = create_api_error_model(dispatch_ns)
+validation_error_model = create_validation_error_model(dispatch_ns)
+not_found_error_model = create_not_found_error_model(dispatch_ns)
+permission_error_model = create_permission_error_model(dispatch_ns)
 
 # ===== Schémas de validation Marshmallow =====
 
@@ -1366,11 +1379,33 @@ class AssignmentResource(Resource):
 
         return cast("Assignment", a_opt)
 
+
+@dispatch_ns.route("/assignments/<int:assignment_id>")
+class AssignmentPatchResource(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     @dispatch_ns.expect(assignment_patch_model)
-    @dispatch_ns.marshal_with(assignment_model)
+    @dispatch_ns.doc(
+        responses={
+            "200": "Assignation mise à jour avec succès",
+            "400": "Erreur de validation",
+            "401": "Non authentifié",
+            "403": "Non autorisé",
+            "404": "Assignation non trouvée",
+            "500": "Erreur serveur",
+        }
+    )
+    @dispatch_ns.response(200, "Assignation mise à jour avec succès", assignment_model)
+    @dispatch_ns.response(400, "Erreur de validation", validation_error_model)
+    @dispatch_ns.response(401, "Non authentifié", permission_error_model)
+    @dispatch_ns.response(403, "Non autorisé", permission_error_model)
+    @dispatch_ns.response(404, "Assignation non trouvée", not_found_error_model)
+    @dispatch_ns.response(500, "Erreur serveur", api_error_model)
     def patch(self, assignment_id: int):
+        """Mettre à jour une assignation (driver_id, status).
+
+        ✅ P0: Support trace_id pour le suivi.
+        """
         company = _get_current_company()
         # Utiliser le repository pour récupérer l'assignment
         # Imports locaux pour éviter dépendances circulaires
@@ -1399,10 +1434,36 @@ class AssignmentResource(Resource):
 
             db.session.add(a)
             db.session.commit()
+
+            # ✅ P0: Ajouter trace_id dans la réponse
+            trace_id = get_trace_id()
+            logger.info(
+                "[Dispatch] Assignation mise à jour: assignment_id=%s, company_id=%s",
+                assignment_id,
+                company.id,
+                extra={
+                    "trace_id": trace_id,
+                    "assignment_id": assignment_id,
+                    "company_id": company.id,
+                },
+            )
+
+            # Ajouter trace_id à l'objet Assignment si possible
+            if hasattr(a, "__dict__"):
+                a_dict = cast("Any", a).serialize if hasattr(a, "serialize") else {}
+                if isinstance(a_dict, dict):
+                    a_dict["trace_id"] = trace_id
+                    return a_dict, 200
+
             return a
         except Exception as e:
             db.session.rollback()  # 👈 IMPORTANT
-            logger.exception("[Dispatch] patch assignment failed id=%s", assignment_id)
+            trace_id = get_trace_id()
+            logger.exception(
+                "[Dispatch] patch assignment failed id=%s",
+                assignment_id,
+                extra={"trace_id": trace_id},
+            )
             dispatch_ns.abort(500, f"Erreur MAJ assignation: {e}")
 
 
@@ -1416,8 +1477,31 @@ class ReassignResource(Resource):
         ),
         validate=True,
     )
-    @dispatch_ns.marshal_with(assignment_model)
+    @dispatch_ns.doc(
+        responses={
+            "200": "Assignation réassignée avec succès",
+            "400": "Erreur de validation",
+            "401": "Non authentifié",
+            "403": "Non autorisé",
+            "404": "Assignation ou chauffeur non trouvé",
+            "409": "Conflit temporel détecté",
+            "500": "Erreur serveur",
+        }
+    )
+    @dispatch_ns.response(200, "Assignation réassignée avec succès", assignment_model)
+    @dispatch_ns.response(400, "Erreur de validation", validation_error_model)
+    @dispatch_ns.response(401, "Non authentifié", permission_error_model)
+    @dispatch_ns.response(403, "Non autorisé", permission_error_model)
+    @dispatch_ns.response(
+        404, "Assignation ou chauffeur non trouvé", not_found_error_model
+    )
+    @dispatch_ns.response(409, "Conflit temporel détecté", api_error_model)
+    @dispatch_ns.response(500, "Erreur serveur", api_error_model)
     def post(self, assignment_id: int):
+        """Réassigner une assignation à un nouveau chauffeur.
+
+        ✅ P0: Support trace_id pour le suivi.
+        """
         data = request.get_json() or {}
         # ✅ P1: Protéger accès dictionnaires pour éviter KeyError
         new_driver_id_raw = data.get("new_driver_id")
@@ -1553,6 +1637,21 @@ class ReassignResource(Resource):
             db.session.add(a)
             db.session.commit()
 
+            # ✅ P0: Ajouter trace_id dans la réponse
+            trace_id = get_trace_id()
+            logger.info(
+                "[Dispatch] Assignation réassignée: assignment_id=%s, new_driver_id=%s, company_id=%s",
+                assignment_id,
+                new_driver_id,
+                company.id,
+                extra={
+                    "trace_id": trace_id,
+                    "assignment_id": assignment_id,
+                    "new_driver_id": new_driver_id,
+                    "company_id": company.id,
+                },
+            )
+
             # ✅ MÉTRIQUES : Marquer suggestion comme appliquée
             try:
                 from repositories.rl_suggestion_metric_repository import (
@@ -1591,6 +1690,28 @@ class ReassignResource(Resource):
             except Exception as e:
                 db.session.rollback()
                 logger.warning("[RL] Failed to update metric (non-critique): %s", e)
+
+            # ✅ P0: Ajouter trace_id dans la réponse
+            trace_id = get_trace_id()
+            logger.info(
+                "[Dispatch] Assignation réassignée: assignment_id=%s, new_driver_id=%s, company_id=%s",
+                assignment_id,
+                new_driver_id,
+                company.id,
+                extra={
+                    "trace_id": trace_id,
+                    "assignment_id": assignment_id,
+                    "new_driver_id": new_driver_id,
+                    "company_id": company.id,
+                },
+            )
+
+            # Ajouter trace_id à l'objet Assignment si possible
+            if hasattr(a, "__dict__"):
+                a_dict = cast("Any", a).serialize if hasattr(a, "serialize") else {}
+                if isinstance(a_dict, dict):
+                    a_dict["trace_id"] = trace_id
+                    return a_dict, 200
 
             # ✅ CACHE REDIS : Invalider cache suggestions après réassignation
             from ext import redis_client
@@ -1653,6 +1774,13 @@ class ReassignResource(Resource):
             # ✅ P1: Booking déjà chargé via join précédent, pas besoin de requête supplémentaire
             cast("Any", a).booking = booking
             cast("Any", a).driver = driver
+
+            # Ajouter trace_id à l'objet Assignment si possible (fallback si pas déjà fait)
+            if hasattr(a, "__dict__"):
+                a_dict = cast("Any", a).serialize if hasattr(a, "serialize") else {}
+                if isinstance(a_dict, dict) and "trace_id" not in a_dict:
+                    a_dict["trace_id"] = trace_id
+                    return a_dict, 200
 
             return a
         except Exception as e:

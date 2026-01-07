@@ -21,7 +21,7 @@ from models import (
     Invoice,
     User,
 )
-from models.enums import BookingStatus, ClientType, InvoiceStatus
+from models.enums import BookingStatus, ClientType, InvoiceStatus, UserRole
 
 
 @pytest.fixture
@@ -75,13 +75,31 @@ def test_client(db, test_company):
         pytest.skip("test_company required")
 
     unique_suffix = str(uuid.uuid4())[:8]
+
+    # Créer un User d'abord (requis pour Client)
+    user = User(
+        public_id=str(uuid.uuid4()),
+        username=f"client_{unique_suffix}",
+        email=f"client_{unique_suffix}@test.ch",
+        role=UserRole.CLIENT,
+        first_name=f"Test{unique_suffix}",
+        last_name="Client",
+    )
+    from ext import bcrypt
+
+    user.password = bcrypt.generate_password_hash("password123").decode("utf-8")
+    db.session.add(user)
+    db.session.flush()
+
+    # Créer le Client avec relation user (préféré à user_id direct)
     client = Client()
+    client.user = user  # Utiliser la relation plutôt que user_id directement
     client.company_id = test_company.id
     client.first_name = f"Test{unique_suffix}"
     client.last_name = "Client"
     client.email = f"client_{unique_suffix}@test.ch"
     client.phone = "0211234567"
-    client.client_type = ClientType.INDIVIDUAL
+    client.client_type = ClientType.PRIVATE
     db.session.add(client)
     db.session.flush()
     return client
@@ -94,12 +112,25 @@ def test_driver(db, test_company):
         pytest.skip("test_company required")
 
     unique_suffix = str(uuid.uuid4())[:8]
+
+    # Créer un User d'abord (requis pour Driver)
+    user = User(
+        username=f"driver_{unique_suffix}",
+        email=f"driver_{unique_suffix}@test.ch",
+        role=UserRole.driver,
+        first_name=f"Test{unique_suffix}",
+        last_name="Driver",
+    )
+    from ext import bcrypt
+
+    user.password = bcrypt.generate_password_hash("password123").decode("utf-8")
+    db.session.add(user)
+    db.session.flush()
+
+    # Créer le Driver avec relation user (préféré à user_id direct)
     driver = Driver()
+    driver.user = user  # Utiliser la relation plutôt que user_id directement
     driver.company_id = test_company.id
-    driver.first_name = f"Test{unique_suffix}"
-    driver.last_name = "Driver"
-    driver.email = f"driver_{unique_suffix}@test.ch"
-    driver.phone = "0211234567"
     driver.is_active = True
     db.session.add(driver)
     db.session.flush()
@@ -112,7 +143,13 @@ def test_booking(db, test_company, test_client):
     if not test_company or not test_client:
         pytest.skip("test_company and test_client required")
 
+    # S'assurer que test_client.user est chargé
+    if not hasattr(test_client, "user") or test_client.user is None:
+        db.session.refresh(test_client)
+    assert test_client.user_id is not None, "test_client must have a user_id"
+
     booking = Booking()
+    booking.user_id = test_client.user_id  # ✅ NOT NULL: utiliser user_id du client
     booking.company_id = test_company.id
     booking.client_id = test_client.id
     booking.customer_name = f"{test_client.first_name} {test_client.last_name}"
@@ -122,6 +159,7 @@ def test_booking(db, test_company, test_client):
     booking.status = BookingStatus.PENDING
     booking.amount = Decimal("50.00")
     booking.vat_rate = Decimal("7.70")
+    assert booking.user_id is not None, "booking.user_id must be set before flush"
     db.session.add(booking)
     db.session.flush()
     return booking
@@ -133,7 +171,13 @@ def test_completed_booking(db, test_company, test_client):
     if not test_company or not test_client:
         pytest.skip("test_company and test_client required")
 
+    # S'assurer que test_client.user est chargé
+    if not hasattr(test_client, "user") or test_client.user is None:
+        db.session.refresh(test_client)
+    assert test_client.user_id is not None, "test_client must have a user_id"
+
     booking = Booking()
+    booking.user_id = test_client.user_id  # ✅ NOT NULL: utiliser user_id du client
     booking.company_id = test_company.id
     booking.client_id = test_client.id
     booking.customer_name = f"{test_client.first_name} {test_client.last_name}"
@@ -145,6 +189,7 @@ def test_completed_booking(db, test_company, test_client):
     booking.amount = Decimal("100.00")
     booking.vat_rate = Decimal("7.70")
     booking.invoice_line_id = None  # Pas encore facturée
+    assert booking.user_id is not None, "booking.user_id must be set before flush"
     db.session.add(booking)
     db.session.flush()
     return booking

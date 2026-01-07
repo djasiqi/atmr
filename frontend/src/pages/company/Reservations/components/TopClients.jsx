@@ -5,7 +5,7 @@ const TopClients = ({ reservations }) => {
   // Calculer le top des clients
   const clientStats = reservations.reduce((acc, reservation) => {
     const clientName =
-      reservation.customer_name || reservation.client?.full_name || 'Client anonyme';
+      reservation.client_name || reservation.client?.full_name || 'Client anonyme';
     if (!acc[clientName]) {
       acc[clientName] = {
         name: clientName,

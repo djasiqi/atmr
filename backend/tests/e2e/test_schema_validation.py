@@ -92,7 +92,6 @@ class TestSchemaValidationE2E:
             pytest.fail(
                 f"Redirection 302 inattendue pour payload invalide "
                 f"(devrait être 400). Location: {location}"
-                )
             )
 
         assert response.status_code in [400, 404, 500], (
@@ -129,7 +128,6 @@ class TestSchemaValidationE2E:
             pytest.fail(
                 f"Redirection 302 inattendue pour register "
                 f"(devrait être 200/201 ou 400). Location: {location}"
-                )
             )
 
         assert response.status_code in [200, 201, 400, 404, 500], (
@@ -1923,7 +1921,9 @@ class TestSchemaValidationE2E:
         db.session.flush()
 
         test_driver = Driver()
-        test_driver.user_id = driver_user.id
+        test_driver.user = (
+            driver_user  # Utiliser la relation plutôt que user_id directement
+        )
         test_driver.company_id = sample_company.id
         test_driver.is_active = True
         test_driver.contract_type = "CDI"
@@ -2018,7 +2018,9 @@ class TestSchemaValidationE2E:
         db.session.flush()
 
         test_driver = Driver()
-        test_driver.user_id = driver_user.id
+        test_driver.user = (
+            driver_user  # Utiliser la relation plutôt que user_id directement
+        )
         test_driver.company_id = sample_company.id
         db.session.add(test_driver)
         db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
@@ -3030,8 +3032,7 @@ class TestSchemaValidationE2E:
         response = authenticated_client.get(
             f"/api/v1/analytics/export?"
             f"start_date={start_date.isoformat()}&"
-                f"end_date={end_date.isoformat()}&format=csv"
-            )
+            f"end_date={end_date.isoformat()}&format=csv"
         )
         assert response.status_code in [200, 404]
 

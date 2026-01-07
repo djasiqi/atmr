@@ -16,7 +16,8 @@ export const registerUser = async (userData) => {
 export const loginUser = async (credentials) => {
   try {
     const response = await apiClient.post('/auth/login', credentials);
-    const { token, user } = response.data;
+    // ✅ P1-1: Le token est dans les cookies httpOnly, pas besoin de le récupérer
+    const { user } = response.data;
 
     console.log('🔐 Connexion réussie. Données reçues :', response.data);
 
@@ -24,10 +25,12 @@ export const loginUser = async (credentials) => {
       throw new Error('Public ID manquant');
     }
 
-    // ✅ Stocke les informations utilisateur
-    localStorage.setItem('authToken', token);
+    // ✅ P1-1: Standardisation sur cookies httpOnly uniquement
+    // Les tokens sont stockés dans des cookies httpOnly définis par le backend
+    // On stocke uniquement les infos utilisateur pour l'affichage (pas les tokens)
     localStorage.setItem('user', JSON.stringify(user));
     localStorage.setItem('public_id', user.public_id);
+    // ❌ NE PAS stocker authToken ou refreshToken dans localStorage (sécurité)
 
     // ✅ Active automatiquement le Shadow Mode pour les admins
     if (String(user?.role || '').toLowerCase() === 'admin') {
@@ -95,12 +98,9 @@ export const getFreshToken = async (password) => {
       password,
     });
 
-    const { access_token } = response.data;
-    if (access_token) {
-      // Mettre à jour le token dans localStorage (pour mode mobile/compatibilité)
-      localStorage.setItem('authToken', access_token);
-      console.log('✅ Token fresh obtenu avec succès');
-    }
+    // ✅ P1-1: Le token fresh est dans les cookies httpOnly
+    // Pas besoin de le stocker dans localStorage
+    console.log('✅ Token fresh obtenu avec succès (dans cookies httpOnly)');
 
     return response.data;
   } catch (error) {

@@ -99,7 +99,7 @@ const ScheduleReturnTimeModal = ({ isOpen, onClose, reservation, onConfirm }) =>
           <div className={styles.reservationInfo}>
             <div className={styles.infoRow}>
               <span className={styles.label}>Client :</span>
-              <strong>{reservation.customer_name || reservation.client?.full_name}</strong>
+              <strong>{reservation.client_name || reservation.client?.full_name}</strong>
             </div>
             <div className={styles.infoRow}>
               <span className={styles.label}>Aller :</span>

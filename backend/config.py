@@ -502,46 +502,57 @@ class ProductionConfig(Config):
     # ✅ Prod: URL backend publique (depuis env)
     # En production, PDF_BASE_URL est REQUIS et doit être HTTPS
     # Exception: localhost/127.0.0.1 autorisé en développement local
+    # ⚠️ Ne vérifier que si on est réellement en production (pas lors de l'import du module)
+    _flask_config = os.getenv("FLASK_CONFIG", default=None)
     _pdf_base_url = os.getenv("PDF_BASE_URL", default=None)
-    if not _pdf_base_url:
-        raise RuntimeError(
-            "PDF_BASE_URL est requis en production. "
-            + "Définissez cette variable d'environnement avec une URL HTTPS valide."
-        )
-    # ✅ Exception pour développement local (localhost/127.0.0.1)
-    _is_localhost = _pdf_base_url.startswith(
-        "http://localhost"
-    ) or _pdf_base_url.startswith("http://127.0.0.1")
-    if not _pdf_base_url.startswith("https://") and not _is_localhost:
-        raise RuntimeError(
-            "PDF_BASE_URL doit commencer par 'https://' en production. "
-            + f"Valeur actuelle: {_pdf_base_url}"
-        )
-    PDF_BASE_URL = _pdf_base_url
+    if _flask_config == "production":
+        if not _pdf_base_url:
+            raise RuntimeError(
+                "PDF_BASE_URL est requis en production. "
+                + "Définissez cette variable d'environnement avec une URL HTTPS valide."
+            )
+        # ✅ Exception pour développement local (localhost/127.0.0.1)
+        _is_localhost = _pdf_base_url.startswith(
+            "http://localhost"
+        ) or _pdf_base_url.startswith("http://127.0.0.1")
+        if not _pdf_base_url.startswith("https://") and not _is_localhost:
+            raise RuntimeError(
+                "PDF_BASE_URL doit commencer par 'https://' en production. "
+                + f"Valeur actuelle: {_pdf_base_url}"
+            )
+        PDF_BASE_URL = _pdf_base_url
+    else:
+        # Pour les autres environnements, utiliser une valeur par défaut si non définie
+        PDF_BASE_URL = _pdf_base_url or "http://localhost:5000"
 
     # ✅ Prod: Validation SOCKETIO_CORS_ORIGINS en production
     # En production, SOCKETIO_CORS_ORIGINS doit être défini, non vide, et ne pas contenir "*"
+    # ⚠️ Ne vérifier que si on est réellement en production (pas lors de l'import du module)
     _socketio_cors_origins = os.getenv("SOCKETIO_CORS_ORIGINS", "").strip()
-    if not _socketio_cors_origins:
-        raise RuntimeError(
-            "SOCKETIO_CORS_ORIGINS est requis en production. "
-            + "Définissez cette variable d'environnement avec une liste d'origines HTTPS séparées par des virgules."
-        )
-    if _socketio_cors_origins == "*":
-        raise RuntimeError(
-            "SOCKETIO_CORS_ORIGINS ne peut pas être '*' en production pour des raisons de sécurité. "
-            + "Définissez une liste explicite d'origines HTTPS."
-        )
-    # Valider que toutes les origines sont HTTPS (sauf localhost pour tests)
-    for origin in (origin.strip() for origin in _socketio_cors_origins.split(",")):
-        if origin and not origin.startswith(
-            ("https://", "http://localhost", "http://127.0.0.1")
-        ):
+    if _flask_config == "production":
+        if not _socketio_cors_origins:
             raise RuntimeError(
-                f"SOCKETIO_CORS_ORIGINS contient une origine non sécurisée en production: {origin}. "
-                + "Toutes les origines doivent être HTTPS (sauf localhost pour tests)."
+                "SOCKETIO_CORS_ORIGINS est requis en production. "
+                + "Définissez cette variable d'environnement avec une liste d'origines HTTPS séparées par des virgules."
             )
-    SOCKETIO_CORS_ORIGINS = _socketio_cors_origins
+        if _socketio_cors_origins == "*":
+            raise RuntimeError(
+                "SOCKETIO_CORS_ORIGINS ne peut pas être '*' en production pour des raisons de sécurité. "
+                + "Définissez une liste explicite d'origines HTTPS."
+            )
+        # Valider que toutes les origines sont HTTPS (sauf localhost pour tests)
+        for origin in (origin.strip() for origin in _socketio_cors_origins.split(",")):
+            if origin and not origin.startswith(
+                ("https://", "http://localhost", "http://127.0.0.1")
+            ):
+                raise RuntimeError(
+                    f"SOCKETIO_CORS_ORIGINS contient une origine non sécurisée en production: {origin}. "
+                    + "Toutes les origines doivent être HTTPS (sauf localhost pour tests)."
+                )
+        SOCKETIO_CORS_ORIGINS = _socketio_cors_origins
+    else:
+        # Pour les autres environnements, utiliser une valeur par défaut si non définie
+        SOCKETIO_CORS_ORIGINS = _socketio_cors_origins or "*"
 
 
 class TestingConfig(Config):

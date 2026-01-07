@@ -1,7 +1,7 @@
 import React, { useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import apiClient from './utils/apiClient';
+// ✅ P1-1: apiClient n'est plus utilisé directement (cookies httpOnly gèrent l'authentification)
 
 import DefaultLayout from './store/layouts/DefaultLayout';
 import ProtectedRoute from './utils/ProtectedRoute';
@@ -81,60 +81,24 @@ function setupTokenAutoRefresh() {
   const id = setInterval(
     async () => {
       const now = Date.now();
-      const refreshToken = localStorage.getItem('refreshToken');
-      const authToken = localStorage.getItem('authToken');
       const user = localStorage.getItem('user');
 
       // Vérifier si l'utilisateur est actif (moins de 55 min d'inactivité)
       const isActive = now - lastActivity < 55 * 60 * 1000;
 
-      // ✅ Si on utilise des cookies httpOnly (pas de tokens dans localStorage mais infos utilisateur),
-      // on ne fait pas de refresh automatique car le backend gère les cookies automatiquement
-      // On ne fait le refresh que si on a des tokens dans localStorage (mode mobile/compatibilité)
-      if (!refreshToken || !authToken || !isActive) {
-        // Si on a des infos utilisateur mais pas de tokens, on utilise les cookies (pas besoin de refresh)
-        if (user) {
-          return; // Mode cookies httpOnly, le backend gère le refresh automatiquement
-        }
-        return; // Ne rien faire si pas de tokens ou utilisateur inactif
+      // ✅ P1-1: Standardisation sur cookies httpOnly uniquement
+      // Les tokens sont dans les cookies httpOnly, le backend gère le refresh automatiquement
+      // On ne fait pas de refresh automatique côté frontend car :
+      // 1. Les cookies sont envoyés automatiquement avec chaque requête
+      // 2. Le backend peut détecter l'expiration et renouveler automatiquement
+      // 3. L'interceptor 401 gère déjà le refresh en cas d'erreur
+      if (!user || !isActive) {
+        return; // Pas d'utilisateur ou inactif, ne rien faire
       }
 
-      try {
-        // Token refresh en cours
-        const { data } = await apiClient.post(
-          '/auth/refresh-token',
-          {},
-          {
-            headers: {
-              Authorization: `Bearer ${refreshToken}`,
-            },
-            // Ignorer l'intercepteur d'erreur pour éviter les redirections automatiques
-            skipAuthRedirect: true,
-          }
-        );
-
-        if (data.access_token) {
-          localStorage.setItem('authToken', data.access_token);
-        }
-      } catch (e) {
-        console.error('❌ Erreur rafraîchissement token:');
-        console.error('  - Status:', e.response?.status);
-        console.error('  - Data:', e.response?.data);
-        console.error('  - Headers:', e.response?.headers);
-
-        // Ne supprimer les tokens que si le refresh token est vraiment invalide (401, 422)
-        if (e.response?.status === 401 || e.response?.status === 422) {
-          console.warn('⚠️ Refresh token invalide, nettoyage des tokens et redirection...');
-          localStorage.removeItem('authToken');
-          localStorage.removeItem('refreshToken');
-          localStorage.removeItem('user');
-          localStorage.removeItem('public_id');
-          // Rediriger vers la page de connexion seulement après un délai
-          setTimeout(() => {
-            window.location.href = '/login';
-          }, 1000);
-        }
-      }
+      // ✅ P1-1: Pas besoin de refresh automatique
+      // Le backend gère les cookies automatiquement
+      // L'interceptor 401 gère le refresh en cas d'erreur
     },
     50 * 60 * 1000
   ); // Toutes les 50 minutes (le token expire après 1h)

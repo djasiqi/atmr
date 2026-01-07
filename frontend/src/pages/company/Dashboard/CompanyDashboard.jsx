@@ -489,7 +489,7 @@ const CompanyDashboard = () => {
       b && !['completed', 'cancelled', 'no_show'].includes((b.status || '').toLowerCase());
     return (reservations || []).filter(isActive).map((r) => ({
       id: r.id,
-      client_name: r.customer_name || r.client?.full_name || '',
+      client_name: r.client_name || r.client?.full_name || '',
       status: r.status,
       pickup_time: r.scheduled_time || r.pickup_time, // Fallback
       dropoff_time: r.dropoff_time,
@@ -520,7 +520,7 @@ const CompanyDashboard = () => {
         route: row.route || a.route || [],
         booking: {
           id: row.id,
-          client_name: row.customer_name || row.client?.full_name || '',
+          client_name: row.client_name || row.client?.full_name || '',
           status: row.status,
           pickup_time: row.scheduled_time || row.pickup_time,
           dropoff_time: row.dropoff_time || null,

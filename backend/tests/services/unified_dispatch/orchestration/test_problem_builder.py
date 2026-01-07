@@ -11,7 +11,7 @@ from __future__ import annotations  # noqa: I001
 import pytest
 from unittest.mock import MagicMock, patch
 
-from factories import CompanyFactory, DispatchRunFactory
+from tests.factories import CompanyFactory, DispatchRunFactory
 from models import DispatchRun, DispatchStatus
 from services.unified_dispatch.orchestration.problem_builder import ProblemBuilder
 from shared.constants import GeoConstants
@@ -218,11 +218,9 @@ class TestBuild:
     @patch(
         "services.unified_dispatch.orchestration.problem_builder.data.build_problem_data"
     )
-    @patch(
-        "services.unified_dispatch.orchestration.problem_builder.ProblemBuilder._dispatch_run_manager"
-    )
+    @patch("services.unified_dispatch.orchestration.problem_builder.DispatchRunManager")
     def test_build_marks_dispatch_run_failed_on_unexpected_error(
-        self, mock_manager, mock_build_data, db
+        self, mock_manager_class, mock_build_data, db
     ):
         """Test : Marquage DispatchRun FAILED en cas d'erreur inattendue."""
         company = CompanyFactory()
@@ -235,6 +233,10 @@ class TestBuild:
 
         # Mock build_problem_data pour lever une exception inattendue
         mock_build_data.side_effect = RuntimeError("Unexpected error")
+
+        # Mock DispatchRunManager avant l'instanciation
+        mock_manager_instance = MagicMock()
+        mock_manager_class.return_value = mock_manager_instance
 
         builder = ProblemBuilder()
         problem, error_result = builder.build(
@@ -251,7 +253,7 @@ class TestBuild:
         )
 
         # Vérifier que update_status a été appelé pour marquer FAILED
-        mock_manager.update_status.assert_called_once_with(
+        mock_manager_instance.update_status.assert_called_once_with(
             dispatch_run, DispatchStatus.FAILED
         )
         assert problem is None

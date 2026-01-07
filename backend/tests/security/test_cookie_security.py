@@ -135,14 +135,14 @@ def test_validation_ignores_testing():
 
 def test_login_sets_httponly_cookies(
     client,  # noqa: ANN001
-    test_user_credentials: dict[str, str],
+    sample_user,  # noqa: ANN001
 ) -> None:
     """Test que les cookies de login ont le flag HttpOnly."""
     response = client.post(
         "/api/v1/auth/login",
         json={
-            "email": test_user_credentials["email"],
-            "password": test_user_credentials["password"],
+            "email": sample_user.email,
+            "password": "password123",  # Utiliser le mot de passe par défaut
         },
     )
 
@@ -165,7 +165,7 @@ def test_login_sets_httponly_cookies(
 def test_cookies_have_secure_flag_in_production(
     app: Flask,  # noqa: ANN001
     client,  # noqa: ANN001
-    test_user_credentials: dict[str, str],
+    sample_user,  # noqa: ANN001
 ) -> None:
     """Test que les cookies ont Secure=True en production."""
     app.config["FLASK_ENV"] = "production"
@@ -174,8 +174,8 @@ def test_cookies_have_secure_flag_in_production(
     response = client.post(
         "/api/v1/auth/login",
         json={
-            "email": test_user_credentials["email"],
-            "password": test_user_credentials["password"],
+            "email": sample_user.email,
+            "password": "password123",
         },
     )
 
@@ -196,14 +196,14 @@ def test_cookies_have_secure_flag_in_production(
 
 def test_cookies_have_samesite_flag(
     client,  # noqa: ANN001
-    test_user_credentials: dict[str, str],
+    sample_user,  # noqa: ANN001
 ) -> None:
     """Test que les cookies ont le flag SameSite."""
     response = client.post(
         "/api/v1/auth/login",
         json={
-            "email": test_user_credentials["email"],
-            "password": test_user_credentials["password"],
+            "email": sample_user.email,
+            "password": "password123",
         },
     )
 
@@ -225,14 +225,14 @@ def test_cookies_have_samesite_flag(
 
 def test_cookies_have_max_age(
     client,  # noqa: ANN001
-    test_user_credentials: dict[str, str],
+    sample_user,  # noqa: ANN001
 ) -> None:
     """Test que les cookies ont une expiration définie."""
     response = client.post(
         "/api/v1/auth/login",
         json={
-            "email": test_user_credentials["email"],
-            "password": test_user_credentials["password"],
+            "email": sample_user.email,
+            "password": "password123",
         },
     )
 
@@ -254,14 +254,14 @@ def test_cookies_have_max_age(
 
 def test_cookies_not_accessible_via_javascript(
     client,  # noqa: ANN001
-    test_user_credentials: dict[str, str],
+    sample_user,  # noqa: ANN001
 ) -> None:
     """Test que les cookies ne peuvent pas être lus depuis JavaScript (HttpOnly)."""
     response = client.post(
         "/api/v1/auth/login",
         json={
-            "email": test_user_credentials["email"],
-            "password": test_user_credentials["password"],
+            "email": sample_user.email,
+            "password": "password123",
         },
     )
 

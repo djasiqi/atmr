@@ -25,7 +25,7 @@ def upgrade():
     Ajoute le champ executing_company_id à partner_invoices et supprime
     la contrainte unique sur (partnership_id, period_year, period_month)
     pour permettre plusieurs factures par période si les entreprises exécutantes sont différentes.
-    
+
     ⚠️ NOTE: Cette migration est idempotente - elle vérifie l'existence
     de la colonne avant de l'ajouter. En production, la colonne peut
     avoir été créée manuellement avant l'application de cette migration.
@@ -33,21 +33,29 @@ def upgrade():
     # Vérifier l'existence de la colonne avant de l'ajouter
     from sqlalchemy import inspect
     from sqlalchemy.engine import reflection
-    
+
     bind = op.get_bind()
     inspector = reflection.Inspector.from_engine(bind)
-    existing_columns = [col["name"] for col in inspector.get_columns("partner_invoices")]
-    existing_indexes = [idx["name"] for idx in inspector.get_indexes("partner_invoices")]
-    existing_foreign_keys = [fk["name"] for fk in inspector.get_foreign_keys("partner_invoices")]
-    existing_constraints = [c["name"] for c in inspector.get_unique_constraints("partner_invoices")]
-    
+    existing_columns = [
+        col["name"] for col in inspector.get_columns("partner_invoices")
+    ]
+    existing_indexes = [
+        idx["name"] for idx in inspector.get_indexes("partner_invoices")
+    ]
+    existing_foreign_keys = [
+        fk["name"] for fk in inspector.get_foreign_keys("partner_invoices")
+    ]
+    existing_constraints = [
+        c["name"] for c in inspector.get_unique_constraints("partner_invoices")
+    ]
+
     # Ajouter la colonne executing_company_id (si elle n'existe pas déjà)
     if "executing_company_id" not in existing_columns:
         op.add_column(
             "partner_invoices",
             sa.Column("executing_company_id", sa.Integer(), nullable=True),
         )
-        
+
         # Remplir executing_company_id pour les factures existantes
         # En utilisant le premier transfert associé pour déterminer l'entreprise exécutante
         op.execute("""
@@ -61,7 +69,7 @@ def upgrade():
             )
             WHERE executing_company_id IS NULL
         """)
-        
+
         # Rendre la colonne NOT NULL après avoir rempli les valeurs
         op.alter_column(
             "partner_invoices",

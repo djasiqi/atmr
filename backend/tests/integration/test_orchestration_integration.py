@@ -7,12 +7,12 @@ pour valider que le refactoring fonctionne correctement.
 
 from __future__ import annotations  # noqa: I001
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from factories import (
+from tests.factories import (
     BookingFactory,
     CompanyFactory,
     DispatchRunFactory,
@@ -132,7 +132,7 @@ class TestDispatchRunManagerIntegration:
         db.session.add(company)
         db.session.commit()
 
-        existing_run = DispatchRunFactory(company_id=company.id)
+        existing_run = DispatchRunFactory(company=company, day=date(2025, 1, 14))
         db.session.add(existing_run)
         db.session.commit()
 
@@ -173,14 +173,9 @@ class TestProblemBuilderIntegration:
     """Tests d'intégration pour ProblemBuilder."""
 
     @patch(
-        "services.unified_dispatch.orchestration.problem_builder.data.get_available_bookings"
+        "services.unified_dispatch.orchestration.problem_builder.data.build_problem_data"
     )
-    @patch(
-        "services.unified_dispatch.orchestration.problem_builder.data.get_available_drivers_split"
-    )
-    def test_build_problem_with_real_data(
-        self, mock_get_drivers, mock_get_bookings, db
-    ):
+    def test_build_problem_with_real_data(self, mock_build_problem_data, db):
         """Test : Construction du problème avec données réelles."""
         company = CompanyFactory()
         db.session.add(company)
@@ -191,14 +186,14 @@ class TestProblemBuilderIntegration:
         booking1.pickup_lon = 6.1
         booking1.dropoff_lat = 46.3
         booking1.dropoff_lon = 6.2
-        booking1.scheduled_time = datetime.now(UTC) + timedelta(hours=1)
+        booking1.scheduled_time = datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)
 
         booking2 = BookingFactory(company_id=company.id)
         booking2.pickup_lat = 46.2
         booking2.pickup_lon = 6.1
         booking2.dropoff_lat = 46.3
         booking2.dropoff_lon = 6.2
-        booking2.scheduled_time = datetime.now(UTC) + timedelta(hours=2)
+        booking2.scheduled_time = datetime(2026, 1, 15, 13, 0, 0, tzinfo=UTC)
 
         driver = DriverFactory(company_id=company.id)
         driver.current_lat = 46.2
@@ -207,8 +202,14 @@ class TestProblemBuilderIntegration:
         db.session.add_all([booking1, booking2, driver])
         db.session.commit()
 
-        mock_get_bookings.return_value = [booking1, booking2]
-        mock_get_drivers.return_value = ([driver], [])
+        # Mock build_problem_data pour retourner un dict avec bookings et drivers
+        mock_build_problem_data.return_value = {
+            "company_id": company.id,
+            "bookings": [booking1, booking2],
+            "drivers": [driver],
+            "time_matrix": [[0.0, 10.0], [10.0, 0.0]],
+            "meta": {},
+        }
 
         settings = MagicMock()
         settings.features.enable_geographic_validation = True
@@ -247,7 +248,9 @@ class TestClusteringManagerIntegration:
         manager = ClusteringManager()
         settings = MagicMock()
         settings.features.enable_clustering = True
-        settings.clustering.min_bookings_threshold = 10
+        clustering_mock = MagicMock()
+        clustering_mock.bookings_threshold = 10
+        settings.clustering = clustering_mock
 
         problem_small = {"bookings": [MagicMock() for _ in range(5)]}
         problem_large = {"bookings": [MagicMock() for _ in range(15)]}
@@ -265,8 +268,11 @@ class TestPipelineExecutorIntegration:
     @patch(
         "services.unified_dispatch.orchestration.pipeline_executor.ClusteringManager.should_use_clustering"
     )
+    @patch(
+        "services.unified_dispatch.orchestration.pipeline_executor.heuristics.closest_feasible"
+    )
     def test_execute_pipeline_without_clustering(
-        self, mock_should_cluster, mock_shadow, db
+        self, mock_closest_feasible, mock_should_cluster, mock_shadow, db
     ):
         """Test : Exécution du pipeline sans clustering."""
         company = CompanyFactory()
@@ -280,9 +286,29 @@ class TestPipelineExecutorIntegration:
         mock_shadow_instance.generate_and_store_suggestions.return_value = False
         mock_shadow.return_value = mock_shadow_instance
 
-        booking = MagicMock()
-        booking.id = 1
-        driver = MagicMock()
+        booking = BookingFactory(company_id=company.id)
+        booking.pickup_lat = 46.2
+        booking.pickup_lon = 6.1
+        booking.dropoff_lat = 46.3
+        booking.dropoff_lon = 6.2
+        booking.scheduled_time = datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)
+        db.session.add(booking)
+
+        driver = DriverFactory(company_id=company.id)
+        driver.current_lat = 46.2
+        driver.current_lon = 6.1
+        db.session.add(driver)
+        db.session.commit()
+
+        # Mock closest_feasible pour retourner un objet avec assignments
+        from services.unified_dispatch.heuristics import HeuristicResult
+
+        mock_result = HeuristicResult(
+            assignments=[(booking.id, driver.id, 1.0, 10, 20)],
+            unassigned_booking_ids=[],
+            debug={},
+        )
+        mock_closest_feasible.return_value = mock_result
 
         problem = {
             "bookings": [booking],
@@ -292,6 +318,7 @@ class TestPipelineExecutorIntegration:
         settings = MagicMock()
         settings.features.enable_heuristics = False
         settings.features.enable_solver = False
+        settings.features.enable_fallback = False
 
         executor = PipelineExecutor()
         (
@@ -329,29 +356,33 @@ class TestShadowModeManagerIntegration:
     @patch(
         "services.unified_dispatch.orchestration.shadow_mode_manager.ShadowModeOrchestrator"
     )
-    def test_should_apply_rl_integration(self, mock_orchestrator_class):
+    def test_should_apply_rl_integration(self, mock_orchestrator_class, app, db):
         """Test : Décision d'appliquer RL."""
-        settings = MagicMock()
-        manager = ShadowModeManager(settings)
+        with app.app_context():
+            settings = MagicMock()
+            mock_orchestrator_instance = MagicMock()
+            mock_orchestrator_instance.should_apply_rl_with_guards.return_value = (
+                True,
+                85.5,
+            )
+            mock_orchestrator_class.return_value = mock_orchestrator_instance
 
-        mock_orchestrator_instance = MagicMock()
-        mock_orchestrator_instance.should_apply_rl_with_guards.return_value = (
-            True,
-            85.5,
-        )
-        mock_orchestrator_class.return_value = mock_orchestrator_instance
+            manager = ShadowModeManager(settings)
 
-        company = CompanyFactory()
-        assignments = [MagicMock()]
-        problem = {"bookings": [MagicMock()], "drivers": [MagicMock()]}
+            company = CompanyFactory()
+            db.session.add(company)
+            db.session.commit()
 
-        should_apply, quality_score = manager.should_apply_rl(
-            company_id=company.id,
-            dispatch_run_id=42,
-            final_assignments=assignments,
-            problem=problem,
-            company=company,
-        )
+            assignments = [MagicMock()]
+            problem = {"bookings": [MagicMock()], "drivers": [MagicMock()]}
+
+            should_apply, quality_score = manager.should_apply_rl(
+                company_id=company.id,
+                dispatch_run_id=42,
+                final_assignments=assignments,
+                problem=problem,
+                company=company,
+            )
 
         assert should_apply is True
         assert quality_score == 85.5
@@ -363,38 +394,35 @@ class TestAssignmentApplierWrapperIntegration:
     @patch(
         "services.unified_dispatch.orchestration.assignment_applier_wrapper.AssignmentApplier"
     )
-    def test_apply_assignments_integration(self, mock_applier_class):
+    def test_apply_assignments_integration(self, mock_applier_class, app, db):
         """Test : Application des assignations."""
-        wrapper = AssignmentApplierWrapper()
+        with app.app_context():
+            wrapper = AssignmentApplierWrapper()
 
-        mock_applier_instance = MagicMock()
-        mock_applier_class.return_value = mock_applier_instance
+            mock_applier_instance = MagicMock()
+            mock_applier_class.return_value = mock_applier_instance
 
-        company = CompanyFactory()
-        assignments = [MagicMock()]
+            company = CompanyFactory()
+            db.session.add(company)
+            db.session.commit()
+            assignments = [MagicMock()]
 
-        wrapper.apply(
-            company=company,
-            final_assignments=assignments,
-            dispatch_run_id=42,
-            perf_collector=None,
-        )
+            wrapper.apply(
+                company=company,
+                final_assignments=assignments,
+                dispatch_run_id=42,
+                perf_collector=None,
+            )
 
-        mock_applier_instance.apply_and_emit.assert_called_once_with(
-            company, assignments, 42
-        )
+            mock_applier_instance.apply_and_emit.assert_called_once_with(
+                company, assignments, 42
+            )
 
 
 class TestMetricsFinalizerIntegration:
     """Tests d'intégration pour MetricsFinalizer."""
 
-    @patch(
-        "services.unified_dispatch.orchestration.metrics_finalizer.collect_quality_metrics"
-    )
-    @patch(
-        "services.unified_dispatch.orchestration.metrics_finalizer.collect_analytics_metrics"
-    )
-    def test_finalize_metrics_integration(self, mock_analytics, mock_quality, db):
+    def test_finalize_metrics_integration(self, db):
         """Test : Finalisation complète des métriques."""
         company = CompanyFactory()
         db.session.add(company)
@@ -403,9 +431,6 @@ class TestMetricsFinalizerIntegration:
         dispatch_run = DispatchRunFactory(company_id=company.id)
         db.session.add(dispatch_run)
         db.session.commit()
-
-        mock_quality.return_value = {}
-        mock_analytics.return_value = {}
 
         finalizer = MetricsFinalizer()
 
@@ -494,13 +519,8 @@ class TestResultBuilderIntegration:
 class TestDispatchOrchestratorFullIntegration:
     """Tests d'intégration complets pour DispatchOrchestrator."""
 
-    @patch(
-        "services.unified_dispatch.orchestration.dispatch_orchestrator.RedisLockManager"
-    )
-    @patch(
-        "services.unified_dispatch.orchestration.dispatch_orchestrator.performance_metrics"
-    )
-    def test_execute_full_flow(self, mock_perf_metrics, mock_lock_manager, db):
+    @patch("services.unified_dispatch.locking.RedisLockManager")
+    def test_execute_full_flow(self, mock_lock_manager, db):
         """Test : Flux complet de bout en bout."""
         company = CompanyFactory()
         db.session.add(company)
@@ -510,10 +530,6 @@ class TestDispatchOrchestratorFullIntegration:
         mock_lock_instance = MagicMock()
         mock_lock_instance.acquire_lock.return_value = True
         mock_lock_manager.return_value = mock_lock_instance
-
-        # Mock performance metrics
-        mock_perf_collector = MagicMock()
-        mock_perf_metrics.DispatchMetricsCollector.return_value = mock_perf_collector
 
         orchestrator = DispatchOrchestrator()
 

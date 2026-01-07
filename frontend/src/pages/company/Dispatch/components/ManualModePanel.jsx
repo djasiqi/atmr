@@ -63,8 +63,8 @@ const ManualModePanel = ({
           bValue = new Date(b.scheduled_time || 0);
           break;
         case 'client':
-          aValue = a.customer_name || '';
-          bValue = b.customer_name || '';
+          aValue = a.client_name || '';
+          bValue = b.client_name || '';
           break;
         case 'status':
           aValue = a.status || '';

@@ -20,8 +20,8 @@ describe('useDispatchData', () => {
 
   it('should load dispatches for manual mode', async () => {
     const mockData = [
-      { id: 1, customer_name: 'Test Client 1', status: 'pending' },
-      { id: 2, customer_name: 'Test Client 2', status: 'confirmed' },
+      { id: 1, client_name: 'Test Client 1', status: 'pending' },
+      { id: 2, client_name: 'Test Client 2', status: 'confirmed' },
     ];
 
     companyService.fetchCompanyReservations.mockResolvedValue(mockData);
@@ -42,8 +42,8 @@ describe('useDispatchData', () => {
 
   it('should load assigned dispatches for semi_auto mode', async () => {
     const mockData = [
-      { id: 1, customer_name: 'Test Client 1', driver_id: 10, status: 'assigned' },
-      { id: 2, customer_name: 'Test Client 2', driver_id: 11, status: 'assigned' },
+        { id: 1, client_name: 'Test Client 1', driver_id: 10, status: 'assigned' },
+        { id: 2, client_name: 'Test Client 2', driver_id: 11, status: 'assigned' },
     ];
 
     companyService.fetchAssignedReservations.mockResolvedValue(mockData);
@@ -77,8 +77,8 @@ describe('useDispatchData', () => {
   it('should handle data wrapped in data property', async () => {
     const mockData = {
       data: [
-        { id: 1, customer_name: 'Test Client 1' },
-        { id: 2, customer_name: 'Test Client 2' },
+        { id: 1, client_name: 'Test Client 1' },
+        { id: 2, client_name: 'Test Client 2' },
       ],
     };
 

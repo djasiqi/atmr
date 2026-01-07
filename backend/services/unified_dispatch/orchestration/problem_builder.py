@@ -182,6 +182,8 @@ class ProblemBuilder:
                 company_id,
             )
             logger.exception("[ProblemBuilder] build_problem_data DB error details")
+            # Retourner un dict vide en cas d'erreur DB
+            problem = {}
         except (ValueError, TypeError, AttributeError) as e:
             # Erreurs de validation : données invalides, attributs manquants
             logger.error(
@@ -192,6 +194,8 @@ class ProblemBuilder:
             logger.exception(
                 "[ProblemBuilder] build_problem_data validation error details"
             )
+            # Retourner un dict vide en cas d'erreur de validation
+            problem = {}
         except Exception:
             # Erreur inattendue : logger avec trace complète
             logger.exception(
@@ -259,6 +263,9 @@ class ProblemBuilder:
                 return None, error_result
 
         # Continuer avec le traitement normal si problem est défini
+        # Si problem n'a pas été défini (erreur dans except), utiliser {}
+        if not problem:
+            problem = {}
         if not problem or not problem.get("bookings") or not problem.get("drivers"):
             logger.info(
                 "[ProblemBuilder] Pas de données à dispatcher (company=%s)", company_id
@@ -280,6 +287,11 @@ class ProblemBuilder:
                     logger.exception(
                         "[ProblemBuilder] Failed to mark DispatchRun COMPLETED (unexpected error) for no_data"
                     )
+            # Si problem est vide (erreur DB ou validation), retourner problem, None
+            # Si problem a des données mais pas de bookings/drivers, retourner None, error_result
+            if not problem:
+                # Erreur DB ou validation : retourner problem vide, pas d'error_result
+                return problem, None
             # ✅ Standardisation: Utiliser DispatchResult
             drid_no_data = (
                 safe_int(getattr(dispatch_run, "id", None)) if dispatch_run else None

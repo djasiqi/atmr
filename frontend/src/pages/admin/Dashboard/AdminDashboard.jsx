@@ -157,7 +157,7 @@ const AdminDashboard = () => {
                   <tr key={booking.id}>
                     <td>{booking.date_formatted || 'Non spécifié'}</td>
                     <td>{booking.time_formatted || 'Non spécifié'}</td>
-                    <td>{booking.customer_name || 'Non spécifié'}</td>
+                    <td>{booking.client_name || 'Non spécifié'}</td>
                     <td>{booking.pickup_location || 'Non spécifié'}</td>
                     <td>{booking.dropoff_location || 'Non spécifié'}</td>
                     <td>{booking.amount} CHF</td>
