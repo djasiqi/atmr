@@ -462,7 +462,7 @@ class BookingTransferService:
             # Option 1: Facturation immédiate (comportement actuel)
             # Décommenter pour activer la facturation course par course
             # try:
-            #     from services.invoice_transfer_service import InvoiceTransferService
+            #     from services.booking.invoices import InvoiceTransferService
             #     invoice_service = InvoiceTransferService()
             #     invoice_service.create_invoices_for_transfer(transfer)
             # except Exception as e:

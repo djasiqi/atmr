@@ -1394,7 +1394,7 @@ class AcceptReservation(Resource):
             # Cas 2: Entreprise assignée accepte → accepter le transfert (ce qui accepte aussi la réservation)
             elif active_transfer_check.executing_company_id == company_id:
                 # Accepter le transfert via le service (ce qui accepte aussi la réservation)
-                from services.booking_transfer_service import BookingTransferService
+                from services.booking.transfers import BookingTransferService
 
                 try:
                     accepted_transfer = BookingTransferService.accept_transfer(
