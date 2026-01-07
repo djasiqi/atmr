@@ -1039,7 +1039,7 @@ class UpdateBookingStatus(Resource):
                         driver_id: int,
                     ) -> None:
                         """Fallback pour notification directe si événement échoue."""
-                        from services.socketio_service import emit_assignment_cancelled
+                        from services.realtime.socketio import emit_assignment_cancelled
 
                         emit_assignment_cancelled(
                             company_id=company_id,
@@ -1869,3 +1869,4 @@ class SwitchToEnterprise(Resource):
             }
             status_code = 500
         return result, status_code
+

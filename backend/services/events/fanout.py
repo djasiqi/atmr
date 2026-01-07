@@ -12,7 +12,7 @@ from typing import Any, Dict
 from ext import app_logger
 from schemas.socket_events import EVENT_VERSION, SocketEvent
 from services.notifications.push import send_push_message
-from services.socketio_service import (
+from services.realtime.socketio import (
     emit_company_event,
     emit_date_event,
     emit_driver_event,
@@ -549,3 +549,4 @@ def fanout_urgent_alert(
             body=message,
             data=push_data,
         )
+

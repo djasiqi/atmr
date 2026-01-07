@@ -204,8 +204,8 @@ class RoutingServiceLocal(RoutingServiceInterface):
         coords: List[Tuple[float, float]] | None = None,
         zone_id: str | None = None,
     ) -> None:
-        """Implémentation locale via services.cache_invalidation."""
-        from services.cache_invalidation import invalidate_osrm_matrix_cache
+        """Implémentation locale via services.infrastructure.cache."""
+        from services.infrastructure.cache import invalidate_osrm_matrix_cache
 
         invalidate_osrm_matrix_cache(coords=coords, zone_id=zone_id)
 
@@ -236,4 +236,5 @@ def set_routing_service(service: RoutingServiceInterface) -> None:
     import services.interfaces.routing_interface as module
 
     module._default_routing_service = service
+
 

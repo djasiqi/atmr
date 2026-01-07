@@ -61,22 +61,22 @@ class WeatherServiceLocal(WeatherServiceInterface):
 
     @override
     def get_weather(self, lat: float, lon: float) -> Dict[str, Any] | None:
-        """Implémentation locale via services.weather_service."""
-        from services.weather_service import WeatherService
+        """Implémentation locale via services.external.weather."""
+        from services.external.weather import WeatherService
 
         return WeatherService.get_weather(lat, lon)
 
     @override
     def get_weather_factor(self, lat: float, lon: float) -> float:
-        """Implémentation locale via services.weather_service."""
-        from services.weather_service import WeatherService
+        """Implémentation locale via services.external.weather."""
+        from services.external.weather import WeatherService
 
         return WeatherService.get_weather_factor(lat, lon)
 
     @override
     def clear_cache(self) -> None:
-        """Implémentation locale via services.weather_service."""
-        from services.weather_service import WeatherService
+        """Implémentation locale via services.external.weather."""
+        from services.external.weather import WeatherService
 
         WeatherService.clear_cache()
 
@@ -104,6 +104,7 @@ def set_weather_service(service: WeatherServiceInterface) -> None:
         service: Instance du service météo
     """
     # Mettre à jour via le module pour éviter global statement
-    import services.interfaces.weather_interface as module
+    import services.external.weather_interface as module
 
     module._default_weather_service = service
+

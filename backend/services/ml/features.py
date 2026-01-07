@@ -94,7 +94,7 @@ def extract_base_features(booking: Any, driver: Any) -> dict[str, float]:
 
     # Weather (données réelles via OpenWeatherMap)
     try:
-        from services.weather_service import get_weather_factor
+        from services.external.weather import get_weather_factor
 
         pickup_lat_val = getattr(booking, "pickup_lat", None)
         pickup_lon_val = getattr(booking, "pickup_lon", None)
@@ -340,3 +340,4 @@ def features_to_dataframe(
     row_data = {col: features.get(col, 0) for col in feature_order}
 
     return pd.DataFrame([row_data])
+

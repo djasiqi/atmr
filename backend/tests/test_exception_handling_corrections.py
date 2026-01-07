@@ -18,8 +18,8 @@ import requests
 from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
 
 from services.events.handlers_registry import dispatch_event
-from services.socketio_service import _is_jsonable, emit_company_event
-from services.weather_service import WeatherService
+from services.realtime.socketio import _is_jsonable, emit_company_event
+from services.external.weather import WeatherService
 
 
 class TestExceptionHandlingCorrections:
@@ -33,7 +33,7 @@ class TestExceptionHandlingCorrections:
         with (
             patch("requests.get") as mock_get,
             patch(
-                "services.weather_service.WeatherService._get_from_cache",
+                "services.external.weather.WeatherService._get_from_cache",
                 return_value=None,
             ),
         ):
@@ -56,7 +56,7 @@ class TestExceptionHandlingCorrections:
         with (
             patch("requests.get") as mock_get,
             patch(
-                "services.weather_service.WeatherService._get_from_cache",
+                "services.external.weather.WeatherService._get_from_cache",
                 return_value=None,
             ),
         ):
@@ -76,7 +76,7 @@ class TestExceptionHandlingCorrections:
         with (
             patch("requests.get") as mock_get,
             patch(
-                "services.weather_service.WeatherService._get_from_cache",
+                "services.external.weather.WeatherService._get_from_cache",
                 return_value=None,
             ),
         ):
@@ -148,14 +148,14 @@ class TestExceptionHandlingCorrections:
 
     def test_notification_service_socketio_errors(self):
         """Test : SocketIO service gère correctement les erreurs Socket.IO."""
-        with patch("services.socketio_service.socketio") as mock_socketio:
+        with patch("services.realtime.socketio.socketio") as mock_socketio:
             # Simuler une erreur de connexion Socket.IO
             mock_socketio.emit.side_effect = ConnectionError(
                 "Socket.IO connection failed"
             )
 
             # Devrait gérer l'erreur sans lever d'exception
-            with patch("services.socketio_service.app_logger") as mock_logger:
+            with patch("services.realtime.socketio.app_logger") as mock_logger:
                 emit_company_event(
                     company_id=1, event="test_event", payload={"test": "data"}
                 )
@@ -167,7 +167,7 @@ class TestExceptionHandlingCorrections:
 
     def test_notification_service_type_errors(self):
         """Test : SocketIO service gère correctement les TypeError."""
-        with patch("services.socketio_service.socketio") as mock_socketio:
+        with patch("services.realtime.socketio.socketio") as mock_socketio:
             # Simuler une TypeError (problème de compatibilité Socket.IO)
             # La première tentative avec 'to=' lève TypeError, puis fallback 'room='
             mock_socketio.emit.side_effect = TypeError("Invalid type")
@@ -382,4 +382,5 @@ class TestExceptionRegression:
 if __name__ == "__main__":
     """Exécution directe pour tests rapides."""
     pytest.main([__file__, "-v"])
+
 

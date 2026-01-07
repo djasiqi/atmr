@@ -19,7 +19,7 @@ from flask_restx import (  # pyright: ignore[reportMissingImports]
 from werkzeug.exceptions import BadRequest  # pyright: ignore[reportMissingImports]
 
 from ext import limiter
-from services.version_check import check_app_version
+from services.infrastructure.version import check_app_version
 from shared.error_handlers import APIErrorHandler
 
 logger = logging.getLogger(__name__)
@@ -155,3 +155,4 @@ class VersionCheck(Resource):
         except Exception as e:
             logger.exception("Version check - erreur serveur: %s", e)
             return APIErrorHandler.handle_exception(e, logger)
+

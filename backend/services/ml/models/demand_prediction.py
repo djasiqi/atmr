@@ -299,7 +299,7 @@ class DemandPredictor:
     def _get_holiday_multiplier(self, dt: datetime) -> float:
         """Retourne le multiplicateur pour vacances/jours fériés."""
         try:
-            from services.holidays_service import is_holiday_in_geneva
+            from services.external.holidays import is_holiday_in_geneva
 
             # Convertir datetime en date pour la fonction
             check_date = dt.date()
@@ -394,3 +394,4 @@ def get_demand_predictor() -> DemandPredictor:
         _global_demand_predictor = DemandPredictor()
 
     return _global_demand_predictor
+

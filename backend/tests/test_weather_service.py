@@ -6,7 +6,7 @@ class TestWeatherService:
 
     def test_get_default_weather(self):
         """Test récupération météo par défaut."""
-        from services.weather_service import WeatherService
+        from services.external.weather import WeatherService
 
         weather = WeatherService._get_default_weather()
 
@@ -18,7 +18,7 @@ class TestWeatherService:
 
     def test_calculate_weather_factor_ideal(self):
         """Test calcul facteur météo - conditions idéales."""
-        from services.weather_service import WeatherService
+        from services.external.weather import WeatherService
 
         # Conditions idéales
         weather_data = {
@@ -38,7 +38,7 @@ class TestWeatherService:
 
     def test_calculate_weather_factor_rain(self):
         """Test calcul facteur météo - pluie."""
-        from services.weather_service import WeatherService
+        from services.external.weather import WeatherService
 
         # Pluie modérée
         weather_data = {
@@ -60,7 +60,7 @@ class TestWeatherService:
 
     def test_calculate_weather_factor_snow(self):
         """Test calcul facteur météo - neige."""
-        from services.weather_service import WeatherService
+        from services.external.weather import WeatherService
 
         # Neige
         weather_data = {
@@ -82,7 +82,7 @@ class TestWeatherService:
 
     def test_cache_mechanism(self):
         """Test mécanisme de cache."""
-        from services.weather_service import WeatherService
+        from services.external.weather import WeatherService
 
         # Clear cache
         WeatherService.clear_cache()
@@ -106,7 +106,7 @@ class TestWeatherService:
 
     def test_get_weather_factor_helper(self):
         """Test helper get_weather_factor."""
-        from services.weather_service import get_weather_factor
+        from services.external.weather import get_weather_factor
 
         factor = get_weather_factor(46.2044, 6.1432)
 
@@ -145,3 +145,4 @@ if __name__ == "__main__":
     print("   Pour tester avec vraie API:")
     print("   export OPENWEATHER_API_KEY=your_key")
     print("   pytest tests/test_weather_service.py")
+

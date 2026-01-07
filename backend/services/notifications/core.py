@@ -13,7 +13,7 @@ from services.events.fanout import (
     fanout_dispatch_run_completed,
     fanout_urgent_alert,
 )
-from services.socketio_service import emit_company_event
+from services.realtime.socketio import emit_company_event
 
 if TYPE_CHECKING:
     from models import Booking
@@ -281,4 +281,5 @@ def notify_urgent_alert(
         booking_id=booking_id,
         driver_id=driver_id,
     )
+
 

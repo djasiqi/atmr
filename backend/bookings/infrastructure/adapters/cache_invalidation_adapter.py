@@ -1,7 +1,7 @@
 """Adapter Infrastructure pour l'invalidation du cache (géocodage + OSRM).
 
 Migration progressive vers Clean Architecture:
-- Encapsule les appels à `services.cache_invalidation` depuis la couche Application
+- Encapsule les appels à `services.infrastructure.cache` depuis la couche Application
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ def invalidate_geocoding_cache_adapter(
         provider: Provider à invalider (both, google, osm).
     """
     try:
-        from services.cache_invalidation import invalidate_geocoding_cache
+        from services.infrastructure.cache import invalidate_geocoding_cache
 
         invalidate_geocoding_cache(address, country=country, provider=provider)
         logger.debug(
@@ -47,7 +47,7 @@ def invalidate_osrm_matrix_cache_adapter(coords: list[tuple[float, float]]) -> N
         coords: Liste de coordonnées (lat, lon) à invalider.
     """
     try:
-        from services.cache_invalidation import invalidate_osrm_matrix_cache
+        from services.infrastructure.cache import invalidate_osrm_matrix_cache
 
         invalidate_osrm_matrix_cache(coords=coords)
         logger.debug(
@@ -77,3 +77,4 @@ def create_cache_invalidation_ports() -> tuple[
         invalidate_osrm_matrix_cache_adapter(coords)
 
     return invalidate_geocoding_fn, invalidate_osrm_fn
+

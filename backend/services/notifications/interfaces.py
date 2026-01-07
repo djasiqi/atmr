@@ -123,8 +123,8 @@ class NotificationServiceLocal(NotificationServiceInterface):
     def emit_company_event(
         self, company_id: int, event: str, payload: Dict[str, Any]
     ) -> None:
-        """Implémentation locale via services.socketio_service."""
-        from services.socketio_service import emit_company_event as _emit_company
+        """Implémentation locale via services.realtime.socketio."""
+        from services.realtime.socketio import emit_company_event as _emit_company
 
         _emit_company(company_id, event, payload)
 
@@ -155,3 +155,4 @@ def set_notification_service(service: NotificationServiceInterface) -> None:
     import services.interfaces.notification_interface as module
 
     module._default_notification_service = service
+
