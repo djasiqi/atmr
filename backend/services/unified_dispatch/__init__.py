@@ -87,6 +87,9 @@ from . import orchestration
 # Ils seront supprimés après la migration complète de tous les imports
 # dans le codebase (Semaine 3-4)
 
+# Import de queue pour compatibilité app.py
+from .core import queue  # noqa: F401
+
 # TODO: Compléter lors de la migration (Semaine 2)
 # from .core.types import *
 # from .core.exceptions import *
@@ -98,6 +101,7 @@ __all__ = [
     # Modules
     "locking",
     "orchestration",
+    "queue",  # Compatibilité app.py
     # Les autres exports seront ajoutés lors de la migration
 ]
 
