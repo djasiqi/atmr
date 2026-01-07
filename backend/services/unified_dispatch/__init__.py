@@ -87,7 +87,8 @@ from . import orchestration
 # Ils seront supprimés après la migration complète de tous les imports
 # dans le codebase (Semaine 3-4)
 
-# Import de queue pour compatibilité app.py
+# Imports de compatibilité pour app.py et tasks
+from .core import engine  # noqa: F401
 from .core import queue  # noqa: F401
 
 # TODO: Compléter lors de la migration (Semaine 2)
@@ -99,6 +100,7 @@ from .core import queue  # noqa: F401
 
 __all__ = [
     # Modules
+    "engine",  # Compatibilité tasks/dispatch_tasks.py
     "locking",
     "orchestration",
     "queue",  # Compatibilité app.py
