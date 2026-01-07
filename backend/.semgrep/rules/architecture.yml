@@ -1,0 +1,299 @@
+# Règles Semgrep pour validation architecturale ATMR
+# Version: 1.0
+# Date: 7 janvier 2025
+#
+# Usage:
+#   semgrep --config=.semgrep/rules/architecture.yml .
+#   semgrep --config=.semgrep/rules/architecture.yml bookings/ drivers/ dispatch/ companies/
+
+rules:
+  # RÈGLE #1: Interdire imports directs depuis models/ dans bounded contexts
+  - id: no-direct-model-import-in-bounded-contexts
+    pattern-either:
+      - pattern: from models import $X
+      - pattern: from models.$Y import $Z
+      - pattern: import models
+    paths:
+      include:
+        - "bookings/"
+        - "drivers/"
+        - "dispatch/"
+        - "companies/"
+      exclude:
+        - "*/infrastructure/*repository.py"
+        - "*/infrastructure/*adapter.py"
+        - "*/tests/*"
+    message: |
+      ❌ VIOLATION RÈGLE #2: Import direct depuis models/ interdit dans bounded contexts.
+      
+      Les imports depuis models/ sont UNIQUEMENT autorisés dans:
+      - infrastructure/*repository.py (mapping ORM ↔ Domain)
+      - infrastructure/*adapter.py (adapters legacy)
+      
+      ✅ Solution:
+      1. Utiliser le domain model: from bookings.domain.booking import Booking
+      2. Utiliser le repository: from bookings.infrastructure.booking_repository import BookingRepository
+      
+      📖 Voir: docs/ARCHITECTURE_RULES.md
+    languages:
+      - python
+    severity: ERROR
+    metadata:
+      category: architecture
+      confidence: HIGH
+      likelihood: HIGH
+      impact: HIGH
+      subcategory:
+        - vuln
+
+  # RÈGLE #2: Interdire query direct ORM dans application/ et api/
+  - id: no-direct-orm-query-in-application-api
+    pattern-either:
+      - pattern: $MODEL.query.$METHOD(...)
+      - pattern: db.session.query($MODEL)
+      - pattern: db.session.add($OBJ)
+      - pattern: db.session.commit()
+    paths:
+      include:
+        - "*/application/*.py"
+        - "*/api/*.py"
+      exclude:
+        - "*/tests/*"
+    message: |
+      ❌ VIOLATION RÈGLE #3: Accès direct ORM interdit dans application/ et api/.
+      
+      Les queries ORM sont UNIQUEMENT autorisées dans infrastructure/repositories.
+      
+      ✅ Solution:
+      1. Créer/utiliser un repository dans infrastructure/
+      2. Injecter le repository dans le use-case (DI)
+      
+      Exemple:
+        # ❌ INTERDIT
+        booking = Booking.query.get(booking_id)
+        
+        # ✅ CORRECT
+        booking_repo = BookingRepository()
+        booking = booking_repo.find_by_id(booking_id)
+      
+      📖 Voir: docs/ARCHITECTURE_RULES.md
+    languages:
+      - python
+    severity: ERROR
+    metadata:
+      category: architecture
+      confidence: HIGH
+
+  # RÈGLE #3: Détecter logique métier dans application/ (heuristique)
+  - id: business-logic-leak-in-use-case
+    pattern-either:
+      - pattern: |
+          if $OBJ.status == $STATUS:
+              $OBJ.status = $NEW_STATUS
+      - pattern: |
+          if $OBJ.$ATTR $OP $VALUE:
+              raise ValueError(...)
+    paths:
+      include:
+        - "*/application/*_use_case.py"
+      exclude:
+        - "*/tests/*"
+    message: |
+      ⚠️ POSSIBLE VIOLATION RÈGLE #4: Logique métier détectée dans use-case.
+      
+      La logique métier (validation, transition d'état) doit être dans domain/.
+      
+      ✅ Solution:
+      1. Déplacer la logique dans l'agrégat (domain/)
+      2. Appeler la méthode de l'agrégat dans le use-case
+      
+      Exemple:
+        # ❌ INTERDIT (dans use-case)
+        if booking.status != "pending":
+            raise ValueError("Cannot confirm")
+        booking.status = "confirmed"
+        
+        # ✅ CORRECT (dans domain/booking.py)
+        def confirm(self):
+            if self.status != "pending":
+                raise ValueError("Cannot confirm non-pending booking")
+            self.status = "confirmed"
+        
+        # Dans use-case
+        booking.confirm()
+      
+      📖 Voir: docs/ARCHITECTURE_RULES.md
+    languages:
+      - python
+    severity: WARNING
+    metadata:
+      category: architecture
+      confidence: MEDIUM
+
+  # RÈGLE #4: Interdire création de nouveaux fichiers dans routes/ legacy
+  - id: no-new-legacy-routes
+    pattern: |
+      @bp.route(...)
+      def $FUNC(...):
+          ...
+    paths:
+      include:
+        - "routes/*.py"
+      exclude:
+        - "routes/__init__.py"
+        - "routes/_template_route.py"
+    message: |
+      ⚠️ VIOLATION RÈGLE #6: Création de nouvelles routes dans routes/ legacy interdite.
+      
+      Le code legacy (routes/) est GELÉ. Nouvelles features → Bounded Contexts.
+      
+      ✅ Solution:
+      1. Créer la route dans bounded_context/api/
+      2. Utiliser Flask-RESTX (@namespace.route)
+      
+      Exemple:
+        # ❌ INTERDIT
+        # routes/bookings.py
+        @bp.route("/bookings")
+        def get_bookings():
+            ...
+        
+        # ✅ CORRECT
+        # bookings/api/booking_routes.py
+        @bookings_ns.route("/")
+        class BookingsResource(Resource):
+            def get(self):
+                ...
+      
+      📖 Voir: docs/ARCHITECTURE_RULES.md
+    languages:
+      - python
+    severity: WARNING
+    metadata:
+      category: architecture
+      confidence: HIGH
+
+  # RÈGLE #5: Interdire création de nouveaux services dans services/ legacy
+  - id: no-new-legacy-services
+    pattern: |
+      def $FUNC(...):
+          ...
+    paths:
+      include:
+        - "services/*.py"
+      exclude:
+        - "services/__init__.py"
+        - "services/interfaces/*"
+        - "services/unified_dispatch/*"
+        - "services/ml/*"
+        - "services/rl/*"
+        - "services/analytics/*"
+    message: |
+      ⚠️ POSSIBLE VIOLATION RÈGLE #6: Création de nouveaux services dans services/ legacy.
+      
+      Le code legacy (services/) est GELÉ. Nouvelles features → Bounded Contexts.
+      
+      ✅ Solution:
+      1. Créer un use-case dans bounded_context/application/
+      2. Si logique partagée → créer dans shared/
+      
+      📖 Voir: docs/ARCHITECTURE_RULES.md
+    languages:
+      - python
+    severity: INFO
+    metadata:
+      category: architecture
+      confidence: MEDIUM
+
+  # RÈGLE #6: Détecter imports circulaires entre bounded contexts
+  - id: no-cross-context-imports
+    pattern-either:
+      - pattern: from bookings.$X import $Y
+      - pattern: from drivers.$X import $Y
+      - pattern: from dispatch.$X import $Y
+      - pattern: from companies.$X import $Y
+    paths:
+      include:
+        - "bookings/"
+        - "drivers/"
+        - "dispatch/"
+        - "companies/"
+      exclude:
+        - "*/tests/*"
+    message: |
+      ❌ VIOLATION RÈGLE #8: Import direct entre bounded contexts interdit.
+      
+      Les contexts DOIVENT communiquer via Events, PAS via imports directs.
+      
+      ✅ Solution:
+      1. Publier un Domain Event après l'action
+      2. Créer un handler dans l'autre context qui écoute l'événement
+      
+      Exemple:
+        # ❌ INTERDIT
+        from bookings.domain.booking import Booking  # Dans drivers/
+        
+        # ✅ CORRECT
+        # Dans bookings/application/
+        publish_event(BookingCreatedEvent(booking_id=booking.id))
+        
+        # Dans drivers/application/handlers/
+        @event_handler(BookingCreatedEvent)
+        def on_booking_created(event):
+            # Réagir sans couplage
+            ...
+      
+      📖 Voir: docs/ARCHITECTURE_RULES.md
+    languages:
+      - python
+    severity: ERROR
+    metadata:
+      category: architecture
+      confidence: HIGH
+    # Note: Cette règle peut avoir des faux positifs
+    # Vérifier manuellement si l'import est légitime (tests, shared utils)
+
+  # RÈGLE #7: Encourager utilisation de dataclasses pour domain models
+  - id: prefer-dataclass-for-domain-models
+    pattern: |
+      class $CLASS:
+          def __init__(self, ...):
+              ...
+    paths:
+      include:
+        - "*/domain/*.py"
+      exclude:
+        - "*/domain/events.py"
+        - "*/domain/*_event.py"
+        - "*/tests/*"
+    message: |
+      💡 SUGGESTION: Utiliser @dataclass pour les domain models.
+      
+      Les dataclasses offrent:
+      - Moins de boilerplate (__init__, __repr__, __eq__)
+      - Immutabilité avec frozen=True
+      - Type hints obligatoires
+      
+      Exemple:
+        # ⚠️ Verbeux
+        class Booking:
+            def __init__(self, id, status):
+                self.id = id
+                self.status = status
+        
+        # ✅ Concis
+        from dataclasses import dataclass
+        
+        @dataclass
+        class Booking:
+            id: int | None
+            status: str
+      
+      📖 Voir: docs/ARCHITECTURE_RULES.md
+    languages:
+      - python
+    severity: INFO
+    metadata:
+      category: best-practice
+      confidence: LOW
+

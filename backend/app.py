@@ -302,6 +302,18 @@ def create_app(config_name: str | None = None):
     bcrypt.init_app(app)
     migrate.init_app(app, db, compare_type=True, render_as_batch=True)
 
+    # ✅ A2: Détection N+1 queries en développement
+    if app.config.get("ENV") == "development" or app.config.get("SQLALCHEMY_ECHO"):
+        try:
+            from nplusone.ext.flask_sqlalchemy import NPlusOne
+
+            NPlusOne(app)
+            app.logger.info("✅ NPlusOne activé - Détection N+1 queries activée")
+        except ImportError:
+            app.logger.warning(
+                "⚠️ nplusone non installé - Exécuter: pip install nplusone"
+            )
+
     # ✅ Clean Architecture: wiring explicite du bus d'événements
     # - Application ne dépend pas de services/celery/redis.
     # - Le choix de l'implémentation (infra) est fait ici (outer layer).

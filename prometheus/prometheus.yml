@@ -24,6 +24,7 @@ global: # noqa: SC200
 rule_files:
   - 'alerts-dispatch.yml'
   - 'alerts-slo.yml'  # ✅ 2.11: Alertes SLO breach pour PagerDuty
+  - 'alerts-critical.yml'  # ✅ A3: Alertes infrastructure critiques (DB, Redis, Celery)
 
 # Scrape configurations
 scrape_configs:

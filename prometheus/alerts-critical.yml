@@ -1,0 +1,334 @@
+# yaml-language-server: disable
+# ✅ A3: Alertes Critiques Infrastructure ATMR
+# Alertes pour les composants d'infrastructure essentiels (DB, Redis, Celery)
+
+groups:
+  # ============================================
+  # Alertes Infrastructure Critique
+  # ============================================
+  - name: infrastructure_critical
+    interval: 30s
+    rules:
+      # ✅ A3.1: PostgreSQL Down (CRITIQUE)
+      - alert: DatabaseDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: database
+          notification: pagerduty
+        annotations:
+          summary: "🚨 PostgreSQL is DOWN"
+          description: "La base de données principale est inaccessible depuis 1 minute. Toutes les opérations backend sont bloquées."
+          impact: "TOTAL - Application non fonctionnelle"
+          action: |
+            1. Vérifier logs PostgreSQL: docker logs atmr-postgres
+            2. Vérifier connexion réseau
+            3. Redémarrer si nécessaire: docker-compose restart postgres
+            4. Vérifier disque plein: df -h
+          runbook_url: "https://docs.atmr.ch/runbooks/database-down"
+          pagerduty_severity: "critical"
+      
+      # ✅ A3.2: PostgreSQL Connection Pool Saturé
+      - alert: DatabaseConnectionPoolExhausted
+        expr: |
+          (
+            sum(sqlalchemy_pool_connections_total) - 
+            sum(sqlalchemy_pool_connections_idle)
+          ) / sum(sqlalchemy_pool_connections_total) > 0.9
+        for: 5m
+        labels:
+          severity: critical
+          component: database
+          notification: pagerduty
+        annotations:
+          summary: "🚨 Pool de connexions DB saturé (>90%)"
+          description: "Le pool de connexions PostgreSQL est utilisé à {{ $value | humanizePercentage }}. Risque de blocage applicatif imminent."
+          impact: "ÉLEVÉ - Dégradation performances, risque de timeouts"
+          action: |
+            1. Vérifier requêtes lentes: SELECT * FROM pg_stat_activity WHERE state = 'active'
+            2. Vérifier fuites de connexions dans le code
+            3. Augmenter SQLALCHEMY_POOL_SIZE si nécessaire
+            4. Redémarrer workers Celery si blocage détecté
+          runbook_url: "https://docs.atmr.ch/runbooks/db-connection-pool"
+          pagerduty_severity: "critical"
+      
+      # ✅ A3.3: Redis Down (CRITIQUE)
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: cache
+          notification: pagerduty
+        annotations:
+          summary: "🚨 Redis is DOWN"
+          description: "Le cache Redis est inaccessible depuis 2 minutes. Dispatch dégradé (fallback Haversine activé)."
+          impact: "MOYEN - Dispatch fonctionne en mode dégradé, performances réduites"
+          action: |
+            1. Vérifier logs Redis: docker logs atmr-redis
+            2. Vérifier mémoire: docker stats atmr-redis
+            3. Redémarrer si nécessaire: docker-compose restart redis
+            4. Vérifier éviction policy (maxmemory-policy)
+          runbook_url: "https://docs.atmr.ch/runbooks/redis-down"
+          pagerduty_severity: "critical"
+      
+      # ✅ A3.4: Redis Mémoire Critique
+      - alert: RedisMemoryCritical
+        expr: |
+          (
+            redis_memory_used_bytes / redis_memory_max_bytes
+          ) > 0.95
+        for: 10m
+        labels:
+          severity: critical
+          component: cache
+          notification: pagerduty
+        annotations:
+          summary: "🚨 Mémoire Redis critique (>95%)"
+          description: "Redis utilise {{ $value | humanizePercentage }} de sa mémoire maximale. Risque d'éviction ou crash."
+          impact: "ÉLEVÉ - Risque de crash Redis, perte de cache"
+          action: |
+            1. Analyser top keys: redis-cli --bigkeys
+            2. Vérifier eviction policy: redis-cli CONFIG GET maxmemory-policy
+            3. Augmenter maxmemory si possible
+            4. Purger manuellement si nécessaire: redis-cli FLUSHDB
+          runbook_url: "https://docs.atmr.ch/runbooks/redis-memory"
+          pagerduty_severity: "critical"
+      
+      # ✅ A3.5: Aucun Worker Celery Actif
+      - alert: CeleryWorkersDown
+        expr: |
+          sum(up{job="celery"}) == 0 OR absent(up{job="celery"})
+        for: 3m
+        labels:
+          severity: critical
+          component: workers
+          notification: pagerduty
+        annotations:
+          summary: "🚨 Aucun worker Celery actif"
+          description: "Tous les workers Celery sont hors service depuis 3 minutes. Toutes les tâches asynchrones sont bloquées."
+          impact: "TOTAL - Dispatch, retraining ML, emails, notifications bloqués"
+          action: |
+            1. Vérifier logs Celery: docker logs atmr-celery-worker
+            2. Vérifier connexion Redis (broker)
+            3. Redémarrer workers: docker-compose restart celery-worker
+            4. Vérifier OOM kills: dmesg | grep -i kill
+          runbook_url: "https://docs.atmr.ch/runbooks/celery-workers-down"
+          pagerduty_severity: "critical"
+      
+      # ✅ A3.6: Workers Celery Insuffisants
+      - alert: CeleryWorkersLow
+        expr: |
+          sum(up{job="celery"}) < 2
+        for: 10m
+        labels:
+          severity: warning
+          component: workers
+          notification: slack
+        annotations:
+          summary: "⚠️ Moins de 2 workers Celery actifs"
+          description: "Seulement {{ $value }} worker(s) Celery actif(s). Risque de saturation des tâches."
+          impact: "MOYEN - Latence accrue sur tâches asynchrones"
+          action: |
+            1. Vérifier charge CPU/RAM des workers existants
+            2. Scaler si nécessaire: docker-compose up -d --scale celery-worker=3
+            3. Vérifier queues Celery: celery -A celery_app inspect active
+          runbook_url: "https://docs.atmr.ch/runbooks/celery-scaling"
+
+  # ============================================
+  # Alertes Dispatch Critique (complément)
+  # ============================================
+  - name: dispatch_critical
+    interval: 1m
+    rules:
+      # ✅ A3.7: Taux d'Échec Dispatch Élevé
+      - alert: DispatchFailureRate
+        expr: |
+          (
+            rate(atmr_dispatch_errors_total[5m]) / 
+            rate(atmr_dispatch_total[5m])
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+          component: dispatch
+          notification: pagerduty
+        annotations:
+          summary: "🚨 Taux d'échec dispatch > 10% sur 5min"
+          description: "{{ $value | humanizePercentage }} des dispatches échouent. Problème système critique détecté."
+          impact: "ÉLEVÉ - Bookings non assignés, clients impactés"
+          action: |
+            1. Vérifier logs dispatch: docker logs atmr-api | grep ERROR
+            2. Vérifier métriques Prometheus: /api/v1/prometheus/metrics
+            3. Vérifier OSRM: curl http://osrm:5000/health
+            4. Vérifier OR-Tools disponible: python -c "import ortools"
+          runbook_url: "https://docs.atmr.ch/runbooks/dispatch-failure-rate"
+          pagerduty_severity: "critical"
+      
+      # ✅ A3.8: Dispatch Bloqué (aucune exécution)
+      - alert: DispatchStalled
+        expr: |
+          rate(atmr_dispatch_total[10m]) == 0 AND 
+          rate(atmr_dispatch_total[1h] offset 1h) > 0
+        for: 15m
+        labels:
+          severity: critical
+          component: dispatch
+          notification: pagerduty
+        annotations:
+          summary: "🚨 Dispatch complètement bloqué depuis 15min"
+          description: "Aucun dispatch exécuté depuis 15 minutes alors qu'il y avait de l'activité auparavant."
+          impact: "TOTAL - Système d'assignation hors service"
+          action: |
+            1. Vérifier Celery Beat: docker logs atmr-celery-beat
+            2. Vérifier workers: docker ps | grep celery
+            3. Vérifier DB locks: SELECT * FROM pg_locks WHERE NOT granted
+            4. Redémarrer dispatch stack si nécessaire
+          runbook_url: "https://docs.atmr.ch/runbooks/dispatch-stalled"
+          pagerduty_severity: "critical"
+
+  # ============================================
+  # Alertes OSRM (Routing Service)
+  # ============================================
+  - name: osrm_critical
+    interval: 1m
+    rules:
+      # ✅ A3.9: OSRM Down
+      - alert: OSRMDown
+        expr: up{job="osrm"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          component: routing
+          notification: slack
+        annotations:
+          summary: "⚠️ OSRM routing service DOWN"
+          description: "Le service de routing OSRM est inaccessible depuis 5 minutes. Dispatch utilise fallback Haversine."
+          impact: "MOYEN - Routing dégradé (distances à vol d'oiseau), précision réduite"
+          action: |
+            1. Vérifier logs OSRM: docker logs atmr-osrm
+            2. Vérifier mémoire disponible: free -h
+            3. Redémarrer si nécessaire: docker-compose restart osrm
+            4. Vérifier map data OSM montée correctement
+          runbook_url: "https://docs.atmr.ch/runbooks/osrm-down"
+      
+      # ✅ A3.10: OSRM Latence Élevée
+      - alert: OSRMLatencyHigh
+        expr: |
+          histogram_quantile(0.95, rate(osrm_request_duration_seconds_bucket[5m])) > 2
+        for: 10m
+        labels:
+          severity: warning
+          component: routing
+          notification: slack
+        annotations:
+          summary: "⚠️ OSRM latence élevée (p95 > 2s)"
+          description: "OSRM répond en {{ $value }}s au p95. Performance dégradée."
+          impact: "MOYEN - Dispatch plus lent, timeout possibles"
+          action: |
+            1. Vérifier charge CPU OSRM: docker stats atmr-osrm
+            2. Vérifier cache Redis (si utilisé)
+            3. Considérer scaling horizontal OSRM
+          runbook_url: "https://docs.atmr.ch/runbooks/osrm-performance"
+
+  # ============================================
+  # Alertes API Health Checks
+  # ============================================
+  - name: api_health_critical
+    interval: 30s
+    rules:
+      # ✅ A3.11: Health Check Principal Échoue
+      - alert: APIHealthCheckFailing
+        expr: |
+          rate(http_requests_total{endpoint="/api/health",status=~"5.."}[5m]) > 0.5
+        for: 3m
+        labels:
+          severity: critical
+          component: api
+          notification: pagerduty
+        annotations:
+          summary: "🚨 Health check API échoue (>50% erreurs 5xx)"
+          description: "{{ $value | humanize }} erreurs/seconde sur /api/health. Application potentiellement HS."
+          impact: "CRITIQUE - Service dégradé ou indisponible"
+          action: |
+            1. Vérifier logs API: docker logs atmr-api
+            2. Vérifier connexion DB: psql -h localhost -U atmr -c "SELECT 1"
+            3. Vérifier mémoire: docker stats atmr-api
+            4. Redémarrer si nécessaire: docker-compose restart api
+          runbook_url: "https://docs.atmr.ch/runbooks/api-health-failure"
+          pagerduty_severity: "critical"
+      
+      # ✅ A3.12: Readiness Check Échoue
+      - alert: APIReadinessCheckFailing
+        expr: |
+          rate(http_requests_total{endpoint="/api/ready",status=~"5.."}[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+          notification: slack
+        annotations:
+          summary: "⚠️ Readiness check API échoue"
+          description: "L'API n'est pas prête à recevoir du trafic. Kubernetes/load balancer pourrait retirer du pool."
+          impact: "MOYEN - Service non prêt, trafic potentiellement redirigé"
+          action: |
+            1. Vérifier dépendances externes (Redis, OSRM)
+            2. Vérifier initialisation complète de l'app
+            3. Attendre warmup ou redémarrer si bloqué
+          runbook_url: "https://docs.atmr.ch/runbooks/api-readiness"
+
+  # ============================================
+  # Alertes Disk & Memory
+  # ============================================
+  - name: resources_critical
+    interval: 1m
+    rules:
+      # ✅ A3.13: Disque Presque Plein
+      - alert: DiskSpaceCritical
+        expr: |
+          (
+            node_filesystem_avail_bytes{mountpoint="/"} / 
+            node_filesystem_size_bytes{mountpoint="/"}
+          ) < 0.1
+        for: 10m
+        labels:
+          severity: critical
+          component: infrastructure
+          notification: pagerduty
+        annotations:
+          summary: "🚨 Espace disque critique (<10% libre)"
+          description: "Seulement {{ $value | humanizePercentage }} d'espace disque libre sur /. Risque de crash imminent."
+          impact: "CRITIQUE - DB pourrait crasher, logs perdus"
+          action: |
+            1. Vérifier utilisation: df -h
+            2. Trouver gros fichiers: du -sh /* | sort -h
+            3. Purger logs anciens: find /var/log -mtime +7 -delete
+            4. Nettoyer Docker: docker system prune -af --volumes
+          runbook_url: "https://docs.atmr.ch/runbooks/disk-full"
+          pagerduty_severity: "critical"
+      
+      # ✅ A3.14: Mémoire Système Critique
+      - alert: MemoryCritical
+        expr: |
+          (
+            node_memory_MemAvailable_bytes / 
+            node_memory_MemTotal_bytes
+          ) < 0.05
+        for: 5m
+        labels:
+          severity: critical
+          component: infrastructure
+          notification: pagerduty
+        annotations:
+          summary: "🚨 Mémoire système critique (<5% libre)"
+          description: "Seulement {{ $value | humanizePercentage }} de RAM disponible. Risque d'OOM kills."
+          impact: "CRITIQUE - Processus pourraient être tués par OOM killer"
+          action: |
+            1. Vérifier processus gourmands: top -o %MEM
+            2. Vérifier OOM kills: dmesg | grep -i kill
+            3. Identifier fuites mémoire: docker stats
+            4. Redémarrer services non-critiques ou scaler horizontalement
+          runbook_url: "https://docs.atmr.ch/runbooks/memory-critical"
+          pagerduty_severity: "critical"
+
