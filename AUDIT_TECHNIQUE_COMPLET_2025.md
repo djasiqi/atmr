@@ -1437,28 +1437,45 @@ IMPLEMENTATION_A3_ALERTING.md     ✅ Documentation (450 lignes)
 
 ---
 
-#### 🟠 B3: Optimiser Frontend Bundle
+#### ✅ B3: Optimiser Frontend Bundle
 
 **Objectif:** Réduire temps de chargement initial
 
-**Actions:**
+**Status:** ✅ **DÉJÀ IMPLÉMENTÉ** (Lazy loading -34%, code-splitting optimisé)
 
-1. Analyser bundle:
+**Implémentation actuelle:**
 
-   ```bash
-   npm run build -- --stats
-   npx webpack-bundle-analyzer build/bundle-stats.json
-   ```
-
-2. Lazy loading des routes:
-
+1. ✅ Lazy loading routes (30+ routes):
    ```javascript
    const CompanyDashboard = lazy(() => import("./pages/company/Dashboard"));
+   const DriverDashboard = lazy(() => import("./pages/driver/Dashboard"));
+   // ... 30+ routes lazy-loadées
+   ```
+   **Résultat:** Bundle 3.2 MB → 2.1 MB (-34%)
+
+2. ✅ Code-splitting Webpack (`config-overrides.js`):
+   ```javascript
+   splitChunks: {
+     cacheGroups: {
+       leaflet: { /* 150 KB séparé */ },
+       recharts: { /* 380 KB séparé */ },
+       socketio: { /* Socket.IO séparé */ }
+     }
+   }
    ```
 
-3. Tree-shaking agressif (Material-UI)
+3. ✅ Terser optimisé (drop_console en prod)
 
-**Effort:** ⏱️ **1-2 semaines**
+**Optimisations supplémentaires identifiées (optionnelles):**
+- ⚠️ Material-UI imports (-100-200 KB)
+- ⚠️ PDF lazy loading (-200 KB)
+- ⚠️ Framer Motion lazy loading (-120 KB)
+
+**Gain potentiel additionnel:** -400-500 KB (~20% bundle initial)
+
+**Rapport:** `RAPPORT_B3_FRONTEND_OPTIMISATION.md`
+
+**Effort:** ⏱️ **COMPLÉTÉ** (optimisations additionnelles : 1-2 jours)
 
 ---
 
