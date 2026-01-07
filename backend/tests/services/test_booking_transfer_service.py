@@ -8,7 +8,7 @@ import pytest
 from ext import db
 from models.booking import Booking
 from models.enums import BookingStatus, TransferModel, TransferStatus
-from services.booking_transfer_service import BookingTransferService
+from services.booking.transfers import BookingTransferService
 from services.partnership_service import PartnershipService
 from tests.factories import (
     BookingFactory,
