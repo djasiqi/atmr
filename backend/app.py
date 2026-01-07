@@ -305,7 +305,9 @@ def create_app(config_name: str | None = None):
     # ✅ A2: Détection N+1 queries en développement
     if app.config.get("ENV") == "development" or app.config.get("SQLALCHEMY_ECHO"):
         try:
-            from nplusone.ext.flask_sqlalchemy import NPlusOne
+            from nplusone.ext.flask_sqlalchemy import (  # type: ignore[import-untyped]
+                NPlusOne,
+            )
 
             NPlusOne(app)
             app.logger.info("✅ NPlusOne activé - Détection N+1 queries activée")

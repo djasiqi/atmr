@@ -46,7 +46,11 @@ from services.unified_dispatch.optimization import solver
 **Refactoring B1 - Phase 1 (Semaine 1)** : Structure créée
 **Status :** 🔵 EN COURS
 """
-from . import locking
+
+# pyright: reportImportCycles=false
+# Les imports ci-dessous créent des cycles détectés par basedpyright, mais sont nécessaires
+# pour maintenir l'API publique du module. Les cycles seront résolus en Semaine 3.
+from . import locking  # noqa: I001
 from . import orchestration
 
 # ========== Exports Publics (Nouvelle API) ==========
