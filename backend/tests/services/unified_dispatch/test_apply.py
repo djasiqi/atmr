@@ -10,7 +10,7 @@ from flask import Flask
 from sqlalchemy.exc import IntegrityError
 
 from models import Assignment, Booking, BookingStatus
-from services.unified_dispatch.apply import apply_assignments
+from services.unified_dispatch.optimization.assignment_applier import apply_assignments
 from tests.factories import (
     BookingFactory,
     CompanyFactory,
