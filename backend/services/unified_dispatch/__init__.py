@@ -46,7 +46,6 @@ from services.unified_dispatch.optimization import solver
 **Refactoring B1 - Phase 1 (Semaine 1)** : Structure créée
 **Status :** 🔵 EN COURS
 """
-
 from . import locking
 from . import orchestration
 
