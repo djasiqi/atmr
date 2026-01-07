@@ -946,12 +946,14 @@ df -h
 **Refactoring B1 (Janvier 2025)** : Le module `unified_dispatch` a été réorganisé en structure modulaire v2.0. Les anciens imports depuis la racine ne fonctionnent plus.
 
 **Avant (v1.0) :**
+
 ```python
 from services.unified_dispatch import data, solver
 from services.unified_dispatch.apply import apply_assignments
 ```
 
 **Après (v2.0) :**
+
 ```python
 from services.unified_dispatch.data import loader
 from services.unified_dispatch.optimization import solver
@@ -980,14 +982,14 @@ from services.unified_dispatch.optimization.assignment_applier import apply_assi
 
 ### Mapping Rapide (Modules fréquents)
 
-| Ancien                                          | Nouveau                                                  |
-| ----------------------------------------------- | -------------------------------------------------------- |
-| `from services.unified_dispatch.types`          | `from services.unified_dispatch.core.types`              |
-| `from services.unified_dispatch.exceptions`     | `from services.unified_dispatch.core.exceptions`         |
-| `from services.unified_dispatch.solver`         | `from services.unified_dispatch.optimization.solver`     |
-| `from services.unified_dispatch.apply`          | `from services.unified_dispatch.optimization.assignment_applier` |
-| `from services.unified_dispatch.validation`     | `from services.unified_dispatch.validation.constraints`  |
-| `from services.unified_dispatch.dispatch_metrics` | `from services.unified_dispatch.metrics.dispatch`      |
+| Ancien                                            | Nouveau                                                          |
+| ------------------------------------------------- | ---------------------------------------------------------------- |
+| `from services.unified_dispatch.types`            | `from services.unified_dispatch.core.types`                      |
+| `from services.unified_dispatch.exceptions`       | `from services.unified_dispatch.core.exceptions`                 |
+| `from services.unified_dispatch.solver`           | `from services.unified_dispatch.optimization.solver`             |
+| `from services.unified_dispatch.apply`            | `from services.unified_dispatch.optimization.assignment_applier` |
+| `from services.unified_dispatch.validation`       | `from services.unified_dispatch.validation.constraints`          |
+| `from services.unified_dispatch.dispatch_metrics` | `from services.unified_dispatch.metrics.dispatch`                |
 
 ### Actions de récupération (5-15 min)
 
@@ -997,7 +999,7 @@ from services.unified_dispatch.optimization.assignment_applier import apply_assi
    # Exemple de correction
    # AVANT
    from services.unified_dispatch.solver import solve_vrptw
-   
+
    # APRÈS
    from services.unified_dispatch.optimization.solver import solve_vrptw
    ```

@@ -8,6 +8,7 @@
 ## 📋 Vue d'Ensemble
 
 Ce document décrit les dépendances entre les modules du backend ATMR, incluant :
+
 - Services internes
 - Bounded contexts (DDD)
 - Dépendances externes
@@ -54,17 +55,17 @@ services/unified_dispatch/
 
 ### Dépendances Externes (unified_dispatch)
 
-| Dépendance        | Version   | Usage                                      |
-| ----------------- | --------- | ------------------------------------------ |
-| **OR-Tools**      | >=9.5     | Résolution VRPTW (Vehicle Routing)         |
-| **PyTorch**       | >=2.0     | Agent RL (DQN) pour scoring assignments   |
-| **XGBoost**       | >=1.7     | Prédiction retards (ML)                    |
-| **LightGBM**      | >=3.3     | Prédiction demande (ML)                    |
-| **scikit-learn**  | >=1.3     | Preprocessing ML, clustering               |
-| **Redis**         | >=6.2     | Locks distribués, cache, A/B tracking      |
-| **PostgreSQL**    | >=14      | Stockage données (bookings, drivers, etc.) |
-| **OSRM**          | >=5.27    | Matrices distance/durée (routing)          |
-| **Prometheus**    | Client    | Métriques dispatch                         |
+| Dépendance       | Version | Usage                                      |
+| ---------------- | ------- | ------------------------------------------ |
+| **OR-Tools**     | >=9.5   | Résolution VRPTW (Vehicle Routing)         |
+| **PyTorch**      | >=2.0   | Agent RL (DQN) pour scoring assignments    |
+| **XGBoost**      | >=1.7   | Prédiction retards (ML)                    |
+| **LightGBM**     | >=3.3   | Prédiction demande (ML)                    |
+| **scikit-learn** | >=1.3   | Preprocessing ML, clustering               |
+| **Redis**        | >=6.2   | Locks distribués, cache, A/B tracking      |
+| **PostgreSQL**   | >=14    | Stockage données (bookings, drivers, etc.) |
+| **OSRM**         | >=5.27  | Matrices distance/durée (routing)          |
+| **Prometheus**   | Client  | Métriques dispatch                         |
 
 ### Graphe de Dépendances Interne
 
@@ -91,6 +92,7 @@ core → (aucune dépendance interne)
 **Responsabilité :** Gestion des réservations
 
 **Structure :**
+
 ```
 bookings/
 ├── domain/          # Entités, value objects, events
@@ -100,11 +102,13 @@ bookings/
 ```
 
 **Dépendances :**
+
 - `shared.event_bus` (publish events)
 - `infrastructure.repositories` (persistence)
 - `models.Booking` (legacy, à migrer)
 
 **Events émis :**
+
 - `BookingCreatedEvent`
 - `BookingUpdatedEvent`
 - `BookingCancelledEvent`
@@ -116,6 +120,7 @@ bookings/
 **Responsabilité :** Gestion des chauffeurs et disponibilités
 
 **Structure :**
+
 ```
 drivers/
 ├── domain/          # Entités, value objects, events
@@ -125,11 +130,13 @@ drivers/
 ```
 
 **Dépendances :**
+
 - `shared.event_bus` (publish events)
 - `infrastructure.repositories` (persistence)
 - `models.Driver` (legacy, à migrer)
 
 **Events émis :**
+
 - `DriverCreatedEvent`
 - `DriverUpdatedEvent`
 - `DriverAvailabilityChangedEvent`
@@ -141,6 +148,7 @@ drivers/
 **Responsabilité :** Orchestration du dispatch et assignations
 
 **Structure :**
+
 ```
 dispatch/
 ├── domain/          # Entités, value objects, events
@@ -150,17 +158,20 @@ dispatch/
 ```
 
 **Dépendances :**
+
 - `services.unified_dispatch` (via adapters)
 - `shared.event_bus` (publish/subscribe events)
 - `infrastructure.repositories` (persistence)
 - `models.Assignment` (legacy, à migrer)
 
 **Events émis :**
+
 - `DriverNewBookingEvent` (via unified_dispatch)
 - `AssignmentCreatedEvent`
 - `AssignmentCancelledEvent`
 
 **Events écoutés :**
+
 - `BookingCreatedEvent` (trigger dispatch)
 - `DriverAvailabilityChangedEvent` (re-dispatch)
 
@@ -171,6 +182,7 @@ dispatch/
 **Responsabilité :** Gestion des entreprises et configurations
 
 **Structure :**
+
 ```
 companies/
 ├── domain/          # Entités, value objects, events
@@ -180,11 +192,13 @@ companies/
 ```
 
 **Dépendances :**
+
 - `shared.event_bus` (publish events)
 - `infrastructure.repositories` (persistence)
 - `models.Company` (legacy, à migrer)
 
 **Events émis :**
+
 - `CompanyCreatedEvent`
 - `CompanyUpdatedEvent`
 - `CompanyConfigChangedEvent`
@@ -196,6 +210,7 @@ companies/
 ### Event Bus (Architecture Hexagonale)
 
 **Implémentation :**
+
 - `shared.event_bus.EventBus` (interface)
 - `infrastructure.event_bus.CeleryEventBus` (production)
 - `infrastructure.event_bus.InMemoryEventBus` (tests)
@@ -205,6 +220,7 @@ companies/
 **Exemples de flux :**
 
 1. **Création Booking → Dispatch Automatique**
+
    ```
    Bookings Context
        └─> BookingCreatedEvent
@@ -228,6 +244,7 @@ companies/
 ### `shared/`
 
 **Contenu :**
+
 - `constants.py` : Constantes globales (GeoConstants, etc.)
 - `event_bus.py` : Interface EventBus
 - `events.py` : Classes d'événements de domaine
@@ -241,11 +258,13 @@ companies/
 ### `infrastructure/`
 
 **Contenu :**
+
 - `event_bus/` : Implémentations CeleryEventBus, InMemoryEventBus
 - `repositories/` : Repositories SQLAlchemy pour bounded contexts
 - `dispatch/` : Adapters vers `unified_dispatch` (validation, apply, etc.)
 
 **Dépendances :**
+
 - `shared.event_bus` (interface)
 - `services.unified_dispatch` (pour adapters)
 - `sqlalchemy`, `celery`, `redis`
@@ -256,47 +275,47 @@ companies/
 
 ### Production (requirements.prod.txt)
 
-| Catégorie            | Dépendance                   | Version  |
-| -------------------- | ---------------------------- | -------- |
-| **Web Framework**    | Flask                        | >=3.0    |
-| **Database**         | SQLAlchemy                   | >=2.0    |
-|                      | psycopg2-binary              | >=2.9    |
-|                      | alembic                      | >=1.12   |
-| **Task Queue**       | Celery                       | >=5.3    |
-|                      | Redis                        | >=5.0    |
-| **API**              | Flask-RESTX                  | >=1.2    |
-|                      | marshmallow                  | >=3.20   |
-| **Auth**             | Flask-JWT-Extended           | >=4.5    |
-|                      | bcrypt                       | >=4.1    |
-| **Optimisation**     | ortools                      | >=9.5    |
-| **ML/RL**            | torch                        | >=2.0    |
-|                      | xgboost                      | >=1.7    |
-|                      | lightgbm                     | >=3.3    |
-|                      | scikit-learn                 | >=1.3    |
-|                      | numpy                        | >=1.24   |
-|                      | pandas                       | >=2.0    |
-| **Monitoring**       | prometheus-client            | >=0.18   |
-|                      | sentry-sdk[flask]            | >=1.39   |
-|                      | opentelemetry-*              | >=1.21   |
-| **Security**         | cryptography                 | >=41.0   |
-|                      | hvac                         | >=2.0    |
-| **Utilities**        | requests                     | >=2.31   |
-|                      | python-dotenv                | >=1.0    |
-|                      | nplusone                     | >=1.0    |
+| Catégorie         | Dépendance         | Version |
+| ----------------- | ------------------ | ------- |
+| **Web Framework** | Flask              | >=3.0   |
+| **Database**      | SQLAlchemy         | >=2.0   |
+|                   | psycopg2-binary    | >=2.9   |
+|                   | alembic            | >=1.12  |
+| **Task Queue**    | Celery             | >=5.3   |
+|                   | Redis              | >=5.0   |
+| **API**           | Flask-RESTX        | >=1.2   |
+|                   | marshmallow        | >=3.20  |
+| **Auth**          | Flask-JWT-Extended | >=4.5   |
+|                   | bcrypt             | >=4.1   |
+| **Optimisation**  | ortools            | >=9.5   |
+| **ML/RL**         | torch              | >=2.0   |
+|                   | xgboost            | >=1.7   |
+|                   | lightgbm           | >=3.3   |
+|                   | scikit-learn       | >=1.3   |
+|                   | numpy              | >=1.24  |
+|                   | pandas             | >=2.0   |
+| **Monitoring**    | prometheus-client  | >=0.18  |
+|                   | sentry-sdk[flask]  | >=1.39  |
+|                   | opentelemetry-\*   | >=1.21  |
+| **Security**      | cryptography       | >=41.0  |
+|                   | hvac               | >=2.0   |
+| **Utilities**     | requests           | >=2.31  |
+|                   | python-dotenv      | >=1.0   |
+|                   | nplusone           | >=1.0   |
 
 ### Développement (requirements.dev.txt)
 
-| Catégorie            | Dépendance                   | Version  |
-| -------------------- | ---------------------------- | -------- |
-| **Testing**          | pytest                       | >=7.4    |
-|                      | pytest-cov                   | >=4.1    |
-|                      | pytest-flask                 | >=1.3    |
-|                      | pytest-mock                  | >=3.12   |
-| **Linting**          | ruff                         | >=0.1    |
-|                      | basedpyright                 | >=1.32   |
-| **Static Analysis**  | semgrep                      | >=1.50   |
-| **Formatting**       | black                        | >=23.12  |
-| **Type Checking**    | mypy                         | >=1.7    |
+| Catégorie           | Dépendance   | Version |
+| ------------------- | ------------ | ------- |
+| **Testing**         | pytest       | >=7.4   |
+|                     | pytest-cov   | >=4.1   |
+|                     | pytest-flask | >=1.3   |
+|                     | pytest-mock  | >=3.12  |
+| **Linting**         | ruff         | >=0.1   |
+|                     | basedpyright | >=1.32  |
+| **Static Analysis** | semgrep      | >=1.50  |
+| **Formatting**      | black        | >=23.12 |
+| **Type Checking**   | mypy         | >=1.7   |
 
 ---
 
@@ -347,6 +366,7 @@ companies/
 8. **Grafana** (port 3000) - dashboards
 
 **Commande Docker Compose :**
+
 ```bash
 docker-compose up -d postgres redis osrm
 docker-compose up -d api celery-worker celery-beat
@@ -357,4 +377,3 @@ docker-compose up -d prometheus grafana
 
 **Date de dernière mise à jour :** 7 janvier 2025  
 **Version du document :** 2.0.0
-
