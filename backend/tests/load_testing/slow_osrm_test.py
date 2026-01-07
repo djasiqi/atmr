@@ -67,10 +67,7 @@ class SlowOSRMDispatchTest(HttpUser):
         tomorrow = date.today() + timedelta(days=1)
         self.test_date = tomorrow.strftime("%Y-%m-%d")
 
-        logger.info(
-            f"[SETUP] ✅ Prêt pour test OSRM lent | "
-            f"Date: {self.test_date}"
-        )
+        logger.info(f"[SETUP] ✅ Prêt pour test OSRM lent | Date: {self.test_date}")
 
     def _login(self) -> None:
         """Authentification."""
@@ -134,8 +131,7 @@ class SlowOSRMDispatchTest(HttpUser):
         elif response.status_code == 504:
             # Gateway Timeout (OSRM timeout)
             logger.error(
-                f"[DISPATCH] ❌ Gateway Timeout (504) | "
-                f"Duration: {duration:.2f}s"
+                f"[DISPATCH] ❌ Gateway Timeout (504) | Duration: {duration:.2f}s"
             )
             self.osrm_timeout_count += 1
         else:
@@ -215,8 +211,7 @@ class SlowOSRMDispatchTest(HttpUser):
                 self.osrm_fallback_count += 1
             else:
                 logger.warning(
-                    f"[FALLBACK] ⚠️ Mode attendu: haversine, "
-                    f"obtenu: {distance_mode}"
+                    f"[FALLBACK] ⚠️ Mode attendu: haversine, obtenu: {distance_mode}"
                 )
 
     @task(2)
@@ -252,14 +247,12 @@ class SlowOSRMDispatchTest(HttpUser):
             failure_rate = data.get("failure_rate", 0)
 
             logger.debug(
-                f"[CIRCUIT BREAKER] State: {state} | "
-                f"Failure rate: {failure_rate:.1%}"
+                f"[CIRCUIT BREAKER] State: {state} | Failure rate: {failure_rate:.1%}"
             )
 
             if state == "open":
                 logger.warning(
-                    "[CIRCUIT BREAKER] ⚠️ Circuit ouvert "
-                    "(trop d'échecs OSRM)"
+                    "[CIRCUIT BREAKER] ⚠️ Circuit ouvert (trop d'échecs OSRM)"
                 )
 
     def _process_success(self, response: Any, duration: float) -> None:
@@ -409,4 +402,3 @@ Points de validation :
 - ✅ Circuit breaker s'ouvre si trop d'échecs
 - ✅ Pas de timeout fatal (504)
 """
-
