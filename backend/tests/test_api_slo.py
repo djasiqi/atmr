@@ -3,7 +3,7 @@
 import unittest
 from unittest.mock import patch
 
-from services.api_slo import (
+from services.monitoring.slo import (
     API_SLOS,
     APISLOTarget,
     get_slo_target,
@@ -76,9 +76,9 @@ class TestAPISLO(unittest.TestCase):
         self.assertLessEqual(len(normalized), 103)  # 100 + "..."
         self.assertTrue(normalized.endswith("...") or len(normalized) <= 100)
 
-    @patch("services.api_slo.PROMETHEUS_AVAILABLE", True)
-    @patch("services.api_slo.SLO_LATENCY_BREACH")
-    @patch("services.api_slo.SLO_LATENCY_HISTOGRAM")
+    @patch("services.monitoring.slo.PROMETHEUS_AVAILABLE", True)
+    @patch("services.monitoring.slo.SLO_LATENCY_BREACH")
+    @patch("services.monitoring.slo.SLO_LATENCY_HISTOGRAM")
     def test_record_slo_metric_no_breach(self, mock_histogram, mock_counter):
         """Test enregistrement métrique SLO sans violation."""
         # Durée < seuil (300ms pour /api/bookings/:id)
@@ -95,9 +95,9 @@ class TestAPISLO(unittest.TestCase):
         if mock_histogram:
             mock_histogram.labels().observe.assert_called_once()
 
-    @patch("services.api_slo.PROMETHEUS_AVAILABLE", True)
-    @patch("services.api_slo.SLO_LATENCY_BREACH")
-    @patch("services.api_slo.SLO_ERROR_BREACH")
+    @patch("services.monitoring.slo.PROMETHEUS_AVAILABLE", True)
+    @patch("services.monitoring.slo.SLO_LATENCY_BREACH")
+    @patch("services.monitoring.slo.SLO_ERROR_BREACH")
     def test_record_slo_metric_latency_breach(self, mock_error, mock_latency):
         """Test enregistrement violation latence SLO."""
         # Durée > seuil (500ms pour /api/bookings)
@@ -113,8 +113,8 @@ class TestAPISLO(unittest.TestCase):
             mock_latency.labels.assert_called_once()
             mock_latency.labels().inc.assert_called_once()
 
-    @patch("services.api_slo.PROMETHEUS_AVAILABLE", True)
-    @patch("services.api_slo.SLO_ERROR_BREACH")
+    @patch("services.monitoring.slo.PROMETHEUS_AVAILABLE", True)
+    @patch("services.monitoring.slo.SLO_ERROR_BREACH")
     def test_record_slo_metric_error_breach(self, mock_error):
         """Test enregistrement violation taux d'erreurs SLO."""
         # Erreur serveur (5xx)
@@ -130,7 +130,7 @@ class TestAPISLO(unittest.TestCase):
             mock_error.labels.assert_called_once()
             mock_error.labels().inc.assert_called_once()
 
-    @patch("services.api_slo.PROMETHEUS_AVAILABLE", False)
+    @patch("services.monitoring.slo.PROMETHEUS_AVAILABLE", False)
     def test_record_slo_metric_no_prometheus(self):
         """Test que l'enregistrement fonctionne même sans Prometheus."""
         # Ne doit pas lever d'exception
@@ -161,3 +161,4 @@ class TestAPISLO(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

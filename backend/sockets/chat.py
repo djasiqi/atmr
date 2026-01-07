@@ -38,8 +38,8 @@ from schemas.socket_events import EVENT_VERSION, SocketEvent
 from services.geolocation.location import get_location_service
 from services.notifications.push import send_push_message
 from services.security.spam import can_send_message
-from services.websocket_metrics import ws_metrics
-from services.websocket_rate_limiter import ws_rate_limiter
+from services.monitoring.websocket_metrics import ws_metrics
+from services.monitoring.websocket_rate_limiter import ws_rate_limiter
 
 # Constantes pour éviter les valeurs magiques
 RECEIVER_ID_ZERO = 0
@@ -2642,4 +2642,5 @@ def init_chat_socket(socketio: SocketIO):
             emit("error", {"error": str(e)})
 
     # Les handlers sont enregistrés via @socketio.on() ci-dessus
+
 

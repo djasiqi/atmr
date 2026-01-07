@@ -17,7 +17,7 @@ import pytest
 import requests
 from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
 
-from services.event_handlers_registry import dispatch_event
+from services.events.handlers_registry import dispatch_event
 from services.socketio_service import _is_jsonable, emit_company_event
 from services.weather_service import WeatherService
 
@@ -98,13 +98,13 @@ class TestExceptionHandlingCorrections:
             raise ValueError("Invalid data")
 
         # Enregistrer le handler
-        from services.event_handlers_registry import register
+        from services.events.handlers_registry import register
 
         register("test_event", bad_handler)
 
         # Dispatcher l'événement - ne devrait pas lever d'exception
         # mais logger l'erreur
-        with patch("services.event_handlers_registry.logger") as mock_logger:
+        with patch("services.events.handlers_registry.logger") as mock_logger:
             dispatch_event({"event_type": "test_event", "data": "test"})
 
             # Vérifier que l'erreur est loggée
@@ -119,12 +119,12 @@ class TestExceptionHandlingCorrections:
         def network_handler(event):
             raise ConnectionError("Network error")
 
-        from services.event_handlers_registry import register
+        from services.events.handlers_registry import register
 
         register("test_network_event", network_handler)
 
         # Dispatcher l'événement - ne devrait pas lever d'exception
-        with patch("services.event_handlers_registry.logger") as mock_logger:
+        with patch("services.events.handlers_registry.logger") as mock_logger:
             dispatch_event({"event_type": "test_network_event", "data": "test"})
 
             # Vérifier que l'erreur réseau est loggée
@@ -188,13 +188,13 @@ class TestExceptionHandlingCorrections:
         def unexpected_handler(event):
             raise RuntimeError("Unexpected error")
 
-        from services.event_handlers_registry import register
+        from services.events.handlers_registry import register
 
         register("test_unexpected_event", unexpected_handler)
 
         # Dispatcher l'événement - ne devrait pas lever d'exception
         # mais être capturé par le filet de sécurité
-        with patch("services.event_handlers_registry.logger") as mock_logger:
+        with patch("services.events.handlers_registry.logger") as mock_logger:
             dispatch_event({"event_type": "test_unexpected_event", "data": "test"})
 
             # Vérifier que l'erreur inattendue est loggée avec exception()
@@ -304,12 +304,12 @@ class TestExceptionLogging:
         def context_handler(event):
             raise ValueError("Invalid data")
 
-        from services.event_handlers_registry import register
+        from services.events.handlers_registry import register
 
         register("test_context_event", context_handler)
 
         # Dispatcher l'événement
-        with patch("services.event_handlers_registry.logger") as mock_logger:
+        with patch("services.events.handlers_registry.logger") as mock_logger:
             dispatch_event({"event_type": "test_context_event", "data": "test"})
 
             # Vérifier que le log contient le contexte (event_type, handler)
@@ -324,12 +324,12 @@ class TestExceptionLogging:
         def unexpected_handler(event):
             raise RuntimeError("Unexpected error")
 
-        from services.event_handlers_registry import register
+        from services.events.handlers_registry import register
 
         register("test_trace_event", unexpected_handler)
 
         # Dispatcher l'événement
-        with patch("services.event_handlers_registry.logger") as mock_logger:
+        with patch("services.events.handlers_registry.logger") as mock_logger:
             dispatch_event({"event_type": "test_trace_event", "data": "test"})
 
             # Vérifier que exception() est appelé (trace complète)
@@ -348,12 +348,12 @@ class TestExceptionRegression:
         def error_handler(event):
             raise ValueError("Test error")
 
-        from services.event_handlers_registry import register
+        from services.events.handlers_registry import register
 
         register("test_no_swallow_event", error_handler)
 
         # Dispatcher l'événement
-        with patch("services.event_handlers_registry.logger") as mock_logger:
+        with patch("services.events.handlers_registry.logger") as mock_logger:
             dispatch_event({"event_type": "test_no_swallow_event", "data": "test"})
 
             # Vérifier que l'erreur est loggée (pas silencieusement avalée)
@@ -382,3 +382,4 @@ class TestExceptionRegression:
 if __name__ == "__main__":
     """Exécution directe pour tests rapides."""
     pytest.main([__file__, "-v"])
+

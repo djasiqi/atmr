@@ -27,7 +27,7 @@ from shared.retry import retry_db_operation  # ✅ P1: Retry pour DB queries cri
 
 # Import optionnel des métriques (peut ne pas être disponible)
 try:
-    from services.db_session_metrics import (
+    from services.monitoring.db_metrics import (
         track_context_manager_usage,
         track_session_error,
         track_transaction,
@@ -581,3 +581,4 @@ def get_db_circuit_breaker_stats() -> dict[str, Any]:
         Dict avec les statistiques du circuit breaker
     """
     return _db_circuit_breaker.get_stats()
+

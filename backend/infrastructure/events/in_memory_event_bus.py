@@ -23,6 +23,7 @@ class InMemoryEventBus(EventBus):
 
     @override
     def publish(self, event: DomainEvent) -> None:
-        from services.event_handlers_registry import dispatch_event
+        from services.events.handlers_registry import dispatch_event
 
         dispatch_event(event.to_dict())
+

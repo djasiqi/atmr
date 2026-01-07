@@ -283,8 +283,8 @@ class TestEventPerformance:
         time_without_metrics = (end_time - start_time) * 1000
 
         # Réactiver les handlers (incluant metrics_handler)
-        from services.event_handlers.booking_handlers import handle_booking_cancelled
-        from services.event_handlers.metrics_handler import handle_event_metrics
+        from services.events.handlers.booking_handlers import handle_booking_cancelled
+        from services.events.handlers.metrics_handler import handle_event_metrics
 
         registry.register("BookingCancelledEvent", handle_booking_cancelled)
         registry.register("BookingCancelledEvent", handle_event_metrics)
@@ -299,3 +299,4 @@ class TestEventPerformance:
         assert overhead < 5, (
             f"Overhead metrics_handler trop élevé: {overhead:.2f}ms (attendu < 5ms)"
         )
+

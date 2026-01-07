@@ -30,7 +30,7 @@ from models.booking_transfer import BookingTransfer
 from models.company import Company
 from models.enums import PartnershipStatus, TransferStatus
 from models.partnership import Partnership
-from services.pdf_service import PDFService
+from services.documents.pdf import PDFService
 
 logger = logging.getLogger(__name__)
 
@@ -686,3 +686,4 @@ class PartnershipStatementService:
 
         logger.info("Décompte PDF généré: %s", pdf_url)
         return pdf_url
+

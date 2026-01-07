@@ -124,7 +124,7 @@ def prom_middleware(app: Flask) -> Flask:
 
         # ✅ SLO: Enregistrer métriques SLO pour routes critiques
         try:
-            from services.api_slo import record_slo_metric
+            from services.monitoring.slo import record_slo_metric
 
             record_slo_metric(
                 endpoint=endpoint,
@@ -192,3 +192,4 @@ def _get_endpoint(request) -> str:
         endpoint = endpoint[:_MAX_ENDPOINT_LENGTH] + "..."
 
     return endpoint
+

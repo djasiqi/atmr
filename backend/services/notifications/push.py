@@ -22,7 +22,7 @@ from ext import app_logger, redis_client
 
 # Import conditionnel pour métriques Prometheus
 try:
-    from services.prometheus_metrics import track_push_notification
+    from services.monitoring.prometheus import track_push_notification
 except ImportError:
     # Si prometheus_metrics non disponible, fonction no-op
     def track_push_notification(*args, **kwargs):
@@ -363,3 +363,4 @@ def _persist_failed_push(
             "timestamp": time.time(),
         },
     )
+
