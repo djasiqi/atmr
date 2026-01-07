@@ -9,7 +9,7 @@ import requests  # pyright: ignore[reportMissingModuleSource]
 from flask import current_app, request  # pyright: ignore[reportMissingImports]
 from flask_restx import Namespace, Resource  # pyright: ignore[reportMissingImports]
 
-from services.google_places import (
+from services.geolocation.google_places import (
     GooglePlacesError,
     autocomplete_address,
     geocode_address_google,
@@ -107,7 +107,7 @@ def normalize_google_places(
     Returns:
         Liste de dictionnaires normalisés avec label et address au format complet
     """
-    from services.google_places import (
+    from services.geolocation.google_places import (
         GooglePlacesError,
         extract_address_components,
         get_place_details,
@@ -315,7 +315,7 @@ def normalize_photon(data: Dict[str, Any]) -> List[Dict[str, Any]]:
 
                 try:
                     # Appeler Google Geocoding pour enrichir
-                    from services.google_places import geocode_address_google
+                    from services.geolocation.google_places import geocode_address_google
 
                     google_result = geocode_address_google(
                         search_address, country=country or "CH"
@@ -799,7 +799,7 @@ class GeocodeAddress(Resource):
                 result = geocode_address_google(address, country=country)
             else:
                 # Fallback vers le service existant
-                from services.maps import geocode_address
+                from services.geolocation.maps import geocode_address
 
                 coords = geocode_address(address, country=country)
                 result = (
@@ -831,3 +831,4 @@ class GeocodeAddress(Resource):
         except Exception as e:
             current_app.logger.error("❌ Erreur géocodage: %s", e)
             return APIErrorHandler.handle_exception(e, current_app.logger)
+

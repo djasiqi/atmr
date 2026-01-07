@@ -35,7 +35,7 @@ from flask_socketio import (  # pyright: ignore[reportMissingModuleSource]
 from ext import db, redis_client
 from models import Company, Driver, Message, SenderRole, User, UserRole
 from schemas.socket_events import EVENT_VERSION, SocketEvent
-from services.location_service import get_location_service
+from services.geolocation.location import get_location_service
 from services.notifications.push import send_push_message
 from services.security.spam import can_send_message
 from services.websocket_metrics import ws_metrics
@@ -2642,3 +2642,4 @@ def init_chat_socket(socketio: SocketIO):
             emit("error", {"error": str(e)})
 
     # Les handlers sont enregistrés via @socketio.on() ci-dessus
+

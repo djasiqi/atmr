@@ -128,7 +128,7 @@ class RoutingServiceLocal(RoutingServiceInterface):
         avg_speed_kmh_fallback: float = 50.0,
     ) -> List[List[float]]:
         """Implémentation locale via services.osrm_client."""
-        from services.osrm_client import build_distance_matrix_osrm_with_cb
+        from services.geolocation.osrm import build_distance_matrix_osrm_with_cb
 
         resolved_base_url = base_url or os.getenv("OSRM_BASE_URL", "http://osrm:5000")
         return build_distance_matrix_osrm_with_cb(
@@ -160,7 +160,7 @@ class RoutingServiceLocal(RoutingServiceInterface):
         avg_speed_kmh_fallback: float = 50.0,
     ) -> int:
         """Implémentation locale via services.osrm_client (route_info + cache)."""
-        from services.osrm_client import eta_seconds as _eta_seconds
+        from services.geolocation.osrm import eta_seconds as _eta_seconds
 
         resolved_base_url = base_url or os.getenv("OSRM_BASE_URL", "http://osrm:5000")
         return _eta_seconds(
@@ -185,7 +185,7 @@ class RoutingServiceLocal(RoutingServiceInterface):
         waypoints: List[Tuple[float, float]] | None = None,
     ) -> Dict[str, Any]:
         """Implémentation locale via services.osrm_client."""
-        from services.osrm_client import (
+        from services.geolocation.osrm import (
             get_route as _get_route,
         )
 
@@ -236,3 +236,4 @@ def set_routing_service(service: RoutingServiceInterface) -> None:
     import services.interfaces.routing_interface as module
 
     module._default_routing_service = service
+

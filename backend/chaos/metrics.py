@@ -216,7 +216,7 @@ def measure_rto(
         ...     injector.set_osrm_down(False)
         >>>
         >>> def test():
-        ...     from services.osrm_client import get_matrix
+        ...     from services.geolocation.osrm import get_matrix
         ...     return get_matrix([(0, 0)], [(1, 1)])
         >>>
         >>> rto = measure_rto("osrm", restore, test, objective_seconds=30.0)
@@ -330,3 +330,4 @@ def measure_rto(
         f"failed for service {service_name}"
     )
     raise RuntimeError(error_msg) from None
+

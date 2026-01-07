@@ -81,7 +81,7 @@ class GeocodingServiceLocal(GeocodingServiceInterface):
         self, address: str, *, country: str | None = None, language: str = "fr"
     ) -> Dict[str, float] | None:
         """Implémentation locale via services.maps."""
-        from services.maps import geocode_address as _geocode_address
+        from services.geolocation.maps import geocode_address as _geocode_address
 
         return _geocode_address(address, country=country, language=language)
 
@@ -95,7 +95,7 @@ class GeocodingServiceLocal(GeocodingServiceInterface):
         provider: str = "auto",
     ) -> Dict[str, Dict[str, float] | None]:
         """Implémentation locale via services.maps."""
-        from services.maps import geocode_addresses_batch as _geocode_batch
+        from services.geolocation.maps import geocode_addresses_batch as _geocode_batch
 
         # geocode_addresses_batch n'accepte pas provider, utilise prefer_google
         prefer_google = provider == "google" or (provider == "auto" and True)
@@ -138,3 +138,4 @@ def set_geocoding_service(service: GeocodingServiceInterface) -> None:
     import services.interfaces.geocoding_interface as module
 
     module._default_geocoding_service = service
+

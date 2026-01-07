@@ -156,7 +156,7 @@ def _precompute_matrix_for_zone(
         True si succès, False sinon
     """
     try:
-        from services.osrm_client import build_distance_matrix_osrm
+        from services.geolocation.osrm import build_distance_matrix_osrm
 
         coords = zone["coords"]
         zone_id = zone["zone_id"]
@@ -291,3 +291,4 @@ def precompute_osrm_matrices_task(
     except Exception as e:
         logger.exception("[OSRM Precompute] Task failed: %s", e)
         raise
+

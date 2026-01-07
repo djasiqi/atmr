@@ -426,7 +426,7 @@ class LiveDelaysResource(Resource):
             # ✅ ÉTAPE 2: Vérifier le circuit breaker OSRM AVANT de lancer les calculs
             use_haversine_only = False
             try:
-                from services.osrm_client import _osrm_circuit_breaker
+                from services.geolocation.osrm import _osrm_circuit_breaker
 
                 if _osrm_circuit_breaker.state == "OPEN":
                     logger.info(
@@ -851,3 +851,4 @@ class LiveDelaysResource(Resource):
         except Exception as e:
             logger.exception("Erreur récupération retards live: %s", e)
             return APIErrorHandler.handle_exception(e, logger)
+

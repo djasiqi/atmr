@@ -2838,7 +2838,7 @@ class MobileCreateRide(Resource):
         # Géocodage si coordonnées manquantes
         if not pickup_lat or not pickup_lon:
             try:
-                from services.maps import geocode_address
+                from services.geolocation.maps import geocode_address
 
                 pickup_coords = geocode_address(pickup_address)
                 if pickup_coords:
@@ -2849,7 +2849,7 @@ class MobileCreateRide(Resource):
 
         if not dropoff_lat or not dropoff_lon:
             try:
-                from services.maps import geocode_address
+                from services.geolocation.maps import geocode_address
 
                 dropoff_coords = geocode_address(dropoff_address)
                 if dropoff_coords:
@@ -2864,7 +2864,7 @@ class MobileCreateRide(Resource):
         if pickup_lat and pickup_lon and dropoff_lat and dropoff_lon:
             try:
                 from config import Config
-                from services.osrm_client import _route
+                from services.geolocation.osrm import _route
 
                 osrm_url = getattr(Config, "UD_OSRM_URL", "http://osrm:5000")
                 route_data = _route(
@@ -3261,7 +3261,7 @@ class MobileSearchAddresses(Resource):
                 normalize_photon,
                 photon_query,
             )
-            from services.google_places import (
+            from services.geolocation.google_places import (
                 GooglePlacesError,
                 autocomplete_address,
             )
@@ -3404,3 +3404,4 @@ class MobileSearchClients(Resource):
             )
 
         return results, 200
+

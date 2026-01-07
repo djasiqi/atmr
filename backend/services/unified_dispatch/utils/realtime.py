@@ -24,7 +24,7 @@ from repositories.driver_repository import DriverRepository
 from services.dispatch.auto_reassignment import get_auto_reassignment_service
 from services.ml.models.eta_delay import get_eta_delay_model
 from services.notifications.core import notify_dispatcher_optimization_opportunity
-from services.osrm_client import _table
+from services.geolocation.osrm import _table
 from services.unified_dispatch.data import calculate_eta
 from services.unified_dispatch.delay_predictor import DelayPredictor
 from services.unified_dispatch.utils.suggestions import Suggestion, SuggestionEngine
@@ -1185,3 +1185,4 @@ def check_opportunities_manual(
     """
     optimizer = RealtimeOptimizer(company_id, app=app)
     return optimizer.check_current_assignments(for_date)
+

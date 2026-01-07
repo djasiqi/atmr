@@ -548,7 +548,7 @@ class CompanyMe(Resource):
                 )
 
                 def _geocode_fn(address: str):
-                    from services.maps import geocode_address
+                    from services.geolocation.maps import geocode_address
 
                     return geocode_address(address, country="CH")
 
@@ -2790,7 +2790,7 @@ class CreateManualReservation(Resource):
                 # et ne pas bloquer la création
                 osrm_url = getattr(Config, "UD_OSRM_URL", "http://osrm:5000")
                 try:
-                    from services.osrm_client import _route
+                    from services.geolocation.osrm import _route
 
                     # Appel direct à _route (bypass singleflight/cache)
                     # pour éviter blocages
@@ -5389,3 +5389,4 @@ class DebugBookingTransfer(Resource):
         }
 
         return result, 200
+

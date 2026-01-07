@@ -721,7 +721,7 @@ def mock_external_services(monkeypatch):
     # Mock OSRM - utiliser les mêmes fonctions que mock_osrm_client
     def mock_build_distance_matrix_osrm(coords, **kwargs):
         """Retourne une matrice de durées simulée (secondes) basée sur haversine."""
-        from services.osrm_client import _fallback_eta_seconds
+        from services.geolocation.osrm import _fallback_eta_seconds
 
         n = len(coords)
         matrix = []
@@ -738,7 +738,7 @@ def mock_external_services(monkeypatch):
 
     def mock_route_info(origin, dest=None, destination=None, **kwargs):
         """Retourne des données de route simulées basées sur haversine."""
-        from services.osrm_client import _fallback_eta_seconds, _haversine_km
+        from services.geolocation.osrm import _fallback_eta_seconds, _haversine_km
 
         # ✅ FIX: Accepter 'destination' (nom réel) ou 'dest' (nom du mock)
         dest_coord = destination if destination is not None else dest
@@ -765,7 +765,7 @@ def mock_external_services(monkeypatch):
 
     def mock_get_distance_time(origin, dest, **kwargs):
         """Mock pour compatibilité avec anciens tests."""
-        from services.osrm_client import _fallback_eta_seconds, _haversine_km
+        from services.geolocation.osrm import _fallback_eta_seconds, _haversine_km
 
         km = _haversine_km(origin, dest)
         duration_s = _fallback_eta_seconds(origin, dest)
@@ -773,7 +773,7 @@ def mock_external_services(monkeypatch):
 
     def mock_get_matrix(origins, destinations, **kwargs):
         """Mock pour compatibilité avec anciens tests."""
-        from services.osrm_client import _fallback_eta_seconds, _haversine_km
+        from services.geolocation.osrm import _fallback_eta_seconds, _haversine_km
 
         n, m = len(origins), len(destinations)
         durations = []
@@ -792,7 +792,7 @@ def mock_external_services(monkeypatch):
 
     def mock_eta_seconds(origin, dest, **kwargs):
         """Mock pour compatibilité avec anciens tests."""
-        from services.osrm_client import _fallback_eta_seconds
+        from services.geolocation.osrm import _fallback_eta_seconds
 
         return _fallback_eta_seconds(origin, dest)
 
@@ -872,7 +872,7 @@ def mock_osrm_client(monkeypatch):
 
     def mock_build_distance_matrix_osrm(coords, **kwargs):
         """Retourne une matrice de durées simulée (secondes) basée sur haversine."""
-        from services.osrm_client import _fallback_eta_seconds
+        from services.geolocation.osrm import _fallback_eta_seconds
 
         n = len(coords)
         # Matrice symétrique avec durées simulées basées sur haversine
@@ -891,7 +891,7 @@ def mock_osrm_client(monkeypatch):
 
     def mock_route_info(origin, dest=None, destination=None, **kwargs):
         """Retourne des données de route simulées basées sur haversine."""
-        from services.osrm_client import _fallback_eta_seconds, _haversine_km
+        from services.geolocation.osrm import _fallback_eta_seconds, _haversine_km
 
         # ✅ FIX: Accepter 'destination' (nom réel) ou 'dest' (nom du mock)
         dest_coord = destination if destination is not None else dest
@@ -917,7 +917,7 @@ def mock_osrm_client(monkeypatch):
 
     def mock_get_distance_time(origin, dest, **kwargs):
         """Mock pour compatibilité avec anciens tests."""
-        from services.osrm_client import _fallback_eta_seconds, _haversine_km
+        from services.geolocation.osrm import _fallback_eta_seconds, _haversine_km
 
         km = _haversine_km(origin, dest)
         duration_s = _fallback_eta_seconds(origin, dest)
@@ -925,7 +925,7 @@ def mock_osrm_client(monkeypatch):
 
     def mock_get_matrix(origins, destinations, **kwargs):
         """Mock pour compatibilité avec anciens tests."""
-        from services.osrm_client import _fallback_eta_seconds, _haversine_km
+        from services.geolocation.osrm import _fallback_eta_seconds, _haversine_km
 
         n, m = len(origins), len(destinations)
         durations = []
@@ -944,7 +944,7 @@ def mock_osrm_client(monkeypatch):
 
     def mock_eta_seconds(origin, dest, **kwargs):
         """Mock pour compatibilité avec anciens tests."""
-        from services.osrm_client import _fallback_eta_seconds
+        from services.geolocation.osrm import _fallback_eta_seconds
 
         return _fallback_eta_seconds(origin, dest)
 
@@ -1460,3 +1460,4 @@ def mock_now_local(monkeypatch):
 
     monkeypatch.setattr("shared.time_utils.now_local", mock_now)
     return FIXED_DATE
+

@@ -47,8 +47,8 @@ from services.geolocation.osrm import OSRMClient
 from services.geolocation.interfaces import GeocodingInterface, RoutingInterface
 
 # Imports de compatibilité (DEPRECATED, à migrer)
-# from services.geolocation_service import GeolocationService
-# from services.osrm_client import OSRMClient
+# from services.geolocation.core import GeolocationService
+# from services.geolocation.osrm import OSRMClient
 ```
 
 ## Documentation
@@ -74,4 +74,5 @@ __all__ = [
 
 __version__ = "1.0.0"
 __refactoring__ = "B2 - Services Consolidation"
+
 

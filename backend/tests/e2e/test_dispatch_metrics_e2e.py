@@ -187,7 +187,7 @@ def test_osrm_metrics_present(authenticated_client):
     # ✅ FIX: Faire un appel OSRM réel pour déclencher les incréments (optionnel)
     # Si OSRM n'est pas disponible, les métriques doivent quand même être déclarées
     try:
-        from services.osrm_client import get_matrix
+        from services.geolocation.osrm import get_matrix
 
         origins = [(46.5197, 6.6323)]  # Lausanne
         destinations = [(46.2044, 6.1432)]  # Genève
@@ -356,3 +356,4 @@ def test_metrics_in_prometheus():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+

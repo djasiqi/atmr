@@ -2392,7 +2392,7 @@ class LiveDelaysResource(Resource):
         # Si OSRM est indisponible, utiliser Haversine directement pour tous les calculs
         use_haversine_only = False
         try:
-            from services.osrm_client import _osrm_circuit_breaker
+            from services.geolocation.osrm import _osrm_circuit_breaker
 
             if _osrm_circuit_breaker.state == "OPEN":
                 logger.info(
@@ -5285,3 +5285,4 @@ class ResetAssignmentsResource(Resource):
         except Exception as e:
             db.session.rollback()
             return APIErrorHandler.handle_exception(e, logger)
+

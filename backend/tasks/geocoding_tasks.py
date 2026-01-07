@@ -13,7 +13,7 @@ from typing import Any
 from celery_app import celery
 from ext import db
 from models import Booking
-from services.maps import geocode_address
+from services.geolocation.maps import geocode_address
 
 logger = logging.getLogger(__name__)
 
@@ -164,3 +164,4 @@ def geocode_booking_addresses_task(
             db.session.rollback()
             # ✅ P1: Retry automatique pour erreurs transitoires
             raise self.retry(exc=e, countdown=5) from e
+

@@ -8,7 +8,7 @@ from pathlib import Path
 backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
-from services.osrm_client import route_info  # noqa: E402
+from services.geolocation.osrm import route_info  # noqa: E402
 
 try:
     result = route_info(
@@ -19,3 +19,4 @@ try:
     print(f"   - Durée: {result.get('duration', 0):.1f}s")
 except Exception as e:
     print(f"❌ Erreur OSRM: {e}")
+

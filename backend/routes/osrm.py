@@ -14,7 +14,7 @@ from config import Config
 from ext import redis_client
 from schemas.osrm_schemas import OSRMRouteQuerySchema
 from schemas.validation_utils import validate_request
-from services.osrm_client import route_info
+from services.geolocation.osrm import route_info
 from shared.error_handlers import APIErrorHandler
 
 logger = logging.getLogger(__name__)
@@ -110,3 +110,4 @@ class OSRMRoute(Resource):
         except Exception as e:
             logger.error("Erreur OSRM route: %s", e)
             return APIErrorHandler.handle_exception(e, logger)
+
