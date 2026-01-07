@@ -5,7 +5,7 @@ utilise des tools (function calls) pour interagir avec le système, respecte des
 garde-fous stricts, et génère des rapports quotidiens.
 """
 
-from services.agent_dispatch.orchestrator import (
+from .orchestrator import (
     AgentOrchestrator,
     get_agent_for_company,
 )
