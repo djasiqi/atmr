@@ -28,7 +28,7 @@ from repositories.company_billing_settings_repository import (
 from repositories.invoice_line_repository import InvoiceLineRepository
 from repositories.invoice_repository import InvoiceRepository
 from repositories.invoice_sequence_repository import InvoiceSequenceRepository
-from services.pdf_service import PDFService
+from services.documents.pdf import PDFService
 
 logger = logging.getLogger(__name__)
 
@@ -285,3 +285,4 @@ class InvoiceTransferService:
 
         # Optionnel: Commission A → B (à implémenter si nécessaire)
         # Pour l'instant, on ne crée pas de facture de commission automatiquement
+

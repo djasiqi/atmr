@@ -40,7 +40,7 @@ class TestBookingUpdatedHandler:
 
         from ext import bcrypt
         from models import Booking, Client, Driver, User
-        from services.event_handlers.booking_handlers import handle_booking_updated
+        from services.events.handlers.booking_handlers import handle_booking_updated
 
         # Créer un booking et un driver
         unique_id = str(uuid.uuid4()).replace("-", "")[:16]
@@ -113,17 +113,17 @@ class TestBookingUpdatedHandler:
 
     def test_handle_booking_updated_missing_fields(self):
         """Test que handle_booking_updated gère les champs manquants."""
-        from services.event_handlers.booking_handlers import handle_booking_updated
+        from services.events.handlers.booking_handlers import handle_booking_updated
 
         # Event sans booking_id
         event = {"event_type": "BookingUpdatedEvent", "driver_id": 1}
-        with patch("services.event_handlers.booking_handlers.logger") as mock_logger:
+        with patch("services.events.handlers.booking_handlers.logger") as mock_logger:
             handle_booking_updated(event)
             mock_logger.warning.assert_called_once()
 
     def test_handle_booking_updated_booking_not_found(self, db):
         """Test que handle_booking_updated gère le cas où le booking n'existe pas."""
-        from services.event_handlers.booking_handlers import handle_booking_updated
+        from services.events.handlers.booking_handlers import handle_booking_updated
 
         event = {
             "event_type": "BookingUpdatedEvent",
@@ -145,7 +145,7 @@ class TestBookingUpdatedHandler:
 
         from ext import bcrypt
         from models import Booking, Client, Driver, User
-        from services.event_handlers.booking_handlers import handle_booking_updated
+        from services.events.handlers.booking_handlers import handle_booking_updated
 
         # Créer un booking
         unique_id = str(uuid.uuid4()).replace("-", "")[:16]
@@ -204,7 +204,7 @@ class TestBookingUpdatedHandler:
                 "services.notification_service.notify_booking_update",
                 side_effect=Exception("Notification failed"),
             ),
-            patch("services.event_handlers.booking_handlers.logger") as mock_logger,
+            patch("services.events.handlers.booking_handlers.logger") as mock_logger,
         ):
             event = {
                 "event_type": "BookingUpdatedEvent",
@@ -225,7 +225,7 @@ class TestBookingCancelledHandler:
 
     def test_handle_booking_cancelled_success(self):
         """Test que handle_booking_cancelled notifie correctement le driver."""
-        from services.event_handlers.booking_handlers import handle_booking_cancelled
+        from services.events.handlers.booking_handlers import handle_booking_cancelled
 
         event = {
             "event_type": "BookingCancelledEvent",
@@ -244,17 +244,17 @@ class TestBookingCancelledHandler:
 
     def test_handle_booking_cancelled_missing_fields(self):
         """Test que handle_booking_cancelled gère les champs manquants."""
-        from services.event_handlers.booking_handlers import handle_booking_cancelled
+        from services.events.handlers.booking_handlers import handle_booking_cancelled
 
         # Event sans booking_id
         event = {"event_type": "BookingCancelledEvent", "driver_id": 1}
-        with patch("services.event_handlers.booking_handlers.logger") as mock_logger:
+        with patch("services.events.handlers.booking_handlers.logger") as mock_logger:
             handle_booking_cancelled(event)
             mock_logger.warning.assert_called_once()
 
     def test_handle_booking_cancelled_exception_handling(self):
         """Test que handle_booking_cancelled gère les exceptions."""
-        from services.event_handlers.booking_handlers import handle_booking_cancelled
+        from services.events.handlers.booking_handlers import handle_booking_cancelled
 
         event = {
             "event_type": "BookingCancelledEvent",
@@ -269,7 +269,7 @@ class TestBookingCancelledHandler:
                 "services.notification_service.notify_booking_cancelled",
                 side_effect=Exception("Notification failed"),
             ),
-            patch("services.event_handlers.booking_handlers.logger") as mock_logger,
+            patch("services.events.handlers.booking_handlers.logger") as mock_logger,
         ):
             handle_booking_cancelled(event)
 
@@ -288,7 +288,7 @@ class TestDriverNewBookingHandler:
 
         from ext import bcrypt
         from models import Booking, Client, Driver, User
-        from services.event_handlers.driver_handlers import handle_driver_new_booking
+        from services.events.handlers.driver_handlers import handle_driver_new_booking
 
         # Créer un booking et un driver
         unique_id = str(uuid.uuid4()).replace("-", "")[:16]
@@ -361,17 +361,17 @@ class TestDriverNewBookingHandler:
 
     def test_handle_driver_new_booking_missing_fields(self):
         """Test que handle_driver_new_booking gère les champs manquants."""
-        from services.event_handlers.driver_handlers import handle_driver_new_booking
+        from services.events.handlers.driver_handlers import handle_driver_new_booking
 
         # Event sans booking_id
         event = {"event_type": "DriverNewBookingEvent", "driver_id": 1}
-        with patch("services.event_handlers.driver_handlers.logger") as mock_logger:
+        with patch("services.events.handlers.driver_handlers.logger") as mock_logger:
             handle_driver_new_booking(event)
             mock_logger.warning.assert_called_once()
 
     def test_handle_driver_new_booking_booking_not_found(self, db):
         """Test que handle_driver_new_booking gère le cas où le booking n'existe pas."""
-        from services.event_handlers.driver_handlers import handle_driver_new_booking
+        from services.events.handlers.driver_handlers import handle_driver_new_booking
 
         event = {
             "event_type": "DriverNewBookingEvent",
@@ -393,7 +393,7 @@ class TestDriverNewBookingHandler:
 
         from ext import bcrypt
         from models import Booking, Client, Driver, User
-        from services.event_handlers.driver_handlers import handle_driver_new_booking
+        from services.events.handlers.driver_handlers import handle_driver_new_booking
 
         # Créer un booking
         unique_id = str(uuid.uuid4()).replace("-", "")[:16]
@@ -452,7 +452,7 @@ class TestDriverNewBookingHandler:
                 "services.notification_service.notify_driver_new_booking",
                 side_effect=Exception("Notification failed"),
             ),
-            patch("services.event_handlers.driver_handlers.logger") as mock_logger,
+            patch("services.events.handlers.driver_handlers.logger") as mock_logger,
         ):
             event = {
                 "event_type": "DriverNewBookingEvent",
@@ -530,7 +530,7 @@ class TestEventIntegration:
         db.session.commit()
 
         # Réenregistrer les handlers après le clear du registry
-        from services.event_handlers.booking_handlers import handle_booking_updated
+        from services.events.handlers.booking_handlers import handle_booking_updated
 
         registry.register("BookingUpdatedEvent", handle_booking_updated)
 
@@ -553,7 +553,7 @@ class TestEventIntegration:
     def test_booking_cancelled_event_flow(self):
         """Test le flux complet : publication → handler → notification."""
         # Réenregistrer les handlers après le clear du registry
-        from services.event_handlers.booking_handlers import handle_booking_cancelled
+        from services.events.handlers.booking_handlers import handle_booking_cancelled
 
         registry.register("BookingCancelledEvent", handle_booking_cancelled)
 
@@ -632,7 +632,7 @@ class TestEventIntegration:
         db.session.commit()
 
         # Réenregistrer les handlers après le clear du registry
-        from services.event_handlers.driver_handlers import handle_driver_new_booking
+        from services.events.handlers.driver_handlers import handle_driver_new_booking
 
         registry.register("DriverNewBookingEvent", handle_driver_new_booking)
 
@@ -651,3 +651,4 @@ class TestEventIntegration:
 
             # Vérifier que le handler a été appelé
             mock_notify.assert_called_once()
+

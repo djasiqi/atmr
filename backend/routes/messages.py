@@ -17,7 +17,7 @@ from models import UserRole
 from repositories.company_repository import CompanyRepository
 from repositories.message_repository import MessageRepository
 from repositories.user_repository import UserRepository
-from services.clamav_service import scan_bytes
+from services.documents.clamav import scan_bytes
 from shared.error_handlers import APIErrorHandler
 
 logger = logging.getLogger(__name__)
@@ -363,3 +363,4 @@ class MessageUpload(Resource):
         )
 
         return response, 200
+

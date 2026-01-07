@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, Dict
 
 from ext import app_logger
 from repositories.dispatch_run_repository import DispatchRunRepository
-from services.event_fanout import (
+from services.events.fanout import (
     fanout_booking_assigned_to_company,
     fanout_booking_assigned_to_driver,
     fanout_booking_cancelled,
@@ -281,3 +281,4 @@ def notify_urgent_alert(
         booking_id=booking_id,
         driver_id=driver_id,
     )
+

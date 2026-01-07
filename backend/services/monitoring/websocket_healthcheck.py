@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Any, Dict
 
 from ext import redis_client
-from services.websocket_metrics import ws_metrics
+from services.monitoring.websocket_metrics import ws_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -108,3 +108,4 @@ def check_websocket_health() -> Dict[str, Any]:
     result["connections_total"] = connections_total
 
     return result
+

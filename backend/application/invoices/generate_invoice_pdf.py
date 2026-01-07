@@ -36,7 +36,7 @@ class GenerateInvoicePdfUseCase:
             GenerateInvoicePdfResult avec l'URL du PDF généré
         """
         # ⚠️ TODO: Migrer la logique métier depuis PDFService vers ce use case
-        from services.pdf_service import PDFService
+        from services.documents.pdf import PDFService
 
         try:
             pdf_service = PDFService()
@@ -54,3 +54,4 @@ class GenerateInvoicePdfUseCase:
                 error={"error": f"Erreur lors de la génération du PDF: {e!s}"},
                 status_code=500,
             )
+

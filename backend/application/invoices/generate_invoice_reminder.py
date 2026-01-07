@@ -20,7 +20,7 @@ from repositories.company_billing_settings_repository import (
 )
 from repositories.invoice_line_repository import InvoiceLineRepository
 from repositories.invoice_repository import InvoiceRepository
-from services.pdf_service import PDFService
+from services.documents.pdf import PDFService
 
 logger = logging.getLogger(__name__)
 
@@ -212,3 +212,4 @@ class GenerateInvoiceReminderUseCase:
                 error={"error": "Erreur interne"},
                 status_code=500,
             )
+

@@ -4,7 +4,7 @@ from flask import Blueprint, jsonify  # pyright: ignore[reportMissingImports]
 from sqlalchemy import text
 
 from ext import db, limiter, redis_client
-from services.websocket_healthcheck import check_websocket_health
+from services.monitoring.websocket_healthcheck import check_websocket_health
 
 healthcheck_bp = Blueprint("healthcheck", __name__)
 
@@ -112,3 +112,4 @@ def websocket_health():
             ),
             503,
         )
+

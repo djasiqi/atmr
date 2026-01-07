@@ -5,22 +5,22 @@ from typing import Any, Callable
 
 from sqlalchemy.exc import DBAPIError, OperationalError
 
-from services.event_handlers.assignment_handlers import handle_assignment_cancelled
-from services.event_handlers.booking_handlers import (
+from services.events.handlers.assignment_handlers import handle_assignment_cancelled
+from services.events.handlers.booking_handlers import (
     handle_booking_assigned,
     handle_booking_cancelled,
     handle_booking_created,
     handle_booking_updated,
 )
-from services.event_handlers.dispatch_handlers import (
+from services.events.handlers.dispatch_handlers import (
     handle_dispatch_requested,
     handle_dispatch_run_completed,
 )
-from services.event_handlers.driver_handlers import (
+from services.events.handlers.driver_handlers import (
     handle_driver_location_updated,
     handle_driver_new_booking,
 )
-from services.event_handlers.metrics_handler import handle_event_metrics
+from services.events.handlers.metrics_handler import handle_event_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -103,3 +103,4 @@ register("DispatchRequestedEvent", handle_event_metrics)
 register("DriverLocationUpdatedEvent", handle_event_metrics)
 register("DriverNewBookingEvent", handle_event_metrics)
 register("AssignmentCancelledEvent", handle_event_metrics)
+

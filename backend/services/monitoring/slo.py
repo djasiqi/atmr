@@ -4,7 +4,7 @@ Ce module définit les SLO pour chaque route critique de l'application,
 permet de suivre les violations (breaches) et expose des métriques Prometheus.
 
 Usage:
-    from services.api_slo import get_slo_target, record_slo_metric
+    from services.monitoring.slo import get_slo_target, record_slo_metric
 
     # Dans une route
     slo = get_slo_target("/api/bookings")
@@ -259,3 +259,4 @@ def normalize_endpoint(endpoint: str) -> str:
         normalized = normalized[:MAX_ENDPOINT_LENGTH] + "..."
 
     return normalized
+

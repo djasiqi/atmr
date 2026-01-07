@@ -28,7 +28,7 @@ from repositories.company_repository import CompanyRepository
 from repositories.invoice_repository import InvoiceRepository
 from repositories.user_repository import UserRepository
 from security.ip_whitelist import ip_whitelist_required
-from services.websocket_metrics import ws_metrics
+from services.monitoring.websocket_metrics import ws_metrics
 from shared.error_handlers import APIErrorHandler
 from shared.infrastructure.adapters.auth_adapter import (
     get_current_user_via_use_case,
@@ -1418,3 +1418,4 @@ class WebSocketMetricsResource(Resource):
             sentry_sdk.capture_exception(e)
             logger.exception("❌ ERREUR websocket_metrics: %s", e)
             return APIErrorHandler.handle_exception(e, logger)
+

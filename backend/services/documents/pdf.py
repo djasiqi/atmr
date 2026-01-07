@@ -7,7 +7,7 @@ from flask import current_app  # pyright: ignore[reportMissingImports]
 from sqlalchemy.orm import joinedload
 
 from models import Client, CompanyBillingSettings, Invoice, InvoiceLineType
-from services.qrbill_service import QRBillService
+from services.documents.qrbill import QRBillService
 
 LEVEL_ONE = 1
 LEVEL_THRESHOLD = 2
@@ -2270,3 +2270,4 @@ class PDFService:
         # Retourner le contenu
         buffer.seek(0)
         return buffer.getvalue()
+

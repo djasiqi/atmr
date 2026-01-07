@@ -20,7 +20,7 @@ from sqlalchemy.exc import DBAPIError, OperationalError
 from ext import redis_client
 from models import AssignmentStatus, DelayEvent
 from repositories.assignment_repository import AssignmentRepository
-from services.websocket_metrics import ws_metrics
+from services.monitoring.websocket_metrics import ws_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -630,3 +630,4 @@ def get_alerting_service() -> AlertingService:
     if _alerting_service_instance is None:
         _alerting_service_instance = AlertingService()
     return _alerting_service_instance
+
