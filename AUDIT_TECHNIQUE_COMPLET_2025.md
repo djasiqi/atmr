@@ -1533,7 +1533,7 @@ IMPLEMENTATION_A3_ALERTING.md     ✅ Documentation (450 lignes)
 
 **Objectif:** Valider performance sous charge
 
-**Status:** 🔵 **EN COURS** - Setup Locust complété (Jour 1/7)
+**Status:** 🔵 **EN COURS** - Setup complété + Hotfixes B1/B2 (Jour 1/7)
 
 **Scénarios:**
 
@@ -1548,6 +1548,9 @@ IMPLEMENTATION_A3_ALERTING.md     ✅ Documentation (450 lignes)
 - ✅ Plan détaillé créé (`C2_LOAD_TESTING_DISPATCH_PLAN.md`)
 - ✅ Locust installé
 - ✅ Structure tests créée (`tests/load_testing/`)
+- ✅ **Hotfixes B1/B2** : 15 fichiers corrigés (6 commits)
+  - Imports `shadow_mode`, `queue`, `validation`, `heuristics`, `slo`
+  - Backend fonctionnel ✅ (voir `backend/HOTFIX_B1_B2_IMPORTS.md`)
 - 🔲 Scénarios à implémenter (Jours 2-7)
 
 **Effort:** ⏱️ **1 semaine** (7 jours)
