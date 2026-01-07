@@ -19,7 +19,7 @@ from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.orm import joinedload
 
 from models import Booking, Company, Driver
-from services.dispatch_utils import count_assigned_bookings_for_day
+from services.dispatch.utils import count_assigned_bookings_for_day
 from services.interfaces.geocoding_interface import get_geocoding_service
 from services.interfaces.routing_interface import get_routing_service
 from services.unified_dispatch.optimization.heuristics import (

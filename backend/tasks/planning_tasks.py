@@ -4,7 +4,7 @@ from celery import shared_task  # pyright: ignore[reportMissingImports]
 
 from ext import db
 from models import DriverShift
-from services.planning_service import serialize_shift
+from services.dispatch.planning import serialize_shift
 
 
 @shared_task(name="planning.autogen_from_templates")

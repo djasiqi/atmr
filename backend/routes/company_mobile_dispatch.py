@@ -34,11 +34,11 @@ from models.enums import AssignmentStatus, BookingStatus, DriverType, SenderRole
 
 # ✅ REFACTORING: get_company_from_token() n'est plus importé directement
 # ✅ DDD: Utilisation de GetCurrentCompanyUseCase via _get_current_company_via_use_case()
-from services.agent_dispatch.orchestrator import (
+from services.dispatch.agent.orchestrator import (
     get_agent_for_company,
     stop_agent_for_company,
 )
-from services.agent_dispatch.tools import AgentTools
+from services.dispatch.agent.tools import AgentTools
 from infrastructure.dispatch import settings_module_adapter as dispatch_settings
 from infrastructure.dispatch.heuristics_adapter import MAX_FAIRNESS_GAP
 from infrastructure.dispatch.queue_adapter import trigger_job

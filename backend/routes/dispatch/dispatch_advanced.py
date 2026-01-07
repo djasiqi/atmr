@@ -329,7 +329,7 @@ class DispatchModeResource(Resource):
 
                 # ✅ Démarrer/arrêter l'agent automatiquement selon le mode
                 try:
-                    from services.agent_dispatch.orchestrator import (
+                    from services.dispatch.agent.orchestrator import (
                         get_agent_for_company,
                         stop_agent_for_company,
                     )

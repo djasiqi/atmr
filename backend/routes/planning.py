@@ -17,7 +17,7 @@ from models import (
     DriverWeeklyTemplate,
 )
 from routes.companies import get_company_from_token
-from services.planning_service import (
+from services.dispatch.planning import (
     materialize_template,
     serialize_shift,
     validate_shift_overlap,

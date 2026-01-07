@@ -197,7 +197,7 @@ class AgentStartResource(Resource):
         company_id = _current_company_id()
 
         try:
-            from services.agent_dispatch.orchestrator import get_agent_for_company
+            from services.dispatch.agent.orchestrator import get_agent_for_company
 
             agent = get_agent_for_company(
                 company_id,
@@ -254,7 +254,7 @@ class AgentStopResource(Resource):
                     "current_mode": current_mode,
                 }, HTTPStatus.FORBIDDEN
 
-            from services.agent_dispatch.orchestrator import stop_agent_for_company
+            from services.dispatch.agent.orchestrator import stop_agent_for_company
 
             stop_agent_for_company(company_id)
 
@@ -278,7 +278,7 @@ class AgentStatusResource(Resource):
         company_id = _current_company_id()
 
         try:
-            from services.agent_dispatch.orchestrator import get_agent_for_company
+            from services.dispatch.agent.orchestrator import get_agent_for_company
 
             agent = get_agent_for_company(company_id)
             status = agent.get_status()
