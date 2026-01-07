@@ -7,7 +7,7 @@ Coverage cible : 70%+
 from datetime import datetime, timedelta
 
 from models import BookingStatus
-from services.unified_dispatch.heuristics import (
+from services.unified_dispatch.optimization.heuristics import (
     HeuristicAssignment,
     HeuristicResult,
     _can_be_pooled,
@@ -351,7 +351,7 @@ class TestHeuristicsHelpers:
 
     def test_haversine_minutes_calculation(self):
         """Test calcul temps en minutes via haversine."""
-        from services.unified_dispatch.heuristics import haversine_minutes
+        from services.unified_dispatch.optimization.heuristics import haversine_minutes
 
         # Genève centre → Genève aéroport (~5km)
         point_a = (46.2044, 6.1432)
@@ -365,7 +365,7 @@ class TestHeuristicsHelpers:
 
     def test_is_return_urgent(self, db):
         """Test détection course retour urgente."""
-        from services.unified_dispatch.heuristics import _is_return_urgent
+        from services.unified_dispatch.optimization.heuristics import _is_return_urgent
 
         company = CompanyFactory()
 
@@ -386,7 +386,7 @@ class TestHeuristicsHelpers:
 
     def test_driver_fairness_penalty(self):
         """Test pénalité de fairness."""
-        from services.unified_dispatch.heuristics import _driver_fairness_penalty
+        from services.unified_dispatch.optimization.heuristics import _driver_fairness_penalty
 
         # Driver avec beaucoup de courses déjà
         fairness_counts = {1: 5, 2: 2, 3: 0}
@@ -401,7 +401,7 @@ class TestHeuristicsHelpers:
 
     def test_check_driver_window_feasible(self):
         """Test vérification faisabilité fenêtre chauffeur."""
-        from services.unified_dispatch.heuristics import _check_driver_window_feasible
+        from services.unified_dispatch.optimization.heuristics import _check_driver_window_feasible
 
         driver_window = (60, 480)  # 1h-8h (60 minutes à 480 minutes)
 
@@ -419,7 +419,7 @@ class TestHeuristicsHelpers:
 
     def test_py_int_helper(self):
         """Test helper _py_int."""
-        from services.unified_dispatch.heuristics import _py_int
+        from services.unified_dispatch.optimization.heuristics import _py_int
 
         assert _py_int(42) == 42
         assert _py_int("42") == 42
@@ -429,7 +429,7 @@ class TestHeuristicsHelpers:
 
     def test_driver_current_coord(self, db):
         """Test extraction coordonnées driver."""
-        from services.unified_dispatch.heuristics import _driver_current_coord
+        from services.unified_dispatch.optimization.heuristics import _driver_current_coord
 
         driver = DriverFactory(latitude=46.2044, longitude=6.1432)
 
@@ -445,7 +445,7 @@ class TestHeuristicsHelpers:
 
     def test_booking_coords(self, db):
         """Test extraction coordonnées booking (pickup + dropoff)."""
-        from services.unified_dispatch.heuristics import _booking_coords
+        from services.unified_dispatch.optimization.heuristics import _booking_coords
 
         booking = BookingFactory(
             pickup_lat=46.2044,
@@ -464,7 +464,7 @@ class TestHeuristicsHelpers:
     def test_is_booking_assigned(self, db):
         """Test vérification si booking est assigné."""
         from models import BookingStatus
-        from services.unified_dispatch.heuristics import _is_booking_assigned
+        from services.unified_dispatch.optimization.heuristics import _is_booking_assigned
 
         # Booking avec driver assigné
         company = CompanyFactory()
@@ -486,7 +486,7 @@ class TestHeuristicsHelpers:
 
     def test_current_driver_id(self, db):
         """Test récupération driver_id actuel."""
-        from services.unified_dispatch.heuristics import _current_driver_id
+        from services.unified_dispatch.optimization.heuristics import _current_driver_id
 
         company = CompanyFactory()
         driver = DriverFactory(company=company)
@@ -503,7 +503,7 @@ class TestHeuristicsHelpers:
 
     def test_priority_weight(self, db):
         """Test calcul poids de priorité."""
-        from services.unified_dispatch.heuristics import _priority_weight
+        from services.unified_dispatch.optimization.heuristics import _priority_weight
 
         company = CompanyFactory()
 

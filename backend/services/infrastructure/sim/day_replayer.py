@@ -226,7 +226,7 @@ class DayReplayer:
     def _run_heuristic(self, problem: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Exécute politique heuristique."""
         try:
-            from services.unified_dispatch.heuristics import assign
+            from services.unified_dispatch.optimization.heuristics import assign
             from services.unified_dispatch.settings import Settings
 
             settings = Settings()
