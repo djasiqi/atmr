@@ -14,7 +14,7 @@ from ext import db, role_required
 from models.enums import PartnershipStatus, UserRole
 from models.partnership import Partnership
 from routes.companies import _get_current_company_via_use_case
-from services.booking_transfer_service import BookingTransferService
+from services.booking.transfers import BookingTransferService
 from shared.error_handlers import APIErrorHandler
 from shared.response_helpers import success_response
 
