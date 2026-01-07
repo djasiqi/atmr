@@ -10,12 +10,20 @@ Tests pour :
 from __future__ import annotations  # noqa: I001
 
 import pytest
+from flask import Flask
 from unittest.mock import MagicMock, patch
 
-from factories import CompanyFactory
+from tests.factories import CompanyFactory
 from services.unified_dispatch.orchestration.assignment_applier_wrapper import (
     AssignmentApplierWrapper,
 )
+
+
+@pytest.fixture(autouse=True)
+def _app_context(app: Flask):
+    """Assure que tous les tests s'exécutent dans un app context."""
+    with app.app_context():
+        yield
 
 
 class TestApply:

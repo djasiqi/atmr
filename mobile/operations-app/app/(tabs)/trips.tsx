@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { useAuth } from "@/hooks/useAuth";
 import { getCompletedTrips, getAssignedTrips, Booking } from "@/services/api";
+import { isCompletedStatus, isCanceledStatus } from "@/utils/bookingStatus";
 import { Loader } from "@/components/ui/Loader";
 import { tripCardStyles as cardStyles } from "@/styles/tripCardStyles";
 import TripHeader from "@/components/dashboard/TripHeader";
@@ -112,13 +113,14 @@ export default function TripsScreen() {
           .filter((b) => {
             // Remove if cancelled
             const s = (b.status || "").toLowerCase();
-            return !["canceled", "cancelled"].includes(s);
+            // ✅ P0-1: Utiliser la fonction de normalisation
+            return !isCanceledStatus(s);
           });
         return updated;
       });
 
-      // If booking is completed, move to completed trips
-      if (status === "completed" || status === "return_completed") {
+      // ✅ P0-1: If booking is completed, move to completed trips
+      if (isCompletedStatus(status)) {
         setCompletedTrips((prev) => {
           // Check if already in completed list
           const exists = prev.find((b) => b.id === booking.id);
@@ -198,6 +200,7 @@ export default function TripsScreen() {
                 scheduled_time: new Date().toISOString(),
                 status: "assigned",
                 client_name: "",
+                // ✅ P1-4 Phase 3.1: client_phone déprécié, mais gardé pour compatibilité avec le type
                 client_phone: "",
                 company_id: 0,
                 driver_id: 0,

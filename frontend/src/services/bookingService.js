@@ -14,7 +14,8 @@ export const fetchBookings = async (publicId) => {
 
     return response.data.map((booking) => ({
       ...booking,
-      company_name: booking.company_id ? `Entreprise ${booking.company_id}` : 'Non assignée',
+      // ✅ P1-4 Phase 2.2: Utiliser company_name du backend (ou fallback si absent)
+      company_name: booking.company_name || (booking.company_id ? `Entreprise ${booking.company_id}` : 'Non assignée'),
       driver_name: booking.driver_id ? `Chauffeur ${booking.driver_id}` : 'Non assigné',
     }));
   } catch (error) {

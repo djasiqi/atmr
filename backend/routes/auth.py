@@ -42,12 +42,19 @@ from application.users import (
     RegisterUserUseCase,
 )
 from ext import db, limiter, mail, role_required
+from middleware.trace_id import get_trace_id
 from models import (
     Client,
     User,
 )  # Client utilisé pour création directe, User pour type annotations
 from models.enums import UserRole
 from repositories.user_repository import UserRepository
+from routes.api_error_models import (
+    create_api_error_model,
+    create_not_found_error_model,
+    create_permission_error_model,
+    create_validation_error_model,
+)
 from schemas.auth_schemas import LoginSchema, RegisterSchema
 from schemas.validation_utils import handle_validation_error, validate_request
 from security.audit_log import AuditLogger
@@ -116,6 +123,47 @@ login_model = auth_ns.model(
         ),
         "password": fields.String(
             required=True, description="Le mot de passe de l'utilisateur", min_length=6
+        ),
+    },
+)
+
+# ✅ P0: Modèles d'erreur standardisés
+api_error_model = create_api_error_model(auth_ns)
+validation_error_model = create_validation_error_model(auth_ns)
+not_found_error_model = create_not_found_error_model(auth_ns)
+permission_error_model = create_permission_error_model(auth_ns)
+
+# ✅ P0: Modèle de réponse succès pour login
+login_success_model = auth_ns.model(
+    "LoginSuccess",
+    {
+        "message": fields.String(
+            required=True,
+            description="Message de confirmation",
+            example="Connexion réussie",
+        ),
+        "token": fields.String(
+            required=True, description="Token d'accès JWT (pour mobile)"
+        ),
+        "refresh_token": fields.String(
+            required=True, description="Token de rafraîchissement (pour mobile)"
+        ),
+        "user": fields.Raw(
+            required=True,
+            description="Informations utilisateur",
+            example={
+                "id": 1,
+                "public_id": "abc123",
+                "username": "john.doe",
+                "email": "john.doe@example.com",
+                "role": "client",
+                "force_password_change": False,
+            },
+        ),
+        "trace_id": fields.String(
+            required=False,
+            description="ID de traçage pour le support",
+            example="a1b2c3d4",
         ),
     },
 )
@@ -277,6 +325,12 @@ class UserSchema(Schema):
 @auth_ns.route("/login")
 class Login(Resource):
     @auth_ns.expect(login_model)
+    @auth_ns.response(200, "Connexion réussie", login_success_model)
+    @auth_ns.response(400, "Erreur de validation", validation_error_model)
+    @auth_ns.response(401, "Credentials invalides", permission_error_model)
+    @auth_ns.response(403, "Compte désactivé ou non autorisé", permission_error_model)
+    @auth_ns.response(429, "Rate limit dépassé", api_error_model)
+    @auth_ns.response(500, "Erreur serveur", api_error_model)
     # Limite d'appels pour éviter le brute force
     @limiter.limit("5 per minute")
     def post(self):
@@ -352,7 +406,9 @@ class Login(Resource):
             except Exception as json_error:
                 # Gérer spécifiquement les erreurs de parsing JSON (BadRequest 400)
                 # pour éviter qu'elles soient transformées en 500 par le gestionnaire global
-                from werkzeug.exceptions import BadRequest
+                from werkzeug.exceptions import (  # pyright: ignore[reportMissingImports]
+                    BadRequest,
+                )
 
                 if isinstance(json_error, BadRequest):
                     logger.warning("Erreur parsing JSON dans login: %s", json_error)
@@ -533,10 +589,19 @@ class Login(Resource):
                         alert_error,
                     )
 
-                return APIErrorHandler.handle_permission_error(
+                # ✅ P0: Ajouter trace_id dans l'erreur
+                trace_id = get_trace_id()
+                logger.warning(
+                    "Login failed",
+                    extra={"trace_id": trace_id, "email": mask_email(email)},
+                )
+                error_response, status_code = APIErrorHandler.handle_permission_error(
                     "Email ou mot de passe invalide.",
                     logger_instance=logger,
                 )
+                # Ajouter trace_id à la réponse d'erreur
+                error_response["trace_id"] = trace_id
+                return error_response, status_code
 
             # Création du token avec le rôle dans additional_claims
             # ✅ SECURITY: Ajout claim 'aud' (audience) pour prévenir token replay
@@ -670,6 +735,17 @@ class Login(Resource):
                 logger.warning("Échec audit logging login_success: %s", audit_error)
 
             # ✅ Migration localStorage → cookies httpOnly
+            # ✅ P0: Ajouter trace_id dans la réponse
+            trace_id = get_trace_id()
+            logger.info(
+                "Login success",
+                extra={
+                    "trace_id": trace_id,
+                    "user_id": user.id,
+                    "email": mask_email(email),
+                },
+            )
+
             # Créer la réponse JSON
             response_data = {
                 "message": "Connexion réussie",
@@ -681,6 +757,7 @@ class Login(Resource):
                     "role": user.role.value,
                     "force_password_change": user.force_password_change,
                 },
+                "trace_id": trace_id,
             }
 
             # ✅ Compatibilité mobile : retourner tokens en JSON (même modèle que company_mobile)
@@ -1047,6 +1124,11 @@ refresh_token_response_model = auth_ns.model(
             required=True,
             description="Informations minimales de l'utilisateur",
         ),
+        "trace_id": fields.String(
+            required=False,
+            description="ID de traçage pour le support",
+            example="a1b2c3d4",
+        ),
     },
 )
 
@@ -1055,11 +1137,12 @@ refresh_token_response_model = auth_ns.model(
 class RefreshToken(Resource):
     @auth_ns.expect(refresh_token_request_model)
     @auth_ns.response(200, "Token rafraîchi avec succès", refresh_token_response_model)
-    @auth_ns.response(400, "Requête invalide")
-    @auth_ns.response(401, "Refresh token invalide ou expiré")
-    @auth_ns.response(403, "Compte désactivé")
-    @auth_ns.response(404, "Utilisateur non trouvé")
-    @auth_ns.response(500, "Erreur interne")
+    @auth_ns.response(400, "Requête invalide", validation_error_model)
+    @auth_ns.response(401, "Refresh token invalide ou expiré", permission_error_model)
+    @auth_ns.response(403, "Compte désactivé", permission_error_model)
+    @auth_ns.response(404, "Utilisateur non trouvé", not_found_error_model)
+    @auth_ns.response(429, "Rate limit dépassé", api_error_model)
+    @auth_ns.response(500, "Erreur interne", api_error_model)
     # ✅ S2: Rate limiting plus strict pour refresh token (protection contre abus)
     @limiter.limit("20 per minute")
     def post(self):  # noqa: PLR0911
@@ -1096,14 +1179,34 @@ class RefreshToken(Resource):
 
             # 3. Validation : refresh_token requis
             if not refresh_token:
-                return {
-                    "error": "refresh_token requis (cookie, body ou Authorization header)"
-                }, 400
+                trace_id = get_trace_id()
+                logger.warning(
+                    "Refresh token missing",
+                    extra={"trace_id": trace_id},
+                )
+                error_response, _ = APIErrorHandler.handle_validation_error(
+                    "refresh_token requis (cookie, body ou Authorization header)",
+                    logger_instance=logger,
+                )
+                error_response["trace_id"] = trace_id
+                return error_response, 400
 
             # 4. Valider le refresh token (inclut vérification révocation, pwd_hash, etc.)
             user_public_id, error_response = _validate_refresh_token(refresh_token)
             if error_response or not user_public_id:
-                return error_response or {"error": "Refresh token invalide"}, 401
+                trace_id = get_trace_id()
+                logger.warning(
+                    "Refresh token invalid",
+                    extra={"trace_id": trace_id},
+                )
+                if error_response:
+                    error_response["trace_id"] = trace_id
+                    return error_response, 401
+                error_response = {
+                    "error": "Refresh token invalide",
+                    "trace_id": trace_id,
+                }
+                return error_response, 401
 
             # 5. Vérifier que l'utilisateur existe
             user_dto = user_repo.find_by_public_id(user_public_id)
@@ -1243,6 +1346,13 @@ class RefreshToken(Resource):
                 logger.warning("Échec audit logging token_refresh: %s", audit_error)
 
             # 9. ✅ Migration localStorage → cookies httpOnly
+            # ✅ P0: Ajouter trace_id dans la réponse
+            trace_id = get_trace_id()
+            logger.info(
+                "Token refresh success",
+                extra={"trace_id": trace_id, "user_id": user.id},
+            )
+
             # Construire la réponse JSON
             response_data = {
                 "user": {
@@ -1251,6 +1361,7 @@ class RefreshToken(Resource):
                     "company_id": getattr(user, "company_id", None),
                     "driver_id": getattr(user, "driver_id", None),
                 },
+                "trace_id": trace_id,
             }
 
             # ✅ Compatibilité mobile : retourner tokens en JSON si header X-Requested-With: Expo

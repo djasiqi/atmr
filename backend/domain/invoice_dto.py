@@ -100,5 +100,25 @@ class InvoiceDTO:
             "status": (
                 self.status.value if hasattr(self.status, "value") else str(self.status)
             ),
-            "lines": [line.__dict__ for line in (self.lines or [])],
+            "lines": [
+                {
+                    "id": line.id,
+                    "invoice_id": line.invoice_id,
+                    "type": line.line_type,  # ✅ FIX: utiliser line_type (nom du DTO)
+                    "description": line.description,
+                    "qty": float(
+                        line.quantity
+                    ),  # ✅ FIX: utiliser quantity (nom du DTO)
+                    "unit_price": float(line.unit_price),
+                    "line_total": float(line.line_total),
+                    "vat_rate": float(line.vat_rate)
+                    if line.vat_rate is not None
+                    else None,
+                    "vat_amount": float(line.vat_amount),
+                    "total_with_vat": float(line.total_with_vat),
+                    "adjustment_note": line.adjustment_note,
+                    "reservation_id": line.reservation_id,
+                }
+                for line in (self.lines or [])
+            ],
         }

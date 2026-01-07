@@ -14,11 +14,19 @@ from flask_restx import (  # pyright: ignore[reportMissingImports]
 
 from app import sentry_sdk
 from ext import mail, role_required
+from middleware.trace_id import get_trace_id
 from models import db
 from models.enums import GenderEnum, UserRole
 from repositories.booking_repository import BookingRepository
 from repositories.client_repository import ClientRepository
 from repositories.user_repository import UserRepository
+from routes.api_error_models import (
+    create_api_error_model,
+    create_not_found_error_model,
+    create_permission_error_model,
+    create_validation_error_model,
+)
+from services.idempotency_service import IdempotencyService
 from shared.error_handlers import APIErrorHandler
 from shared.infrastructure.adapters.auth_adapter import (
     get_current_user_via_use_case,
@@ -37,6 +45,12 @@ clients_ns = Namespace(
     "clients",
     description="Opérations liées aux profils clients et à leurs réservations",
 )
+
+# ✅ P0: Modèles d'erreur standardisés
+api_error_model = create_api_error_model(clients_ns)
+validation_error_model = create_validation_error_model(clients_ns)
+not_found_error_model = create_not_found_error_model(clients_ns)
+permission_error_model = create_permission_error_model(clients_ns)
 
 # Modèle pour la mise à jour du profil client
 client_profile_model = clients_ns.model(
@@ -255,8 +269,35 @@ class ClientBookings(Resource):
     @jwt_required()
     @role_required(UserRole.client)
     @clients_ns.expect(booking_create_model)
+    @clients_ns.response(200, "Réservation créée avec succès (idempotency)")
+    @clients_ns.response(201, "Réservation créée avec succès")
+    @clients_ns.response(400, "Erreur de validation", validation_error_model)
+    @clients_ns.response(401, "Non authentifié", permission_error_model)
+    @clients_ns.response(403, "Non autorisé", permission_error_model)
+    @clients_ns.response(
+        409, "Réservation déjà existante (idempotency)", api_error_model
+    )
+    @clients_ns.response(500, "Erreur serveur", api_error_model)
     def post(self, _public_id):  # noqa: PLR0911
+        """Créer une réservation pour un client.
+
+        ✅ P0: Support idempotency-key pour éviter les doublons.
+        """
         try:
+            # ✅ P0: Vérifier idempotency-key
+            idempotency_key = IdempotencyService.get_idempotency_key_from_request()
+            if idempotency_key:
+                cached_response = IdempotencyService.check_key(idempotency_key)
+                if cached_response[0]:  # Key exists
+                    logger.info(
+                        "Idempotency key found, returning cached response",
+                        extra={
+                            "trace_id": get_trace_id(),
+                            "idempotency_key": idempotency_key,
+                        },
+                    )
+                    return cached_response[1], 201
+
             # Validation initiale combinée
             current_user = get_current_user_via_use_case()
             client = None
@@ -335,10 +376,32 @@ class ClientBookings(Resource):
                 new_booking = create_booking_via_use_case(
                     user_id=current_user.id, client_id=client.id, data=booking_data
                 )
+
+                # ✅ P0: Ajouter trace_id dans la réponse
+                trace_id = get_trace_id()
+                logger.info(
+                    "✅ Réservation créée avec succès: booking_id=%s, client_id=%s",
+                    new_booking.id if hasattr(new_booking, "id") else None,
+                    client.id,
+                    extra={
+                        "trace_id": trace_id,
+                        "booking_id": new_booking.id
+                        if hasattr(new_booking, "id")
+                        else None,
+                        "client_id": client.id,
+                    },
+                )
+
                 result = {
                     "message": "Booking created successfully",
                     "booking": new_booking.serialize,
+                    "trace_id": trace_id,
                 }
+
+                # ✅ P0: Stocker la réponse pour idempotency
+                if idempotency_key:
+                    IdempotencyService.store_response(idempotency_key, result, 201)
+
                 return result, 201
             except (ValueError, RuntimeError) as e:
                 # Erreur de validation ou de géocodage
@@ -482,16 +545,29 @@ class ListPayments(Resource):
 class CancelBooking(Resource):
     @jwt_required()
     @role_required(UserRole.client)
+    @clients_ns.response(200, "Réservation annulée avec succès")
+    @clients_ns.response(400, "Erreur de validation", validation_error_model)
+    @clients_ns.response(401, "Non authentifié", permission_error_model)
+    @clients_ns.response(403, "Non autorisé", permission_error_model)
+    @clients_ns.response(404, "Réservation non trouvée", not_found_error_model)
+    @clients_ns.response(500, "Erreur serveur", api_error_model)
     def delete(self, booking_id):
+        """Annuler une réservation.
+
+        ✅ P0: Support trace_id pour le suivi.
+        """
         try:
             # 🔒 get user (public_id) → user.id, puis récupérer le client
             current_user = get_current_user_via_use_case()
             if not current_user:
-                return APIErrorHandler.handle_not_found(
+                trace_id = get_trace_id()
+                error_response, status_code = APIErrorHandler.handle_not_found(
                     "User",
                     None,
                     logger,
                 )
+                error_response["trace_id"] = trace_id
+                return error_response, status_code
             client = client_repo.find_by_user_id_with_bookings(current_user.id)
             if not client:
                 return APIErrorHandler.handle_permission_error(
@@ -520,7 +596,24 @@ class CancelBooking(Resource):
                 }, uc_result.status_code or 400
 
             db.session.commit()
-            return {"message": "Booking canceled successfully"}, 200
+
+            # ✅ P0: Ajouter trace_id dans la réponse
+            trace_id = get_trace_id()
+            logger.info(
+                "✅ Réservation annulée avec succès: booking_id=%s, client_id=%s",
+                booking_id,
+                client.id,
+                extra={
+                    "trace_id": trace_id,
+                    "booking_id": booking_id,
+                    "client_id": client.id,
+                },
+            )
+
+            return {
+                "message": "Booking canceled successfully",
+                "trace_id": trace_id,
+            }, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
             logger.error("❌ ERREUR cancel_booking: %s - %s", type(e).__name__, str(e))
@@ -698,11 +791,34 @@ class ClientsList(Resource):
             },
         )
     )
+    @clients_ns.response(200, "Client créé avec succès (idempotency)")
+    @clients_ns.response(201, "Client créé avec succès")
+    @clients_ns.response(400, "Erreur de validation", validation_error_model)
+    @clients_ns.response(401, "Non authentifié", permission_error_model)
+    @clients_ns.response(403, "Non autorisé", permission_error_model)
+    @clients_ns.response(409, "Client déjà existant (idempotency)", api_error_model)
+    @clients_ns.response(500, "Erreur serveur", api_error_model)
     def post(self):
         """POST /clients
         Crée un nouveau client avec géocodage automatique des adresses.
+
+        ✅ P0: Support idempotency-key pour éviter les doublons.
         """
         try:
+            # ✅ P0: Vérifier idempotency-key
+            idempotency_key = IdempotencyService.get_idempotency_key_from_request()
+            if idempotency_key:
+                cached_response = IdempotencyService.check_key(idempotency_key)
+                if cached_response[0]:  # Key exists
+                    logger.info(
+                        "Idempotency key found, returning cached response",
+                        extra={
+                            "trace_id": get_trace_id(),
+                            "idempotency_key": idempotency_key,
+                        },
+                    )
+                    return cached_response[1], 201
+
             data = request.get_json() or {}
             # Validation basique
             for field in ("first_name", "last_name", "email"):
@@ -841,14 +957,25 @@ class ClientsList(Resource):
             db.session.add(new_client)
             db.session.commit()
 
+            # ✅ P0: Ajouter trace_id dans la réponse
+            trace_id = get_trace_id()
             logger.info(
                 "✅ Client créé avec succès: %s %s (ID: %s)",
                 data["first_name"],
                 data["last_name"],
                 new_client.id,
+                extra={"trace_id": trace_id, "client_id": new_client.id},
             )
 
-            return new_client.serialize, 201
+            # ✅ P0: Stocker la réponse pour idempotency
+            response_data = new_client.serialize
+            if isinstance(response_data, dict):
+                response_data["trace_id"] = trace_id
+
+            if idempotency_key:
+                IdempotencyService.store_response(idempotency_key, response_data, 201)
+
+            return response_data, 201
 
         except Exception as e:
             db.session.rollback()

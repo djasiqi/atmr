@@ -247,6 +247,11 @@ class DispatchInitializer:
         # 1) Configuration
         s = custom_settings or ud_settings.for_company(company)
 
+        # ✅ Gérer l'override de mode depuis overrides (priorité sur fast_mode)
+        if overrides and "mode" in overrides:
+            mode = overrides["mode"]
+            logger.info("[Initializer] Mode override depuis overrides: %s", mode)
+
         # ⚡ Détecter le mode rapide depuis overrides
         is_fast_mode: bool = bool(overrides and overrides.get("fast_mode") is True)
         if is_fast_mode:
@@ -300,9 +305,13 @@ class DispatchInitializer:
 
                 # ✅ Logger les paramètres appliqués vs demandés
                 # (comparaison avant/après)
-                if hasattr(s, "heuristic"):
-                    driver_load_after = s.heuristic.driver_load_balance
-                    proximity_after = s.heuristic.proximity
+                if hasattr(s, "heuristic") and not isinstance(
+                    getattr(s, "heuristic", None), str
+                ):
+                    driver_load_after = getattr(
+                        s.heuristic, "driver_load_balance", None
+                    )
+                    proximity_after = getattr(s.heuristic, "proximity", None)
                     heuristic_override = (
                         overrides.get("heuristic", {})
                         if isinstance(overrides.get("heuristic"), dict)
@@ -333,7 +342,7 @@ class DispatchInitializer:
                         fairness_weight_after,
                         fairness_override.get("fairness_weight", "N/A"),
                     )
-            except (ValueError, TypeError, KeyError) as e:
+            except (ValueError, TypeError, KeyError, AttributeError) as e:
                 # Erreurs de validation/parsing attendues dans les overrides
                 logger.warning(
                     "[Initializer] merge_overrides failed (validation error): %s. Using base settings.",

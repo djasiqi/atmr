@@ -11,6 +11,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 
 import { EnterpriseCard } from "./EnterpriseCard";
+import { isCompletedStatus } from "@/utils/bookingStatus";
 
 type BadgeTone = "default" | "warning" | "danger" | "info";
 
@@ -249,11 +250,12 @@ export const RideSnippetCard: React.FC<{
           {(() => {
             // ✅ Normaliser le statut en minuscules pour éviter les problèmes de casse
             const normalizedStatus = ride.status ? String(ride.status).toLowerCase().trim() : undefined;
-            
+
             // ✅ Obtenir les couleurs selon le statut (aligné avec le frontend web)
             const statusColors = getStatusColors(normalizedStatus);
-            const isCompleted = normalizedStatus === "completed" || normalizedStatus === "return_completed";
-            
+            // ✅ P0-1: Utiliser la fonction de normalisation
+            const isCompleted = isCompletedStatus(normalizedStatus);
+
             // ✅ Si terminée, toujours afficher les couleurs de statut (vert) SANS retard
             // ✅ Afficher le badge même si pas de chauffeur assigné (cas rare mais possible)
             // ✅ Ignorer complètement delayMinutes pour les courses terminées
@@ -283,7 +285,7 @@ export const RideSnippetCard: React.FC<{
                 </View>
               );
             }
-            
+
             // ✅ Sinon, logique normale avec retard et couleurs de statut
             if (ride.assignedTo) {
               const delayMinutes = ride.delayMinutes ?? 0;
@@ -346,7 +348,7 @@ export const RideSnippetCard: React.FC<{
                 </View>
               );
             }
-            
+
             // ✅ Non assignée - utiliser les couleurs de statut "pending"
             return (
               <View
@@ -414,8 +416,9 @@ export const RideSnippetCard: React.FC<{
           {(() => {
             // ✅ Normaliser le statut pour vérifier si la course est terminée
             const normalizedStatus = ride.status ? String(ride.status).toLowerCase().trim() : undefined;
-            const isCompleted = normalizedStatus === "completed" || normalizedStatus === "return_completed";
-            
+            // ✅ P0-1: Utiliser la fonction de normalisation
+            const isCompleted = isCompletedStatus(normalizedStatus);
+
             return (ride.onQuickAction || ride.onPrimaryAction) && !isCompleted ? (
               <View style={styles.expandedActions}>
                 {ride.onQuickAction && !ride.assignedTo ? (

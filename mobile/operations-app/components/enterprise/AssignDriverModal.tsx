@@ -35,6 +35,7 @@ interface AssignDriverModalProps {
     assigning: boolean;
     allDrivers?: DriverSuggestion[]; // ✅ Tous les chauffeurs disponibles (fallback)
     loadingAllDrivers?: boolean; // ✅ Chargement de tous les chauffeurs
+    isManualMode?: boolean; // ✅ Mode manuel (pas de suggestions)
     onClose: () => void;
     onAssign: (driverId: string) => void;
 }
@@ -47,6 +48,7 @@ export function AssignDriverModal({
     assigning,
     allDrivers = [],
     loadingAllDrivers = false,
+    isManualMode = false,
     onClose,
     onAssign,
 }: AssignDriverModalProps) {
@@ -89,7 +91,9 @@ export function AssignDriverModal({
 
                     {!loading && !loadingAllDrivers && (suggestions.length > 0 || allDrivers.length > 0) && (
                         <Text style={styles.modalSectionTitle}>
-                            {suggestions.length > 0 ? "Choisir un chauffeur" : "Sélectionner un chauffeur manuellement"}
+                            {isManualMode || suggestions.length === 0
+                                ? "Sélectionner un chauffeur manuellement"
+                                : "Choisir un chauffeur"}
                         </Text>
                     )}
 
@@ -115,8 +119,8 @@ export function AssignDriverModal({
                             showsVerticalScrollIndicator={false}
                             keyboardShouldPersistTaps="handled"
                         >
-                            {/* ✅ Afficher les suggestions si disponibles, sinon tous les chauffeurs */}
-                            {(suggestions.length > 0 ? suggestions : allDrivers).map((suggestion: DriverSuggestion) => (
+                            {/* ✅ En mode manuel, ne jamais afficher les suggestions, seulement tous les chauffeurs */}
+                            {((isManualMode || suggestions.length === 0) ? allDrivers : suggestions).map((suggestion: DriverSuggestion) => (
                                 <Pressable
                                     key={suggestion.driver_id}
                                     style={({ pressed }) => [

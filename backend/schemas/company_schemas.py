@@ -125,6 +125,9 @@ class ClientCreateSchema(Schema):
     is_institution = fields.Bool(load_default=False)
     institution_name = fields.Str(validate=validate.Length(max=200), allow_none=True)
 
+    # Établissement de résidence (EMS, clinique, foyer, etc.)
+    residence_facility = fields.Str(validate=validate.Length(max=200), allow_none=True)
+
     # Champs facturation/contact
     billing_address = fields.Str(validate=validate.Length(max=500), allow_none=True)
     billing_lat = fields.Float(validate=validate_latitude, allow_none=True)

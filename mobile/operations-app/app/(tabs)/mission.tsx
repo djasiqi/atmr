@@ -95,7 +95,9 @@ export default function MissionScreen() {
                 "return_completed",
                 "canceled",
                 "cancelled",
-              ].includes((m.status || "").toLowerCase())
+              ].includes((m.status || "").toLowerCase()) ||
+              // ✅ P0-1: Vérifier aussi les statuts en uppercase
+              ["COMPLETED", "RETURN_COMPLETED", "CANCELED"].includes(m.status || "")
           );
           if (active.length) {
             const sorted = active.sort(
@@ -186,8 +188,10 @@ export default function MissionScreen() {
           .map((m) => (m.id === data.id ? data : m))
           .filter((m) => {
             const s = (m.status || "").toLowerCase();
-            // ✅ Filtrer les missions terminées ou annulées (mais pas les libérées qui reviennent à ASSIGNED)
-            return !["completed", "return_completed", "canceled", "cancelled"].includes(s);
+            // ✅ P0-1: Filtrer les missions terminées ou annulées (mais pas les libérées qui reviennent à ASSIGNED)
+            // Vérifier aussi les statuts en uppercase
+            return !["completed", "return_completed", "canceled", "cancelled"].includes(s) &&
+              !["COMPLETED", "RETURN_COMPLETED", "CANCELED"].includes(m.status || "");
           })
           .sort(
             (a, b) =>
@@ -341,9 +345,10 @@ export default function MissionScreen() {
 
     try {
       const isReturn = !!mission.is_return;
+      // ✅ P0-1: Utiliser les statuts en UPPERCASE pour correspondre au backend
       const statusToSend: BookingStatus = isReturn
-        ? "return_completed"
-        : "completed";
+        ? "RETURN_COMPLETED"
+        : "COMPLETED";
 
       console.log("[Mission] Mise à jour du statut:", statusToSend, "pour booking", mission.id);
 
@@ -455,8 +460,9 @@ export default function MissionScreen() {
                     isGrouped={groupInfo.isGrouped}
                     onComplete={() => handleOpenModal(mission.id)}
                     onCall={() =>
-                      mission.client_phone &&
-                      Linking.openURL(`tel:${mission.client_phone}`)
+                      // ✅ P1-4 Phase 3.1: Utiliser client.contact_phone au lieu de client_phone
+                      (mission.client?.contact_phone || mission.client_phone) &&
+                      Linking.openURL(`tel:${mission.client?.contact_phone || mission.client_phone}`)
                     }
                     onNavigate={() => {
                       const dest =
@@ -474,7 +480,7 @@ export default function MissionScreen() {
                         AsyncStorage.setItem(
                           MISSIONS_CACHE_KEY,
                           JSON.stringify(updated)
-                        ).catch(() => {});
+                        ).catch(() => { });
                         return updated;
                       });
                     }}

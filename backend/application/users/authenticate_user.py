@@ -86,9 +86,17 @@ class AuthenticateUserUseCase:
                 f.write(
                     json.dumps(
                         {
-                            "location": "authenticate_user.py:AuthenticateUserUseCase.execute",
+                            "location": (
+                                "authenticate_user.py:AuthenticateUserUseCase.execute"
+                            ),
                             "message": "before UserRepository.find_model_by_email",
-                            "data": {"email": input_data.email[:10] + "***" if input_data.email else None},
+                            "data": {
+                                "email": (
+                                    input_data.email[:10] + "***"
+                                    if input_data.email
+                                    else None
+                                ),
+                            },
                             "timestamp": datetime.now(UTC).isoformat(),
                             "sessionId": "debug-session",
                             "runId": "run1",
@@ -108,7 +116,9 @@ class AuthenticateUserUseCase:
                 f.write(
                     json.dumps(
                         {
-                            "location": "authenticate_user.py:AuthenticateUserUseCase.execute",
+                            "location": (
+                                "authenticate_user.py:AuthenticateUserUseCase.execute"
+                            ),
                             "message": "after UserRepository.find_model_by_email",
                             "data": {
                                 "user_found": user is not None,
@@ -129,7 +139,9 @@ class AuthenticateUserUseCase:
                     f.write(
                         json.dumps(
                             {
-                                "location": "authenticate_user.py:AuthenticateUserUseCase.execute",
+                                "location": (
+                                    "authenticate_user.py:AuthenticateUserUseCase.execute"
+                                ),
                                 "message": "ERROR logging after find_model_by_email",
                                 "data": {"log_error": str(log_err)},
                                 "timestamp": datetime.now(UTC).isoformat(),

@@ -36,19 +36,34 @@ class QRBillService:
             import json
             import time
             from pathlib import Path
+
             log_path = Path("/app/.cursor/debug.log")
             log_data = {
-                "location": "qrbill_service.py:generate_qr_bill_svg:check_iban",
+                "location": ("qrbill_service.py:generate_qr_bill_svg:check_iban"),
                 "message": "Checking IBAN for QR-Bill generation",
                 "data": {
                     "invoice_id": invoice.id,
                     "company_id": invoice.company_id,
                     "billing_settings_found": billing_settings is not None,
-                    "has_iban_raw": hasattr(billing_settings, "_iban_raw") if billing_settings else False,
-                    "iban_raw_value": str(getattr(billing_settings, "_iban_raw", None)) if billing_settings else None,
-                    "iban_decrypted": billing_settings.iban if billing_settings else None,
-                    "iban_is_none": billing_settings.iban is None if billing_settings else True,
-                    "iban_is_empty": billing_settings.iban == "" if billing_settings else True,
+                    "has_iban_raw": (
+                        hasattr(billing_settings, "_iban_raw")
+                        if billing_settings
+                        else False
+                    ),
+                    "iban_raw_value": (
+                        str(getattr(billing_settings, "_iban_raw", None))
+                        if billing_settings
+                        else None
+                    ),
+                    "iban_decrypted": (
+                        billing_settings.iban if billing_settings else None
+                    ),
+                    "iban_is_none": (
+                        billing_settings.iban is None if billing_settings else True
+                    ),
+                    "iban_is_empty": (
+                        billing_settings.iban == "" if billing_settings else True
+                    ),
                 },
                 "timestamp": int(time.time() * 1000),
                 "sessionId": "debug-session",
@@ -164,7 +179,8 @@ class QRBillService:
                 reference_number=None,  # Pas de référence QR pour l'instant
                 additional_information=(
                     f"Facture {invoice.invoice_number} - "
-                    f"Période: {invoice.period_month:02d}.{invoice.period_year}"
+                    f"Période: {invoice.period_month:02d}."
+                    f"{invoice.period_year}"
                 ),
                 language="fr",
             )
@@ -300,7 +316,8 @@ class QRBillService:
                 reference_number=None,  # Pas de référence QR pour l'instant
                 additional_information=(
                     f"Facture {invoice.invoice_number} - "
-                    f"Période: {invoice.period_month:02d}.{invoice.period_year}"
+                    f"Période: {invoice.period_month:02d}."
+                    f"{invoice.period_year}"
                 ),
                 language="fr",
             )

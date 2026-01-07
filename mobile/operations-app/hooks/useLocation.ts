@@ -7,6 +7,14 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { sendDriverLocation, getDistanceInMeters } from "@/services/location";
 import { useAuth } from "@/hooks/useAuth";
 import { useSocket } from "@/hooks/useSocket";
+// ✅ P2-1: Mode Offline Mobile - Persister queue GPS
+import {
+  enqueueLocation,
+  getLocationQueue,
+  removeSentLocations,
+  clearLocationQueue,
+  type QueuedLocation,
+} from "@/services/locationQueue";
 
 // ✅ Nom de la tâche en arrière-plan (doit correspondre à locationTask.ts)
 const BACKGROUND_TASK_NAME = "background-location-task";
@@ -21,11 +29,12 @@ const BATCH_INTERVAL_MS = 10000;  // Flush toutes les 10s (réduit de 15s)
 const HEARTBEAT_INTERVAL_MS = 30000;  // Heartbeat GPS toutes les 30s même si immobile
 
 export const useLocation = () => {
-  const { driver, authMode } = useAuth();
+  const { driver } = useAuth();
   const socket = useSocket();
   
-  // Vérifier que l'utilisateur est bien un chauffeur avant d'envoyer la position
-  const isDriverMode = authMode === "driver" && !!driver;
+  // ✅ Vérifier que l'utilisateur est bien un chauffeur avant d'envoyer la position
+  // Note: authMode n'existe plus dans AuthContextType, on vérifie directement driver
+  const isDriverMode = !!driver;
 
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const locationSubscription = useRef<Location.LocationSubscription | number | null>(null);
@@ -206,6 +215,7 @@ export const useLocation = () => {
     };
 
   // ✅ PERF: Flush batch de positions (réduit réseau et batterie)
+  // ✅ P2-1: Mode Offline Mobile - Persister queue GPS si offline
   const flushPositionBatch = async () => {
     if (positionBuffer.current.length === 0) {
       console.log("[useLocation] ⚠️ Buffer vide, pas d'envoi");
@@ -216,42 +226,65 @@ export const useLocation = () => {
       positionBuffer.current = []; // Vider le buffer
       return;
     }
-    if (!socket || !socket.connected) {
-      console.log("[useLocation] ⚠️ Socket non connecté, pas d'envoi", { socket: !!socket, connected: socket?.connected });
-      return;
-    }
     
     const batch = [...positionBuffer.current];
     positionBuffer.current = [];  // Clear buffer
     
-    try {
-      const payload = {
-        positions: batch.map(loc => ({
-          latitude: loc.coords.latitude,
-          longitude: loc.coords.longitude,
-          speed: loc.coords.speed ?? 0,
-          heading: loc.coords.heading ?? 0,
-          accuracy: loc.coords.accuracy ?? 0,
-          timestamp: loc.timestamp ?? Date.now(),
-        })),
-        driver_id: driver.id,
-      };
-      
-      console.log(`📍 [useLocation] Envoi batch: ${batch.length} positions, driver_id=${driver.id}, socket_connected=${socket.connected}`);
-      
-      // Envoyer batch via Socket.IO (plus efficient)
-      socket.emit("driver_location_batch", payload);
-      
-      console.log(`✅ [useLocation] Batch envoyé: ${batch.length} positions`);
-      
-      // Mettre à jour dernière position
-      const lastPos = batch[batch.length - 1];
-      lastSentLocation.current = {
-        latitude: lastPos.coords.latitude,
-        longitude: lastPos.coords.longitude
-      };
-    } catch (error) {
-      console.error("❌ [useLocation] Erreur envoi batch localisation:", error);
+    // ✅ P2-1: Préparer les positions pour la queue
+    const queuedLocations: QueuedLocation[] = batch.map(loc => ({
+      latitude: loc.coords.latitude,
+      longitude: loc.coords.longitude,
+      speed: loc.coords.speed ?? 0,
+      heading: loc.coords.heading ?? 0,
+      accuracy: loc.coords.accuracy ?? 0,
+      timestamp: loc.timestamp ?? Date.now(),
+      driver_id: driver.id,
+    }));
+    
+    // ✅ P2-1: Si socket connecté, envoyer immédiatement
+    if (socket && socket.connected) {
+      try {
+        const payload = {
+          positions: queuedLocations.map(loc => ({
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            speed: loc.speed,
+            heading: loc.heading,
+            accuracy: loc.accuracy,
+            timestamp: loc.timestamp,
+          })),
+          driver_id: driver.id,
+        };
+        
+        console.log(`📍 [useLocation] Envoi batch: ${batch.length} positions, driver_id=${driver.id}, socket_connected=${socket.connected}`);
+        
+        // Envoyer batch via Socket.IO (plus efficient)
+        socket.emit("driver_location_batch", payload);
+        
+        console.log(`✅ [useLocation] Batch envoyé: ${batch.length} positions`);
+        
+        // ✅ P2-1: Supprimer les positions envoyées de la queue
+        await removeSentLocations(queuedLocations);
+        
+        // Mettre à jour dernière position
+        const lastPos = batch[batch.length - 1];
+        lastSentLocation.current = {
+          latitude: lastPos.coords.latitude,
+          longitude: lastPos.coords.longitude
+        };
+      } catch (error) {
+        console.error("❌ [useLocation] Erreur envoi batch localisation:", error);
+        // ✅ P2-1: En cas d'erreur, ajouter à la queue pour retry plus tard
+        for (const loc of queuedLocations) {
+          await enqueueLocation(loc);
+        }
+      }
+    } else {
+      // ✅ P2-1: Mode offline - Ajouter toutes les positions à la queue
+      console.log(`📦 [useLocation] Mode offline: ${queuedLocations.length} positions ajoutées à la queue`);
+      for (const loc of queuedLocations) {
+        await enqueueLocation(loc);
+      }
     }
   };
 

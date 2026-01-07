@@ -18,6 +18,7 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/fr";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { isCompletedStatus, normalizeBookingStatus } from "@/utils/bookingStatus";
 
 // ✅ Palette professionnelle cohérente avec les autres pages
 const palette = {
@@ -119,6 +120,8 @@ const CANCEL_REASONS = [
 export default function RideDetailsScreen() {
   const { rideId } = useLocalSearchParams<{ rideId?: string }>();
   const { enterpriseSession } = useAuth();
+  const dispatchMode = (enterpriseSession?.company?.dispatchMode as "manual" | "semi_auto" | "fully_auto" | undefined) || "manual";
+  const isManualMode = dispatchMode === "manual";
 
   const [detail, setDetail] = useState<RideDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -153,9 +156,12 @@ export default function RideDetailsScreen() {
     try {
       const data = await getDispatchRideDetails(rideId);
       setDetail(data);
+      // ✅ Réinitialiser le message d'erreur en cas de succès
+      setErrorMessage(null);
     } catch (error: any) {
-      // ✅ Gestion améliorée des erreurs avec messages plus clairs
+      // ✅ Gestion améliorée des erreurs avec messages plus clairs et actions possibles
       const status = error?.response?.status;
+      const errorData = error?.response?.data;
       let message = "Impossible de charger la fiche course.";
 
       if (status === 404) {
@@ -163,12 +169,18 @@ export default function RideDetailsScreen() {
       } else if (status === 403) {
         message = "Vous n'avez pas l'autorisation d'accéder à cette course.";
       } else if (status === 500) {
-        message = "Erreur serveur. Veuillez réessayer plus tard.";
-      } else if (error?.response?.data?.error) {
+        // ✅ Message plus informatif pour les erreurs 500 avec suggestion de réessayer
+        const backendMessage = errorData?.error || errorData?.message;
+        if (backendMessage && typeof backendMessage === "string" && backendMessage.length > 0) {
+          message = `Erreur serveur: ${backendMessage}\n\nVeuillez réessayer dans quelques instants.`;
+        } else {
+          message = "Erreur serveur lors du chargement des détails.\n\nVeuillez réessayer dans quelques instants. Si le problème persiste, contactez le support.";
+        }
+      } else if (errorData?.error) {
         // Utiliser le message d'erreur du backend s'il est disponible
-        message = error.response.data.error;
-      } else if (error?.response?.data?.message) {
-        message = error.response.data.message;
+        message = errorData.error;
+      } else if (errorData?.message) {
+        message = errorData.message;
       } else if (error?.message && error.message !== "Request failed with status code") {
         // Éviter les messages génériques comme "Request failed with status code 500"
         message = error.message;
@@ -177,10 +189,13 @@ export default function RideDetailsScreen() {
       console.error("[RideDetails] Erreur chargement détails:", {
         status,
         message,
-        error: error?.response?.data || error,
+        error: errorData || error,
+        rideId,
       });
 
       setErrorMessage(message);
+      // ✅ Ne pas définir detail à null pour permettre un retry sans perdre l'état précédent
+      // setDetail(null); // Commenté pour permettre un retry
     } finally {
       setLoading(false);
     }
@@ -386,12 +401,27 @@ export default function RideDetailsScreen() {
   if (!detail || !summary) {
     return (
       <View style={styles.loadingContainer}>
+        <Ionicons name="alert-circle-outline" size={48} color={palette.error} style={{ marginBottom: 16 }} />
         <Text style={styles.errorText}>
           {errorMessage ?? "Course introuvable."}
         </Text>
-        <TouchableOpacity style={styles.primaryButton} onPress={loadDetail}>
-          <Text style={styles.primaryButtonText}>Réessayer</Text>
-        </TouchableOpacity>
+        <Text style={styles.errorHint}>
+          {errorMessage?.includes("500") || errorMessage?.includes("serveur")
+            ? "L'erreur peut être temporaire. Réessayez dans quelques instants."
+            : "Vérifiez votre connexion et réessayez."}
+        </Text>
+        <View style={styles.errorActions}>
+          <TouchableOpacity style={styles.primaryButton} onPress={loadDetail} disabled={loading}>
+            {loading ? (
+              <ActivityIndicator color={palette.primaryText} />
+            ) : (
+              <Text style={styles.primaryButtonText}>Réessayer</Text>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.secondaryButton} onPress={() => router.back()}>
+            <Text style={styles.secondaryButtonText}>Retour</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -471,11 +501,11 @@ export default function RideDetailsScreen() {
             {
               label: "Statut",
               value:
-                summary.status === "assigned"
+                summary.status === "assigned" || normalizeBookingStatus(summary.status) === "ASSIGNED"
                   ? "Assignée"
-                  : summary.status === "completed"
+                  : isCompletedStatus(summary.status)
                     ? "Terminée"
-                    : summary.status === "cancelled"
+                    : summary.status === "cancelled" || normalizeBookingStatus(summary.status) === "CANCELED"
                       ? "Annulée"
                       : "Non assignée",
             },
@@ -494,8 +524,8 @@ export default function RideDetailsScreen() {
           // ✅ Normaliser le statut en minuscules pour la correspondance avec statusColors
           if (summary?.driver?.name) {
             // ✅ Si un chauffeur est assigné, normaliser le statut pour l'affichage
-            // ✅ Conserver les statuts "completed", "return_completed" et "cancelled" tels quels (en minuscules)
-            if (statusStr === "completed" || statusStr === "return_completed" || statusStr === "cancelled" || statusStr === "canceled") {
+            // ✅ P0-1: Utiliser la fonction de normalisation pour vérifier les statuts complétés
+            if (isCompletedStatus(displayStatus) || statusStr === "cancelled" || statusStr === "canceled") {
               // ✅ Utiliser le statut en minuscules pour la correspondance avec statusColors
               displayStatus = statusStr;
             } else if (!displayStatus || statusStr === "unassigned" || statusStr === "accepted" || statusStr === "") {
@@ -644,7 +674,12 @@ export default function RideDetailsScreen() {
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Choisir un chauffeur</Text>
             <ScrollView style={styles.driverListModal} nestedScrollEnabled>
-              {suggestions.length === 0 ? (
+              {/* ✅ En mode manuel, ne pas afficher les suggestions */}
+              {isManualMode ? (
+                <Text style={styles.muted}>
+                  Mode manuel : Sélectionnez un chauffeur depuis la liste complète des chauffeurs disponibles.
+                </Text>
+              ) : suggestions.length === 0 ? (
                 <Text style={styles.muted}>Aucun chauffeur disponible</Text>
               ) : (
                 suggestions.map((suggestion: DriverSuggestion) => (
@@ -728,8 +763,8 @@ const InfoRow = ({
   if (isDriverField && isAssigned) {
     // ✅ Si un chauffeur est assigné, normaliser le statut pour l'affichage
     const statusStr = normalizedStatus || "";
-    // ✅ Conserver les statuts "completed", "return_completed" et "cancelled" tels quels
-    if (statusStr === "completed" || statusStr === "return_completed" || statusStr === "cancelled" || statusStr === "canceled") {
+    // ✅ P0-1: Utiliser la fonction de normalisation pour vérifier les statuts complétés
+    if (isCompletedStatus(status) || statusStr === "cancelled" || statusStr === "canceled") {
       normalizedStatus = statusStr;
     } else if (!status || statusStr === "accepted" || statusStr === "unassigned" || statusStr === "") {
       normalizedStatus = "assigned"; // Traiter "accepted" ou undefined avec driver comme "assigned"
@@ -1101,8 +1136,25 @@ const styles = StyleSheet.create({
   errorText: {
     color: palette.error,
     marginTop: 8,
-    fontSize: 14,
+    fontSize: 16,
     marginHorizontal: 16,
+    textAlign: "center",
+    fontWeight: "600",
+    lineHeight: 22,
+  },
+  errorHint: {
+    color: palette.textSecondary,
+    marginTop: 8,
+    fontSize: 13,
+    marginHorizontal: 16,
+    textAlign: "center",
+    lineHeight: 18,
+  },
+  errorActions: {
+    marginTop: 24,
+    width: "100%",
+    gap: 12,
+    paddingHorizontal: 16,
   },
   muted: {
     color: palette.hintText,

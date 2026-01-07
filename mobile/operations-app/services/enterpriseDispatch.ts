@@ -301,7 +301,8 @@ export interface RealtimeDashboardData {
     driver_id: number;
     delay_minutes: number;
     status: "late" | "early";
-    customer_name: string;
+    // ✅ P1-4 Phase 3.3: Utiliser client_name au lieu de customer_name
+    client_name: string;
     scheduled_time: string | null;
   }>;
   opportunities: Array<{
@@ -474,6 +475,7 @@ export interface CreateClientPayload {
   birth_date?: string;
   is_institution?: boolean;
   institution_name?: string;
+  residence_facility?: string; // Établissement de résidence (EMS, clinique, etc.)
   domicile_address?: string; // Rue seule (sans code postal/ville)
   domicile_zip?: string;
   domicile_city?: string;

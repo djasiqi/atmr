@@ -345,10 +345,15 @@ class Booking(db.Model):
 
         return {
             "id": self.id,
-            "customer_name": self.customer_full_name,
+            # ✅ P1-4 Phase 1.1: Supprimer customer_name, garder uniquement client_name
             "client_name": self.customer_full_name,
             "pickup_location": self.pickup_location,
             "dropoff_location": self.dropoff_location,
+            # ✅ P1-4 Phase 1.3: Ajouter coordonnées GPS
+            "pickup_lat": _as_float(self.pickup_lat),
+            "pickup_lon": _as_float(self.pickup_lon),
+            "dropoff_lat": _as_float(self.dropoff_lat),
+            "dropoff_lon": _as_float(self.dropoff_lon),
             "amount": round(amt, 2),
             "scheduled_time": scheduled_dt.isoformat() if scheduled_dt else None,
             "date_formatted": date_local or "Non spécifié",
@@ -370,7 +375,9 @@ class Booking(db.Model):
                 "floor": getattr(cli, "floor", None) if cli else None,
                 "access_notes": getattr(cli, "access_notes", None) if cli else None,
             },
-            "company": self.company.name if self.company else "Non assignée",
+            # ✅ P1-4 Phase 1.2: Remplacer company (string) par company_id + company_name
+            "company_id": self.company_id,
+            "company_name": self.company.name if self.company else None,
             "driver": {
                 "id": self.driver.id,
                 "username": self.driver.user.username if self.driver.user else None,
@@ -397,10 +404,22 @@ class Booking(db.Model):
             "notes_medical": self.notes_medical or "Aucune note",
             "wheelchair_client_has": _as_bool(self.wheelchair_client_has),
             "wheelchair_need": _as_bool(self.wheelchair_need),
-            "created_at": created_loc.strftime("%d/%m/%Y %H:%M")
+            # ✅ P1-4 Phase 1.4: Standardiser timestamps en ISO 8601
+            "created_at": (
+                iso_utc_z(to_utc_from_db(created_dt))
+                if isinstance(created_dt, datetime)
+                else None
+            ),
+            "updated_at": (
+                iso_utc_z(to_utc_from_db(updated_dt))
+                if isinstance(updated_dt, datetime)
+                else None
+            ),
+            # ✅ P1-4 Phase 1.4: Ajouter versions formatées pour compatibilité (optionnel)
+            "created_at_formatted": created_loc.strftime("%d/%m/%Y %H:%M")
             if created_loc
             else "Non spécifié",
-            "updated_at": updated_loc.strftime("%d/%m/%Y %H:%M")
+            "updated_at_formatted": updated_loc.strftime("%d/%m/%Y %H:%M")
             if updated_loc
             else "Non spécifié",
             "rejected_by": self.rejected_by,
@@ -426,6 +445,7 @@ class Booking(db.Model):
                 else None,
                 "billed_to_contact": self.billed_to_contact,
             },
+            # ✅ P1-4 Phase 1.1: patient_name reste pour compatibilité (utilise customer_name de la DB)
             "patient_name": _as_str(self.customer_name),
         }
 
@@ -577,10 +597,109 @@ class Booking(db.Model):
         st = _as_dt(self.scheduled_time)
         return bool(st and st > now_local())
 
-    def update_status(self, new_status):
-        if not isinstance(new_status, BookingStatus):
-            msg = "Statut invalide."
-            raise ValueError(msg)
+    # ✅ P1-2: State machine courses avec validation
+    def validate_status_transition(
+        self, new_status: BookingStatus
+    ) -> tuple[bool, str | None]:
+        """Valide si une transition de statut est autorisée selon la state machine.
+
+        Returns:
+            (is_valid, error_message): Tuple indiquant si la transition est valide
+                et un message d'erreur si elle ne l'est pas.
+        """
+        current_status = self.status
+
+        # Définir les transitions autorisées
+        ALLOWED_TRANSITIONS: dict[BookingStatus, list[BookingStatus]] = {
+            BookingStatus.PENDING: [
+                BookingStatus.ACCEPTED,
+                BookingStatus.ASSIGNED,
+                BookingStatus.CANCELED,
+            ],
+            BookingStatus.ACCEPTED: [
+                BookingStatus.ASSIGNED,
+                BookingStatus.CANCELED,
+            ],
+            BookingStatus.ASSIGNED: [
+                BookingStatus.EN_ROUTE,
+                BookingStatus.CANCELED,
+            ],
+            BookingStatus.EN_ROUTE: [
+                BookingStatus.IN_PROGRESS,
+                BookingStatus.CANCELED,
+            ],
+            BookingStatus.IN_PROGRESS: [
+                BookingStatus.COMPLETED,
+                BookingStatus.RETURN_COMPLETED,
+                BookingStatus.CANCELED,
+            ],
+            BookingStatus.COMPLETED: [
+                # COMPLETED est un état terminal, pas de transition autorisée
+            ],
+            BookingStatus.RETURN_COMPLETED: [
+                # RETURN_COMPLETED est un état terminal, pas de transition autorisée
+            ],
+            BookingStatus.CANCELED: [
+                # CANCELED est un état terminal, pas de transition autorisée
+            ],
+        }
+
+        # Vérifier si la transition est autorisée
+        allowed_next_statuses = ALLOWED_TRANSITIONS.get(current_status, [])
+        if new_status not in allowed_next_statuses:
+            allowed_values = [s.value for s in allowed_next_statuses]
+            return (
+                False,
+                (
+                    f"Transition invalide : {current_status.value} → {new_status.value}. "
+                    f"Transitions autorisées depuis {current_status.value} : {allowed_values}"
+                ),
+            )
+
+        # Validations supplémentaires selon le nouveau statut
+        if new_status == BookingStatus.ASSIGNED and not self.driver_id:
+            return (
+                False,
+                (
+                    "Impossible d'assigner une course sans driver_id. "
+                    "Un chauffeur doit être assigné avant de passer au statut ASSIGNED."
+                ),
+            )
+
+        if new_status == BookingStatus.EN_ROUTE and not self.driver_id:
+            return (
+                False,
+                "Impossible de passer en EN_ROUTE sans driver_id.",
+            )
+
+        if new_status == BookingStatus.IN_PROGRESS and not self.driver_id:
+            return (
+                False,
+                "Impossible de passer en IN_PROGRESS sans driver_id.",
+            )
+
+        if (
+            new_status in (BookingStatus.COMPLETED, BookingStatus.RETURN_COMPLETED)
+            and not self.driver_id
+        ):
+            return (
+                False,
+                "Impossible de compléter une course sans driver_id.",
+            )
+
+        return (True, None)
+
+    def update_status(self, new_status: BookingStatus) -> None:
+        """Met à jour le statut avec validation de transition.
+
+        Raises:
+            ValueError: Si la transition n'est pas autorisée ou si le statut est invalide.
+        """
+        # ✅ P1-2: Valider la transition avant de l'appliquer
+        is_valid, error_message = self.validate_status_transition(new_status)
+        if not is_valid:
+            raise ValueError(error_message or "Transition de statut invalide")
+
         self.status = new_status
 
     @property

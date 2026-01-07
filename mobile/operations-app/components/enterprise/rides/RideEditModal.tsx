@@ -62,6 +62,7 @@ export const RideEditModal: React.FC<RideEditModalProps> = ({
     }, [visible, ride, loadRideDetail, clear]);
 
     useEffect(() => {
+        // ✅ Utiliser rideDetail si disponible, sinon utiliser les données de base de ride
         if (rideDetail?.summary) {
             const summary = rideDetail.summary;
             setPickupAddress(summary.route.pickup_address || "");
@@ -71,8 +72,19 @@ export const RideEditModal: React.FC<RideEditModalProps> = ({
             );
             setNotes(rideDetail.notes?.[0] || "");
             setPriority(summary.client.priority || "NORMAL");
+        } else if (ride && !loadingDetail) {
+            // ✅ Fallback : utiliser les données de base de ride (RideSummary) si rideDetail n'est pas disponible
+            // Cela permet d'éditer même si le chargement des détails a échoué
+            console.log("[RideEditModal] Utilisation des données de base de ride (fallback)");
+            setPickupAddress(ride.route?.pickup_address || "");
+            setDropoffAddress(ride.route?.dropoff_address || "");
+            setScheduledTime(
+                ride.time?.pickup_at ? dayjs(ride.time.pickup_at).toDate() : null
+            );
+            setNotes(""); // Les notes ne sont pas disponibles dans RideSummary
+            setPriority(ride.client?.priority || "NORMAL");
         }
-    }, [rideDetail]);
+    }, [rideDetail, ride, loadingDetail]);
 
     const handleSave = async () => {
         if (!ride) return;
@@ -102,8 +114,9 @@ export const RideEditModal: React.FC<RideEditModalProps> = ({
     };
 
     const hasChanges = () => {
-        if (!rideDetail?.summary) return false;
-        const summary = rideDetail.summary;
+        // ✅ Utiliser rideDetail si disponible, sinon utiliser ride (RideSummary)
+        const summary = rideDetail?.summary || ride;
+        if (!summary) return false;
         // Comparer les dates en format local (sans timezone) pour éviter les problèmes de timezone
         const currentTimeStr = scheduledTime
             ? dayjs(scheduledTime).format("YYYY-MM-DDTHH:mm:ss")
@@ -112,11 +125,11 @@ export const RideEditModal: React.FC<RideEditModalProps> = ({
             ? dayjs(summary.time.pickup_at).format("YYYY-MM-DDTHH:mm:ss")
             : null;
         return (
-            pickupAddress !== (summary.route.pickup_address || "") ||
-            dropoffAddress !== (summary.route.dropoff_address || "") ||
+            pickupAddress !== (summary.route?.pickup_address || "") ||
+            dropoffAddress !== (summary.route?.dropoff_address || "") ||
             currentTimeStr !== originalTimeStr ||
-            notes !== (rideDetail.notes?.[0] || "") ||
-            priority !== summary.client.priority
+            notes !== (rideDetail?.notes?.[0] || "") ||
+            priority !== (summary.client?.priority || "NORMAL")
         );
     };
 
@@ -146,7 +159,17 @@ export const RideEditModal: React.FC<RideEditModalProps> = ({
                             <ActivityIndicator color={palette.modalButton} size="large" />
                             <Text style={styles.loadingText}>Chargement des détails...</Text>
                         </View>
-                    ) : (
+                    ) : !rideDetail?.summary && ride ? (
+                        // ✅ Afficher un avertissement si les détails n'ont pas pu être chargés
+                        // mais permettre quand même l'édition avec les données de base
+                        <View style={styles.warningContainer}>
+                            <Ionicons name="warning-outline" size={20} color="#F59E0B" />
+                            <Text style={styles.warningText}>
+                                Les détails complets n'ont pas pu être chargés. Vous pouvez quand même modifier la course avec les informations disponibles.
+                            </Text>
+                        </View>
+                    ) : null}
+                    {!loadingDetail && (rideDetail?.summary || ride) && (
                         <ScrollView
                             style={styles.modalScroll}
                             contentContainerStyle={styles.modalContent}
@@ -307,6 +330,23 @@ const styles = StyleSheet.create({
     loadingText: {
         color: palette.modalText,
         fontSize: 14,
+    },
+    warningContainer: {
+        flexDirection: "row",
+        alignItems: "flex-start",
+        gap: 12,
+        padding: 20,
+        margin: 20,
+        backgroundColor: "rgba(245, 158, 11, 0.1)",
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: "rgba(245, 158, 11, 0.3)",
+    },
+    warningText: {
+        flex: 1,
+        color: "#92400E",
+        fontSize: 13,
+        lineHeight: 18,
     },
     modalScroll: {
         flex: 1,

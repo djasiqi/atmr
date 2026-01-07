@@ -22,7 +22,7 @@ depends_on = None
 def upgrade():
     """
     Ajoute les tables pour la facturation mensuelle consolidée des partenaires.
-    
+
     ⚠️ NOTE: Cette migration est idempotente - elle vérifie l'existence
     des tables avant de les créer. En production, les tables peuvent
     avoir été créées manuellement avant l'application de cette migration.
@@ -30,16 +30,20 @@ def upgrade():
     # Vérifier l'existence des tables avant de les créer
     from sqlalchemy import inspect
     from sqlalchemy.engine import reflection
-    
+
     bind = op.get_bind()
     inspector = reflection.Inspector.from_engine(bind)
     existing_tables = inspector.get_table_names()
     existing_indexes = {}
     existing_foreign_keys = {}
     for table_name in existing_tables:
-        existing_indexes[table_name] = [idx["name"] for idx in inspector.get_indexes(table_name)]
-        existing_foreign_keys[table_name] = [fk["name"] for fk in inspector.get_foreign_keys(table_name)]
-    
+        existing_indexes[table_name] = [
+            idx["name"] for idx in inspector.get_indexes(table_name)
+        ]
+        existing_foreign_keys[table_name] = [
+            fk["name"] for fk in inspector.get_foreign_keys(table_name)
+        ]
+
     # Créer la table partner_invoices (si elle n'existe pas déjà)
     if "partner_invoices" not in existing_tables:
         op.create_table(
@@ -81,32 +85,44 @@ def upgrade():
                 name="unique_partner_invoice_period",
             ),
         )
-    
+
     # Mettre à jour les index et foreign keys si la table existe maintenant
     if "partner_invoices" in inspector.get_table_names():
-        existing_indexes["partner_invoices"] = [idx["name"] for idx in inspector.get_indexes("partner_invoices")]
-        existing_foreign_keys["partner_invoices"] = [fk["name"] for fk in inspector.get_foreign_keys("partner_invoices")]
+        existing_indexes["partner_invoices"] = [
+            idx["name"] for idx in inspector.get_indexes("partner_invoices")
+        ]
+        existing_foreign_keys["partner_invoices"] = [
+            fk["name"] for fk in inspector.get_foreign_keys("partner_invoices")
+        ]
 
     # Créer les index (si ils n'existent pas déjà)
-    if "ix_partner_invoices_partnership_id" not in existing_indexes.get("partner_invoices", []):
+    if "ix_partner_invoices_partnership_id" not in existing_indexes.get(
+        "partner_invoices", []
+    ):
         op.create_index(
             "ix_partner_invoices_partnership_id",
             "partner_invoices",
             ["partnership_id"],
         )
-    if "ix_partner_invoices_period_year" not in existing_indexes.get("partner_invoices", []):
+    if "ix_partner_invoices_period_year" not in existing_indexes.get(
+        "partner_invoices", []
+    ):
         op.create_index(
             "ix_partner_invoices_period_year",
             "partner_invoices",
             ["period_year"],
         )
-    if "ix_partner_invoices_period_month" not in existing_indexes.get("partner_invoices", []):
+    if "ix_partner_invoices_period_month" not in existing_indexes.get(
+        "partner_invoices", []
+    ):
         op.create_index(
             "ix_partner_invoices_period_month",
             "partner_invoices",
             ["period_month"],
         )
-    if "ix_partner_invoices_invoice_number" not in existing_indexes.get("partner_invoices", []):
+    if "ix_partner_invoices_invoice_number" not in existing_indexes.get(
+        "partner_invoices", []
+    ):
         op.create_index(
             "ix_partner_invoices_invoice_number",
             "partner_invoices",

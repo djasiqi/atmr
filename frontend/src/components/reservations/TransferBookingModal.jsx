@@ -81,7 +81,7 @@ const TransferBookingModal = ({ isOpen, onClose, reservation, onSuccess }) => {
           <div className={styles.bookingInfo}>
             <h3>Course à transférer</h3>
             <p>
-              <strong>Client:</strong> {reservation.client?.full_name || reservation.customer_name}
+              <strong>Client:</strong> {reservation.client?.full_name || reservation.client_name}
             </p>
             <p>
               <strong>Départ:</strong> {reservation.pickup_location}

@@ -47,7 +47,7 @@ const DriverDashboard = () => {
       const fetchedAssignments = [
         {
           id: 1,
-          customer_name: 'Client A',
+          client_name: 'Client A',
           scheduled_time: new Date().toISOString(),
           pickup: 'Adresse A',
           dropoff: 'Adresse B',

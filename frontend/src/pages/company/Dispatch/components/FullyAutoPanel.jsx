@@ -528,7 +528,7 @@ const FullyAutoPanel = ({
                         {formatTime(dispatch.scheduled_time) || '⏱️ À définir'}
                       </td>
                       <td className={styles.clientCell}>
-                        <strong>{dispatch.customer_name || 'Client inconnu'}</strong>
+                        <strong>{dispatch.client_name || 'Client inconnu'}</strong>
                         {dispatch.booking_id && (
                           <span className={styles.bookingId}>#{dispatch.booking_id}</span>
                         )}
@@ -713,7 +713,7 @@ const FullyAutoPanel = ({
                     </span>
                   </div>
                   <div className={styles.alertContent}>
-                    <strong>{delay.customer_name || 'Client inconnu'}</strong> - Retard:{' '}
+                    <strong>{delay.client_name || 'Client inconnu'}</strong> - Retard:{' '}
                     {delay.delay_minutes || 0} min
                   </div>
                 </div>

@@ -348,7 +348,7 @@ const CompanyReservations = () => {
 
         // Recherche par nom du client
         const name = (
-          r.customer_name ||
+          r.client_name ||
           r.client?.full_name ||
           r.client?.username ||
           ''
@@ -721,12 +721,12 @@ const CompanyReservations = () => {
                       {isCancel ? (
                         <>
                           Êtes-vous sûr de vouloir <strong>annuler</strong> la réservation pour{' '}
-                          <strong>{reservationToDelete.customer_name}</strong> ?
+                          <strong>{reservationToDelete.client_name}</strong> ?
                         </>
                       ) : (
                         <>
                           Êtes-vous sûr de vouloir <strong>supprimer</strong> la réservation pour{' '}
-                          <strong>{reservationToDelete.customer_name}</strong> ?
+                          <strong>{reservationToDelete.client_name}</strong> ?
                         </>
                       )}
                     </p>

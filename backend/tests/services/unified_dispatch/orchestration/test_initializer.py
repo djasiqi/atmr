@@ -11,7 +11,7 @@ from __future__ import annotations  # noqa: I001
 import pytest
 from unittest.mock import MagicMock, patch
 
-from factories import CompanyFactory
+from tests.factories import CompanyFactory
 from services.unified_dispatch.exceptions import CompanyNotFoundError
 from services.unified_dispatch.orchestration.initializer import DispatchInitializer
 

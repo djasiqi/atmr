@@ -202,7 +202,8 @@ export interface RideEditPayload {
   dropoff_lat?: number;
   dropoff_lon?: number;
   scheduled_time?: string;
-  customer_name?: string;
+  // ✅ P1-4 Phase 3.3: Utiliser client_name au lieu de customer_name
+  client_name?: string;
   notes?: string;
   priority?: "LOW" | "NORMAL" | "HIGH";
   amount?: number;
@@ -211,7 +212,8 @@ export interface RideEditPayload {
 
 export interface RideCreatePayload {
   client_id?: string;
-  customer_name?: string;
+  // ✅ P1-4 Phase 3.3: Utiliser client_name au lieu de customer_name
+  client_name?: string;
   pickup_address: string;
   dropoff_address: string;
   pickup_lat?: number;

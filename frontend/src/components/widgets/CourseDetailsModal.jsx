@@ -52,7 +52,7 @@ const CourseDetailsModal = ({ course, onClose }) => {
         <div className="modal-body">
           <div className="flex-col gap-sm mb-lg">
             <p>
-              <strong>Client :</strong> {course.customer_name}
+              <strong>Client :</strong> {course.client_name}
             </p>
             {course.client?.birth_date && (
               <p>

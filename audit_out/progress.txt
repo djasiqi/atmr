@@ -1,0 +1,9 @@
+2026-01-06 11:49:58 - Démarrage de l'analyse
+2026-01-06 11:49:58 - Spec chargée: 223 paths
+2026-01-06 11:49:58 - Début de l'indexation
+2026-01-06 11:49:58 - Indexation frontend terminée (1735551 caractères)
+2026-01-06 11:49:58 - Indexation mobile terminée (1189347 caractères)
+2026-01-06 11:49:58 - Indexation terminée en 0.37s
+2026-01-06 11:49:58 - Début de l'analyse des endpoints
+2026-01-06 11:50:10 - 261 endpoints analysés
+2026-01-06 11:50:10 - Analyse terminée en 12.14s

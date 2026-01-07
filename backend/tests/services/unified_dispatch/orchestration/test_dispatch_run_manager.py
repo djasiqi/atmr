@@ -9,12 +9,12 @@ Tests pour :
 
 from __future__ import annotations  # noqa: I001
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 from unittest.mock import MagicMock, patch
 
-from factories import CompanyFactory
+from tests.factories import CompanyFactory
 from models import DispatchRun, DispatchStatus
 from services.unified_dispatch.orchestration.dispatch_run_manager import (
     DispatchRunManager,
@@ -46,7 +46,7 @@ class TestCreateOrReuse:
         assert error_result is None
         assert dispatch_run.company_id == company.id
         assert dispatch_run.status == DispatchStatus.RUNNING
-        assert dispatch_run.day == datetime.now(UTC).date()  # day_str converti en date
+        assert dispatch_run.day == date(2025, 1, 14)  # day_str converti en date
 
     def test_reuse_existing_dispatch_run(self, db):
         """Test : Réutilisation d'un DispatchRun existant."""
@@ -203,27 +203,23 @@ class TestCreateOrReuse:
 
         manager = DispatchRunManager()
 
-        # Mock IntegrityError lors de la création
-        # Simuler que le repository trouve un DispatchRun existant après rollback
-        with (
-            patch.object(
-                manager,
-                "_create_new_dispatch_run",
-                side_effect=Exception("Should not be called"),
-            ),
-            patch(
-                "services.unified_dispatch.orchestration.dispatch_run_manager.DispatchRunRepository"
-            ) as mock_repo,
-        ):
-            mock_repo_instance = MagicMock()
-            mock_repo.return_value = mock_repo_instance
-            # Simuler qu'un DispatchRun existe déjà
-            mock_dto = MagicMock()
-            mock_dto.id = existing_run.id
-            mock_repo_instance.find_by_company_and_day.return_value = mock_dto
+        # Tester que create_or_reuse réutilise le DispatchRun existant
+        # au lieu d'en créer un nouveau (simule la race condition)
+        dispatch_run, error_result = manager.create_or_reuse(
+            company=company,
+            company_id=company.id,
+            day_str=existing_run.day.strftime("%Y-%m-%d"),
+            mode="auto",
+            regular_first=True,
+            allow_emg=True,
+            for_date=existing_run.day.strftime("%Y-%m-%d"),
+            existing_id=None,
+        )
 
-            # Le test vérifie que track_integrity_error est appelé en cas de race condition
-            # (implémentation complète nécessiterait un mock plus complexe)
+        # Vérifier que le DispatchRun existant est réutilisé
+        assert dispatch_run is not None
+        assert error_result is None
+        assert dispatch_run.id == existing_run.id
 
 
 class TestUpdateStatus:

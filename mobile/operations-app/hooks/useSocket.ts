@@ -30,7 +30,7 @@ export const useSocket = (
       s.off("error");
       s.off("unauthorized");
 
-      s.on("connect", () => {
+      s.on("connect", async () => {
         console.log(JSON.stringify({
           event: "socket_connect",
           timestamp: new Date().toISOString()
@@ -41,6 +41,14 @@ export const useSocket = (
           reconnectTimerRef.current = null;
         }
         s.emit("join_driver_room");
+        
+        // ✅ P2-1: Resync queue GPS au reconnect
+        try {
+          const { syncLocationQueue } = await import("@/services/locationQueue");
+          await syncLocationQueue(s);
+        } catch (error) {
+          console.error("❌ [useSocket] Erreur resync queue GPS:", error);
+        }
       });
 
       s.on("disconnect", () => {

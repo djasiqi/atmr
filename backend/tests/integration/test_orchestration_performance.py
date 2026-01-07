@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from factories import BookingFactory, CompanyFactory, DriverFactory
+from tests.factories import BookingFactory, CompanyFactory, DriverFactory
 from services.unified_dispatch.orchestration.dispatch_orchestrator import (
     DispatchOrchestrator,
 )
@@ -22,15 +22,8 @@ from services.unified_dispatch.orchestration.dispatch_orchestrator import (
 class TestExecutionTime:
     """Tests de temps d'exécution."""
 
-    @patch(
-        "services.unified_dispatch.orchestration.dispatch_orchestrator.RedisLockManager"
-    )
-    @patch(
-        "services.unified_dispatch.orchestration.dispatch_orchestrator.performance_metrics"
-    )
-    def test_small_dataset_execution_time(
-        self, mock_perf_metrics, mock_lock_manager, db
-    ):
+    @patch("services.unified_dispatch.locking.RedisLockManager")
+    def test_small_dataset_execution_time(self, mock_lock_manager, db):
         """Test : Temps d'exécution avec petit dataset (10 bookings, 5 drivers)."""
         company = CompanyFactory()
         db.session.add(company)
@@ -44,7 +37,7 @@ class TestExecutionTime:
             booking.pickup_lon = 6.1 + (i * 0.01)
             booking.dropoff_lat = 46.3 + (i * 0.01)
             booking.dropoff_lon = 6.2 + (i * 0.01)
-            booking.scheduled_time = datetime.now(UTC) + timedelta(hours=1 + i)
+            booking.scheduled_time = datetime(2026, 1, 15, 12 + i, 0, 0, tzinfo=UTC)
             bookings.append(booking)
 
         # Créer 5 drivers
@@ -61,9 +54,6 @@ class TestExecutionTime:
         mock_lock_instance = MagicMock()
         mock_lock_instance.acquire_lock.return_value = True
         mock_lock_manager.return_value = mock_lock_instance
-
-        mock_perf_collector = MagicMock()
-        mock_perf_metrics.DispatchMetricsCollector.return_value = mock_perf_collector
 
         orchestrator = DispatchOrchestrator()
 
@@ -83,15 +73,8 @@ class TestExecutionTime:
             f"Temps d'exécution trop long: {execution_time:.2f}s"
         )
 
-    @patch(
-        "services.unified_dispatch.orchestration.dispatch_orchestrator.RedisLockManager"
-    )
-    @patch(
-        "services.unified_dispatch.orchestration.dispatch_orchestrator.performance_metrics"
-    )
-    def test_medium_dataset_execution_time(
-        self, mock_perf_metrics, mock_lock_manager, db
-    ):
+    @patch("services.unified_dispatch.locking.RedisLockManager")
+    def test_medium_dataset_execution_time(self, mock_lock_manager, db):
         """Test : Temps d'exécution avec dataset moyen (100 bookings, 20 drivers)."""
         company = CompanyFactory()
         db.session.add(company)
@@ -105,7 +88,9 @@ class TestExecutionTime:
             booking.pickup_lon = 6.1 + ((i % 10) * 0.01)
             booking.dropoff_lat = 46.3 + ((i % 10) * 0.01)
             booking.dropoff_lon = 6.2 + ((i % 10) * 0.01)
-            booking.scheduled_time = datetime.now(UTC) + timedelta(hours=1 + (i // 10))
+            booking.scheduled_time = datetime(
+                2026, 1, 15, 12 + (i // 10), 0, 0, tzinfo=UTC
+            )
             bookings.append(booking)
 
         # Créer 20 drivers
@@ -122,9 +107,6 @@ class TestExecutionTime:
         mock_lock_instance = MagicMock()
         mock_lock_instance.acquire_lock.return_value = True
         mock_lock_manager.return_value = mock_lock_instance
-
-        mock_perf_collector = MagicMock()
-        mock_perf_metrics.DispatchMetricsCollector.return_value = mock_perf_collector
 
         orchestrator = DispatchOrchestrator()
 
@@ -145,15 +127,8 @@ class TestExecutionTime:
         )
 
     @pytest.mark.slow
-    @patch(
-        "services.unified_dispatch.orchestration.dispatch_orchestrator.RedisLockManager"
-    )
-    @patch(
-        "services.unified_dispatch.orchestration.dispatch_orchestrator.performance_metrics"
-    )
-    def test_large_dataset_execution_time(
-        self, mock_perf_metrics, mock_lock_manager, db
-    ):
+    @patch("services.unified_dispatch.locking.RedisLockManager")
+    def test_large_dataset_execution_time(self, mock_lock_manager, db):
         """Test : Temps d'exécution avec grand dataset (1000 bookings, 50 drivers).
 
         Marqué comme slow car peut prendre du temps.
@@ -170,7 +145,9 @@ class TestExecutionTime:
             booking.pickup_lon = 6.1 + ((i % 20) * 0.01)
             booking.dropoff_lat = 46.3 + ((i % 20) * 0.01)
             booking.dropoff_lon = 6.2 + ((i % 20) * 0.01)
-            booking.scheduled_time = datetime.now(UTC) + timedelta(hours=1 + (i // 50))
+            booking.scheduled_time = datetime(
+                2026, 1, 15, 12 + ((i // 50) % 12), 0, 0, tzinfo=UTC
+            )
             bookings.append(booking)
 
         # Créer 50 drivers
@@ -187,9 +164,6 @@ class TestExecutionTime:
         mock_lock_instance = MagicMock()
         mock_lock_instance.acquire_lock.return_value = True
         mock_lock_manager.return_value = mock_lock_instance
-
-        mock_perf_collector = MagicMock()
-        mock_perf_metrics.DispatchMetricsCollector.return_value = mock_perf_collector
 
         orchestrator = DispatchOrchestrator()
 
@@ -213,13 +187,8 @@ class TestExecutionTime:
 class TestMemoryUsage:
     """Tests d'utilisation mémoire."""
 
-    @patch(
-        "services.unified_dispatch.orchestration.dispatch_orchestrator.RedisLockManager"
-    )
-    @patch(
-        "services.unified_dispatch.orchestration.dispatch_orchestrator.performance_metrics"
-    )
-    def test_memory_usage_small_dataset(self, mock_perf_metrics, mock_lock_manager, db):
+    @patch("services.unified_dispatch.locking.RedisLockManager")
+    def test_memory_usage_small_dataset(self, mock_lock_manager, db):
         """Test : Utilisation mémoire avec petit dataset."""
         try:
             import tracemalloc
@@ -233,9 +202,6 @@ class TestMemoryUsage:
         mock_lock_instance = MagicMock()
         mock_lock_instance.acquire_lock.return_value = True
         mock_lock_manager.return_value = mock_lock_instance
-
-        mock_perf_collector = MagicMock()
-        mock_perf_metrics.DispatchMetricsCollector.return_value = mock_perf_collector
 
         orchestrator = DispatchOrchestrator()
 
@@ -263,13 +229,8 @@ class TestMemoryUsage:
 class TestPerformanceRegression:
     """Tests de régression de performance."""
 
-    @patch(
-        "services.unified_dispatch.orchestration.dispatch_orchestrator.RedisLockManager"
-    )
-    @patch(
-        "services.unified_dispatch.orchestration.dispatch_orchestrator.performance_metrics"
-    )
-    def test_no_performance_regression(self, mock_perf_metrics, mock_lock_manager, db):
+    @patch("services.unified_dispatch.locking.RedisLockManager")
+    def test_no_performance_regression(self, mock_lock_manager, db):
         """Test : Pas de régression de performance significative."""
         company = CompanyFactory()
         db.session.add(company)
@@ -278,9 +239,6 @@ class TestPerformanceRegression:
         mock_lock_instance = MagicMock()
         mock_lock_instance.acquire_lock.return_value = True
         mock_lock_manager.return_value = mock_lock_instance
-
-        mock_perf_collector = MagicMock()
-        mock_perf_metrics.DispatchMetricsCollector.return_value = mock_perf_collector
 
         orchestrator = DispatchOrchestrator()
 

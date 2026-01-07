@@ -433,6 +433,27 @@ def create_app(config_name: str | None = None):
     except Exception as e:
         app.logger.warning("[Centralized Logging] Échec initialisation: %s", e)
 
+    # ✅ P0 Stabilization: Setup trace_id middleware
+    try:
+        from middleware.trace_id import (
+            add_trace_id_to_response,
+            inject_trace_id_middleware,
+        )
+
+        @app.before_request
+        def inject_trace_id():  # pyright: ignore
+            """Injecte trace_id avant chaque requête."""
+            inject_trace_id_middleware()
+
+        @app.after_request
+        def add_trace_id_header(response):  # pyright: ignore
+            """Ajoute trace_id dans les headers de réponse."""
+            return add_trace_id_to_response(response)
+
+        app.logger.info("[P0] Trace ID middleware activé")
+    except Exception as e:
+        app.logger.warning("[P0] Échec initialisation trace_id middleware: %s", e)
+
     # Prometheus middleware pour métriques HTTP (latence p50/p95/p99)
     try:
         from middleware.metrics import prom_middleware
@@ -1658,6 +1679,11 @@ def create_app(config_name: str | None = None):
             app.register_blueprint(healthcheck_bp, url_prefix="/api/v1")
             app.register_blueprint(feature_flags_bp)
             app.register_blueprint(ml_monitoring_bp)
+
+            # ✅ Tâche 1: Enregistrer Swagger UI pour visualiser la spec OpenAPI
+            from routes.swagger_ui import swagger_ui_bp
+
+            app.register_blueprint(swagger_ui_bp)
 
             # ✅ Enregistrer les routes d'alertes proactives
             register_proactive_alerts_routes(app)

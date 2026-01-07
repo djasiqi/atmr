@@ -450,9 +450,7 @@ class PDFService:
             if institution and institution.is_institution:
                 billed_to_name = institution.institution_name or "Institution"
                 billed_to_address_raw = (
-                    institution.billing_address
-                    or institution.contact_address
-                    or "Adresse non renseignée"
+                    institution.billing_address or "Adresse non renseignée"
                 )
                 billed_to_address = _format_address_for_display(billed_to_address_raw)
             else:
@@ -1345,9 +1343,7 @@ class PDFService:
             if institution and institution.is_institution:
                 billed_to_name = institution.institution_name or "Institution"
                 billed_to_address = (
-                    institution.billing_address
-                    or institution.contact_address
-                    or "Adresse non renseignée"
+                    institution.billing_address or "Adresse non renseignée"
                 )
             else:
                 billed_to_name = "Institution"
@@ -2204,9 +2200,18 @@ class PDFService:
             company_id=invoice.company_id
         ).first()
 
+        # ✅ FIX: Utiliser getattr pour rétro-compatibilité et éviter AttributeError
+        # Supporte à la fois reminder1template (ancien) et reminder1_template (nouveau)
         if level == LEVEL_ONE:
-            if billing_settings and billing_settings.reminder1template:
-                message = billing_settings.reminder1template
+            template = None
+            if billing_settings:
+                # Essayer d'abord le nouveau nom (avec underscore)
+                template = getattr(billing_settings, "reminder1_template", None)
+                # Fallback vers l'ancien nom (sans underscore) pour rétro-compatibilité
+                if not template:
+                    template = getattr(billing_settings, "reminder1template", None)
+            if template:
+                message = template
             else:
                 message = (
                     f"Nous vous rappelons que votre facture "
@@ -2214,8 +2219,15 @@ class PDFService:
                     f"{invoice.balance_due:.2f}"
                 )
         elif level == LEVEL_THRESHOLD:
-            if billing_settings and billing_settings.reminder2template:
-                message = billing_settings.reminder2template
+            template = None
+            if billing_settings:
+                # Essayer d'abord le nouveau nom (avec underscore)
+                template = getattr(billing_settings, "reminder2_template", None)
+                # Fallback vers l'ancien nom (sans underscore) pour rétro-compatibilité
+                if not template:
+                    template = getattr(billing_settings, "reminder2template", None)
+            if template:
+                message = template
             else:
                 message = (
                     f"Conformément à nos CG, un montant de CHF 40.- a été ajouté "
@@ -2223,15 +2235,24 @@ class PDFService:
                     f"À défaut de règlement dans ce délai, une procédure de mise "
                     f"en demeure sera engagée."
                 )
-        elif billing_settings and billing_settings.reminder3template:
-            message = billing_settings.reminder3template
         else:
-            message = (
-                "Dernier rappel : Merci d'effectuer votre règlement net sous 5 jours. "
-                "En l'absence de paiement, une mise en demeure sera engagée, "
-                "entraînant des frais supplémentaires et une éventuelle "
-                "procédure légale."
-            )
+            # LEVEL_THREE ou autre
+            template = None
+            if billing_settings:
+                # Essayer d'abord le nouveau nom (avec underscore)
+                template = getattr(billing_settings, "reminder3_template", None)
+                # Fallback vers l'ancien nom (sans underscore) pour rétro-compatibilité
+                if not template:
+                    template = getattr(billing_settings, "reminder3template", None)
+            if template:
+                message = template
+            else:
+                message = (
+                    "Dernier rappel : Merci d'effectuer votre règlement net sous 5 jours. "
+                    "En l'absence de paiement, une mise en demeure sera engagée, "
+                    "entraînant des frais supplémentaires et une éventuelle "
+                    "procédure légale."
+                )
 
         story.append(Paragraph(message, styles["Normal"]))
         story.append(Spacer(1, 20))

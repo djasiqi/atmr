@@ -11,6 +11,7 @@ def test_booking_repository_to_dto_converts_model_fields() -> None:
     fake_model = SimpleNamespace(
         id=1,
         company_id=2,
+        executing_company_id=2,
         client_id=3,
         user_id=4,
         driver_id=5,

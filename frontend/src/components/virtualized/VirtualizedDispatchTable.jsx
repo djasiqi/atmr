@@ -640,7 +640,7 @@ const VirtualizedDispatchTable = ({
             {booking.id}
           </div>
           <div style={{ display: 'table-cell', padding: 'var(--spacing-sm) var(--spacing-md)', verticalAlign: 'middle' }}>
-            {booking.customer_name || booking.client?.full_name || '—'}
+            {booking.client_name || booking.client?.full_name || '—'}
           </div>
           <div style={{ display: 'table-cell', padding: 'var(--spacing-sm) var(--spacing-md)', verticalAlign: 'middle' }}>
             {renderBookingDateTime(booking)}
@@ -889,7 +889,7 @@ const VirtualizedDispatchTable = ({
                 <strong>Course #{selectedBooking.id}</strong>
                 <div>
                   Client :{' '}
-                  {selectedBooking.customer_name || selectedBooking.client?.full_name || '—'}
+                  {selectedBooking.client_name || selectedBooking.client?.full_name || '—'}
                 </div>
                 <div>Pickup : {selectedBooking.pickup_location || '—'}</div>
                 <div>Dropoff : {selectedBooking.dropoff_location || '—'}</div>
@@ -969,7 +969,7 @@ VirtualizedDispatchTable.propTypes = {
     PropTypes.arrayOf(
       PropTypes.shape({
         id: PropTypes.number.isRequired,
-        customer_name: PropTypes.string,
+        client_name: PropTypes.string,
         client: PropTypes.shape({ full_name: PropTypes.string }),
         scheduled_time: PropTypes.string,
         pickup_location: PropTypes.string,

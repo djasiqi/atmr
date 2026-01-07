@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { EnterpriseCard } from "../cards/EnterpriseCard";
 import { RideSummary } from "@/types/enterpriseDispatch";
 import dayjs from "dayjs";
+import { isCompletedStatus } from "@/utils/bookingStatus";
 
 // ✅ Couleurs de statut alignées avec le dashboard et RideSnippetCard
 const statusColors = {
@@ -112,8 +113,8 @@ export const RideCardEnhanced: React.FC<RideCardEnhancedProps> = ({
         })()
         : null;
 
-    // ✅ Ne pas calculer le retard pour les courses terminées
-    const isCompleted = ride.status === "completed" || ride.status === "return_completed";
+    // ✅ P0-1: Ne pas calculer le retard pour les courses terminées
+    const isCompleted = isCompletedStatus(ride.status);
 
     const delayMinutes =
         !isCompleted && ride.time.pickup_at && ride.driver?.name

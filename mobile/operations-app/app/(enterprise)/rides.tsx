@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -11,7 +11,10 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  AppState,
 } from "react-native";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useFocusEffect } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import dayjs from "dayjs";
@@ -72,6 +75,7 @@ const palette = {
 export default function EnterpriseRidesScreen() {
   const { enterpriseSession } = useAuth();
   const { selectedDate } = useEnterpriseContext();
+  const tabBarHeight = useBottomTabBarHeight();
 
   const [rides, setRides] = useState<RideSummary[]>([]);
   const [loading, setLoading] = useState(false);
@@ -154,9 +158,89 @@ export default function EnterpriseRidesScreen() {
     }
   }, [currentDate, enterpriseSession, search]);
 
+  // Référence pour le polling automatique
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const appStateRef = useRef(AppState.currentState);
+
+  // Charger les courses au montage et quand la date change
   useEffect(() => {
     loadRides();
   }, [loadRides]);
+
+  // Polling automatique : récupérer les courses toutes les 30 secondes quand l'app est active
+  useEffect(() => {
+    if (!enterpriseSession) {
+      // Nettoyer le polling si pas de session
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      return;
+    }
+
+    // Fonction pour démarrer le polling
+    const startPolling = () => {
+      // Nettoyer l'intervalle existant si présent
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+
+      // Démarrer le polling toutes les 30 secondes
+      pollingIntervalRef.current = setInterval(() => {
+        const currentAppState = AppState.currentState;
+        // Seulement charger si l'app est active
+        if (currentAppState === "active") {
+          console.log("[rides.tsx] Polling automatique : rechargement des courses");
+          loadRides();
+        }
+      }, 30000); // 30 secondes
+    };
+
+    // Démarrer le polling si l'app est active
+    if (appStateRef.current === "active") {
+      startPolling();
+    }
+
+    // Écouter les changements d'état de l'application
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (
+        appStateRef.current.match(/inactive|background/) &&
+        nextAppState === "active"
+      ) {
+        // L'app revient au premier plan : recharger immédiatement et redémarrer le polling
+        console.log("[rides.tsx] Application revenue au premier plan : rechargement des courses");
+        loadRides();
+        startPolling();
+      } else if (nextAppState.match(/inactive|background/)) {
+        // L'app passe en arrière-plan : arrêter le polling
+        console.log("[rides.tsx] Application en arrière-plan : arrêt du polling");
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+      }
+      appStateRef.current = nextAppState;
+    });
+
+    // Cleanup
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      subscription.remove();
+    };
+  }, [enterpriseSession, loadRides]);
+
+  // Recharger les courses quand l'écran revient au focus
+  useFocusEffect(
+    useCallback(() => {
+      if (enterpriseSession) {
+        console.log("[rides.tsx] Écran au focus : rechargement des courses");
+        loadRides();
+      }
+    }, [enterpriseSession, loadRides])
+  );
 
 
   // ✅ Utiliser le hook partagé pour les actions sur les courses
@@ -284,7 +368,7 @@ export default function EnterpriseRidesScreen() {
     <View style={styles.container}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: Math.max(32, tabBarHeight + 40) }]}
         refreshControl={
           <RefreshControl refreshing={loading} onRefresh={loadRides} />
         }
@@ -378,7 +462,9 @@ export default function EnterpriseRidesScreen() {
 
               // ✅ Calcul du retard : uniquement si la course est assignée, l'heure prévue est passée, ET la course n'est pas terminée
               let delayMinutes: number | null = null;
-              const isCompleted = normalizedStatus === "completed" || normalizedStatus === "return_completed";
+              // ✅ P0-1: Utiliser la fonction de normalisation
+              const { isCompletedStatus } = require("@/utils/bookingStatus");
+              const isCompleted = isCompletedStatus(ride.status);
               if (!isCompleted && ride.driver?.name && ride.time.pickup_at) {
                 const scheduledTime = dayjs(ride.time.pickup_at);
                 const now = dayjs();

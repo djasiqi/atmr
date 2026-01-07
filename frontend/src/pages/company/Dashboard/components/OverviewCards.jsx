@@ -140,9 +140,6 @@ const OverviewCards = ({
               <div className={styles.cardContent}>
                 <h3>Qualité dispatch</h3>
                 <p>{Math.round(qualityMetrics.quality_score)}%</p>
-                {qualityMetrics.assignment_rate !== undefined && (
-                  <small>Taux assignation: {Math.round(qualityMetrics.assignment_rate)}%</small>
-                )}
               </div>
             </div>
           )}

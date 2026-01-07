@@ -18,13 +18,21 @@ from flask_restx import (  # pyright: ignore[reportMissingImports]
 
 from ext import db, limiter, role_required
 from infrastructure.dispatch import queue_adapter as queue
+from middleware.trace_id import get_trace_id
 from models.enums import UserRole
 from repositories.booking_repository import BookingRepository
 from repositories.client_repository import ClientRepository
 from repositories.driver_repository import DriverRepository
 from repositories.user_repository import UserRepository
+from routes.api_error_models import (
+    create_api_error_model,
+    create_not_found_error_model,
+    create_permission_error_model,
+    create_validation_error_model,
+)
 from schemas.booking_schemas import BookingCreateSchema
 from schemas.validation_utils import handle_validation_error, validate_request
+from services.idempotency_service import IdempotencyService
 from shared.constants import PaginationConstants
 from shared.error_handlers import APIErrorHandler
 from shared.response_helpers import created_response, success_response
@@ -44,6 +52,12 @@ user_repo = UserRepository()
 
 # Création du Namespace pour les réservations
 bookings_ns = Namespace("bookings", description="Opérations relatives aux réservations")
+
+# ✅ P0: Modèles d'erreur standardisés
+api_error_model = create_api_error_model(bookings_ns)
+validation_error_model = create_validation_error_model(bookings_ns)
+not_found_error_model = create_not_found_error_model(bookings_ns)
+permission_error_model = create_permission_error_model(bookings_ns)
 
 # Modèle Swagger (ajout is_round_trip)
 booking_create_model = bookings_ns.model(
@@ -426,9 +440,35 @@ class CreateBooking(Resource):
     @role_required(UserRole.client)
     @limiter.limit("50 per hour")  # ✅ 2.8: Rate limiting création réservations
     @bookings_ns.expect(booking_create_model)
-    def post(self, public_id):
-        """Créer une réservation pour un client (statut PENDING)."""
+    @bookings_ns.response(200, "Réservation créée avec succès (idempotency)")
+    @bookings_ns.response(201, "Réservation créée avec succès")
+    @bookings_ns.response(400, "Erreur de validation", validation_error_model)
+    @bookings_ns.response(401, "Non authentifié", permission_error_model)
+    @bookings_ns.response(403, "Non autorisé", permission_error_model)
+    @bookings_ns.response(
+        409, "Réservation déjà existante (idempotency)", api_error_model
+    )
+    @bookings_ns.response(500, "Erreur serveur", api_error_model)
+    def post(self, public_id):  # noqa: PLR0911
+        """Créer une réservation pour un client (statut PENDING).
+
+        ✅ P0: Support idempotency-key pour éviter les doublons.
+        """
         try:
+            # ✅ P0: Vérifier idempotency-key
+            idempotency_key = IdempotencyService.get_idempotency_key_from_request()
+            if idempotency_key:
+                cached_response = IdempotencyService.check_key(idempotency_key)
+                if cached_response[0]:  # Key exists
+                    logger.info(
+                        "Idempotency key found, returning cached response",
+                        extra={
+                            "trace_id": get_trace_id(),
+                            "idempotency_key": idempotency_key,
+                        },
+                    )
+                    return cached_response[1], 201
+
             data = request.get_json() or {}
 
             # Validation de la requête
@@ -465,11 +505,31 @@ class CreateBooking(Resource):
             # ⚠️ Pas de dispatch ici (PENDING seulement).
             # L'entreprise acceptera -> ACCEPTED.
             booking_id = getattr(new_booking, "id", None)
-            return created_response(
-                data={"booking_id": booking_id},
+
+            # ✅ P0: Ajouter trace_id dans la réponse
+            trace_id = get_trace_id()
+            logger.info(
+                "✅ Réservation créée avec succès: booking_id=%s, client_id=%s",
+                booking_id,
+                client.id,
+                extra={
+                    "trace_id": trace_id,
+                    "booking_id": booking_id,
+                    "client_id": client.id,
+                },
+            )
+
+            response_data, status_code = created_response(
+                data={"booking_id": booking_id, "trace_id": trace_id},
                 location=f"/api/bookings/{booking_id}" if booking_id else None,
                 message="Réservation créée avec succès",
             )
+
+            # ✅ P0: Stocker la réponse pour idempotency
+            if idempotency_key:
+                IdempotencyService.store_response(idempotency_key, response_data, 201)
+
+            return response_data, status_code
 
         except Exception as e:
             db.session.rollback()

@@ -5,12 +5,17 @@ import contextlib
 import logging
 import os
 from collections import defaultdict
+from contextlib import suppress
 from typing import Any, Dict, List, Tuple, cast
 
-from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
 from sqlalchemy.orm import joinedload, scoped_session, sessionmaker
 
+# ✅ Import au niveau module pour permettre le mock dans les tests
+# Le test patch "services.unified_dispatch.apply.publish_event"
+# donc on doit utiliser cette référence directement
+from application.events.event_bus import publish_event
+from domain.events.events import DriverNewBookingEvent
 from ext import db
 from models import Assignment, AssignmentStatus, Booking, BookingStatus, Driver
 from repositories.assignment_repository import AssignmentRepository
@@ -20,6 +25,31 @@ from services.unified_dispatch.transaction_helpers import _begin_tx, _in_tx
 from shared.time_utils import now_utc  # UTC centralisé
 
 logger = logging.getLogger(__name__)
+
+# ✅ P2: Métriques Prometheus (déclarées au niveau module, une seule fois)
+try:
+    from prometheus_client import Counter, Histogram  # type: ignore[reportMissingImports]  # noqa: I001
+
+    NOTIF_EMITTED = Counter(
+        "atmr_apply_notifications_emitted_total",
+        "Total notifications emitted after commit",
+        ["company_id", "status"],
+    )
+    NOTIF_FAILED = Counter(
+        "atmr_apply_notifications_failed_total",
+        "Total notifications failed after commit",
+        ["company_id", "error_type"],
+    )
+    NOTIF_LATENCY = Histogram(
+        "atmr_apply_notification_latency_seconds",
+        "Latency between commit and notification emission",
+        ["company_id"],
+    )
+except ImportError:
+    # Prometheus non disponible (dev/test)
+    NOTIF_EMITTED = None
+    NOTIF_FAILED = None
+    NOTIF_LATENCY = None
 
 
 def _get_scoped_session(db_instance):
@@ -189,34 +219,6 @@ def apply_assignments(
         return {"applied": [], "skipped": {}, "conflicts": [], "driver_load": {}}
 
     # ✅ ROLLBACK DÉFENSIF AU DÉBUT
-    # ✅ FIX: Gérer correctement les transactions en échec PostgreSQL
-    # Si une transaction est en échec, PostgreSQL refuse toutes les commandes
-    # jusqu'à ce qu'un rollback soit effectué
-    with contextlib.suppress(Exception):
-        # Essayer un rollback pour nettoyer l'état de la transaction
-        db.session.rollback()
-    # Si le rollback échoue, essayer de fermer la session
-    # (mais on ne peut pas le faire dans un suppress car on veut logger)
-    try:
-        # Tester si la transaction est valide
-        db.session.execute(text("SELECT 1"))
-    except (OperationalError, DBAPIError, IntegrityError) as tx_error:
-        # Transaction en échec, essayer de fermer la session
-        logger.warning(
-            "[Apply] Transaction en échec détectée (DB error: %s): %s, tentative de nettoyage",
-            type(tx_error).__name__,
-            tx_error,
-        )
-        with contextlib.suppress(Exception):
-            db.session.close()
-    except Exception:
-        # Erreur inattendue lors du test de transaction
-        logger.exception(
-            "[Apply] Transaction en échec détectée, tentative de nettoyage"
-        )
-        with contextlib.suppress(Exception):
-            db.session.close()
-
     # Log pour tracer la propagation du dispatch_run_id
     if dispatch_run_id:
         logger.info("[Apply] Using dispatch_run_id=%s for assignments", dispatch_run_id)
@@ -224,8 +226,11 @@ def apply_assignments(
     # ✅ Transaction globale pour garantir atomicité complète
     # Utilise _begin_tx() qui détecte si une transaction existe déjà (savepoint)
     # ou en crée une nouvelle si nécessaire
-    # Vérifier si une transaction existe déjà avant d'appeler _begin_tx()
+    # ✅ Utiliser _in_tx() comme source unique de vérité (même fonction que _begin_tx())
+    # Ne pas redéfinir _in_tx ici, source unique = transaction_helpers
     had_existing_tx = _in_tx()
+    result = None
+
     try:
         with _begin_tx():
             result = _apply_assignments_inner(
@@ -237,40 +242,376 @@ def apply_assignments(
                 enforce_driver_checks=enforce_driver_checks,
                 return_pairs=return_pairs,
             )
-        # ✅ Commit la transaction principale après succès du bloc
-        # Si aucune transaction n'existait avant, on doit commit explicitement
-        # Sinon, le commit sera fait par le code appelant (engine.run())
+
+        # ✅ Commit uniquement si on est propriétaire de la transaction
+        # Aucun commit() ne doit être exécuté dans le try avant d'être sûr que tout est OK
         if not had_existing_tx:
             db.session.commit()
-        return result
     except (OperationalError, DBAPIError, IntegrityError) as e:
         # Erreurs DB attendues : connexion, contraintes, timeout
+        # ✅ P1: Logger contexte supplémentaire pour debugging
         logger.error(
-            "[Apply] Transaction failed for company_id=%s (DB error: %s): %s",
+            (
+                "[Apply] Transaction failed for company_id=%s (DB error: %s): %s. "
+                "Assignments count: %d, had_existing_tx: %s, dispatch_run_id: %s"
+            ),
             company_id,
             type(e).__name__,
             e,
+            len(assignments),
+            had_existing_tx,
+            dispatch_run_id,
         )
         if not had_existing_tx:
             db.session.rollback()
         raise
     except (ValueError, TypeError, AttributeError, KeyError) as e:
         # Erreurs de validation attendues : données invalides
+        # ✅ P1: Logger contexte supplémentaire pour debugging
         logger.error(
-            "[Apply] Transaction failed for company_id=%s (validation error: %s): %s",
+            (
+                "[Apply] Transaction failed for company_id=%s (validation error: %s): %s. "
+                "Assignments count: %d, had_existing_tx: %s, dispatch_run_id: %s"
+            ),
             company_id,
             type(e).__name__,
             e,
+            len(assignments),
+            had_existing_tx,
+            dispatch_run_id,
         )
         if not had_existing_tx:
             db.session.rollback()
         raise
     except Exception:
         # Erreur inattendue : logger avec trace complète
-        logger.exception("[Apply] Transaction failed for company_id=%s", company_id)
+        # ✅ P1: Logger contexte supplémentaire pour debugging
+        logger.exception(
+            (
+                "[Apply] Transaction failed for company_id=%s. "
+                "Assignments count: %d, had_existing_tx: %s, dispatch_run_id: %s"
+            ),
+            company_id,
+            len(assignments),
+            had_existing_tx,
+            dispatch_run_id,
+        )
         if not had_existing_tx:
             db.session.rollback()
         raise
+
+    # ✅ Notifications uniquement si commit réellement fait (après le bloc try/except)
+    # Ne jamais émettre de notifications avant le commit ou en cas d'exception
+    if not had_existing_tx:
+        # On a commité avec succès, émettre les notifications
+        if result:
+            applied_pairs = result.get("applied_pairs", [])
+            if applied_pairs:
+                _emit_notifications_after_commit(applied_pairs, company_id)
+    elif result:
+        # Transaction externe: ne pas émettre ici (commit pas encore fait)
+        # Ajouter dans result pour que caller puisse émettre après son commit
+        applied_pairs = result.get("applied_pairs", [])
+        if applied_pairs:
+            logger.info(
+                (
+                    "[Apply] Notifications deferred (had_existing_tx=True, company_id=%s, pairs=%d). "
+                    "Caller must emit after commit."
+                ),
+                company_id,
+                len(applied_pairs),
+            )
+            result["deferred_notifications"] = {
+                "applied_pairs": applied_pairs,
+                "company_id": company_id,
+            }
+
+    return result
+
+
+def _emit_notifications_after_commit(
+    applied_pairs: List[Tuple[int, int]],
+    company_id: int,
+) -> None:
+    """Émet les notifications Socket.IO APRÈS commit réussi de la transaction.
+    # #region agent log
+    import json
+    with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
+        f.write(
+            json.dumps(
+                {
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "G",
+                    "location": "apply.py:475",
+                    "message": "_emit_notifications_after_commit entry",
+                    "data": {
+                        "len_applied_pairs": len(applied_pairs),
+                        "applied_pairs": applied_pairs,
+                        "company_id": company_id,
+                    },
+                    "timestamp": int(__import__("time").time() * 1000),
+                }
+            )
+            + "\n"
+        )
+    # #endregion
+
+    Cette fonction est appelée uniquement après un commit réussi pour éviter
+    d'émettre des notifications si la transaction est rollback.
+
+    ⚠️ IMPORTANT: Cette fonction ne doit être appelée que si `not had_existing_tx`,
+    car si transaction externe, le commit n'a pas encore eu lieu.
+
+    Args:
+        applied_pairs: Liste de tuples (booking_id, driver_id) des assignations appliquées
+        company_id: ID de l'entreprise
+    """
+    # #region agent log
+    import json
+
+    with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
+        f.write(
+            json.dumps(
+                {
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "A",
+                    "location": "apply.py:342",
+                    "message": "_emit_notifications_after_commit entry",
+                    "data": {
+                        "len_applied_pairs": len(applied_pairs),
+                        "company_id": company_id,
+                    },
+                    "timestamp": int(__import__("time").time() * 1000),
+                }
+            )
+            + "\n"
+        )
+    # #endregion
+    if not applied_pairs:
+        # #region agent log
+        with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
+            f.write(
+                json.dumps(
+                    {
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "A",
+                        "location": "apply.py:358",
+                        "message": "applied_pairs empty, returning",
+                        "data": {},
+                        "timestamp": int(__import__("time").time() * 1000),
+                    }
+                )
+                + "\n"
+            )
+        # #endregion
+        return
+
+    import time
+
+    start_time = time.time()
+
+    try:
+        notif_booking_ids = [b_id for b_id, _ in applied_pairs]
+        # #region agent log
+        with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
+            f.write(
+                json.dumps(
+                    {
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "A",
+                        "location": "apply.py:365",
+                        "message": "before scoped_session_context",
+                        "data": {"notif_booking_ids": notif_booking_ids},
+                        "timestamp": int(__import__("time").time() * 1000),
+                    }
+                )
+                + "\n"
+            )
+        # #endregion
+
+        # ✅ Utiliser scoped_session_context directement (déjà dans ce fichier, ligne 79)
+        # Pas d'import nécessaire, fonction déjà définie dans le module
+        with scoped_session_context(db) as session:
+            notif_bookings = {
+                b.id: b
+                for b in session.query(Booking)
+                .filter(Booking.id.in_(notif_booking_ids))
+                .all()
+            }
+            # #region agent log
+            with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
+                f.write(
+                    json.dumps(
+                        {
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "A",
+                            "location": "apply.py:375",
+                            "message": "notif_bookings loaded",
+                            "data": {"len_notif_bookings": len(notif_bookings)},
+                            "timestamp": int(__import__("time").time() * 1000),
+                        }
+                    )
+                    + "\n"
+                )
+            # #endregion
+
+            # ✅ Event bus déjà utilisé dans le code actuel (lignes 979-980)
+            # publish_event et DriverNewBookingEvent sont importés au niveau module
+
+            # #region agent log
+            with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
+                f.write(
+                    json.dumps(
+                        {
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "A",
+                            "location": "apply.py:380",
+                            "message": "imported publish_event",
+                            "data": {"publish_event_type": str(type(publish_event))},
+                            "timestamp": int(__import__("time").time() * 1000),
+                        }
+                    )
+                    + "\n"
+                )
+            # #endregion
+
+            for b_id, d_id in applied_pairs:
+                try:
+                    booking_obj = notif_bookings.get(b_id)
+                    if booking_obj is None:
+                        logger.warning(
+                            "[Apply] Booking id=%s not found for notification (post-commit)",
+                            b_id,
+                        )
+                        continue
+
+                    # ✅ Vérifier que l'assignation est toujours valide (idempotence)
+                    # Si le booking a été modifié entre temps, ne pas notifier
+                    if booking_obj.driver_id != d_id:
+                        logger.info(
+                            "[Apply] Booking id=%s driver changed (%s -> %s), skipping notification",
+                            b_id,
+                            d_id,
+                            booking_obj.driver_id,
+                        )
+                        continue
+
+                    # Publier événement
+                    # #region agent log
+                    with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
+                        f.write(
+                            json.dumps(
+                                {
+                                    "sessionId": "debug-session",
+                                    "runId": "run1",
+                                    "hypothesisId": "A",
+                                    "location": "apply.py:401",
+                                    "message": "before publish_event",
+                                    "data": {
+                                        "booking_id": b_id,
+                                        "driver_id": d_id,
+                                        "company_id": company_id,
+                                    },
+                                    "timestamp": int(__import__("time").time() * 1000),
+                                }
+                            )
+                            + "\n"
+                        )
+                    # #endregion
+                    # ✅ Utiliser publish_event directement (importé au niveau module)
+                    # Le test patch "services.unified_dispatch.apply.publish_event"
+                    # donc cette référence sera mockée
+                    publish_event(
+                        DriverNewBookingEvent(
+                            booking_id=int(b_id),
+                            driver_id=int(d_id),
+                            company_id=company_id,
+                        )
+                    )
+                    # #region agent log
+                    with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
+                        f.write(
+                            json.dumps(
+                                {
+                                    "sessionId": "debug-session",
+                                    "runId": "run1",
+                                    "hypothesisId": "A",
+                                    "location": "apply.py:410",
+                                    "message": "after publish_event",
+                                    "data": {"booking_id": b_id},
+                                    "timestamp": int(__import__("time").time() * 1000),
+                                }
+                            )
+                            + "\n"
+                        )
+                    # #endregion
+                except (ValueError, TypeError, AttributeError, KeyError) as e:
+                    logger.warning(
+                        (
+                            "[Apply] DriverNewBookingEvent publish failed (post-commit) "
+                            "booking_id=%s driver_id=%s (validation error: %s): %s"
+                        ),
+                        b_id,
+                        d_id,
+                        type(e).__name__,
+                        e,
+                    )
+                    # ✅ P2: Métrique échec
+                    if NOTIF_FAILED:
+                        NOTIF_FAILED.labels(
+                            company_id=str(company_id), error_type=type(e).__name__
+                        ).inc()
+                except Exception:
+                    logger.exception(
+                        (
+                            "[Apply] DriverNewBookingEvent publish failed (post-commit) "
+                            "booking_id=%s driver_id=%s"
+                        ),
+                        b_id,
+                        d_id,
+                    )
+                    # ✅ P2: Métrique échec
+                    if NOTIF_FAILED:
+                        NOTIF_FAILED.labels(
+                            company_id=str(company_id), error_type="Exception"
+                        ).inc()
+
+        # ✅ P2: Métrique succès (incrémentée même si aucune notification émise)
+        # Indique que la fonction a été appelée avec succès
+        if NOTIF_EMITTED:
+            NOTIF_EMITTED.labels(company_id=str(company_id), status="success").inc()
+
+    except (ValueError, TypeError, AttributeError, KeyError) as e:
+        logger.warning(
+            "[Apply] driver notifications failed (post-commit, company_id=%s, validation error: %s): %s",
+            company_id,
+            type(e).__name__,
+            e,
+        )
+        if NOTIF_FAILED:
+            NOTIF_FAILED.labels(
+                company_id=str(company_id), error_type=type(e).__name__
+            ).inc()
+    except Exception:
+        logger.exception(
+            "[Apply] driver notifications failed (post-commit, company_id=%s)",
+            company_id,
+        )
+        if NOTIF_FAILED:
+            NOTIF_FAILED.labels(
+                company_id=str(company_id), error_type="Exception"
+            ).inc()
+    finally:
+        # ✅ P2: Enregistrer latence
+        if NOTIF_LATENCY:
+            latency = time.time() - start_time
+            NOTIF_LATENCY.labels(company_id=str(company_id)).observe(latency)
 
 
 def _apply_assignments_inner(
@@ -304,8 +645,50 @@ def _apply_assignments_inner(
 
     # 1) Déduplication par booking_id
     chosen_by_booking: Dict[int, _Assignment] = {}
+    # #region agent log
+    import json
+
+    with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
+        f.write(
+            json.dumps(
+                {
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "C",
+                    "location": "apply.py:760",
+                    "message": "processing assignments",
+                    "data": {
+                        "len_assignments": len(assignments),
+                        "company_id": company_id,
+                    },
+                    "timestamp": int(__import__("time").time() * 1000),
+                }
+            )
+            + "\n"
+        )
+    # #endregion
     for a in assignments:
         b_id = int(_aget(a, "booking_id"))
+        # #region agent log
+        with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
+            f.write(
+                json.dumps(
+                    {
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "C",
+                        "location": "apply.py:775",
+                        "message": "processing assignment",
+                        "data": {
+                            "booking_id": b_id,
+                            "driver_id": int(_aget(a, "driver_id")),
+                        },
+                        "timestamp": int(__import__("time").time() * 1000),
+                    }
+                )
+                + "\n"
+            )
+        # #endregion
         if b_id not in chosen_by_booking:
             chosen_by_booking[b_id] = a
         else:
@@ -319,6 +702,26 @@ def _apply_assignments_inner(
                 chosen_by_booking[b_id] = a
 
     booking_ids = list(chosen_by_booking.keys())
+    # #region agent log
+    with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
+        f.write(
+            json.dumps(
+                {
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "C",
+                    "location": "apply.py:800",
+                    "message": "chosen_by_booking created",
+                    "data": {
+                        "len_chosen_by_booking": len(chosen_by_booking),
+                        "booking_ids": booking_ids,
+                    },
+                    "timestamp": int(__import__("time").time() * 1000),
+                }
+            )
+            + "\n"
+        )
+    # #endregion
     # Utiliser le helper _aget pour supporter objets ET dicts
     driver_ids = sorted(
         {
@@ -344,6 +747,30 @@ def _apply_assignments_inner(
     if booking_ids:
         booking_dtos = booking_repo.find_by_ids(booking_ids)
         valid_booking_ids = [dto.id for dto in booking_dtos if dto]
+        # #region agent log
+        import json
+
+        with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
+            f.write(
+                json.dumps(
+                    {
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "D",
+                        "location": "apply.py:800",
+                        "message": "booking validation",
+                        "data": {
+                            "booking_ids": booking_ids,
+                            "len_booking_dtos": len(booking_dtos),
+                            "valid_booking_ids": valid_booking_ids,
+                            "company_id": company_id,
+                        },
+                        "timestamp": int(__import__("time").time() * 1000),
+                    }
+                )
+                + "\n"
+            )
+        # #endregion
 
     # Valider que les drivers existent (la vérification company_id se fait dans la requête SQLAlchemy)
     valid_driver_ids = []
@@ -392,6 +819,31 @@ def _apply_assignments_inner(
 
     booking_map: Dict[int, Booking] = {b.id: b for b in bookings}
     driver_map: Dict[int, Driver] = {d.id: d for d in drivers}
+    # #region agent log
+    import json
+
+    with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
+        f.write(
+            json.dumps(
+                {
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "C",
+                    "location": "apply.py:848",
+                    "message": "booking_map and driver_map created",
+                    "data": {
+                        "len_bookings": len(bookings),
+                        "len_drivers": len(drivers),
+                        "booking_map_keys": list(booking_map.keys()),
+                        "driver_map_keys": list(driver_map.keys()),
+                        "chosen_by_booking_keys": list(chosen_by_booking.keys()),
+                    },
+                    "timestamp": int(__import__("time").time() * 1000),
+                }
+            )
+            + "\n"
+        )
+    # #endregion
 
     # 3) Prépare updates
     applied_ids: List[int] = []
@@ -666,242 +1118,260 @@ def _apply_assignments_inner(
         updates.append(payload)
         applied_ids.append(b_id)
         applied_pairs.append((b_id, d_id))
+        # #region agent log
+        import json
+
+        with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
+            f.write(
+                json.dumps(
+                    {
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "C",
+                        "location": "apply.py:1073",
+                        "message": "adding to applied_pairs",
+                        "data": {
+                            "booking_id": b_id,
+                            "driver_id": d_id,
+                            "len_applied_pairs": len(applied_pairs),
+                        },
+                        "timestamp": int(__import__("time").time() * 1000),
+                    }
+                )
+                + "\n"
+            )
+        # #endregion
         driver_load[d_id] += 1
 
     # 4) Write back Bookings + upsert Assignments
     # ✅ Déjà dans une transaction globale (_begin_tx), donc begin_nested créerait
     # un savepoint supplémentaire (optionnel mais peut être utile pour rollback partiel)
-    # On garde begin_nested pour compatibilité et rollback partiel si nécessaire
+    # ✅ FIX: Gérer le savepoint avec commit/rollback explicite pour éviter InFailedSqlTransaction
+    sp = db.session.begin_nested()
     try:
-        with db.session.begin_nested():  # Savepoint pour rollback partiel si nécessaire
-            if updates:
-                db.session.bulk_update_mappings(cast("Any", Booking), updates)
+        if updates:
+            db.session.bulk_update_mappings(cast("Any", Booking), updates)
 
-            # Upsert côté Assignment (y compris ETA si fournies)
-            if desired_assignments:
-                target_bids = list(desired_assignments.keys())
-                # ✅ Utilisation du repository pour découpler de SQLAlchemy
-                assignment_repo = AssignmentRepository()
-                existing_dtos = assignment_repo.find_by_booking_ids(target_bids)
-                # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs pour la compatibilité
-                existing_ids = [dto.id for dto in existing_dtos]
-                existing = (
-                    Assignment.query.filter(Assignment.id.in_(existing_ids)).all()
-                    if existing_ids
-                    else []
-                )
-                by_booking: Dict[int, Assignment] = {}
-                for a0 in existing:
-                    cur = by_booking.get(a0.booking_id)
-                    if cur is None or (
-                        hasattr(a0, "created_at")
-                        and hasattr(cur, "created_at")
-                        and a0.created_at > cur.created_at
-                    ):
-                        by_booking[a0.booking_id] = a0
+        # Upsert côté Assignment (y compris ETA si fournies)
+        if desired_assignments:
+            target_bids = list(desired_assignments.keys())
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            assignment_repo = AssignmentRepository()
+            existing_dtos = assignment_repo.find_by_booking_ids(target_bids)
+            # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs pour la compatibilité
+            existing_ids = [dto.id for dto in existing_dtos]
+            existing = (
+                Assignment.query.filter(Assignment.id.in_(existing_ids)).all()
+                if existing_ids
+                else []
+            )
+            by_booking: Dict[int, Assignment] = {}
+            for a0 in existing:
+                cur = by_booking.get(a0.booking_id)
+                if cur is None or (
+                    hasattr(a0, "created_at")
+                    and hasattr(cur, "created_at")
+                    and a0.created_at > cur.created_at
+                ):
+                    by_booking[a0.booking_id] = a0
 
-                # ✅ PERF: Séparer nouveaux vs existants pour bulk operations
-                new_assignments: List[Dict[str, Any]] = []
-                update_assignments: List[Dict[str, Any]] = []
+            # ✅ PERF: Séparer nouveaux vs existants pour bulk operations
+            new_assignments: List[Dict[str, Any]] = []
+            update_assignments: List[Dict[str, Any]] = []
 
-                for b_id, payload in desired_assignments.items():
-                    cur = by_booking.get(b_id)
-                    if cur is None:
-                        # ✅ PERF: Préparer pour bulk_insert_mappings
-                        new_assignment = {
-                            "booking_id": cast(int, payload["booking_id"]),
-                            "driver_id": payload["driver_id"],
-                            "status": payload.get("status", AssignmentStatus.SCHEDULED),
-                            "created_at": now,
-                            "updated_at": now,
-                        }
+            for b_id, payload in desired_assignments.items():
+                cur = by_booking.get(b_id)
+                if cur is None:
+                    # ✅ PERF: Préparer pour bulk_insert_mappings
+                    new_assignment = {
+                        "booking_id": cast(int, payload["booking_id"]),
+                        "driver_id": payload["driver_id"],
+                        "status": payload.get("status", AssignmentStatus.SCHEDULED),
+                        "created_at": now,
+                        "updated_at": now,
+                    }
 
-                        # ETA optionnels
-                        eta_pu = payload.get("estimated_pickup_arrival") or payload.get(
-                            "eta_pickup_at"
-                        )
-                        eta_do = payload.get(
-                            "estimated_dropoff_arrival"
-                        ) or payload.get("eta_dropoff_at")
-                        if eta_pu is not None:
-                            new_assignment["eta_pickup_at"] = eta_pu
-                        if eta_do is not None:
-                            new_assignment["eta_dropoff_at"] = eta_do
+                    # ETA optionnels
+                    eta_pu = payload.get("estimated_pickup_arrival") or payload.get(
+                        "eta_pickup_at"
+                    )
+                    eta_do = payload.get("estimated_dropoff_arrival") or payload.get(
+                        "eta_dropoff_at"
+                    )
+                    if eta_pu is not None:
+                        new_assignment["eta_pickup_at"] = eta_pu
+                    if eta_do is not None:
+                        new_assignment["eta_dropoff_at"] = eta_do
 
-                        # dispatch_run_id
-                        drid = payload.get("dispatch_run_id") or dispatch_run_id
-                        if drid is not None:
-                            new_assignment["dispatch_run_id"] = drid
+                    # dispatch_run_id
+                    drid = payload.get("dispatch_run_id") or dispatch_run_id
+                    if drid is not None:
+                        new_assignment["dispatch_run_id"] = drid
 
-                        new_assignments.append(new_assignment)
-                    else:
-                        # ✅ PERF: Préparer pour bulk_update_mappings
-                        update_assignment = {
-                            "id": cur.id,
-                            "driver_id": payload["driver_id"],
-                            "status": payload.get("status", AssignmentStatus.SCHEDULED),
-                            "updated_at": now,
-                        }
+                    new_assignments.append(new_assignment)
+                else:
+                    # ✅ PERF: Préparer pour bulk_update_mappings
+                    update_assignment = {
+                        "id": cur.id,
+                        "driver_id": payload["driver_id"],
+                        "status": payload.get("status", AssignmentStatus.SCHEDULED),
+                        "updated_at": now,
+                    }
 
-                        # ETA optionnels
-                        eta_pu = payload.get("estimated_pickup_arrival") or payload.get(
-                            "eta_pickup_at"
-                        )
-                        eta_do = payload.get(
-                            "estimated_dropoff_arrival"
-                        ) or payload.get("eta_dropoff_at")
-                        if eta_pu is not None:
-                            update_assignment["eta_pickup_at"] = eta_pu
-                        if eta_do is not None:
-                            update_assignment["eta_dropoff_at"] = eta_do
+                    # ETA optionnels
+                    eta_pu = payload.get("estimated_pickup_arrival") or payload.get(
+                        "eta_pickup_at"
+                    )
+                    eta_do = payload.get("estimated_dropoff_arrival") or payload.get(
+                        "eta_dropoff_at"
+                    )
+                    if eta_pu is not None:
+                        update_assignment["eta_pickup_at"] = eta_pu
+                    if eta_do is not None:
+                        update_assignment["eta_dropoff_at"] = eta_do
 
-                        # dispatch_run_id
-                        drid = payload.get("dispatch_run_id")
-                        if drid is not None:
-                            update_assignment["dispatch_run_id"] = drid
+                    # dispatch_run_id
+                    drid = payload.get("dispatch_run_id")
+                    if drid is not None:
+                        update_assignment["dispatch_run_id"] = drid
 
-                        update_assignments.append(update_assignment)
+                    update_assignments.append(update_assignment)
 
-                # ✅ A2: Idempotence avec UPSERT ON CONFLICT DO NOTHING
-                if new_assignments:
-                    # Utiliser PostgreSQL insert avec ON CONFLICT
-                    from sqlalchemy.dialects.postgresql import insert
+            # ✅ A2: Idempotence avec UPSERT ON CONFLICT DO NOTHING
+            if new_assignments:
+                # Utiliser PostgreSQL insert avec ON CONFLICT
+                from sqlalchemy.dialects.postgresql import insert
 
-                    try:
-                        # Pour chaque nouveau assignment, faire un upsert
-                        conflicts_count = 0
-                        for assignment in new_assignments:
-                            try:
-                                stmt = (
-                                    insert(Assignment)
-                                    .values(**assignment)
-                                    .on_conflict_do_nothing(
-                                        constraint="uq_assignment_run_booking"
-                                    )
+                try:
+                    # Pour chaque nouveau assignment, faire un upsert
+                    conflicts_count = 0
+                    for assignment in new_assignments:
+                        try:
+                            stmt = (
+                                insert(Assignment)
+                                .values(**assignment)
+                                .on_conflict_do_nothing(
+                                    constraint="uq_assignment_run_booking"
                                 )
-                                db.session.execute(stmt)
-                            except IntegrityError as conflict_err:
-                                # ✅ A2: Compter les conflits de contrainte unique
-                                # IntegrityError contient les détails de la contrainte
-                                conflicts_count += 1
-                                increment_db_conflict_counter()
-                                logger.debug(
-                                    (
-                                        "[Apply] Conflit unique ignoré "
-                                        "(idempotence, IntegrityError): %s"
-                                    ),
-                                    conflict_err,
-                                )
-                            except (OperationalError, DBAPIError) as e:
-                                # Erreurs DB non liées aux contraintes : re-lancer
-                                logger.warning(
-                                    "[Apply] DB error during UPSERT (DB error: %s): %s",
-                                    type(e).__name__,
-                                    e,
-                                )
-                                raise
-                            except Exception:
-                                # Erreur inattendue : re-lancer
-                                logger.exception(
-                                    "[Apply] Unexpected error during UPSERT"
-                                )
-                                raise
-
-                        if conflicts_count > 0:
-                            logger.info(
+                            )
+                            db.session.execute(stmt)
+                        except IntegrityError as conflict_err:
+                            # ✅ A2: Compter les conflits de contrainte unique
+                            # IntegrityError contient les détails de la contrainte
+                            conflicts_count += 1
+                            increment_db_conflict_counter()
+                            logger.debug(
                                 (
-                                    "[Apply] UPSERT: %d insertions, %d conflits "
-                                    "ignorés (idempotent)"
+                                    "[Apply] Conflit unique ignoré "
+                                    "(idempotence, IntegrityError): %s"
                                 ),
-                                len(new_assignments) - conflicts_count,
-                                conflicts_count,
+                                conflict_err,
                             )
-                        else:
-                            logger.info(
-                                "[Apply] UPSERT inserted %d new assignments",
-                                len(new_assignments),
+                        except (OperationalError, DBAPIError) as e:
+                            # Erreurs DB non liées aux contraintes : re-lancer
+                            logger.warning(
+                                "[Apply] DB error during UPSERT (DB error: %s): %s",
+                                type(e).__name__,
+                                e,
                             )
-                    except (OperationalError, DBAPIError, IntegrityError) as upsert_err:
-                        # Erreurs DB attendues : ON CONFLICT non supporté, syntaxe SQL
-                        logger.warning(
-                            (
-                                "[Apply] ON CONFLICT not supported, falling back "
-                                "to bulk_insert (DB error: %s): %s"
-                            ),
-                            type(upsert_err).__name__,
-                            upsert_err,
-                        )
-                    except (ValueError, TypeError, AttributeError) as e:
-                        # Erreurs de validation attendues : données invalides
-                        logger.warning(
-                            (
-                                "[Apply] ON CONFLICT failed, falling back "
-                                "to bulk_insert (validation error: %s): %s"
-                            ),
-                            type(e).__name__,
-                            e,
-                        )
-                    except Exception:
-                        # Erreur inattendue : logger avec trace complète
-                        logger.exception(
-                            "[Apply] ON CONFLICT failed, falling back to bulk_insert"
-                        )
-                        db.session.bulk_insert_mappings(
-                            cast("Any", Assignment), new_assignments
-                        )
+                            raise
+                        except Exception:
+                            # Erreur inattendue : re-lancer
+                            logger.exception("[Apply] Unexpected error during UPSERT")
+                            raise
 
-                if update_assignments:
-                    db.session.bulk_update_mappings(
-                        cast("Any", Assignment), update_assignments
+                    if conflicts_count > 0:
+                        logger.info(
+                            (
+                                "[Apply] UPSERT: %d insertions, %d conflits "
+                                "ignorés (idempotent)"
+                            ),
+                            len(new_assignments) - conflicts_count,
+                            conflicts_count,
+                        )
+                    else:
+                        logger.info(
+                            "[Apply] UPSERT inserted %d new assignments",
+                            len(new_assignments),
+                        )
+                except (OperationalError, DBAPIError, IntegrityError) as upsert_err:
+                    # Erreurs DB attendues : ON CONFLICT non supporté, syntaxe SQL
+                    logger.warning(
+                        (
+                            "[Apply] ON CONFLICT not supported, falling back "
+                            "to bulk_insert (DB error: %s): %s"
+                        ),
+                        type(upsert_err).__name__,
+                        upsert_err,
                     )
-                    logger.info(
-                        "[Apply] Bulk updated %d existing assignments",
-                        len(update_assignments),
+                except (ValueError, TypeError, AttributeError) as e:
+                    # Erreurs de validation attendues : données invalides
+                    logger.warning(
+                        (
+                            "[Apply] ON CONFLICT failed, falling back "
+                            "to bulk_insert (validation error: %s): %s"
+                        ),
+                        type(e).__name__,
+                        e,
                     )
-            else:
-                logger.info(
-                    "[Apply] No desired assignments to upsert (company_id=%s)",
-                    company_id,
+                except Exception:
+                    # Erreur inattendue : logger avec trace complète
+                    logger.exception(
+                        "[Apply] ON CONFLICT failed, falling back to bulk_insert"
+                    )
+                    db.session.bulk_insert_mappings(
+                        cast("Any", Assignment), new_assignments
+                    )
+
+            if update_assignments:
+                db.session.bulk_update_mappings(
+                    cast("Any", Assignment), update_assignments
                 )
+                logger.info(
+                    "[Apply] Bulk updated %d existing assignments",
+                    len(update_assignments),
+                )
+        else:
+            logger.info(
+                "[Apply] No desired assignments to upsert (company_id=%s)",
+                company_id,
+            )
 
         # ✅ Commit le savepoint interne (begin_nested)
         # La transaction principale sera commitée par apply_assignments()
-        db.session.commit()
+        # IMPORTANT: Ne commit que si aucune exception n'a été levée pendant les opérations DB
+        sp.commit()
 
-    except (OperationalError, DBAPIError, IntegrityError) as e:
-        # Erreurs DB attendues : connexion, contraintes, timeout
-        logger.error(
-            "[Apply] DB error while applying assignments (company_id=%s, DB error: %s): %s",
-            company_id,
-            type(e).__name__,
-            e,
-        )
-        # Rollback du savepoint en cas d'erreur
-        # La transaction principale sera rollbackée par apply_assignments()
-        db.session.rollback()
-        # ✅ FIX RC2: Expirer tous les objets après rollback pour forcer le rechargement
-        db.session.expire_all()
-        raise  # Propager l'erreur pour que apply_assignments() gère le rollback global
-    except (ValueError, TypeError, AttributeError, KeyError) as e:
-        # Erreurs de validation attendues : données invalides
-        logger.error(
-            "[Apply] Validation error while applying assignments (company_id=%s, validation error: %s): %s",
-            company_id,
-            type(e).__name__,
-            e,
-        )
-        db.session.rollback()
-        db.session.expire_all()
-        raise
-    except Exception:
-        # Erreur inattendue : logger avec trace complète
-        logger.exception(
-            "[Apply] DB error while applying assignments (company_id=%s)", company_id
-        )
-        # Rollback du savepoint en cas d'erreur
-        # La transaction principale sera rollbackée par apply_assignments()
-        db.session.rollback()
-        # ✅ FIX RC2: Expirer tous les objets après rollback pour forcer le rechargement
+    except Exception as e:
+        # ✅ IMPORTANT: Si une exception DB survient, rollback le savepoint immédiatement
+        # Ne pas continuer après une DB error sans rollback explicite, sinon on garde
+        # InFailedSqlTransaction jusqu'à la fin
+        # Rollback le savepoint dès qu'une DB error arrive, puis re-raise
+        with suppress(Exception):
+            sp.rollback()
+
+        # Logger selon le type d'erreur
+        if isinstance(e, (OperationalError, DBAPIError, IntegrityError)):
+            logger.error(
+                "[Apply] DB error while applying assignments (company_id=%s, DB error: %s): %s",
+                company_id,
+                type(e).__name__,
+                e,
+            )
+        elif isinstance(e, (ValueError, TypeError, AttributeError, KeyError)):
+            logger.error(
+                "[Apply] Validation error while applying assignments (company_id=%s, validation error: %s): %s",
+                company_id,
+                type(e).__name__,
+                e,
+            )
+        else:
+            logger.exception(
+                "[Apply] DB error while applying assignments (company_id=%s)",
+                company_id,
+            )
+
+        # Expirer tous les objets après rollback pour forcer le rechargement
         db.session.expire_all()
         raise  # Propager l'erreur pour que apply_assignments() gère le rollback global
     if dispatch_run_id:
@@ -948,8 +1418,50 @@ def _apply_assignments_inner(
             )
 
     # Optionnel : retourner les paires (booking_id, driver_id) si demandé
+    # #region agent log
+    import json
+
+    with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
+        f.write(
+            json.dumps(
+                {
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "A",
+                    "location": "apply.py:1353",
+                    "message": "before return_pairs check",
+                    "data": {
+                        "return_pairs": return_pairs,
+                        "len_applied_pairs": len(applied_pairs),
+                        "applied_pairs": applied_pairs,
+                        "len_applied_ids": len(applied_ids),
+                        "len_skipped": len(skipped),
+                    },
+                    "timestamp": int(__import__("time").time() * 1000),
+                }
+            )
+            + "\n"
+        )
+    # #endregion
     if return_pairs:
         result["applied_pairs"] = applied_pairs
+        # #region agent log
+        with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
+            f.write(
+                json.dumps(
+                    {
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "A",
+                        "location": "apply.py:1354",
+                        "message": "applied_pairs added to result",
+                        "data": {"len_applied_pairs": len(applied_pairs)},
+                        "timestamp": int(__import__("time").time() * 1000),
+                    }
+                )
+                + "\n"
+            )
+        # #endregion
 
     logger.info(
         "[Apply] company=%s applied=%d skipped=%d conflicts=%d (reasons=%s)",
@@ -960,71 +1472,8 @@ def _apply_assignments_inner(
         dict(skipped),
     )
 
-    # 🔔 Notifications Socket.IO vers les chauffeurs pour MAJ en temps réel (mobile)
-    try:
-        if applied_pairs:
-            notif_booking_ids = [b_id for b_id, _ in applied_pairs]
+    # ✅ Notifications Socket.IO déplacées après commit (voir _emit_notifications_after_commit)
+    # Les notifications sont maintenant émises dans apply_assignments() wrapper
+    # après commit réussi pour éviter émission si rollback
 
-            # ✅ P1: Utiliser context manager pour scoped session (fermeture automatique)
-            # Utiliser une session indépendante pour éviter les transactions closes
-            with scoped_session_context(db) as session:
-                notif_bookings = {
-                    b.id: b
-                    for b in session.query(Booking)
-                    .filter(Booking.id.in_(notif_booking_ids))
-                    .all()
-                }
-
-                # ✅ Clean Architecture: Publier événements au lieu d'appels directs
-                from application.events.event_bus import publish_event
-                from domain.events.events import DriverNewBookingEvent
-
-                for b_id, d_id in applied_pairs:
-                    try:
-                        booking_obj = notif_bookings.get(b_id)
-                        if booking_obj is None:
-                            continue
-                        # Publier événement
-                        publish_event(
-                            DriverNewBookingEvent(
-                                booking_id=int(b_id),
-                                driver_id=int(d_id),
-                                company_id=company_id,
-                            )
-                        )
-                    except (ValueError, TypeError, AttributeError, KeyError) as e:
-                        # Erreurs de validation attendues : données invalides
-                        logger.warning(
-                            (
-                                "[Apply] DriverNewBookingEvent publish failed "
-                                "booking_id=%s driver_id=%s (validation error: %s): %s"
-                            ),
-                            b_id,
-                            d_id,
-                            type(e).__name__,
-                            e,
-                        )
-                    except Exception:
-                        # Erreur inattendue : logger avec trace complète
-                        logger.exception(
-                            (
-                                "[Apply] DriverNewBookingEvent publish failed "
-                                "booking_id=%s driver_id=%s"
-                            ),
-                            b_id,
-                            d_id,
-                        )
-    except (ValueError, TypeError, AttributeError, KeyError) as e:
-        # Erreurs de validation attendues : données invalides
-        logger.warning(
-            "[Apply] driver notifications failed (company_id=%s, validation error: %s): %s",
-            company_id,
-            type(e).__name__,
-            e,
-        )
-    except Exception:
-        # Erreur inattendue : logger avec trace complète
-        logger.exception(
-            "[Apply] driver notifications failed (company_id=%s)", company_id
-        )
     return result

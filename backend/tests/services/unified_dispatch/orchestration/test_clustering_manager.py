@@ -12,7 +12,7 @@ from __future__ import annotations  # noqa: I001
 import pytest
 from unittest.mock import MagicMock, patch
 
-from factories import CompanyFactory
+from tests.factories import CompanyFactory
 from services.unified_dispatch.orchestration.clustering_manager import (
     ClusteringManager,
 )

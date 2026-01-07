@@ -6,7 +6,7 @@ reportMissingImports = factory/faker installés dans Docker, pas localement
 """
 
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import factory
@@ -27,6 +27,7 @@ from models.enums import (
     DispatchMode,
     DispatchStatus,
     DriverType,
+    InvoiceStatus,
     UserRole,
 )
 from models.invoice import Invoice
@@ -305,17 +306,22 @@ class InvoiceFactory(SQLAlchemyModelFactory):
     client = factory.SubFactory(ClientFactory)
 
     invoice_number = factory.Sequence(lambda n: f"INV-{date.today().year}-{n:05d}")
-    invoice_date = factory.LazyFunction(date.today)
-    due_date = factory.LazyAttribute(lambda obj: obj.invoice_date + timedelta(days=30))
+    period_month = factory.LazyFunction(lambda: date.today().month)
+    period_year = factory.LazyFunction(lambda: date.today().year)
+    issued_at = factory.LazyFunction(lambda: datetime.now(UTC))
+    due_date = factory.LazyAttribute(lambda obj: obj.issued_at + timedelta(days=30))
 
     total_amount = factory.LazyAttribute(
         lambda _: round(fake.random.uniform(100.0, 1000.0), 2)
     )
-    tax_amount = factory.LazyAttribute(
+    vat_total_amount = factory.LazyAttribute(
         lambda obj: round(obj.total_amount * 0.077, 2)
     )  # TVA 7.7%
+    subtotal_amount = factory.LazyAttribute(
+        lambda obj: round(obj.total_amount - obj.vat_total_amount, 2)
+    )
 
-    status = "pending"
+    status = InvoiceStatus.DRAFT
     currency = "CHF"
 
     created_at = factory.LazyFunction(datetime.utcnow)

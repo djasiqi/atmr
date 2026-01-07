@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { Alert } from "react-native";
 import * as Crypto from "expo-crypto";
+import { useAuth } from "@/hooks/useAuth";
 import {
     markRideUrgent,
     assignRide,
@@ -19,6 +20,10 @@ import type {
  * Évite la duplication entre dashboard et rides
  */
 export function useRideActions(onSuccess?: () => void | Promise<void>) {
+    const { enterpriseSession } = useAuth();
+    const dispatchMode = (enterpriseSession?.company?.dispatchMode as "manual" | "semi_auto" | "fully_auto" | undefined) || "manual";
+    const isManualMode = dispatchMode === "manual";
+
     const [assigning, setAssigning] = useState(false);
     const [markingUrgent, setMarkingUrgent] = useState<string | null>(null);
     const [assignModalVisible, setAssignModalVisible] = useState(false);
@@ -59,8 +64,10 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
     // ✅ Ouvrir le modal d'assignation
     const handleOpenAssignModal = useCallback(
         async (ride: RideSummary) => {
+            // ✅ P0-1: Utiliser la fonction de normalisation
+            const { isCompletedStatus } = require("@/utils/bookingStatus");
+            const isCompleted = isCompletedStatus(ride?.status);
             const statusLower = ride?.status?.toLowerCase() || "";
-            const isCompleted = statusLower === "completed";
             const isInBoard = statusLower === "in_board";
             const isActionDisabled = isCompleted || isInBoard;
 
@@ -76,6 +83,34 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
 
             setSelectedRide(ride);
             setAssignModalVisible(true);
+
+            // ✅ En mode manuel, ne pas charger les suggestions, charger directement tous les chauffeurs
+            if (isManualMode) {
+                setLoadingSuggestions(false);
+                setRideSuggestions([]);
+                setLoadingAllDrivers(true);
+                try {
+                    const drivers = await getAvailableDrivers();
+                    // Convertir en format DriverSuggestion pour compatibilité
+                    const driverSuggestions: DriverSuggestion[] = drivers.map((driver) => ({
+                        driver_id: driver.driver_id,
+                        driver_name: driver.driver_name,
+                        score: 0.0,
+                        fairness_delta: null,
+                        preferred_match: false,
+                        is_emergency: driver.is_emergency,
+                        reason: "Sélection manuelle",
+                    }));
+                    setAllDrivers(driverSuggestions);
+                } catch (driversError: any) {
+                    console.error("[useRideActions] Erreur chargement tous les chauffeurs:", driversError);
+                } finally {
+                    setLoadingAllDrivers(false);
+                }
+                return;
+            }
+
+            // ✅ En mode semi-auto ou fully-auto, charger les suggestions
             setLoadingSuggestions(true);
             setRideSuggestions([]);
 
@@ -188,12 +223,16 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
             } catch (error: any) {
                 console.error("[useRideActions] Erreur lors de l'assignation:", error);
                 console.error("[useRideActions] Erreur response:", error?.response?.data);
+                console.error("[useRideActions] Erreur status:", error?.response?.status);
+
+                const status = error?.response?.status;
+                const errorData = error?.response?.data;
 
                 // ✅ Gestion spécifique de l'erreur 409 (Conflit de planning)
-                if (error?.response?.status === 409) {
+                if (status === 409) {
                     const conflictMessage =
-                        error?.response?.data?.message ??
-                        error?.response?.data?.error ??
+                        errorData?.message ??
+                        errorData?.error ??
                         "Conflit de planning détecté";
 
                     // Extraire le numéro de course en conflit si présent dans le message
@@ -221,11 +260,44 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
                             { text: "OK", style: "default" },
                         ]
                     );
+                } else if (status === 500) {
+                    // ✅ Gestion spécifique des erreurs 500 (erreur serveur)
+                    // En mode manuel, on peut toujours réassigner même si les suggestions ne sont pas actives
+                    const errorMessage =
+                        errorData?.error ??
+                        errorData?.message ??
+                        "Une erreur serveur est survenue lors de l'assignation.";
+
+                    // Si la course est déjà assignée et qu'on essaie de réassigner, c'est probablement OK
+                    // Le backend peut avoir eu un problème mais l'assignation peut quand même avoir fonctionné
+                    if (isAssigned) {
+                        Alert.alert(
+                            "⚠️ Avertissement",
+                            `${errorMessage}\n\nLa réassignation peut avoir été effectuée malgré l'erreur. Veuillez vérifier l'état de la course.`,
+                            [
+                                {
+                                    text: "OK",
+                                    onPress: async () => {
+                                        // Rafraîchir les données pour voir l'état réel
+                                        await onSuccess?.();
+                                    },
+                                },
+                            ]
+                        );
+                    } else {
+                        Alert.alert(
+                            "Erreur serveur",
+                            `${errorMessage}\n\nVeuillez réessayer. Si le problème persiste, contactez le support.`,
+                            [
+                                { text: "OK", style: "default" },
+                            ]
+                        );
+                    }
                 } else {
-                    // Autres erreurs
+                    // Autres erreurs (400, 404, etc.)
                     const message =
-                        error?.response?.data?.error ??
-                        error?.response?.data?.message ??
+                        errorData?.error ??
+                        errorData?.message ??
                         error?.message ??
                         "Impossible de finaliser l'assignation.";
                     Alert.alert("Erreur", message);

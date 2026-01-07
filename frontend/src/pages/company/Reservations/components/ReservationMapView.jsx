@@ -180,7 +180,7 @@ const ReservationMapView = ({ reservations }) => {
             <div class="${styles.popupContent}">
               <h4>🎯 Destination</h4>
               <p><strong>Client:</strong> ${
-                reservation.customer_name || reservation.client?.full_name || 'N/A'
+                reservation.client_name || reservation.client?.full_name || 'N/A'
               }</p>
               <p><strong>Adresse:</strong> ${reservation.dropoff_location}</p>
               <p><strong>Montant:</strong> ${Number(reservation.amount || 0).toFixed(2)} CHF</p>
@@ -199,7 +199,7 @@ const ReservationMapView = ({ reservations }) => {
               <div class="${styles.popupContent}">
                 <h4>📍 Prise en charge</h4>
                 <p><strong>Client:</strong> ${
-                  reservation.customer_name || reservation.client?.full_name || 'N/A'
+                  reservation.client_name || reservation.client?.full_name || 'N/A'
                 }</p>
                 <p><strong>Adresse:</strong> ${reservation.pickup_location}</p>
                 <p><strong>Heure:</strong> ${new Date(

@@ -234,7 +234,14 @@ def normalize_google_places(
                 # Retirer le pays s'il est présent à la fin
                 if google_address:
                     # Retirer "Suisse", "Switzerland", "France", etc. à la fin
-                    google_address = google_address.replace(/,?\s*(Suisse|Switzerland|France|Deutschland|Germany|Italy|Italia)\s*$/i, "").trim()
+                    import re
+
+                    google_address = re.sub(
+                        r",?\s*(Suisse|Switzerland|France|Deutschland|Germany|Italy|Italia)\s*$",
+                        "",
+                        google_address,
+                        flags=re.IGNORECASE,
+                    ).strip()
                 label = google_address or "Adresse"
 
             # L'adresse à afficher doit toujours inclure le numéro si disponible

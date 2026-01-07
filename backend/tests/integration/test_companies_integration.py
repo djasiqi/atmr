@@ -57,13 +57,13 @@ class TestCompaniesIntegration:
         if not test_company:
             pytest.skip("test_company required")
 
-        url = f"/api/v1/companies/{test_company.id}/clients"
+        url = "/api/v1/companies/me/clients"
         payload = {
             "first_name": "New",
             "last_name": "Client",
             "email": "newclient@test.ch",
             "phone": "0211234567",
-            "client_type": "INDIVIDUAL",
+            "client_type": "PRIVATE",
         }
 
         response = authenticated_client.post(url, json=payload)

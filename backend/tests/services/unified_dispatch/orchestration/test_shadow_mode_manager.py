@@ -9,12 +9,20 @@ Tests pour :
 from __future__ import annotations  # noqa: I001
 
 import pytest
+from flask import Flask
 from unittest.mock import MagicMock, patch
 
-from factories import CompanyFactory, DispatchRunFactory
+from tests.factories import CompanyFactory, DispatchRunFactory
 from services.unified_dispatch.orchestration.shadow_mode_manager import (
     ShadowModeManager,
 )
+
+
+@pytest.fixture(autouse=True)
+def _app_context(app: Flask):
+    """Assure que tous les tests s'exécutent dans un app context."""
+    with app.app_context():
+        yield
 
 
 class TestShouldApplyRl:
@@ -28,7 +36,6 @@ class TestShouldApplyRl:
     ):
         """Test : Retourne True avec un quality_score."""
         settings = MagicMock()
-        manager = ShadowModeManager(settings)
 
         mock_orchestrator_instance = MagicMock()
         mock_orchestrator_instance.should_apply_rl_with_guards.return_value = (
@@ -36,6 +43,8 @@ class TestShouldApplyRl:
             85.5,
         )
         mock_orchestrator_class.return_value = mock_orchestrator_instance
+
+        manager = ShadowModeManager(settings)
 
         company = CompanyFactory()
         assignments = [MagicMock()]
@@ -67,7 +76,6 @@ class TestShouldApplyRl:
     ):
         """Test : Retourne False avec quality_score None."""
         settings = MagicMock()
-        manager = ShadowModeManager(settings)
 
         mock_orchestrator_instance = MagicMock()
         mock_orchestrator_instance.should_apply_rl_with_guards.return_value = (
@@ -75,6 +83,8 @@ class TestShouldApplyRl:
             None,
         )
         mock_orchestrator_class.return_value = mock_orchestrator_instance
+
+        manager = ShadowModeManager(settings)
 
         company = CompanyFactory()
         assignments = []
@@ -99,7 +109,6 @@ class TestShouldApplyRl:
     ):
         """Test : Gère dispatch_run_id None."""
         settings = MagicMock()
-        manager = ShadowModeManager(settings)
 
         mock_orchestrator_instance = MagicMock()
         mock_orchestrator_instance.should_apply_rl_with_guards.return_value = (
@@ -107,6 +116,8 @@ class TestShouldApplyRl:
             None,
         )
         mock_orchestrator_class.return_value = mock_orchestrator_instance
+
+        manager = ShadowModeManager(settings)
 
         company = CompanyFactory()
         assignments = [MagicMock()]
@@ -135,11 +146,12 @@ class TestGenerateAndStoreSuggestions:
     ):
         """Test : Retourne True quand des suggestions sont stockées."""
         settings = MagicMock()
-        manager = ShadowModeManager(settings)
 
         mock_orchestrator_instance = MagicMock()
         mock_orchestrator_instance.generate_and_store_shadow_suggestions.return_value = 5  # 5 suggestions stockées
         mock_orchestrator_class.return_value = mock_orchestrator_instance
+
+        manager = ShadowModeManager(settings)
 
         problem = {"bookings": [MagicMock()], "drivers": [MagicMock()]}
         assignments = [MagicMock()]
@@ -169,11 +181,12 @@ class TestGenerateAndStoreSuggestions:
     ):
         """Test : Retourne False quand aucune suggestion n'est stockée."""
         settings = MagicMock()
-        manager = ShadowModeManager(settings)
 
         mock_orchestrator_instance = MagicMock()
         mock_orchestrator_instance.generate_and_store_shadow_suggestions.return_value = 0  # Aucune suggestion stockée
         mock_orchestrator_class.return_value = mock_orchestrator_instance
+
+        manager = ShadowModeManager(settings)
 
         problem = {"bookings": []}
         assignments = []
@@ -196,11 +209,12 @@ class TestGenerateAndStoreSuggestions:
     ):
         """Test : Gère dispatch_run_id None."""
         settings = MagicMock()
-        manager = ShadowModeManager(settings)
 
         mock_orchestrator_instance = MagicMock()
         mock_orchestrator_instance.generate_and_store_shadow_suggestions.return_value = 0
         mock_orchestrator_class.return_value = mock_orchestrator_instance
+
+        manager = ShadowModeManager(settings)
 
         problem = {"bookings": [MagicMock()]}
         assignments = [MagicMock()]

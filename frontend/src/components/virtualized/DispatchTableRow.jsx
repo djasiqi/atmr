@@ -74,7 +74,7 @@ const DispatchTableRow = ({ booking: b, delays, drivers, timingStatus, style }) 
   return (
     <tr style={style} key={b.id}>
       <td>{b.id}</td>
-      <td>{b.customer_name || b.client?.full_name || '—'}</td>
+      <td>{b.client_name || b.client?.full_name || '—'}</td>
       <td>{renderBookingDateTime(b)}</td>
       <td>{b.pickup_location || '—'}</td>
       <td>{b.dropoff_location || '—'}</td>

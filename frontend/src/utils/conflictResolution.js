@@ -15,22 +15,76 @@ export function detectConflict(optimisticState, serverState, idField = 'id') {
     return false; // Pas le même objet
   }
 
-  // Comparer les champs critiques (exclure les timestamps et métadonnées)
-  const fieldsToCompare = Object.keys(optimisticState).filter(
-    key => !key.includes('_at') && 
-           !key.includes('timestamp') && 
-           !key.includes('updated') &&
-           key !== 'version' &&
-           key !== 'etag'
-  );
+  // Champs à ignorer complètement (métadonnées, timestamps, etc.)
+  const ignoredFields = new Set([
+    '_at', 'timestamp', 'updated', 'version', 'etag',
+    'created_at', 'updated_at', 'modified_at', 'deleted_at',
+    '__typename', '_typename', '_id', '_v'
+  ]);
 
-  for (const field of fieldsToCompare) {
-    if (JSON.stringify(optimisticState[field]) !== JSON.stringify(serverState[field])) {
-      return true; // Conflit détecté
+  // Champs critiques qui doivent correspondre exactement pour éviter un conflit
+  const criticalFields = ['status', 'driver_id', 'assignment_id', 'booking_id'];
+
+  // Fonction helper pour comparer deux valeurs de manière profonde
+  const deepEqual = (a, b) => {
+    if (a === b) return true;
+    if (a == null || b == null) return a === b;
+    if (typeof a !== typeof b) return false;
+    
+    if (typeof a === 'object') {
+      const keysA = Object.keys(a);
+      const keysB = Object.keys(b);
+      
+      if (keysA.length !== keysB.length) return false;
+      
+      for (const key of keysA) {
+        if (!deepEqual(a[key], b[key])) return false;
+      }
+      return true;
+    }
+    
+    return false;
+  };
+
+  // Comparer les champs critiques d'abord
+  for (const field of criticalFields) {
+    if (optimisticState[field] !== undefined && serverState[field] !== undefined) {
+      if (!deepEqual(optimisticState[field], serverState[field])) {
+        return true; // Conflit sur un champ critique
+      }
     }
   }
 
-  return false;
+  // Comparer les autres champs (exclure les métadonnées)
+  const fieldsToCompare = Object.keys(optimisticState).filter(
+    key => !ignoredFields.has(key) && 
+           !key.includes('_at') && 
+           !key.includes('timestamp') && 
+           !key.includes('updated') &&
+           !criticalFields.includes(key) // Déjà vérifié
+  );
+
+  // Compter les différences significatives
+  let significantDifferences = 0;
+  for (const field of fieldsToCompare) {
+    if (!deepEqual(optimisticState[field], serverState[field])) {
+      // Ignorer les différences mineures (null vs undefined, etc.)
+      const optVal = optimisticState[field];
+      const servVal = serverState[field];
+      
+      // Si l'un est null/undefined et l'autre aussi, considérer comme égal
+      if ((optVal == null && servVal == null) || 
+          (optVal === '' && servVal == null) || 
+          (optVal == null && servVal === '')) {
+        continue;
+      }
+      
+      significantDifferences++;
+    }
+  }
+
+  // Seulement considérer comme conflit si il y a des différences significatives
+  return significantDifferences > 0;
 }
 
 /**
