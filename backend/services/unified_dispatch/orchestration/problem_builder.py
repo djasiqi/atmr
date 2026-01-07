@@ -28,7 +28,7 @@ from services.unified_dispatch.orchestration.dispatch_run_manager import (
 )
 from services.unified_dispatch.orchestration.utils import safe_int
 from services.unified_dispatch.transaction_helpers import _begin_tx
-from services.unified_dispatch.types import DispatchResult
+from services.unified_dispatch.core.types import DispatchResult
 from shared.constants import GeoConstants
 from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
 
