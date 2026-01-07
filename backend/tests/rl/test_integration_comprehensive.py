@@ -16,17 +16,17 @@ import torch
 
 # Import conditionnel pour éviter les erreurs si les modules ne sont pas disponibles
 try:
-    from services.rl.improved_dqn_agent import ImprovedDQNAgent
+    from services.ml.rl.improved_dqn_agent import ImprovedDQNAgent
 except ImportError:
     ImprovedDQNAgent = None
 
 try:
-    from services.rl.dispatch_env import DispatchEnv
+    from services.ml.rl.dispatch_env import DispatchEnv
 except ImportError:
     DispatchEnv = None
 
 try:
-    from services.rl.reward_shaping import AdvancedRewardShaping
+    from services.ml.rl.reward_shaping import AdvancedRewardShaping
 except ImportError:
     AdvancedRewardShaping = None
 
@@ -289,7 +289,7 @@ class TestRLIntegration:
     def test_hyperparameter_integration(self):
         """Test l'intégration des hyperparamètres optimaux."""
         try:
-            from services.rl.optimal_hyperparameters import OptimalHyperparameters
+            from services.ml.rl.optimal_hyperparameters import OptimalHyperparameters
 
             # Test de chargement des configurations
             configs = ["production", "training", "evaluation"]

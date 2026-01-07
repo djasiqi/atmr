@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import numpy as np
 
-from services.rl.replay_buffer import PrioritizedReplayBuffer
+from services.ml.rl.replay_buffer import PrioritizedReplayBuffer
 
 
 class TestReplayBufferMissingLines:

@@ -9,7 +9,7 @@ class TestMLMonitoringService:
 
     def test_log_prediction(self, app, sample_booking, db):
         """Test enregistrement d'une prédiction."""
-        from services.ml_monitoring_service import MLMonitoringService
+        from services.ml.monitoring import MLMonitoringService
 
         # NOTE: Le fixture `db` maintient déjà un app context actif pendant le test.
         # Éviter de ré-ouvrir un app_context ici, car cela peut créer une nouvelle
@@ -43,7 +43,7 @@ class TestMLMonitoringService:
 
     def test_update_actual_delay(self, app, sample_booking, db):
         """Test mise à jour retard réel."""
-        from services.ml_monitoring_service import MLMonitoringService
+        from services.ml.monitoring import MLMonitoringService
 
         booking_id = sample_booking.id
 
@@ -75,7 +75,7 @@ class TestMLMonitoringService:
         """Test calcul métriques."""
         from models.booking import Booking
         from models.enums import BookingStatus
-        from services.ml_monitoring_service import MLMonitoringService
+        from services.ml.monitoring import MLMonitoringService
 
         # Le fixture `db` maintient déjà un app context actif (voir note plus haut).
         db.session.flush()

@@ -5,7 +5,7 @@ from datetime import datetime
 
 import pytest
 
-from services.rl.shadow_mode_manager import ShadowModeManager
+from services.ml.rl.shadow_mode_manager import ShadowModeManager
 
 
 class TestShadowModeManagerCorrect:

@@ -15,10 +15,10 @@ Date: 21 octobre 2025
 import numpy as np
 import pytest
 
-from services.rl.dispatch_env import DispatchEnv
-from services.rl.improved_dqn_agent import ImprovedDQNAgent
-from services.rl.replay_buffer import PrioritizedReplayBuffer
-from services.rl.reward_shaping import AdvancedRewardShaping, RewardShapingConfig
+from services.ml.rl.dispatch_env import DispatchEnv
+from services.ml.rl.improved_dqn_agent import ImprovedDQNAgent
+from services.ml.rl.replay_buffer import PrioritizedReplayBuffer
+from services.ml.rl.reward_shaping import AdvancedRewardShaping, RewardShapingConfig
 
 
 class TestPrioritizedReplayBuffer:

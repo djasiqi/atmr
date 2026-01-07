@@ -15,12 +15,12 @@ import pytest
 
 # Import conditionnel pour éviter les erreurs si les modules ne sont pas disponibles
 try:
-    from services.rl.shadow_mode_manager import ShadowModeManager
+    from services.ml.rl.shadow_mode_manager import ShadowModeManager
 except ImportError:
     ShadowModeManager = None
 
 try:
-    from services.rl.improved_dqn_agent import ImprovedDQNAgent
+    from services.ml.rl.improved_dqn_agent import ImprovedDQNAgent
 except ImportError:
     ImprovedDQNAgent = None
 

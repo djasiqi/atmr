@@ -7,7 +7,7 @@ from unittest.mock import mock_open, patch
 
 import pytest
 
-from services.rl.optimal_hyperparameters import OptimalHyperparameters
+from services.ml.rl.optimal_hyperparameters import OptimalHyperparameters
 
 
 class TestOptimalHyperparameters:
@@ -436,7 +436,7 @@ class TestOptimalHyperparameters:
 
     def test_sprint1config(self):
         """Test de la configuration SPRINT1"""
-        from services.rl.optimal_hyperparameters import SPRINT1
+        from services.ml.rl.optimal_hyperparameters import SPRINT1
 
         # SPRINT1 est écrasé 3 fois, la dernière valeur est la configuration
         # de reward shaping qui n'a pas de learning_rate, mais a les poids
@@ -449,7 +449,7 @@ class TestOptimalHyperparameters:
 
     def test_sprint1production_config(self):
         """Test de la configuration SPRINT1"""
-        from services.rl.optimal_hyperparameters import SPRINT1
+        from services.ml.rl.optimal_hyperparameters import SPRINT1
 
         # SPRINT1 est écrasé 3 fois, la dernière valeur est la configuration
         # de reward shaping qui n'a pas de learning_rate, mais a les poids
@@ -462,7 +462,7 @@ class TestOptimalHyperparameters:
 
     def test_sprint1reward_config(self):
         """Test de la configuration SPRINT1"""
-        from services.rl.optimal_hyperparameters import SPRINT1
+        from services.ml.rl.optimal_hyperparameters import SPRINT1
 
         # Vérifier que c'est la configuration punctuality_focused
         assert SPRINT1["punctuality_weight"] == 1.5
@@ -481,7 +481,7 @@ class TestOptimalHyperparameters:
         ):
             # Simuler l'exécution du module principal
             # Import pour effet de bord (exécution du code au niveau module)
-            import services.rl.optimal_hyperparameters  # noqa: F401
+            import services.ml.rl.optimal_hyperparameters  # noqa: F401
 
             # Vérifier que logging.info est appelé
             # (peut être 0 si le module est déjà importé)

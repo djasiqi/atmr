@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 import numpy as np
 import torch
 
-from services.rl.suggestion_generator import RLSuggestionGenerator
+from services.ml.rl.suggestion_generator import RLSuggestionGenerator
 
 
 class TestRLSuggestionGeneratorSimple:

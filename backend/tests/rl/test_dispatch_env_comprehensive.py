@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 import gymnasium as gym
 import numpy as np
 
-from services.rl.dispatch_env import DispatchEnv
+from services.ml.rl.dispatch_env import DispatchEnv
 
 
 class TestDispatchEnvComprehensive:

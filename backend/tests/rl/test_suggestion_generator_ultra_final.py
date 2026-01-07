@@ -7,13 +7,13 @@ import numpy as np
 import pytest
 import torch
 
-from services.rl.hyperparameter_tuner import HyperparameterTuner
-from services.rl.improved_q_network import DuelingQNetwork, ImprovedQNetwork
-from services.rl.noisy_networks import NoisyDuelingQNetwork, NoisyLinear, NoisyQNetwork
-from services.rl.optimal_hyperparameters import OptimalHyperparameters
-from services.rl.rl_logger import RLLogger
-from services.rl.shadow_mode_manager import ShadowModeManager
-from services.rl.suggestion_generator import RLSuggestionGenerator
+from services.ml.rl.hyperparameter_tuner import HyperparameterTuner
+from services.ml.rl.improved_q_network import DuelingQNetwork, ImprovedQNetwork
+from services.ml.rl.noisy_networks import NoisyDuelingQNetwork, NoisyLinear, NoisyQNetwork
+from services.ml.rl.optimal_hyperparameters import OptimalHyperparameters
+from services.ml.rl.rl_logger import RLLogger
+from services.ml.rl.shadow_mode_manager import ShadowModeManager
+from services.ml.rl.suggestion_generator import RLSuggestionGenerator
 
 
 class TestRLSuggestionGeneratorUltraFinal:

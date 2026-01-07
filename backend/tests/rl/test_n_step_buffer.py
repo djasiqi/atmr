@@ -21,8 +21,8 @@ try:
 except ImportError:
     torch = None
 
-from services.rl.improved_dqn_agent import ImprovedDQNAgent
-from services.rl.n_step_buffer import NStepBuffer, NStepPrioritizedBuffer
+from services.ml.rl.improved_dqn_agent import ImprovedDQNAgent
+from services.ml.rl.n_step_buffer import NStepBuffer, NStepPrioritizedBuffer
 
 
 class TestNStepBuffer(unittest.TestCase):
@@ -356,7 +356,7 @@ class TestNStepIntegration(unittest.TestCase):
         )
 
         # Vérifier que le buffer est de type PER standard
-        from services.rl.replay_buffer import PrioritizedReplayBuffer
+        from services.ml.rl.replay_buffer import PrioritizedReplayBuffer
 
         assert isinstance(agent.memory, PrioritizedReplayBuffer)
         assert not agent.use_n_step

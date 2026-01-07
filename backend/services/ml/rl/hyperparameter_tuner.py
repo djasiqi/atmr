@@ -8,8 +8,8 @@ from typing import Any, Dict, List
 import optuna
 from optuna.trial import Trial
 
-from services.rl.dispatch_env import DispatchEnv
-from services.rl.improved_dqn_agent import ImprovedDQNAgent
+from services.ml.rl.dispatch_env import DispatchEnv
+from services.ml.rl.improved_dqn_agent import ImprovedDQNAgent
 
 STEPS_PERCENT = 100
 # 20 = 0  # Constante corrigée

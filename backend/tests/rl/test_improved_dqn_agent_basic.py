@@ -8,7 +8,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from services.rl.improved_dqn_agent import ImprovedDQNAgent
+from services.ml.rl.improved_dqn_agent import ImprovedDQNAgent
 
 
 class TestImprovedDQNAgent:

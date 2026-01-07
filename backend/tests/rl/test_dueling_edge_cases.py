@@ -19,7 +19,7 @@ try:
     import torch
     from torch import nn
 
-    from services.rl.improved_q_network import DuelingQNetwork
+    from services.ml.rl.improved_q_network import DuelingQNetwork
 except ImportError:
     torch = None
     nn = None

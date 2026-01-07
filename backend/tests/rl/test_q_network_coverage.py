@@ -5,7 +5,7 @@ Tests supplémentaires pour améliorer la couverture de improved_q_network.py
 import pytest
 import torch
 
-from services.rl.improved_q_network import DuelingQNetwork, ImprovedQNetwork
+from services.ml.rl.improved_q_network import DuelingQNetwork, ImprovedQNetwork
 
 
 class TestImprovedQNetworkCoverage:

@@ -72,7 +72,7 @@ def _lazy_import_rl():
     if _dqn_agent is None:
         try:
             from services.rl import dispatch_env, improved_dqn_agent
-            from services.rl.improved_dqn_agent import (
+            from services.ml.rl.improved_dqn_agent import (
                 ImprovedDQNAgent as _ImprovedDQNAgent,
             )
 
@@ -131,12 +131,12 @@ class RLSuggestionGenerator:
                 return
 
             # Créer l'environnement (pour obtenir observation/action space)
-            from services.rl.dispatch_env import DispatchEnv
+            from services.ml.rl.dispatch_env import DispatchEnv
 
             dummy_env = DispatchEnv(num_drivers=5, max_bookings=10)
 
             # Créer et charger l'agent
-            from services.rl.improved_dqn_agent import ImprovedDQNAgent
+            from services.ml.rl.improved_dqn_agent import ImprovedDQNAgent
 
             self.agent = ImprovedDQNAgent(
                 state_dim=dummy_env.observation_space.shape[0],

@@ -13,7 +13,7 @@ import pytest
 
 # Import conditionnel pour éviter les erreurs si les modules ne sont pas disponibles
 try:
-    from services.rl.n_step_buffer import NStepBuffer, NStepPrioritizedBuffer
+    from services.ml.rl.n_step_buffer import NStepBuffer, NStepPrioritizedBuffer
 except ImportError:
     NStepBuffer = None
     NStepPrioritizedBuffer = None

@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 
 import numpy as np
 
-from services.rl.n_step_buffer import NStepBuffer, NStepPrioritizedBuffer
+from services.ml.rl.n_step_buffer import NStepBuffer, NStepPrioritizedBuffer
 
 
 class TestNStepBufferMissingLines:

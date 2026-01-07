@@ -7,12 +7,12 @@ from unittest.mock import Mock
 import numpy as np
 import torch
 
-from services.rl.dispatch_env import DispatchEnv
-from services.rl.improved_dqn_agent import ImprovedDQNAgent
-from services.rl.n_step_buffer import NStepBuffer, NStepPrioritizedBuffer
-from services.rl.replay_buffer import PrioritizedReplayBuffer
-from services.rl.reward_shaping import RewardShapingConfig
-from services.rl.shadow_mode_manager import ShadowModeManager
+from services.ml.rl.dispatch_env import DispatchEnv
+from services.ml.rl.improved_dqn_agent import ImprovedDQNAgent
+from services.ml.rl.n_step_buffer import NStepBuffer, NStepPrioritizedBuffer
+from services.ml.rl.replay_buffer import PrioritizedReplayBuffer
+from services.ml.rl.reward_shaping import RewardShapingConfig
+from services.ml.rl.shadow_mode_manager import ShadowModeManager
 
 
 class TestExtendedCoverage:
@@ -91,7 +91,7 @@ class TestExtendedCoverage:
 
     def test_improved_q_network_forward(self):
         """Test forward ImprovedQNetwork"""
-        from services.rl.improved_q_network import ImprovedQNetwork
+        from services.ml.rl.improved_q_network import ImprovedQNetwork
 
         network = ImprovedQNetwork(state_dim=10, action_dim=5)
 
@@ -102,7 +102,7 @@ class TestExtendedCoverage:
 
     def test_dueling_q_network_forward(self):
         """Test forward DuelingQNetwork"""
-        from services.rl.improved_q_network import DuelingQNetwork
+        from services.ml.rl.improved_q_network import DuelingQNetwork
 
         network = DuelingQNetwork(state_dim=10, action_dim=5)
 
@@ -113,7 +113,7 @@ class TestExtendedCoverage:
 
     def test_n_step_buffer_add_transition(self):
         """Test ajout de transition NStepBuffer"""
-        from services.rl.n_step_buffer import NStepBuffer
+        from services.ml.rl.n_step_buffer import NStepBuffer
 
         # ✅ FIX: capacity doit être un int, pas un float
         buffer = NStepBuffer(capacity=100, n_step=3)
@@ -148,7 +148,7 @@ class TestExtendedCoverage:
 
     def test_n_step_prioritized_buffer_add_transition(self):
         """Test ajout de transition NStepPrioritizedBuffer"""
-        from services.rl.n_step_buffer import NStepPrioritizedBuffer
+        from services.ml.rl.n_step_buffer import NStepPrioritizedBuffer
 
         # ✅ FIX: capacity doit être un int
         buffer = NStepPrioritizedBuffer(capacity=100, n_step=3)
@@ -182,7 +182,7 @@ class TestExtendedCoverage:
 
     def test_replay_buffer_add(self):
         """Test ajout PrioritizedReplayBuffer"""
-        from services.rl.replay_buffer import PrioritizedReplayBuffer
+        from services.ml.rl.replay_buffer import PrioritizedReplayBuffer
 
         # ✅ FIX: capacity doit être un int
         buffer = PrioritizedReplayBuffer(capacity=100)
@@ -211,7 +211,7 @@ class TestExtendedCoverage:
 
     def test_reward_shaping_calculate_reward(self):
         """Test calcul de récompense"""
-        from services.rl.reward_shaping import AdvancedRewardShaping
+        from services.ml.rl.reward_shaping import AdvancedRewardShaping
 
         reward_shaping = AdvancedRewardShaping()
 
@@ -236,7 +236,7 @@ class TestExtendedCoverage:
 
     def test_reward_shaping_config_get_weights(self):
         """Test récupération des poids"""
-        from services.rl.reward_shaping import RewardShapingConfig
+        from services.ml.rl.reward_shaping import RewardShapingConfig
 
         config = RewardShapingConfig()
 
@@ -257,7 +257,7 @@ class TestExtendedCoverage:
 
     def test_noisy_linear_forward(self):
         """Test forward NoisyLinear"""
-        from services.rl.noisy_networks import NoisyLinear
+        from services.ml.rl.noisy_networks import NoisyLinear
 
         layer = NoisyLinear(10, 5)
 
@@ -268,7 +268,7 @@ class TestExtendedCoverage:
 
     def test_noisy_q_network_forward(self):
         """Test forward NoisyQNetwork"""
-        from services.rl.noisy_networks import NoisyQNetwork
+        from services.ml.rl.noisy_networks import NoisyQNetwork
 
         network = NoisyQNetwork(state_size=10, action_size=5)
 
@@ -279,7 +279,7 @@ class TestExtendedCoverage:
 
     def test_noisy_dueling_network_forward(self):
         """Test forward NoisyDuelingQNetwork"""
-        from services.rl.noisy_networks import NoisyDuelingQNetwork
+        from services.ml.rl.noisy_networks import NoisyDuelingQNetwork
 
         network = NoisyDuelingQNetwork(state_size=10, action_size=5)
 
@@ -290,7 +290,7 @@ class TestExtendedCoverage:
 
     def test_hyperparameter_tuner_suggest_hyperparameters(self):
         """Test suggestion d'hyperparamètres"""
-        from services.rl.hyperparameter_tuner import HyperparameterTuner
+        from services.ml.rl.hyperparameter_tuner import HyperparameterTuner
 
         tuner = HyperparameterTuner()
 
@@ -306,7 +306,7 @@ class TestExtendedCoverage:
 
     def test_shadow_mode_manager_log_decision_comparison(self):
         """Test logging de comparaison de décisions"""
-        from services.rl.shadow_mode_manager import ShadowModeManager
+        from services.ml.rl.shadow_mode_manager import ShadowModeManager
 
         manager = ShadowModeManager()
 
@@ -348,7 +348,7 @@ class TestExtendedCoverage:
 
     def test_dispatch_env_reset(self):
         """Test reset DispatchEnv"""
-        from services.rl.dispatch_env import DispatchEnv
+        from services.ml.rl.dispatch_env import DispatchEnv
 
         env = DispatchEnv()
 

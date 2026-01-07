@@ -23,7 +23,7 @@ from flask_restx import (  # pyright: ignore[reportMissingImports]
 )
 
 from ext import redis_client
-from services.rl.shadow_mode_manager import ShadowModeManager
+from services.ml.rl.shadow_mode_manager import ShadowModeManager
 from shared.error_handlers import APIErrorHandler
 
 logger = logging.getLogger(__name__)

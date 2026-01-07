@@ -4,7 +4,7 @@ Tests minimaux pour distributional_dqn.py - Version corrigée
 
 import torch
 
-from services.rl.distributional_dqn import (
+from services.ml.rl.distributional_dqn import (
     C51Network,
     DistributionalLoss,
     QRNetwork,

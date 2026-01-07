@@ -60,10 +60,10 @@ from services.ml.rl.agent import ImprovedDQNAgent
 from services.ml.rl.env import DispatchEnv
 
 # Imports de compatibilité (DEPRECATED, à migrer)
-# from services.ml_features import extract_ml_features
-# from services.ml_monitoring_service import MLMonitoringService
-# from services.ml.demand_prediction import DemandPredictionModel
-# from services.rl.improved_dqn_agent import ImprovedDQNAgent
+# from services.ml.features import extract_ml_features
+# from services.ml.monitoring import MLMonitoringService
+# from services.ml.models.demand_prediction import DemandPredictionModel
+# from services.ml.rl.improved_dqn_agent import ImprovedDQNAgent
 ```
 
 ## Documentation

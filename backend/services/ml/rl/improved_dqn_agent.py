@@ -8,8 +8,8 @@ from typing import Any, List, Tuple, cast
 
 import numpy as np
 
-from services.rl.improved_q_network import DuelingQNetwork, ImprovedQNetwork
-from services.rl.replay_buffer import PrioritizedReplayBuffer
+from services.ml.rl.improved_q_network import DuelingQNetwork, ImprovedQNetwork
+from services.ml.rl.replay_buffer import PrioritizedReplayBuffer
 
 TARGET_UPDATE_FREQ_ZERO = 0
 TUPLE_SIZE_TWO = 2
@@ -32,8 +32,8 @@ except ImportError:
 NStepBuffer: Any = None
 NStepPrioritizedBuffer: Any = None
 try:
-    from services.rl.n_step_buffer import NStepBuffer as _NStepBuffer
-    from services.rl.n_step_buffer import (
+    from services.ml.rl.n_step_buffer import NStepBuffer as _NStepBuffer
+    from services.ml.rl.n_step_buffer import (
         NStepPrioritizedBuffer as _NStepPrioritizedBuffer,
     )
 
@@ -201,7 +201,7 @@ class ImprovedDQNAgent:
 
         # Import conditionnel du RLLogger
         try:
-            from services.rl.rl_logger import get_rl_logger
+            from services.ml.rl.rl_logger import get_rl_logger
 
             rl_logger = get_rl_logger()
             enable_logging = True

@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import numpy as np
 
-from services.rl.reward_shaping import AdvancedRewardShaping, RewardShapingConfig
+from services.ml.rl.reward_shaping import AdvancedRewardShaping, RewardShapingConfig
 
 
 class TestRewardShapingComprehensive:

@@ -13,7 +13,7 @@ import pytest
 import torch
 from torch import nn
 
-from services.rl.improved_q_network import ImprovedQNetwork as QNetwork
+from services.ml.rl.improved_q_network import ImprovedQNetwork as QNetwork
 
 
 class TestQNetworkBasics:

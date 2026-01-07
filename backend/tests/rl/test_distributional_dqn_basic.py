@@ -6,7 +6,7 @@ Tests pour distributional_dqn.py - couverture de base
 import pytest
 import torch
 
-from services.rl.distributional_dqn import (
+from services.ml.rl.distributional_dqn import (
     C51Network,
     DistributionalLoss,
     QRNetwork,

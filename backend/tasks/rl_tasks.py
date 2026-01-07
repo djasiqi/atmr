@@ -131,7 +131,7 @@ def retrain_dqn_model_task(self):  # noqa: ARG001
         # Tentative de ré-entraînement
         try:
             # Importer uniquement si PyTorch disponible
-            from services.rl.improved_dqn_agent import ImprovedDQNAgent
+            from services.ml.rl.improved_dqn_agent import ImprovedDQNAgent
 
             # Charger le modèle actuel
             model_path = "data/rl/models/dqn_best.pth"
@@ -413,7 +413,7 @@ def optuna_optimize_impl(
     import os
     from urllib.parse import quote_plus
 
-    from services.rl.hyperparameter_tuner import HyperparameterTuner
+    from services.ml.rl.hyperparameter_tuner import HyperparameterTuner
 
     logger.info(
         (
@@ -618,8 +618,8 @@ def train_model_with_optimal_params_impl(
     from pathlib import Path
     from urllib.parse import quote_plus
 
-    from services.rl.dispatch_env import DispatchEnv
-    from services.rl.improved_dqn_agent import ImprovedDQNAgent
+    from services.ml.rl.dispatch_env import DispatchEnv
+    from services.ml.rl.improved_dqn_agent import ImprovedDQNAgent
 
     logger.info(
         (
@@ -678,7 +678,7 @@ def train_model_with_optimal_params_impl(
 
         else:
             # Utiliser les hyperparamètres par défaut
-            from services.rl.optimal_hyperparameters import OptimalHyperparameters
+            from services.ml.rl.optimal_hyperparameters import OptimalHyperparameters
 
             optimal_params = OptimalHyperparameters.get_optimal_config("training")
             logger.info("[RL] ✅ Utilisation hyperparamètres par défaut")

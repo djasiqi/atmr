@@ -22,7 +22,7 @@ from repositories.assignment_repository import AssignmentRepository
 from repositories.booking_repository import BookingRepository
 from repositories.driver_repository import DriverRepository
 from services.auto_reassignment_service import get_auto_reassignment_service
-from services.ml.eta_delay_model import get_eta_delay_model
+from services.ml.models.eta_delay import get_eta_delay_model
 from services.notifications.core import notify_dispatcher_optimization_opportunity
 from services.osrm_client import _table
 from services.unified_dispatch.data import calculate_eta
