@@ -47,7 +47,7 @@ from routes.api_error_models import (
     create_permission_error_model,
     create_validation_error_model,
 )
-from services.idempotency_service import IdempotencyService
+from services.security.idempotency import IdempotencyService
 from shared.error_handlers import APIErrorHandler
 from shared.response_helpers import paginated_response, success_response
 

@@ -341,7 +341,7 @@ def create_app(config_name: str | None = None):
 
     # ✅ S1: Setup protection CSRF pour requêtes mutantes
     try:
-        from services.csrf_protection import setup_csrf_protection
+        from services.security.csrf import setup_csrf_protection
 
         # Activer CSRF seulement si explicitement activé (par défaut activé en production)
         csrf_enabled = os.getenv("CSRF_ENABLED", "true").lower() in ("true", "1", "yes")

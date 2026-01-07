@@ -9,7 +9,7 @@ from flask import Response, current_app, make_response  # pyright: ignore[report
 from flask_restx import Namespace, Resource  # pyright: ignore[reportMissingImports]
 
 from ext import limiter
-from services.secret_rotation_monitor import (
+from services.security.secret_rotation import (
     get_days_since_last_rotation,
     get_rotation_stats,
 )

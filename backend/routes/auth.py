@@ -72,8 +72,8 @@ from security.security_metrics import (
     security_logout_total,
     security_token_refreshes_total,
 )
-from services.csrf_protection import generate_csrf_token
-from services.refresh_token_service import RefreshTokenService
+from services.security.csrf import generate_csrf_token
+from services.security.authentication import RefreshTokenService
 from shared.error_handlers import APIErrorHandler
 from shared.logging_utils import mask_email
 
@@ -1586,7 +1586,7 @@ class Logout(Resource):
             try:
                 from datetime import UTC, datetime
 
-                from services.access_token_service import AccessTokenService
+                from services.security.authentication import AccessTokenService
 
                 access_token_service = AccessTokenService()
                 jwt_claims = get_jwt()

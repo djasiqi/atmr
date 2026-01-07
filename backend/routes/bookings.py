@@ -32,7 +32,7 @@ from routes.api_error_models import (
 )
 from schemas.booking_schemas import BookingCreateSchema
 from schemas.validation_utils import handle_validation_error, validate_request
-from services.idempotency_service import IdempotencyService
+from services.security.idempotency import IdempotencyService
 from shared.constants import PaginationConstants
 from shared.error_handlers import APIErrorHandler
 from shared.response_helpers import created_response, success_response

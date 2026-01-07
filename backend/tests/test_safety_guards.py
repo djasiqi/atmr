@@ -16,7 +16,7 @@ import pytest
 
 # Import conditionnel pour éviter les erreurs si les modules ne sont pas disponibles
 try:
-    from services.safety_guards import SafetyGuards, SafetyThresholds, get_safety_guards
+    from services.security.safety import SafetyGuards, SafetyThresholds, get_safety_guards
 except ImportError:
     SafetyGuards = None
     SafetyThresholds = None
@@ -333,7 +333,7 @@ class TestSafetyGuardsIntegration:
         assert guards is not None
         # Le logger est utilisé dans __init__ via logger.info, donc on peut
         # vérifier que le module a bien un logger configuré
-        from services.safety_guards import logger as safety_logger
+        from services.security.safety import logger as safety_logger
 
         assert safety_logger is not None
 

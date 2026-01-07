@@ -7,7 +7,7 @@ import pytest
 
 from ext import db
 from models import User, UserRole
-from services.secret_rotation_monitor import record_rotation
+from services.security.secret_rotation import record_rotation
 
 
 @pytest.fixture

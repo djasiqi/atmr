@@ -62,7 +62,7 @@ def rotate_jwt_secret(self: Task) -> dict[str, Any]:
 
         # ✅ Enregistrer le skip dans le monitoring
         try:
-            from services.secret_rotation_monitor import record_rotation
+            from services.security.secret_rotation import record_rotation
 
             environment = os.getenv("FLASK_ENV", "production")
             env_path = (
@@ -96,7 +96,7 @@ def rotate_jwt_secret(self: Task) -> dict[str, Any]:
 
             # ✅ Enregistrer le skip dans le monitoring
             try:
-                from services.secret_rotation_monitor import record_rotation
+                from services.security.secret_rotation import record_rotation
 
                 environment = os.getenv("FLASK_ENV", "production")
                 env_path = (
@@ -196,7 +196,7 @@ def rotate_jwt_secret(self: Task) -> dict[str, Any]:
 
         # ✅ Enregistrer la rotation dans le monitoring
         try:
-            from services.secret_rotation_monitor import record_rotation
+            from services.security.secret_rotation import record_rotation
 
             record_rotation(
                 secret_type="jwt",
@@ -222,7 +222,7 @@ def rotate_jwt_secret(self: Task) -> dict[str, Any]:
 
         # ✅ Enregistrer l'échec dans le monitoring
         try:
-            from services.secret_rotation_monitor import record_rotation
+            from services.security.secret_rotation import record_rotation
 
             environment = os.getenv("FLASK_ENV", "production")
             env_path = (
@@ -266,7 +266,7 @@ def rotate_encryption_key(self: Task) -> dict[str, Any]:
 
         # ✅ Enregistrer le skip dans le monitoring
         try:
-            from services.secret_rotation_monitor import record_rotation
+            from services.security.secret_rotation import record_rotation
 
             environment = os.getenv("FLASK_ENV", "production")
             env_path = (
@@ -300,7 +300,7 @@ def rotate_encryption_key(self: Task) -> dict[str, Any]:
 
             # ✅ Enregistrer le skip dans le monitoring
             try:
-                from services.secret_rotation_monitor import record_rotation
+                from services.security.secret_rotation import record_rotation
 
                 environment = os.getenv("FLASK_ENV", "production")
                 env_path = (
@@ -410,7 +410,7 @@ def rotate_encryption_key(self: Task) -> dict[str, Any]:
 
         # ✅ Enregistrer la rotation dans le monitoring
         try:
-            from services.secret_rotation_monitor import record_rotation
+            from services.security.secret_rotation import record_rotation
 
             record_rotation(
                 secret_type="encryption",
@@ -438,7 +438,7 @@ def rotate_encryption_key(self: Task) -> dict[str, Any]:
 
         # ✅ Enregistrer l'échec dans le monitoring
         try:
-            from services.secret_rotation_monitor import record_rotation
+            from services.security.secret_rotation import record_rotation
 
             environment = os.getenv("FLASK_ENV", "production")
             env_path = (
@@ -482,7 +482,7 @@ def rotate_flask_secret_key(self: Task) -> dict[str, Any]:
 
         # ✅ Enregistrer le skip dans le monitoring
         try:
-            from services.secret_rotation_monitor import record_rotation
+            from services.security.secret_rotation import record_rotation
 
             environment = os.getenv("FLASK_ENV", "production")
             env_path = (
@@ -516,7 +516,7 @@ def rotate_flask_secret_key(self: Task) -> dict[str, Any]:
 
             # ✅ Enregistrer le skip dans le monitoring
             try:
-                from services.secret_rotation_monitor import record_rotation
+                from services.security.secret_rotation import record_rotation
 
                 environment = os.getenv("FLASK_ENV", "production")
                 env_path = (
@@ -593,7 +593,7 @@ def rotate_flask_secret_key(self: Task) -> dict[str, Any]:
 
         # ✅ Enregistrer la rotation dans le monitoring
         try:
-            from services.secret_rotation_monitor import record_rotation
+            from services.security.secret_rotation import record_rotation
 
             record_rotation(
                 secret_type="flask_secret_key",
@@ -620,7 +620,7 @@ def rotate_flask_secret_key(self: Task) -> dict[str, Any]:
 
         # ✅ Enregistrer l'échec dans le monitoring
         try:
-            from services.secret_rotation_monitor import record_rotation
+            from services.security.secret_rotation import record_rotation
 
             environment = os.getenv("FLASK_ENV", "production")
             env_path = (

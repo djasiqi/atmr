@@ -1013,7 +1013,7 @@ def mock_weather_service(monkeypatch):
 def safety_guards():
     """Crée une instance de SafetyGuards pour les tests."""
     try:
-        from services.safety_guards import SafetyGuards
+        from services.security.safety import SafetyGuards
 
         return SafetyGuards()
     except ImportError:
