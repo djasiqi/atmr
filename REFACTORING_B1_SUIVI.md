@@ -235,6 +235,7 @@ bab66ed [B1-FIX] Corriger imports après migration P0+P1
 ## 🚀 Prochaines Étapes (Phase 3 → Phase 4)
 
 ### Phase 3 - Tests (En cours)
+
 1. ~~**Migrer fichiers P2**~~ ✅ **COMPLÉTÉ !**
 2. **Exécuter tests unitaires** `unified_dispatch/`
 3. **Tests d'intégration** dispatch
@@ -242,6 +243,7 @@ bab66ed [B1-FIX] Corriger imports après migration P0+P1
 5. **Benchmark** performance avant/après
 
 ### Phase 4 - Documentation & Review
+
 6. **Créer `ARCHITECTURE.md`** dans `unified_dispatch/`
 7. **Créer `MIGRATION_GUIDE.md`** pour les développeurs
 8. **Mettre à jour** `DEPENDENCIES.md` et `RUNBOOK.md`
