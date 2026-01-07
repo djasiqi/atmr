@@ -339,7 +339,9 @@ class TestPostCommitNotifications:
         db.session.commit()
 
         # ✅ Réémettre les notifications (simule le comportement post-commit)
-        from services.unified_dispatch.optimization.assignment_applier import _emit_notifications_after_commit
+        from services.unified_dispatch.optimization.assignment_applier import (
+            _emit_notifications_after_commit,
+        )
 
         applied_pairs = result.get("applied_pairs", [])
         _emit_notifications_after_commit(applied_pairs, company.id)
@@ -436,7 +438,10 @@ class TestPostCommitNotifications:
         ]
 
         # ✅ Vérifier que les métriques sont utilisées si Prometheus disponible
-        from services.unified_dispatch.optimization.assignment_applier import NOTIF_EMITTED, NOTIF_LATENCY
+        from services.unified_dispatch.optimization.assignment_applier import (
+            NOTIF_EMITTED,
+            NOTIF_LATENCY,
+        )
 
         # Si Prometheus non disponible, skip le test
         if NOTIF_EMITTED is None or NOTIF_LATENCY is None:
