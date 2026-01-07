@@ -1373,6 +1373,7 @@ IMPLEMENTATION_A3_ALERTING.md     ✅ Documentation (450 lignes)
 **Effort réel:** ⏱️ **1 journée** (au lieu de 3-4 semaines) - **95% plus rapide**
 
 **Livrables:**
+
 - 38 fichiers migrés avec `git mv` (historique préservé)
 - 58 fichiers imports corrigés (0 erreurs linter)
 - 55 commits Git (traçabilité complète)
@@ -1380,6 +1381,7 @@ IMPLEMENTATION_A3_ALERTING.md     ✅ Documentation (450 lignes)
 - Structure v2.0: 10 modules thématiques clairs
 
 **Documentation:**
+
 - `docs/UNIFIED_DISPATCH_ARCHITECTURE.md` (~400 lignes)
 - `docs/UNIFIED_DISPATCH_MIGRATION_GUIDE.md` (~350 lignes)
 - `backend/RUNBOOK.md` (section troubleshooting v2.0)
@@ -1387,8 +1389,9 @@ IMPLEMENTATION_A3_ALERTING.md     ✅ Documentation (450 lignes)
 - `RAPPORT_FINAL_CONSOLIDE_B1.md` (rapport complet)
 
 **Validation:**
+
 - ✅ Syntaxe Python: 35 fichiers compilent sans erreur
-- ✅ Structure: 10 modules avec __init__.py
+- ✅ Structure: 10 modules avec **init**.py
 - ✅ Tests présents: 14 fichiers de tests
 - ⚠️ Tests complets: À exécuter en CI/CD (Docker limité localement)
 

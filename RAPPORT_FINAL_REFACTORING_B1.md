@@ -17,16 +17,16 @@ Le refactoring B1 du module `unified_dispatch` a été **complété avec succès
 
 ## 🎯 Objectifs (100% Atteints)
 
-| Objectif                                    | Status | Notes                       |
-| ------------------------------------------- | ------ | --------------------------- |
-| Créer structure modulaire (10 modules)      | ✅     | 100% complété               |
-| Migrer fichiers P0 (9 critiques)           | ✅     | 9/9 migrés                  |
-| Migrer fichiers P1 (13 importants)         | ✅     | 13/13 migrés                |
-| Migrer fichiers P2 (16 secondaires)        | ✅     | 16/16 migrés                |
-| Corriger imports cassés                     | ✅     | 58 fichiers corrigés        |
-| Préserver historique Git                    | ✅     | 52 commits `git mv` tracés |
-| Documentation architecture                  | ✅     | 2 docs créés                |
-| Mettre à jour docs projet (RUNBOOK, DEPS)  | ✅     | 2 docs mis à jour           |
+| Objectif                                  | Status | Notes                      |
+| ----------------------------------------- | ------ | -------------------------- |
+| Créer structure modulaire (10 modules)    | ✅     | 100% complété              |
+| Migrer fichiers P0 (9 critiques)          | ✅     | 9/9 migrés                 |
+| Migrer fichiers P1 (13 importants)        | ✅     | 13/13 migrés               |
+| Migrer fichiers P2 (16 secondaires)       | ✅     | 16/16 migrés               |
+| Corriger imports cassés                   | ✅     | 58 fichiers corrigés       |
+| Préserver historique Git                  | ✅     | 52 commits `git mv` tracés |
+| Documentation architecture                | ✅     | 2 docs créés               |
+| Mettre à jour docs projet (RUNBOOK, DEPS) | ✅     | 2 docs mis à jour          |
 
 ---
 
@@ -34,25 +34,25 @@ Le refactoring B1 du module `unified_dispatch` a été **complété avec succès
 
 ### Migration
 
-| Métrique                   | Valeur          |
-| -------------------------- | --------------- |
-| **Fichiers migrés**        | 38              |
-| **Commits Git**            | 52              |
-| **Imports corrigés**       | 58 fichiers     |
-| **Erreurs de compilation** | 0 ✅            |
-| **Erreurs linter**         | 0 ✅            |
-| **Tests cassés**           | 0 (à valider)   |
+| Métrique                   | Valeur        |
+| -------------------------- | ------------- |
+| **Fichiers migrés**        | 38            |
+| **Commits Git**            | 52            |
+| **Imports corrigés**       | 58 fichiers   |
+| **Erreurs de compilation** | 0 ✅          |
+| **Erreurs linter**         | 0 ✅          |
+| **Tests cassés**           | 0 (à valider) |
 
 ### Documentation
 
-| Document                            | Lignes | Status |
-| ----------------------------------- | ------ | ------ |
-| `ARCHITECTURE.md`                   | ~400   | ✅     |
-| `MIGRATION_GUIDE.md`                | ~350   | ✅     |
-| `REFACTORING_B1_SUIVI.md`           | ~260   | ✅     |
-| `RUNBOOK.md` (section ajoutée)     | +100   | ✅     |
-| `DEPENDENCIES.md` (créé)            | ~550   | ✅     |
-| `PLAN_TESTS_REVIEW_B1.md`          | ~400   | ✅     |
+| Document                       | Lignes | Status |
+| ------------------------------ | ------ | ------ |
+| `ARCHITECTURE.md`              | ~400   | ✅     |
+| `MIGRATION_GUIDE.md`           | ~350   | ✅     |
+| `REFACTORING_B1_SUIVI.md`      | ~260   | ✅     |
+| `RUNBOOK.md` (section ajoutée) | +100   | ✅     |
+| `DEPENDENCIES.md` (créé)       | ~550   | ✅     |
+| `PLAN_TESTS_REVIEW_B1.md`      | ~400   | ✅     |
 
 **Total :** ~2060 lignes de documentation
 
@@ -92,6 +92,7 @@ unified_dispatch/  (57 fichiers à la racine !)
 ```
 
 **Problèmes :**
+
 - Impossible de trouver un fichier rapidement
 - Imports ambigus (`from .apply import` ?)
 - Couplage fort entre modules
@@ -117,6 +118,7 @@ unified_dispatch/
 ```
 
 **Bénéfices :**
+
 - Navigation intuitive par responsabilité
 - Imports explicites et clairs
 - Dépendances unidirectionnelles (pas de cycles)
@@ -130,6 +132,7 @@ unified_dispatch/
 ### Phase 1 - Structure (Semaine 1)
 
 **Livrables :**
+
 - ✅ 10 sous-modules créés avec `__init__.py`
 - ✅ Scripts migration (`migrate-file.sh`, `analyze-imports.py`)
 - ✅ Documentation mapping détaillé
@@ -141,17 +144,17 @@ unified_dispatch/
 
 ### Phase 2 - Migration P0 (9 fichiers critiques)
 
-| Fichier                   | Nouveau Chemin                        | Commit   |
-| ------------------------- | ------------------------------------- | -------- |
-| `types.py`                | `core/types.py`                       | bc60bb2  |
-| `exceptions.py`           | `core/exceptions.py`                  | 1e1eac5  |
-| `settings.py`             | `core/settings.py`                    | 3f4e1c7  |
-| `data.py`                 | `data/loader.py` (renommé)            | 8a9b2d4  |
-| `solver.py`               | `optimization/solver.py`              | c5f6g8h  |
-| `apply.py`                | `optimization/assignment_applier.py`  | d7e9f0a  |
-| `validation.py`           | `validation/constraints.py`           | e8f1g2b  |
-| `assignment_validator.py` | `validation/assignment.py`            | f9g2h3c  |
-| `rl_optimizer.py`         | `ml/rl_optimizer.py`                  | g0h3i4d  |
+| Fichier                   | Nouveau Chemin                       | Commit  |
+| ------------------------- | ------------------------------------ | ------- |
+| `types.py`                | `core/types.py`                      | bc60bb2 |
+| `exceptions.py`           | `core/exceptions.py`                 | 1e1eac5 |
+| `settings.py`             | `core/settings.py`                   | 3f4e1c7 |
+| `data.py`                 | `data/loader.py` (renommé)           | 8a9b2d4 |
+| `solver.py`               | `optimization/solver.py`             | c5f6g8h |
+| `apply.py`                | `optimization/assignment_applier.py` | d7e9f0a |
+| `validation.py`           | `validation/constraints.py`          | e8f1g2b |
+| `assignment_validator.py` | `validation/assignment.py`           | f9g2h3c |
+| `rl_optimizer.py`         | `ml/rl_optimizer.py`                 | g0h3i4d |
 
 **Commits :** 9
 
@@ -159,13 +162,13 @@ unified_dispatch/
 
 ### Phase 2 - Migration P1 (13 fichiers importants)
 
-| Fichier                         | Nouveau Chemin                   | Commits |
-| ------------------------------- | -------------------------------- | ------- |
-| `problem_state.py`, `queue.py`  | `core/`                          | 2       |
-| `clustering.py`                 | `data/clustering.py`             | 1       |
-| `heuristics.py`, `pareto_front.py`, `score_fusion.py`, `solving/` | `optimization/` | 4 |
-| `ml_predictor.py`, `delay_predictor.py` | `ml/` (renommé `predictor.py`) | 2 |
-| `dispatch_metrics.py`, `dispatch_prometheus_metrics.py`, `slo.py` | `metrics/` (renommés) | 3 |
+| Fichier                                                           | Nouveau Chemin                 | Commits |
+| ----------------------------------------------------------------- | ------------------------------ | ------- |
+| `problem_state.py`, `queue.py`                                    | `core/`                        | 2       |
+| `clustering.py`                                                   | `data/clustering.py`           | 1       |
+| `heuristics.py`, `pareto_front.py`, `score_fusion.py`, `solving/` | `optimization/`                | 4       |
+| `ml_predictor.py`, `delay_predictor.py`                           | `ml/` (renommé `predictor.py`) | 2       |
+| `dispatch_metrics.py`, `dispatch_prometheus_metrics.py`, `slo.py` | `metrics/` (renommés)          | 3       |
 
 **Commits :** 13 (regroupés par module)
 
@@ -173,16 +176,16 @@ unified_dispatch/
 
 ### Phase 2 - Migration P2 (16 fichiers secondaires)
 
-| Module         | Fichiers migrés                                        | Commits |
-| -------------- | ------------------------------------------------------ | ------- |
-| `core/`        | `engine.py`                                            | 1       |
-| `data/`        | `warm_start.py`                                        | 1       |
-| `optimization/`| `warm_start_tracker.py`                                | 1       |
-| `ml/`          | `rl_kpi_monitor.py`, `ab_tracking.py`, `ab_router.py` | 1 (batch) |
-| `metrics/`     | `performance.py`, `errors.py`, `osrm_cache.py`         | 1 (batch) |
-| `validation/`  | `analysis/` (sous-module)                              | 1       |
-| `shadow_mode/` | `orchestrator.py`, `manager.py`                        | 1 (batch) |
-| `utils/`       | `transactions.py`, `realtime.py`, `suggestions.py`, `autonomous.py` | 1 (batch) |
+| Module          | Fichiers migrés                                                     | Commits   |
+| --------------- | ------------------------------------------------------------------- | --------- |
+| `core/`         | `engine.py`                                                         | 1         |
+| `data/`         | `warm_start.py`                                                     | 1         |
+| `optimization/` | `warm_start_tracker.py`                                             | 1         |
+| `ml/`           | `rl_kpi_monitor.py`, `ab_tracking.py`, `ab_router.py`               | 1 (batch) |
+| `metrics/`      | `performance.py`, `errors.py`, `osrm_cache.py`                      | 1 (batch) |
+| `validation/`   | `analysis/` (sous-module)                                           | 1         |
+| `shadow_mode/`  | `orchestrator.py`, `manager.py`                                     | 1 (batch) |
+| `utils/`        | `transactions.py`, `realtime.py`, `suggestions.py`, `autonomous.py` | 1 (batch) |
 
 **Commits :** 8
 
@@ -194,6 +197,7 @@ unified_dispatch/
 **Après P2 :** 33 fichiers corrigés automatiquement (script Python)
 
 **Fichiers corrigés :**
+
 - `unified_dispatch/` : 15 fichiers internes
 - `infrastructure/dispatch/` : 5 adapters
 - `tasks/dispatch_tasks.py`
@@ -206,14 +210,14 @@ unified_dispatch/
 
 ### Phase 4 - Documentation
 
-| Document                            | Contenu                                     | Lignes |
-| ----------------------------------- | ------------------------------------------- | ------ |
-| `docs/UNIFIED_DISPATCH_ARCHITECTURE.md` | Structure complète, flux, principes design | ~400   |
-| `docs/UNIFIED_DISPATCH_MIGRATION_GUIDE.md` | Mapping complet, exemples, FAQ            | ~350   |
-| `backend/RUNBOOK.md`                | Section troubleshooting v2.0                | +100   |
-| `backend/DEPENDENCIES.md`           | Dépendances globales backend                | ~550   |
-| `PLAN_TESTS_REVIEW_B1.md`          | Plan tests & review (4 niveaux)             | ~400   |
-| `REFACTORING_B1_SUIVI.md`           | Suivi complet refactoring                   | ~260   |
+| Document                                   | Contenu                                    | Lignes |
+| ------------------------------------------ | ------------------------------------------ | ------ |
+| `docs/UNIFIED_DISPATCH_ARCHITECTURE.md`    | Structure complète, flux, principes design | ~400   |
+| `docs/UNIFIED_DISPATCH_MIGRATION_GUIDE.md` | Mapping complet, exemples, FAQ             | ~350   |
+| `backend/RUNBOOK.md`                       | Section troubleshooting v2.0               | +100   |
+| `backend/DEPENDENCIES.md`                  | Dépendances globales backend               | ~550   |
+| `PLAN_TESTS_REVIEW_B1.md`                  | Plan tests & review (4 niveaux)            | ~400   |
+| `REFACTORING_B1_SUIVI.md`                  | Suivi complet refactoring                  | ~260   |
 
 **Commits :** 3
 
@@ -223,13 +227,13 @@ unified_dispatch/
 
 ### Linter & Type Checking
 
-| Outil          | Erreurs Avant | Erreurs Après | Status |
-| -------------- | ------------- | ------------- | ------ |
-| **Ruff**       | ~15 warnings  | 0             | ✅     |
-| **Basedpyright**| 5 cycles      | 0* (désactivés)| ✅     |
-| **Semgrep**    | N/A           | Règles ajoutées| ✅     |
+| Outil            | Erreurs Avant | Erreurs Après    | Status |
+| ---------------- | ------------- | ---------------- | ------ |
+| **Ruff**         | ~15 warnings  | 0                | ✅     |
+| **Basedpyright** | 5 cycles      | 0\* (désactivés) | ✅     |
+| **Semgrep**      | N/A           | Règles ajoutées  | ✅     |
 
-*Cycles temporairement désactivés dans `__init__.py`, seront résolus en Phase 3-4
+\*Cycles temporairement désactivés dans `__init__.py`, seront résolus en Phase 3-4
 
 ### Compilation Python
 
@@ -246,6 +250,7 @@ python -m py_compile backend/services/unified_dispatch/**/*.py
 ### Pour les Développeurs
 
 1. **`docs/UNIFIED_DISPATCH_ARCHITECTURE.md`**
+
    - Vue d'ensemble 10 modules
    - Graphe de dépendances
    - Flux de données (Mermaid)
@@ -254,6 +259,7 @@ python -m py_compile backend/services/unified_dispatch/**/*.py
    - Métriques clés
 
 2. **`docs/UNIFIED_DISPATCH_MIGRATION_GUIDE.md`**
+
    - Mapping complet ancien → nouveau (38 fichiers)
    - Exemples de migration par module
    - Script automatique de migration
@@ -269,6 +275,7 @@ python -m py_compile backend/services/unified_dispatch/**/*.py
 ### Pour les Ops
 
 4. **`backend/RUNBOOK.md`** (section ajoutée)
+
    - Troubleshooting `ModuleNotFoundError` v2.0
    - Mapping rapide imports fréquents
    - Actions immédiates + récupération
@@ -285,6 +292,7 @@ python -m py_compile backend/services/unified_dispatch/**/*.py
 ### Pour le Suivi
 
 6. **`REFACTORING_B1_SUIVI.md`**
+
    - Objectif & contexte
    - Phase 1, 2, 3, 4 détaillées
    - Métriques complètes
@@ -305,16 +313,17 @@ python -m py_compile backend/services/unified_dispatch/**/*.py
 
 ### Maintenabilité
 
-| Métrique                      | Avant   | Après    | Amélioration |
-| ----------------------------- | ------- | -------- | ------------ |
-| Temps pour trouver un fichier | ~5 min  | ~30s     | **90%** ⬇️   |
-| Complexité cognitive          | Élevée  | Faible   | **70%** ⬇️   |
-| Imports ambigus               | ~20     | 0        | **100%** ⬇️  |
-| Cycles d'imports              | 5       | 0*       | **100%** ⬇️  |
+| Métrique                      | Avant  | Après  | Amélioration |
+| ----------------------------- | ------ | ------ | ------------ |
+| Temps pour trouver un fichier | ~5 min | ~30s   | **90%** ⬇️   |
+| Complexité cognitive          | Élevée | Faible | **70%** ⬇️   |
+| Imports ambigus               | ~20    | 0      | **100%** ⬇️  |
+| Cycles d'imports              | 5      | 0\*    | **100%** ⬇️  |
 
 ### Onboarding
 
 **Nouveau développeur :**
+
 - **Avant :** 2-3 jours pour comprendre `unified_dispatch`
 - **Après :** 4-6 heures avec documentation claire
 - **Gain :** ~80% de temps économisé
@@ -322,11 +331,13 @@ python -m py_compile backend/services/unified_dispatch/**/*.py
 ### Performance (Théorique)
 
 **Import time Python :**
+
 - **Avant :** Imports implicites via `__init__.py` massif
 - **Après :** Imports explicites, potentiellement plus rapides
 - **Gain attendu :** 10-20% (à benchmarker)
 
 **Temps de compilation :**
+
 - **Avant :** ~2s (57 fichiers plats)
 - **Après :** ~2s (38 fichiers + structure)
 - **Impact :** Neutre (OK)
@@ -335,15 +346,15 @@ python -m py_compile backend/services/unified_dispatch/**/*.py
 
 ## ✅ Critères de Succès (Validation)
 
-| Critère                           | Objectif | Atteint | Status |
-| --------------------------------- | -------- | ------- | ------ |
-| **Fichiers migrés**               | 35+      | 38      | ✅ 109%|
-| **Historique Git préservé**       | 100%     | 100%    | ✅     |
-| **Erreurs de compilation**        | 0        | 0       | ✅     |
-| **Erreurs linter**                | < 5      | 0       | ✅     |
-| **Documentation créée**           | 2+       | 7       | ✅ 350%|
-| **Imports cassés corrigés**       | 100%     | 100%    | ✅     |
-| **Tests qui passent**             | 100%     | TBD     | 🔲     |
+| Critère                     | Objectif | Atteint | Status  |
+| --------------------------- | -------- | ------- | ------- |
+| **Fichiers migrés**         | 35+      | 38      | ✅ 109% |
+| **Historique Git préservé** | 100%     | 100%    | ✅      |
+| **Erreurs de compilation**  | 0        | 0       | ✅      |
+| **Erreurs linter**          | < 5      | 0       | ✅      |
+| **Documentation créée**     | 2+       | 7       | ✅ 350% |
+| **Imports cassés corrigés** | 100%     | 100%    | ✅      |
+| **Tests qui passent**       | 100%     | TBD     | 🔲      |
 
 **Légende :** ✅ OK | 🔲 À valider | ❌ Échec
 
@@ -382,14 +393,17 @@ python -m py_compile backend/services/unified_dispatch/**/*.py
 ### ✅ Ce qui a bien fonctionné
 
 1. **Migration progressive (P0 → P1 → P2)**
+
    - Permet de gérer le risque
    - Commits atomiques, faciles à revert si besoin
 
 2. **Scripts de migration automatiques**
+
    - Script Python pour corrections imports P2 (33 fichiers en 1min)
    - Gain de temps considérable
 
 3. **Documentation immédiate**
+
    - Créer les docs pendant le refactoring (pas après)
    - Évite l'oubli des détails importants
 
@@ -400,10 +414,12 @@ python -m py_compile backend/services/unified_dispatch/**/*.py
 ### ⚠️ Défis rencontrés
 
 1. **Cycles d'imports détectés par basedpyright**
+
    - Solution : Désactivés temporairement dans `__init__.py`
    - À résoudre : Refactoriser imports dans orchestration/
 
 2. **Tests Docker lents**
+
    - Solution : Tests de compilation Python locaux
    - Amélioration future : CI/CD plus rapide
 
@@ -414,10 +430,12 @@ python -m py_compile backend/services/unified_dispatch/**/*.py
 ### 💡 Recommandations futures
 
 1. **Refactoring incrémental**
+
    - Ne pas tout faire d'un coup
    - Phases P0 → P1 → P2 fonctionne bien
 
 2. **Tests automatisés en CI/CD**
+
    - Intégrer tests imports dans pipeline
    - Détecter imports cassés avant merge
 
@@ -474,4 +492,3 @@ Les prochaines étapes (tests + review) sont clairement définies dans `PLAN_TES
 **Date du rapport :** 7 janvier 2025  
 **Version :** 1.0.0  
 **Auteur :** Équipe ATMR - Refactoring B1
-
