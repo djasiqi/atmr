@@ -11,9 +11,9 @@ from ext import db
 from models import Company
 from repositories.company_repository import CompanyRepository
 from services.unified_dispatch import data
-from services.unified_dispatch import settings as ud_settings
-from services.unified_dispatch.analysis import UnassignedAnalyzer
-from services.unified_dispatch.assignment import AssignmentApplier
+from services.unified_dispatch.core import settings as ud_settings
+from services.unified_dispatch.validation.analysis import UnassignedAnalyzer
+from services.unified_dispatch.assignment.assignment_applier import AssignmentApplier
 from services.unified_dispatch.locking import RedisLockManager
 from shared.constants import GeoConstants, NumericConstants
 from shared.otel_setup import get_tracer  # D1: OpenTelemetry
