@@ -9,5 +9,22 @@ Ce module contient :
 Créé lors du refactoring B1 - 7 janvier 2025
 """
 
+# Import de compatibilité pour tools.py
+from .constraints import (
+    check_existing_assignment_conflict,
+    is_groupable,
+    validate_assignments,
+    validate_driver_capacity,
+    validate_no_duplicate_times,
+    validate_no_temporal_conflicts,
+)
+
 # Exports publics (à compléter lors de la migration)
-__all__ = []
+__all__ = [
+    "check_existing_assignment_conflict",
+    "is_groupable",
+    "validate_assignments",
+    "validate_driver_capacity",
+    "validate_no_duplicate_times",
+    "validate_no_temporal_conflicts",
+]
