@@ -14,7 +14,7 @@ from ortools.constraint_solver import (  # pyright: ignore[reportMissingImports]
     routing_enums_pb2,
 )
 
-from services.unified_dispatch.settings import Settings
+from services.unified_dispatch.core.settings import Settings
 
 if TYPE_CHECKING:
     from models import Booking, Driver
