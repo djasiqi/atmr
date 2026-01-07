@@ -62,13 +62,13 @@ backend/services/security/
 
 #### Services Migrés
 
-| #   | Ancien Fichier                          | Nouveau Fichier                    | Status | Commit  |
-| --- | --------------------------------------- | ---------------------------------- | ------ | ------- |
-| 1   | `notification_service.py`               | `notifications/core.py`            | ✅     | 886317b |
-| 2   | `push_service.py`                       | `notifications/push.py`            | ✅     | 886317b |
-| 3   | `alerting_service.py`                   | `notifications/system.py`          | ✅     | 886317b |
-| 4   | `proactive_alerts.py`                   | `notifications/proactive.py`       | ✅     | 886317b |
-| 5   | `interfaces/notification_interface.py`  | `notifications/interfaces.py`      | ✅     | 886317b |
+| #   | Ancien Fichier                         | Nouveau Fichier               | Status | Commit  |
+| --- | -------------------------------------- | ----------------------------- | ------ | ------- |
+| 1   | `notification_service.py`              | `notifications/core.py`       | ✅     | 886317b |
+| 2   | `push_service.py`                      | `notifications/push.py`       | ✅     | 886317b |
+| 3   | `alerting_service.py`                  | `notifications/system.py`     | ✅     | 886317b |
+| 4   | `proactive_alerts.py`                  | `notifications/proactive.py`  | ✅     | 886317b |
+| 5   | `interfaces/notification_interface.py` | `notifications/interfaces.py` | ✅     | 886317b |
 
 #### Structure Créée
 
