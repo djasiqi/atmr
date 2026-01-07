@@ -63,14 +63,8 @@ from services.unified_dispatch.optimization import solver
 # ML
 # from .ml import predictor, delay_predictor, rl_optimizer, ab_tracking, ab_router
 
-# Orchestration (déjà existant)
-from . import orchestration  # noqa: F401
-
 # Metrics
 # from .metrics import dispatch, prometheus, performance, errors, osrm_cache, slo
-
-# Validation
-# from .validation import constraints, assignment
 
 # Shadow Mode
 # from .shadow_mode import orchestrator, manager
@@ -78,8 +72,12 @@ from . import orchestration  # noqa: F401
 # Utils
 # from .utils import transactions, realtime, suggestions, autonomous
 
-# Locking (déjà existant)
-from . import locking  # noqa: F401
+# Validation
+# from .validation import constraints, assignment
+
+# Modules existants (locking, orchestration)
+from . import locking
+from . import orchestration
 
 # ========== Imports de Compatibilité (DEPRECATED) ==========
 
@@ -88,16 +86,16 @@ from . import locking  # noqa: F401
 # dans le codebase (Semaine 3-4)
 
 # TODO: Compléter lors de la migration (Semaine 2)
-# from .core.types import *  # noqa: F401, F403
-# from .core.exceptions import *  # noqa: F401, F403
-# from .data.loader import *  # noqa: F401, F403
-# from .optimization.solver import *  # noqa: F401, F403
+# from .core.types import *
+# from .core.exceptions import *
+# from .data.loader import *
+# from .optimization.solver import *
 # ... autres imports de compatibilité
 
 __all__ = [
     # Modules
-    "orchestration",
     "locking",
+    "orchestration",
     # Les autres exports seront ajoutés lors de la migration
 ]
 
