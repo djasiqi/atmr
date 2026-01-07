@@ -10,9 +10,9 @@ from domain.events.events import BookingAssignedEvent, DispatchRunCompletedEvent
 from ext import db
 from models import Booking, DispatchRun
 from repositories.booking_repository import BookingRepository
-from services.unified_dispatch import settings as ud_settings
-from services.unified_dispatch.apply import apply_assignments
-from services.unified_dispatch.validation import validate_assignments
+from services.unified_dispatch.core import settings as ud_settings
+from services.unified_dispatch.optimization.assignment_applier import apply_assignments
+from services.unified_dispatch.validation.constraints import validate_assignments
 from shared.otel_setup import get_tracer
 
 logger = logging.getLogger(__name__)

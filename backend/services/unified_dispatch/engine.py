@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from infrastructure.dispatch import unified_dispatch_engine as _impl
 from services.unified_dispatch import data
-from services.unified_dispatch import settings as ud_settings
+from services.unified_dispatch.core import settings as ud_settings
 
 # Ré-exports explicites (compatibilité API + évite F401/unused-import).
 _acquire_day_lock = _impl._acquire_day_lock
