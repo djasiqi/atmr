@@ -4,7 +4,7 @@ from typing import Any
 
 
 def start_optimizer_for_company(*args: Any, **kwargs: Any) -> Any:
-    from services.unified_dispatch.realtime_optimizer import (
+    from services.unified_dispatch.utils.realtime import (
         start_optimizer_for_company as _fn,
     )
 
@@ -12,7 +12,7 @@ def start_optimizer_for_company(*args: Any, **kwargs: Any) -> Any:
 
 
 def stop_optimizer_for_company(*args: Any, **kwargs: Any) -> Any:
-    from services.unified_dispatch.realtime_optimizer import (
+    from services.unified_dispatch.utils.realtime import (
         stop_optimizer_for_company as _fn,
     )
 
@@ -20,7 +20,7 @@ def stop_optimizer_for_company(*args: Any, **kwargs: Any) -> Any:
 
 
 def get_optimizer_for_company(*args: Any, **kwargs: Any) -> Any:
-    from services.unified_dispatch.realtime_optimizer import (
+    from services.unified_dispatch.utils.realtime import (
         get_optimizer_for_company as _fn,
     )
 
@@ -28,7 +28,7 @@ def get_optimizer_for_company(*args: Any, **kwargs: Any) -> Any:
 
 
 def check_opportunities_manual(*args: Any, **kwargs: Any) -> Any:
-    from services.unified_dispatch.realtime_optimizer import (
+    from services.unified_dispatch.utils.realtime import (
         check_opportunities_manual as _fn,
     )
 

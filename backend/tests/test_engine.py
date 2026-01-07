@@ -297,7 +297,7 @@ class TestEngineInternalFunctions:
 
     def test_in_tx(self, db):
         """Test _in_tx détecte transaction active."""
-        from services.unified_dispatch.transaction_helpers import _in_tx
+        from services.unified_dispatch.utils.transactions import _in_tx
 
         # Hors transaction
         result = _in_tx()
@@ -636,7 +636,7 @@ class TestEngineAdditionalCoverage:
 
     def test_begin_tx(self, db):
         """Test _begin_tx comme context manager."""
-        from services.unified_dispatch.transaction_helpers import _begin_tx
+        from services.unified_dispatch.utils.transactions import _begin_tx
 
         # Tester que _begin_tx peut être utilisé comme context manager
         # La fixture db fournit le contexte d'application Flask nécessaire

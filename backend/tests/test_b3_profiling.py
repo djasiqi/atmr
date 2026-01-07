@@ -76,7 +76,7 @@ class TestDispatchProfiler:
         """Test: Check budgets si tous sont respectés."""
 
         from scripts.profiling.profiler import DispatchProfiler
-        from services.unified_dispatch.performance_metrics import (
+        from services.unified_dispatch.metrics.performance import (
             DispatchPerformanceMetrics,
         )
 
@@ -102,7 +102,7 @@ class TestDispatchProfiler:
         """Test: Check budgets si certains sont dépassés."""
 
         from scripts.profiling.profiler import DispatchProfiler
-        from services.unified_dispatch.performance_metrics import (
+        from services.unified_dispatch.metrics.performance import (
             DispatchPerformanceMetrics,
         )
 
@@ -155,7 +155,7 @@ class TestDispatchProfiler:
         """Test: Vérifier que le rapport est généré."""
 
         from scripts.profiling.profiler import DispatchProfiler
-        from services.unified_dispatch.performance_metrics import (
+        from services.unified_dispatch.metrics.performance import (
             DispatchPerformanceMetrics,
         )
 
@@ -210,7 +210,7 @@ class TestDispatchProfiler:
         """Test: Vérifier que les pourcentages sont calculés correctement."""
 
         from scripts.profiling.profiler import DispatchProfiler
-        from services.unified_dispatch.performance_metrics import (
+        from services.unified_dispatch.metrics.performance import (
             DispatchPerformanceMetrics,
         )
 

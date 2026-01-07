@@ -21,7 +21,7 @@ from models import Assignment, AssignmentStatus, Booking, BookingStatus, Driver
 from repositories.assignment_repository import AssignmentRepository
 from repositories.booking_repository import BookingRepository
 from repositories.driver_repository import DriverRepository
-from services.unified_dispatch.transaction_helpers import _begin_tx, _in_tx
+from services.unified_dispatch.utils.transactions import _begin_tx, _in_tx
 from shared.time_utils import now_utc  # UTC centralisé
 
 logger = logging.getLogger(__name__)

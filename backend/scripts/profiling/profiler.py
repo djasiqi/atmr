@@ -14,7 +14,7 @@ from contextlib import contextmanager
 from io import StringIO
 from typing import Any, Dict, List
 
-from services.unified_dispatch.performance_metrics import DispatchPerformanceMetrics
+from services.unified_dispatch.metrics.performance import DispatchPerformanceMetrics
 
 logger = logging.getLogger(__name__)
 

@@ -45,7 +45,7 @@ class TestDriverCreationToAssignmentFlow:
         )
 
         # Déclencher le dispatch (comme dans test_booking_dispatch_e2e.py)
-        from services.unified_dispatch.engine import run as dispatch_run
+        from services.unified_dispatch.core.engine import run as dispatch_run
 
         dispatch_date = scheduled_time.date()
         result = dispatch_run(

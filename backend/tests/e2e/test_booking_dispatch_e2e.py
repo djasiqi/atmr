@@ -10,7 +10,7 @@ import pytest
 from flask.testing import FlaskClient
 
 from models import Booking, BookingStatus, DispatchRun, DispatchStatus
-from services.unified_dispatch.engine import run as dispatch_run
+from services.unified_dispatch.core.engine import run as dispatch_run
 from tests.e2e.helpers.e2e_helpers import (
     assert_booking_assigned,
     assert_dispatch_run_created,

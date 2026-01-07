@@ -184,7 +184,7 @@ def run(
         - DB: Commit transaction (ou rollback en cas d'erreur)
 
     Exemple:
-        >>> from services.unified_dispatch.engine import run
+        >>> from services.unified_dispatch.core.engine import run
         >>> # Dispatch automatique pour aujourd'hui
         >>> result = run(company_id=1, mode="auto")
         >>> if result["success"]:

@@ -10,11 +10,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from models import DispatchMode
-from services.unified_dispatch.autonomous_manager import (
+from services.unified_dispatch.utils.autonomous import (
     AutonomousDispatchManager,
     get_manager_for_company,
 )
-from services.unified_dispatch.reactive_suggestions import Suggestion
+from services.unified_dispatch.utils.suggestions import Suggestion
 from tests.factories import CompanyFactory
 
 

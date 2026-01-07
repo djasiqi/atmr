@@ -7,7 +7,7 @@ Teste que le cache OSRM fonctionne et que les métriques hit-rate sont correctes
 
 import logging
 
-from services.unified_dispatch.osrm_cache_metrics import (
+from services.unified_dispatch.metrics.osrm_cache import (
     check_cache_alert,
     get_cache_hit_rate,
     get_top_misses,
@@ -138,7 +138,7 @@ class TestOSrmCacheMetrics:
         for _ in range(5):
             increment_cache_bypass()
 
-        from services.unified_dispatch.osrm_cache_metrics import get_cache_metrics_dict
+        from services.unified_dispatch.metrics.osrm_cache import get_cache_metrics_dict
 
         metrics = get_cache_metrics_dict()
 
@@ -184,7 +184,7 @@ class TestOSrmCacheKeyGeneration:
     def test_cache_key_same_input(self):
         """Test: même input → même cache key."""
 
-        from services.unified_dispatch.osrm_cache_metrics import generate_cache_key_v1
+        from services.unified_dispatch.metrics.osrm_cache import generate_cache_key_v1
 
         points = [(45.5, -73.5), (45.6, -73.6)]
         key1 = generate_cache_key_v1("driving", points, "20250127", 10)
@@ -197,7 +197,7 @@ class TestOSrmCacheKeyGeneration:
     def test_cache_key_different_input(self):
         """Test: input différent → cache key différent."""
 
-        from services.unified_dispatch.osrm_cache_metrics import generate_cache_key_v1
+        from services.unified_dispatch.metrics.osrm_cache import generate_cache_key_v1
 
         points1 = [(45.5, -73.5)]
         points2 = [(45.6, -73.6)]
@@ -214,7 +214,7 @@ class TestOSrmCacheKeyGeneration:
 
         from datetime import UTC, datetime
 
-        from services.unified_dispatch.osrm_cache_metrics import get_slot_15min
+        from services.unified_dispatch.metrics.osrm_cache import get_slot_15min
 
         # Slot 0: 00:00
         slot0 = get_slot_15min(datetime(2025, 1, 27, 0, 0, tzinfo=UTC))

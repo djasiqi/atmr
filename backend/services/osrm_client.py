@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Tuple, cast
 import requests  # pyright: ignore[reportMissingModuleSource]
 from cachetools import LRUCache  # pyright: ignore[reportMissingModuleSource]
 
-from services.unified_dispatch.osrm_cache_metrics import (
+from services.unified_dispatch.metrics.osrm_cache import (
     increment_cache_bypass,
     increment_cache_hit,
     increment_cache_miss,
@@ -634,7 +634,7 @@ def _get_adaptive_ttl(
 
         # ✅ Métrique Prometheus pour routes fréquentes
         try:
-            from services.unified_dispatch.osrm_cache_metrics import (
+            from services.unified_dispatch.metrics.osrm_cache import (
                 OSRM_CACHE_FREQUENT_ROUTES_TOTAL,
             )
 

@@ -11,7 +11,7 @@ from models import Company, DispatchMode
 from repositories.booking_repository import BookingRepository
 from repositories.company_repository import CompanyRepository
 from repositories.driver_repository import DriverRepository
-from services.unified_dispatch.reactive_suggestions import Suggestion, apply_suggestion
+from services.unified_dispatch.utils.suggestions import Suggestion, apply_suggestion
 from shared.time_utils import now_local
 
 logger = logging.getLogger(__name__)
