@@ -11,7 +11,7 @@ from typing import Any, Dict
 
 from ext import app_logger
 from schemas.socket_events import EVENT_VERSION, SocketEvent
-from services.push_service import send_push_message
+from services.notifications.push import send_push_message
 from services.socketio_service import (
     emit_company_event,
     emit_date_event,

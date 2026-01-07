@@ -332,7 +332,7 @@ def run_dispatch_task(
                         try:
                             from datetime import date as date_type
 
-                            from services.notification_service import (
+                            from services.notifications.core import (
                                 notify_dispatch_run_completed,
                             )
 

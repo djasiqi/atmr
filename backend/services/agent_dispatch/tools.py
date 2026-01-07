@@ -1228,7 +1228,7 @@ class AgentTools:
             )
 
             # TODO: Intégrer avec services/notification_service.py
-            # from services.notification_service import send_notification
+            # from services.notifications.core import send_notification
             # send_notification(channel, to, template_id, vars)
 
             return {"ok": True, "id": f"notif_{datetime.now().isoformat()}"}

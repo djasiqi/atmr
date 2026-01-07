@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from services.proactive_alerts import ProactiveAlertsService
+from services.notifications.proactive import ProactiveAlertsService
 
 
 def create_proactive_alerts_service() -> ProactiveAlertsService:

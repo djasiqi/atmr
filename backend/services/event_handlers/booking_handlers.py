@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 def handle_booking_assigned(event: dict[str, Any]) -> None:
     from ext import db
     from models import Booking
-    from services.notification_service import notify_booking_assigned
+    from services.notifications.core import notify_booking_assigned
 
     booking_id = event.get("booking_id")
     if booking_id is None:
@@ -99,7 +99,7 @@ def handle_booking_updated(event: dict[str, Any]) -> None:
     try:
         from ext import db
         from models import Booking
-        from services.notification_service import notify_booking_update
+        from services.notifications.core import notify_booking_update
 
         # Récupérer le booking pour la notification
         with suppress(Exception):
@@ -149,7 +149,7 @@ def handle_booking_cancelled(event: dict[str, Any]) -> None:
         return
 
     try:
-        from services.notification_service import notify_booking_cancelled
+        from services.notifications.core import notify_booking_cancelled
 
         notify_booking_cancelled(int(driver_id), int(booking_id))
         logger.debug(

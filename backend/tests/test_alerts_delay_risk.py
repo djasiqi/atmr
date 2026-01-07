@@ -21,7 +21,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from routes.proactive_alerts import _get_mock_booking_data, _get_mock_driver_data
-from services.proactive_alerts import ProactiveAlertsService
+from services.notifications.proactive import ProactiveAlertsService
 
 
 class TestProactiveAlertsService:

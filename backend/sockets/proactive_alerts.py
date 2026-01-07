@@ -28,7 +28,7 @@ from flask_socketio import (  # pyright: ignore[reportMissingModuleSource]
     rooms,
 )
 
-from services.proactive_alerts import ProactiveAlertsService
+from services.notifications.proactive import ProactiveAlertsService
 from sockets.websocket_ack import get_ack_manager, register_ack_handlers
 
 logger = logging.getLogger(__name__)

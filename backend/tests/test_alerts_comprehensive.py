@@ -15,12 +15,12 @@ import pytest
 
 # Import conditionnel pour éviter les erreurs si les modules ne sont pas disponibles
 try:
-    from services.proactive_alerts import ProactiveAlertsService
+    from services.notifications.proactive import ProactiveAlertsService
 except ImportError:
     ProactiveAlertsService = None
 
 try:
-    from services.notification_service import NotificationService  # pyright: ignore
+    from services.notifications.core import NotificationService  # pyright: ignore
 except ImportError:
     NotificationService = None
 
