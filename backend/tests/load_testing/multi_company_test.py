@@ -65,8 +65,7 @@ class MultiCompanyDispatchTest(HttpUser):
         self.test_date = tomorrow.strftime("%Y-%m-%d")
 
         logger.info(
-            f"[SETUP] ✅ Company {self.company_id} prête | "
-            f"Date: {self.test_date}"
+            f"[SETUP] ✅ Company {self.company_id} prête | Date: {self.test_date}"
         )
 
     def _login(self) -> None:
@@ -152,15 +151,13 @@ class MultiCompanyDispatchTest(HttpUser):
         elif response.status_code == 409:
             # Conflit (dispatch déjà en cours)
             logger.warning(
-                f"[DISPATCH] ⚠️ Company {self.company_id} | "
-                f"Dispatch déjà en cours (409)"
+                f"[DISPATCH] ⚠️ Company {self.company_id} | Dispatch déjà en cours (409)"
             )
             response.success()  # Pas une erreur réelle
         elif response.status_code == 423:
             # Locked (Redis lock actif)
             logger.warning(
-                f"[DISPATCH] ⚠️ Company {self.company_id} | "
-                f"Redis lock actif (423)"
+                f"[DISPATCH] ⚠️ Company {self.company_id} | Redis lock actif (423)"
             )
             response.success()
         else:
@@ -291,8 +288,7 @@ class MultiCompanyDispatchTest(HttpUser):
 
         except json.JSONDecodeError as e:
             logger.error(
-                f"[DISPATCH] ❌ Company {self.company_id} | "
-                f"Erreur parsing JSON : {e}"
+                f"[DISPATCH] ❌ Company {self.company_id} | Erreur parsing JSON : {e}"
             )
             response.failure(f"JSON parse error: {e}")
 
@@ -363,4 +359,3 @@ Points de validation :
 - ✅ Performance stable avec 10+ entreprises
 - ✅ Pas de deadlocks DB
 """
-
