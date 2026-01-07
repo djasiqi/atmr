@@ -727,7 +727,7 @@ def ensure_agents_running(self) -> Dict[str, Any]:  # noqa: ARG001
 
             for company in companies:
                 try:
-                    from services.agent_dispatch.orchestrator import (
+                    from services.dispatch.agent.orchestrator import (
                         get_agent_for_company,
                     )
 

@@ -29,9 +29,9 @@ from repositories.assignment_repository import AssignmentRepository
 from repositories.booking_repository import BookingRepository
 from repositories.company_repository import CompanyRepository
 from repositories.driver_repository import DriverRepository
-from services.agent_dispatch.reporting import generate_daily_report
-from services.agent_dispatch.safety_policy import SafetyPolicy
-from services.agent_dispatch.tools import AgentTools
+from services.dispatch.agent.reporting import generate_daily_report
+from services.dispatch.agent.safety_policy import SafetyPolicy
+from services.dispatch.agent.tools import AgentTools
 from shared.time_utils import now_local
 
 TZ = ZoneInfo("Europe/Zurich")
