@@ -33,7 +33,7 @@ from services.unified_dispatch.optimization import heuristics, solver
 from services.unified_dispatch.orchestration.clustering_manager import (
     ClusteringManager,
 )
-from services.unified_dispatch.orchestration.shadow_mode_manager import (
+from services.unified_dispatch.shadow_mode.manager import (
     ShadowModeManager,
 )
 from sqlalchemy.exc import DBAPIError, OperationalError
