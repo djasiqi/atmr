@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 def handle_dispatch_run_completed(event: dict[str, Any]) -> None:
-    from services.notification_service import notify_dispatch_run_completed
+    from services.notifications.core import notify_dispatch_run_completed
 
     company_id = int(event.get("company_id") or 0)
     dispatch_run_id = int(event.get("dispatch_run_id") or 0)

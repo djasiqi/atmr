@@ -36,7 +36,7 @@ from ext import db, redis_client
 from models import Company, Driver, Message, SenderRole, User, UserRole
 from schemas.socket_events import EVENT_VERSION, SocketEvent
 from services.location_service import get_location_service
-from services.push_service import send_push_message
+from services.notifications.push import send_push_message
 from services.security.spam import can_send_message
 from services.websocket_metrics import ws_metrics
 from services.websocket_rate_limiter import ws_rate_limiter

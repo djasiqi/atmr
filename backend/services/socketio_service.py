@@ -473,7 +473,7 @@ def emit_delay_detected(
     # Import depuis push_service pour éviter les cycles d'import
     if driver and hasattr(driver, "push_token") and driver.push_token:
         try:
-            from services.push_service import send_push_message
+            from services.notifications.push import send_push_message
 
             delay_text = (
                 f"{int(delay_minutes)} min" if delay_minutes >= 1 else "< 1 min"

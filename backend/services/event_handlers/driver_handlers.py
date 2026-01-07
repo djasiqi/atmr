@@ -55,7 +55,7 @@ def handle_driver_new_booking(event: dict[str, Any]) -> None:
     try:
         from ext import db
         from models import Booking
-        from services.notification_service import notify_driver_new_booking
+        from services.notifications.core import notify_driver_new_booking
 
         # Récupérer le booking pour la notification
         with suppress(Exception):
