@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
 import sentry_sdk  # pyright: ignore[reportMissingImports]
-from flask import request  # pyright: ignore[reportMissingImports]
+from flask import request
 from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
     get_jwt_identity,
     jwt_required,
@@ -950,7 +950,7 @@ class OptunaOptimize(Resource):
             # Le worker RL a accès à Optuna et à la base de données RL PostgreSQL
             import os
 
-            import requests  # pyright: ignore[reportMissingModuleSource]
+            import requests
 
             # URL du worker RL (par défaut : atmr-rl-worker:5000 dans le réseau Docker)
             rl_worker_url = os.getenv(
@@ -994,7 +994,7 @@ class OptunaOptimize(Resource):
 
                 # Désactiver les avertissements SSL pour les connexions internes non sécurisées
                 try:
-                    import urllib3  # pyright: ignore[reportMissingImports]
+                    import urllib3
 
                     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
                 except ImportError:
@@ -1257,8 +1257,7 @@ class OptunaTrain(Resource):
             # Faire une requête HTTP vers le worker RL pour lancer l'entraînement
             import os
 
-            import requests  # pyright: ignore[reportMissingModuleSource]
-
+            import requests
             # URL du worker RL (par défaut : atmr-rl-worker:5000 dans le réseau Docker)
             rl_worker_url = os.getenv(
                 "RL_WORKER_URL", "http://atmr-rl-worker:5000"
@@ -1291,7 +1290,7 @@ class OptunaTrain(Resource):
 
             # Désactiver les avertissements SSL pour les connexions internes
             try:
-                import urllib3  # pyright: ignore[reportMissingImports]
+                import urllib3
 
                 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
             except ImportError:
@@ -1424,6 +1423,10 @@ class WebSocketMetricsResource(Resource):
 # ✅ C2: Endpoints Redis Rate Limiting Management
 # ========================
 
+# Constantes pour rate limiting
+MIN_KEY_PARTS_FOR_ENDPOINT = 2  # Nombre minimum de parties dans une clé pour extraire l'endpoint
+
+
 @admin_ns.route("/rate-limit/flush")
 class RateLimitFlush(Resource):
     """Endpoint pour flush tous les compteurs de rate limit."""
@@ -1447,6 +1450,13 @@ class RateLimitFlush(Resource):
                 rate_limit_active_keys,
                 rate_limit_flushes_total,
             )
+
+            # Vérifier que Redis est disponible
+            if redis_client is None:
+                return {
+                    "error": "Redis is not available",
+                    "status": "error",
+                }, 503
 
             user_id = get_jwt_identity()
 
@@ -1480,7 +1490,7 @@ class RateLimitFlush(Resource):
             sentry_sdk.capture_exception(e)
             logger.exception("[ADMIN] Failed to flush rate limits: %s", e)
             return {
-                "error": f"Failed to flush rate limits: {str(e)}",
+                "error": f"Failed to flush rate limits: {e!s}",
                 "status": "error",
             }, 500
 
@@ -1503,6 +1513,13 @@ class RateLimitStats(Resource):
         try:
             from security.security_metrics import rate_limit_active_keys
 
+            # Vérifier que Redis est disponible
+            if redis_client is None:
+                return {
+                    "error": "Redis is not available",
+                    "status": "error",
+                }, 503
+
             # Scanner toutes les clés de rate limit
             keys = list(redis_client.scan_iter("LIMITER:*"))
 
@@ -1515,11 +1532,9 @@ class RateLimitStats(Resource):
                 # Convertir bytes en string si nécessaire
                 key_str = key.decode("utf-8") if isinstance(key, bytes) else key
                 parts = key_str.split(":")
-                if len(parts) >= 2:
+                if len(parts) >= MIN_KEY_PARTS_FOR_ENDPOINT:
                     endpoint = parts[1] if len(parts) > 1 else "unknown"
-                    stats_by_endpoint[endpoint] = (
-                        stats_by_endpoint.get(endpoint, 0) + 1
-                    )
+                    stats_by_endpoint[endpoint] = stats_by_endpoint.get(endpoint, 0) + 1
 
             # Obtenir les infos mémoire Redis
             redis_memory_info = redis_client.info("memory")
@@ -1529,8 +1544,7 @@ class RateLimitStats(Resource):
                 "total_keys": len(keys),
                 "keys_by_endpoint": stats_by_endpoint,
                 "sample_keys": [
-                    k.decode("utf-8") if isinstance(k, bytes) else k
-                    for k in keys[:10]
+                    k.decode("utf-8") if isinstance(k, bytes) else k for k in keys[:10]
                 ],
                 "redis_memory_used": redis_memory_used,
             }
@@ -1541,7 +1555,7 @@ class RateLimitStats(Resource):
             sentry_sdk.capture_exception(e)
             logger.exception("[ADMIN] Failed to get rate limit stats: %s", e)
             return {
-                "error": f"Failed to get rate limit stats: {str(e)}",
+                "error": f"Failed to get rate limit stats: {e!s}",
                 "status": "error",
             }, 500
 
@@ -1562,6 +1576,13 @@ class RedisInfo(Resource):
             JSON avec informations Redis
         """
         try:
+            # Vérifier que Redis est disponible
+            if redis_client is None:
+                return {
+                    "error": "Redis is not available",
+                    "status": "error",
+                }, 503
+
             info = {
                 "server": redis_client.info("server"),
                 "memory": redis_client.info("memory"),
@@ -1575,7 +1596,7 @@ class RedisInfo(Resource):
             sentry_sdk.capture_exception(e)
             logger.exception("[ADMIN] Failed to get Redis info: %s", e)
             return {
-                "error": f"Failed to get Redis info: {str(e)}",
+                "error": f"Failed to get Redis info: {e!s}",
                 "status": "error",
             }, 500
 
@@ -1620,6 +1641,6 @@ class RateLimitConfig(Resource):
             sentry_sdk.capture_exception(e)
             logger.exception("[ADMIN] Failed to get rate limit config: %s", e)
             return {
-                "error": f"Failed to get rate limit config: {str(e)}",
+                "error": f"Failed to get rate limit config: {e!s}",
                 "status": "error",
             }, 500
