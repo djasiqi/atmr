@@ -265,6 +265,12 @@ class Config:
     # Version de configuration pour versioning des clés Redis
     # Incrémenter manuellement lors de changements majeurs de rate limits
     RATELIMIT_CONFIG_VERSION = os.getenv("RATELIMIT_CONFIG_VERSION", "v1")
+    
+    # ✅ C2 Phase 2: TTL automatique sur les clés de rate limit
+    # Durée de vie par défaut: 2 heures (7200 secondes)
+    # Les clés expirent automatiquement, évitant l'accumulation en mémoire Redis
+    # Valeur recommandée: 2-4 heures (7200-14400 secondes)
+    RATELIMIT_KEY_TTL = int(os.getenv("RATELIMIT_KEY_TTL", "7200"))
 
     # Logique d'initialisation commune (optionnel)
     @staticmethod
