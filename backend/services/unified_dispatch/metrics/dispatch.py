@@ -146,7 +146,8 @@ class DispatchMetricsCollector:
             # ✅ Utilisation du repository pour découpler de SQLAlchemy
             assignment_repo = AssignmentRepository()
             assignment_dtos = assignment_repo.find_by_dispatch_run_id(dispatch_run_id)
-            # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs pour la compatibilité
+            # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs pour la
+            # compatibilité
             assignment_ids = [dto.id for dto in assignment_dtos]
             assignments = (
                 Assignment.query.filter(Assignment.id.in_(assignment_ids)).all()
@@ -164,7 +165,8 @@ class DispatchMetricsCollector:
             filtered_booking_dtos = [
                 dto for dto in booking_dtos if dto.status in valid_statuses
             ]
-            # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs pour la compatibilité
+            # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs pour la
+            # compatibilité
             booking_ids = [dto.id for dto in filtered_booking_dtos]
             all_bookings = (
                 Booking.query.filter(Booking.id.in_(booking_ids)).all()
@@ -351,7 +353,8 @@ class DispatchMetricsCollector:
         if booking_ids:
             booking_repo = BookingRepository()
             booking_dtos = booking_repo.find_by_ids(booking_ids)
-            # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs pour la compatibilité
+            # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs pour la
+            # compatibilité
             booking_model_ids = [dto.id for dto in booking_dtos]
             bookings = (
                 Booking.query.filter(Booking.id.in_(booking_model_ids)).all()
