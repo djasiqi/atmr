@@ -20,7 +20,8 @@ Métriques clés :
 - Isolation données : 100%
 
 Usage:
-    locust -f multi_company_test.py --host=http://localhost:5000 --users=10 --spawn-rate=10
+    locust -f multi_company_test.py --host=http://localhost:5000 --users=10 
+    --spawn-rate=10
 """
 
 from __future__ import annotations
@@ -192,7 +193,8 @@ class MultiCompanyDispatchTest(HttpUser):
             for booking in bookings:
                 if booking.get("company_id") != self.company_id:
                     logger.error(
-                        "[ISOLATION] ❌ LEAK DÉTECTÉ ! Booking %s de Company %s visible par Company %s",
+                        "[ISOLATION] ❌ LEAK DÉTECTÉ ! Booking %s de Company %s "
+                        "visible par Company %s",
                         booking.get("id"),
                         booking.get("company_id"),
                         self.company_id,
@@ -271,7 +273,8 @@ class MultiCompanyDispatchTest(HttpUser):
 
             # Log succès
             logger.info(
-                "[DISPATCH] ✅ Company %s | Duration: %.2fs | API: %.2fs | Assignments: %s/%s",
+                "[DISPATCH] ✅ Company %s | Duration: %.2fs | API: %.2fs | "
+                "Assignments: %s/%s",
                 self.company_id,
                 dispatch_duration,
                 duration,

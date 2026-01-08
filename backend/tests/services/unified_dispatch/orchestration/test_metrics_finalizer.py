@@ -232,10 +232,14 @@ class TestRecordPrometheusMetrics:
         # Vérifier que les fonctions record_* sont appelées
         # Note: Les fonctions sont importées localement dans un try/except,
         # donc le mock doit être fait sur dispatch_prometheus_metrics
-        # Vérifier que record_unassigned_count est appelé (toujours appelé si dispatch_run_id is not None et perf_metrics)
-        # Vérifier que record_assignments_created est appelé seulement si assignments_created > 0
-        # Les mocks peuvent ne pas être appelés si l'import échoue ou si les conditions ne sont pas remplies
-        # Pour l'instant, on vérifie seulement que la méthode ne lève pas d'exception
+        # Vérifier que record_unassigned_count est appelé (toujours appelé si
+        # dispatch_run_id is not None et perf_metrics)
+        # Vérifier que record_assignments_created est appelé seulement si
+        # assignments_created > 0
+        # Les mocks peuvent ne pas être appelés si l'import échoue ou si les
+        # conditions ne sont pas remplies
+        # Pour l'instant, on vérifie seulement que la méthode ne lève pas
+        # d'exception
         assert True  # Test passe si aucune exception n'est levée
 
     @patch(
