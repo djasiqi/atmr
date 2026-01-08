@@ -1,8 +1,37 @@
 # 🚨 TODO - Erreurs de Déploiement SSH
 
 **Date** : 2026-01-08 21:26
-**Status** : ❌ ÉCHEC CRITIQUE
+**Status** : 🔧 **CAUSE RACINE IDENTIFIÉE - Solution en cours**
 **Job** : `appleboy/ssh-action@master`
+
+---
+
+## 🎯 MISE À JOUR - Cause racine identifiée (2026-01-08 23:45)
+
+### Problème : Cache Docker BuildKit
+
+L'erreur `ModuleNotFoundError: No module named 'flask_limiter.storage'` **persistait malgré les builds automatiques** à cause du **cache Docker/BuildKit GitHub Actions**.
+
+**Explication** :
+- Le workflow GitHub Actions utilise le cache BuildKit (`cache-from: type=gha, cache-to: type=gha,mode=max`)
+- Les anciens wheels de `Flask-Limiter` (compilés **AVANT** l'ajout de `[redis]`) étaient persistés dans ce cache
+- Même avec `Flask-Limiter[redis]>=3.0.0` dans `requirements.base.txt`, les wheels en cache étaient **réutilisés**
+- Le hash `REQUIREMENTS_HASH` était calculé mais jamais utilisé pour invalider le cache du `RUN` dans `Dockerfile.production`
+
+### Solution appliquée (commit `abc41d3c`)
+
+1. ✅ Ajout d'un commentaire d'invalidation de cache dans `backend/requirements.base.txt` :
+   ```diff
+   # Requirements de base - communs à tous les environnements (prod et RL)
+   # Ces dépendances sont nécessaires pour l'API, la DB, Celery, Redis, etc.
+   + # INVALIDATION CACHE: 2026-01-08 - Fix Flask-Limiter[redis] installation
+   ```
+
+2. ✅ Push vers `main` → déclenche automatiquement un nouveau build
+3. ⏳ Le nouveau build reconstruit TOUS les wheels Python avec le cache invalidé
+4. 🔄 Le déploiement automatique suivra avec l'image correcte
+
+**Temps estimé** : 10-15 minutes pour le build complet
 
 ---
 
