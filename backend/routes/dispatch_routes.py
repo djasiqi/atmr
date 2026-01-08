@@ -561,7 +561,7 @@ def _booking_time_expr() -> Any:
 class CompanyDispatchRun(Resource):
     @jwt_required()
     @role_required(UserRole.company)
-    @limiter.limit("30 per hour")  # ✅ 2.8: Rate limiting lancement dispatch (coûteux)
+    @limiter.limit("10000 per hour")  # ⚠️ C2: Augmenté temporairement (normalement 30)
     @dispatch_ns.expect(run_model, validate=False)
     @dispatch_ns.doc(
         description="""
@@ -909,7 +909,7 @@ class DispatchPreview(Resource):
 class DispatchTrigger(Resource):
     @jwt_required()
     @role_required(UserRole.company)
-    @limiter.limit("50 per hour")  # ✅ 2.8: Rate limiting trigger dispatch
+    @limiter.limit("10000 per hour")  # ⚠️ C2: Augmenté temporairement (normalement 50)
     @dispatch_ns.doc(
         description="""
         ⚠️ **DÉPRÉCIÉ** - Cet endpoint sera supprimé dans une future version.
