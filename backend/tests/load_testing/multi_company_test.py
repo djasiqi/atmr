@@ -215,8 +215,6 @@ class MultiCompanyDispatchTest(HttpUser):
     def test_redis_lock(self) -> None:
         """Tester acquisition/release de lock Redis."""
         # Tenter d'acquérir un lock pour cette entreprise/date
-        lock_key = f"dispatch_lock:{self.company_id}:{self.test_date}"
-
         response = self.client.post(
             "/api/dispatch/acquire-lock",
             json={

@@ -72,8 +72,8 @@ from security.security_metrics import (
     security_logout_total,
     security_token_refreshes_total,
 )
-from services.security.csrf import generate_csrf_token
 from services.security.authentication import RefreshTokenService
+from services.security.csrf import generate_csrf_token
 from shared.error_handlers import APIErrorHandler
 from shared.logging_utils import mask_email
 

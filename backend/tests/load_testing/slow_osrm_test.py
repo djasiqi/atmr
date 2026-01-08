@@ -149,8 +149,6 @@ class SlowOSRMDispatchTest(HttpUser):
         Après le 1er dispatch, le cache doit être rempli.
         Les dispatches suivants doivent être plus rapides.
         """
-        start_time = time.time()
-
         response = self.client.post(
             "/api/v1/company_dispatch/run",
             json={
@@ -162,8 +160,6 @@ class SlowOSRMDispatchTest(HttpUser):
             headers=self._get_headers(),
             name="[DISPATCH] OSRM Cached",
         )
-
-        duration = time.time() - start_time
 
         if response.status_code == 200:
             data = response.json()

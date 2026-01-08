@@ -38,7 +38,7 @@ def seed_test_user():
         db.session.add(user)
         db.session.commit()
 
-        print(f"✅ Utilisateur créé avec succès!")
+        print("✅ Utilisateur créé avec succès!")
         print(f"   Email: {user.email}")
         print(f"   Username: {user.username}")
         print(f"   Role: {user.role.value}")

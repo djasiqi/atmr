@@ -10,8 +10,9 @@ Tests couverts :
 - TTL automatiques sur les clés
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 

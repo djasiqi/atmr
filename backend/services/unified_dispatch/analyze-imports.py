@@ -23,7 +23,7 @@ def find_imports_in_file(file_path):
     imports = []
 
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with Path(file_path).open(encoding="utf-8") as f:
             content = f.read()
 
         # Patterns d'import
@@ -64,8 +64,8 @@ def analyze_codebase(base_dir="backend", target_file=None, target_module=None):
             if not file.endswith(".py"):
                 continue
 
-            file_path = os.path.join(root, file)
-            rel_path = os.path.relpath(file_path, base_dir)
+            file_path = Path(root) / file
+            rel_path = file_path.relative_to(base_dir)
 
             imports = find_imports_in_file(file_path)
 
@@ -119,7 +119,11 @@ def generate_migration_plan(results):
     # Compter les imports par fichier source
     import_counts = defaultdict(int)
 
-    for file_path, imports in results.items():
+    # Constantes pour les seuils de priorité
+    HIGH_PRIORITY_THRESHOLD = 10
+    MEDIUM_PRIORITY_THRESHOLD = 5
+
+    for _file_path, imports in results.items():
         for imp in imports:
             import_counts[str(imp)] += 1
 
@@ -127,7 +131,13 @@ def generate_migration_plan(results):
     sorted_imports = sorted(import_counts.items(), key=lambda x: x[1], reverse=True)
 
     for i, (import_str, count) in enumerate(sorted_imports[:20], 1):
-        priority = "P0" if count > 10 else "P1" if count > 5 else "P2"
+        priority = (
+            "P0"
+            if count > HIGH_PRIORITY_THRESHOLD
+            else "P1"
+            if count > MEDIUM_PRIORITY_THRESHOLD
+            else "P2"
+        )
         print(f"{i:2d}. [{priority}] {import_str:40s} ({count:3d} usages)")
 
 

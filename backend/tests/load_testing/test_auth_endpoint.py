@@ -22,7 +22,7 @@ def test_login_test_endpoint():
     print(f"  Status: {response.status_code}")
     if response.status_code == 200:
         data = response.json()
-        print(f"  ✅ Login réussi!")
+        print("  ✅ Login réussi!")
         print(f"  User: {data.get('user', {}).get('email')}")
         print(f"  Token: {data.get('token')[:50]}...")
     else:

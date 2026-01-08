@@ -22,8 +22,7 @@ def validate_test_file(filepath: str) -> tuple[bool, str]:
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
             return True, f"[OK] {filepath} - Syntaxe OK"
-        else:
-            return False, f"[ERROR] {filepath} - Impossible de charger le module"
+        return False, f"[ERROR] {filepath} - Impossible de charger le module"
     except Exception as e:
         return False, f"[ERROR] {filepath} - Erreur: {e}"
 

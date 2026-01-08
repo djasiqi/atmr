@@ -18,8 +18,8 @@ import requests
 from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
 
 from services.events.handlers_registry import dispatch_event
-from services.realtime.socketio import _is_jsonable, emit_company_event
 from services.external.weather import WeatherService
+from services.realtime.socketio import _is_jsonable, emit_company_event
 
 
 class TestExceptionHandlingCorrections:

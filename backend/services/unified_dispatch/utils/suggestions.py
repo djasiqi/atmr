@@ -10,8 +10,8 @@ from typing import Any, Dict, List, Tuple
 
 from ext import db
 from models import Assignment, Booking, Driver
-from services.unified_dispatch.data import haversine_minutes
 from services.unified_dispatch.core.settings import Settings
+from services.unified_dispatch.data import haversine_minutes
 from shared.time_utils import now_local
 
 DELAY_MINUTES_THRESHOLD = 15
