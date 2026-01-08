@@ -133,7 +133,8 @@ class TestExceptionHandlingCorrections:
             assert any("network error" in str(call) for call in warning_calls)
 
     def test_socketio_service_json_serialization(self):
-        """Test : SocketIOService gère correctement les erreurs de sérialisation JSON."""
+        """Test : SocketIOService gère correctement les erreurs de
+        sérialisation JSON."""
         # Tester avec un objet non sérialisable
         non_serializable = object()
 

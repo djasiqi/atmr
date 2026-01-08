@@ -146,7 +146,8 @@ def test_update_driver_profile_value_error_returns_validation_error(
         )
     headers = {"Authorization": f"Bearer {token}"}
 
-    # Mocker get_driver_from_token pour réussir, puis lever ValueError lors de la mise à jour
+    # Mocker get_driver_from_token pour réussir, puis lever ValueError lors
+    # de la mise à jour
     with (
         patch("routes.driver.get_driver_from_token") as mock_get_driver,
         patch.object(

@@ -735,7 +735,8 @@ def test_booking_create_round_trip_return_time_after_scheduled_accepted(
     if response.status_code in (403, 404):
         return
 
-    # Peut être 200 (succès) ou 400 (autre erreur de validation), mais pas 400 pour return_time
+    # Peut être 200 (succès) ou 400 (autre erreur de validation), mais pas
+    # 400 pour return_time
     if response.status_code == 400:
         data = response.get_json()
         # Ne doit pas être une erreur de validation return_time

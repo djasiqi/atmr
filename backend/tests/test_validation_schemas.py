@@ -1662,7 +1662,8 @@ class TestPaymentStatusUpdateSchema:
         assert "status" in exc_info.value.messages["errors"]
 
     def test_invalid_status(self):
-        """✅ Test erreur si status invalide (doit être pending, completed ou failed)."""
+        """✅ Test erreur si status invalide (doit être pending, completed ou
+        failed)."""
         # Statut invalide
         data = {"status": "invalid_status"}
         with pytest.raises(ValidationError) as exc_info:

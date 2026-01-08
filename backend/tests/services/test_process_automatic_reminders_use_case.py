@@ -107,5 +107,6 @@ def test_process_automatic_reminders_calls_generate_reminder(db) -> None:
     # Note: Le nombre d'appels dépend de la présence de factures en retard en DB
     # Ici on vérifie juste que le use case s'exécute
     assert isinstance(result, ProcessAutomaticRemindersOutput)
-    # Si des rappels sont générés, generate_reminder_uc._calls devrait contenir des entrées
+    # Si des rappels sont générés, generate_reminder_uc._calls devrait
+    # contenir des entrées
     # mais cela dépend de l'état de la DB de test
