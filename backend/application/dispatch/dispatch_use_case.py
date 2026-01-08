@@ -48,18 +48,22 @@ class DispatchUseCase:
         """Initialise le use-case.
 
         Args:
-            get_bookings_for_day_fn: Fonction de lecture des bookings pour le dimensionnement.
+            get_bookings_for_day_fn: Fonction de lecture des bookings pour
+                le dimensionnement.
             getenv_fn: Fonction getenv (injection pour tests).
             engine_run_fn: Fonction d'exécution (adapter Infrastructure).
-            validate_assignments_fn: Fonction de validation post-run (adapter Infrastructure).
+            validate_assignments_fn: Fonction de validation post-run
+                (adapter Infrastructure).
         """
 
         def _missing_get_bookings_for_day(
             _company_id: int, _for_date: str
         ) -> list[Any]:
             raise RuntimeError(
-                "DispatchUseCase nécessite une dépendance injectée `get_bookings_for_day_fn`. "
-                + "Utiliser la façade DispatchService (ou une factory) pour le wiring production."
+                "DispatchUseCase nécessite une dépendance injectée "
+                "`get_bookings_for_day_fn`. "
+                + "Utiliser la façade DispatchService (ou une factory) pour "
+                + "le wiring production."
             )
 
         self.get_bookings_for_day = (
@@ -96,7 +100,8 @@ class DispatchUseCase:
 
                     if invalid_keys:
                         logger.warning(
-                            "[DispatchService] Overrides invalides (clés non autorisées): %s",
+                            "[DispatchService] Overrides invalides "
+                            "(clés non autorisées): %s",
                             invalid_keys,
                         )
                         return (
@@ -107,7 +112,10 @@ class DispatchUseCase:
                                 "errors": {
                                     "overrides": {
                                         "invalid_keys": list(invalid_keys),
-                                        "message": f"Les clés suivantes ne sont pas autorisées: {', '.join(invalid_keys)}",
+                                        "message": (
+                                            f"Les clés suivantes ne sont pas "
+                                            f"autorisées: {', '.join(invalid_keys)}"
+                                        ),
                                     }
                                 },
                             },
@@ -173,7 +181,8 @@ class DispatchUseCase:
 
         if bookings_count > max_sync_bookings:
             logger.info(
-                "[DispatchService] ⚠️ Forcing async mode: %d bookings > %d (max sync). Mode sync désactivé pour éviter timeout HTTP.",
+                "[DispatchService] ⚠️ Forcing async mode: %d bookings > %d "
+                "(max sync). Mode sync désactivé pour éviter timeout HTTP.",
                 bookings_count,
                 max_sync_bookings,
             )
@@ -221,13 +230,17 @@ class DispatchUseCase:
             (result, validation_info) où validation_info contient erreurs/warnings.
 
         Raises:
-            RuntimeError: si les dépendances `engine_run_fn`/`validate_assignments_fn` ne sont pas injectées.
+            RuntimeError: si les dépendances `engine_run_fn`/
+                `validate_assignments_fn` ne sont pas injectées.
         """
         engine_run = self._engine_run
         validate_assignments = self._validate_assignments
         if engine_run is None or validate_assignments is None:
             raise RuntimeError(
-                "DispatchUseCase.execute_dispatch_sync nécessite des dépendances injectées (engine_run_fn et validate_assignments_fn). Utiliser la façade DispatchService (ou une factory) pour le wiring production."
+                "DispatchUseCase.execute_dispatch_sync nécessite des "
+                "dépendances injectées (engine_run_fn et "
+                "validate_assignments_fn). Utiliser la façade DispatchService "
+                "(ou une factory) pour le wiring production."
             )
 
         result = engine_run(**params)
@@ -238,7 +251,8 @@ class DispatchUseCase:
             validation_result = validate_assignments(assignments_list, strict=False)
             if not validation_result["valid"]:
                 logger.warning(
-                    "[DispatchService] Conflits temporels détectés pour company %s, date %s",
+                    "[DispatchService] Conflits temporels détectés pour "
+                    "company %s, date %s",
                     params["company_id"],
                     params.get("for_date"),
                 )
