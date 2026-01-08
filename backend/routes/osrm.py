@@ -110,4 +110,3 @@ class OSRMRoute(Resource):
         except Exception as e:
             logger.error("Erreur OSRM route: %s", e)
             return APIErrorHandler.handle_exception(e, logger)
-

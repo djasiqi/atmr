@@ -2270,4 +2270,3 @@ class PDFService:
         # Retourner le contenu
         buffer.seek(0)
         return buffer.getvalue()
-

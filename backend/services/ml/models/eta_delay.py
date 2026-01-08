@@ -818,4 +818,3 @@ def get_eta_delay_model() -> ETADelayModel:
             _global_eta_model = ETADelayModel(model_type="fallback")
 
     return _global_eta_model
-

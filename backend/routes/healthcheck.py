@@ -112,4 +112,3 @@ def websocket_health():
             ),
             503,
         )
-

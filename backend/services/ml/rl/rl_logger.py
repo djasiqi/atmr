@@ -544,4 +544,3 @@ def log_rl_decision(
         constraints=constraints,
         metadata=metadata,
     )
-

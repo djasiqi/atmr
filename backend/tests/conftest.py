@@ -1460,4 +1460,3 @@ def mock_now_local(monkeypatch):
 
     monkeypatch.setattr("shared.time_utils.now_local", mock_now)
     return FIXED_DATE
-

@@ -549,4 +549,3 @@ def fanout_urgent_alert(
             body=message,
             data=push_data,
         )
-

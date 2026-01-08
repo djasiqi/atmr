@@ -551,4 +551,3 @@ class BookingTransferService:
         if status:
             query = query.filter_by(status=status)
         return query.all()
-

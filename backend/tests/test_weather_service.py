@@ -145,4 +145,3 @@ if __name__ == "__main__":
     print("   Pour tester avec vraie API:")
     print("   export OPENWEATHER_API_KEY=your_key")
     print("   pytest tests/test_weather_service.py")
-

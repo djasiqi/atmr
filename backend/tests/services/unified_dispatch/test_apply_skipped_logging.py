@@ -7,7 +7,10 @@ import pytest
 from flask import Flask
 
 from models import BookingStatus
-from services.unified_dispatch.optimization.assignment_applier import apply_assignments, logger
+from services.unified_dispatch.optimization.assignment_applier import (
+    apply_assignments,
+    logger,
+)
 from tests.factories import BookingFactory, CompanyFactory, DriverFactory
 
 

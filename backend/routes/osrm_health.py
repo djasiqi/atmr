@@ -107,4 +107,3 @@ class OsrmHealth(Resource):
                 "status": "error",
                 "error": str(e),
             }, 500
-

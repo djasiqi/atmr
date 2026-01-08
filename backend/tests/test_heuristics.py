@@ -386,7 +386,9 @@ class TestHeuristicsHelpers:
 
     def test_driver_fairness_penalty(self):
         """Test pénalité de fairness."""
-        from services.unified_dispatch.optimization.heuristics import _driver_fairness_penalty
+        from services.unified_dispatch.optimization.heuristics import (
+            _driver_fairness_penalty,
+        )
 
         # Driver avec beaucoup de courses déjà
         fairness_counts = {1: 5, 2: 2, 3: 0}
@@ -401,7 +403,9 @@ class TestHeuristicsHelpers:
 
     def test_check_driver_window_feasible(self):
         """Test vérification faisabilité fenêtre chauffeur."""
-        from services.unified_dispatch.optimization.heuristics import _check_driver_window_feasible
+        from services.unified_dispatch.optimization.heuristics import (
+            _check_driver_window_feasible,
+        )
 
         driver_window = (60, 480)  # 1h-8h (60 minutes à 480 minutes)
 
@@ -429,7 +433,9 @@ class TestHeuristicsHelpers:
 
     def test_driver_current_coord(self, db):
         """Test extraction coordonnées driver."""
-        from services.unified_dispatch.optimization.heuristics import _driver_current_coord
+        from services.unified_dispatch.optimization.heuristics import (
+            _driver_current_coord,
+        )
 
         driver = DriverFactory(latitude=46.2044, longitude=6.1432)
 
@@ -464,7 +470,9 @@ class TestHeuristicsHelpers:
     def test_is_booking_assigned(self, db):
         """Test vérification si booking est assigné."""
         from models import BookingStatus
-        from services.unified_dispatch.optimization.heuristics import _is_booking_assigned
+        from services.unified_dispatch.optimization.heuristics import (
+            _is_booking_assigned,
+        )
 
         # Booking avec driver assigné
         company = CompanyFactory()

@@ -132,4 +132,3 @@ def test_osrm_eta_fallback():
     # Distance ~50 km à 60 km/h = ~50 minutes = ~3000 secondes
     assert 2000 < eta < 5000
     assert isinstance(eta, int)
-

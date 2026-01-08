@@ -340,4 +340,3 @@ def features_to_dataframe(
     row_data = {col: features.get(col, 0) for col in feature_order}
 
     return pd.DataFrame([row_data])
-

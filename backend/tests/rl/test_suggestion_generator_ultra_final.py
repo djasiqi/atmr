@@ -9,7 +9,11 @@ import torch
 
 from services.ml.rl.hyperparameter_tuner import HyperparameterTuner
 from services.ml.rl.improved_q_network import DuelingQNetwork, ImprovedQNetwork
-from services.ml.rl.noisy_networks import NoisyDuelingQNetwork, NoisyLinear, NoisyQNetwork
+from services.ml.rl.noisy_networks import (
+    NoisyDuelingQNetwork,
+    NoisyLinear,
+    NoisyQNetwork,
+)
 from services.ml.rl.optimal_hyperparameters import OptimalHyperparameters
 from services.ml.rl.rl_logger import RLLogger
 from services.ml.rl.shadow_mode_manager import ShadowModeManager

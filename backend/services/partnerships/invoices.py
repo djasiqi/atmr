@@ -632,5 +632,3 @@ class PartnerInvoiceService:
                 total += transfer.partner_cost
 
         return total
-
-

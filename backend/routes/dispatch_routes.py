@@ -5285,4 +5285,3 @@ class ResetAssignmentsResource(Resource):
         except Exception as e:
             db.session.rollback()
             return APIErrorHandler.handle_exception(e, logger)
-

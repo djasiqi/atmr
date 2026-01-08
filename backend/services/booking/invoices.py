@@ -285,4 +285,3 @@ class InvoiceTransferService:
 
         # Optionnel: Commission A → B (à implémenter si nécessaire)
         # Pour l'instant, on ne crée pas de facture de commission automatiquement
-

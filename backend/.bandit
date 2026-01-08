@@ -8,6 +8,13 @@ exclude_dirs:
   - .pytest_cache
   - .mypy_cache
   - .ruff_cache
+  - .cursor-server
+  - .local
+  - htmlcov
+  - instance
+  - uploads
+  - static
+  - temp_*
 skips:
   - B101
 confidence: medium

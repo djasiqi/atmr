@@ -1028,7 +1028,7 @@ class OptunaOptimize(Resource):
                         json=payload,
                         headers=request_headers,
                         timeout=10,
-                        verify=False,
+                        verify=True,  # Toujours vérifier les certificats SSL en production
                         allow_redirects=False,  # Ne pas suivre automatiquement
                     )
 
@@ -1303,7 +1303,7 @@ class OptunaTrain(Resource):
                     json=payload,
                     headers={"Content-Type": "application/json"},
                     timeout=10,
-                    verify=False,
+                    verify=True,  # Toujours vérifier les certificats SSL en production
                     allow_redirects=False,
                 )
 

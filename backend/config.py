@@ -248,12 +248,12 @@ class Config:
     # --- Rate Limiting Configuration ---
     # ✅ Configuration adaptative selon l'environnement
     ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
-    
+
     # Stratégie de rate limiting
     # - "fixed-window": Fenêtre fixe (plus rapide, moins précis)
     # - "moving-window": Fenêtre glissante (plus précis, plus coûteux en CPU)
     RATELIMIT_STRATEGY = os.getenv("RATELIMIT_STRATEGY", "moving-window")
-    
+
     # Rate limits par défaut (conservateurs pour la production)
     # Ces valeurs seront surclassées dans DevelopmentConfig/ProductionConfig
     RATELIMIT_DEFAULT_LIMITS = ["1000 per hour"]
@@ -261,11 +261,11 @@ class Config:
     RATELIMIT_DISPATCH_TRIGGER = "50 per hour"
     RATELIMIT_COMPANY_DISPATCH_RUN = "10 per minute"
     RATELIMIT_COMPANY_DISPATCH_OPTIMIZER = "10 per minute"
-    
+
     # Version de configuration pour versioning des clés Redis
     # Incrémenter manuellement lors de changements majeurs de rate limits
     RATELIMIT_CONFIG_VERSION = os.getenv("RATELIMIT_CONFIG_VERSION", "v1")
-    
+
     # ✅ C2 Phase 2: TTL automatique sur les clés de rate limit
     # Durée de vie par défaut: 2 heures (7200 secondes)
     # Les clés expirent automatiquement, évitant l'accumulation en mémoire Redis
@@ -425,7 +425,9 @@ class DevelopmentConfig(Config):
         os.getenv("RATELIMIT_DEFAULT_LIMITS", "100000 per hour")
     ]
     RATELIMIT_DISPATCH_RUN = os.getenv("RATELIMIT_DISPATCH_RUN", "10000 per hour")
-    RATELIMIT_DISPATCH_TRIGGER = os.getenv("RATELIMIT_DISPATCH_TRIGGER", "10000 per hour")
+    RATELIMIT_DISPATCH_TRIGGER = os.getenv(
+        "RATELIMIT_DISPATCH_TRIGGER", "10000 per hour"
+    )
     RATELIMIT_COMPANY_DISPATCH_RUN = os.getenv(
         "RATELIMIT_COMPANY_DISPATCH_RUN", "10000 per hour"
     )
@@ -597,9 +599,7 @@ class ProductionConfig(Config):
 
     # ✅ Rate Limits Production: Conservateurs pour protéger contre l'abus
     ENVIRONMENT = "production"
-    RATELIMIT_DEFAULT_LIMITS = [
-        os.getenv("RATELIMIT_DEFAULT_LIMITS", "1000 per hour")
-    ]
+    RATELIMIT_DEFAULT_LIMITS = [os.getenv("RATELIMIT_DEFAULT_LIMITS", "1000 per hour")]
     # Dispatch endpoints: limites restrictives
     RATELIMIT_DISPATCH_RUN = os.getenv("RATELIMIT_DISPATCH_RUN", "30 per hour")
     RATELIMIT_DISPATCH_TRIGGER = os.getenv("RATELIMIT_DISPATCH_TRIGGER", "50 per hour")

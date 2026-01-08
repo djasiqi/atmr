@@ -192,4 +192,3 @@ def _get_endpoint(request) -> str:
         endpoint = endpoint[:_MAX_ENDPOINT_LENGTH] + "..."
 
     return endpoint
-

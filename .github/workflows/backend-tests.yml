@@ -156,7 +156,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libcairo2-dev libffi-dev pkg-config
+          sudo apt-get install -y libcairo2-dev libffi-dev pkg-config redis-tools
 
       - name: Install dependencies
         run: |
@@ -381,7 +381,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libcairo2-dev libffi-dev pkg-config postgresql-client
+          sudo apt-get install -y libcairo2-dev libffi-dev pkg-config postgresql-client redis-tools
 
       - name: Install dependencies
         run: |
@@ -639,7 +639,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libcairo2-dev libffi-dev pkg-config postgresql-client
+          sudo apt-get install -y libcairo2-dev libffi-dev pkg-config postgresql-client redis-tools
 
       - name: Wait for PostgreSQL (migrations job)
         run: |

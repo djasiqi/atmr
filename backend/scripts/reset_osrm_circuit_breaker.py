@@ -31,4 +31,3 @@ def reset_circuit_breaker():
 
 if __name__ == "__main__":
     reset_circuit_breaker()
-

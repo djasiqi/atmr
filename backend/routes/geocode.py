@@ -315,7 +315,9 @@ def normalize_photon(data: Dict[str, Any]) -> List[Dict[str, Any]]:
 
                 try:
                     # Appeler Google Geocoding pour enrichir
-                    from services.geolocation.google_places import geocode_address_google
+                    from services.geolocation.google_places import (
+                        geocode_address_google,
+                    )
 
                     google_result = geocode_address_google(
                         search_address, country=country or "CH"
@@ -831,4 +833,3 @@ class GeocodeAddress(Resource):
         except Exception as e:
             current_app.logger.error("❌ Erreur géocodage: %s", e)
             return APIErrorHandler.handle_exception(e, current_app.logger)
-

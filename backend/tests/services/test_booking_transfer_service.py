@@ -318,4 +318,3 @@ class TestBookingTransferService:
                     transfer_id=transfer.id,
                     validator_user_id=1,
                 )
-

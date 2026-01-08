@@ -787,7 +787,9 @@ def _try_run(st: CompanyDispatchState, mode: str) -> None:
         redis_client = _get_redis_for_status()
         if redis_client:
             try:
-                from services.infrastructure.cache import invalidate_dispatch_status_cache
+                from services.infrastructure.cache import (
+                    invalidate_dispatch_status_cache,
+                )
 
                 invalidate_dispatch_status_cache(
                     st.company_id, st.params.get("for_date")
@@ -1100,4 +1102,3 @@ def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
         _RUNNING[company_id] = False
         _PROGRESS[company_id] = 0
         _LAST_ERROR[company_id] = str(e)
-

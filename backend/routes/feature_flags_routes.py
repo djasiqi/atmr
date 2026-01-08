@@ -255,4 +255,3 @@ def ml_health() -> tuple[dict[str, Any], int]:
         error_response["status"] = "error"
         error_response["healthy"] = False
         return jsonify(error_response), status_code
-

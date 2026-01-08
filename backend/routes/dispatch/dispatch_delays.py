@@ -851,4 +851,3 @@ class LiveDelaysResource(Resource):
         except Exception as e:
             logger.exception("Erreur récupération retards live: %s", e)
             return APIErrorHandler.handle_exception(e, logger)
-

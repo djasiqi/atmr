@@ -155,4 +155,3 @@ class VersionCheck(Resource):
         except Exception as e:
             logger.exception("Version check - erreur serveur: %s", e)
             return APIErrorHandler.handle_exception(e, logger)
-

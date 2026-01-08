@@ -26,7 +26,10 @@ from services.unified_dispatch.optimization.heuristics import (
     baseline_and_cap_loads,
     haversine_minutes,
 )
-from services.unified_dispatch.core.settings import Settings, driver_work_window_from_config
+from services.unified_dispatch.core.settings import (
+    Settings,
+    driver_work_window_from_config,
+)
 from shared.constants import DispatchDataConstants, GeoConstants
 from shared.error_handling import safe_execute
 from shared.time_utils import day_local_bounds, now_local, parse_local_naive
@@ -2525,5 +2528,3 @@ def get_next_free_at(dropoff_time: datetime, settings=DEFAULT_SETTINGS) -> datet
         )
         buf = 15
     return dropoff_time + timedelta(minutes=buf)
-
-

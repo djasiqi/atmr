@@ -108,4 +108,3 @@ def check_websocket_health() -> Dict[str, Any]:
     result["connections_total"] = connections_total
 
     return result
-

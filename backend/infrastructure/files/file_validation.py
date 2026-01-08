@@ -19,4 +19,3 @@ def validate_uploaded_image(
         file_type="image",
         declared_mime_type=declared_mime_type,
     )
-

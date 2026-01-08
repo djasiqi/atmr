@@ -17,7 +17,7 @@ Fichiers consolidés :
 
 ---
 
-**Version :** 1.0.0  
+**Version :** 1.0.0
 **Date :** 7 janvier 2025
 """
 
@@ -30,4 +30,3 @@ Fichiers consolidés :
 __all__ = [
     # À compléter après migration
 ]
-

@@ -529,4 +529,3 @@ class GeographicClustering:
             "unassigned": final_unassigned_ids,
             "zone_results": zone_results,
         }
-

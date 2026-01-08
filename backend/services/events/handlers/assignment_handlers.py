@@ -70,4 +70,3 @@ def handle_assignment_cancelled(event: dict[str, Any]) -> None:
     except Exception:
         # Erreur inattendue : logger avec trace complète
         logger.exception("❌ Failed to send assignment cancelled notification")
-

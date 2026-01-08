@@ -299,4 +299,3 @@ class TestEventPerformance:
         assert overhead < 5, (
             f"Overhead metrics_handler trop élevé: {overhead:.2f}ms (attendu < 5ms)"
         )
-

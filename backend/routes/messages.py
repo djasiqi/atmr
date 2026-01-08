@@ -363,4 +363,3 @@ class MessageUpload(Resource):
         )
 
         return response, 200
-

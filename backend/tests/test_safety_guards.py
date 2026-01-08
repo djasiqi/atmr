@@ -16,7 +16,11 @@ import pytest
 
 # Import conditionnel pour éviter les erreurs si les modules ne sont pas disponibles
 try:
-    from services.security.safety import SafetyGuards, SafetyThresholds, get_safety_guards
+    from services.security.safety import (
+        SafetyGuards,
+        SafetyThresholds,
+        get_safety_guards,
+    )
 except ImportError:
     SafetyGuards = None
     SafetyThresholds = None

@@ -19,4 +19,3 @@ try:
     print(f"   - Durée: {result.get('duration', 0):.1f}s")
 except Exception as e:
     print(f"❌ Erreur OSRM: {e}")
-

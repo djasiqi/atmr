@@ -73,4 +73,3 @@ class OsrmReset(Resource):
         return jsonify(
             {"status": "ok", "message": "Circuit-breaker reset to CLOSED state"}
         )
-

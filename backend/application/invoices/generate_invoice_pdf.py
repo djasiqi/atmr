@@ -54,4 +54,3 @@ class GenerateInvoicePdfUseCase:
                 error={"error": f"Erreur lors de la génération du PDF: {e!s}"},
                 status_code=500,
             )
-

@@ -356,4 +356,3 @@ def test_metrics_in_prometheus():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

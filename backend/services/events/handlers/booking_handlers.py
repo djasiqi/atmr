@@ -176,4 +176,3 @@ def handle_booking_cancelled(event: dict[str, Any]) -> None:
         logger.exception(
             "[EventBus] Failed to notify driver about booking cancellation"
         )
-

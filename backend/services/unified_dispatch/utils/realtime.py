@@ -1185,4 +1185,3 @@ def check_opportunities_manual(
     """
     optimizer = RealtimeOptimizer(company_id, app=app)
     return optimizer.check_current_assignments(for_date)
-

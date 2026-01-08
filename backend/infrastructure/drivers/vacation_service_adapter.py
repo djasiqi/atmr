@@ -20,4 +20,3 @@ class VacationServiceAdapter:
         vacation_type: str,
     ) -> bool:
         return bool(create_vacation(driver, start_date, end_date, vacation_type))
-

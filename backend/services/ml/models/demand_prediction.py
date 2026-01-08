@@ -394,4 +394,3 @@ def get_demand_predictor() -> DemandPredictor:
         _global_demand_predictor = DemandPredictor()
 
     return _global_demand_predictor
-

@@ -630,4 +630,3 @@ def get_alerting_service() -> AlertingService:
     if _alerting_service_instance is None:
         _alerting_service_instance = AlertingService()
     return _alerting_service_instance
-

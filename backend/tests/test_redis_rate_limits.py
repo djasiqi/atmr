@@ -23,7 +23,9 @@ def app():
         app = Flask(__name__)
         app.config["TESTING"] = True
         app.config["ENVIRONMENT"] = "test"
-        app.config["RATELIMIT_ENABLED"] = False  # Désactiver rate limiting dans les tests
+        app.config["RATELIMIT_ENABLED"] = (
+            False  # Désactiver rate limiting dans les tests
+        )
         mock_create_app.return_value = app
         yield app
 
@@ -53,8 +55,13 @@ class TestRateLimitFlush:
 
         # Act
         with patch("backend.routes.admin.jwt_required", return_value=lambda f: f):
-            with patch("backend.routes.admin.role_required", return_value=lambda r: lambda f: f):
-                with patch("backend.routes.admin.ip_whitelist_required", return_value=lambda f: f):
+            with patch(
+                "backend.routes.admin.role_required", return_value=lambda r: lambda f: f
+            ):
+                with patch(
+                    "backend.routes.admin.ip_whitelist_required",
+                    return_value=lambda f: f,
+                ):
                     response = client.post(
                         "/api/v1/admin/rate-limit/flush",
                         headers={"Authorization": admin_token},
@@ -72,8 +79,13 @@ class TestRateLimitFlush:
         """Test flush quand Redis est indisponible."""
         # Act
         with patch("backend.routes.admin.jwt_required", return_value=lambda f: f):
-            with patch("backend.routes.admin.role_required", return_value=lambda r: lambda f: f):
-                with patch("backend.routes.admin.ip_whitelist_required", return_value=lambda f: f):
+            with patch(
+                "backend.routes.admin.role_required", return_value=lambda r: lambda f: f
+            ):
+                with patch(
+                    "backend.routes.admin.ip_whitelist_required",
+                    return_value=lambda f: f,
+                ):
                     response = client.post(
                         "/api/v1/admin/rate-limit/flush",
                         headers={"Authorization": admin_token},
@@ -101,17 +113,24 @@ class TestRateLimitStats:
     def test_stats_success(self, mock_redis, client, admin_token):
         """Test récupération des statistiques avec Redis disponible."""
         # Arrange
-        mock_redis.scan_iter.return_value = iter([
-            b"LIMITER:v12345:user:1:endpoint1",
-            b"LIMITER:v12345:user:2:endpoint2",
-            b"LIMITER:v12345:ip:192.168.1.1:endpoint1",
-        ])
+        mock_redis.scan_iter.return_value = iter(
+            [
+                b"LIMITER:v12345:user:1:endpoint1",
+                b"LIMITER:v12345:user:2:endpoint2",
+                b"LIMITER:v12345:ip:192.168.1.1:endpoint1",
+            ]
+        )
         mock_redis.info.return_value = {"used_memory_human": "10M"}
 
         # Act
         with patch("backend.routes.admin.jwt_required", return_value=lambda f: f):
-            with patch("backend.routes.admin.role_required", return_value=lambda r: lambda f: f):
-                with patch("backend.routes.admin.ip_whitelist_required", return_value=lambda f: f):
+            with patch(
+                "backend.routes.admin.role_required", return_value=lambda r: lambda f: f
+            ):
+                with patch(
+                    "backend.routes.admin.ip_whitelist_required",
+                    return_value=lambda f: f,
+                ):
                     response = client.get(
                         "/api/v1/admin/rate-limit/stats",
                         headers={"Authorization": admin_token},
@@ -130,8 +149,13 @@ class TestRateLimitStats:
         """Test stats quand Redis est indisponible."""
         # Act
         with patch("backend.routes.admin.jwt_required", return_value=lambda f: f):
-            with patch("backend.routes.admin.role_required", return_value=lambda r: lambda f: f):
-                with patch("backend.routes.admin.ip_whitelist_required", return_value=lambda f: f):
+            with patch(
+                "backend.routes.admin.role_required", return_value=lambda r: lambda f: f
+            ):
+                with patch(
+                    "backend.routes.admin.ip_whitelist_required",
+                    return_value=lambda f: f,
+                ):
                     response = client.get(
                         "/api/v1/admin/rate-limit/stats",
                         headers={"Authorization": admin_token},
@@ -159,8 +183,13 @@ class TestRedisInfo:
 
         # Act
         with patch("backend.routes.admin.jwt_required", return_value=lambda f: f):
-            with patch("backend.routes.admin.role_required", return_value=lambda r: lambda f: f):
-                with patch("backend.routes.admin.ip_whitelist_required", return_value=lambda f: f):
+            with patch(
+                "backend.routes.admin.role_required", return_value=lambda r: lambda f: f
+            ):
+                with patch(
+                    "backend.routes.admin.ip_whitelist_required",
+                    return_value=lambda f: f,
+                ):
                     response = client.get(
                         "/api/v1/admin/redis/info",
                         headers={"Authorization": admin_token},
@@ -182,8 +211,13 @@ class TestRateLimitConfig:
         """Test récupération de la configuration des rate limits."""
         # Act
         with patch("backend.routes.admin.jwt_required", return_value=lambda f: f):
-            with patch("backend.routes.admin.role_required", return_value=lambda r: lambda f: f):
-                with patch("backend.routes.admin.ip_whitelist_required", return_value=lambda f: f):
+            with patch(
+                "backend.routes.admin.role_required", return_value=lambda r: lambda f: f
+            ):
+                with patch(
+                    "backend.routes.admin.ip_whitelist_required",
+                    return_value=lambda f: f,
+                ):
                     with patch("backend.routes.admin.current_app") as mock_app:
                         mock_app.config.get.side_effect = lambda key, default=None: {
                             "RATELIMIT_DEFAULT_LIMITS": "1000 per hour",
