@@ -70,9 +70,11 @@ class GenerateConsolidatedInvoiceOutput:
 
 
 class GenerateConsolidatedInvoiceUseCase:
-    """Use-case Application: générer des factures consolidées pour plusieurs clients.
+    """Use-case Application: générer des factures consolidées pour plusieurs
+    clients.
 
-    Ce use case migre la logique métier de InvoiceService.generate_consolidated_invoice()
+    Ce use case migre la logique métier de
+    InvoiceService.generate_consolidated_invoice()
     vers l'architecture DDD. Il génère plusieurs factures pour différents clients
     mais toutes adressées à une institution.
     """

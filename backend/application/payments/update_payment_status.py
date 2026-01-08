@@ -55,7 +55,8 @@ class UpdatePaymentStatusOutput:
 
 
 class UpdatePaymentStatusUseCase:
-    """Use-case Application: mettre à jour le statut d'un paiement (admin uniquement)."""
+    """Use-case Application: mettre à jour le statut d'un paiement
+    (admin uniquement)."""
 
     def __init__(  # pyright: ignore[reportMissingSuperCall]
         self, *, payment_repo: _PaymentRepositoryPort

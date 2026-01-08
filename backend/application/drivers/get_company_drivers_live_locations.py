@@ -23,7 +23,8 @@ class GetCompanyDriversLiveLocationsResult:
 
 
 class GetCompanyDriversLiveLocationsUseCase:
-    """Use-case Application: lister les dernières positions des chauffeurs d'une entreprise."""
+    """Use-case Application: lister les dernières positions des chauffeurs
+    d'une entreprise."""
 
     def __init__(
         self, *, driver_repo: _DriverRepo, get_last_location_fn: _LocationStore

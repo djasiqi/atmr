@@ -1,7 +1,8 @@
 # pyright: reportImportCycles=false
 # basedpyright: reportImportCycles=false
 # pyright: reportImplicitOverride=false
-# Note: basedpyright ne reconnaît pas toujours @override avec imports conditionnels (pattern utilisé ailleurs).
+# Note: basedpyright ne reconnaît pas toujours @override avec imports
+# conditionnels (pattern utilisé ailleurs).
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
