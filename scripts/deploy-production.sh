@@ -95,7 +95,14 @@ pull_with_retry() {
 }
 
 pull_with_retry
-docker compose -f docker-compose.production.yml down --remove-orphans || true
+
+# Nettoyage complet de l'état Docker
+echo "🧹 Nettoyage de l'état Docker..."
+docker compose -f docker-compose.production.yml down --remove-orphans --volumes || true
+docker compose -f docker-compose.monitoring.yml down --remove-orphans || true
+
+# Supprimer les conteneurs orphelins manuellement
+docker ps -a --filter "name=atmr-" --format "{{.ID}}" | xargs -r docker rm -f || true
 
 # Créer .env.production
 {
@@ -133,6 +140,10 @@ cp .env.production .env && chmod 600 .env
 
 mkdir -p data/rl/shadow_mode data/ml data/rl data/ml/models && chmod -R 755 data && chown -R 999:999 data 2>/dev/null || true
 docker compose -f docker-compose.production.yml up -d --remove-orphans
+
+# Laisser le temps aux conteneurs de se stabiliser
+echo "⏳ Stabilisation des conteneurs (5 secondes)..."
+sleep 5
 
 echo "⏳ Attente du démarrage du backend..."
 for i in $(seq 1 30); do
@@ -178,6 +189,10 @@ if [ -f "docker-compose.monitoring.yml" ]; then
   # Redémarrer les services production après monitoring
   echo "🔄 Redémarrage des services production..."
   docker compose -f docker-compose.production.yml up -d --remove-orphans || exit 1
+  
+  # Laisser le temps aux conteneurs de se stabiliser
+  echo "⏳ Stabilisation des conteneurs (5 secondes)..."
+  sleep 5
   
   for i in $(seq 1 30); do
     BACKEND_STATUS=$(docker compose -f docker-compose.production.yml ps backend --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
