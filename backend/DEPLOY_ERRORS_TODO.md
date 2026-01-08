@@ -279,7 +279,7 @@ level=warning msg="Found orphan containers ([***-backend ***-celery-worker ***-f
 + elif [ -f "/app/data/ml/delay_predictor.pkl" ]; then
 +     MODEL_PATH="/app/data/ml/delay_predictor.pkl"
 + fi
-+ 
++
 + if [ -n "$MODEL_PATH" ]; then
 +     echo "  📊 Chargement du modèle depuis $MODEL_PATH..."
 ```
