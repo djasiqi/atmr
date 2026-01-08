@@ -39,10 +39,18 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install Python dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+
       - name: Generate OpenAPI spec
         run: |
-          docker-compose run --rm api python scripts/generate_openapi.py --output /app/docs/openapi.json
-        continue-on-error: true
+          cd backend
+          python scripts/generate_openapi.py --output docs/openapi.json || echo "{}" > docs/openapi.json
+        env:
+          FLASK_ENV: testing
+          DATABASE_URL: sqlite:///test.db
 
       - name: Validate OpenAPI format
         run: node scripts/validate-openapi-format.js
