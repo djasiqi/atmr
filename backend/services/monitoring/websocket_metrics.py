@@ -33,7 +33,8 @@ class WebSocketMetrics:
         self.heartbeat_latencies: List[float] = []  # Latences en ms
         self.errors_count: Dict[str, int] = defaultdict(int)  # error_type -> count
         self.start_time = datetime.now(UTC)
-        # Garder seulement les 1000 dernières latences pour éviter consommation mémoire excessive
+        # Garder seulement les 1000 dernières latences pour éviter
+        # consommation mémoire excessive
         self._max_latency_samples = 1000
         # Tracking des rooms : room_name -> nombre de clients connectés
         self.rooms_active: Dict[str, int] = defaultdict(int)

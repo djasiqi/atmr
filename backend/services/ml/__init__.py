@@ -1,7 +1,9 @@
 """
-Module `ml` - Consolidation des services de Machine Learning et Reinforcement Learning
+Module `ml` - Consolidation des services de Machine Learning et
+Reinforcement Learning
 
-Ce module regroupe tous les services liés au Machine Learning et au Reinforcement Learning :
+Ce module regroupe tous les services liés au Machine Learning et au
+Reinforcement Learning :
 - Features engineering pour ML
 - Monitoring des modèles ML
 - Modèles de prédiction (demande, ETA, retards)

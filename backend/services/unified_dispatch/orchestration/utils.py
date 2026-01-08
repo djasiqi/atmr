@@ -60,7 +60,8 @@ def to_date_ymd(s: str) -> date:
             )
         if s[4] != "-" or s[7] != "-":
             raise ValueError(
-                f"for_date invalide: {s!r} (attendu 'YYYY-MM-DD', séparateurs manquants)"
+                f"for_date invalide: {s!r} "
+                f"(attendu 'YYYY-MM-DD', séparateurs manquants)"
             )
         return date.fromisoformat(s)
     except (ValueError, TypeError) as err:

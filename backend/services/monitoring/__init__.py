@@ -1,4 +1,5 @@
-"""Module `monitoring` - Services de monitoring et métriques (Prometheus, WebSocket, SLO)
+"""Module `monitoring` - Services de monitoring et métriques
+(Prometheus, WebSocket, SLO)
 Migration B2 - 7 janvier 2025
 """
 

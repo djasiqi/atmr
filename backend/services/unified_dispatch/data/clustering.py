@@ -236,7 +236,8 @@ class GeographicClustering:
     ) -> float:
         """Calcule la distance Haversine en km.
 
-        ✅ REFACTORING: Utilise GeolocationService au lieu d'une implémentation dupliquée.
+        ✅ REFACTORING: Utilise GeolocationService au lieu d'une
+        implémentation dupliquée.
 
         Args:
             lat1, lon1: Coordonnées du premier point

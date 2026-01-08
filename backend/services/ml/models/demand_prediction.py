@@ -28,7 +28,8 @@ try:
     SKLEARN_AVAILABLE = True
 except ImportError:
     logger.error(
-        "[DemandPrediction] scikit-learn requis. Installer avec: pip install scikit-learn"
+        "[DemandPrediction] scikit-learn requis. "
+        "Installer avec: pip install scikit-learn"
     )
     SKLEARN_AVAILABLE = False
 

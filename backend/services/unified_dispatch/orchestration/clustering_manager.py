@@ -100,7 +100,8 @@ class ClusteringManager:
         n_drivers = len(problem.get("drivers", []))
 
         logger.info(
-            "[ClusteringManager] Activating geographic clustering: %d bookings, %d drivers",
+            "[ClusteringManager] Activating geographic clustering: "
+            "%d bookings, %d drivers",
             n_bookings,
             n_drivers,
         )

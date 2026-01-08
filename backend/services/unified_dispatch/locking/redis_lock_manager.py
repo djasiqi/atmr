@@ -66,7 +66,8 @@ class RedisLockManager:
             return False
 
     def release_lock(self, lock_key: str) -> None:
-        """Libère un verrou Redis via une clé explicite (API compatible orchestrator)."""
+        """Libère un verrou Redis via une clé explicite
+        (API compatible orchestrator)."""
         redis_client = self._get_redis_client()
         if not redis_client:
             return
