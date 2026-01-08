@@ -151,15 +151,15 @@ class CreateBookingUseCase:
         except OSError as e:
             logger.error(
                 "❌ Erreur configuration géocodage pour booking "
-                "(pickup=%s, dropoff=%s): %s",
+                + "(pickup=%s, dropoff=%s): %s",
                 validated_data["pickup_location"],
                 validated_data["dropoff_location"],
                 e,
             )
             raise RuntimeError(
                 "Impossible de calculer la distance entre les adresses. "
-                "Vérifiez que les adresses sont valides et que le service de "
-                "géocodage est configuré."
+                + "Vérifiez que les adresses sont valides et que le service de "
+                + "géocodage est configuré."
             ) from e
         except RuntimeError as e:
             error_msg = str(e)
@@ -193,8 +193,8 @@ class CreateBookingUseCase:
             )
             raise RuntimeError(
                 "Erreur lors du calcul de la distance. Le service de géocodage "
-                "est temporairement indisponible. Veuillez réessayer dans "
-                "quelques instants."
+                + "est temporairement indisponible. Veuillez réessayer dans "
+                + "quelques instants."
             ) from e
 
         client_dto = self.client_repo.find_by_id(cmd.client_id)
@@ -276,14 +276,14 @@ class CreateBookingUseCase:
             logger.error("❌ Erreur validation adresse lors géocodage: %s", e)
             raise ValueError(
                 "L'adresse fournie est invalide ou vide. "
-                "Veuillez fournir une adresse complète et valide."
+                + "Veuillez fournir une adresse complète et valide."
             ) from e
         except Exception as e:
             logger.exception("❌ Erreur inattendue lors du géocodage des adresses")
             raise RuntimeError(
                 "Erreur lors du géocodage des adresses. Le service de géocodage "
-                "est temporairement indisponible. Veuillez réessayer dans "
-                "quelques instants."
+                + "est temporairement indisponible. Veuillez réessayer dans "
+                + "quelques instants."
             ) from e
 
     def _process_geocoding_result(
@@ -325,7 +325,7 @@ class CreateBookingUseCase:
             else:
                 logger.info(
                     "⚠️ %s géocodage cache miss, utilisation coordonnées "
-                    "approximatives: (%.6f, %.6f) - géocodage asynchrone en cours",
+                    + "approximatives: (%.6f, %.6f) - géocodage asynchrone en cours",
                     address_type.capitalize(),
                     lat,
                     lon,
@@ -333,7 +333,7 @@ class CreateBookingUseCase:
         else:
             logger.info(
                 "⚠️ %s géocodage cache miss, utilisation coordonnées "
-                "approximatives: (%.6f, %.6f) - géocodage asynchrone en cours",
+                + "approximatives: (%.6f, %.6f) - géocodage asynchrone en cours",
                 address_type.capitalize(),
                 lat,
                 lon,
