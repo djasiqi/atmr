@@ -372,8 +372,8 @@ class TestRLLoggerMinimal:
             metadata,
         )
 
-        # ✅ FIX: Le résultat devrait être True car si les deux loggings sont désactivés,
-        # c'est considéré comme un succès (rien à logger)
+        # ✅ FIX: Le résultat devrait être True car si les deux loggings sont
+        # désactivés, c'est considéré comme un succès (rien à logger)
         # Voir rl_logger.py ligne 252-254
         assert result is True
         # Les statistiques total_logs devraient être incrémentées (le logging est tenté)

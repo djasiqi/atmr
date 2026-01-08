@@ -1,6 +1,7 @@
 """Tests de performance pour les handlers d'événements.
 
-Vérifie que la latence ajoutée par les événements reste acceptable (< 10ms par événement).
+Vérifie que la latence ajoutée par les événements reste acceptable
+(< 10ms par événement).
 """
 
 from __future__ import annotations

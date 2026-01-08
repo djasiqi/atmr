@@ -81,8 +81,9 @@ class TestLogoutEndpointIntegration:
         # Mock Redis
         # @patch remplace directement redis_client, donc mock_redis EST le redis_client
         mock_redis.setex = MagicMock()
-        # Important: le callback JWT token_in_blocklist_loader vérifie `exists()`
-        # sur redis_client. Sans ce mock, MagicMock est truthy -> token vu comme blacklisté.
+        # Important: le callback JWT token_in_blocklist_loader vérifie
+        # `exists()` sur redis_client. Sans ce mock, MagicMock est truthy ->
+        # token vu comme blacklisté.
         mock_redis.exists = MagicMock(return_value=0)
 
         # Mock JWT data

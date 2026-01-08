@@ -237,8 +237,9 @@ class TestFlaskSecurityConfig:
             from app import create_app
 
             app = create_app("production")
-            # La prod permet override (reverse proxy HTTP). On vérifie donc surtout
-            # la présence des protections (httpOnly/samesite) et que la valeur est booléenne.
+            # La prod permet override (reverse proxy HTTP). On vérifie donc
+            # surtout la présence des protections (httpOnly/samesite) et que
+            # la valeur est booléenne.
             assert isinstance(app.config.get("SESSION_COOKIE_SECURE"), bool)
             assert app.config.get("SESSION_COOKIE_HTTPONLY") is True
             assert app.config.get("SESSION_COOKIE_SAMESITE") == "Lax"
