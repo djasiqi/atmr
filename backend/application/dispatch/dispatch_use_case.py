@@ -64,9 +64,7 @@ class DispatchUseCase:
                 "`get_bookings_for_day_fn`. "
                 "Utiliser la façade DispatchService (ou une factory) pour "
             )
-            raise RuntimeError(msg
-                + "le wiring production."
-            )
+            raise RuntimeError(msg + "le wiring production.")
 
         self.get_bookings_for_day = (
             get_bookings_for_day_fn or _missing_get_bookings_for_day

@@ -252,8 +252,7 @@ class InvoiceTransferService:
             db.session.commit()
 
             msg = (
-                "Facture sous-traitance créée: %s - Entreprise %s facture %s "
-                "pour %s %s"
+                "Facture sous-traitance créée: %s - Entreprise %s facture %s pour %s %s"
             )
             logger.info(
                 msg,

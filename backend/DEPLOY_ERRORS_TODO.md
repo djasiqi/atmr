@@ -415,6 +415,50 @@ docker-compose exec backend flask db upgrade
 
 ---
 
+---
+
+## ⚠️ MISE À JOUR : 2026-01-08 21:46 UTC
+
+### 🔄 Workflow GitHub Actions lancé (Run #251)
+
+**Statut actuel** : ⏳ **BUILD EN COURS**
+
+#### Ce qui se passe
+
+1. ✅ Workflow déclenché automatiquement (commit `c74e247e`)
+2. ⏳ Job "Build & Push" EN COURS (5-10 min)
+3. ❌ Image Docker Hub PAS ENCORE mise à jour
+4. ❌ Serveur a pull l'ANCIENNE image (obsolète)
+5. ❌ Backend crashe avec **MÊME ERREUR** : `ModuleNotFoundError: flask_limiter.storage`
+
+#### Pourquoi l'erreur persiste ?
+
+```
+Timeline:
+21:40 - Push commit c74e247e → Déclenche workflow
+21:41 - Job "Build & Push" démarre
+21:46 - Job "Deploy" démarre (en parallèle !)
+21:46 - Serveur pull l'image Docker Hub
+        ❌ PROBLÈME : L'image est encore l'ANCIENNE !
+        ⏳ Le build n'a pas encore fini (prend 10-15 min)
+21:46 - Backend démarre avec l'ancienne image
+        ❌ ModuleNotFoundError: flask_limiter.storage
+```
+
+#### Solution
+
+**ATTENDRE** que le workflow termine complètement :
+
+```
+Étape 1 : Vérifier que "Build & Push" est terminé (vert) ✅
+Étape 2 : Vérifier que l'image est sur Docker Hub
+Étape 3 : RE-DÉCLENCHER le déploiement manuellement
+```
+
+**Temps estimé** : 10-15 minutes de plus
+
+---
+
 **Date de création** : 2026-01-08
 **Créé par** : Analyse automatique des logs de déploiement
-**Commit concerné** : `b941db99` (dernier push)
+**Commit concerné** : `b941db99` → `c74e247e` (workflow en cours)
