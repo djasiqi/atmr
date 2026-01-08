@@ -1,7 +1,8 @@
 """Use-case: enregistrer un nouvel utilisateur (register).
 
-⚠️ TODO: Ce use case encapsule temporairement la logique d'inscription dans routes/auth.py
-pour permettre une migration progressive. La logique métier devrait être migrée progressivement
+⚠️ TODO: Ce use case encapsule temporairement la logique d'inscription
+dans routes/auth.py pour permettre une migration progressive.
+La logique métier devrait être migrée progressivement
 vers ce use case.
 """
 

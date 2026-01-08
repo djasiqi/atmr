@@ -106,10 +106,14 @@ class SwitchToEnterpriseUseCase:
                                 "driver_type_value": driver.driver_type.value
                                 if hasattr(driver.driver_type, "value")
                                 else str(driver.driver_type),
-                                "expected_emergency": str(self._driver_type_emergency),
-                                "expected_emergency_value": self._driver_type_emergency.value
-                                if hasattr(self._driver_type_emergency, "value")
-                                else str(self._driver_type_emergency),
+                                "expected_emergency": str(
+                                    self._driver_type_emergency
+                                ),
+                                "expected_emergency_value": (
+                                    self._driver_type_emergency.value
+                                    if hasattr(self._driver_type_emergency, "value")
+                                    else str(self._driver_type_emergency)
+                                ),
                                 "is_equal": driver.driver_type
                                 == self._driver_type_emergency,
                                 "type_comparison": type(driver.driver_type)
@@ -126,8 +130,9 @@ class SwitchToEnterpriseUseCase:
         except Exception:
             pass
         # #endregion
-        # Comparaison robuste : comparer les valeurs plutôt que les objets enum
-        # pour gérer les cas où driver_type pourrait être une chaîne ou un enum différent
+        # Comparaison robuste : comparer les valeurs plutôt que les objets
+        # enum pour gérer les cas où driver_type pourrait être une chaîne
+        # ou un enum différent
         driver_type_value = (
             driver.driver_type.value
             if hasattr(driver.driver_type, "value")
@@ -167,7 +172,10 @@ class SwitchToEnterpriseUseCase:
             # #endregion
             return SwitchToEnterpriseResult(
                 response={
-                    "error": "Seuls les chauffeurs d'urgence peuvent basculer vers le compte entreprise."
+                    "error": (
+                        "Seuls les chauffeurs d'urgence peuvent basculer vers "
+                        "le compte entreprise."
+                    )
                 },
                 status_code=403,
             )

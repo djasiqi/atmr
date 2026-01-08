@@ -55,7 +55,8 @@ class CancelInvoiceOutput:
 
 
 class CancelInvoiceUseCase:
-    """Use-case Application: annuler une facture en libérant les réservations associées."""
+    """Use-case Application: annuler une facture en libérant les
+    réservations associées."""
 
     def __init__(  # pyright: ignore[reportMissingSuperCall]
         self,
@@ -79,7 +80,8 @@ class CancelInvoiceUseCase:
             CancelInvoiceOutput avec le résultat de l'opération
 
         Side-effects:
-            - DB: Met à jour Invoice.status, Invoice.balance_due, Booking.invoice_line_id
+            - DB: Met à jour Invoice.status, Invoice.balance_due,
+              Booking.invoice_line_id
             - DB: Commit transaction (ou rollback en cas d'erreur)
         """
         invoice = input_data.invoice
@@ -104,7 +106,10 @@ class CancelInvoiceUseCase:
             return CancelInvoiceOutput(
                 success=False,
                 error={
-                    "error": "Seules les factures au statut 'draft' peuvent être annulées."
+                    "error": (
+                        "Seules les factures au statut 'draft' peuvent être "
+                        "annulées."
+                    )
                 },
                 status_code=400,
             )

@@ -61,7 +61,8 @@ class DuplicateInvoiceUseCase:
 
         Args:
             cancel_invoice_use_case: Use case pour annuler une facture
-            booking_repo: Repository pour les réservations (utilisé par CancelInvoiceUseCase)
+            booking_repo: Repository pour les réservations
+                (utilisé par CancelInvoiceUseCase)
         """
         booking_repo = booking_repo or BookingRepository()
         self.cancel_invoice_use_case = cancel_invoice_use_case or CancelInvoiceUseCase(
@@ -86,7 +87,10 @@ class DuplicateInvoiceUseCase:
             # 1. Vérifier que la facture n'est pas déjà un brouillon
             current_status = cast(InvoiceStatus, invoice.status)
             if current_status == InvoiceStatus.DRAFT:
-                msg = "La facture est déjà un brouillon et peut être modifiée directement."
+                msg = (
+                    "La facture est déjà un brouillon et peut être modifiée "
+                    "directement."
+                )
                 raise ValueError(msg)
 
             # 2. Récupérer les lignes avec réservations
