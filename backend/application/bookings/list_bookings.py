@@ -136,12 +136,15 @@ class ListBookingsUseCase:
 
         Args:
             booking_repo: Repository pour récupérer les bookings.
-            client_repo: Repository pour récupérer les clients (requis pour rôle client).
+            client_repo: Repository pour récupérer les clients
+                (requis pour rôle client).
         """
         self.booking_repo = booking_repo
         self.client_repo = client_repo
 
-    def execute(self, input_data: ListBookingsInput) -> ListBookingsOutput:  # noqa: PLR0911
+    def execute(
+        self, input_data: ListBookingsInput
+    ) -> ListBookingsOutput:  # noqa: PLR0911
         """Exécute la liste des réservations.
 
         Args:
@@ -162,7 +165,9 @@ class ListBookingsUseCase:
             return ListBookingsOutput(
                 success=False,
                 error={
-                    "per_page": f"Le nombre par page doit être entre 1 et {self.MAX_PER_PAGE}"
+                    "per_page": (
+                        f"Le nombre par page doit être entre 1 et {self.MAX_PER_PAGE}"
+                    )
                 },
                 status_code=400,
             )
