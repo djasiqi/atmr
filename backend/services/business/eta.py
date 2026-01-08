@@ -164,7 +164,8 @@ class EtaService:
         confidence = 1.0
 
         # ✅ Vérifier feature flag ML global (avec pourcentage de trafic)
-        # Le feature flag contrôle à la fois l'activation globale ET le pourcentage de trafic
+        # Le feature flag contrôle à la fois l'activation globale ET le
+        # pourcentage de trafic
         ml_enabled_globally = FeatureFlags.is_ml_enabled()
         should_use_ml_flag = FeatureFlags.should_use_ml()  # Gère aussi le pourcentage
         should_use_ml = use_ml and ml_enabled_globally and should_use_ml_flag
@@ -181,7 +182,8 @@ class EtaService:
 
                 # Convertir retard prédit en facteur de correction ETA
                 # Si ML prédit un retard de +5 min, on augmente l'ETA de base
-                # Facteur = 1.0 + (retard_prédit_minutes / 60) / (eta_base_secondes / 60)
+                # Facteur = 1.0 + (retard_prédit_minutes / 60) /
+                # (eta_base_secondes / 60)
                 if base_eta_seconds > 0:
                     eta_base_minutes = base_eta_seconds / 60.0
                     # Correction : si retard prédit, augmenter ETA proportionnellement
@@ -205,7 +207,8 @@ class EtaService:
                     # Fallback gracieux : utiliser ETA de base sans correction
                 else:
                     logger.warning(
-                        "[EtaService] Impossible d'appliquer correction ML: base_eta_seconds <= 0"
+                        "[EtaService] Impossible d'appliquer correction ML: "
+                        "base_eta_seconds <= 0"
                     )
 
             except Exception as e:

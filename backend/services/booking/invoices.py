@@ -98,8 +98,8 @@ class InvoiceTransferService:
             return
 
         try:
-            # 1. Récupérer ou créer un client "institution" pour l'entreprise propriétaire
-            # Ce client représente l'entreprise A dans le système de B
+            # 1. Récupérer ou créer un client "institution" pour l'entreprise
+            # propriétaire. Ce client représente l'entreprise A dans le système de B
             owner_company = Company.query.get(transfer.owner_company_id)
             if not owner_company:
                 raise ValueError(
@@ -252,7 +252,8 @@ class InvoiceTransferService:
             db.session.commit()
 
             logger.info(
-                "Facture sous-traitance créée: %s - Entreprise %s facture %s pour %s %s",
+                "Facture sous-traitance créée: %s - Entreprise %s facture %s "
+                "pour %s %s",
                 invoice_number,
                 transfer.executing_company_id,
                 transfer.owner_company_id,
@@ -279,7 +280,8 @@ class InvoiceTransferService:
         # car le booking appartient maintenant à l'entreprise exécutante
 
         logger.info(
-            "Modèle ASSIGN_TO_PARTNER: La facture client sera créée lors de la génération mensuelle pour l'entreprise %s",
+            "Modèle ASSIGN_TO_PARTNER: La facture client sera créée lors de "
+            "la génération mensuelle pour l'entreprise %s",
             transfer.executing_company_id,
         )
 

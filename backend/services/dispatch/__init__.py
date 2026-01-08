@@ -2,7 +2,8 @@
 Module `dispatch` - Consolidation des services de dispatch et optimisation
 
 Ce module regroupe tous les services liés au dispatch :
-- Dispatch unifié (optimisation combinatoire + ML/RL) → `unified_dispatch/` (déjà refactorisé B1)
+- Dispatch unifié (optimisation combinatoire + ML/RL) → `unified_dispatch/`
+  (déjà refactorisé B1)
 - Agent dispatch (orchestration multi-agents)
 - Planning service (planification des courses)
 - Auto-réaffectation automatique
@@ -15,7 +16,8 @@ Ce module consolide les services dispatch fragmentés :
 - `planning_service.py` → `dispatch/planning.py`
 - `auto_reassignment_service.py` → `dispatch/auto_reassignment.py`
 - `dispatch_utils.py` → `dispatch/utils.py`
-- `unified_dispatch/` → Reste en place (déjà refactorisé B1, fait partie du domaine dispatch)
+- `unified_dispatch/` → Reste en place (déjà refactorisé B1, fait partie du
+  domaine dispatch)
 
 ## Structure
 
@@ -45,7 +47,9 @@ from services.dispatch.auto_reassignment import AutoReassignmentService
 from services.dispatch.utils import dispatch_helper_function
 
 # Unified dispatch (B1) - chemins inchangés
-from services.unified_dispatch.orchestration.dispatch_orchestrator import DispatchOrchestrator
+from services.unified_dispatch.orchestration.dispatch_orchestrator import (
+    DispatchOrchestrator,
+)
 
 # Imports de compatibilité (DEPRECATED, à migrer)
 # from services.agent_dispatch.orchestrator import AgentDispatchOrchestrator
