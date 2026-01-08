@@ -49,13 +49,13 @@ class MultiCompanyDispatchTest(HttpUser):
     test_date: str = ""
     user_index: int = 0
 
-    def on_start(self) -> None:
+    def on_start(self) -> None:  # type: ignore[reportImplicitOverride]
         """Setup : Login et assignation entreprise."""
         # Assigner un ID d'entreprise unique (1-10)
         self.user_index = (id(self) % 10) + 1
         self.company_id = self.user_index
 
-        logger.info(f"[SETUP] User {self.user_index} → Company {self.company_id}")
+        logger.info("[SETUP] User %s → Company %s", self.user_index, self.company_id)
 
         # Login
         self._login()
@@ -65,7 +65,7 @@ class MultiCompanyDispatchTest(HttpUser):
         self.test_date = tomorrow.strftime("%Y-%m-%d")
 
         logger.info(
-            f"[SETUP] ✅ Company {self.company_id} prête | Date: {self.test_date}"
+            "[SETUP] ✅ Company %s prête | Date: %s", self.company_id, self.test_date
         )
 
     def _login(self) -> None:
@@ -86,11 +86,12 @@ class MultiCompanyDispatchTest(HttpUser):
         if response.status_code == 200:
             data = response.json()
             self.token = data.get("access_token")
-            logger.info(f"[AUTH] ✅ Company {self.company_id} authentifiée")
+            logger.info("[AUTH] ✅ Company %s authentifiée", self.company_id)
         else:
             logger.error(
-                f"[AUTH] ❌ Company {self.company_id} login échoué : "
-                f"{response.status_code}"
+                "[AUTH] ❌ Company %s login échoué : %s",
+                self.company_id,
+                response.status_code,
             )
             # Fallback : utiliser admin token
             self._login_as_admin()
@@ -109,7 +110,7 @@ class MultiCompanyDispatchTest(HttpUser):
         if response.status_code == 200:
             data = response.json()
             self.token = data.get("access_token")
-            logger.info(f"[AUTH] ✅ Company {self.company_id} utilise admin token")
+            logger.info("[AUTH] ✅ Company %s utilise admin token", self.company_id)
 
     def _get_headers(self) -> dict[str, str]:
         """Headers avec JWT token."""
@@ -151,20 +152,22 @@ class MultiCompanyDispatchTest(HttpUser):
         elif response.status_code == 409:
             # Conflit (dispatch déjà en cours)
             logger.warning(
-                f"[DISPATCH] ⚠️ Company {self.company_id} | Dispatch déjà en cours (409)"
+                "[DISPATCH] ⚠️ Company %s | Dispatch déjà en cours (409)",
+                self.company_id,
             )
             response.success()  # Pas une erreur réelle
         elif response.status_code == 423:
             # Locked (Redis lock actif)
             logger.warning(
-                f"[DISPATCH] ⚠️ Company {self.company_id} | Redis lock actif (423)"
+                "[DISPATCH] ⚠️ Company %s | Redis lock actif (423)", self.company_id
             )
             response.success()
         else:
             logger.error(
-                f"[DISPATCH] ❌ Company {self.company_id} | "
-                f"Status: {response.status_code} | "
-                f"Response: {response.text[:200]}"
+                "[DISPATCH] ❌ Company %s | Status: %s | Response: %s",
+                self.company_id,
+                response.status_code,
+                response.text[:200],
             )
             response.failure(f"Status {response.status_code}")
 
@@ -181,7 +184,7 @@ class MultiCompanyDispatchTest(HttpUser):
             data = response.json()
             bookings = data.get("bookings", [])
             logger.debug(
-                f"[BOOKINGS] Company {self.company_id} : {len(bookings)} bookings"
+                "[BOOKINGS] Company %s : %s bookings", self.company_id, len(bookings)
             )
 
             # Validation isolation : vérifier que tous les bookings appartiennent
@@ -189,10 +192,10 @@ class MultiCompanyDispatchTest(HttpUser):
             for booking in bookings:
                 if booking.get("company_id") != self.company_id:
                     logger.error(
-                        f"[ISOLATION] ❌ LEAK DÉTECTÉ ! "
-                        f"Booking {booking.get('id')} de Company "
-                        f"{booking.get('company_id')} visible par Company "
-                        f"{self.company_id}"
+                        "[ISOLATION] ❌ LEAK DÉTECTÉ ! Booking %s de Company %s visible par Company %s",
+                        booking.get("id"),
+                        booking.get("company_id"),
+                        self.company_id,
                     )
 
     @task(2)
@@ -208,7 +211,7 @@ class MultiCompanyDispatchTest(HttpUser):
             data = response.json()
             drivers = data.get("drivers", [])
             logger.debug(
-                f"[DRIVERS] Company {self.company_id} : {len(drivers)} drivers"
+                "[DRIVERS] Company %s : %s drivers", self.company_id, len(drivers)
             )
 
     @task(1)
@@ -226,7 +229,7 @@ class MultiCompanyDispatchTest(HttpUser):
         )
 
         if response.status_code == 200:
-            logger.debug(f"[LOCK] ✅ Company {self.company_id} lock acquis")
+            logger.debug("[LOCK] ✅ Company %s lock acquis", self.company_id)
 
             # Attendre un peu
             time.sleep(random.uniform(0.1, 0.5))
@@ -243,7 +246,7 @@ class MultiCompanyDispatchTest(HttpUser):
             )
 
             if release_response.status_code == 200:
-                logger.debug(f"[LOCK] ✅ Company {self.company_id} lock relâché")
+                logger.debug("[LOCK] ✅ Company %s lock relâché", self.company_id)
 
     def _validate_response(self, response: Any, duration: float) -> None:
         """Valider la réponse et vérifier isolation données."""
@@ -259,18 +262,21 @@ class MultiCompanyDispatchTest(HttpUser):
             # Validation isolation
             if company_returned and company_returned != self.company_id:
                 logger.error(
-                    f"[ISOLATION] ❌ Company mismatch ! "
-                    f"Expected: {self.company_id}, Got: {company_returned}"
+                    "[ISOLATION] ❌ Company mismatch ! Expected: %s, Got: %s",
+                    self.company_id,
+                    company_returned,
                 )
                 response.failure(f"Company leak: {company_returned}")
                 return
 
             # Log succès
             logger.info(
-                f"[DISPATCH] ✅ Company {self.company_id} | "
-                f"Duration: {dispatch_duration:.2f}s | "
-                f"API: {duration:.2f}s | "
-                f"Assignments: {num_assignments}/{num_bookings}"
+                "[DISPATCH] ✅ Company %s | Duration: %.2fs | API: %.2fs | Assignments: %s/%s",
+                self.company_id,
+                dispatch_duration,
+                duration,
+                num_assignments,
+                num_bookings,
             )
 
             # Métriques custom
@@ -286,7 +292,9 @@ class MultiCompanyDispatchTest(HttpUser):
 
         except json.JSONDecodeError as e:
             logger.error(
-                f"[DISPATCH] ❌ Company {self.company_id} | Erreur parsing JSON : {e}"
+                "[DISPATCH] ❌ Company %s | Erreur parsing JSON : %s",
+                self.company_id,
+                e,
             )
             response.failure(f"JSON parse error: {e}")
 
@@ -312,9 +320,9 @@ def on_test_stop(environment: Any, **kwargs: Any) -> None:
     logger.info("=" * 80)
 
     stats = environment.stats
-    logger.info(f"[STATS] Total Requests: {stats.total.num_requests}")
-    logger.info(f"[STATS] Total Failures: {stats.total.num_failures}")
-    logger.info(f"[STATS] Avg Response Time: {stats.total.avg_response_time:.2f}ms")
+    logger.info("[STATS] Total Requests: %s", stats.total.num_requests)
+    logger.info("[STATS] Total Failures: %s", stats.total.num_failures)
+    logger.info("[STATS] Avg Response Time: %.2fms", stats.total.avg_response_time)
 
 
 # ========== Configuration Recommandée ==========
