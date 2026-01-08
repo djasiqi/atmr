@@ -92,7 +92,8 @@ class CreateCompanyVehicleUseCase:
             "vin": vin,
             "seats": seats,
             "wheelchair_accessible": wheelchair_accessible,
-            "is_wheelchair_accessible": wheelchair_accessible,  # compat champ alternatif
+            # compat champ alternatif
+            "is_wheelchair_accessible": wheelchair_accessible,
             "is_active": is_active,
             "insurance_expires_at": insurance_expires_at,
             "inspection_expires_at": inspection_expires_at,

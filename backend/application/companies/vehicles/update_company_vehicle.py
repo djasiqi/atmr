@@ -41,7 +41,8 @@ class UpdateCompanyVehicleResult:
 class UpdateCompanyVehicleUseCase:
     """Use-case Application: mise à jour d'un véhicule.
 
-    Le parsing des dates legacy (insurance_expires_at / inspection_expires_at) est géré ici.
+    Le parsing des dates legacy (insurance_expires_at /
+    inspection_expires_at) est géré ici.
     """
 
     def execute(

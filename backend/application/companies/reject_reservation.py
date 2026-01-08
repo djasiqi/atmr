@@ -27,7 +27,8 @@ class RejectReservationResult:
 
 
 class RejectReservationUseCase:
-    """Use-case Application: rejeter une réservation (reste PENDING, ajoute company_id à rejected_by)."""
+    """Use-case Application: rejeter une réservation
+    (reste PENDING, ajoute company_id à rejected_by)."""
 
     def execute(
         self, booking: _BookingLike, *, company_id: int

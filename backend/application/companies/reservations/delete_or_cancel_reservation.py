@@ -27,7 +27,8 @@ class DeleteOrCancelCompanyReservationResult:
 
 
 class DeleteOrCancelCompanyReservationUseCase:
-    """Use-case Application: suppression/annulation intelligente selon statut + timing."""
+    """Use-case Application: suppression/annulation intelligente selon
+    statut + timing."""
 
     def execute(
         self,
@@ -40,7 +41,8 @@ class DeleteOrCancelCompanyReservationUseCase:
 
         scheduled = getattr(booking, "scheduled_time", None)
         if scheduled and scheduled.tzinfo is None:
-            # Si naïf: on le traite comme UTC pour l'algorithme (la route peut normaliser si besoin)
+            # Si naïf: on le traite comme UTC pour l'algorithme
+            # (la route peut normaliser si besoin)
             scheduled = scheduled.replace(tzinfo=UTC)
 
         time_diff_hours = (

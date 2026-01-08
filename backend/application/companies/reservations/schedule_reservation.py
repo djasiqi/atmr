@@ -27,10 +27,12 @@ class ScheduleCompanyReservationResult:
 
 
 class ScheduleCompanyReservationUseCase:
-    """Use-case Application: planification d'une réservation (scheduled_time + time_confirmed).
+    """Use-case Application: planification d'une réservation
+    (scheduled_time + time_confirmed).
 
     - Autorisé si statut ∈ {PENDING, ACCEPTED, ASSIGNED}
-    - Si booking.is_return : nécessite que la course aller soit complétée (info fournie par la route)
+    - Si booking.is_return : nécessite que la course aller soit complétée
+      (info fournie par la route)
     - Si statut PENDING : passe en ACCEPTED pour être éligible au moteur
     """
 
@@ -48,7 +50,10 @@ class ScheduleCompanyReservationUseCase:
             return ScheduleCompanyReservationResult(
                 ok=False,
                 error={
-                    "error": f"Statut '{status_value(getattr(booking, 'status', None))}' non modifiable."
+                    "error": (
+                        f"Statut '{status_value(getattr(booking, 'status', None))}' "
+                        f"non modifiable."
+                    )
                 },
                 status_code=400,
             )
@@ -61,7 +66,10 @@ class ScheduleCompanyReservationUseCase:
             return ScheduleCompanyReservationResult(
                 ok=False,
                 error={
-                    "error": "Impossible de planifier un retour. La course aller doit être complétée."
+                    "error": (
+                        "Impossible de planifier un retour. "
+                        "La course aller doit être complétée."
+                    )
                 },
                 status_code=400,
             )
