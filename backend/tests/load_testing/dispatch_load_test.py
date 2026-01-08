@@ -102,7 +102,7 @@ class DispatchLoadTest(HttpUser):
             "/api/v1/company_dispatch/run",
             json={
                 "company_id": self.company_id,
-                "date": self.test_date,
+                "for_date": self.test_date,  # ✅ C2: Corrigé (API attend for_date, pas date)
                 "mode": "optimization",  # OR-Tools
                 "force_rerun": False,
             },
@@ -124,7 +124,7 @@ class DispatchLoadTest(HttpUser):
             "/api/v1/company_dispatch/run",
             json={
                 "company_id": self.company_id,
-                "date": self.test_date,
+                "for_date": self.test_date,  # ✅ C2: Corrigé (API attend for_date, pas date)
                 "mode": "heuristic",  # Greedy
             },
             headers=self._get_headers(),
