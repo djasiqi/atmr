@@ -7,7 +7,8 @@ from security.password_policy import PasswordPolicyService
 
 @dataclass(frozen=True, slots=True)
 class PasswordPolicyAdapter:
-    """Adapter Infrastructure: proxy vers `security.password_policy.PasswordPolicyService`."""
+    """Adapter Infrastructure: proxy vers
+    `security.password_policy.PasswordPolicyService`."""
 
     def validate_password(
         self, *, password: str, user_id: int, check_history: bool

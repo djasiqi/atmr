@@ -76,7 +76,8 @@ class Company(db.Model):
 
     # Légal & Facturation
     # ✅ S2: IBAN chiffré en base de données (conformité RGPD)
-    # Le champ _iban_raw stocke le texte chiffré (base64), peut être plus long que l'IBAN original
+    # Le champ _iban_raw stocke le texte chiffré (base64), peut être plus
+    # long que l'IBAN original
     # Utilisation de Column avec name="iban" pour garder le nom de colonne en base
     _iban_raw = Column(
         String(200), nullable=True, name="iban"

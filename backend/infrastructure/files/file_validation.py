@@ -8,7 +8,8 @@ def validate_uploaded_image(
 ) -> dict[str, Any]:
     """Adapter Infrastructure: validation upload image.
 
-    Encapsule `services.documents.validation.validate_uploaded_file` pour éviter que la couche
+    Encapsule `services.documents.validation.validate_uploaded_file` pour
+    éviter que la couche
     Application dépende de `services.*`.
     """
 

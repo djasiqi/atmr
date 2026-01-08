@@ -9,7 +9,8 @@ from services.business.vacations import create_vacation
 
 @dataclass(frozen=True, slots=True)
 class VacationServiceAdapter:
-    """Adapter Infrastructure: proxy vers `services.business.vacations.create_vacation`."""
+    """Adapter Infrastructure: proxy vers
+    `services.business.vacations.create_vacation`."""
 
     def create_vacation(
         self,

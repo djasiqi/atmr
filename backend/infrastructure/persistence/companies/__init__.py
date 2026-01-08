@@ -1,6 +1,7 @@
 """Adaptateurs persistence pour le module Companies.
 
-Espace réservé : les opérations SQLAlchemy spécifiques (multi-tables, transactions) migreront ici.
+Espace réservé : les opérations SQLAlchemy spécifiques (multi-tables,
+transactions) migreront ici.
 """
 
 from .client_writer import SqlAlchemyClientWriter

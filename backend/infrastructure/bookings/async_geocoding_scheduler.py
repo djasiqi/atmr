@@ -27,7 +27,8 @@ def trigger_async_geocoding(
         )
     except Exception as e:
         logger.warning(
-            "[Geocoding] ⚠️ Impossible de lancer le géocodage asynchrone booking_id=%s: %s",
+            "[Geocoding] ⚠️ Impossible de lancer le géocodage asynchrone "
+            "booking_id=%s: %s",
             booking_id,
             e,
         )
