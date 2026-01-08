@@ -338,11 +338,13 @@ class InvoicesList(Resource):
             search_query=q if q else None,
         )
 
-        # Calculer les stats sur TOUTES les factures filtrées AVANT le tri et la pagination
+        # Calculer les stats sur TOUTES les factures filtrées AVANT le tri et
+        # la pagination
         from sqlalchemy import desc, func
 
-        # IMPORTANT: Créer une copie de la query pour les stats (with_entities modifie la query)
-        # Utiliser from_statement ou créer une nouvelle query depuis la même base
+        # IMPORTANT: Créer une copie de la query pour les stats (with_entities
+        # modifie la query). Utiliser from_statement ou créer une nouvelle query
+        # depuis la même base
         stats_base_query = invoice_repo.find_models_by_company_with_filters_query(
             company_id=company_id,
             status=status_enum,
@@ -394,14 +396,16 @@ class InvoicesList(Resource):
         )
 
         # Tri par émission récente et pagination
-        # IMPORTANT: Les joinedload sur relations one-to-many (lines, payments) créent des doublons
-        # Solution: Créer une copie de la query SANS les joinedload pour la pagination,
-        # puis charger les relations après avec subqueryload
-        # Créer une query de base sans les options de chargement pour éviter les doublons
-        # On clone la query en récupérant uniquement les filtres WHERE
+        # IMPORTANT: Les joinedload sur relations one-to-many (lines, payments)
+        # créent des doublons
+        # Solution: Créer une copie de la query SANS les joinedload pour la
+        # pagination, puis charger les relations après avec subqueryload
+        # Créer une query de base sans les options de chargement pour éviter les
+        # doublons. On clone la query en récupérant uniquement les filtres WHERE
 
-        # Créer une nouvelle query Invoice avec les mêmes filtres mais sans les joinedload
-        # On utilise query.statement pour obtenir les filtres WHERE, mais cela ne fonctionne pas bien
+        # Créer une nouvelle query Invoice avec les mêmes filtres mais sans les
+        # joinedload. On utilise query.statement pour obtenir les filtres WHERE,
+        # mais cela ne fonctionne pas bien
         # Meilleure approche: créer une query basique avec les mêmes filtres
         pagination_query = Invoice.query.filter(Invoice.company_id == company_id)
 
@@ -450,9 +454,12 @@ class InvoicesList(Resource):
             )
 
         # Créer une sous-requête pour obtenir les IDs paginés (sans doublons)
-        # IMPORTANT: PostgreSQL exige que les colonnes ORDER BY soient dans le SELECT avec DISTINCT
-        # On sélectionne id et issued_at, on trie, puis on ne garde que id dans la sous-requête externe
-        # Note: Si issued_at est NULL, il sera trié en dernier (NULLS LAST par défaut en PostgreSQL)
+        # IMPORTANT: PostgreSQL exige que les colonnes ORDER BY soient dans le
+        # SELECT avec DISTINCT
+        # On sélectionne id et issued_at, on trie, puis on ne garde que id dans
+        # la sous-requête externe
+        # Note: Si issued_at est NULL, il sera trié en dernier (NULLS LAST par
+        # défaut en PostgreSQL)
         ids_subquery = (
             pagination_query.with_entities(Invoice.id, Invoice.issued_at)
             .distinct()
@@ -467,8 +474,9 @@ class InvoicesList(Resource):
         paginated_ids = [row[0] for row in ids_pagination.items]
 
         # Charger les objets complets avec les relations pour les IDs paginés
-        # IMPORTANT: Utiliser subqueryload au lieu de joinedload pour les relations one-to-many
-        # pour éviter les doublons qui faussent la pagination
+        # IMPORTANT: Utiliser subqueryload au lieu de joinedload pour les
+        # relations one-to-many pour éviter les doublons qui faussent la
+        # pagination
         if paginated_ids:
             from sqlalchemy.orm import subqueryload
 
