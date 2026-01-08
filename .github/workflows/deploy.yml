@@ -367,15 +367,15 @@ jobs:
           target: "/srv/atmr/"
           strip_components: 0
 
-      - name: Copy smoke tests script to server
+      - name: Copy deployment scripts to server
         uses: appleboy/scp-action@master
         with:
           host: ${{ env.SSH_HOST }}
           username: ${{ env.SSH_USER }}
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
-          source: "scripts/smoke_tests.sh"
-          target: "/srv/atmr/scripts/"
+          source: "scripts/smoke_tests.sh,scripts/deploy-production.sh"
+          target: "/srv/atmr/"
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@master
@@ -384,419 +384,32 @@ jobs:
           username: ${{ env.SSH_USER }}
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
-          # Note: Les variables d'environnement sont exportées directement dans le script
-          # au lieu d'utiliser envs: pour éviter la limite GitHub Actions de 21000 caractères
           script: |
-            cd /srv/atmr
-            set -o errexit -o nounset -o pipefail
-
-            # Fonction helper pour docker compose exec avec toutes les variables d'environnement
-            docker_exec() {
-              docker compose -f docker-compose.production.yml exec -T \
-                -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
-                -e DATABASE_URL="${DATABASE_URL}" \
-                -e POSTGRES_USER="${POSTGRES_USER}" \
-                -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
-                -e POSTGRES_DB="${POSTGRES_DB}" \
-                -e POSTGRES_HOST="postgres" \
-                -e POSTGRES_PORT="5432" \
-                -e REDIS_URL="${REDIS_URL}" \
-                -e REDIS_PASSWORD="${REDIS_PASSWORD}" \
-                -e MAIL_PASSWORD="${MAIL_PASSWORD}" \
-                backend "$@"
-            }
-
-            # Fonction de rollback en cas d'erreur
-            rollback() {
-              echo "🔄 Rollback en cours..."
-              docker compose -f docker-compose.production.yml down --remove-orphans || true
-              echo "❌ Déploiement échoué, rollback effectué"
-              exit 1
-            }
-            trap rollback ERR
-
-            # Export des variables d'environnement depuis les secrets GitHub
-            export APP_ENCRYPTION_KEY_B64="${{ secrets.APP_ENCRYPTION_KEY_B64 }}"
-            export SECRET_KEY="${{ secrets.SECRET_KEY }}"
-            export JWT_SECRET_KEY="${{ secrets.JWT_SECRET_KEY }}"
-            export POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}"
-            export POSTGRES_USER="${{ secrets.POSTGRES_USER }}"
-            export POSTGRES_DB="${{ secrets.POSTGRES_DB }}"
-            export REDIS_PASSWORD="${{ secrets.REDIS_PASSWORD }}"
-            export MAIL_PASSWORD="${{ secrets.MAIL_PASSWORD }}"
-            export SENTRY_DSN="${{ secrets.SENTRY_DSN }}"
-            export PDF_BASE_URL="${{ secrets.PDF_BASE_URL }}"
-            export GOOGLE_MAPS_API_KEY="${{ secrets.GOOGLE_MAPS_API_KEY }}"
-            # ✅ D2: Clé d'encryption maître pour chiffrement IBAN et données sensibles
-            export MASTER_ENCRYPTION_KEY="${{ secrets.MASTER_ENCRYPTION_KEY }}"
-            export DOCKER_IMAGE="${DOCKER_IMAGE}"
-            export DOCKER_TAG="${DOCKER_TAG}"
-            # ✅ Variables Monitoring (Grafana + Alertmanager)
-            export GRAFANA_ADMIN_USER="${{ secrets.GRAFANA_ADMIN_USER }}"
-            export GRAFANA_ADMIN_PASSWORD="${{ secrets.GRAFANA_ADMIN_PASSWORD }}"
-            export GRAFANA_ROOT_URL="${{ secrets.GRAFANA_ROOT_URL }}"
-            # ✅ OAuth Google - DÉSACTIVÉ pour le moment (utilisateur unique)
-            # Pour activer plus tard, décommenter :
-            # export GRAFANA_OAUTH_GOOGLE_ENABLED="${{ secrets.GRAFANA_OAUTH_GOOGLE_ENABLED }}"
-            # export GRAFANA_OAUTH_GOOGLE_CLIENT_ID="${{ secrets.GRAFANA_OAUTH_GOOGLE_CLIENT_ID }}"
-            # export GRAFANA_OAUTH_GOOGLE_CLIENT_SECRET="${{ secrets.GRAFANA_OAUTH_GOOGLE_CLIENT_SECRET }}"
-            # export GRAFANA_OAUTH_GOOGLE_ALLOWED_DOMAINS="${{ secrets.GRAFANA_OAUTH_GOOGLE_ALLOWED_DOMAINS }}"
-            export SLACK_WEBHOOK_URL="${{ secrets.SLACK_WEBHOOK_URL }}"
-            export SMTP_HOST="${{ secrets.SMTP_HOST }}"
-            export SMTP_PORT="${{ secrets.SMTP_PORT }}"
-            export SMTP_USERNAME="${{ secrets.SMTP_USERNAME }}"
-            export SMTP_PASSWORD="${{ secrets.SMTP_PASSWORD }}"
-            export ALERTMANAGER_FROM_EMAIL="${{ secrets.ALERTMANAGER_FROM_EMAIL }}"
-            export ALERT_EMAIL_TO="${{ secrets.ALERT_EMAIL_TO }}"
-            # ✅ S1: CORS - Origines autorisées pour production
-            export SOCKETIO_CORS_ORIGINS="${{ secrets.SOCKETIO_CORS_ORIGINS }}"
-
-            MISSING_SECRETS=()
-            [ -z "${APP_ENCRYPTION_KEY_B64:-}" ] && MISSING_SECRETS+=("APP_ENCRYPTION_KEY_B64")
-            [ -z "${SECRET_KEY:-}" ] && MISSING_SECRETS+=("SECRET_KEY")
-            [ -z "${JWT_SECRET_KEY:-}" ] && MISSING_SECRETS+=("JWT_SECRET_KEY")
-            [ -z "${POSTGRES_PASSWORD:-}" ] && MISSING_SECRETS+=("POSTGRES_PASSWORD")
-            [ -z "${POSTGRES_USER:-}" ] && MISSING_SECRETS+=("POSTGRES_USER")
-            [ -z "${POSTGRES_DB:-}" ] && MISSING_SECRETS+=("POSTGRES_DB")
-            [ -z "${REDIS_PASSWORD:-}" ] && MISSING_SECRETS+=("REDIS_PASSWORD")
-            [ -z "${DOCKER_IMAGE:-}" ] && MISSING_SECRETS+=("DOCKER_IMAGE")
-            [ -z "${DOCKER_TAG:-}" ] && MISSING_SECRETS+=("DOCKER_TAG")
-            [ -z "${SOCKETIO_CORS_ORIGINS:-}" ] && MISSING_SECRETS+=("SOCKETIO_CORS_ORIGINS")
-            [ ${#MISSING_SECRETS[@]} -ne 0 ] && { echo "❌ Secrets manquants: ${MISSING_SECRETS[*]}"; exit 1; }
-
-            ESCAPED_PASSWORD=$(python3 -c "from urllib.parse import quote_plus; import sys; print(quote_plus(sys.argv[1]))" "${POSTGRES_PASSWORD}")
-            export DATABASE_URL="postgresql+psycopg2://${POSTGRES_USER}:${ESCAPED_PASSWORD}@postgres:5432/${POSTGRES_DB}"
-            export SQLALCHEMY_DATABASE_URI="${DATABASE_URL}"
-            ESCAPED_REDIS_PASSWORD=$(python3 -c "from urllib.parse import quote_plus; import sys; print(quote_plus(sys.argv[1]))" "${REDIS_PASSWORD}")
-            export REDIS_URL="redis://:${ESCAPED_REDIS_PASSWORD}@redis:6379/0"
-
-            pull_with_retry() {
-              local max_attempts=3 attempt=1 timeout=600
-              while [ $attempt -le $max_attempts ]; do
-                echo "🔄 Pull Docker ($attempt/$max_attempts)..."
-                if command -v timeout >/dev/null 2>&1 && timeout $timeout docker compose -f docker-compose.production.yml pull || ! command -v timeout >/dev/null 2>&1 && docker compose -f docker-compose.production.yml pull; then
-                  echo "✅ Pull réussi"
-                  return 0
-                elif [ $attempt -lt $max_attempts ]; then
-                  sleep 10
-                  attempt=$((attempt + 1))
-                else
-                  echo "❌ Pull échoué"
-                  exit 1
-                fi
-              done
-            }
-            pull_with_retry
-            docker compose -f docker-compose.production.yml down --remove-orphans || true
-            [ -z "${POSTGRES_USER:-}" ] || [ -z "${POSTGRES_PASSWORD:-}" ] || [ -z "${POSTGRES_DB:-}" ] && { echo "❌ Variables POSTGRES_* manquantes"; exit 1; }
-            {
-              echo "DATABASE_URL=${DATABASE_URL}"
-              echo "SQLALCHEMY_DATABASE_URI=${SQLALCHEMY_DATABASE_URI}"
-              echo "POSTGRES_USER=${POSTGRES_USER}"
-              echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}"
-              echo "POSTGRES_DB=${POSTGRES_DB}"
-              echo "REDIS_PASSWORD=${REDIS_PASSWORD}"
-              echo "REDIS_URL=${REDIS_URL}"
-              echo "SECRET_KEY=${SECRET_KEY}"
-              echo "JWT_SECRET_KEY=${JWT_SECRET_KEY}"
-              echo "APP_ENCRYPTION_KEY_B64=${APP_ENCRYPTION_KEY_B64}"
-              # ✅ D2: Clé d'encryption maître pour chiffrement IBAN et données sensibles
-              echo "MASTER_ENCRYPTION_KEY=${MASTER_ENCRYPTION_KEY:-}"
-              echo "DOCKER_IMAGE=${DOCKER_IMAGE}"
-              echo "DOCKER_TAG=${DOCKER_TAG}"
-              echo "MAIL_PASSWORD=${MAIL_PASSWORD:-}"
-              echo "SENTRY_DSN=${SENTRY_DSN:-}"
-              echo "PDF_BASE_URL=${PDF_BASE_URL:-}"
-              echo "GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY:-}"
-              echo "USE_GOOGLE_PLACES=${USE_GOOGLE_PLACES:-true}"
-              # ✅ Variables Monitoring (Grafana + Alertmanager)
-              echo "GRAFANA_ADMIN_USER=${GRAFANA_ADMIN_USER:-}"
-              echo "GRAFANA_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-}"
-              echo "GRAFANA_ROOT_URL=${GRAFANA_ROOT_URL:-}"
-              # ✅ OAuth Google - DÉSACTIVÉ pour le moment (utilisateur unique)
-              # Pour activer plus tard, décommenter :
-              # echo "GRAFANA_OAUTH_GOOGLE_ENABLED=${GRAFANA_OAUTH_GOOGLE_ENABLED:-false}"
-              # echo "GRAFANA_OAUTH_GOOGLE_CLIENT_ID=${GRAFANA_OAUTH_GOOGLE_CLIENT_ID:-}"
-              # echo "GRAFANA_OAUTH_GOOGLE_CLIENT_SECRET=${GRAFANA_OAUTH_GOOGLE_CLIENT_SECRET:-}"
-              # echo "GRAFANA_OAUTH_GOOGLE_ALLOWED_DOMAINS=${GRAFANA_OAUTH_GOOGLE_ALLOWED_DOMAINS:-}"
-              echo "SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}"
-              echo "SMTP_HOST=${SMTP_HOST:-}"
-              echo "SMTP_PORT=${SMTP_PORT:-587}"
-              echo "SMTP_USERNAME=${SMTP_USERNAME:-}"
-              echo "SMTP_PASSWORD=${SMTP_PASSWORD:-}"
-              echo "ALERTMANAGER_FROM_EMAIL=${ALERTMANAGER_FROM_EMAIL:-}"
-              echo "ALERT_EMAIL_TO=${ALERT_EMAIL_TO:-}"
-              # ✅ S1: CORS - Origines autorisées pour production
-              echo "SOCKETIO_CORS_ORIGINS=${SOCKETIO_CORS_ORIGINS:-}"
-            } > .env.production && chmod 600 .env.production
-            cp .env.production .env && chmod 600 .env
-            mkdir -p data/rl/shadow_mode data/ml data/rl data/ml/models && chmod -R 755 data && chown -R 999:999 data 2>/dev/null || true
-            docker compose -f docker-compose.production.yml up -d --remove-orphans
-            echo "⏳ Attente du démarrage du backend..."
-            for i in $(seq 1 30); do
-              BACKEND_STATUS=$(docker compose -f docker-compose.production.yml ps backend --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
-              [ "$BACKEND_STATUS" = "running" ] && echo "✅ Backend démarré" && break
-              sleep 1
-            done
-            echo "🔐 Correction des permissions ML (dans le volume Docker)..."
-            docker compose -f docker-compose.production.yml exec -T --user root backend bash -c "mkdir -p /app/data /app/data/ml /app/data/ml/models && chmod -R 755 /app/data && chown -R 999:999 /app/data && [ -f /app/data/ml/models/delay_predictor.pkl ] && chmod 644 /app/data/ml/models/delay_predictor.pkl && chown 999:999 /app/data/ml/models/delay_predictor.pkl || true; ls -la /app/data/ml/models/ 2>/dev/null || true" || true
-            echo "🔄 Redémarrage du backend pour appliquer les permissions..."
-            docker compose -f docker-compose.production.yml restart backend || true
-            sleep 5
-
-            POSTGRES_READY=false
-            for i in $(seq 1 60); do
-              POSTGRES_STATUS=$(docker compose -f docker-compose.production.yml ps postgres --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
-              if [ "$POSTGRES_STATUS" = "running" ]; then
-                HEALTH=$(docker inspect --format='{{.State.Health.Status}}' atmr-postgres 2>/dev/null || echo "none")
-                if [ "$HEALTH" = "healthy" ] && docker compose -f docker-compose.production.yml exec -T postgres pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" > /dev/null 2>&1; then
-                  echo "✅ PostgreSQL prêt"
-                  POSTGRES_READY=true
-                  break
-                fi
-              elif [ "$POSTGRES_STATUS" = "exited" ] || [ "$POSTGRES_STATUS" = "dead" ]; then
-                docker compose -f docker-compose.production.yml logs postgres | tail -50
-                exit 1
-              fi
-              sleep 2
-            done
-            [ "$POSTGRES_READY" = "false" ] && { docker compose -f docker-compose.production.yml logs postgres | tail -100; exit 1; }
-
-            # ✅ Démarrer le monitoring (Prometheus + Grafana + Alertmanager)
-            echo "📊 Démarrage du monitoring..."
-            if [ -f "docker-compose.monitoring.yml" ]; then
-              echo "✅ docker-compose.monitoring.yml trouvé, démarrage du monitoring..."
-              
-              # Vérifier que le répertoire monitoring existe
-              if [ -d "monitoring" ]; then
-                echo "✅ Répertoire monitoring trouvé"
-                
-                # Donner les permissions d'exécution au script d'entrypoint d'Alertmanager
-                if [ -f "monitoring/alertmanager/docker-entrypoint.sh" ]; then
-                  echo "🔧 Configuration des permissions pour docker-entrypoint.sh..."
-                  chmod +x monitoring/alertmanager/docker-entrypoint.sh || true
-                fi
-                
-                # Reconstruire Alertmanager si le Dockerfile existe (pour inclure le script d'entrypoint)
-                if [ -f "monitoring/alertmanager/Dockerfile" ]; then
-                  echo "🔨 Reconstruction d'Alertmanager avec le nouveau Dockerfile..."
-                  docker compose -f docker-compose.monitoring.yml build alertmanager || {
-                    echo "⚠️  Erreur lors de la reconstruction d'Alertmanager, continuation avec l'image existante..."
-                  }
-                fi
-              else
-                echo "⚠️  Répertoire monitoring non trouvé, certains services peuvent ne pas fonctionner correctement"
-              fi
-              
-              docker compose -f docker-compose.monitoring.yml up -d --remove-orphans || {
-                echo "⚠️  Erreur lors du démarrage du monitoring, vérification des logs..."
-                docker compose -f docker-compose.monitoring.yml logs --tail 50 || true
-                echo "⚠️  Le monitoring n'a pas pu démarrer, mais le déploiement continue..."
-              }
-              echo "⏳ Attente du démarrage du monitoring (10 secondes)..."
-              sleep 10
-              docker compose -f docker-compose.monitoring.yml ps || true
-              
-              # 🔄 IMPORTANT: Redémarrer les services production après le monitoring
-              # Le monitoring avec --remove-orphans arrête les conteneurs qui ne sont pas dans son fichier
-              echo "🔄 Redémarrage des services production après le monitoring..."
-              docker compose -f docker-compose.production.yml up -d --remove-orphans || {
-                echo "❌ Erreur lors du redémarrage des services production"
-                exit 1
-              }
-              echo "⏳ Attente du redémarrage du backend et PostgreSQL..."
-              for i in $(seq 1 30); do
-                BACKEND_STATUS=$(docker compose -f docker-compose.production.yml ps backend --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
-                [ "$BACKEND_STATUS" = "running" ] && echo "✅ Backend redémarré" && break
-                sleep 1
-              done
-              
-              # Attendre que PostgreSQL soit prêt
-              POSTGRES_READY=false
-              for i in $(seq 1 60); do
-                POSTGRES_STATUS=$(docker compose -f docker-compose.production.yml ps postgres --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
-                if [ "$POSTGRES_STATUS" = "running" ]; then
-                  HEALTH=$(docker inspect --format='{{.State.Health.Status}}' atmr-postgres 2>/dev/null || echo "none")
-                  if [ "$HEALTH" = "healthy" ] && docker compose -f docker-compose.production.yml exec -T postgres pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" > /dev/null 2>&1; then
-                    echo "✅ PostgreSQL prêt après redémarrage"
-                    POSTGRES_READY=true
-                    break
-                  fi
-                fi
-                sleep 1
-              done
-              
-              if [ "$POSTGRES_READY" = "false" ]; then
-                echo "❌ PostgreSQL n'est pas prêt après redémarrage"
-                exit 1
-              fi
-            else
-              echo "⚠️  docker-compose.monitoring.yml non trouvé, monitoring non démarré"
-            fi
-
-            export DATABASE_URL="${SQLALCHEMY_DATABASE_URI}"
-            # 🔍 Diagnostic: Afficher les informations de connexion DB (sans secrets)
-            echo "🔍 Diagnostic de connexion DB:"
-            DB_HOST=$(echo "$DATABASE_URL" | sed -n 's/.*@\([^:]*\):.*/\1/p' || echo "N/A")
-            DB_PORT=$(echo "$DATABASE_URL" | sed -n 's/.*:\([0-9]*\)\/.*/\1/p' || echo "N/A")
-            DB_NAME=$(echo "$DATABASE_URL" | sed -n 's/.*\/\([^?]*\).*/\1/p' || echo "N/A")
-            SSL_MODE=$(echo "$DATABASE_URL" | sed -n 's/.*sslmode=\([^&]*\).*/\1/p' || echo "N/A")
-            echo "  Host: $DB_HOST"
-            echo "  Port: $DB_PORT"
-            echo "  Database: $DB_NAME"
-            echo "  SSL Mode: $SSL_MODE"
-            echo ""
-            echo "📋 État des migrations avant upgrade:"
-            docker_exec flask db current || true
-            docker_exec flask db heads || true
-            echo "🔄 Upgrade des migrations vers le head..."
-            # Utiliser 'upgrade heads' pour gérer les merge migrations avec plusieurs heads
-            UPGRADE_OUTPUT=$(docker_exec flask db upgrade heads 2>&1) || {
-              UPGRADE_EXIT_CODE=$?
-              echo "$UPGRADE_OUTPUT"
-              echo "⚠️  Première tentative échouée (code: $UPGRADE_EXIT_CODE), vérification de l'état..."
-              # 🔍 Diagnostic: Afficher les logs PostgreSQL en cas d'échec
-              echo "🔍 Logs PostgreSQL (dernières 50 lignes):"
-              docker compose -f docker-compose.production.yml logs postgres --tail=50 || true
-              echo ""
-              CURRENT_OUTPUT=$(docker_exec flask db current 2>&1 || echo "")
-              echo "$CURRENT_OUTPUT"
-              # Si erreur "overlaps", détecter et appliquer les révisions parentes manquantes
-              if echo "$UPGRADE_OUTPUT" | grep -q "overlaps"; then
-                echo "🔍 Détection d'un conflit de branches de migration (overlaps)..."
-                echo "📋 Analyse des révisions parentes de la migration de merge..."
-                
-                # Les révisions parentes de merge_68116559b15d_24bbcb82c891 sont:
-                # - 68116559b15d
-                # - 24bbcb82c891
-                
-                HAS_68116559b15d=false
-                HAS_24bbcb82c891=false
-                
-                # Vérifier quelle(s) révision(s) parente(s) est/sont déjà appliquée(s)
-                if echo "$CURRENT_OUTPUT" | grep -q "68116559b15d"; then
-                  HAS_68116559b15d=true
-                  echo "✅ Révision 68116559b15d déjà appliquée"
-                fi
-                if echo "$CURRENT_OUTPUT" | grep -q "24bbcb82c891"; then
-                  HAS_24bbcb82c891=true
-                  echo "✅ Révision 24bbcb82c891 déjà appliquée"
-                fi
-                
-                # Vérifier si les deux révisions sont présentes (cas où elles sont dans des branches séparées)
-                # Si oui, on peut directement appliquer la migration de merge
-                if [ "$HAS_68116559b15d" = "true" ] && [ "$HAS_24bbcb82c891" = "true" ]; then
-                  echo "✅ Les deux révisions parentes sont présentes, application directe de la migration de merge..."
-                  docker_exec flask db upgrade merge_68116559b15d_24bbcb82c891 || {
-                    echo "❌ Erreur lors de l'application directe de la migration de merge"
-                    docker_exec flask db current || true
-                    docker_exec flask db heads || true
-                    exit 1
-                  }
-                  echo "✅ Migration de merge appliquée avec succès"
-                elif [ "$HAS_68116559b15d" = "false" ] && [ "$HAS_24bbcb82c891" = "false" ]; then
-                  echo "❌ Aucune des révisions parentes n'est appliquée - état inattendu"
-                  docker_exec flask db current || true
-                  docker_exec flask db heads || true
-                  docker_exec flask db history | head -50 || true
-                  exit 1
-                else
-                  # Une seule révision est présente - appliquer l'autre branche
-                  if [ "$HAS_68116559b15d" = "true" ]; then
-                    MISSING_REVISION="24bbcb82c891"
-                    echo "⚠️  Révision 24bbcb82c891 manquante - tentative d'application..."
-                  else
-                    MISSING_REVISION="68116559b15d"
-                    echo "⚠️  Révision 68116559b15d manquante - tentative d'application..."
-                  fi
-                  
-                  # Essayer d'appliquer la migration manquante directement
-                  echo "🔄 Tentative d'application de la migration $MISSING_REVISION..."
-                  if UPGRADE_MISSING_OUTPUT=$(docker_exec flask db upgrade "$MISSING_REVISION" 2>&1); then
-                    echo "$UPGRADE_MISSING_OUTPUT"
-                    echo "✅ Migration $MISSING_REVISION appliquée avec succès"
-                  else
-                    UPGRADE_MISSING_EXIT=$?
-                    echo "$UPGRADE_MISSING_OUTPUT"
-                    echo "⚠️  L'application directe a échoué (code: $UPGRADE_MISSING_EXIT) - les branches sont probablement indépendantes"
-                    echo "🔄 Marquage des révisions nécessaires pour permettre la migration de merge..."
-                    
-                    # Déterminer l'ancêtre commun de la révision manquante
-                    # Pour 24bbcb82c891, l'ancêtre est 8186648ac54e
-                    # Pour 68116559b15d, l'ancêtre est f7e8d9c0b1a2
-                    if [ "$MISSING_REVISION" = "24bbcb82c891" ]; then
-                      ANCESTOR="8186648ac54e"
-                    else
-                      ANCESTOR="f7e8d9c0b1a2"
-                    fi
-                    
-                    # Stamper d'abord l'ancêtre commun si nécessaire, puis la révision manquante
-                    echo "🔄 Marquage de l'ancêtre commun $ANCESTOR (si nécessaire)..."
-                    docker_exec flask db stamp "$ANCESTOR" 2>&1 || echo "⚠️  Ancêtre peut-être déjà marqué, continuons..."
-                    
-                    # Si la révision manquante est 24bbcb82c891, stamper aussi les migrations intermédiaires
-                    # de la branche f7e8d9c0b1a2 pour éviter les conflits lors de l'application de la merge
-                    if [ "$MISSING_REVISION" = "24bbcb82c891" ]; then
-                      echo "🔄 Marquage des migrations intermédiaires de la branche f7e8d9c0b1a2..."
-                      # Stamper f7e8d9c0b1a2 et ses révisions parentes si nécessaire
-                      docker_exec flask db stamp f7e8d9c0b1a2 2>&1 || echo "⚠️  f7e8d9c0b1a2 peut-être déjà marqué"
-                      # Stamper aussi les révisions parentes de f7e8d9c0b1a2 pour éviter les conflits
-                      docker_exec flask db stamp a1b2c3d4e5f6 2>&1 || echo "⚠️  a1b2c3d4e5f6 peut-être déjà marqué"
-                      docker_exec flask db stamp add_message_file_fields 2>&1 || echo "⚠️  add_message_file_fields peut-être déjà marqué"
-                      docker_exec flask db stamp b2c3d4e5f6a7 2>&1 || echo "⚠️  b2c3d4e5f6a7 peut-être déjà marqué"
-                    fi
-                    
-                    echo "🔄 Marquage de la révision $MISSING_REVISION comme appliquée..."
-                    # Stamper la révision manquante pour permettre la migration de merge
-                    # Note: Cela suppose que les changements de la migration sont déjà dans la base de données
-                    # ou seront appliqués par la suite. Si ce n'est pas le cas, il faudra appliquer manuellement.
-                    docker_exec flask db stamp "$MISSING_REVISION" || {
-                      echo "❌ Échec du marquage de la révision $MISSING_REVISION"
-                      echo "💡 Vérification de l'état actuel des migrations..."
-                      docker_exec flask db current || true
-                      docker_exec flask db heads || true
-                      docker_exec flask db history | head -50 || true
-                      exit 1
-                    }
-                    echo "✅ Révision $MISSING_REVISION marquée comme appliquée"
-                  fi
-                  
-                  # Maintenant, appliquer la migration de merge directement par son ID
-                  echo "🔄 Application de la migration de merge directement par son ID..."
-                  docker_exec flask db upgrade merge_68116559b15d_24bbcb82c891 || {
-                    echo "❌ Erreur lors de l'application directe de la migration de merge"
-                    echo "💡 Tentative alternative avec heads..."
-                    docker_exec flask db upgrade heads || {
-                      echo "❌ Les deux tentatives ont échoué"
-                      echo "💡 État actuel des migrations:"
-                      docker_exec flask db current || true
-                      docker_exec flask db heads || true
-                      docker compose -f docker-compose.production.yml logs backend | tail -100 || true
-                      exit 1
-                    }
-                  }
-                  echo "✅ Migration de merge appliquée avec succès"
-                fi
-              else
-                echo "❌ Erreur lors de l'exécution des migrations"
-                echo "💡 Vérification de l'état des migrations..."
-                docker_exec flask db current || true
-                docker_exec flask db heads || true
-                docker_exec flask db history | head -50 || true
-                # 🔍 Debug: Afficher les colonnes de la table booking en cas d'erreur
-                echo "🔍 Debug: Colonnes de la table 'booking':"
-                docker compose -f docker-compose.production.yml exec -T postgres psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -c "SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name='booking' ORDER BY ordinal_position;" || true
-                echo ""
-                docker compose -f docker-compose.production.yml logs backend | tail -100 || true
-                exit 1
-              fi
-            }
-            echo "✅ Migrations appliquées avec succès"
-            docker compose -f docker-compose.production.yml exec -T --user root backend bash -c "mkdir -p /app/data /app/data/ml /app/data/ml/models && chmod -R 755 /app/data && chown -R 999:999 /app/data 2>/dev/null || true; [ -f /app/data/ml/models/delay_predictor.pkl ] && chmod 644 /app/data/ml/models/delay_predictor.pkl && chown 999:999 /app/data/ml/models/delay_predictor.pkl 2>/dev/null || true" || true
-
-            if [ -f "/srv/atmr/scripts/smoke_tests.sh" ]; then
-              export BACKEND_URL="http://localhost:5000"
-              bash /srv/atmr/scripts/smoke_tests.sh || rollback
-            fi
-            trap - ERR
-            echo "✅ Déploiement terminé"
+            chmod +x /srv/atmr/scripts/deploy-production.sh
+            chmod +x /srv/atmr/scripts/smoke_tests.sh
+            /srv/atmr/scripts/deploy-production.sh \
+              "${{ secrets.APP_ENCRYPTION_KEY_B64 }}" \
+              "${{ secrets.SECRET_KEY }}" \
+              "${{ secrets.JWT_SECRET_KEY }}" \
+              "${{ secrets.POSTGRES_PASSWORD }}" \
+              "${{ secrets.POSTGRES_USER }}" \
+              "${{ secrets.POSTGRES_DB }}" \
+              "${{ secrets.REDIS_PASSWORD }}" \
+              "${{ secrets.MAIL_PASSWORD }}" \
+              "${{ secrets.SENTRY_DSN }}" \
+              "${{ secrets.PDF_BASE_URL }}" \
+              "${{ secrets.GOOGLE_MAPS_API_KEY }}" \
+              "${{ secrets.MASTER_ENCRYPTION_KEY }}" \
+              "${{ env.DOCKER_IMAGE }}" \
+              "${{ env.DOCKER_TAG }}" \
+              "${{ secrets.GRAFANA_ADMIN_USER }}" \
+              "${{ secrets.GRAFANA_ADMIN_PASSWORD }}" \
+              "${{ secrets.GRAFANA_ROOT_URL }}" \
+              "${{ secrets.SLACK_WEBHOOK_URL }}" \
+              "${{ secrets.SMTP_HOST }}" \
+              "${{ secrets.SMTP_PORT }}" \
+              "${{ secrets.SMTP_USERNAME }}" \
+              "${{ secrets.SMTP_PASSWORD }}" \
+              "${{ secrets.ALERTMANAGER_FROM_EMAIL }}" \
+              "${{ secrets.ALERT_EMAIL_TO }}" \
+              "${{ secrets.SOCKETIO_CORS_ORIGINS }}"
