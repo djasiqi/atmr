@@ -595,6 +595,40 @@ jobs:
               echo "⏳ Attente du démarrage du monitoring (10 secondes)..."
               sleep 10
               docker compose -f docker-compose.monitoring.yml ps || true
+              
+              # 🔄 IMPORTANT: Redémarrer les services production après le monitoring
+              # Le monitoring avec --remove-orphans arrête les conteneurs qui ne sont pas dans son fichier
+              echo "🔄 Redémarrage des services production après le monitoring..."
+              docker compose -f docker-compose.production.yml up -d --remove-orphans || {
+                echo "❌ Erreur lors du redémarrage des services production"
+                exit 1
+              }
+              echo "⏳ Attente du redémarrage du backend et PostgreSQL..."
+              for i in $(seq 1 30); do
+                BACKEND_STATUS=$(docker compose -f docker-compose.production.yml ps backend --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
+                [ "$BACKEND_STATUS" = "running" ] && echo "✅ Backend redémarré" && break
+                sleep 1
+              done
+              
+              # Attendre que PostgreSQL soit prêt
+              POSTGRES_READY=false
+              for i in $(seq 1 60); do
+                POSTGRES_STATUS=$(docker compose -f docker-compose.production.yml ps postgres --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
+                if [ "$POSTGRES_STATUS" = "running" ]; then
+                  HEALTH=$(docker inspect --format='{{.State.Health.Status}}' atmr-postgres 2>/dev/null || echo "none")
+                  if [ "$HEALTH" = "healthy" ] && docker compose -f docker-compose.production.yml exec -T postgres pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" > /dev/null 2>&1; then
+                    echo "✅ PostgreSQL prêt après redémarrage"
+                    POSTGRES_READY=true
+                    break
+                  fi
+                fi
+                sleep 1
+              done
+              
+              if [ "$POSTGRES_READY" = "false" ]; then
+                echo "❌ PostgreSQL n'est pas prêt après redémarrage"
+                exit 1
+              fi
             else
               echo "⚠️  docker-compose.monitoring.yml non trouvé, monitoring non démarré"
             fi
