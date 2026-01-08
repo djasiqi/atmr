@@ -168,10 +168,8 @@ jobs:
             REQUIREMENTS_HASH=${{ steps.requirements_hash.outputs.requirements_hash }}
           push: true
           tags: ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          # Invalider le cache si requirements.txt a changé
-          no-cache: false
+          # FORCE REBUILD COMPLET - pas de cache pour garantir Flask-Limiter[redis]
+          no-cache: true
 
       - name: Verify image was pushed
         id: verify_push
@@ -412,4 +410,4 @@ jobs:
               "${{ secrets.SMTP_PASSWORD }}" \
               "${{ secrets.ALERTMANAGER_FROM_EMAIL }}" \
               "${{ secrets.ALERT_EMAIL_TO }}" \
-              "${{ secrets.SOCKETIO_CORS_ORIGINS }}"
+              "${{ secrets.SOCKETIO_CORS_ORIGINS }}"
