@@ -305,12 +305,12 @@ def validate_production_security(app) -> None:
 
         if not secret_key:
             raise RuntimeError(
-                "❌ SECURITÉ: SECRET_KEY doit être défini en production. "
+                "❌ SECURITÉ: SECRET_KEY doit être défini en production. " +
                 "Placez la valeur dans Vault ou dans la variable d'environnement SECRET_KEY."
             )
         if not jwt_secret_key:
             raise RuntimeError(
-                "❌ SECURITÉ: JWT_SECRET_KEY doit être défini en production. "
+                "❌ SECURITÉ: JWT_SECRET_KEY doit être défini en production. " +
                 "Placez la valeur dans Vault ou dans la variable d'environnement JWT_SECRET_KEY."
             )
 
