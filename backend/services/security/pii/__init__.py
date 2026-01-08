@@ -56,7 +56,8 @@ SENSITIVE_KEYS = {
 
 # Pattern pour détecter les tokens dans les chaînes (token: value, key: value, etc.)
 # Pattern pour détecter les tokens dans les chaînes (token: value, key: value, etc.)
-# ✅ IMPORTANT: on masque toute la valeur après `authorization:` (y compris "Bearer ...").
+# ✅ IMPORTANT: on masque toute la valeur après `authorization:`
+# (y compris "Bearer ...").
 TOKEN_PATTERN = re.compile(
     r"(?i)\b(token|key|secret|password|apikey|access_key|secret_key|authorization|auth)\b\s*[:=]\s*([^\s,;]+(?:\s+[^\s,;]+)*)",
     re.IGNORECASE,

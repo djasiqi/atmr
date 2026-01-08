@@ -108,7 +108,8 @@ class ProactiveAlertsService:
 
             if self.delay_predictor.is_trained:
                 logger.info(
-                    "[ProactiveAlerts] ✅ Modèle delay_predictor chargé via DelayMLPredictor"
+                    "[ProactiveAlerts] ✅ Modèle delay_predictor chargé via "
+                    "DelayMLPredictor"
                 )
             else:
                 logger.warning(

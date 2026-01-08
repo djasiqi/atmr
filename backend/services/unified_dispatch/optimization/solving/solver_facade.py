@@ -138,7 +138,8 @@ class SolverFacade:
         Args:
             problem: Problème complet
             booking_ids: IDs des bookings à garder
-            settings: Paramètres de dispatch (non utilisé actuellement, conservé pour compatibilité)
+            settings: Paramètres de dispatch (non utilisé actuellement,
+                conservé pour compatibilité)
 
         Returns:
             Problème filtré
