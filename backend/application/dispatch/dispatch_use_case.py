@@ -59,10 +59,12 @@ class DispatchUseCase:
         def _missing_get_bookings_for_day(
             _company_id: int, _for_date: str
         ) -> list[Any]:
-            raise RuntimeError(
+            msg = (
                 "DispatchUseCase nécessite une dépendance injectée "
                 "`get_bookings_for_day_fn`. "
-                + "Utiliser la façade DispatchService (ou une factory) pour "
+                "Utiliser la façade DispatchService (ou une factory) pour "
+            )
+            raise RuntimeError(msg
                 + "le wiring production."
             )
 
@@ -99,9 +101,12 @@ class DispatchUseCase:
                     invalid_keys = original_keys - validated_keys
 
                     if invalid_keys:
-                        logger.warning(
+                        msg = (
                             "[DispatchService] Overrides invalides "
-                            "(clés non autorisées): %s",
+                            "(clés non autorisées): %s"
+                        )
+                        logger.warning(
+                            msg,
                             invalid_keys,
                         )
                         return (
@@ -180,9 +185,12 @@ class DispatchUseCase:
         bookings_count = len(self.get_bookings_for_day(company_id, for_date))
 
         if bookings_count > max_sync_bookings:
-            logger.info(
+            msg = (
                 "[DispatchService] ⚠️ Forcing async mode: %d bookings > %d "
-                "(max sync). Mode sync désactivé pour éviter timeout HTTP.",
+                "(max sync). Mode sync désactivé pour éviter timeout HTTP."
+            )
+            logger.info(
+                msg,
                 bookings_count,
                 max_sync_bookings,
             )
@@ -236,12 +244,13 @@ class DispatchUseCase:
         engine_run = self._engine_run
         validate_assignments = self._validate_assignments
         if engine_run is None or validate_assignments is None:
-            raise RuntimeError(
+            msg = (
                 "DispatchUseCase.execute_dispatch_sync nécessite des "
                 "dépendances injectées (engine_run_fn et "
                 "validate_assignments_fn). Utiliser la façade DispatchService "
                 "(ou une factory) pour le wiring production."
             )
+            raise RuntimeError(msg)
 
         result = engine_run(**params)
 
@@ -250,9 +259,12 @@ class DispatchUseCase:
         if assignments_list:
             validation_result = validate_assignments(assignments_list, strict=False)
             if not validation_result["valid"]:
-                logger.warning(
+                msg = (
                     "[DispatchService] Conflits temporels détectés pour "
-                    "company %s, date %s",
+                    "company %s, date %s"
+                )
+                logger.warning(
+                    msg,
                     params["company_id"],
                     params.get("for_date"),
                 )

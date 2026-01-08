@@ -152,18 +152,22 @@ class CreateBookingUseCase:
                 validated_data["dropoff_location"],
             )
         except OSError as e:
-            logger.error(
+            msg = (
                 "❌ Erreur configuration géocodage pour booking "
-                "(pickup=%s, dropoff=%s): %s",
+                "(pickup=%s, dropoff=%s): %s"
+            )
+            logger.error(
+                msg,
                 validated_data["pickup_location"],
                 validated_data["dropoff_location"],
                 e,
             )
-            raise RuntimeError(
+            msg = (
                 "Impossible de calculer la distance entre les adresses. "
                 "Vérifiez que les adresses sont valides et que le service de "
                 "géocodage est configuré."
-            ) from e
+            )
+            raise RuntimeError(msg) from e
         except RuntimeError as e:
             error_msg = str(e)
             logger.warning(
@@ -194,11 +198,12 @@ class CreateBookingUseCase:
                 validated_data["pickup_location"],
                 validated_data["dropoff_location"],
             )
-            raise RuntimeError(
+            msg = (
                 "Erreur lors du calcul de la distance. Le service de géocodage "
                 "est temporairement indisponible. Veuillez réessayer dans "
                 "quelques instants."
-            ) from e
+            )
+            raise RuntimeError(msg) from e
 
         client_dto = self.client_repo.find_by_id(cmd.client_id)
         if not client_dto:
@@ -277,17 +282,19 @@ class CreateBookingUseCase:
             return pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, geocode_miss
         except ValueError as e:
             logger.error("❌ Erreur validation adresse lors géocodage: %s", e)
-            raise ValueError(
+            msg = (
                 "L'adresse fournie est invalide ou vide. Veuillez fournir une "
                 "adresse complète et valide."
-            ) from e
+            )
+            raise ValueError(msg) from e
         except Exception as e:
             logger.exception("❌ Erreur inattendue lors du géocodage des adresses")
-            raise RuntimeError(
+            msg = (
                 "Erreur lors du géocodage des adresses. Le service de géocodage "
                 "est temporairement indisponible. Veuillez réessayer dans "
                 "quelques instants."
-            ) from e
+            )
+            raise RuntimeError(msg) from e
 
     def _process_geocoding_result(
         self,
@@ -298,10 +305,12 @@ class CreateBookingUseCase:
     ) -> tuple[float, float, bool]:
         fallback_fn = self.fallback_coords_fn
         if fallback_fn is None:
-            raise RuntimeError(
+            msg = (
                 "CreateBookingUseCase nécessite une dépendance injectée "
                 "`fallback_coords_fn`. "
-                + "Utiliser BookingService (ou une factory) pour le wiring "
+                "Utiliser BookingService (ou une factory) pour le wiring "
+            )
+            raise RuntimeError(msg
                 + "production."
             )
 

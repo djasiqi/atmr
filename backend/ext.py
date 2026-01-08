@@ -96,10 +96,11 @@ if REDIS_URL and REDIS_URL.strip() and not REDIS_URL.startswith("memory://"):
         REDIS_URL.split("@")[-1] if "@" in REDIS_URL else REDIS_URL,
     )
 else:
-    app_logger.warning(
+    msg = (
         "[Socket.IO] ⚠️  Message queue Redis non configurée - "
         "mode single-worker uniquement. Pour multi-workers, définissez REDIS_URL."
     )
+    app_logger.warning(msg)
 
 socketio = SocketIO(
     async_mode=ASYNC_MODE,
@@ -442,9 +443,12 @@ def invalid_token_callback(error):
                     # Note: Flask-JWT-Extended ne permet pas de "re-décoder"
                     # avec une autre clé dans ce callback. Le token sera rejeté
                     # et l'utilisateur devra se reconnecter.
-                    app_logger.info(
+                    msg = (
                         "[JWT Legacy] ✅ Token décodé avec legacy key "
-                        "(user_id: %s, endpoint: %s)",
+                        "(user_id: %s, endpoint: %s)"
+                    )
+                    app_logger.info(
+                        msg,
                         payload.get("sub") or payload.get("identity"),
                         request.path,
                     )
@@ -523,10 +527,11 @@ def check_if_token_revoked(_jwt_header, jwt_payload):
     # ⚠️ FALLBACK: Si pas de jti (cas théorique, ne devrait pas arriver)
     # La blacklist utilisera le hash du token comme fallback
     # Ce cas ne devrait jamais se produire avec Flask-JWT-Extended moderne
-    app_logger.warning(
+    msg = (
         "[JWT Security] Token sans jti détecté dans check_if_token_revoked. "
         "Ce cas ne devrait pas se produire avec Flask-JWT-Extended moderne."
     )
+    app_logger.warning(msg)
     # Ne pas vérifier la blacklist si pas de jti (le token sera accepté)
     # car on ne peut pas l'identifier de manière fiable sans jti
     return False

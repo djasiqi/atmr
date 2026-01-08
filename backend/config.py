@@ -619,9 +619,11 @@ class ProductionConfig(Config):
             if origin and not origin.startswith(
                 ("https://", "http://localhost", "http://127.0.0.1")
             ):
-                raise RuntimeError(
+                msg = (
                     f"SOCKETIO_CORS_ORIGINS contient une origine non sécurisée "
-                    + f"en production: {origin}. Toutes les origines doivent être "
+                    f"en production: {origin}. Toutes les origines doivent être "
+                )
+                raise RuntimeError(msg
                     + "HTTPS (sauf localhost pour tests)."
                 )
         SOCKETIO_CORS_ORIGINS = _socketio_cors_origins
