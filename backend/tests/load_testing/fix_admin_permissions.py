@@ -12,8 +12,8 @@ sys.path.insert(0, str(backend_dir))
 
 from app import create_app
 from ext import db
-from models.user import User
 from models.enums import UserRole
+from models.user import User
 
 
 def fix_admin_permissions():
@@ -44,7 +44,7 @@ def fix_admin_permissions():
 
         try:
             db.session.commit()
-            print(f"[2/2] Role modifie avec succes!")
+            print("[2/2] Role modifie avec succes!")
             print(f"   Ancien role: {old_role.value}")
             print(f"   Nouveau role: {user.role.value}")
             print()

@@ -1,5 +1,5 @@
 """
-Scénario 1 : Test de Charge Standard - Dispatch 100 bookings × 50 drivers
+Scénario 1 : Test de Charge Standard - Dispatch 100 bookings x 50 drivers
 
 Ce test simule un dispatch standard avec une charge importante pour valider :
 - Performance du moteur d'optimisation OR-Tools
@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import json
 import logging
-import random
 import time
 from datetime import date, timedelta
 from typing import Any
@@ -32,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 class DispatchLoadTest(HttpUser):
-    """Test de charge standard : 100 bookings × 50 drivers."""
+    """Test de charge standard : 100 bookings x 50 drivers."""
 
     wait_time = between(2, 5)  # Attente entre requêtes
     host = "http://localhost:5000"
@@ -54,7 +53,7 @@ class DispatchLoadTest(HttpUser):
         self.test_date = tomorrow.strftime("%Y-%m-%d")
 
         logger.info(
-            f"[SETUP] ✅ Prêt pour dispatch : date={self.test_date}, company={self.company_id}"
+            "[SETUP] ✅ Prêt pour dispatch : date=%s, company=%s", self.test_date, self.company_id
         )
 
     def _login(self) -> None:
@@ -88,7 +87,7 @@ class DispatchLoadTest(HttpUser):
     @task(10)  # Poids 10 : Tâche principale
     def dispatch_large_set(self) -> None:
         """
-        Test dispatch 100 bookings × 50 drivers.
+        Test dispatch 100 bookings x 50 drivers.
 
         Simule un dispatch réaliste avec :
         - 100 courses à assigner
@@ -107,7 +106,7 @@ class DispatchLoadTest(HttpUser):
                 "force_rerun": False,
             },
             headers=self._get_headers(),
-            name="[DISPATCH] Large Set (100×50)",
+            name="[DISPATCH] Large Set (100x50)",
         )
 
         duration = time.time() - start_time
@@ -147,7 +146,7 @@ class DispatchLoadTest(HttpUser):
         if response.status_code == 200:
             data = response.json()
             status = data.get("status", "unknown")
-            logger.debug(f"[STATUS] Dispatch status: {status}")
+            logger.debug("[STATUS] Dispatch status: %s", status)
 
     # @task(1)  # ⚠️ C2: Endpoint désactivé temporairement (404 NOT FOUND)
     def get_dispatch_metrics(self) -> None:
@@ -160,7 +159,7 @@ class DispatchLoadTest(HttpUser):
 
         if response.status_code == 200:
             data = response.json()
-            logger.debug(f"[METRICS] Last dispatch: {data.get('last_run_duration')}s")
+            logger.debug("[METRICS] Last dispatch: %ss", data.get('last_run_duration'))
 
     def _process_success_response(self, response: Any, duration: float) -> None:
         """Traiter une réponse réussie et logger les métriques."""
@@ -226,7 +225,7 @@ def on_test_start(environment: Any, **kwargs: Any) -> None:
     """Hook exécuté au démarrage du test."""
     logger.info("=" * 80)
     logger.info("[LOCUST] 🚀 Démarrage Test de Charge - Scénario 1")
-    logger.info("[LOCUST] Objectif : 100 bookings × 50 drivers")
+    logger.info("[LOCUST] Objectif : 100 bookings x 50 drivers")
     logger.info("=" * 80)
 
     # Si mode distributed (master/workers)
@@ -262,7 +261,7 @@ def on_request(
 ) -> None:
     """Hook exécuté après chaque requête (pour logging détaillé)."""
     if exception:
-        logger.error(f"[REQUEST] ❌ {name} | Exception: {exception}")
+        logger.error("[REQUEST] ❌ %s | Exception: %s", name, exception)
     elif response_time > 5000:  # > 5s
         logger.warning(f"[REQUEST] ⚠️ {name} | Lent: {response_time:.0f}ms")
 

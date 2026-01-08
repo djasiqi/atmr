@@ -12,7 +12,7 @@ Usage :
 import sys
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
-from decimal import Decimal
+
 
 # Ajouter le répertoire backend au PYTHONPATH
 backend_dir = Path(__file__).parent.parent.parent
