@@ -163,9 +163,10 @@ def get_rate_limit_key() -> str:
 
 
 # ✅ S2: Rate limiting amélioré - limite par défaut réduite (5000 → 1000/heure)
+# ⚠️ C2 LOAD TESTING: Temporairement augmenté à 100000/hour pour tests de charge
 limiter = Limiter(
     key_func=get_rate_limit_key,
-    default_limits=["1000 per hour"],  # ✅ S2: Réduit de 5000 à 1000/heure
+    default_limits=["100000 per hour"],  # ⚠️ C2: Augmenté temporairement (normalement 1000)
     storage_uri=limiter_storage,
 )
 

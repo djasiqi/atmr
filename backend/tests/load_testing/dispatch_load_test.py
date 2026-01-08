@@ -135,7 +135,7 @@ class DispatchLoadTest(HttpUser):
             data = response.json()
             logger.debug(f"[HEURISTIC] Assignations: {data.get('num_assignments', 0)}")
 
-    @task(2)  # Poids 2 : Monitoring
+    # @task(2)  # ⚠️ C2: Endpoint désactivé temporairement (403 FORBIDDEN - permissions)
     def check_dispatch_status(self) -> None:
         """Vérifier l'état d'un dispatch en cours."""
         response = self.client.get(
@@ -149,7 +149,7 @@ class DispatchLoadTest(HttpUser):
             status = data.get("status", "unknown")
             logger.debug(f"[STATUS] Dispatch status: {status}")
 
-    @task(1)  # Poids 1 : Rare
+    # @task(1)  # ⚠️ C2: Endpoint désactivé temporairement (404 NOT FOUND)
     def get_dispatch_metrics(self) -> None:
         """Récupérer les métriques du dernier dispatch."""
         response = self.client.get(
