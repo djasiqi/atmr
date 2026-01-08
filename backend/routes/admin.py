@@ -1418,4 +1418,3 @@ class WebSocketMetricsResource(Resource):
             sentry_sdk.capture_exception(e)
             logger.exception("❌ ERREUR websocket_metrics: %s", e)
             return APIErrorHandler.handle_exception(e, logger)
-
