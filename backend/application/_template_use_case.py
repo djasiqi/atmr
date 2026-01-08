@@ -283,7 +283,9 @@ class ListEntitiesUseCase:
             return ListEntitiesOutput(
                 success=False,
                 error={
-                    "per_page": f"Le nombre par page doit être entre 1 et {self.MAX_PER_PAGE}"
+                    "per_page": (
+                        f"Le nombre par page doit être entre 1 et {self.MAX_PER_PAGE}"
+                    )
                 },
                 status_code=400,
             )
@@ -299,7 +301,10 @@ class ListEntitiesUseCase:
             # )
             # total = pagination.total or 0
             # entities = pagination.items or []
-            # total_pages = (total + input_data.per_page - 1) // input_data.per_page if total > 0 else 0
+            # total_pages = (
+            #     (total + input_data.per_page - 1) // input_data.per_page
+            #     if total > 0 else 0
+            # )
 
             # Exemple simplifié
             entities = []  # self._entity_repo.find_by_company_id(...)

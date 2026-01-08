@@ -46,7 +46,7 @@ except ImportError:  # pragma: no cover
 # --- Imports de libs tiers (tous en haut pour Ruff E402) ---
 import sentry_sdk  # pyright: ignore[reportMissingImports]
 from dotenv import load_dotenv  # pyright: ignore[reportMissingImports]
-from flask import (  # pyright: ignore[reportMissingImports]
+from flask import (
     Flask,
     current_app,
     jsonify,
@@ -54,16 +54,16 @@ from flask import (  # pyright: ignore[reportMissingImports]
     request,
     send_from_directory,
 )
-from flask_cors import CORS  # pyright: ignore[reportMissingModuleSource]
+from flask_cors import CORS
 from flask_talisman import Talisman  # pyright: ignore[reportMissingImports]
 from sentry_sdk.integrations.flask import (  # pyright: ignore[reportMissingImports]
     FlaskIntegration,
 )
-from werkzeug.exceptions import (  # pyright: ignore[reportMissingImports]
+from werkzeug.exceptions import (
     HTTPException,
     NotFound,
 )
-from werkzeug.middleware.proxy_fix import (  # pyright: ignore[reportMissingImports]
+from werkzeug.middleware.proxy_fix import (
     ProxyFix,
 )
 
@@ -158,9 +158,10 @@ def validate_required_env_vars(config_name: str) -> None:
         if not cors_origins_env or cors_origins_env.strip() == "*":
             raise RuntimeError(
                 "Configuration CORS invalide pour production. "
-                + "SOCKETIO_CORS_ORIGINS ne peut pas être vide ou '*' en production. "
-                + "Fournissez une liste d'origines autorisées séparées par des virgules "
-                + "(ex: 'https://app.example.com,https://www.example.com')."
+                + "SOCKETIO_CORS_ORIGINS ne peut pas être vide ou '*' "
+                + "en production. Fournissez une liste d'origines autorisées "
+                + "séparées par des virgules (ex: 'https://app.example.com,"
+                + "https://www.example.com')."
             )
         # Valider que toutes les origines sont HTTPS (sauf localhost pour tests)
         origins_list = [origin.strip() for origin in cors_origins_env.split(",")]
@@ -169,8 +170,9 @@ def validate_required_env_vars(config_name: str) -> None:
                 ("https://", "http://localhost", "http://127.0.0.1")
             ):
                 raise RuntimeError(
-                    f"SOCKETIO_CORS_ORIGINS contient une origine non sécurisée en production: {origin}. "
-                    + "Toutes les origines doivent être HTTPS (sauf localhost pour tests)."
+                    "SOCKETIO_CORS_ORIGINS contient une origine non sécurisée "
+                    + f"en production: {origin}. Toutes les origines doivent "
+                    + "être HTTPS (sauf localhost pour tests)."
                 )
 
         # ✅ Valider PDF_BASE_URL en production (REQUIS)
@@ -266,7 +268,7 @@ def create_app(config_name: str | None = None):
 
     # Flask 2.3+ : JSON Provider ; fallback <2.3 : json_encoder
     try:
-        from flask.json.provider import (  # pyright: ignore[reportMissingImports]
+        from flask.json.provider import (
             DefaultJSONProvider,
         )
 
@@ -333,7 +335,8 @@ def create_app(config_name: str | None = None):
             set_event_bus(InMemoryEventBus())
             app.logger.info("[EventBus] ✅ InMemoryEventBus activé (mode=%s)", mode)
     except Exception as e:
-        # Ne pas bloquer le démarrage si le wiring échoue (tests/unit, dépendances optionnelles, etc.)
+        # Ne pas bloquer le démarrage si le wiring échoue
+        # (tests/unit, dépendances optionnelles, etc.)
         app.logger.warning("[EventBus] ⚠️ Wiring bus échoué: %s", e)
 
     if app.config.get("RATELIMIT_ENABLED", True):
@@ -994,7 +997,8 @@ def create_app(config_name: str | None = None):
         csp = {
             "default-src": "'self'",
             "script-src": "'self'",
-            "style-src": "'self'",  # ✅ 'unsafe-inline' supprimé : tous les styles inline ont été migrés vers classes CSS
+            # ✅ 'unsafe-inline' supprimé : styles inline migrés vers CSS
+            "style-src": "'self'",
             "img-src": "'self' data: blob:",
             "connect-src": "'self' http://localhost:3000 http://127.00.1:3000 ws: wss:",
         }
@@ -1005,7 +1009,8 @@ def create_app(config_name: str | None = None):
         csp = {
             "default-src": "'self'",
             "script-src": "'self'",
-            "style-src": "'self'",  # ✅ 'unsafe-inline' supprimé : tous les styles inline ont été migrés vers classes CSS
+            # ✅ 'unsafe-inline' supprimé : styles inline migrés vers CSS
+            "style-src": "'self'",
             "img-src": "'self' data: blob:",
             "connect-src": f"'self' {frontend_url} ws: wss:",
         }
@@ -1316,7 +1321,9 @@ def create_app(config_name: str | None = None):
                     "GET, POST, PUT, PATCH, DELETE, OPTIONS"
                 )
                 resp.headers["Access-Control-Allow-Headers"] = (
-                    "Content-Type, Authorization, Cache-Control, Pragma, X-Device-ID, X-Company-ID, X-Session-ID, X-CSRF-Token, X-Csrf-Token, X-Requested-With"
+                    "Content-Type, Authorization, Cache-Control, Pragma, "
+                    "X-Device-ID, X-Company-ID, X-Session-ID, "
+                    "X-CSRF-Token, X-Csrf-Token, X-Requested-With"
                 )
                 resp.headers["Access-Control-Allow-Credentials"] = "true"
                 resp.headers["Access-Control-Max-Age"] = "3600"
@@ -1445,7 +1452,9 @@ def create_app(config_name: str | None = None):
                     "GET, POST, PUT, PATCH, DELETE, OPTIONS"
                 )
                 response.headers["Access-Control-Allow-Headers"] = (
-                    "Content-Type, Authorization, Cache-Control, Pragma, X-Device-ID, X-Company-ID, X-Session-ID, X-CSRF-Token, X-Csrf-Token, X-Requested-With"
+                    "Content-Type, Authorization, Cache-Control, Pragma, "
+                    "X-Device-ID, X-Company-ID, X-Session-ID, "
+                    "X-CSRF-Token, X-Csrf-Token, X-Requested-With"
                 )
                 response.headers["Access-Control-Allow-Credentials"] = "true"
                 response.headers["Access-Control-Max-Age"] = "3600"
@@ -1884,7 +1893,7 @@ def create_app(config_name: str | None = None):
         # (évite 404 si RESTX rate) ---
         from routes.companies import CompanyDriversList, CompanyMe
 
-        @app.route("/api/companies/me", methods=["GET", "PUT", "OPTIONS"])
+        @app.route("/api/companies/me", methods=["GET", "PUT", "OPTIONS"])  # type: ignore[reportArgumentType]
         def _compat_companies_me():  # pyright: ignore[reportUnusedFunction]
             if request.method == "OPTIONS":
                 return make_response("", 204)
@@ -1895,7 +1904,7 @@ def create_app(config_name: str | None = None):
                 return res.put()
             raise NotFound
 
-        @app.route(
+        @app.route(  # type: ignore[reportArgumentType]
             "/api/v<int:version>/companies/me", methods=["GET", "PUT", "OPTIONS"]
         )
         def _compat_companies_me_v(version: int):  # pyright: ignore  # noqa: ARG001
@@ -1908,13 +1917,13 @@ def create_app(config_name: str | None = None):
                 return res.put()
             raise NotFound
 
-        @app.route("/api/companies/me/drivers", methods=["GET", "OPTIONS"])
+        @app.route("/api/companies/me/drivers", methods=["GET", "OPTIONS"])  # type: ignore[reportArgumentType]
         def _compat_companies_me_drivers():  # pyright: ignore[reportUnusedFunction]
             if request.method == "OPTIONS":
                 return make_response("", 204)
             return CompanyDriversList().get()
 
-        @app.route(
+        @app.route(  # type: ignore[reportArgumentType]
             "/api/v<int:version>/companies/me/drivers", methods=["GET", "OPTIONS"]
         )
         def _compat_companies_me_drivers_v(  # pyright: ignore[reportUnusedFunction]
