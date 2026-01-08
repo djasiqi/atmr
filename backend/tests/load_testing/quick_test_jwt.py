@@ -3,8 +3,9 @@ Test rapide pour verifier que les tokens JWT generes par /login-test
 ont l'audience correcte et fonctionnent avec les endpoints dispatch.
 """
 
-import requests
 import json
+
+import requests
 
 BASE_URL = "http://localhost:5000"
 
@@ -36,7 +37,7 @@ def test_jwt_audience():
         print(f"   Response: {json.dumps(data, indent=2)}")
         return False
 
-    print(f"[OK] Login reussi!")
+    print("[OK] Login reussi!")
     print(f"   Token (preview): {access_token[:50]}...")
     print(f"   User: {data['user']['email']}")
     print()
@@ -60,13 +61,9 @@ def test_jwt_audience():
         print("[FAIL] Token rejete (401 UNAUTHORIZED)")
         print("   Possible raison: audience manquante ou invalide")
         return False
-    else:
-        print(f"[OK] Token accepte (status {response.status_code})")
-        print("   Audience JWT validee avec succes!")
-        return True
-
-    print()
-    print("=" * 80)
+    print(f"[OK] Token accepte (status {response.status_code})")
+    print("   Audience JWT validee avec succes!")
+    return True
 
 
 if __name__ == "__main__":

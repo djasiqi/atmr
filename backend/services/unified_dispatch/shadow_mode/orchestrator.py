@@ -11,11 +11,11 @@ import logging
 from datetime import date
 from typing import Any, Dict, List
 
-from services.unified_dispatch.ml.ab_router import ABRouter
 from services.unified_dispatch.metrics.dispatch import (
     QUALITY_THRESHOLD,
     DispatchMetricsCollector,
 )
+from services.unified_dispatch.ml.ab_router import ABRouter
 
 logger = logging.getLogger(__name__)
 

@@ -256,7 +256,7 @@ class Config:
 
     # Rate limits par défaut (conservateurs pour la production)
     # Ces valeurs seront surclassées dans DevelopmentConfig/ProductionConfig
-    RATELIMIT_DEFAULT_LIMITS = ["1000 per hour"]
+    RATELIMIT_DEFAULT_LIMITS: ClassVar[list[str]] = ["1000 per hour"]
     RATELIMIT_DISPATCH_RUN = "30 per hour"
     RATELIMIT_DISPATCH_TRIGGER = "50 per hour"
     RATELIMIT_COMPANY_DISPATCH_RUN = "10 per minute"
@@ -421,7 +421,7 @@ class DevelopmentConfig(Config):
 
     # ✅ Rate Limits Development: Très permissifs pour faciliter le développement
     ENVIRONMENT = "development"
-    RATELIMIT_DEFAULT_LIMITS = [
+    RATELIMIT_DEFAULT_LIMITS: ClassVar[list[str]] = [
         os.getenv("RATELIMIT_DEFAULT_LIMITS", "100000 per hour")
     ]
     RATELIMIT_DISPATCH_RUN = os.getenv("RATELIMIT_DISPATCH_RUN", "10000 per hour")
@@ -599,7 +599,9 @@ class ProductionConfig(Config):
 
     # ✅ Rate Limits Production: Conservateurs pour protéger contre l'abus
     ENVIRONMENT = "production"
-    RATELIMIT_DEFAULT_LIMITS = [os.getenv("RATELIMIT_DEFAULT_LIMITS", "1000 per hour")]
+    RATELIMIT_DEFAULT_LIMITS: ClassVar[list[str]] = [
+        os.getenv("RATELIMIT_DEFAULT_LIMITS", "1000 per hour")
+    ]
     # Dispatch endpoints: limites restrictives
     RATELIMIT_DISPATCH_RUN = os.getenv("RATELIMIT_DISPATCH_RUN", "30 per hour")
     RATELIMIT_DISPATCH_TRIGGER = os.getenv("RATELIMIT_DISPATCH_TRIGGER", "50 per hour")

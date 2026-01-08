@@ -22,13 +22,13 @@ from models import Booking, Company, Driver
 from services.dispatch.utils import count_assigned_bookings_for_day
 from services.geolocation.geocoding_interface import get_geocoding_service
 from services.geolocation.routing_interface import get_routing_service
-from services.unified_dispatch.optimization.heuristics import (
-    baseline_and_cap_loads,
-    haversine_minutes,
-)
 from services.unified_dispatch.core.settings import (
     Settings,
     driver_work_window_from_config,
+)
+from services.unified_dispatch.optimization.heuristics import (
+    baseline_and_cap_loads,
+    haversine_minutes,
 )
 from shared.constants import DispatchDataConstants, GeoConstants
 from shared.error_handling import safe_execute

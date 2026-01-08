@@ -121,7 +121,7 @@ def main() -> None:
     if str(output_path).startswith("/app/../"):
         # Le répertoire docs n'est pas monté, utiliser /app/docs à la place
         output_path = Path("/app/docs") / output_path.name
-        print(f"⚠️  Le répertoire docs n'est pas monté dans le conteneur.")
+        print("⚠️  Le répertoire docs n'est pas monté dans le conteneur.")
         print(
             f"   Écriture dans {output_path} (accessible via ./backend/docs sur l'hôte)"
         )

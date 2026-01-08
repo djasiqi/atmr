@@ -302,7 +302,7 @@ class TestPIIMaskingIntegration:
         # ✅ FIX: Formater le message complètement avant de le passer au logger
         # pour éviter que PIIFilter ne modifie les arguments et cause des erreurs
         # de formatage. Utiliser format specifiers pour respecter Ruff UP031
-        formatted_message = "Processing booking with PII: {}".format(str(masked_data))
+        formatted_message = f"Processing booking with PII: {masked_data!s}"
         logger.info(formatted_message)
 
         log_output = log_stream.getvalue()

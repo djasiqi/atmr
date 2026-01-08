@@ -3,11 +3,11 @@
 Génère et injecte des trace_id pour le traçage des requêtes.
 """
 
-import uuid
 import logging
+import uuid
 from typing import Any
 
-from flask import request, g  # pyright: ignore[reportMissingImports]
+from flask import g, request  # pyright: ignore[reportMissingImports]
 
 logger = logging.getLogger(__name__)
 

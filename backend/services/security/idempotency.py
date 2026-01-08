@@ -16,12 +16,12 @@ class IdempotencyService:
     """Service pour gérer l'idempotence des requêtes."""
 
     @staticmethod
-    def check_key(key: str, ttl: int = 86400) -> tuple[bool, dict[str, Any] | None]:
+    def check_key(key: str, _ttl: int = 86400) -> tuple[bool, dict[str, Any] | None]:
         """Vérifie si une clé d'idempotence existe et retourne la réponse précédente.
 
         Args:
             key: Clé d'idempotence (généralement un UUID)
-            ttl: Time-to-live en secondes (défaut: 24h)
+            _ttl: Time-to-live en secondes (défaut: 24h) - non utilisé actuellement
 
         Returns:
             Tuple (exists, previous_response):
@@ -86,7 +86,7 @@ class IdempotencyService:
         Returns:
             Clé d'idempotence ou None si absente
         """
-        from flask import request  # pyright: ignore[reportMissingImports]
+        from flask import request
 
         return request.headers.get("Idempotency-Key") or request.headers.get(
             "X-Idempotency-Key"

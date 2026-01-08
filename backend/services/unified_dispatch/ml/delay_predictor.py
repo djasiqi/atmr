@@ -8,8 +8,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, Dict, List
 
-from services.unified_dispatch.data import calculate_eta
 from services.unified_dispatch.core.settings import Settings
+from services.unified_dispatch.data import calculate_eta
 from shared.time_utils import now_local
 
 AGE_MINUTES_THRESHOLD = 10

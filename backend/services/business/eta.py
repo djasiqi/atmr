@@ -18,9 +18,9 @@ from datetime import datetime
 from typing import Any, Tuple
 
 from ext import db, redis_client
+from services.geolocation.osrm import route_info as osrm_route_info
 from services.infrastructure.feature_flags import FeatureFlags
 from services.ml.models.eta_delay import ETADelayModel, ETADelayPrediction
-from services.geolocation.osrm import route_info as osrm_route_info
 from shared.geo_utils import haversine_distance
 
 logger = logging.getLogger(__name__)
