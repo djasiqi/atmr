@@ -70,7 +70,8 @@ class CancelBookingUseCase:
                 success=False,
                 error={
                     "error": (
-                        "Seules les réservations en attente ou confirmées peuvent être annulées"
+                        "Seules les réservations en attente ou confirmées "
+                        "peuvent être annulées"
                     )
                 },
                 status_code=400,

@@ -82,7 +82,9 @@ class CreateBookingUseCase:
         ...     geocoding_service=get_geocoding_service(),  # doctest: +SKIP
         ...     distance_duration_fn=get_distance_duration,  # doctest: +SKIP
         ... )
-        >>> booking = uc.execute(CreateBookingCommand(user_id=1, client_id=2, data={...}))  # doctest: +SKIP
+        >>> booking = uc.execute(
+        ...     CreateBookingCommand(user_id=1, client_id=2, data={...})
+        ... )  # doctest: +SKIP
     """
 
     def __init__(  # pyright: ignore[reportMissingSuperCall]
@@ -102,9 +104,12 @@ class CreateBookingUseCase:
             client_repo: Repository client.
             company_repo: Repository company.
             geocoding_service: Service de géocodage (interface).
-            distance_duration_fn: Fonction (pickup_address, dropoff_address) -> (duration_s, distance_m).
-            fallback_coords_fn: Fonction fallback (company -> (lat, lon)) utilisée quand le géocodage manque.
-            trigger_async_geocoding_fn: Hook optionnel pour déclencher un géocodage async (tests).
+            distance_duration_fn: Fonction (pickup_address, dropoff_address)
+                -> (duration_s, distance_m).
+            fallback_coords_fn: Fonction fallback (company -> (lat, lon))
+                utilisée quand le géocodage manque.
+            trigger_async_geocoding_fn: Hook optionnel pour déclencher
+                un géocodage async (tests).
         """
         self.client_repo = client_repo
         self.company_lookup = company_lookup
@@ -145,13 +150,16 @@ class CreateBookingUseCase:
             )
         except OSError as e:
             logger.error(
-                "❌ Erreur configuration géocodage pour booking (pickup=%s, dropoff=%s): %s",
+                "❌ Erreur configuration géocodage pour booking "
+                "(pickup=%s, dropoff=%s): %s",
                 validated_data["pickup_location"],
                 validated_data["dropoff_location"],
                 e,
             )
             raise RuntimeError(
-                "Impossible de calculer la distance entre les adresses. Vérifiez que les adresses sont valides et que le service de géocodage est configuré."
+                "Impossible de calculer la distance entre les adresses. "
+                "Vérifiez que les adresses sont valides et que le service de "
+                "géocodage est configuré."
             ) from e
         except RuntimeError as e:
             error_msg = str(e)
@@ -184,7 +192,9 @@ class CreateBookingUseCase:
                 validated_data["dropoff_location"],
             )
             raise RuntimeError(
-                "Erreur lors du calcul de la distance. Le service de géocodage est temporairement indisponible. Veuillez réessayer dans quelques instants."
+                "Erreur lors du calcul de la distance. Le service de géocodage "
+                "est temporairement indisponible. Veuillez réessayer dans "
+                "quelques instants."
             ) from e
 
         client_dto = self.client_repo.find_by_id(cmd.client_id)
@@ -265,12 +275,15 @@ class CreateBookingUseCase:
         except ValueError as e:
             logger.error("❌ Erreur validation adresse lors géocodage: %s", e)
             raise ValueError(
-                "L'adresse fournie est invalide ou vide. Veuillez fournir une adresse complète et valide."
+                "L'adresse fournie est invalide ou vide. "
+                "Veuillez fournir une adresse complète et valide."
             ) from e
         except Exception as e:
             logger.exception("❌ Erreur inattendue lors du géocodage des adresses")
             raise RuntimeError(
-                "Erreur lors du géocodage des adresses. Le service de géocodage est temporairement indisponible. Veuillez réessayer dans quelques instants."
+                "Erreur lors du géocodage des adresses. Le service de géocodage "
+                "est temporairement indisponible. Veuillez réessayer dans "
+                "quelques instants."
             ) from e
 
     def _process_geocoding_result(
@@ -283,8 +296,9 @@ class CreateBookingUseCase:
         fallback_fn = self.fallback_coords_fn
         if fallback_fn is None:
             raise RuntimeError(
-                "CreateBookingUseCase nécessite une dépendance injectée `fallback_coords_fn`. "
-                + "Utiliser BookingService (ou une factory) pour le wiring production."
+                "CreateBookingUseCase nécessite une dépendance injectée "
+                + "`fallback_coords_fn`. Utiliser BookingService (ou une factory) "
+                + "pour le wiring production."
             )
 
         lat, lon = fallback_fn(company)
@@ -310,20 +324,16 @@ class CreateBookingUseCase:
                 )
             else:
                 logger.info(
-                    (
-                        "⚠️ %s géocodage cache miss, utilisation coordonnées approximatives: "
-                        "(%.6f, %.6f) - géocodage asynchrone en cours"
-                    ),
+                    "⚠️ %s géocodage cache miss, utilisation coordonnées "
+                    "approximatives: (%.6f, %.6f) - géocodage asynchrone en cours",
                     address_type.capitalize(),
                     lat,
                     lon,
                 )
         else:
             logger.info(
-                (
-                    "⚠️ %s géocodage cache miss, utilisation coordonnées approximatives: "
-                    "(%.6f, %.6f) - géocodage asynchrone en cours"
-                ),
+                "⚠️ %s géocodage cache miss, utilisation coordonnées "
+                "approximatives: (%.6f, %.6f) - géocodage asynchrone en cours",
                 address_type.capitalize(),
                 lat,
                 lon,
