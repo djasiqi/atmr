@@ -1180,9 +1180,21 @@ class LoginTest(Resource):
 
         # Note: Pas de vérification is_active car c'est un endpoint de test simplifié
 
-        # Générer les tokens JWT
-        access_token = create_access_token(identity=user.public_id)
-        refresh_token = create_refresh_token(identity=user.public_id)
+        # Générer les tokens JWT avec les claims nécessaires (notamment "aud" pour validation audience)
+        claims = {
+            "user_id": user.id,  # ⚠️ ID numérique attendu par dispatch_routes
+            "role": user.role.value,
+            "company_id": getattr(user, "company_id", None),
+            "driver_id": getattr(user, "driver_id", None),
+            "aud": "atmr-api",  # ✅ Audience claim pour passer validation JWT
+        }
+        access_token = create_access_token(
+            identity=str(user.public_id),
+            additional_claims=claims,
+            expires_delta=current_app.config["JWT_ACCESS_TOKEN_EXPIRES"],
+            fresh=True,  # Token fresh pour tests
+        )
+        refresh_token = create_refresh_token(identity=str(user.public_id))
 
         # Retourner la réponse (format simplifié pour tests)
         return {
