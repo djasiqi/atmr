@@ -1846,7 +1846,7 @@ def create_app(config_name: str | None = None):
 
         # Compat: accès direct au login
         # (certains environnements/proxy peuvent rater la déclaration RESTX)
-        from routes.auth import Login  # Import au niveau module
+        from routes.auth import Login, LoginTest  # Import au niveau module
 
         @app.route("/api/auth/login", methods=["POST", "OPTIONS"])
         def _compat_auth_login():  # pyright: ignore
@@ -1866,6 +1866,19 @@ def create_app(config_name: str | None = None):
             if request.method == "OPTIONS":
                 return make_response("", 204)
             return Login().post()
+
+        # Compat: accès direct au login-test (pour tests de charge)
+        @app.route("/api/auth/login-test", methods=["POST", "OPTIONS"])
+        def _compat_auth_login_test():  # pyright: ignore[reportUnusedFunction]
+            if request.method == "OPTIONS":
+                return make_response("", 204)
+            return LoginTest().post()
+
+        @app.route("/api/v<int:version>/auth/login-test", methods=["POST", "OPTIONS"])
+        def _compat_auth_login_test_v(version: int):  # pyright: ignore  # noqa: ARG001
+            if request.method == "OPTIONS":
+                return make_response("", 204)
+            return LoginTest().post()
 
         # --- Compat: endpoints companies les plus utilisés
         # (évite 404 si RESTX rate) ---
