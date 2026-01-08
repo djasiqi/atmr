@@ -60,6 +60,7 @@ def fix_admin_permissions():
 
     print()
     print("=" * 80)
+    return False
 
 
 if __name__ == "__main__":

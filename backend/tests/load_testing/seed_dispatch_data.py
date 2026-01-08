@@ -10,9 +10,8 @@ Usage :
 """
 
 import sys
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime
 from pathlib import Path
-
 
 # Ajouter le répertoire backend au PYTHONPATH
 backend_dir = Path(__file__).parent.parent.parent
@@ -200,15 +199,15 @@ def seed_dispatch_data():
         print("✅ SEED COMPLÉTÉ")
         print("=" * 80)
         print()
-        print(f"📊 Résumé des données créées :")
+        print("📊 Résumé des données créées :")
         print(f"   • Compagnie       : {company.name} (ID: {company.id})")
         print(f"   • Chauffeurs      : {len(drivers)} disponibles")
         print(f"   • Clients         : {len(clients)} enregistrés")
         print(f"   • Réservations    : 100 pour le {test_date}")
         print()
-        print(f"🚀 Prêt pour les tests de charge Locust !")
-        print(f"   • URL : http://localhost:8089")
-        print(f"   • Login : admin@test.com / test123")
+        print("🚀 Prêt pour les tests de charge Locust !")
+        print("   • URL : http://localhost:8089")
+        print("   • Login : admin@test.com / test123")
         print(f"   • Company ID : {company.id}")
         print(f"   • Date : {test_date}")
         print()
