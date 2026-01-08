@@ -141,6 +141,7 @@ except Exception:
 # ✅ C2: Redis Storage avec TTL automatiques
 # ========================
 
+
 class RedisStorageWithTTL:
     """
     Wrapper pour le storage Redis qui ajoute automatiquement des TTL aux clés.
@@ -157,6 +158,8 @@ class RedisStorageWithTTL:
             storage_uri: URI de connexion Redis (ex: "redis://localhost:6379/0")
             ttl_seconds: Durée de vie des clés en secondes (défaut: 2 heures)
         """
+        super().__init__()  # Appel du constructeur parent implicite (object)
+
         # Import tardif pour éviter les cycles
         from flask_limiter.storage import (  # pyright: ignore[reportMissingImports]
             RedisStorage,
