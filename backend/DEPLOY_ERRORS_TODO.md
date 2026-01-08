@@ -13,6 +13,7 @@
 L'erreur `ModuleNotFoundError: No module named 'flask_limiter.storage'` **persistait malgré les builds automatiques** à cause du **cache Docker/BuildKit GitHub Actions**.
 
 **Explication** :
+
 - Le workflow GitHub Actions utilise le cache BuildKit (`cache-from: type=gha, cache-to: type=gha,mode=max`)
 - Les anciens wheels de `Flask-Limiter` (compilés **AVANT** l'ajout de `[redis]`) étaient persistés dans ce cache
 - Même avec `Flask-Limiter[redis]>=3.0.0` dans `requirements.base.txt`, les wheels en cache étaient **réutilisés**
@@ -21,6 +22,7 @@ L'erreur `ModuleNotFoundError: No module named 'flask_limiter.storage'` **persis
 ### Solution appliquée (commit `abc41d3c`)
 
 1. ✅ Ajout d'un commentaire d'invalidation de cache dans `backend/requirements.base.txt` :
+
    ```diff
    # Requirements de base - communs à tous les environnements (prod et RL)
    # Ces dépendances sont nécessaires pour l'API, la DB, Celery, Redis, etc.
@@ -37,7 +39,7 @@ L'erreur `ModuleNotFoundError: No module named 'flask_limiter.storage'` **persis
 
 ## ❌ ERREURS CRITIQUES (Bloquantes)
 
-### 1. 🔴 **ERREUR PRINCIPALE : ModuleNotFoundError flask_limiter.storage**
+### 1. 🟡 **ERREUR PRINCIPALE : ModuleNotFoundError flask_limiter.storage** (EN COURS DE RÉSOLUTION)
 
 **Erreur** :
 
@@ -60,27 +62,30 @@ ModuleNotFoundError: No module named 'flask_limiter.storage'
 - ❌ Flask CLI indisponible (`flask db` commands)
 - ❌ Tout le système est DOWN
 
-**Cause racine** :
+**Cause racine identifiée** :
 
-- `Flask-Limiter[redis]` manquant dans l'image Docker
-- Les dépendances Redis de Flask-Limiter ne sont pas installées
+- ✅ `Flask-Limiter[redis]>=3.0.0` était bien dans `requirements.base.txt`
+- ❌ **Cache Docker BuildKit GitHub Actions** contenait d'anciens wheels de `Flask-Limiter` (sans `[redis]`)
+- ❌ Les wheels en cache étaient réutilisés malgré la présence de `[redis]` dans requirements
 
-**Solution** :
+**Solution appliquée** :
 
 ```diff
 # backend/requirements.base.txt
-- Flask-Limiter>=3.0.0
-+ Flask-Limiter[redis]>=3.0.0
+# Requirements de base - communs à tous les environnements (prod et RL)
+# Ces dépendances sont nécessaires pour l'API, la DB, Celery, Redis, etc.
++ # INVALIDATION CACHE: 2026-01-08 - Fix Flask-Limiter[redis] installation
 ```
 
 **Actions requises** :
 
-1. ✅ Vérifier que `requirements.base.txt` contient `Flask-Limiter[redis]>=3.0.0`
-2. ❌ Rebuild l'image Docker backend
-3. ❌ Push la nouvelle image
-4. ❌ Redéployer
+1. ✅ Vérifier que `requirements.base.txt` contient `Flask-Limiter[redis]>=3.0.0` (commit `abc41d3c`)
+2. ✅ Invalider le cache Docker en modifiant requirements.base.txt (commit `abc41d3c`)
+3. ⏳ **EN COURS** : Rebuild automatique de l'image Docker via GitHub Actions
+4. ⏳ **EN COURS** : Push automatique de la nouvelle image vers Docker Hub
+5. ⏳ **EN ATTENTE** : Redéploiement automatique après le build
 
-**Priorité** : 🔥 URGENTE (Bloque tout)
+**Priorité** : 🟡 EN COURS (Solution appliquée, build en cours - ETA: 10-15 min)
 
 ---
 
