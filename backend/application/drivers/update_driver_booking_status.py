@@ -204,8 +204,7 @@ class UpdateDriverBookingStatusUseCase:
                     elif status_val != BOOKING_STATUS_IN_PROGRESS:
                         response = {
                             "error": (
-                                "Booking must be in_progress before "
-                                "completing return"
+                                "Booking must be in_progress before completing return"
                             )
                         }
                         status_code = 400
@@ -287,9 +286,12 @@ class UpdateDriverBookingStatusUseCase:
                                 except Exception as e:
                                     # Fallback vers notification directe
                                     # si événement échoue
-                                    logger.warning(
+                                    msg = (
                                         "[UpdateDriverBookingStatus] Event publish "
-                                        "failed, using direct notification: %s",
+                                        "failed, using direct notification: %s"
+                                    )
+                                    logger.warning(
+                                        msg,
                                         e,
                                     )
                                     self._emit_assignment_cancelled(
@@ -372,9 +374,12 @@ class UpdateDriverBookingStatusUseCase:
                 )
             except Exception as e:
                 # Fallback vers notification directe si événement échoue
-                logger.warning(
+                msg = (
                     "[UpdateDriverBookingStatus] Event publish failed, "
-                    "using direct notification: %s",
+                    "using direct notification: %s"
+                )
+                logger.warning(
+                    msg,
                     e,
                 )
                 self._notify_booking_update(cmd.driver_id, booking)

@@ -222,10 +222,11 @@ def main():
     auto_fixable = total_stats["comments_fixable"] + total_stats["docstrings_fixable"]
     if auto_fixable > 0:
         print(f"[OK] {auto_fixable} lignes peuvent etre corrigees automatiquement")
-        print(
+        msg = (
             f"[!!] {total_stats['manual_review']} lignes necessitent une "
             "revision manuelle"
         )
+        print(msg)
         print()
         print("PROCHAINES ETAPES :")
         print(
