@@ -43,14 +43,16 @@ class CancelBookingUseCase:
 
     def execute(self, booking: _BookingLike) -> CancelBookingResult:
         status = _status_value(getattr(booking, "status", None))
-        # Convertir en minuscules pour la comparaison (les enums retournent souvent en majuscules)
+        # Convertir en minuscules pour la comparaison
+        # (les enums retournent souvent en majuscules)
         status_lower = status.lower() if status else ""
         if status_lower not in {"pending", "assigned"}:
             return CancelBookingResult(
                 ok=False,
                 error={
                     "error": (
-                        "Seules les réservations en attente ou confirmées peuvent être annulées"
+                        "Seules les réservations en attente ou confirmées "
+                        "peuvent être annulées"
                     )
                 },
                 status_code=400,

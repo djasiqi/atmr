@@ -29,7 +29,10 @@ class GetBookingUseCase:
     Utilise l'agrégat Booking du domaine.
 
     Exemple:
-        >>> from bookings.infrastructure.repositories.sqlalchemy_booking_repository import SqlAlchemyBookingRepository
+        >>> from bookings.infrastructure.repositories import (
+        ...     sqlalchemy_booking_repository,
+        ... )
+        >>> repo = sqlalchemy_booking_repository.SqlAlchemyBookingRepository()
         >>> repo = SqlAlchemyBookingRepository()
         >>> uc = GetBookingUseCase(booking_repo=repo)
         >>> result = uc.execute(booking_id=123)

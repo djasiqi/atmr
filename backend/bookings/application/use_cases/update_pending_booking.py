@@ -17,7 +17,8 @@ def _status_value(status: Any) -> str:
 def _set_status(obj: Any, status_str: str) -> None:
     """Assigne un statut sans dépendre de l'Enum ORM.
 
-    - Si `obj.status` est un Enum (ex: BookingStatus), on tente `BookingStatus.PENDING`, etc.
+    - Si `obj.status` est un Enum (ex: BookingStatus), on tente
+      `BookingStatus.PENDING`, etc.
     - Sinon, on assigne directement la string.
     """
     current = getattr(obj, "status", None)
@@ -110,7 +111,8 @@ class UpdatePendingBookingUseCase:
         if "notes_medical" in validated_data:
             booking.notes_medical = validated_data.get("notes_medical")
 
-        # Par sécurité: empêche un update de statut via cette route (si payload contient "status").
+        # Par sécurité: empêche un update de statut via cette route
+        # (si payload contient "status").
         # La transition de statut est gérée par d'autres flows.
         if "status" in validated_data:
             # ignorer silencieusement

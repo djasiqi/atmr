@@ -99,7 +99,8 @@ class ListBookingsUseCase:
 
         Args:
             booking_repo: Repository pour récupérer les bookings.
-            client_repo: Repository pour récupérer les clients (requis pour rôle client).
+            client_repo: Repository pour récupérer les clients
+                (requis pour rôle client).
         """
         self.booking_repo = booking_repo
         self.client_repo = client_repo
@@ -123,7 +124,8 @@ class ListBookingsUseCase:
             status_filter: Filtre optionnel par statut.
 
         Returns:
-            ListBookingsResult avec les bookings paginés, ou None si erreur (client non trouvé).
+            ListBookingsResult avec les bookings paginés, ou None si erreur
+                (client non trouvé).
         """
         if user_role == UserRole.admin:
             query = self.booking_repo.find_all_with_eager_loading_query(
