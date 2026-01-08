@@ -346,7 +346,6 @@ def create_app(config_name: str | None = None):
     try:
         from services.security.csrf import setup_csrf_protection
 
-
         # Activer CSRF seulement si explicitement activé
         # (par défaut activé en production)
         csrf_enabled = os.getenv("CSRF_ENABLED", "true").lower() in ("true", "1", "yes")
@@ -689,9 +688,12 @@ def create_app(config_name: str | None = None):
                     pass
 
         # #endregion
-        app.logger.info(
+        msg = (
             "✅ Socket.IO initialisé: async_mode=%s, cors=%s, "
-            "allow_upgrades=%s, path=/socket.io",
+            "allow_upgrades=%s, path=/socket.io"
+        )
+        app.logger.info(
+            msg,
             async_mode,
             "*"
             if (isinstance(cors_origins, str) and cors_origins == "*")
@@ -944,9 +946,12 @@ def create_app(config_name: str | None = None):
             candidate = (base / filename).resolve()
         except (ValueError, RuntimeError):
             # Ex: "embedded null byte" ou erreurs de résolution de chemin
-            app.logger.warning(
+            msg = (
                 "Tentative de path traversal / chemin invalide bloquée: "
-                "filename=%s, base=%s",
+                "filename=%s, base=%s"
+            )
+            app.logger.warning(
+                msg,
                 filename,
                 base,
             )
@@ -963,9 +968,12 @@ def create_app(config_name: str | None = None):
         except (ValueError, RuntimeError):
             # Path traversal détecté : le chemin résolu sort du répertoire
             # autorisé
-            app.logger.warning(
+            msg = (
                 "Tentative de path traversal bloquée: filename=%s, "
-                "resolved=%s, base=%s",
+                "resolved=%s, base=%s"
+            )
+            app.logger.warning(
+                msg,
                 filename,
                 candidate,
                 base,
@@ -1130,10 +1138,11 @@ def create_app(config_name: str | None = None):
     rl_enabled = os.getenv("RL_ENABLED", "false").lower() == "true"
     if app_env == "rl" or rl_enabled:
         force_https = False
-        app.logger.info(
+        msg = (
             "[App] Environnement RL détecté: force_https désactivé "
             "pour communication interne"
         )
+        app.logger.info(msg)
 
     # ✅ FIX: Désactiver complètement Talisman pour le mode testing
     # et l'environnement RL
@@ -1154,15 +1163,17 @@ def create_app(config_name: str | None = None):
         # Ne pas initialiser Talisman en mode testing ou environnement RL
         talisman = None
         if app_env == "rl" or rl_enabled:
-            app.logger.info(
+            msg = (
                 "[App] Talisman désactivé pour l'environnement RL "
                 "(communication interne HTTP)"
             )
+            app.logger.info(msg)
         else:
-            app.logger.info(
-                "[App] Talisman désactivé en mode testing "
-                "pour éviter les redirections 302"
+            msg = (
+                "[App] Talisman désactivé en mode testing pour éviter "
+                "les redirections 302"
             )
+            app.logger.info(msg)
     else:
         talisman = Talisman(
             content_security_policy=csp,
@@ -1579,9 +1590,12 @@ def create_app(config_name: str | None = None):
                 + "origine autorisée."
             )
         # Logger les origines autorisées pour documentation
-        app.logger.info(
+        msg = (
             "[Security] CORS configuré pour production avec %d "
-            "origine(s) autorisée(s): %s",
+            "origine(s) autorisée(s): %s"
+        )
+        app.logger.info(
+            msg,
             len(origins_list),
             ", ".join(origins_list),
         )
@@ -1609,8 +1623,6 @@ def create_app(config_name: str | None = None):
             "runId": "run1",
             "hypothesisId": "A",
         }
-        # json est importé en haut du fichier (ligne 18)
-        # pyright: ignore[reportPossiblyUnboundVariable]
         # json est importé en haut du fichier (ligne 18)
         req = urllib.request.Request(
             "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
@@ -1664,10 +1676,11 @@ def create_app(config_name: str | None = None):
         # En production, forcer WARNING minimum pour éviter fuite d'informations
         app_log_level = logging.WARNING
         werkzeug_log_level = logging.ERROR
-        app.logger.warning(
+        msg = (
             "[Security] Niveau de log forcé à WARNING en production "
             "(APP_LOG_LEVEL ignoré pour sécurité)"
         )
+        app.logger.warning(msg)
     else:
         # En développement/testing, respecter APP_LOG_LEVEL
         app_log_level = getattr(
