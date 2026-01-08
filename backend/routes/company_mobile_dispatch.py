@@ -2082,7 +2082,9 @@ class MobileDispatchSettings(Resource):
 class MobileDispatchRun(Resource):
     @jwt_required()
     @role_required(UserRole.company)
-    @limiter.limit("10/minute")
+    @limiter.limit(
+        "10000 per hour"
+    )  # ⚠️ C2: Augmenté temporairement pour load testing (normalement 10/minute)
     def post(self):
         company, company_id = _get_company_context()
         body = request.get_json(silent=True) or {}
@@ -2184,7 +2186,9 @@ class MobileDispatchRun(Resource):
 class MobileOptimizerRun(Resource):
     @jwt_required()
     @role_required(UserRole.company)
-    @limiter.limit("10/minute")
+    @limiter.limit(
+        "10000 per hour"
+    )  # ⚠️ C2: Augmenté temporairement pour load testing (normalement 10/minute)
     def post(self):
         _, company_id = _get_company_context()
         body = request.get_json(silent=True) or {}
@@ -3404,4 +3408,3 @@ class MobileSearchClients(Resource):
             )
 
         return results, 200
-
