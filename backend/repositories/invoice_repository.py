@@ -205,7 +205,8 @@ class InvoiceRepository:
     def find_models_by_client_id_and_company(
         self, client_id: int, company_id: int
     ) -> list[Invoice]:
-        """Trouve les factures d'un client pour une entreprise (retourne les modèles SQLAlchemy).
+        """Trouve les factures d'un client pour une entreprise (retourne les
+        modèles SQLAlchemy).
 
         Args:
             client_id: ID du client
@@ -215,7 +216,8 @@ class InvoiceRepository:
             Liste de Invoice triées par created_at décroissant (modèles SQLAlchemy)
 
         Note:
-            Méthode legacy - utiliser find_by_client_id_and_company() pour obtenir des DTOs
+            Méthode legacy - utiliser find_by_client_id_and_company() pour
+            obtenir des DTOs
         """
         return (
             Invoice.query.filter_by(client_id=client_id, company_id=company_id)
@@ -282,7 +284,8 @@ class InvoiceRepository:
     def find_model_by_id_with_eager_loading(
         self, invoice_id: int, company_id: int
     ) -> Invoice | None:
-        """Trouve une facture par son ID avec eager loading (retourne le modèle SQLAlchemy).
+        """Trouve une facture par son ID avec eager loading (retourne le
+        modèle SQLAlchemy).
 
         Args:
             invoice_id: ID de la facture

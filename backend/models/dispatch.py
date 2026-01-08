@@ -229,11 +229,14 @@ class Assignment(db.Model):
             "dispatch_run_id", "booking_id", name="uq_assignment_run_booking"
         ),
         Index("ix_assignment_driver_status", "driver_id", "status"),
-        # ✅ P1: Index composite pour requêtes driver + booking (optimise _get_driver_previous_booking)
+        # ✅ P1: Index composite pour requêtes driver + booking
+        # (optimise _get_driver_previous_booking)
         Index("ix_assignment_driver_booking", "driver_id", "booking_id"),
-        # ✅ P1: Index composite pour requêtes booking + driver (optimise joins Assignment-Booking)
+        # ✅ P1: Index composite pour requêtes booking + driver
+        # (optimise joins Assignment-Booking)
         Index("ix_assignment_booking_driver", "booking_id", "driver_id"),
-        # ✅ P1: Index composite pour requêtes booking + status (optimise filtrage par statut)
+        # ✅ P1: Index composite pour requêtes booking + status
+        # (optimise filtrage par statut)
         Index("ix_assignment_booking_status", "booking_id", "status"),
         CheckConstraint(
             "delay_seconds >= DELAY_SECONDS_ZERO", name="ck_assignment_delay_nonneg"

@@ -146,10 +146,12 @@ def generate_report(
     report_lines.append("RÉSUMÉ")
     report_lines.append("-" * 80)
     report_lines.append(
-        f"Assignments: {summary['assignments_count_1']} vs {summary['assignments_count_2']}"
+        f"Assignments: {summary['assignments_count_1']} vs "
+        f"{summary['assignments_count_2']}"
     )
     report_lines.append(
-        f"Unassigned: {summary['unassigned_count_1']} vs {summary['unassigned_count_2']}"
+        f"Unassigned: {summary['unassigned_count_1']} vs "
+        f"{summary['unassigned_count_2']}"
     )
     report_lines.append(
         f"Bookings: {summary['bookings_count_1']} vs {summary['bookings_count_2']}"
@@ -196,7 +198,8 @@ def main():
     """Point d'entrée principal."""
     if len(sys.argv) < 3:
         print(
-            "Usage: python compare_dispatch_results.py <result1.json> <result2.json> [output.txt]"
+            "Usage: python compare_dispatch_results.py <result1.json> "
+            "<result2.json> [output.txt]"
         )
         sys.exit(1)
 

@@ -39,7 +39,10 @@ version_check_request = app_version_ns.model(
         ),
         "current_version": fields.String(
             required=True,
-            description="Version actuelle de l'application (format semver: MAJOR.MINOR.PATCH)",
+            description=(
+                "Version actuelle de l'application (format semver: "
+                "MAJOR.MINOR.PATCH)"
+            ),
             example="1.2.3",
         ),
     },
@@ -93,17 +96,21 @@ class VersionCheck(Resource):
     )  # ✅ SECURITY: Rate limiting pour prévenir abus (endpoint public)
     @app_version_ns.doc(
         description=(
-            "Vérifie la version de l'application et retourne le statut de mise à jour.\n\n"
+            "Vérifie la version de l'application et retourne le statut de "
+            "mise à jour.\n\n"
             "**Statuts possibles:**\n"
             "- `OK`: L'application est à jour\n"
-            "- `UPDATE_RECOMMENDED`: Une mise à jour est recommandée (non bloquante)\n"
+            "- `UPDATE_RECOMMENDED`: Une mise à jour est recommandée "
+            "(non bloquante)\n"
             "- `UPDATE_REQUIRED`: Une mise à jour est obligatoire (bloquante)\n\n"
             "**Logique:**\n"
             "- Si `current_version < min_required_version` → `UPDATE_REQUIRED`\n"
-            "- Sinon si `current_version < latest_version` → `UPDATE_RECOMMENDED`\n"
+            "- Sinon si `current_version < latest_version` → "
+            "`UPDATE_RECOMMENDED`\n"
             "- Sinon → `OK`\n\n"
-            "**Note:** Cet endpoint est public (pas d'authentification requise) car il doit "
-            "être appelé avant même que l'utilisateur soit connecté."
+            "**Note:** Cet endpoint est public (pas d'authentification "
+            "requise) car il doit être appelé avant même que l'utilisateur "
+            "soit connecté."
         ),
         responses={
             200: "Vérification réussie",
