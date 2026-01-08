@@ -273,8 +273,7 @@ class SlowOSRMDispatchTest(HttpUser):
 
             # Log détaillé
             logger.info(
-                "[DISPATCH] ✅ SUCCESS | Duration: %.2fs | API: %.2fs | Assignments: %s/%s | "
-                "Distance mode: %s | OSRM calls: %s | Cache hits: %s (%.1f%%)",
+                "[DISPATCH] ✅ SUCCESS | Duration: %.2fs | API: %.2fs | Assignments: %s/%s | Distance mode: %s | OSRM calls: %s | Cache hits: %s (%.1f%%)",
                 dispatch_duration,
                 duration,
                 num_assignments,
