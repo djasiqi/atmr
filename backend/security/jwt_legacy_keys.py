@@ -79,7 +79,8 @@ def try_decode_with_legacy_keys(
             # Si décodage réussi avec une legacy key, logger pour audit
             if key_idx > 0:
                 logger.debug(
-                    "[JWT Legacy] ✅ Token décodé avec legacy key #%d (total legacy keys: %d)",
+                    "[JWT Legacy] ✅ Token décodé avec legacy key #%d "
+                    "(total legacy keys: %d)",
                     key_idx,
                     len(keys) - 1,
                 )

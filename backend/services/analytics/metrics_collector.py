@@ -44,7 +44,8 @@ class MetricsCollector:
             # ✅ Utilisation du repository pour découpler de SQLAlchemy
             assignment_repo = AssignmentRepository()
             assignment_dtos = assignment_repo.find_by_dispatch_run_id(dispatch_run_id)
-            # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs pour la compatibilité
+            # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs pour
+            # la compatibilité
             assignment_ids = [dto.id for dto in assignment_dtos]
             assignments = (
                 Assignment.query.filter(Assignment.id.in_(assignment_ids)).all()

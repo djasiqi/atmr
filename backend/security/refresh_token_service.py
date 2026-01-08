@@ -189,7 +189,8 @@ def get_user_active_sessions(user_id: int) -> list[RefreshToken]:
         user_id: ID de l'utilisateur
 
     Returns:
-        Liste des RefreshToken actifs (non révoqués et non expirés), triés par date de création décroissante
+        Liste des RefreshToken actifs (non révoqués et non expirés), triés
+        par date de création décroissante
     """
     now = datetime.now(UTC)
 

@@ -47,4 +47,7 @@ class PasswordHistory(db.Model):
     )
 
     def __repr__(self) -> str:  # pyright: ignore[reportImplicitOverride]
-        return f"<PasswordHistory id={self.id} user_id={self.user_id} created_at={self.created_at}>"
+        return (
+            f"<PasswordHistory id={self.id} user_id={self.user_id} "
+            f"created_at={self.created_at}>"
+        )

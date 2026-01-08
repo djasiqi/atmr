@@ -35,7 +35,8 @@ def swagger_ui():
 <head>
     <meta charset="UTF-8">
     <title>ATMR API Documentation</title>
-    <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.10.3/swagger-ui.css" />
+    <link rel="stylesheet" type="text/css"
+          href="https://unpkg.com/swagger-ui-dist@5.10.3/swagger-ui.css" />
     <style>
         html {{
             box-sizing: border-box;

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Script pour analyser le rapport Bandit et afficher les problèmes HIGH prioritaires."""
+"""Script pour analyser le rapport Bandit et afficher les problèmes HIGH
+prioritaires."""
 
 import json
 import sys

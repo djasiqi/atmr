@@ -305,7 +305,8 @@ class RLTrainOptimal(Resource):
                 },
                 "note": (
                     "L'entraînement s'exécute en arrière-plan. "
-                    f"Le modèle sera sauvegardé dans {model_output_path} une fois terminé."
+                    f"Le modèle sera sauvegardé dans {model_output_path} une "
+                    f"fois terminé."
                 ),
             }
 
