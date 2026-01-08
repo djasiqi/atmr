@@ -498,10 +498,7 @@ services:
     volumes:
       - ./backend:/app
     working_dir: /app
-    command: >
-      locust
-      -f tests/load_testing/dispatch_load_test.py
-      --host=http://api:5000
+    command: -f tests/load_testing/dispatch_load_test.py --host=http://api:5000
     environment:
       - LOCUST_HOST=http://api:5000
     depends_on:
