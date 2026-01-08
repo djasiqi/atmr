@@ -1418,3 +1418,208 @@ class WebSocketMetricsResource(Resource):
             sentry_sdk.capture_exception(e)
             logger.exception("❌ ERREUR websocket_metrics: %s", e)
             return APIErrorHandler.handle_exception(e, logger)
+
+
+# ========================
+# ✅ C2: Endpoints Redis Rate Limiting Management
+# ========================
+
+@admin_ns.route("/rate-limit/flush")
+class RateLimitFlush(Resource):
+    """Endpoint pour flush tous les compteurs de rate limit."""
+
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @ip_whitelist_required()
+    @limiter.limit("10 per hour")
+    def post(self):
+        """
+        Flush tous les compteurs de rate limit en Redis.
+
+        Utilisation : POST /api/v1/admin/rate-limit/flush
+        Nécessite : Token JWT avec rôle admin + IP whitelist
+
+        Returns:
+            JSON avec nombre de clés supprimées
+        """
+        try:
+            from security.security_metrics import (
+                rate_limit_active_keys,
+                rate_limit_flushes_total,
+            )
+
+            user_id = get_jwt_identity()
+
+            # Compter les clés avant suppression
+            keys_to_delete = list(redis_client.scan_iter("LIMITER:*"))
+            count = len(keys_to_delete)
+
+            # Supprimer toutes les clés de rate limit
+            if count > 0:
+                redis_client.delete(*keys_to_delete)
+
+            # ✅ Incrémenter métrique Prometheus
+            rate_limit_flushes_total.labels(admin_user_id=str(user_id)).inc()
+
+            # ✅ Mettre à jour la gauge des clés actives
+            rate_limit_active_keys.set(0)
+
+            logger.info(
+                "[ADMIN] Rate limits flushed by user %s: %d keys deleted",
+                user_id,
+                count,
+            )
+
+            return {
+                "message": "Rate limits flushed successfully",
+                "keys_deleted": count,
+                "status": "success",
+            }, 200
+
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.exception("[ADMIN] Failed to flush rate limits: %s", e)
+            return {
+                "error": f"Failed to flush rate limits: {str(e)}",
+                "status": "error",
+            }, 500
+
+
+@admin_ns.route("/rate-limit/stats")
+class RateLimitStats(Resource):
+    """Endpoint pour obtenir des statistiques sur les rate limits."""
+
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @ip_whitelist_required()
+    @limiter.limit("100 per hour")
+    def get(self):
+        """
+        Statistiques sur les rate limits actuels.
+
+        Returns:
+            JSON avec statistiques détaillées
+        """
+        try:
+            from security.security_metrics import rate_limit_active_keys
+
+            # Scanner toutes les clés de rate limit
+            keys = list(redis_client.scan_iter("LIMITER:*"))
+
+            # ✅ Mettre à jour la gauge Prometheus
+            rate_limit_active_keys.set(len(keys))
+
+            # Analyser les clés pour extraire des stats
+            stats_by_endpoint = {}
+            for key in keys[:100]:  # Limiter à 100 pour performance
+                # Convertir bytes en string si nécessaire
+                key_str = key.decode("utf-8") if isinstance(key, bytes) else key
+                parts = key_str.split(":")
+                if len(parts) >= 2:
+                    endpoint = parts[1] if len(parts) > 1 else "unknown"
+                    stats_by_endpoint[endpoint] = (
+                        stats_by_endpoint.get(endpoint, 0) + 1
+                    )
+
+            # Obtenir les infos mémoire Redis
+            redis_memory_info = redis_client.info("memory")
+            redis_memory_used = redis_memory_info.get("used_memory_human", "N/A")
+
+            stats = {
+                "total_keys": len(keys),
+                "keys_by_endpoint": stats_by_endpoint,
+                "sample_keys": [
+                    k.decode("utf-8") if isinstance(k, bytes) else k
+                    for k in keys[:10]
+                ],
+                "redis_memory_used": redis_memory_used,
+            }
+
+            return stats, 200
+
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.exception("[ADMIN] Failed to get rate limit stats: %s", e)
+            return {
+                "error": f"Failed to get rate limit stats: {str(e)}",
+                "status": "error",
+            }, 500
+
+
+@admin_ns.route("/redis/info")
+class RedisInfo(Resource):
+    """Endpoint pour obtenir des informations détaillées sur Redis."""
+
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @ip_whitelist_required()
+    @limiter.limit("50 per hour")
+    def get(self):
+        """
+        Informations détaillées sur Redis.
+
+        Returns:
+            JSON avec informations Redis
+        """
+        try:
+            info = {
+                "server": redis_client.info("server"),
+                "memory": redis_client.info("memory"),
+                "stats": redis_client.info("stats"),
+                "keyspace": redis_client.info("keyspace"),
+            }
+
+            return info, 200
+
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.exception("[ADMIN] Failed to get Redis info: %s", e)
+            return {
+                "error": f"Failed to get Redis info: {str(e)}",
+                "status": "error",
+            }, 500
+
+
+@admin_ns.route("/rate-limit/config")
+class RateLimitConfig(Resource):
+    """Endpoint pour obtenir la configuration actuelle des rate limits."""
+
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @ip_whitelist_required()
+    @limiter.limit("100 per hour")
+    def get(self):
+        """
+        Configuration actuelle des rate limits.
+
+        Returns:
+            JSON avec configuration des rate limits
+        """
+        try:
+            from flask import current_app
+
+            config = {
+                "default_limits": current_app.config.get(
+                    "RATELIMIT_DEFAULT_LIMITS", "1000 per hour"
+                ),
+                "environment": current_app.config.get("ENVIRONMENT", "development"),
+                "storage_uri": current_app.config.get(
+                    "RATELIMIT_STORAGE_URL", "redis://localhost:6379/1"
+                ),
+                "strategy": current_app.config.get(
+                    "RATELIMIT_STRATEGY", "fixed-window"
+                ),
+                "config_version": current_app.config.get(
+                    "RATELIMIT_CONFIG_VERSION", "v1"
+                ),
+            }
+
+            return config, 200
+
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.exception("[ADMIN] Failed to get rate limit config: %s", e)
+            return {
+                "error": f"Failed to get rate limit config: {str(e)}",
+                "status": "error",
+            }, 500
