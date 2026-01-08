@@ -94,7 +94,8 @@ class TestBookingsIntegration:
     def test_cancel_booking_releases_resources(
         self, authenticated_client, test_company, test_booking
     ):
-        """Test annulation d'une réservation et vérification de la libération des ressources."""
+        """Test annulation d'une réservation et vérification de la libération
+        des ressources."""
         if not all([test_company, test_booking]):
             pytest.skip("Required fixtures missing")
 

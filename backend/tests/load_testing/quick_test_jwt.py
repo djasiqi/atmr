@@ -42,7 +42,8 @@ def test_jwt_audience():
     print(f"   User: {data['user']['email']}")
     print()
 
-    # Etape 2: Test dispatch (devrait echouer avec 404 ou autre erreur metier, mais PAS 401)
+    # Etape 2: Test dispatch (devrait echouer avec 404 ou autre erreur
+    # metier, mais PAS 401)
     print("[2/3] Test requete dispatch avec le nouveau token...")
     response = requests.post(
         f"{BASE_URL}/api/v1/company_dispatch/run",
