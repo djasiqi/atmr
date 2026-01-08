@@ -170,6 +170,7 @@ flask db heads
 ✅ Cette erreur sera **automatiquement résolue** une fois l'erreur #1 corrigée.
 
 **Statut actuel** :
+
 - ✅ Solution pour l'erreur #1 appliquée (commit `abc41d3c`)
 - ⏳ Build en cours avec cache Docker invalidé (10-15 min)
 - ⏳ Une fois le build terminé, Flask pourra charger l'app correctement
@@ -181,9 +182,9 @@ flask db heads
 
 ---
 
-## ⚠️ AVERTISSEMENTS (Non-bloquants mais à surveiller)
+## ⚠️ AVERTISSEMENTS (Non-bloquants - Comportement acceptable)
 
-### 4. 🟡 **Conteneurs orphelins détectés**
+### 4. 🟢 **Conteneurs orphelins détectés** (ACCEPTABLE)
 
 **Message** :
 
@@ -195,17 +196,24 @@ level=warning msg="Found orphan containers ([***-backend ***-celery-worker ***-f
 
 - Anciens conteneurs non nettoyés après modifications de docker-compose
 
+**Statut** :
+
+- ✅ Cosmétique uniquement
+- ✅ Sera automatiquement nettoyé au prochain `docker-compose down` (inclus dans le workflow)
+- ✅ N'affecte pas le fonctionnement de l'application
+
 **Solution** :
 
 ```bash
+# Si vous voulez nettoyer manuellement :
 docker-compose down --remove-orphans
 ```
 
-**Priorité** : 🟢 BASSE (Cosmétique)
+**Priorité** : 🟢 BASSE (Cosmétique - Aucune action requise)
 
 ---
 
-### 5. 🟡 **Secrets Vault non trouvés (warnings)**
+### 5. 🟢 **Secrets Vault non trouvés** (COMPORTEMENT ATTENDU)
 
 **Messages** :
 
@@ -215,27 +223,26 @@ docker-compose down --remove-orphans
 [4.1 Vault] Secret non trouvé: JWT_LEGACY_SECRET_KEYS (path=prod/jwt/legacy_secret_keys, key=keys)
 ```
 
-**Impact** :
+**Statut** :
 
-- ℹ️ Pas de Vault configuré en production
-- ℹ️ L'app utilise les secrets depuis les variables d'environnement (fallback)
-- ℹ️ Fonctionnalité dégradée mais non bloquante
+- ✅ Comportement **normal et attendu** si HashiCorp Vault n'est pas configuré
+- ✅ L'application utilise le fallback : variables d'environnement (`.env.production`)
+- ✅ Aucun impact sur la sécurité ou les fonctionnalités
 
 **Cause** :
 
-- Vault non configuré sur ce serveur
-- C'est attendu si vous n'utilisez pas HashiCorp Vault
+- Vault non configuré sur ce serveur (comportement par design)
 
 **Solution** :
 
-- Si vous voulez utiliser Vault : configurer `VAULT_ADDR`, `VAULT_TOKEN`, etc.
-- Sinon : ignorer ces warnings (comportement normal)
+- ✅ **Aucune action requise** - Ces warnings sont informatifs uniquement
+- ℹ️ Si vous voulez utiliser Vault (optionnel) : configurer `VAULT_ADDR`, `VAULT_TOKEN`, etc.
 
-**Priorité** : 🟢 BASSE (Optionnel)
+**Priorité** : 🟢 BASSE (Optionnel - Aucune action requise)
 
 ---
 
-### 6. 🟡 **Modèle ML de prédiction de retard non trouvé**
+### 6. 🟡 **Modèle ML de prédiction de retard non trouvé** (VÉRIFICATION REQUISE)
 
 **Message** :
 
@@ -246,24 +253,33 @@ docker-compose down --remove-orphans
 **Impact** :
 
 - ⚠️ Fonctionnalité ML désactivée
-- ℹ️ App fonctionne sans prédictions ML
+- ✅ App fonctionne normalement sans prédictions ML
 
-**Cause** :
+**Observation** :
 
-- Le fichier `delay_predictor.pkl` n'est pas au bon emplacement ou corrompu
-- Permissions ML corrigées mais modèle manquant
+D'après les logs de déploiement, le fichier **EXISTE** :
+```
+-rw-r--r-- 1 appuser appgroup 36276078 Nov 21 12:11 delay_predictor.pkl
+```
+
+**Cause probable** :
+
+- ✅ Le fichier existe dans `/app/data/ml/delay_predictor.pkl`
+- ❌ L'application cherche peut-être dans un autre chemin (`/app/ml_models/`)
+- ❌ Variable d'environnement `ML_MODELS_PATH` mal configurée
 
 **Solution** :
 
 ```bash
-# Sur le serveur
-docker exec ***-backend ls -la /app/ml_models/
-# Vérifier si delay_predictor.pkl existe
+# Vérifier la configuration du chemin ML
+docker exec ***-backend env | grep ML_MODELS_PATH
+# Devrait afficher: ML_MODELS_PATH=/app/data/ml
 
-# Si manquant, entraîner un nouveau modèle ou copier depuis backup
+# Vérifier que le fichier est accessible
+docker exec ***-backend ls -la /app/data/ml/delay_predictor.pkl
 ```
 
-**Priorité** : 🟢 BASSE (Fonctionnalité optionnelle)
+**Priorité** : 🟡 MOYENNE (Fonctionnalité optionnelle - À vérifier après déploiement)
 
 ---
 
