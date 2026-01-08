@@ -113,6 +113,7 @@ FATAL:  role "root" does not exist
 **Solution appliquée** :
 
 ✅ **`docker-compose.production.yml`** (ligne 36) :
+
 ```yaml
 postgres:
   healthcheck:
@@ -120,6 +121,7 @@ postgres:
 ```
 
 ✅ **`docker-compose.monitoring.yml`** (ligne 301) :
+
 ```yaml
 postgres-exporter:
   environment:
@@ -136,7 +138,7 @@ postgres-exporter:
 
 ---
 
-### 3. 🔴 **Migrations Alembic échouent**
+### 3. 🟡 **Migrations Alembic échouent** (SERA RÉSOLU AUTOMATIQUEMENT)
 
 **Erreur** :
 
@@ -144,29 +146,38 @@ postgres-exporter:
 Error: No such command 'db'.
 ```
 
-**Cause** :
+**Cause racine** :
 
-- Conséquence directe de l'erreur #1 (flask_limiter.storage)
-- Flask CLI ne peut pas charger l'app à cause de l'import error
+- ❌ Conséquence directe de l'erreur #1 (flask_limiter.storage)
+- ❌ Flask CLI ne peut pas charger l'app à cause de l'import error
 
 **Commandes qui échouent** :
 
 ```bash
 flask db current
 flask db upgrade
+flask db heads
 ```
 
 **Impact** :
 
 - ❌ Base de données potentiellement pas à jour
 - ❌ Nouvelles migrations non appliquées
+- ❌ Workflow GitHub Actions échoue à l'étape "Run Alembic migrations"
 
-**Solution** :
+**Solution appliquée** :
 
-- Corriger l'erreur #1 d'abord
-- Puis les commandes `flask db` fonctionneront
+✅ Cette erreur sera **automatiquement résolue** une fois l'erreur #1 corrigée.
 
-**Priorité** : 🔥 URGENTE (Dépend de #1)
+**Statut actuel** :
+- ✅ Solution pour l'erreur #1 appliquée (commit `abc41d3c`)
+- ⏳ Build en cours avec cache Docker invalidé (10-15 min)
+- ⏳ Une fois le build terminé, Flask pourra charger l'app correctement
+- ⏳ Les commandes `flask db` fonctionneront automatiquement
+
+**Aucune action supplémentaire requise** - La correction de l'erreur #1 résout automatiquement ce problème.
+
+**Priorité** : 🟡 EN ATTENTE (Dépend de la résolution de #1)
 
 ---
 
