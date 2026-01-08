@@ -28,6 +28,11 @@ const BATCH_SIZE = 3;  // Buffer de 3-5 positions avant envoi
 const BATCH_INTERVAL_MS = 10000;  // Flush toutes les 10s (réduit de 15s)
 const HEARTBEAT_INTERVAL_MS = 30000;  // Heartbeat GPS toutes les 30s même si immobile
 
+// ✅ P2: Bug #6 - Retry automatique avec backoff exponentiel
+const MAX_RETRY_ATTEMPTS = 5;
+let retryTimeout: ReturnType<typeof setTimeout> | null = null;
+let retryAttempts = 0;
+
 export const useLocation = () => {
   const { driver } = useAuth();
   const socket = useSocket();
@@ -214,8 +219,61 @@ export const useLocation = () => {
       }
     };
 
+  // ✅ P2: Bug #6 - Retry automatique avec backoff exponentiel
+  const retryFailedBatch = async () => {
+    if (retryAttempts >= MAX_RETRY_ATTEMPTS) {
+      console.log('[useLocation] ⚠️ Max retry attempts reached, waiting for reconnect');
+      retryAttempts = 0;
+      return;
+    }
+    
+    const queueSize = await getLocationQueue().then(q => q.length).catch(() => 0);
+    if (queueSize === 0) {
+      retryAttempts = 0;
+      return;
+    }
+    
+    if (socket && socket.connected) {
+      console.log(`[useLocation] 🔄 Retry #${retryAttempts + 1}: ${queueSize} positions in queue`);
+      try {
+        const { syncLocationQueue } = await import("@/services/locationQueue");
+        await syncLocationQueue(socket);
+        retryAttempts = 0;  // Reset on success
+        console.log('[useLocation] ✅ Retry réussi, queue vidée');
+      } catch (error) {
+        console.error(`[useLocation] ❌ Retry #${retryAttempts + 1} échoué:`, error);
+        // Exponential backoff: 2s, 4s, 8s, 16s, 32s
+        const delay = Math.min(2000 * Math.pow(2, retryAttempts), 32000);
+        retryAttempts++;
+        
+        console.log(`[useLocation] ⏰ Prochain retry dans ${delay/1000}s`);
+        
+        if (retryTimeout) {
+          clearTimeout(retryTimeout);
+        }
+        retryTimeout = setTimeout(() => {
+          retryFailedBatch();
+        }, delay);
+      }
+    } else {
+      // Exponential backoff si socket déconnecté
+      const delay = Math.min(2000 * Math.pow(2, retryAttempts), 32000);
+      retryAttempts++;
+      
+      console.log(`[useLocation] ⏰ Socket déconnecté, retry dans ${delay/1000}s`);
+      
+      if (retryTimeout) {
+        clearTimeout(retryTimeout);
+      }
+      retryTimeout = setTimeout(() => {
+        retryFailedBatch();
+      }, delay);
+    }
+  };
+
   // ✅ PERF: Flush batch de positions (réduit réseau et batterie)
   // ✅ P2-1: Mode Offline Mobile - Persister queue GPS si offline
+  // ✅ P0: Fix Race Condition - Attendre ACK avant de vider buffer
   const flushPositionBatch = async () => {
     if (positionBuffer.current.length === 0) {
       console.log("[useLocation] ⚠️ Buffer vide, pas d'envoi");
@@ -228,7 +286,7 @@ export const useLocation = () => {
     }
     
     const batch = [...positionBuffer.current];
-    positionBuffer.current = [];  // Clear buffer
+    // ✅ P0: NE PAS VIDER LE BUFFER IMMÉDIATEMENT (fix race condition)
     
     // ✅ P2-1: Préparer les positions pour la queue
     const queuedLocations: QueuedLocation[] = batch.map(loc => ({
@@ -258,10 +316,29 @@ export const useLocation = () => {
         
         console.log(`📍 [useLocation] Envoi batch: ${batch.length} positions, driver_id=${driver.id}, socket_connected=${socket.connected}`);
         
-        // Envoyer batch via Socket.IO (plus efficient)
-        socket.emit("driver_location_batch", payload);
+        // ✅ P0: Attendre ACK du serveur avant de vider buffer
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('Timeout waiting for ACK'));
+          }, 5000);
+          
+          socket.emit("driver_location_batch", payload, (ack: any) => {
+            clearTimeout(timeout);
+            if (ack?.success) {
+              console.log(`✅ [useLocation] ACK reçu: ${ack.positions_count} positions confirmées`);
+              resolve();
+            } else {
+              reject(new Error(ack?.error || 'ACK failed'));
+            }
+          });
+        });
         
-        console.log(`✅ [useLocation] Batch envoyé: ${batch.length} positions`);
+        // ✅ P0: VIDER LE BUFFER SEULEMENT APRÈS CONFIRMATION ACK
+        positionBuffer.current = positionBuffer.current.filter(
+          loc => !batch.includes(loc)
+        );
+        
+        console.log(`✅ [useLocation] Batch confirmé et supprimé du buffer: ${batch.length} positions`);
         
         // ✅ P2-1: Supprimer les positions envoyées de la queue
         await removeSentLocations(queuedLocations);
@@ -274,10 +351,13 @@ export const useLocation = () => {
         };
       } catch (error) {
         console.error("❌ [useLocation] Erreur envoi batch localisation:", error);
-        // ✅ P2-1: En cas d'erreur, ajouter à la queue pour retry plus tard
+        // ✅ P0: En cas d'erreur, NE PAS vider le buffer (sera retenté)
+        // ✅ P2-1: Ajouter à la queue pour persistance
         for (const loc of queuedLocations) {
           await enqueueLocation(loc);
         }
+        // ✅ P2: Bug #6 - Déclencher retry automatique
+        retryFailedBatch();
       }
     } else {
       // ✅ P2-1: Mode offline - Ajouter toutes les positions à la queue
@@ -285,6 +365,8 @@ export const useLocation = () => {
       for (const loc of queuedLocations) {
         await enqueueLocation(loc);
       }
+      // ✅ Vider buffer après ajout à la queue (offline)
+      positionBuffer.current = [];
     }
   };
 
@@ -364,6 +446,13 @@ export const useLocation = () => {
       isMounted = false;
       clearInterval(flushInterval);  // Cleanup flush interval
       clearInterval(heartbeatInterval);  // Cleanup heartbeat interval
+      
+      // ✅ P2: Bug #6 - Nettoyer retry timeout
+      if (retryTimeout) {
+        clearTimeout(retryTimeout);
+        retryTimeout = null;
+      }
+      retryAttempts = 0;
       
       // Flush final avant cleanup
       if (positionBuffer.current.length > 0) {

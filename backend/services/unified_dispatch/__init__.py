@@ -88,8 +88,8 @@ from . import orchestration
 # dans le codebase (Semaine 3-4)
 
 # Imports de compatibilité pour app.py et tasks
-from .core import engine  # noqa: F401
-from .core import queue  # noqa: F401
+from .core import engine
+from .core import queue
 
 # TODO: Compléter lors de la migration (Semaine 2)
 # from .core.types import *

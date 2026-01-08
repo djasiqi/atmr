@@ -7,6 +7,7 @@ import {
     ScrollView,
     ActivityIndicator,
     StyleSheet,
+    TextInput,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import dayjs from "dayjs";
@@ -661,9 +662,6 @@ export const RideCreateModal: React.FC<RideCreateModalProps> = ({
     );
 };
 
-// Ajout des imports manquants
-import { TextInput } from "react-native";
-
 const styles = StyleSheet.create({
     modalOverlay: {
         flex: 1,
@@ -675,7 +673,7 @@ const styles = StyleSheet.create({
     modalCard: {
         width: "100%",
         maxWidth: 500,
-        maxHeight: "90%",
+        height: "90%",
         backgroundColor: palette.modalBackground,
         borderRadius: 24,
         borderWidth: 1,
@@ -748,7 +746,6 @@ const styles = StyleSheet.create({
     },
     scrollContainer: {
         flex: 1,
-        minHeight: 300,
     },
     modalScroll: {
         flex: 1,

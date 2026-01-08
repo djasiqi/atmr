@@ -281,24 +281,28 @@ locust -f backend/tests/load_testing/slow_osrm_test.py \
 ## 🔧 Hotfix #3 : Rate Limits Dispatch (8 janvier - 10h25)
 
 ### ❌ Problème
+
 Tests Locust échouaient avec **429 TOO MANY REQUESTS** : `{ "message": "30 per 1 hour" }`
 
 ### 🔍 Analyse
+
 Rate limits trop restrictifs dans **3 fichiers différents** :
 
-| Fichier | Endpoint | Limite AVANT | Limite APRÈS |
-|---------|----------|--------------|--------------|
-| `company_mobile_dispatch.py` (L2085) | `/v1/company_dispatch/run` | **10/minute** | 10000/hour |
-| `company_mobile_dispatch.py` (L2187) | `/v1/company_dispatch/optimizer/run` | **10/minute** | 10000/hour |
-| `dispatch/dispatch_run.py` (L47) | `/dispatch/run` | **30/hour** ← cause du 429 | 10000/hour |
-| `dispatch/dispatch_run.py` (L399) | `/dispatch/trigger` | **50/hour** | 10000/hour |
+| Fichier                              | Endpoint                             | Limite AVANT               | Limite APRÈS |
+| ------------------------------------ | ------------------------------------ | -------------------------- | ------------ |
+| `company_mobile_dispatch.py` (L2085) | `/v1/company_dispatch/run`           | **10/minute**              | 10000/hour   |
+| `company_mobile_dispatch.py` (L2187) | `/v1/company_dispatch/optimizer/run` | **10/minute**              | 10000/hour   |
+| `dispatch/dispatch_run.py` (L47)     | `/dispatch/run`                      | **30/hour** ← cause du 429 | 10000/hour   |
+| `dispatch/dispatch_run.py` (L399)    | `/dispatch/trigger`                  | **50/hour**                | 10000/hour   |
 
 ### ✅ Solution
+
 1. **Commit 877ff7c** : Augmentation `company_mobile_dispatch.py` (10/min → 10000/h)
 2. **Commit 87cb380** : Augmentation `dispatch/dispatch_run.py` (30/h + 50/h → 10000/h)
 3. Redémarrage Redis + API pour appliquer les changements
 
 ### 📊 Impact
+
 - Rate limits passés de **30-600/h** à **10000/h** pour load testing
 - Permet jusqu'à **2.78 requêtes/seconde** par endpoint
 - Suffisant pour tester 100 bookings × 50 drivers avec 10 users Locust

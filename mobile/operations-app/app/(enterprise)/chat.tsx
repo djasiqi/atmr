@@ -322,6 +322,16 @@ export default function EnterpriseChatScreen() {
 
   const handlePickGallery = useCallback(async () => {
     setShowAttachment(false);
+    // ✅ Demander les permissions pour accéder à la galerie
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert(
+        "Permission requise",
+        "L'application a besoin d'accéder à votre galerie pour envoyer des photos."
+      );
+      return;
+    }
+
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsEditing: true,

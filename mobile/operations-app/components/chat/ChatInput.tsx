@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-// import * as DocumentPicker from "expo-document-picker"; // TODO: Installer expo-document-picker
+import * as DocumentPicker from "expo-document-picker";
 import { chatStyles } from "@/styles/chatStyles";
 
 interface ChatInputProps {
@@ -66,6 +66,16 @@ export default function ChatInput({
 
     const handleGallery = async () => {
         setShowAttachMenu(false);
+        // ✅ Demander les permissions pour accéder à la galerie
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== "granted") {
+            Alert.alert(
+                "Permission requise",
+                "L'application a besoin d'accéder à votre galerie pour envoyer des photos."
+            );
+            return;
+        }
+
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ["images"],
             allowsEditing: true,
@@ -85,25 +95,25 @@ export default function ChatInput({
 
     const handleDocument = async () => {
         setShowAttachMenu(false);
-        // TODO: Implémenter avec expo-document-picker une fois installé
-        Alert.alert(
-            "Fonctionnalité à venir",
-            "La sélection de PDF sera disponible prochainement"
-        );
-        // try {
-        //   const result = await DocumentPicker.getDocumentAsync({
-        //     type: "application/pdf",
-        //     copyToCacheDirectory: true,
-        //   });
-        //
-        //   if (!result.canceled && result.assets[0] && onSendPdf) {
-        //     const asset = result.assets[0];
-        //     onSendPdf(asset.uri, asset.name || "document.pdf");
-        //   }
-        // } catch (error) {
-        //   console.log("Erreur sélection PDF:", error);
-        //   Alert.alert("Erreur", "Impossible de sélectionner le document");
-        // }
+        if (!onSendPdf) {
+            Alert.alert("Erreur", "Envoi de PDF non configuré");
+            return;
+        }
+
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: "application/pdf",
+                copyToCacheDirectory: true,
+            });
+
+            if (!result.canceled && result.assets && result.assets[0]) {
+                const asset = result.assets[0];
+                onSendPdf(asset.uri, asset.name || "document.pdf");
+            }
+        } catch (error) {
+            console.log("❌ Erreur sélection PDF:", error);
+            Alert.alert("Erreur", "Impossible de sélectionner le document");
+        }
     };
 
     return (

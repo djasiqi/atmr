@@ -814,7 +814,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    color: palette.heroText,
+    color: palette.modalTitle, // ✅ Corrigé : texte visible (vert foncé au lieu de blanc)
     paddingVertical: 12,
     paddingHorizontal: 10,
     fontSize: 15,

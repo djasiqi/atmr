@@ -18,6 +18,7 @@ export interface QueuedLocation {
 
 /**
  * Ajoute une position à la queue persistante.
+ * ✅ P2: Bug #8 - Filtrer positions > 24h
  * @param location Position GPS à ajouter
  */
 export async function enqueueLocation(
@@ -25,15 +26,32 @@ export async function enqueueLocation(
 ): Promise<void> {
   try {
     const queue = await getLocationQueue();
-    queue.push(location);
+    
+    // ✅ P2: Bug #8 - Filtrer les positions > 24h
+    const now = Date.now();
+    const MAX_AGE_MS = 24 * 60 * 60 * 1000;  // 24 heures
+    
+    const validQueue = queue.filter(loc => {
+      const age = now - loc.timestamp;
+      return age < MAX_AGE_MS;
+    });
+    
+    // Ajouter la nouvelle position
+    validQueue.push(location);
 
     // Limiter la taille de la queue
-    if (queue.length > MAX_QUEUE_SIZE) {
+    if (validQueue.length > MAX_QUEUE_SIZE) {
       // Garder les positions les plus récentes
-      queue.splice(0, queue.length - MAX_QUEUE_SIZE);
+      validQueue.splice(0, validQueue.length - MAX_QUEUE_SIZE);
     }
 
-    await AsyncStorage.setItem(LOCATION_QUEUE_KEY, JSON.stringify(queue));
+    // Logger si des positions ont été expirées
+    const expiredCount = queue.length - validQueue.length + 1;  // +1 car on vient d'ajouter
+    if (expiredCount > 0) {
+      console.log(`🗑️ [locationQueue] ${expiredCount - 1} positions expirées (> 24h)`);
+    }
+
+    await AsyncStorage.setItem(LOCATION_QUEUE_KEY, JSON.stringify(validQueue));
   } catch (error) {
     console.error("❌ [locationQueue] Erreur lors de l'ajout à la queue:", error);
   }
@@ -149,21 +167,34 @@ export async function syncLocationQueue(socket: any): Promise<void> {
           `📤 [locationQueue] Envoi batch resync: ${locations.length} positions pour driver ${driverId}`
         );
 
-        // Envoyer via Socket.IO
-        socket.emit("driver_location_batch", payload);
+        // ✅ P1: Attendre ACK du serveur avant de supprimer
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('Timeout waiting for ACK'));
+          }, 5000);
+          
+          socket.emit("driver_location_batch", payload, (ack: any) => {
+            clearTimeout(timeout);
+            if (ack?.success) {
+              resolve();
+            } else {
+              reject(new Error(ack?.error || 'ACK failed'));
+            }
+          });
+        });
 
-        // ✅ Supprimer les positions envoyées de la queue
+        // ✅ P1: Supprimer SEULEMENT après ACK de succès
         await removeSentLocations(locations);
 
         console.log(
-          `✅ [locationQueue] Resync réussi: ${locations.length} positions envoyées`
+          `✅ [locationQueue] Resync réussi: ${locations.length} positions confirmées et supprimées`
         );
       } catch (error) {
         console.error(
           `❌ [locationQueue] Erreur resync pour driver ${driverId}:`,
           error
         );
-        // Ne pas supprimer les positions en cas d'erreur, elles seront retentées plus tard
+        // ✅ P1: Ne PAS supprimer, sera retenté plus tard
       }
     }
 

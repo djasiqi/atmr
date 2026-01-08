@@ -105,6 +105,14 @@ module.exports = withAndroidR8Enabled(
       },
     ],
     [
+      "expo-image-picker",
+      {
+        photosPermission: "L'application a besoin d'accéder à vos photos pour envoyer des images dans le chat.",
+        cameraPermission: "L'application a besoin d'accéder à votre caméra pour prendre des photos."
+      }
+    ],
+    "expo-document-picker",
+    [
       "expo-build-properties",
       {
         android: {

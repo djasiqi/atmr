@@ -370,6 +370,13 @@ export default function ChatScreen() {
 
   const handlePickGallery = useCallback(async () => {
     setShowAttachment(false);
+    // ✅ Demander les permissions pour accéder à la galerie
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      console.log("[ChatScreen] Permission galerie refusée");
+      return;
+    }
+
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsEditing: true,

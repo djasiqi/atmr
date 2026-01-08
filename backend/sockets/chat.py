@@ -8,6 +8,7 @@ Les fonctions de handlers sont enregistrées via @socketio.on()
 et appelées par le framework.
 """
 
+# ruff: noqa: I001
 import json
 import logging
 import os
@@ -20,26 +21,18 @@ from typing import TYPE_CHECKING, Any, Dict, cast
 from typing import cast as tcast
 
 import jwt.exceptions as jwt_exceptions  # pyright: ignore[reportMissingImports]
-from flask import (  # pyright: ignore[reportMissingImports]
-    current_app,
-    request,
-    session,
-)
+from flask import current_app, request, session
 from flask_jwt_extended import decode_token  # pyright: ignore[reportMissingImports]
-from flask_socketio import (  # pyright: ignore[reportMissingModuleSource]
-    SocketIO,
-    emit,
-    join_room,
-)
+from flask_socketio import SocketIO, emit, join_room  # pyright: ignore[reportMissingModuleSource]
 
 from ext import db, redis_client
 from models import Company, Driver, Message, SenderRole, User, UserRole
 from schemas.socket_events import EVENT_VERSION, SocketEvent
 from services.geolocation.location import get_location_service
+from services.monitoring.websocket_rate_limiter import ws_rate_limiter
+from services.monitoring.websocket_metrics import ws_metrics
 from services.notifications.push import send_push_message
 from services.security.spam import can_send_message
-from services.monitoring.websocket_metrics import ws_metrics
-from services.monitoring.websocket_rate_limiter import ws_rate_limiter
 
 # Constantes pour éviter les valeurs magiques
 RECEIVER_ID_ZERO = 0
@@ -1997,7 +1990,7 @@ def init_chat_socket(socketio: SocketIO):
                 )
 
     @socketio.on("driver_location_batch")
-    def handle_driver_location_batch(data):
+    def handle_driver_location_batch(data):  # noqa: PLR0911
         """Handler pour la réception de batch de localisations du chauffeur.
         Traite chaque position du batch et les persiste.
         """
@@ -2027,12 +2020,12 @@ def init_chat_socket(socketio: SocketIO):
                     current_sid,
                 )
                 emit("error", {"error": "Session JWT introuvable"})
-                return
+                return {"success": False, "error": "Session JWT introuvable"}
 
             user = User.query.filter_by(public_id=user_public_id).first()
             if not user:
                 emit("error", {"error": "Utilisateur introuvable"})
-                return
+                return {"success": False, "error": "Utilisateur introuvable"}
             user_id = user.id
             user_id_log = user_id
 
@@ -2074,7 +2067,11 @@ def init_chat_socket(socketio: SocketIO):
                     )
                     ws_metrics.on_error("rate_limit_exceeded")
                     ws_metrics.on_rate_limit_hit("driver_location_batch")
-                    return
+                    return {
+                        "success": False,
+                        "error": "Rate limit exceeded",
+                        "retry_after": retry_after,
+                    }
 
             payload_driver_id = data.get("driver_id")
             driver: Driver | None = None
@@ -2120,25 +2117,83 @@ def init_chat_socket(socketio: SocketIO):
                     "error",
                     {"error": "Chauffeur introuvable ou non lié à une entreprise."},
                 )
-                return
+                return {
+                    "success": False,
+                    "error": "Chauffeur introuvable ou non lié à une entreprise",
+                }
 
             positions = data.get("positions", [])
             if not positions:
                 logger.warning("⚠️ driver_location_batch vide")
-                return
+                return {"success": False, "error": "Batch vide"}
 
             company_room = f"company_{company_id_val}"
             now_iso = datetime.now(UTC).isoformat()
 
+            # ✅ P2: Déduplication - vérifier si batch déjà traité
+            if positions and redis_client:
+                try:
+                    first_ts = positions[0].get("timestamp")
+                    batch_id = f"{driver.id}:{first_ts}"
+                    processed_key = f"driver:{driver.id}:processed_batch"
+
+                    # Vérifier si batch déjà traité
+                    if redis_client.exists(processed_key):
+                        batch_ids = redis_client.smembers(processed_key)
+                        if batch_id.encode() in batch_ids:
+                            logger.info(
+                                "⚠️ [Déduplication] Batch déjà traité: driver=%s, batch_id=%s",
+                                driver.id,
+                                batch_id,
+                            )
+                            # ✅ P0: Envoyer ACK de succès avec flag duplicate
+                            return {
+                                "success": True,
+                                "positions_count": len(positions),
+                                "driver_id": driver.id,
+                                "timestamp": now_iso,
+                                "duplicate": True,
+                            }
+
+                    # Marquer batch comme traité (TTL 5 min)
+                    redis_client.sadd(processed_key, batch_id)
+                    redis_client.expire(processed_key, 300)
+
+                except Exception as dedup_err:
+                    # Ne pas faire échouer l'envoi pour une erreur de déduplication
+                    logger.warning(
+                        "⚠️ [Déduplication] Erreur lors de la vérification: %s",
+                        dedup_err,
+                    )
+
             # Traiter chaque position du batch
-            for pos in positions:
+            rejected_positions: list[dict[str, Any]] = []  # ✅ P2: Bug #7
+            processed_count = 0  # ✅ P2: Compter positions traitées avec succès
+            for idx, pos in enumerate(positions):
                 try:
                     latitude = float(pos.get("latitude", 0))
                     longitude = float(pos.get("longitude", 0))
 
+                    # ✅ P2: Bug #7 - Tracker rejets au lieu de skip silencieux
                     if not (-LAT_THRESHOLD <= latitude <= LAT_THRESHOLD):
+                        rejected_positions.append(
+                            {
+                                "index": idx,
+                                "reason": f"Latitude invalide: {latitude}",
+                                "latitude": latitude,
+                                "longitude": longitude,
+                            }
+                        )
                         continue
                     if not (-LON_THRESHOLD <= longitude <= LON_THRESHOLD):
+                        rejected_positions.append(
+                            {
+                                "index": idx,
+                                "reason": f"Longitude invalide: {longitude}",
+                                "latitude": latitude,
+                                "longitude": longitude,
+                            }
+                        )
                         continue
 
                     # ✅ 3.3.1: Utiliser LocationService pour chaque position du batch
@@ -2202,16 +2257,55 @@ def init_chat_socket(socketio: SocketIO):
                         },
                         room=company_room,
                     )
+
+                    # ✅ P2: Incrémenter compteur de positions traitées avec succès
+                    processed_count += 1
+
                 except (TypeError, ValueError) as e:
-                    logger.warning("⚠️ Position invalide dans batch: %s", e)
+                    # ✅ P2: Bug #7 - Tracker erreur au lieu de skip silencieux
+                    rejected_positions.append(
+                        {
+                            "index": idx,
+                            "reason": f"Erreur validation: {e!s}",
+                            "position": pos,
+                        }
+                    )
+                    logger.warning(
+                        "⚠️ Position invalide dans batch (index %d): %s", idx, e
+                    )
                     continue
 
             logger.info(
-                "📡 Batch -> %s (driver %s) %s positions",
+                "📡 Batch -> %s (driver %s) %s/%s positions traitées",
                 company_room,
                 driver.id,
+                processed_count,
                 len(positions),
             )
+
+            # ✅ P2: Bug #7 - Inclure positions rejetées dans ACK
+            if rejected_positions:
+                logger.warning(
+                    "⚠️ [Validation] %d positions rejetées sur %d",
+                    len(rejected_positions),
+                    len(positions),
+                )
+
+            # ✅ P0: Envoyer ACK de succès au client pour confirmer réception
+            ack_response = {
+                "success": True,
+                "positions_count": processed_count,
+                "total_positions": len(positions),
+                "driver_id": driver.id,
+                "timestamp": now_iso,
+            }
+
+            # ✅ P2: Bug #7 - Inclure rejets si présents
+            if rejected_positions:
+                ack_response["rejected"] = rejected_positions
+                ack_response["rejected_count"] = len(rejected_positions)
+
+            return ack_response
 
         except Exception as e:
             # ✅ 18. Améliorer gestion erreurs Socket.IO : Logger avec contexte complet
@@ -2237,6 +2331,13 @@ def init_chat_socket(socketio: SocketIO):
                     "error",
                     {"error": "Erreur lors de la mise à jour batch de localisation."},
                 )
+
+            # ✅ P0: Envoyer ACK d'erreur au client pour indiquer retry
+            return {
+                "success": False,
+                "error": "Internal error processing batch",
+                "retry": True,  # Indique au client de retry
+            }
 
     @socketio.on("join_company")
     def handle_join_company(data=None):  # noqa: ARG001
@@ -2642,5 +2743,3 @@ def init_chat_socket(socketio: SocketIO):
             emit("error", {"error": str(e)})
 
     # Les handlers sont enregistrés via @socketio.on() ci-dessus
-
-
