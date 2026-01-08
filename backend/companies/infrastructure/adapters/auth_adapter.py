@@ -21,7 +21,8 @@ class AuthServiceAdapter(GetCurrentUserPort):
         """Initialise l'adapter.
 
         Args:
-            get_current_user_fn: Fonction pour obtenir l'utilisateur courant (par défaut: get_current_user_via_use_case)
+            get_current_user_fn: Fonction pour obtenir l'utilisateur courant
+                (par défaut: get_current_user_via_use_case)
         """
         if get_current_user_fn is None:
             from shared.infrastructure.adapters.auth_adapter import (

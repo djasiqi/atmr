@@ -1,5 +1,6 @@
 # domain/__init__.py
-"""Domain layer - DTOs (Data Transfer Objects) pour découpler les services des modèles SQLAlchemy.
+"""Domain layer - DTOs (Data Transfer Objects) pour découpler les services
+des modèles SQLAlchemy.
 
 Cette couche permet de :
 - Réduire le couplage entre services et infrastructure (SQLAlchemy)

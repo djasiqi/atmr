@@ -554,7 +554,8 @@ def _get_queue_length_gauge():
             logger.info("[Celery] Prometheus metric 'celery_queue_length' initialized")
         except ImportError:
             logger.warning(
-                "[Celery] prometheus_client non disponible, métrique queue_length désactivée"
+                "[Celery] prometheus_client non disponible, "
+                "métrique queue_length désactivée"
             )
         except Exception as e:
             logger.warning(

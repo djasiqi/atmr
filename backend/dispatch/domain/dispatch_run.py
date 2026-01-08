@@ -70,7 +70,8 @@ class DispatchRun:
         if self.completed_at is not None and not self.status.is_final():
             return False
 
-        # Invariant 3: Si started_at est présent, status doit être RUNNING, COMPLETED ou FAILED
+        # Invariant 3: Si started_at est présent, status doit être RUNNING,
+        # COMPLETED ou FAILED
         if self.started_at is not None and self.status.is_pending():
             return False
 
