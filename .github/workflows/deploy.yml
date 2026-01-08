@@ -1,9 +1,9 @@
 # yaml-language-server: disable
 name: Build & Deploy
 
-# ⏸️ Workflow suspendu temporairement - focus sur lint
+# ✅ Workflow automatique activé - Build & Deploy sur chaque push main
 on:
-  workflow_dispatch: # Seulement déclenchement manuel autorisé
+  workflow_dispatch: # Déclenchement manuel toujours disponible
     inputs:
       tag:
         description: "Tag de l'image (ex: latest, v1.0.0). Laissez vide pour utiliser DOCKER_TAG du secret"
@@ -14,17 +14,18 @@ on:
         type: boolean
         required: false
         default: false
-  # push:
-  #   branches: [main]
-  #   paths:
-  #     - "backend/**"
-  #     - "docker-compose.yml"
-  #     - "docker-compose.production.yml"
-  #     - "pyrightconfig.json"
-  #     - "package.json"
-  #     - "package-lock.json"
-  #     - "prometheus/**"
-  #     - "vault/**"
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "docker-compose.yml"
+      - "docker-compose.production.yml"
+      - "pyrightconfig.json"
+      - "package.json"
+      - "package-lock.json"
+      - "prometheus/**"
+      - "vault/**"
+      - ".github/workflows/deploy.yml"
 
 permissions:
   actions: write
