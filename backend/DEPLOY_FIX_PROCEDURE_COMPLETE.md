@@ -309,46 +309,88 @@ git push
 
 ---
 
-## 🚀 ACTIONS IMMÉDIATES (À FAIRE MAINTENANT)
+## 🚀 ACTIONS IMMÉDIATES (CI/CD Automatisé)
 
-### Étape 1 : Rebuild l'image (5 min)
+### ⏳ MAINTENANT : Attendre le workflow GitHub Actions (10-15 min)
 
-```powershell
-# Sur Windows PowerShell
+**❌ NE RIEN FAIRE MANUELLEMENT !** GitHub Actions fait tout automatiquement.
+
+```
+Étape 1 : Vérifier le workflow
+Aller sur : https://github.com/djasiqi/atmr/actions
+
+Étape 2 : Trouver le Run #251
+Workflow : "Build & Deploy"
+Commit : c74e247e (feat: Activate GitHub Actions workflow)
+
+Étape 3 : Vérifier l'état
+Job "Build & Push" : ⏳ EN COURS (5-10 min)
+  - Build Dockerfile.production
+  - Scan Trivy (sécurité)
+  - Push vers Docker Hub
+
+Job "Deploy" : ❌ ÉCHOUÉ (premier essai avec ancienne image)
+  - Normal ! L'image n'était pas encore prête
+
+Temps restant estimé : 10-15 min
+```
+
+---
+
+### 🔄 APRÈS LE BUILD : Re-déclencher le déploiement (3 options)
+
+**Attendez que le Job "Build & Push" soit ✅ VERT avant de continuer !**
+
+#### **Option A : Via GitHub Actions UI** (⭐ RECOMMANDÉ - Le plus simple)
+
+```
+1. Aller sur : https://github.com/djasiqi/atmr/actions
+2. Cliquer sur "Build & Deploy" dans la liste des workflows
+3. Cliquer sur "Run workflow" (bouton vert à droite)
+4. Laisser tous les champs par défaut
+5. Cliquer sur "Run workflow" (confirmer)
+6. Attendre 5-10 min (nouveau déploiement avec la nouvelle image)
+7. Vérifier que tout est ✅ VERT
+```
+
+**⏳ Temps total** : 5-10 minutes
+
+---
+
+#### **Option B : Via Git Push** (Déclenche automatiquement)
+
+```bash
+# Sur votre PC Windows
 cd C:\Users\jasiq\atmr
 
-# Rebuild l'image backend
-docker build -t docker.io/djasiqi/atmr-backend:latest ./backend
+# Commit vide pour déclencher le workflow
+git commit --allow-empty -m "chore: Trigger re-deployment with new Docker image"
+git push origin main
+
+# Le workflow se lance automatiquement
+# Aller sur GitHub → Actions pour suivre
 ```
 
-**⏳ Temps de build estimé** : 5-10 minutes
+**⏳ Temps total** : 15-20 minutes (build + deploy)
 
-### Étape 2 : Push vers Docker Hub (2 min)
+---
 
-```powershell
-# Login à Docker Hub
-docker login
-# Username: djasiqi
-# Password: [votre token Docker Hub]
-
-# Push l'image
-docker push docker.io/djasiqi/atmr-backend:latest
-```
-
-**⏳ Temps de push estimé** : 2-5 minutes (selon bande passante)
-
-### Étape 3 : Redéployer sur le serveur (3 min)
+#### **Option C : Via SSH Manuel** (Si urgent)
 
 ```bash
 # SSH au serveur
 ssh deploy@138.201.155.201
 
-cd /home/deploy/atmr
+cd /srv/atmr
 
-# Pull la nouvelle image
+# Vérifier que la NOUVELLE image existe sur Docker Hub
+docker manifest inspect djasiqi/atmr-backend:latest
+# Vérifier la date : doit être 2026-01-08 (aujourd'hui)
+
+# Pull la NOUVELLE image
 docker-compose -f docker-compose.production.yml pull backend celery-worker celery-beat flower
 
-# Redémarrer les services
+# Redémarrer avec la nouvelle image
 docker-compose -f docker-compose.production.yml up -d --force-recreate
 
 # Exécuter les migrations
@@ -356,84 +398,102 @@ docker-compose -f docker-compose.production.yml exec backend flask db upgrade
 
 # Vérifier les logs
 docker-compose -f docker-compose.production.yml logs -f backend
+
+# ✅ Attendre le message : "✅ Backend démarré"
+# ✅ SANS erreur "ModuleNotFoundError: flask_limiter.storage"
 ```
 
-**✅ Attendre le message** : `✅ Backend démarré`
+**⏳ Temps total** : 5 minutes
 
-### Étape 4 : Vérifier le service (1 min)
+---
+
+### ✅ VÉRIFICATION FINALE : Tester le service (2 min)
 
 ```bash
-# Tester l'API
+# Tester l'API (depuis votre PC ou le serveur)
 curl -I https://www.lirie.ch/health
-# Attendre: HTTP/2 200
+# ✅ Attendu : HTTP/2 200
 
-# Tester l'API alternative
 curl -I https://api.lirie.ch/health
-# Attendre: HTTP/2 200
+# ✅ Attendu : HTTP/2 200
+
+# Vérifier les logs backend
+ssh deploy@138.201.155.201
+cd /srv/atmr
+docker-compose -f docker-compose.production.yml logs --tail=50 backend
+
+# ✅ Vérifier qu'il n'y a PLUS d'erreur flask_limiter.storage
 ```
 
 ---
 
-## ⚠️ AUTRES CORRECTIONS NÉCESSAIRES
+## ✅ CORRECTIONS DÉJÀ APPLIQUÉES
 
-Après avoir corrigé le problème Flask-Limiter, il faudra aussi corriger :
+Ces corrections ont été faites lors de l'activation du CI/CD :
 
-### 1. PostgreSQL "role root" (non-bloquant)
+### 1. ✅ PostgreSQL "role root" - CORRIGÉ
 
-**Fichier** : `docker-compose.production.yml`
-
-```diff
-postgres:
-  healthcheck:
--   test: ["CMD-SHELL", "pg_isready"]
-+   test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-atmr_user}"]
-    interval: 5s
-    timeout: 3s
-    retries: 20
-    start_period: 90s
-```
-
-**Fichier** : `docker-compose.monitoring.yml`
+**Fichier** : `docker-compose.production.yml` (commit `a987f774`)
 
 ```yaml
-# Vérifier que postgres-exporter utilise ${POSTGRES_USER}
+postgres:
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-atmr_user}"]
+    # ✅ Corrigé : utilise maintenant ${POSTGRES_USER}
+```
+
+**Fichier** : `docker-compose.monitoring.yml` (déjà correct)
+
+```yaml
 postgres-exporter:
   environment:
     - DATA_SOURCE_NAME=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+    # ✅ Correct : utilise ${POSTGRES_USER}
 ```
 
-### 2. Nettoyer les conteneurs orphelins
+### 2. ⏳ Conteneurs orphelins - Se nettoiera automatiquement
 
-```bash
-# Sur le serveur
-docker-compose down --remove-orphans
-docker-compose -f docker-compose.production.yml up -d
-```
+Les warnings "orphan containers" sont normaux pendant le déploiement. Ils se résoudront automatiquement au prochain redémarrage.
 
 ---
 
-## 📋 CHECKLIST DE DÉPLOIEMENT
+## 📋 CHECKLIST DE DÉPLOIEMENT (Automatisé via GitHub Actions)
 
-### Avant le déploiement
+### ✅ Avant le déploiement (déjà fait !)
 
 - [x] Flask-Limiter[redis] présent dans requirements.base.txt
-- [ ] Image Docker rebuildée localement
-- [ ] Image pushée vers Docker Hub
-- [ ] Backup de la base de données effectué (optionnel)
+- [x] Workflow GitHub Actions activé
+- [x] Push vers main effectué (commit c74e247e)
+- [x] Secrets GitHub configurés (47/47)
 
-### Pendant le déploiement
+### ⏳ Pendant le build (GitHub Actions - AUTOMATIQUE)
 
-- [ ] Pull de la nouvelle image réussi
-- [ ] Conteneurs redémarrés avec `--force-recreate`
-- [ ] Migrations Alembic exécutées
-- [ ] Backend démarre sans erreurs
+- [x] Workflow déclenché (Run #251)
+- [ ] ⏳ Job "Build & Push" en cours (10-15 min)
+  - [ ] Build Dockerfile.production
+  - [ ] Scan Trivy (sécurité)
+  - [ ] Push vers Docker Hub
+- [ ] ⏳ Nouvelle image disponible sur Docker Hub
 
-### Après le déploiement
+### 🔄 Re-déploiement (À FAIRE après le build)
 
-- [ ] API accessible (`curl https://www.lirie.ch/health`)
-- [ ] Logs backend sans erreurs `flask_limiter.storage`
-- [ ] Logs PostgreSQL sans `FATAL: role "root"`
-- [ ] Socket.IO fonctionne (tester depuis l'app mobile/frontend)
+**Option 1 : Automatique** (laisser le workflow terminer)
+
+- [ ] Attendre que le workflow termine complètement
+- [ ] Vérifier que tout est vert ✅
+
+**Option 2 : Manuel** (si Option 1 échoue)
+
+- [ ] Vérifier image sur Docker Hub mise à jour
+- [ ] Re-déclencher le déploiement (GitHub Actions → Run workflow)
+- [ ] OU SSH au serveur + pull + restart
+
+### ✅ Après le déploiement (vérifications finales)
+
+- [ ] API accessible (`curl https://www.lirie.ch/health` → HTTP/2 200)
+- [ ] Logs backend SANS erreur `flask_limiter.storage` ✅
+- [ ] Logs PostgreSQL SANS `FATAL: role "root"` ✅
+- [ ] Socket.IO fonctionne (tester app mobile/frontend)
 
 ---
 
@@ -487,6 +547,57 @@ git push
 
 ---
 
+---
+
+## ⚠️ MISE À JOUR IMPORTANTE : 2026-01-08 21:46 UTC
+
+### 🔄 Workflow GitHub Actions EN COURS (Run #251)
+
+**Problème identifié** :
+
+Le job "Deploy" s'est lancé **AVANT** que le job "Build & Push" termine !
+
+**Résultat** :
+
+- ❌ Serveur a pull l'ANCIENNE image Docker Hub (obsolète)
+- ❌ Backend crashe avec **MÊME ERREUR** : `ModuleNotFoundError: flask_limiter.storage`
+- ⏳ Job "Build & Push" encore en cours (construction de la NOUVELLE image avec Flask-Limiter[redis])
+
+**Solution IMMÉDIATE** :
+
+```bash
+# ÉTAPE 1 : Attendre que le workflow termine (10-15 min)
+# Aller sur : https://github.com/djasiqi/atmr/actions/runs/251
+# Vérifier que "Build & Push" est ✅ VERT (terminé avec succès)
+
+# ÉTAPE 2 : Vérifier que l'image est mise à jour sur Docker Hub
+docker manifest inspect djasiqi/atmr-backend:latest
+# Vérifier la date de création (doit être aujourd'hui)
+
+# ÉTAPE 3 : RE-DÉCLENCHER le déploiement
+# Option A : Via GitHub Actions UI
+#   1. GitHub → Actions → Build & Deploy
+#   2. Run workflow → skip_deploy: false → Run workflow
+
+# Option B : Via SSH manuel sur le serveur
+ssh deploy@138.201.155.201
+cd /srv/atmr
+docker-compose -f docker-compose.production.yml pull backend celery-worker celery-beat flower
+docker-compose -f docker-compose.production.yml up -d --force-recreate
+docker-compose -f docker-compose.production.yml exec backend flask db upgrade
+```
+
+**Timeline estimée** :
+
+```
+21:46 - ❌ Premier déploiement échoué (image obsolète)
+21:55 - ✅ Build & Push terminé (nouvelle image disponible)
+22:00 - ✅ Re-déploiement réussi (backend démarre correctement)
+```
+
+---
+
 **Créé le** : 2026-01-08  
+**Mis à jour** : 2026-01-08 21:46 UTC  
 **Auteur** : Analyse automatique des logs de déploiement  
-**Statut** : ✅ Prêt pour application
+**Statut** : ⏳ En attente de la fin du build (10-15 min)

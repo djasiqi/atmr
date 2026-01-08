@@ -310,9 +310,7 @@ class CreateBookingUseCase:
                 "`fallback_coords_fn`. "
                 "Utiliser BookingService (ou une factory) pour le wiring "
             )
-            raise RuntimeError(msg
-                + "production."
-            )
+            raise RuntimeError(msg + "production.")
 
         lat, lon = fallback_fn(company)
         geocoded = False

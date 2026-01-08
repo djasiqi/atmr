@@ -969,8 +969,7 @@ def create_app(config_name: str | None = None):
             # Path traversal détecté : le chemin résolu sort du répertoire
             # autorisé
             msg = (
-                "Tentative de path traversal bloquée: filename=%s, "
-                "resolved=%s, base=%s"
+                "Tentative de path traversal bloquée: filename=%s, resolved=%s, base=%s"
             )
             app.logger.warning(
                 msg,
