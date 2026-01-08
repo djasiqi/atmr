@@ -10,7 +10,8 @@ from models import Client, ClientType, User, UserRole
 
 @dataclass(frozen=True, slots=True)
 class SqlAlchemyClientWriter:
-    """Adaptateur Infrastructure: création d'un client (User + Client) via SQLAlchemy."""
+    """Adaptateur Infrastructure: création d'un client (User + Client)
+    via SQLAlchemy."""
 
     def create_client_for_company(
         self,

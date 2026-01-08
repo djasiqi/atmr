@@ -4,7 +4,8 @@ from typing import Any
 
 
 def get_bookings_for_day(*args: Any, **kwargs: Any) -> Any:
-    """Adapter: récupère les bookings d'une journée (proxy data.get_bookings_for_day)."""
+    """Adapter: récupère les bookings d'une journée
+    (proxy data.get_bookings_for_day)."""
     from services.unified_dispatch.data import get_bookings_for_day as _fn
 
     return _fn(*args, **kwargs)

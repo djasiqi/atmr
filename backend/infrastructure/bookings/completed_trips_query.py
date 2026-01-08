@@ -9,7 +9,8 @@ from repositories.booking_repository import BookingRepository
 def get_completed_trips_for_driver(driver_id: int):
     """Adapter Infrastructure: requête 'completed trips' pour un driver.
 
-    Encapsule la construction SQLAlchemy de la clause de statut (COMPLETED / RETURN_COMPLETED).
+    Encapsule la construction SQLAlchemy de la clause de statut
+    (COMPLETED / RETURN_COMPLETED).
     """
 
     status_clause = or_(

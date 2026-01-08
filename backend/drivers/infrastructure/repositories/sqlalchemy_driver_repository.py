@@ -38,7 +38,8 @@ class SqlAlchemyDriverRepository:
             location = DriverLocation(
                 latitude=float(getattr(sa_driver, "latitude", 0.0)),
                 longitude=float(getattr(sa_driver, "longitude", 0.0)),
-                accuracy=0.0,  # Par défaut, peut être enrichi depuis DriverStatus si disponible
+                # Par défaut, peut être enrichi depuis DriverStatus si dispo
+                accuracy=0.0,
                 timestamp=sa_driver.last_position_update
                 or __import__("datetime").datetime.now(),
                 speed=None,  # Peut être enrichi depuis DriverStatus

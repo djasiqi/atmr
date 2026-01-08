@@ -9,7 +9,8 @@ from models import Driver, User, UserRole
 
 @dataclass(frozen=True, slots=True)
 class SqlAlchemyDriverWriter:
-    """Adaptateur Infrastructure: création d'un chauffeur (User + Driver) via SQLAlchemy."""
+    """Adaptateur Infrastructure: création d'un chauffeur (User + Driver)
+    via SQLAlchemy."""
 
     def create_driver_for_company(
         self,

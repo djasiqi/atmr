@@ -27,7 +27,8 @@ def invalidate_geocoding_cache_adapter(
 
         invalidate_geocoding_cache(address, country=country, provider=provider)
         logger.debug(
-            "[Cache] ✅ Invalidated geocoding cache for address: %s (country=%s, provider=%s)",
+            "[Cache] ✅ Invalidated geocoding cache for address: %s "
+            "(country=%s, provider=%s)",
             address[:50],
             country,
             provider,
