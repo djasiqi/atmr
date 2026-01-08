@@ -10,7 +10,17 @@ from pathlib import Path
 def get_files_with_few_e501(max_errors=2):
     """Récupère les fichiers avec peu d'E501."""
     result = subprocess.run(
-        ["python", "-m", "ruff", "check", ".", "--select", "E501", "--output-format", "json"],
+        [
+            "python",
+            "-m",
+            "ruff",
+            "check",
+            ".",
+            "--select",
+            "E501",
+            "--output-format",
+            "json",
+        ],
         capture_output=True,
         text=True,
         cwd=Path(__file__).parent,
@@ -42,7 +52,17 @@ def fix_file_e501(filepath):
 
     # Lire les E501 de ce fichier
     result = subprocess.run(
-        ["python", "-m", "ruff", "check", filepath, "--select", "E501", "--output-format", "json"],
+        [
+            "python",
+            "-m",
+            "ruff",
+            "check",
+            filepath,
+            "--select",
+            "E501",
+            "--output-format",
+            "json",
+        ],
         capture_output=True,
         text=True,
         check=False,
@@ -61,7 +81,7 @@ def fix_file_e501(filepath):
 
         line = lines[line_num]
         stripped = line.lstrip()
-        indent = line[:len(line) - len(stripped)]
+        indent = line[: len(line) - len(stripped)]
 
         # Cas 1 : Commentaire simple
         if stripped.startswith("#"):
@@ -79,7 +99,7 @@ def fix_file_e501(filepath):
                     f"{indent}# {line1}\n",
                     f"{indent}# {line2}\n",
                 ]
-                lines[line_num:line_num+1] = new_lines
+                lines[line_num : line_num + 1] = new_lines
                 modified = True
 
     if modified:
