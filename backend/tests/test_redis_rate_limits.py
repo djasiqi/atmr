@@ -283,7 +283,8 @@ class TestRedisStorageWithTTL:
 
     @patch("backend.ext.redis.Redis")
     def test_ttl_not_set_on_subsequent_incr(self, mock_redis_class):
-        """Test que le TTL n'est PAS prolongé sur les incrémentations suivantes (mode fixed)."""
+        """Test que le TTL n'est PAS prolongé sur les incrémentations
+        suivantes (mode fixed)."""
         # Arrange
         from backend.ext import RedisStorageWithTTL
 

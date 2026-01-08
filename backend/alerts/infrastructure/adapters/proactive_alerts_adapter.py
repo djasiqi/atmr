@@ -1,6 +1,7 @@
 """Adapter pour ProactiveAlertsService (compatibilité avec routes).
 
-Encapsule ProactiveAlertsService pour permettre une migration progressive vers use-cases.
+Encapsule ProactiveAlertsService pour permettre une migration progressive
+vers use-cases.
 """
 
 from __future__ import annotations
