@@ -186,7 +186,8 @@ class TestBuild:
         "services.unified_dispatch.orchestration.problem_builder.data.build_problem_data"
     )
     def test_build_handles_validation_error(self, mock_build_data, db):
-        """Test : Gestion des erreurs de validation (ValueError, TypeError, AttributeError)."""
+        """Test : Gestion des erreurs de validation (ValueError, TypeError,
+        AttributeError)."""
         company = CompanyFactory()
         db.session.add(company)
         db.session.commit()
@@ -437,4 +438,5 @@ class TestValidateGeographicCoordinates:
 
         # Tous les bookings devraient être dans la liste
         assert len(result["bookings_without_coords"]) == 25
-        # Mais le logging devrait être limité à 20 (vérifié via le code, pas via le résultat)
+        # Mais le logging devrait être limité à 20 (vérifié via le code, pas
+        # via le résultat)

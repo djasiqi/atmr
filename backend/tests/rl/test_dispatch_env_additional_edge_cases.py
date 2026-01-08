@@ -294,7 +294,8 @@ class TestDispatchEnvAdditionalEdgeCases:
         env = DispatchEnv(num_drivers=3, max_bookings=5)
         env.reset()
 
-        # ✅ FIX: Le code accède directement à driver["lat"], booking["pickup_lat"], etc.
+        # ✅ FIX: Le code accède directement à driver["lat"],
+        # booking["pickup_lat"], etc.
         # sans try/except dans _assign_booking, donc on doit utiliser try/except
         # dans le test pour capturer l'exception
         driver = {"invalid": "data"}
@@ -456,7 +457,8 @@ class TestDispatchEnvAdditionalEdgeCases:
 
         env._end_of_day_return(driver)
 
-        # ✅ FIX: Le code peut retourner au bureau (70% probabilité) ou à la maison (30%)
+        # ✅ FIX: Le code peut retourner au bureau (70% probabilité) ou à la
+        # maison (30%)
         # donc on vérifie que la position a changé (soit bureau, soit maison)
         # Le bureau est défini dans l'environnement (probablement autour de Lausanne)
         assert driver["lat"] is not None

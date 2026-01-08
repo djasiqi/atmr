@@ -72,9 +72,11 @@ class TestAuthIntegration:
                 assert user is not None
                 assert user.email == payload["email"]
 
-                # Vérifier qu'une entreprise a été créée (peut être None selon l'implémentation)
+                # Vérifier qu'une entreprise a été créée (peut être None selon
+                # l'implémentation)
                 _ = Company.query.filter_by(user_id=user.id).first()
-                # L'entreprise peut être créée automatiquement ou non selon l'implémentation
+                # L'entreprise peut être créée automatiquement ou non selon
+                # l'implémentation
                 # On vérifie juste que l'utilisateur existe
 
     def test_get_current_user_returns_user(self, authenticated_client, sample_user):

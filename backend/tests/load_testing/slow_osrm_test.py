@@ -167,7 +167,8 @@ class SlowOSRMDispatchTest(HttpUser):
             dispatch_duration = data.get("duration_seconds", 0)
 
             logger.info(
-                "[CACHE] ✅ Dispatch avec cache | Duration: %.2fs | Cache hit rate: %.1f%%",
+                "[CACHE] ✅ Dispatch avec cache | Duration: %.2fs | "
+                "Cache hit rate: %.1f%%",
                 dispatch_duration,
                 cache_hit_rate * 100,
             )
@@ -272,8 +273,13 @@ class SlowOSRMDispatchTest(HttpUser):
                 cache_hit_rate = osrm_cache_hits / (osrm_calls + osrm_cache_hits)
 
             # Log détaillé
+            msg = (
+                "[DISPATCH] ✅ SUCCESS | Duration: %.2fs | API: %.2fs | "
+                "Assignments: %s/%s | Distance mode: %s | OSRM calls: %s | "
+                "Cache hits: %s (%.1f%%)"
+            )
             logger.info(
-                "[DISPATCH] ✅ SUCCESS | Duration: %.2fs | API: %.2fs | Assignments: %s/%s | Distance mode: %s | OSRM calls: %s | Cache hits: %s (%.1f%%)",
+                msg,
                 dispatch_duration,
                 duration,
                 num_assignments,
