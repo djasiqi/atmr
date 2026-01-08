@@ -41,7 +41,7 @@ class DispatchLoadTest(HttpUser):
     company_id: int = 1
     test_date: str = ""
 
-    def on_start(self) -> None:
+    def on_start(self) -> None:  # pyright: ignore[reportImplicitOverride]
         """Setup initial : Login et préparation données."""
         logger.info("[SETUP] Initialisation utilisateur Locust...")
 
@@ -53,7 +53,9 @@ class DispatchLoadTest(HttpUser):
         self.test_date = tomorrow.strftime("%Y-%m-%d")
 
         logger.info(
-            "[SETUP] ✅ Prêt pour dispatch : date=%s, company=%s", self.test_date, self.company_id
+            "[SETUP] ✅ Prêt pour dispatch : date=%s, company=%s",
+            self.test_date,
+            self.company_id,
         )
 
     def _login(self) -> None:
@@ -72,7 +74,7 @@ class DispatchLoadTest(HttpUser):
             self.token = data.get("access_token")
             logger.info("[AUTH] ✅ Login réussi")
         else:
-            logger.error(f"[AUTH] ❌ Login échoué : {response.status_code}")
+            logger.error("[AUTH] ❌ Login échoué : %s", response.status_code)
             raise Exception("Login failed")
 
     def _get_headers(self) -> dict[str, str]:
@@ -132,7 +134,7 @@ class DispatchLoadTest(HttpUser):
 
         if response.status_code == 200:
             data = response.json()
-            logger.debug(f"[HEURISTIC] Assignations: {data.get('num_assignments', 0)}")
+            logger.debug("[HEURISTIC] Assignations: %s", data.get("num_assignments", 0))
 
     # @task(2)  # ⚠️ C2: Endpoint désactivé temporairement (403 FORBIDDEN - permissions)
     def check_dispatch_status(self) -> None:
@@ -159,7 +161,7 @@ class DispatchLoadTest(HttpUser):
 
         if response.status_code == 200:
             data = response.json()
-            logger.debug("[METRICS] Last dispatch: %ss", data.get('last_run_duration'))
+            logger.debug("[METRICS] Last dispatch: %ss", data.get("last_run_duration"))
 
     def _process_success_response(self, response: Any, duration: float) -> None:
         """Traiter une réponse réussie et logger les métriques."""
@@ -175,24 +177,26 @@ class DispatchLoadTest(HttpUser):
 
             # Log métriques
             logger.info(
-                f"[DISPATCH] ✅ SUCCESS | "
-                f"Duration: {dispatch_duration:.2f}s | "
-                f"API: {duration:.2f}s | "
-                f"Assignments: {num_assignments}/{num_bookings} | "
-                f"Drivers: {num_drivers} | "
-                f"Unassigned: {unassigned}"
+                "[DISPATCH] ✅ SUCCESS | Duration: %.2fs | API: %.2fs | Assignments: %s/%s | Drivers: %s | Unassigned: %s",
+                dispatch_duration,
+                duration,
+                num_assignments,
+                num_bookings,
+                num_drivers,
+                unassigned,
             )
 
             # Validation SLO
             if dispatch_duration > 60:
                 logger.warning(
-                    f"[SLO] ⚠️ Dispatch trop lent : {dispatch_duration:.2f}s > 60s"
+                    "[SLO] ⚠️ Dispatch trop lent : %.2fs > 60s", dispatch_duration
                 )
 
             if num_assignments < (num_bookings * 0.8):
                 logger.warning(
-                    f"[SLO] ⚠️ Taux d'assignation faible : "
-                    f"{num_assignments}/{num_bookings} < 80%"
+                    "[SLO] ⚠️ Taux d'assignation faible : %s/%s < 80%%",
+                    num_assignments,
+                    num_bookings,
                 )
 
             # Enregistrer métriques personnalisées
@@ -205,15 +209,15 @@ class DispatchLoadTest(HttpUser):
             )
 
         except json.JSONDecodeError as e:
-            logger.error(f"[DISPATCH] ❌ Erreur parsing JSON : {e}")
+            logger.error("[DISPATCH] ❌ Erreur parsing JSON : %s", e)
 
     def _process_error_response(self, response: Any, duration: float) -> None:
         """Traiter une réponse d'erreur."""
         logger.error(
-            f"[DISPATCH] ❌ FAILED | "
-            f"Status: {response.status_code} | "
-            f"Duration: {duration:.2f}s | "
-            f"Response: {response.text[:200]}"
+            "[DISPATCH] ❌ FAILED | Status: %s | Duration: %.2fs | Response: %s",
+            response.status_code,
+            duration,
+            response.text[:200],
         )
 
 
@@ -231,7 +235,7 @@ def on_test_start(environment: Any, **kwargs: Any) -> None:
     # Si mode distributed (master/workers)
     if isinstance(environment.runner, MasterRunner):
         logger.info(
-            f"[LOCUST] Mode Master/Worker : {environment.runner.worker_count} workers"
+            "[LOCUST] Mode Master/Worker : %s workers", environment.runner.worker_count
         )
 
 
@@ -244,10 +248,10 @@ def on_test_stop(environment: Any, **kwargs: Any) -> None:
 
     # Afficher statistiques
     stats = environment.stats
-    logger.info(f"[STATS] Total Requests: {stats.total.num_requests}")
-    logger.info(f"[STATS] Total Failures: {stats.total.num_failures}")
-    logger.info(f"[STATS] Avg Response Time: {stats.total.avg_response_time:.2f}ms")
-    logger.info(f"[STATS] RPS: {stats.total.current_rps:.2f}")
+    logger.info("[STATS] Total Requests: %s", stats.total.num_requests)
+    logger.info("[STATS] Total Failures: %s", stats.total.num_failures)
+    logger.info("[STATS] Avg Response Time: %.2fms", stats.total.avg_response_time)
+    logger.info("[STATS] RPS: %.2f", stats.total.current_rps)
 
 
 @events.request.add_listener
@@ -263,7 +267,7 @@ def on_request(
     if exception:
         logger.error("[REQUEST] ❌ %s | Exception: %s", name, exception)
     elif response_time > 5000:  # > 5s
-        logger.warning(f"[REQUEST] ⚠️ {name} | Lent: {response_time:.0f}ms")
+        logger.warning("[REQUEST] ⚠️ %s | Lent: %.0fms", name, response_time)
 
 
 # ========== Configuration Recommandée ==========
