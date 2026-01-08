@@ -196,9 +196,12 @@ class GeofencingService:
             result = self.check_geofence((driver_lat, driver_lon), pickup_geofence)
 
             if result.inside:
-                logger.info(
+                msg = (
                     "[GeofencingService] Driver %d arrived at pickup "
-                    "(assignment %d, distance=%.1fm)",
+                    "(assignment %d, distance=%.1fm)"
+                )
+                logger.info(
+                    msg,
                     driver_id,
                     assignment_id,
                     -result.distance_to_edge_m,
@@ -263,9 +266,12 @@ class GeofencingService:
             result = self.check_geofence((driver_lat, driver_lon), dropoff_geofence)
 
             if result.inside:
-                logger.info(
+                msg = (
                     "[GeofencingService] Driver %d arrived at dropoff "
-                    "(assignment %d, distance=%.1fm)",
+                    "(assignment %d, distance=%.1fm)"
+                )
+                logger.info(
+                    msg,
                     driver_id,
                     assignment_id,
                     -result.distance_to_edge_m,

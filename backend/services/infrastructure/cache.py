@@ -153,9 +153,12 @@ def invalidate_osrm_matrix_cache(
             for profile in ["driving", "walking", "cycling"]:
                 precomputed_key = f"{CACHE_PREFIX_OSRM_PRECOMPUTED}{zone_id}:{profile}"
                 redis_client.delete(precomputed_key)
-                logger.debug(
+                msg = (
                     "[Cache] Invalidated precomputed OSRM matrix for zone: %s "
-                    "(profile=%s)",
+                    "(profile=%s)"
+                )
+                logger.debug(
+                    msg,
                     zone_id,
                     profile,
                 )
@@ -227,9 +230,12 @@ def invalidate_dispatch_status_cache(
             keys = redis_client.keys(pattern)
             if keys:
                 redis_client.delete(*keys)
-                logger.debug(
+                msg = (
                     "[Cache] Invalidated %d dispatch status cache entries "
-                    "for company=%s",
+                    "for company=%s"
+                )
+                logger.debug(
+                    msg,
                     len(keys),
                     company_id,
                 )

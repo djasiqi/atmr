@@ -166,9 +166,12 @@ class SlowOSRMDispatchTest(HttpUser):
             cache_hit_rate = data.get("osrm_cache_hit_rate", 0)
             dispatch_duration = data.get("duration_seconds", 0)
 
-            logger.info(
+            msg = (
                 "[CACHE] ✅ Dispatch avec cache | Duration: %.2fs | "
-                "Cache hit rate: %.1f%%",
+                "Cache hit rate: %.1f%%"
+            )
+            logger.info(
+                msg,
                 dispatch_duration,
                 cache_hit_rate * 100,
             )
