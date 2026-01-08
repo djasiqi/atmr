@@ -6,7 +6,7 @@ import os
 from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, cast
 
-from flask import request  # pyright: ignore[reportMissingImports]
+from flask import request
 from flask_jwt_extended import jwt_required  # pyright: ignore[reportMissingImports]
 from flask_restx import Resource  # pyright: ignore[reportMissingImports]
 
@@ -44,7 +44,9 @@ class CompanyDispatchRun(Resource):
 
     @jwt_required()
     @role_required(UserRole.company)
-    @limiter.limit("10000 per hour")  # ⚠️ C2: Augmenté temporairement pour load testing (normalement 30/h)
+    @limiter.limit(
+        "10000 per hour"
+    )  # ⚠️ C2: Augmenté temporairement pour load testing (normalement 30/h)
     @dispatch_ns.expect(run_model, validate=False)
     @dispatch_ns.doc(
         description="""
@@ -396,7 +398,9 @@ class DispatchTrigger(Resource):
 
     @jwt_required()
     @role_required(UserRole.company)
-    @limiter.limit("10000 per hour")  # ⚠️ C2: Augmenté temporairement pour load testing (normalement 50/h)
+    @limiter.limit(
+        "10000 per hour"
+    )  # ⚠️ C2: Augmenté temporairement pour load testing (normalement 50/h)
     @dispatch_ns.doc(
         description="""
         ⚠️ **DÉPRÉCIÉ** - Cet endpoint sera supprimé dans une future version.

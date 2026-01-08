@@ -1258,6 +1258,7 @@ class OptunaTrain(Resource):
             import os
 
             import requests
+
             # URL du worker RL (par défaut : atmr-rl-worker:5000 dans le réseau Docker)
             rl_worker_url = os.getenv(
                 "RL_WORKER_URL", "http://atmr-rl-worker:5000"
@@ -1424,7 +1425,9 @@ class WebSocketMetricsResource(Resource):
 # ========================
 
 # Constantes pour rate limiting
-MIN_KEY_PARTS_FOR_ENDPOINT = 2  # Nombre minimum de parties dans une clé pour extraire l'endpoint
+MIN_KEY_PARTS_FOR_ENDPOINT = (
+    2  # Nombre minimum de parties dans une clé pour extraire l'endpoint
+)
 
 
 @admin_ns.route("/rate-limit/flush")

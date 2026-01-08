@@ -41,6 +41,11 @@ export const sendDriverLocation = async (payload: DriverLocationPayload) => {  t
     }
 
     // Assurer que les coordonnées sont des nombres
+    // ✅ P1: Normaliser timestamp en string ISO
+    const ts = typeof payload.timestamp === 'number'
+      ? new Date(payload.timestamp).toISOString()
+      : payload.timestamp || new Date().toISOString();
+    
     const cleanPayload = {
       ...payload,
       latitude: Number(payload.latitude),
@@ -48,7 +53,7 @@ export const sendDriverLocation = async (payload: DriverLocationPayload) => {  t
       speed: Number(payload.speed || 0),
       heading: Number(payload.heading || 0),
       accuracy: Number(payload.accuracy || 10),
-      ts: payload.timestamp || new Date().toISOString()
+      ts,  // ✅ Toujours string ISO pour le backend
     };
 
     console.log("📍 Clean payload:", cleanPayload);

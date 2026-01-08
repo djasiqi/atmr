@@ -16,7 +16,7 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
-from flask import request  # pyright: ignore[reportMissingImports]
+from flask import request
 
 logger = logging.getLogger(__name__)
 
@@ -348,7 +348,7 @@ def setup_csrf_protection(app: Any) -> None:
 
         # ✅ Tests: désactiver CSRF si l'app est en mode TESTING ou si CSRF est désactivé
         try:
-            from flask import current_app  # pyright: ignore[reportMissingImports]
+            from flask import current_app
 
             if current_app and (
                 bool(current_app.config.get("TESTING", False))

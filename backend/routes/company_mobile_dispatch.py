@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, cast
 
-from flask import current_app, request  # pyright: ignore[reportMissingImports]
+from flask import current_app, request
 from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
     get_jwt_identity,
     jwt_required,
@@ -49,7 +49,6 @@ from infrastructure.dispatch.realtime_optimizer_adapter import (
 from infrastructure.dispatch.validation_adapter import (
     check_existing_assignment_conflict,
 )
-from shared.error_handlers import APIErrorHandler
 from shared.geo_utils import haversine_distance
 from shared.time_utils import day_local_bounds, now_local, parse_local_naive
 
@@ -2637,17 +2636,31 @@ class MobileRealtimeDashboard(Resource):
             opportunities = []
             try:
                 optimizer = get_optimizer_for_company(company_id)
-                if optimizer and optimizer.get_status()["running"]:
-                    opportunities = [
-                        o.to_dict() for o in optimizer.get_current_opportunities()
-                    ]
+                if optimizer:
+                    # ✅ Fix: Vérifier que get_status() retourne un dict avec la clé "running"
+                    optimizer_status = optimizer.get_status()
+                    if isinstance(optimizer_status, dict) and optimizer_status.get(
+                        "running"
+                    ):
+                        opportunities = [
+                            o.to_dict() for o in optimizer.get_current_opportunities()
+                        ]
+                    else:
+                        # Optimizer existe mais n'est pas en mode running
+                        opportunities = [
+                            o.to_dict()
+                            for o in check_opportunities_manual(company_id, date_str)
+                        ]
                 else:
+                    # Pas d'optimizer actif, vérification manuelle
                     opportunities = [
                         o.to_dict()
                         for o in check_opportunities_manual(company_id, date_str)
                     ]
             except Exception as e:
                 logger.warning("[Dashboard] Failed to get opportunities: %s", e)
+                # ✅ Fix: Log complet de l'exception pour debugging
+                logger.exception("[Dashboard] Detailed error getting opportunities")
 
             # 4. Charge par chauffeur
             driver_load = {}
@@ -2713,10 +2726,37 @@ class MobileRealtimeDashboard(Resource):
 
         except Exception as e:
             logger.exception(
-                "[Dashboard] Failed to build realtime dashboard for company %s",
+                "[Dashboard] Failed to build realtime dashboard for company %s: %s",
                 company_id,
+                str(e),
             )
-            return APIErrorHandler.handle_exception(e, logger)
+            # ✅ Fix: Retourner une réponse JSON valide avec message d'erreur détaillé
+            return {
+                "error": "Failed to load dashboard",
+                "details": str(e),
+                "date": date_str,
+                "timestamp": datetime.now(UTC).isoformat(),
+                # Retourner des données par défaut pour éviter crash frontend
+                "quality_metrics": {
+                    "quality_score": 0,
+                    "assignment_rate": 0,
+                    "on_time_rate": 0,
+                    "pooling_rate": 0,
+                    "fairness": 0,
+                    "avg_delay": 0,
+                },
+                "current_delays": [],
+                "opportunities": [],
+                "driver_load": [],
+                "stats": {
+                    "total_bookings": 0,
+                    "delayed_bookings": 0,
+                    "early_bookings": 0,
+                    "on_time_bookings": 0,
+                    "critical_opportunities": 0,
+                    "drivers_active": 0,
+                },
+            }, 500
 
 
 # =====================================================
