@@ -89,7 +89,7 @@ ModuleNotFoundError: No module named 'flask_limiter.storage'
 
 ---
 
-### 2. 🔴 **PostgreSQL : role "root" does not exist**
+### 2. ✅ **PostgreSQL : role "root" does not exist** (RÉSOLU)
 
 **Erreur** :
 
@@ -97,59 +97,42 @@ ModuleNotFoundError: No module named 'flask_limiter.storage'
 FATAL:  role "root" does not exist
 ```
 
-**Fréquence** : Se répète toutes les 5 secondes
-
-**Occurrences** :
-
-```
-2026-01-08 21:25:14.586 UTC [39] FATAL:  role "root" does not exist
-2026-01-08 21:25:19.667 UTC [46] FATAL:  role "root" does not exist
-2026-01-08 21:25:24.767 UTC [61] FATAL:  role "root" does not exist
-2026-01-08 21:25:29.871 UTC [68] FATAL:  role "root" does not exist
-2026-01-08 21:25:34.970 UTC [76] FATAL:  role "root" does not exist
-2026-01-08 21:25:40.065 UTC [83] FATAL:  role "root" does not exist
-2026-01-08 21:25:45.159 UTC [91] FATAL:  role "root" does not exist
-```
+**Fréquence** : Se répétait toutes les 5 secondes
 
 **Impact** :
 
 - ⚠️ Tentatives de connexion échouées
 - ⚠️ Logs pollués
-- ⚠️ Possible problème de health check
+- ⚠️ Problème de health check
 
-**Cause racine** :
+**Cause racine identifiée** :
 
-- Un service tente de se connecter à PostgreSQL avec l'utilisateur `root`
-- Probablement un health check ou monitoring mal configuré
+- Le healthcheck PostgreSQL utilisait l'utilisateur par défaut `root`
+- Le postgres-exporter était mal configuré
 
-**Localisation probable** :
+**Solution appliquée** :
 
-- `docker-compose.monitoring.yml` - postgres-exporter
-- `docker-compose.production.yml` - health checks PostgreSQL
-
-**Solution** :
-
+✅ **`docker-compose.production.yml`** (ligne 36) :
 ```yaml
-# Dans docker-compose.production.yml
 postgres:
   healthcheck:
     test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-atmr_user}"]
-    # ❌ NE PAS UTILISER: pg_isready -U root
-
-# Dans docker-compose.monitoring.yml
-postgres-exporter:
-  environment:
-    - DATA_SOURCE_NAME=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
-    # ❌ NE PAS UTILISER: root comme utilisateur
 ```
 
-**Actions requises** :
+✅ **`docker-compose.monitoring.yml`** (ligne 301) :
+```yaml
+postgres-exporter:
+  environment:
+    DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-atmr_user}:${POSTGRES_PASSWORD:-atmr_password}@postgres:5432/${POSTGRES_DB:-atmr_db}?sslmode=disable"
+```
 
-1. ❌ Vérifier `docker-compose.production.yml` - section `postgres.healthcheck`
-2. ❌ Vérifier `docker-compose.monitoring.yml` - `postgres-exporter.environment.DATA_SOURCE_NAME`
-3. ❌ S'assurer que toutes les connexions utilisent `${POSTGRES_USER}` (défini dans `.env.production`)
+**Actions complétées** :
 
-**Priorité** : 🟡 MOYENNE (Non bloquant mais à corriger)
+1. ✅ Corrigé `docker-compose.production.yml` - healthcheck utilise `${POSTGRES_USER:-atmr_user}`
+2. ✅ Corrigé `docker-compose.monitoring.yml` - postgres-exporter utilise `${POSTGRES_USER:-atmr_user}`
+3. ✅ Toutes les connexions PostgreSQL utilisent maintenant la variable `${POSTGRES_USER}`
+
+**Statut** : ✅ RÉSOLU (Les logs ne devraient plus afficher cette erreur après redéploiement)
 
 ---
 
