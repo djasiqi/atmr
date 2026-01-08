@@ -36,8 +36,10 @@ class GetCurrentCompanyUseCase:
         """Initialise le use case.
 
         Args:
-            company_repo: Repository pour les entreprises (créé par défaut si None)
-            get_current_user_fn: Fonction pour obtenir l'utilisateur courant (par défaut: get_current_user_via_use_case)
+            company_repo: Repository pour les entreprises
+                (créé par défaut si None)
+            get_current_user_fn: Fonction pour obtenir l'utilisateur courant
+                (par défaut: get_current_user_via_use_case)
         """
         self.company_repo = company_repo or CompanyRepository()
         self.get_current_user_fn = get_current_user_fn or get_current_user_via_use_case
@@ -49,8 +51,10 @@ class GetCurrentCompanyUseCase:
             GetCurrentCompanyResult avec l'entreprise si trouvée
         """
         try:
-            # ✅ Vérifier d'abord le claim company_id du token JWT (priorité pour les switchs)
-            # Cela permet aux tokens créés lors d'un switch (driver <-> company) de fonctionner
+            # ✅ Vérifier d'abord le claim company_id du token JWT
+            # (priorité pour les switchs)
+            # Cela permet aux tokens créés lors d'un switch
+            # (driver <-> company) de fonctionner
             # même si l'utilisateur dans la DB a un user_id différent
             company = None
             try:
@@ -64,10 +68,12 @@ class GetCurrentCompanyUseCase:
                     if company_id:
                         company = self.company_repo.find_model_by_id(int(company_id))
             except Exception:
-                # Si on ne peut pas récupérer le claim, continuer avec la recherche par user_id
+                # Si on ne peut pas récupérer le claim, continuer avec
+                # la recherche par user_id
                 pass
 
-            # Si le claim du token n'a pas fonctionné, utiliser la méthode classique (recherche par user_id)
+            # Si le claim du token n'a pas fonctionné, utiliser la méthode
+            # classique (recherche par user_id)
             if not company:
                 # 1. Récupérer l'utilisateur authentifié
                 user = self.get_current_user_fn()
