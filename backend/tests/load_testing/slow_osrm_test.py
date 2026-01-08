@@ -56,7 +56,7 @@ class SlowOSRMDispatchTest(HttpUser):
     osrm_fallback_count: int = 0
     osrm_timeout_count: int = 0
 
-    def on_start(self) -> None:
+    def on_start(self) -> None:  # type: ignore[reportImplicitOverride]
         """Setup initial."""
         logger.info("[SETUP] Initialisation test OSRM lent...")
 
@@ -67,7 +67,7 @@ class SlowOSRMDispatchTest(HttpUser):
         tomorrow = date.today() + timedelta(days=1)
         self.test_date = tomorrow.strftime("%Y-%m-%d")
 
-        logger.info(f"[SETUP] ✅ Prêt pour test OSRM lent | Date: {self.test_date}")
+        logger.info("[SETUP] ✅ Prêt pour test OSRM lent | Date: %s", self.test_date)
 
     def _login(self) -> None:
         """Authentification."""
@@ -85,7 +85,7 @@ class SlowOSRMDispatchTest(HttpUser):
             self.token = data.get("access_token")
             logger.info("[AUTH] ✅ Login réussi")
         else:
-            logger.error(f"[AUTH] ❌ Login échoué : {response.status_code}")
+            logger.error("[AUTH] ❌ Login échoué : %s", response.status_code)
             raise Exception("Login failed")
 
     def _get_headers(self) -> dict[str, str]:
@@ -131,14 +131,14 @@ class SlowOSRMDispatchTest(HttpUser):
         elif response.status_code == 504:
             # Gateway Timeout (OSRM timeout)
             logger.error(
-                f"[DISPATCH] ❌ Gateway Timeout (504) | Duration: {duration:.2f}s"
+                "[DISPATCH] ❌ Gateway Timeout (504) | Duration: %.2fs", duration
             )
             self.osrm_timeout_count += 1
         else:
             logger.error(
-                f"[DISPATCH] ❌ Failed | "
-                f"Status: {response.status_code} | "
-                f"Duration: {duration:.2f}s"
+                "[DISPATCH] ❌ Failed | Status: %s | Duration: %.2fs",
+                response.status_code,
+                duration,
             )
 
     @task(5)
@@ -167,16 +167,16 @@ class SlowOSRMDispatchTest(HttpUser):
             dispatch_duration = data.get("duration_seconds", 0)
 
             logger.info(
-                f"[CACHE] ✅ Dispatch avec cache | "
-                f"Duration: {dispatch_duration:.2f}s | "
-                f"Cache hit rate: {cache_hit_rate:.1%}"
+                "[CACHE] ✅ Dispatch avec cache | Duration: %.2fs | Cache hit rate: %.1f%%",
+                dispatch_duration,
+                cache_hit_rate * 100,
             )
 
             # Valider que le cache accélère vraiment
             if cache_hit_rate > 0.8 and dispatch_duration > 60:
                 logger.warning(
-                    f"[CACHE] ⚠️ Cache hit rate élevé mais dispatch lent : "
-                    f"{dispatch_duration:.2f}s"
+                    "[CACHE] ⚠️ Cache hit rate élevé mais dispatch lent : %.2fs",
+                    dispatch_duration,
                 )
 
     @task(3)
@@ -207,7 +207,7 @@ class SlowOSRMDispatchTest(HttpUser):
                 self.osrm_fallback_count += 1
             else:
                 logger.warning(
-                    f"[FALLBACK] ⚠️ Mode attendu: haversine, obtenu: {distance_mode}"
+                    "[FALLBACK] ⚠️ Mode attendu: haversine, obtenu: %s", distance_mode
                 )
 
     @task(2)
@@ -223,10 +223,10 @@ class SlowOSRMDispatchTest(HttpUser):
             status = data.get("status", "unknown")
             latency = data.get("avg_latency_ms", 0)
 
-            logger.debug(f"[OSRM] Status: {status} | Latency: {latency:.0f}ms")
+            logger.debug("[OSRM] Status: %s | Latency: %.0fms", status, latency)
 
             if latency > 500:
-                logger.warning(f"[OSRM] ⚠️ Latence élevée : {latency:.0f}ms")
+                logger.warning("[OSRM] ⚠️ Latence élevée : %.0fms", latency)
 
     @task(1)
     def check_circuit_breaker(self) -> None:
@@ -243,7 +243,7 @@ class SlowOSRMDispatchTest(HttpUser):
             failure_rate = data.get("failure_rate", 0)
 
             logger.debug(
-                f"[CIRCUIT BREAKER] State: {state} | Failure rate: {failure_rate:.1%}"
+                "[CIRCUIT BREAKER] State: %s | Failure rate: %.1f%%", state, failure_rate * 100
             )
 
             if state == "open":
@@ -271,13 +271,16 @@ class SlowOSRMDispatchTest(HttpUser):
 
             # Log détaillé
             logger.info(
-                f"[DISPATCH] ✅ SUCCESS | "
-                f"Duration: {dispatch_duration:.2f}s | "
-                f"API: {duration:.2f}s | "
-                f"Assignments: {num_assignments}/{num_bookings} | "
-                f"Distance mode: {distance_mode} | "
-                f"OSRM calls: {osrm_calls} | "
-                f"Cache hits: {osrm_cache_hits} ({cache_hit_rate:.1%})"
+                "[DISPATCH] ✅ SUCCESS | Duration: %.2fs | API: %.2fs | Assignments: %s/%s | "
+                "Distance mode: %s | OSRM calls: %s | Cache hits: %s (%.1f%%)",
+                dispatch_duration,
+                duration,
+                num_assignments,
+                num_bookings,
+                distance_mode,
+                osrm_calls,
+                osrm_cache_hits,
+                cache_hit_rate * 100,
             )
 
             # Comptabiliser
@@ -289,14 +292,15 @@ class SlowOSRMDispatchTest(HttpUser):
             # Validations SLO
             if dispatch_duration > 120:
                 logger.error(
-                    f"[SLO] ❌ Dispatch trop lent avec OSRM lent : "
-                    f"{dispatch_duration:.2f}s > 120s"
+                    "[SLO] ❌ Dispatch trop lent avec OSRM lent : %.2fs > 120s",
+                    dispatch_duration,
                 )
 
             if num_assignments < (num_bookings * 0.7):
                 logger.warning(
-                    f"[SLO] ⚠️ Taux d'assignation faible : "
-                    f"{num_assignments}/{num_bookings} < 70%"
+                    "[SLO] ⚠️ Taux d'assignation faible : %s/%s < 70%%",
+                    num_assignments,
+                    num_bookings,
                 )
 
             # Métriques custom
@@ -309,7 +313,7 @@ class SlowOSRMDispatchTest(HttpUser):
             )
 
         except json.JSONDecodeError as e:
-            logger.error(f"[DISPATCH] ❌ Erreur parsing JSON : {e}")
+            logger.error("[DISPATCH] ❌ Erreur parsing JSON : %s", e)
 
 
 # ========== Event Handlers ==========
@@ -334,17 +338,17 @@ def on_test_stop(environment: Any, **kwargs: Any) -> None:
 
     # Stats globales
     stats = environment.stats
-    logger.info(f"[STATS] Total Requests: {stats.total.num_requests}")
-    logger.info(f"[STATS] Total Failures: {stats.total.num_failures}")
-    logger.info(f"[STATS] Avg Response Time: {stats.total.avg_response_time:.2f}ms")
+    logger.info("[STATS] Total Requests: %s", stats.total.num_requests)
+    logger.info("[STATS] Total Failures: %s", stats.total.num_failures)
+    logger.info("[STATS] Avg Response Time: %.2fms", stats.total.avg_response_time)
 
     # Stats OSRM (approximatif, basé sur 1 user)
     # Dans un vrai test, il faudrait agréger entre tous les users
     logger.info("=" * 80)
     logger.info("[OSRM STATS] Approximation (1 user) :")
-    logger.info(f"  - OSRM Success: {SlowOSRMDispatchTest.osrm_success_count}")
-    logger.info(f"  - Haversine Fallback: {SlowOSRMDispatchTest.osrm_fallback_count}")
-    logger.info(f"  - Timeouts: {SlowOSRMDispatchTest.osrm_timeout_count}")
+    logger.info("  - OSRM Success: %s", SlowOSRMDispatchTest.osrm_success_count)
+    logger.info("  - Haversine Fallback: %s", SlowOSRMDispatchTest.osrm_fallback_count)
+    logger.info("  - Timeouts: %s", SlowOSRMDispatchTest.osrm_timeout_count)
 
 
 # ========== Configuration Recommandée ==========

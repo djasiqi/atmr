@@ -243,7 +243,7 @@ class TestRateLimitConfig:
             response = client.get(
                 "/api/v1/admin/rate-limit/config",
                 headers={"Authorization": admin_token},
-                        )
+            )
 
         # Assert
         assert response.status_code == 200
