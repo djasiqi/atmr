@@ -121,7 +121,8 @@ class CreateCompanyClientUseCase:
                 success=False,
                 error={
                     "error": (
-                        "client_type invalide. Valeurs possibles: SELF_SERVICE, PRIVATE, CORPORATE"
+                        "client_type invalide. Valeurs possibles: "
+                        "SELF_SERVICE, PRIVATE, CORPORATE"
                     )
                 },
                 status_code=400,
@@ -153,7 +154,9 @@ class CreateCompanyClientUseCase:
                 return CreateCompanyClientOutput(
                     success=False,
                     error={
-                        "error": f"Champs manquants pour facturation : {', '.join(missing)}"
+                        "error": (
+                            f"Champs manquants pour facturation : {', '.join(missing)}"
+                        )
                     },
                     status_code=400,
                 )

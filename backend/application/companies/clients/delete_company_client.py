@@ -32,7 +32,9 @@ class DeleteCompanyClientUseCase:
                             f"Le client a {invoice_count} facture(s) "
                             f"et {booking_count} réservation(s)"
                         ),
-                        "suggestion": "Utilisez la désactivation (soft delete) à la place",
+                        "suggestion": (
+                            "Utilisez la désactivation (soft delete) à la place"
+                        ),
                     },
                 )
             return DeleteCompanyClientResult(ok=True, action="hard")
