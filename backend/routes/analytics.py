@@ -697,11 +697,13 @@ class DispatchAnalytics(Resource):
                 end_date + timedelta(days=1), datetime.min.time()
             ).replace(tzinfo=UTC_TZ)
 
-            assignments = assignment_repo.find_models_by_company_with_time_range_and_excluded_statuses(
-                company_id=company.id,
-                start_datetime=start_datetime,
-                end_datetime=end_datetime,
-                excluded_statuses=[],  # Pas d'exclusion de statuts
+            assignments = (
+                assignment_repo.find_models_by_company_with_time_range_and_excluded_statuses(
+                    company_id=company.id,
+                    start_datetime=start_datetime,
+                    end_datetime=end_datetime,
+                    excluded_statuses=[],  # Pas d'exclusion de statuts
+                )
             )
 
             if not assignments:
@@ -816,7 +818,8 @@ class DispatchAnalytics(Resource):
                 min_load = 0
                 max_load = 0
 
-            # Taux réassignation (approximation: assignments avec updated_at > created_at)
+            # Taux réassignation (approximation: assignments avec updated_at >
+            # created_at)
             reassigned_count = 0
             for a in assignments:
                 updated_at = getattr(a, "updated_at", None)

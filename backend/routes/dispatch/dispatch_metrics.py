@@ -480,14 +480,16 @@ class A1BackoutResource(Resource):
 
             if backout_needed:
                 logger.error(
-                    "[A1] ❌ Backout recommandé: violation_rate=%.4f >= threshold=%.4f (company_id=%s)",
+                    "[A1] ❌ Backout recommandé: violation_rate=%.4f >= "
+                    "threshold=%.4f (company_id=%s)",
                     violation_rate,
                     threshold,
                     company_id,
                 )
             else:
                 logger.info(
-                    "[A1] ✅ Conformité OK: violation_rate=%.4f < threshold=%.4f (company_id=%s)",
+                    "[A1] ✅ Conformité OK: violation_rate=%.4f < "
+                    "threshold=%.4f (company_id=%s)",
                     violation_rate,
                     threshold,
                     company_id,

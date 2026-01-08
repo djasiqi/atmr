@@ -89,7 +89,8 @@ class AutoReassignmentService:
         """Initialise le service de réassignation automatique.
 
         Args:
-            delay_threshold_minutes: Seuil de retard (minutes) pour déclencher réassignation
+            delay_threshold_minutes: Seuil de retard (minutes) pour déclencher
+                réassignation
             confirmation_timeout_seconds: Timeout pour confirmation chauffeur (secondes)
             min_gain_minutes: Gain minimum requis (minutes) pour réassigner
             enabled: Activer/désactiver le service (feature flag)
@@ -221,7 +222,10 @@ class AutoReassignmentService:
                     delay_minutes=projected_delay,
                     projected_delay_minutes=projected_delay,
                     gain_minutes=gain_minutes,
-                    reason=f"Gain insuffisant ({gain_minutes} min < {self.min_gain_minutes} min)",
+                    reason=(
+                        f"Gain insuffisant ({gain_minutes} min < "
+                        f"{self.min_gain_minutes} min)"
+                    ),
                 )
 
             # Notifier chauffeur actuel si auto_apply=False

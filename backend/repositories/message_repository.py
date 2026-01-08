@@ -38,7 +38,8 @@ class MessageRepository:
         before_timestamp: datetime | None = None,
         limit: int | None = None,
     ) -> list[Message]:
-        """Trouve les messages d'une entreprise avec eager loading et filtres optionnels.
+        """Trouve les messages d'une entreprise avec eager loading et filtres
+        optionnels.
 
         Args:
             company_id: ID de l'entreprise
@@ -46,7 +47,8 @@ class MessageRepository:
             limit: Nombre maximum de résultats (optionnel)
 
         Returns:
-            Liste de Message triés par timestamp descendant (avec sender et receiver chargés)
+            Liste de Message triés par timestamp descendant
+            (avec sender et receiver chargés)
         """
         query = (
             Message.query.filter_by(company_id=company_id)

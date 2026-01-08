@@ -80,7 +80,8 @@ class OptimizerStopResource(Resource):
 
             if current_mode == "fully_auto":
                 logger.warning(
-                    "[Optimizer] Tentative d'arrêt refusée pour company %s (mode fully_auto actif)",
+                    "[Optimizer] Tentative d'arrêt refusée pour company %s "
+                    "(mode fully_auto actif)",
                     company_id,
                 )
                 return {
@@ -242,7 +243,8 @@ class AgentStopResource(Resource):
 
             if current_mode == "fully_auto":
                 logger.warning(
-                    "[Agent] Tentative d'arrêt refusée pour company %s (mode fully_auto actif)",
+                    "[Agent] Tentative d'arrêt refusée pour company %s "
+                    "(mode fully_auto actif)",
                     company_id,
                 )
                 return {
