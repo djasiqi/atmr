@@ -20,7 +20,8 @@ class UploadCompanyLogoResult:
 
 
 class UploadCompanyLogoUseCase:
-    """Use-case Application: upload logo company (écrit fichier + met à jour logo_url)."""
+    """Use-case Application: upload logo company
+    (écrit fichier + met à jour logo_url)."""
 
     _ALLOWED_EXT: ClassVar[set[str]] = {"png", "jpg", "jpeg", "svg"}
 

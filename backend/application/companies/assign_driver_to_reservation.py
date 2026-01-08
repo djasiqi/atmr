@@ -74,19 +74,22 @@ class AssignDriverToReservationUseCase:
 
         logger = logging.getLogger(__name__)
         logger.info(
-            "[AssignDriverToReservationUseCase] Status check: status=%s, status_lower=%s, is_accepted=%s, is_assigned=%s",
+            "[AssignDriverToReservationUseCase] Status check: status=%s, "
+            "status_lower=%s, is_accepted=%s, is_assigned=%s",
             status,
             status.lower() if status else None,
             status.lower() == "accepted" if status else False,
             status.lower() == "assigned" if status else False,
         )
         # #endregion
-        # ✅ Convertir en minuscules pour la comparaison (les enums peuvent être en majuscules)
+        # ✅ Convertir en minuscules pour la comparaison
+        # (les enums peuvent être en majuscules)
         status_lower = status.lower() if status else ""
         if status_lower not in {"accepted", "assigned"}:
             # #region agent log
             logger.warning(
-                "[AssignDriverToReservationUseCase] Status validation failed: status=%s, status_lower=%s, required=[accepted, assigned]",
+                "[AssignDriverToReservationUseCase] Status validation failed: "
+                "status=%s, status_lower=%s, required=[accepted, assigned]",
                 status,
                 status_lower,
             )

@@ -23,7 +23,8 @@ class CompleteCompanyReservationResult:
 
 
 class CompleteCompanyReservationUseCase:
-    """Use-case Application: complétion d'une réservation (IN_PROGRESS -> COMPLETED/RETURN_COMPLETED)."""
+    """Use-case Application: complétion d'une réservation
+    (IN_PROGRESS -> COMPLETED/RETURN_COMPLETED)."""
 
     def execute(self, booking: _BookingLike) -> CompleteCompanyReservationResult:
         st = status_value(getattr(booking, "status", None)).lower()

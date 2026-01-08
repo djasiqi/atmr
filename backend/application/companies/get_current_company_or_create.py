@@ -28,9 +28,11 @@ class GetCurrentCompanyOrCreateResult:
 
 
 class GetCurrentCompanyOrCreateUseCase:
-    """Use-case Application: récupérer l'entreprise courante ou la créer si besoin.
+    """Use-case Application: récupérer l'entreprise courante ou la créer
+    si besoin.
 
-    Objectif: remplacer `CompanyService.get_current_company_or_create` (service supprimé)
+    Objectif: remplacer `CompanyService.get_current_company_or_create`
+    (service supprimé)
     dans la couche Application, avec dépendances injectées.
     """
 
