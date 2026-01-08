@@ -48,7 +48,8 @@ class GetDriverUpcomingBookingsUseCase:
         today = self._today()
         today_start, today_end = self._day_bounds(today.strftime("%Y-%m-%d"))
 
-        # Assurer datetime pour SQLAlchemy (robuste face aux retours "str"/datetime-like)
+        # Assurer datetime pour SQLAlchemy (robuste face aux retours
+        # "str"/datetime-like)
         start_dt = datetime.fromisoformat(str(today_start))
         end_dt = datetime.fromisoformat(str(today_end))
 

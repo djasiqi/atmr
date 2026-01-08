@@ -1,6 +1,7 @@
 """Use-case: récupérer l'utilisateur courant.
 
-Ce use case est un wrapper autour de GetCurrentUserUseCase dans shared/application/use_cases/
+Ce use case est un wrapper autour de GetCurrentUserUseCase dans
+shared/application/use_cases/
 pour maintenir la cohérence avec les autres use cases dans application/users/.
 """
 

@@ -88,7 +88,8 @@ class GetDriverBookingsETAUseCase:
                     pickup_pos = (float(pickup_lat), float(pickup_lon))
                     eta_to_pickup = int(self._eta_seconds(driver_pos, pickup_pos))
 
-                    # Recalculer la durée totale si on a dropoff + booking pas "in progress"
+                    # Recalculer la durée totale si on a dropoff +
+                    # booking pas "in progress"
                     if (
                         dropoff_lat is not None
                         and dropoff_lon is not None
