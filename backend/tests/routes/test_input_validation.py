@@ -119,7 +119,8 @@ class TestQueryParamsValidation:
         response = client.get(
             "/api/v1/admin/autonomous-actions?page=-1&per_page=50", headers=auth_headers
         )
-        # ✅ FIX: La route peut ne pas exister (404) ou l'utilisateur ne pas être admin (401/403)
+        # ✅ FIX: La route peut ne pas exister (404) ou l'utilisateur ne pas
+        # être admin (401/403)
         if response.status_code in {401, 403, 404}:
             # Route n'existe pas encore, skip le test de validation
             return
@@ -132,7 +133,8 @@ class TestQueryParamsValidation:
         response = client.get(
             "/api/v1/admin/autonomous-actions?page=1&per_page=600", headers=auth_headers
         )
-        # ✅ FIX: La route peut ne pas exister (404) ou l'utilisateur ne pas être admin (401/403)
+        # ✅ FIX: La route peut ne pas exister (404) ou l'utilisateur ne pas
+        # être admin (401/403)
         if response.status_code in {401, 403, 404}:
             # Route n'existe pas encore, skip le test de validation
             return
@@ -146,7 +148,8 @@ class TestQueryParamsValidation:
             "/api/v1/admin/autonomous-actions?start_date=2025/01/15",
             headers=auth_headers,
         )
-        # ✅ FIX: La route peut ne pas exister (404) ou l'utilisateur ne pas être admin (401/403)
+        # ✅ FIX: La route peut ne pas exister (404) ou l'utilisateur ne pas
+        # être admin (401/403)
         if response.status_code in {401, 403, 404}:
             # Route n'existe pas encore, skip le test de validation
             return

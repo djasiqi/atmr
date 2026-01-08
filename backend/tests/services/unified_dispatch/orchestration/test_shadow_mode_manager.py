@@ -148,7 +148,9 @@ class TestGenerateAndStoreSuggestions:
         settings = MagicMock()
 
         mock_orchestrator_instance = MagicMock()
-        mock_orchestrator_instance.generate_and_store_shadow_suggestions.return_value = 5  # 5 suggestions stockées
+        # 5 suggestions stockées
+        mock_fn = mock_orchestrator_instance.generate_and_store_shadow_suggestions
+        mock_fn.return_value = 5
         mock_orchestrator_class.return_value = mock_orchestrator_instance
 
         manager = ShadowModeManager(settings)
@@ -183,7 +185,9 @@ class TestGenerateAndStoreSuggestions:
         settings = MagicMock()
 
         mock_orchestrator_instance = MagicMock()
-        mock_orchestrator_instance.generate_and_store_shadow_suggestions.return_value = 0  # Aucune suggestion stockée
+        # Aucune suggestion stockée
+        mock_fn = mock_orchestrator_instance.generate_and_store_shadow_suggestions
+        mock_fn.return_value = 0
         mock_orchestrator_class.return_value = mock_orchestrator_instance
 
         manager = ShadowModeManager(settings)
@@ -211,7 +215,8 @@ class TestGenerateAndStoreSuggestions:
         settings = MagicMock()
 
         mock_orchestrator_instance = MagicMock()
-        mock_orchestrator_instance.generate_and_store_shadow_suggestions.return_value = 0
+        mock_orchestrator_instance.generate_and_store_shadow_suggestions.\
+            return_value = 0
         mock_orchestrator_class.return_value = mock_orchestrator_instance
 
         manager = ShadowModeManager(settings)
