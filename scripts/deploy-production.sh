@@ -104,6 +104,10 @@ docker compose -f docker-compose.monitoring.yml down --remove-orphans || true
 # Supprimer les conteneurs orphelins manuellement
 docker ps -a --filter "name=atmr-" --format "{{.ID}}" | xargs -r docker rm -f || true
 
+# Nettoyer TOUS les volumes Docker non utilisés (résout les conflits de volumes)
+echo "🧹 Nettoyage approfondi des volumes Docker..."
+docker volume prune -a -f || true
+
 # Créer .env.production
 {
   echo "DATABASE_URL=${DATABASE_URL}"
