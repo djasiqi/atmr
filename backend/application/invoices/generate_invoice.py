@@ -48,8 +48,10 @@ class GenerateInvoiceInput:
         client_id: ID du bénéficiaire du service (patient)
         period_year: Année de facturation (ex: 2025)
         period_month: Mois de facturation (1-12)
-        bill_to_client_id: ID du payeur (clinique/institution). Si None, client_id paie directement
-        reservation_ids: Liste d'IDs de réservations spécifiques. Si None, prend toutes les réservations non facturées
+        bill_to_client_id: ID du payeur (clinique/institution).
+            Si None, client_id paie directement
+        reservation_ids: Liste d'IDs de réservations spécifiques.
+            Si None, prend toutes les réservations non facturées
         overrides: Dict facultatif {reservation_id: {amount, vat_rate, note}}
     """
 
@@ -194,12 +196,15 @@ class GenerateInvoiceUseCase:
                         )
 
                         if is_owner:
-                            # Entreprise propriétaire : peut facturer pour SUBCONTRACT ou si pas de transfert
-                            # Pour SUBCONTRACT, l'entreprise propriétaire facture toujours le client
-                            # même si la course a été exécutée par une autre entreprise
+                            # Entreprise propriétaire : peut facturer pour
+                            # SUBCONTRACT ou si pas de transfert
+                            # Pour SUBCONTRACT, l'entreprise propriétaire facture
+                            # toujours le client même si la course a été exécutée
+                            # par une autre entreprise
                             filtered_booking_dtos.append(dto)
                         elif is_executor:
-                            # Entreprise exécutante : peut facturer uniquement pour ASSIGN_TO_PARTNER
+                            # Entreprise exécutante : peut facturer uniquement
+                            # pour ASSIGN_TO_PARTNER
                             # Vérifier qu'il y a un transfert ASSIGN_TO_PARTNER validé
                             from models.booking_transfer import BookingTransfer
                             from models.enums import TransferModel, TransferStatus
@@ -258,7 +263,8 @@ class GenerateInvoiceUseCase:
                     if getattr(r, "invoice_line_id", None) is None
                 ]
 
-                # Pour ASSIGN_TO_PARTNER : inclure aussi les bookings où l'entreprise est exécutante
+                # Pour ASSIGN_TO_PARTNER : inclure aussi les bookings où
+                # l'entreprise est exécutante
                 from sqlalchemy import and_
 
                 from models.booking_transfer import BookingTransfer
@@ -494,7 +500,8 @@ class GenerateInvoiceUseCase:
                 vat_breakdown[rate_key]["vat"] += vat_amount
 
             # 10. Mettre à jour les totaux de la facture
-            # Arrondir les totaux à 5 centimes pour éviter les montants comme 10.12 ou 11.13
+            # Arrondir les totaux à 5 centimes pour éviter les montants
+            # comme 10.12 ou 11.13
             # Arrondir le subtotal à 5 centimes
             subtotal = round_to_5_cents(subtotal)
             # Arrondir la TVA totale à 5 centimes
