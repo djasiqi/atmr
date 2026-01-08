@@ -7,8 +7,6 @@ les fixtures frozen_time et mock_now_local dans les tests.
 
 from datetime import timedelta
 
-import pytest
-
 from shared import time_utils
 
 

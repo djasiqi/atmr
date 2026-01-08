@@ -14,10 +14,10 @@ if os.getenv("FLASK_ENV") == "production" or os.getenv("FLASK_CONFIG") == "produ
     os.environ["PYTEST_DISABLED"] = "1"
     os.environ["DISABLE_PYTEST"] = "1"
 
-    # Empêcher pytest de collecter les tests en important pytest uniquement si nécessaire
-    # et en désactivant les hooks automatiques
+    # Empêcher pytest de collecter les tests en important pytest
+    # uniquement si nécessaire et en désactivant les hooks automatiques
     try:
-        import pytest  # pyright: ignore[reportMissingImports]
+        import pytest
 
         # Désactiver la collecte automatique de tests
         if hasattr(pytest, "config"):
@@ -48,7 +48,7 @@ if _async_mode == "eventlet":
         print("⚠️ [WSGI] eventlet non disponible", flush=True)
 elif _async_mode == "gevent":
     try:
-        from gevent import monkey  # pyright: ignore[reportMissingModuleSource]
+        from gevent import monkey
 
         monkey.patch_all()
         print("✅ [WSGI] gevent.monkey.patch_all() appliqué", flush=True)
@@ -62,7 +62,5 @@ from app import create_app  # noqa: E402
 _cfg = os.getenv("FLASK_ENV") or os.getenv("FLASK_CONFIG") or "production"
 app = create_app(_cfg)
 print(f"✅ [WSGI] Application Flask créée (config={_cfg})", flush=True)
-print(
-    "✅ [WSGI] Application exportée pour Gunicorn (Socket.IO intégré via socketio.init_app)",
-    flush=True,
-)
+print("✅ [WSGI] Application exportée pour Gunicorn", flush=True)
+print("✅ [WSGI] Socket.IO intégré via socketio.init_app", flush=True)
