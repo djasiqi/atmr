@@ -4,11 +4,14 @@ from pathlib import Path
 
 
 def test_routes_have_no_direct_unified_dispatch_imports() -> None:
-    """Garde-fou: les routes ne doivent pas importer directement services.unified_dispatch.*.
+    """Garde-fou: les routes ne doivent pas importer directement
+    services.unified_dispatch.*.
 
     Objectif:
-        - Forcer l'utilisation des adapters Infrastructure (`backend/infrastructure/dispatch/*`).
-        - Éviter le couplage direct routes -> legacy services.unified_dispatch.
+        - Forcer l'utilisation des adapters Infrastructure
+          (`backend/infrastructure/dispatch/*`).
+        - Éviter le couplage direct routes -> legacy
+          services.unified_dispatch.
     """
     root = Path(__file__).resolve().parents[1]  # backend/
     routes_dir = root / "routes"

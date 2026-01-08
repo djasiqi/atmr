@@ -293,7 +293,8 @@ class TestDispatchEnvUltraTargeted:
         env = DispatchEnv(num_drivers=3, max_bookings=5)
         env.reset()
 
-        # ✅ FIX: Le code accède directement à d["load"] et d["available"] dans _get_info
+        # ✅ FIX: Le code accède directement à d["load"] et d["available"]
+        # dans _get_info
         # sans try/except, donc on doit fournir ces clés
         env.drivers = [{"load": 0, "available": True}]
         env.bookings = []
@@ -309,7 +310,8 @@ class TestDispatchEnvUltraTargeted:
         env = DispatchEnv(num_drivers=3, max_bookings=5)
         env.reset()
 
-        # ✅ FIX: Le code accède directement à d["load"] et d["available"] dans _get_info
+        # ✅ FIX: Le code accède directement à d["load"] et d["available"]
+        # dans _get_info
         # sans try/except, donc on doit fournir ces clés
         env.drivers = [{"load": 0, "available": True}]
         env.bookings = []

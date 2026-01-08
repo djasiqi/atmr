@@ -1,4 +1,5 @@
-# backend/tests/services/unified_dispatch/orchestration/test_assignment_applier_wrapper.py
+# backend/tests/services/unified_dispatch/orchestration/
+# test_assignment_applier_wrapper.py
 """Tests unitaires pour AssignmentApplierWrapper.
 
 Tests pour :
@@ -169,7 +170,8 @@ class TestApply:
         "services.unified_dispatch.orchestration.assignment_applier_wrapper.AssignmentApplier"
     )
     def test_apply_perf_collector_context_manager(self, mock_applier_class):
-        """Test : Vérifie que le context manager perf_collector est utilisé correctement."""
+        """Test : Vérifie que le context manager perf_collector est utilisé
+        correctement."""
         wrapper = AssignmentApplierWrapper()
 
         mock_applier_instance = MagicMock()
