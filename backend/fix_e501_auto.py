@@ -223,7 +223,8 @@ def main():
     if auto_fixable > 0:
         print(f"[OK] {auto_fixable} lignes peuvent etre corrigees automatiquement")
         print(
-            f"[!!] {total_stats['manual_review']} lignes necessitent une revision manuelle"
+            f"[!!] {total_stats['manual_review']} lignes necessitent une "
+            "revision manuelle"
         )
         print()
         print("PROCHAINES ETAPES :")

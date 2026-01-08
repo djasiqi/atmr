@@ -2,7 +2,8 @@
 """✅ Phase 1 N+1: Script de profilage pour détecter requêtes N+1 dans dispatch.
 
 Usage:
-    python backend/scripts/profiling/profile_dispatch_queries.py --company-id 1 --for-date 2025-01-15
+    python backend/scripts/profiling/profile_dispatch_queries.py --company-id 1
+    --for-date 2025-01-15
 
 Options:
     --company-id: ID de l'entreprise
