@@ -1,5 +1,6 @@
 # Requirements de base - communs à tous les environnements (prod et RL)
 # Ces dépendances sont nécessaires pour l'API, la DB, Celery, Redis, etc.
+# INVALIDATION CACHE: 2026-01-08 - Fix Flask-Limiter[redis] installation
 
 # ========== Core Framework ==========
 Flask>=2.0.0
