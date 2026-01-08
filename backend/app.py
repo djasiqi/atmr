@@ -346,7 +346,9 @@ def create_app(config_name: str | None = None):
     try:
         from services.security.csrf import setup_csrf_protection
 
-        # Activer CSRF seulement si explicitement activé (par défaut activé en production)
+
+        # Activer CSRF seulement si explicitement activé
+        # (par défaut activé en production)
         csrf_enabled = os.getenv("CSRF_ENABLED", "true").lower() in ("true", "1", "yes")
         if csrf_enabled:
             setup_csrf_protection(app)
@@ -521,7 +523,8 @@ def create_app(config_name: str | None = None):
     if config_name == "development":
         # ✅ En développement, spécifier explicitement les origines locales
         # (ne peut pas utiliser "*" avec cors_credentials=True)
-        # Permettre override via variable d'environnement, mais toujours inclure les origines essentielles
+        # Permettre override via variable d'environnement,
+        # mais toujours inclure les origines essentielles
         dev_cors_origins_env = os.getenv("SOCKETIO_CORS_ORIGINS", default="")
         if dev_cors_origins_env:
             # Parser les origines depuis l'environnement
@@ -613,8 +616,9 @@ def create_app(config_name: str | None = None):
         except Exception:
             pass
         # #endregion
-        # ✅ FIX Socket.IO multi-workers: Passer message_queue explicitement à init_app()
-        # pour garantir que Redis est utilisé pour partager les SIDs entre workers.
+        # ✅ FIX Socket.IO multi-workers: Passer message_queue explicitement
+        # à init_app() pour garantir que Redis est utilisé pour partager
+        # les SIDs entre workers.
         # Le message_queue est configuré dans ext.py, mais doit être passé ici aussi.
         socketio.init_app(
             app,
@@ -628,7 +632,8 @@ def create_app(config_name: str | None = None):
             max_http_buffer_size=10_000_000,  # int
             allow_upgrades=allow_ws_upgrades,
             cors_credentials=True,
-            message_queue=_socketio_message_queue,  # ✅ FIX: Passer message_queue explicitement
+            # ✅ FIX: Passer message_queue explicitement
+            message_queue=_socketio_message_queue,
             # ✅ Note: La compression Socket.IO est gérée automatiquement
             # par le protocole lors de la négociation client/serveur.
             # Pas besoin de paramètre explicite dans Flask-SocketIO.
@@ -637,7 +642,8 @@ def create_app(config_name: str | None = None):
         # #region agent log - Socket.IO request tracking
         @app.before_request
         def log_socketio_requests():  # pyright: ignore[reportUnusedFunction]
-            """Log toutes les requêtes Socket.IO pour vérifier le partage SID entre workers."""
+            """Log toutes les requêtes Socket.IO pour vérifier le partage SID
+            entre workers."""
             if request.path.startswith("/socket.io"):
                 from pathlib import Path
 
@@ -657,7 +663,10 @@ def create_app(config_name: str | None = None):
                     log_path.parent.mkdir(parents=True, exist_ok=True)
                     with log_path.open("a", encoding="utf-8") as f:
                         log_data = {
-                            "id": f"log_{int(datetime.now(UTC).timestamp() * 1000)}_socketio_req",
+                            "id": (
+                                f"log_{int(datetime.now(UTC).timestamp() * 1000)}"
+                                "_socketio_req"
+                            ),
                             "timestamp": int(datetime.now(UTC).timestamp() * 1000),
                             "location": "app.py:log_socketio_requests",
                             "message": "Socket.IO request",
@@ -681,7 +690,8 @@ def create_app(config_name: str | None = None):
 
         # #endregion
         app.logger.info(
-            "✅ Socket.IO initialisé: async_mode=%s, cors=%s, allow_upgrades=%s, path=/socket.io",
+            "✅ Socket.IO initialisé: async_mode=%s, cors=%s, "
+            "allow_upgrades=%s, path=/socket.io",
             async_mode,
             "*"
             if (isinstance(cors_origins, str) and cors_origins == "*")
@@ -804,7 +814,8 @@ def create_app(config_name: str | None = None):
     # ✅ S3: Middleware pour capturer les tentatives d'accès non autorisé
     @app.after_request
     def _track_unauthorized_access(resp):  # pyright: ignore[reportUnusedFunction]
-        """✅ S3: Enregistre les tentatives d'accès non autorisé (401/403) pour alertes."""
+        """✅ S3: Enregistre les tentatives d'accès non autorisé (401/403)
+        pour alertes."""
         if resp.status_code in (401, 403):
             try:
                 from security.security_alerts import SecurityAlertService
@@ -934,22 +945,27 @@ def create_app(config_name: str | None = None):
         except (ValueError, RuntimeError):
             # Ex: "embedded null byte" ou erreurs de résolution de chemin
             app.logger.warning(
-                "Tentative de path traversal / chemin invalide bloquée: filename=%s, base=%s",
+                "Tentative de path traversal / chemin invalide bloquée: "
+                "filename=%s, base=%s",
                 filename,
                 base,
             )
             raise NotFound from None
 
-        # ✅ S2: Protection path traversal améliorée avec Path.is_relative_to() (Python 3.9+)
-        # Plus robuste que startswith() car gère correctement les chemins Windows et liens symboliques
+        # ✅ S2: Protection path traversal améliorée avec Path.is_relative_to()
+        # (Python 3.9+)
+        # Plus robuste que startswith() car gère correctement les chemins
+        # Windows et liens symboliques
         try:
             # Vérifier que le chemin résolu est bien relatif au répertoire de base
             # is_relative_to() lève ValueError si le chemin n'est pas relatif
             candidate.relative_to(base)
         except (ValueError, RuntimeError):
-            # Path traversal détecté : le chemin résolu sort du répertoire autorisé
+            # Path traversal détecté : le chemin résolu sort du répertoire
+            # autorisé
             app.logger.warning(
-                "Tentative de path traversal bloquée: filename=%s, resolved=%s, base=%s",
+                "Tentative de path traversal bloquée: filename=%s, "
+                "resolved=%s, base=%s",
                 filename,
                 candidate,
                 base,
@@ -1115,13 +1131,17 @@ def create_app(config_name: str | None = None):
     if app_env == "rl" or rl_enabled:
         force_https = False
         app.logger.info(
-            "[App] Environnement RL détecté: force_https désactivé pour communication interne"
+            "[App] Environnement RL détecté: force_https désactivé "
+            "pour communication interne"
         )
 
-    # ✅ FIX: Désactiver complètement Talisman pour le mode testing et l'environnement RL
+    # ✅ FIX: Désactiver complètement Talisman pour le mode testing
+    # et l'environnement RL
     # pour éviter toute redirection 302
-    # Talisman peut encore causer des redirections même avec force_https=False
-    # dans certains cas (notamment avec ProxyFix qui détecte X-Forwarded-Proto)
+    # Talisman peut encore causer des redirections même avec
+    # force_https=False
+    # dans certains cas (notamment avec ProxyFix qui détecte
+    # X-Forwarded-Proto)
     should_disable_talisman = (
         config_name == "testing"
         or app.config.get("TESTING", False)
@@ -1135,11 +1155,13 @@ def create_app(config_name: str | None = None):
         talisman = None
         if app_env == "rl" or rl_enabled:
             app.logger.info(
-                "[App] Talisman désactivé pour l'environnement RL (communication interne HTTP)"
+                "[App] Talisman désactivé pour l'environnement RL "
+                "(communication interne HTTP)"
             )
         else:
             app.logger.info(
-                "[App] Talisman désactivé en mode testing pour éviter les redirections 302"
+                "[App] Talisman désactivé en mode testing "
+                "pour éviter les redirections 302"
             )
     else:
         talisman = Talisman(
@@ -1195,12 +1217,17 @@ def create_app(config_name: str | None = None):
         if "Referrer-Policy" not in resp.headers:
             resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
 
-        # ✅ S2: Ajouter Permissions-Policy pour désactiver features non nécessaires
-        # Désactive les fonctionnalités du navigateur qui ne sont pas nécessaires pour l'application
-        # Cela réduit la surface d'attaque et limite les risques de fuite d'informations
+        # ✅ S2: Ajouter Permissions-Policy pour désactiver features
+        # non nécessaires
+        # Désactive les fonctionnalités du navigateur qui ne sont pas
+        # nécessaires pour l'application
+        # Cela réduit la surface d'attaque et limite les risques
+        # de fuite d'informations
         if "Permissions-Policy" not in resp.headers:
-            # Désactiver les fonctionnalités non nécessaires pour une application de transport
-            # - geolocation: désactivé (on utilise notre propre système de géolocalisation)
+            # Désactiver les fonctionnalités non nécessaires
+            # pour une application de transport
+            # - geolocation: désactivé (on utilise notre propre système
+            # de géolocalisation)
             # - camera: désactivé (pas de caméra nécessaire)
             # - microphone: désactivé (pas de microphone nécessaire)
             # - payment: désactivé (gestion des paiements via API)
@@ -1540,18 +1567,21 @@ def create_app(config_name: str | None = None):
             raise RuntimeError(
                 "Configuration CORS invalide pour production. "
                 + "Les origines CORS ne peuvent pas être '*' en production. "
-                + "Fournissez une liste d'origines autorisées via SOCKETIO_CORS_ORIGINS "
-                + "(ex: 'https://app.example.com,https://www.example.com')."
+                + "Fournissez une liste d'origines autorisées via "
+                + "SOCKETIO_CORS_ORIGINS (ex: 'https://app.example.com,"
+                + "https://www.example.com')."
             )
         # Vérifier que la liste n'est pas vide
         if not origins_list:
             raise RuntimeError(
                 "Configuration CORS invalide pour production. "
-                + "SOCKETIO_CORS_ORIGINS doit être défini avec au moins une origine autorisée."
+                + "SOCKETIO_CORS_ORIGINS doit être défini avec au moins une "
+                + "origine autorisée."
             )
         # Logger les origines autorisées pour documentation
         app.logger.info(
-            "[Security] CORS configuré pour production avec %d origine(s) autorisée(s): %s",
+            "[Security] CORS configuré pour production avec %d "
+            "origine(s) autorisée(s): %s",
             len(origins_list),
             ", ".join(origins_list),
         )
@@ -1572,14 +1602,15 @@ def create_app(config_name: str | None = None):
                 "cors_origins": cors_origins_list,
                 "cors_origins_type": type(cors_origins).__name__,
                 "cors_origins_count": len(cors_origins_list),
-                "has_localhost_8081": "http://localhost:8081" in cors_origins_list,
+                "has_localhost_8081": ("http://localhost:8081" in cors_origins_list),
             },
             "timestamp": int(datetime.now(UTC).timestamp() * 1000),
             "sessionId": "debug-session",
             "runId": "run1",
             "hypothesisId": "A",
         }
-        # json est importé en haut du fichier (ligne 18) - pyright: ignore[reportPossiblyUnboundVariable]
+        # json est importé en haut du fichier (ligne 18)
+        # pyright: ignore[reportPossiblyUnboundVariable]
         # json est importé en haut du fichier (ligne 18)
         req = urllib.request.Request(
             "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
@@ -1634,7 +1665,8 @@ def create_app(config_name: str | None = None):
         app_log_level = logging.WARNING
         werkzeug_log_level = logging.ERROR
         app.logger.warning(
-            "[Security] Niveau de log forcé à WARNING en production (APP_LOG_LEVEL ignoré pour sécurité)"
+            "[Security] Niveau de log forcé à WARNING en production "
+            "(APP_LOG_LEVEL ignoré pour sécurité)"
         )
     else:
         # En développement/testing, respecter APP_LOG_LEVEL
@@ -1996,7 +2028,10 @@ def create_app(config_name: str | None = None):
             if isinstance(e, ExpiredSignatureError):
                 app.logger.warning("Token JWT expiré intercepté: %s", str(e))
                 return jsonify(
-                    {"error": "token_expired", "message": "Signature has expired"}
+                    {
+                        "error": "token_expired",
+                        "message": "Signature has expired",
+                    }
                 ), 401
             if isinstance(e, InvalidTokenError):
                 app.logger.warning("Token JWT invalide intercepté: %s", str(e))
@@ -2010,7 +2045,8 @@ def create_app(config_name: str | None = None):
             # Logger l'exception complète (pour Sentry/logs serveur)
             app.logger.exception("Unhandled server error")
 
-            # Message pour le client : générique en production, détaillé seulement en dev
+            # Message pour le client : générique en production,
+            # détaillé seulement en dev
             if is_production or not is_debug:
                 # Production ou non-DEBUG : message générique
                 msg = "Une erreur interne est survenue."
