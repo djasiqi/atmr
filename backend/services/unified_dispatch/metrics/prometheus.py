@@ -42,7 +42,8 @@ def _get_or_create_metric(metric_class, name, *args, **kwargs):
     """Crée une métrique Prometheus ou retourne None si déjà enregistrée.
 
     Évite les erreurs de duplication lors d'imports multiples (Gunicorn workers).
-    Si la métrique existe déjà, retourne None (elle sera utilisée depuis le registre global).
+    Si la métrique existe déjà, retourne None (elle sera utilisée depuis le
+    registre global).
 
     Args:
         metric_class: Classe de métrique (Counter, Gauge, Histogram)
@@ -64,7 +65,8 @@ def _get_or_create_metric(metric_class, name, *args, **kwargs):
         # La métrique existante sera utilisée depuis le registre global
         if "Duplicated timeseries" in str(e) or "already registered" in str(e):
             logger.debug(
-                "[DispatchMetrics] Métrique %s déjà enregistrée (ignorée, utilisation de l'existante)",
+                "[DispatchMetrics] Métrique %s déjà enregistrée (ignorée, "
+                "utilisation de l'existante)",
                 name,
             )
             return None
@@ -80,7 +82,8 @@ if (
     and Gauge is not None
     and Histogram is not None
 ):
-    # ✅ Protection contre duplication : toutes les métriques utilisent _get_or_create_metric
+    # ✅ Protection contre duplication : toutes les métriques utilisent
+    # _get_or_create_metric
     # Compteur de runs dispatch
     DISPATCH_RUNS_TOTAL = _get_or_create_metric(
         Counter,

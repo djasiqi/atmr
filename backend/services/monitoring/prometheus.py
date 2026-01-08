@@ -33,7 +33,8 @@ def _get_or_create_metric(metric_class, name, *args, **kwargs):
     """Crée une métrique Prometheus ou retourne None si déjà enregistrée.
 
     Évite les erreurs de duplication lors d'imports multiples (Gunicorn workers).
-    Si la métrique existe déjà, retourne None (elle sera utilisée depuis le registre global).
+    Si la métrique existe déjà, retourne None (elle sera utilisée depuis le
+    registre global).
 
     Args:
         metric_class: Classe de métrique (Counter, Gauge, Histogram)
@@ -55,7 +56,8 @@ def _get_or_create_metric(metric_class, name, *args, **kwargs):
         # La métrique existante sera utilisée depuis le registre global
         if "Duplicated timeseries" in str(e) or "already registered" in str(e):
             logger.debug(
-                "[PrometheusMetrics] Métrique %s déjà enregistrée (ignorée, utilisation de l'existante)",
+                "[PrometheusMetrics] Métrique %s déjà enregistrée (ignorée, "
+                "utilisation de l'existante)",
                 name,
             )
             return None
@@ -233,7 +235,8 @@ if PROMETHEUS_AVAILABLE and Counter and Histogram and Gauge:
         [
             "status",
             "event_type",
-        ],  # status: "success", "failed", event_type: "booking", "message", "delay", etc.
+        ],  # status: "success", "failed", event_type: "booking", "message",
+        # "delay", etc.
     )
 
     # Latence push notifications

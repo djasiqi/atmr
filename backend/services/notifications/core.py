@@ -230,14 +230,16 @@ def notify_dispatcher_optimization_opportunity(
     except (ValueError, TypeError, AttributeError) as e:
         # Erreurs de validation attendues : conversion de types, attributs manquants
         app_logger.error(
-            "[notify_dispatcher_optimization_opportunity] emit failed (validation error: %s): %s",
+            "[notify_dispatcher_optimization_opportunity] emit failed "
+            "(validation error: %s): %s",
             type(e).__name__,
             e,
         )
     except (ConnectionError, OSError) as e:
         # Erreurs réseau attendues : Socket.IO indisponible
         app_logger.error(
-            "[notify_dispatcher_optimization_opportunity] emit failed (network error: %s): %s",
+            "[notify_dispatcher_optimization_opportunity] emit failed "
+            "(network error: %s): %s",
             type(e).__name__,
             e,
         )
@@ -265,7 +267,8 @@ def notify_urgent_alert(
     Args:
         company_id: ID de l'entreprise
         alert_id: ID unique de l'alerte
-        alert_type: Type d'alerte (ex: "delay", "driver_unavailable", "booking_conflict")
+        alert_type: Type d'alerte (ex: "delay", "driver_unavailable",
+            "booking_conflict")
         message: Message de l'alerte
         booking_id: ID du booking concerné (optionnel)
         driver_id: ID du chauffeur concerné (optionnel)
