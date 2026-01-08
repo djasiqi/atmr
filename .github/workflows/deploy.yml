@@ -38,8 +38,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
-      # Utiliser l'input tag si fourni, sinon utiliser le secret DOCKER_TAG
-      DOCKER_TAG: ${{ github.event.inputs.tag != '' && github.event.inputs.tag || secrets.DOCKER_TAG }}
+      # TEMPORARY: Force tag v2 to rebuild with Flask-Limiter[redis] without cache conflicts
+      DOCKER_TAG: ${{ github.event.inputs.tag != '' && github.event.inputs.tag || 'v2' }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
@@ -168,8 +168,10 @@ jobs:
             REQUIREMENTS_HASH=${{ steps.requirements_hash.outputs.requirements_hash }}
           push: true
           tags: ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
-          # FORCE REBUILD COMPLET - pas de cache pour garantir Flask-Limiter[redis]
-          no-cache: true
+          # Réactiver le cache avec le nouveau tag v2 (pas de conflit avec le cache de 'latest')
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          no-cache: false
 
       - name: Verify image was pushed
         id: verify_push
@@ -226,8 +228,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
-      # Utiliser l'input tag si fourni, sinon utiliser le secret DOCKER_TAG
-      DOCKER_TAG: ${{ github.event.inputs.tag != '' && github.event.inputs.tag || secrets.DOCKER_TAG }}
+      # TEMPORARY: Force tag v2 to match build job
+      DOCKER_TAG: ${{ github.event.inputs.tag != '' && github.event.inputs.tag || 'v2' }}
       SSH_HOST: ${{ secrets.SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER }}
       SSH_PORT: ${{ secrets.SSH_PORT }}
