@@ -197,7 +197,8 @@ class GeofencingService:
 
             if result.inside:
                 logger.info(
-                    "[GeofencingService] Driver %d arrived at pickup (assignment %d, distance=%.1fm)",
+                    "[GeofencingService] Driver %d arrived at pickup "
+                    "(assignment %d, distance=%.1fm)",
                     driver_id,
                     assignment_id,
                     -result.distance_to_edge_m,
@@ -263,7 +264,8 @@ class GeofencingService:
 
             if result.inside:
                 logger.info(
-                    "[GeofencingService] Driver %d arrived at dropoff (assignment %d, distance=%.1fm)",
+                    "[GeofencingService] Driver %d arrived at dropoff "
+                    "(assignment %d, distance=%.1fm)",
                     driver_id,
                     assignment_id,
                     -result.distance_to_edge_m,

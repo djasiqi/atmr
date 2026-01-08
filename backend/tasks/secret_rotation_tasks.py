@@ -297,9 +297,11 @@ def check_and_rotate_all(self: Task) -> dict[str, Any]:
 
 @celery.task(bind=True, name="tasks.secret_rotation_tasks.check_rotation_due")
 def check_rotation_due(self: Task) -> dict[str, Any]:
-    """✅ S3: Vérifie si une rotation de clé est due (déprécié, utiliser check_and_rotate_all).
+    """✅ S3: Vérifie si une rotation de clé est due (déprécié, utiliser
+    check_and_rotate_all).
 
-    Cette tâche est conservée pour compatibilité mais redirige vers check_and_rotate_all.
+    Cette tâche est conservée pour compatibilité mais redirige vers
+    check_and_rotate_all.
 
     Returns:
         dict avec rotation_due (bool) et jours_restants

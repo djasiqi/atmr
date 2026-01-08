@@ -10,7 +10,8 @@ DISTANCE_THRESHOLD_KM = 0.1  # ~1km en degrés
 
 
 class UnassignedAnalyzer:
-    """Analyse les raisons détaillées pour lesquelles certaines courses n'ont pas pu être assignées."""
+    """Analyse les raisons détaillées pour lesquelles certaines courses n'ont
+    pas pu être assignées."""
 
     def analyze(
         self,
@@ -22,7 +23,8 @@ class UnassignedAnalyzer:
 
         Args:
             problem: Dictionnaire contenant les bookings et drivers
-            assignments: Liste des assignations (non utilisé mais conservé pour compatibilité)
+            assignments: Liste des assignations (non utilisé mais conservé pour
+                compatibilité)
             unassigned_ids: Liste des IDs de bookings non assignés
 
         Returns:

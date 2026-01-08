@@ -262,9 +262,10 @@ class ETADelayModel:
                     # ✅ Utilisation du repository pour découpler de SQLAlchemy
                     booking_repo = BookingRepository()
                     booking_dtos = booking_repo.find_recent_completed_by_driver(
-                        driver_id, cutoff_date, limit=50
-                    )
-                    # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs pour la compatibilité
+                    driver_id, cutoff_date, limit=50
+                )
+                # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs pour
+                # la compatibilité
                     booking_ids = [dto.id for dto in booking_dtos]
                     recent_bookings = (
                         Booking.query.filter(Booking.id.in_(booking_ids))
@@ -598,7 +599,8 @@ class ETADelayModel:
         """
         if not XGBOOST_AVAILABLE and not LIGHTGBM_AVAILABLE:
             raise ImportError(
-                "XGBoost ou LightGBM requis. Installer avec: pip install xgboost lightgbm"
+                "XGBoost ou LightGBM requis. "
+                "Installer avec: pip install xgboost lightgbm"
             )
 
         if not training_data:

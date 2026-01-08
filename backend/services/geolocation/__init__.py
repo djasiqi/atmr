@@ -1,7 +1,9 @@
 """
-Module `geolocation` - Consolidation des services de géolocalisation et routing
+Module `geolocation` - Consolidation des services de géolocalisation et
+routing
 
-Ce module regroupe tous les services liés à la géolocalisation, cartographie et routing :
+Ce module regroupe tous les services liés à la géolocalisation, cartographie
+et routing :
 - Services de géolocalisation et localisation
 - Geofencing (zones géographiques)
 - Intégration cartes (Google Maps, etc.)
@@ -18,7 +20,8 @@ Ce module consolide 7 services fragmentés :
 - `maps.py` → `geolocation/maps.py`
 - `google_places.py` → `geolocation/google_places.py`
 - `osrm_client.py` → `geolocation/osrm.py`
-- `interfaces/geocoding_interface.py` + `interfaces/routing_interface.py` → `geolocation/interfaces.py`
+- `interfaces/geocoding_interface.py` +
+  `interfaces/routing_interface.py` → `geolocation/interfaces.py`
 
 ## Structure
 

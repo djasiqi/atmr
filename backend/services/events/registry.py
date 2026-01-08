@@ -50,7 +50,8 @@ def dispatch_event(event: dict[str, Any]) -> None:
         except (ValueError, TypeError, AttributeError, KeyError) as e:
             # Erreurs de validation attendues : données invalides, clés manquantes
             logger.warning(
-                "[EventBus] handler failed event_type=%s handler=%r (validation error: %s): %s",
+                "[EventBus] handler failed event_type=%s handler=%r "
+                "(validation error: %s): %s",
                 event_type,
                 h,
                 type(e).__name__,
@@ -59,7 +60,8 @@ def dispatch_event(event: dict[str, Any]) -> None:
         except (ConnectionError, OSError) as e:
             # Erreurs réseau attendues : Socket.IO, services externes indisponibles
             logger.warning(
-                "[EventBus] handler failed event_type=%s handler=%r (network error: %s): %s",
+                "[EventBus] handler failed event_type=%s handler=%r "
+                "(network error: %s): %s",
                 event_type,
                 h,
                 type(e).__name__,

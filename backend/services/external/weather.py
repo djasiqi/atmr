@@ -301,7 +301,8 @@ class WeatherService:
             # Erreurs réseau/validation attendues : Redis indisponible, URL invalide
             pass
         except Exception:
-            # Erreur inattendue lors de la création du client Redis (ignorée silencieusement)
+            # Erreur inattendue lors de la création du client Redis
+            # (ignorée silencieusement)
             pass
 
         return None
@@ -428,7 +429,8 @@ class WeatherService:
             except (ValueError, TypeError) as e:
                 # Erreurs de validation attendues : JSON invalide
                 logger.debug(
-                    "[Weather] Failed to write to Redis cache (validation error: %s): %s",
+                    "[Weather] Failed to write to Redis cache "
+                    "(validation error: %s): %s",
                     type(e).__name__,
                     e,
                 )
