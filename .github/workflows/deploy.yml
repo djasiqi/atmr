@@ -530,7 +530,7 @@ jobs:
             } > .env.production && chmod 600 .env.production
             cp .env.production .env && chmod 600 .env
             mkdir -p data/rl/shadow_mode data/ml data/rl data/ml/models && chmod -R 755 data && chown -R 999:999 data 2>/dev/null || true
-            docker compose -f docker-compose.production.yml up -d
+            docker compose -f docker-compose.production.yml up -d --remove-orphans
             echo "⏳ Attente du démarrage du backend..."
             for i in $(seq 1 30); do
               BACKEND_STATUS=$(docker compose -f docker-compose.production.yml ps backend --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
@@ -587,7 +587,7 @@ jobs:
                 echo "⚠️  Répertoire monitoring non trouvé, certains services peuvent ne pas fonctionner correctement"
               fi
               
-              docker compose -f docker-compose.monitoring.yml up -d || {
+              docker compose -f docker-compose.monitoring.yml up -d --remove-orphans || {
                 echo "⚠️  Erreur lors du démarrage du monitoring, vérification des logs..."
                 docker compose -f docker-compose.monitoring.yml logs --tail 50 || true
                 echo "⚠️  Le monitoring n'a pas pu démarrer, mais le déploiement continue..."

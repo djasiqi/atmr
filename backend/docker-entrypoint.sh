@@ -158,21 +158,29 @@ warmup_models() {
     echo "🔥 Warmup des modèles ML..."
     
     # Warmup du modèle de prédiction de retard
-    if [ -f "/app/data/ml/delay_predictor.pkl" ]; then
-        echo "  📊 Chargement du modèle de prédiction de retard..."
+    # Vérifier plusieurs emplacements possibles
+    MODEL_PATH=""
+    if [ -f "/app/data/ml/models/delay_predictor.pkl" ]; then
+        MODEL_PATH="/app/data/ml/models/delay_predictor.pkl"
+    elif [ -f "/app/data/ml/delay_predictor.pkl" ]; then
+        MODEL_PATH="/app/data/ml/delay_predictor.pkl"
+    fi
+    
+    if [ -n "$MODEL_PATH" ]; then
+        echo "  📊 Chargement du modèle de prédiction de retard depuis $MODEL_PATH..."
         python -c "
 import pickle
 import logging
 logging.basicConfig(level=logging.INFO)
 try:
-    with open('/app/data/ml/delay_predictor.pkl', 'rb') as f:
+    with open('$MODEL_PATH', 'rb') as f:
         model = pickle.load(f)
     print(f'✅ Modèle de prédiction de retard chargé: {type(model).__name__}')
 except Exception as e:
     print(f'⚠️  Erreur lors du chargement du modèle de prédiction: {e}')
 "
     else
-        echo "  ⚠️  Modèle de prédiction de retard non trouvé"
+        echo "  ℹ️  Modèle de prédiction de retard non trouvé (optionnel)"
     fi
     
     # Warmup des modèles RL (uniquement si RL_ENABLED=true)

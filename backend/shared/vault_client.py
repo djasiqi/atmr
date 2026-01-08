@@ -112,7 +112,7 @@ class VaultClient:
                 )
                 self._client.token = response["auth"]["client_token"]
             else:
-                logger.warning(
+                logger.debug(
                     "[4.1 Vault] Aucune authentification configurée, désactivation"
                 )
                 self.use_vault = False
@@ -208,7 +208,7 @@ class VaultClient:
             logger.debug("[4.1 Vault] Utilisation valeur par défaut pour: %s", path)
             return default
 
-        logger.warning(
+        logger.debug(
             "[4.1 Vault] Secret non trouvé: %s (path=%s, key=%s)",
             env_fallback or path,
             path,
