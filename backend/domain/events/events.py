@@ -42,7 +42,8 @@ class DriverLocationUpdatedEvent(DomainEvent):
 
 @dataclass(frozen=True, slots=True)
 class DispatchRequestedEvent(DomainEvent):
-    """Event utilitaire pour découpler les triggers dispatch (booking/driver changes)."""
+    """Event utilitaire pour découpler les triggers dispatch
+    (booking/driver changes)."""
 
     event_type = "DispatchRequestedEvent"
 

@@ -8,7 +8,8 @@ from services.geolocation.location import LocationService, get_location_service
 
 
 class LocationServiceAdapter:
-    """Adapter qui encapsule LocationService pour l'utiliser avec UpdateDriverLocationUseCase.
+    """Adapter qui encapsule LocationService pour l'utiliser avec
+    UpdateDriverLocationUseCase.
 
     Permet d'utiliser LocationService existant avec les nouveaux use-cases.
     """

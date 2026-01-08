@@ -23,7 +23,8 @@ class ValueObject:
 class BookingStatus(ValueObject):
     """Value Object : Statut de réservation."""
 
-    value: str  # PENDING, ACCEPTED, ASSIGNED, EN_ROUTE, IN_PROGRESS, COMPLETED, CANCELLED, RETURN_COMPLETED
+    value: str  # PENDING, ACCEPTED, ASSIGNED, EN_ROUTE, IN_PROGRESS,
+    # COMPLETED, CANCELLED, RETURN_COMPLETED
 
     def can_be_cancelled(self) -> bool:
         """Vérifie si la réservation peut être annulée."""

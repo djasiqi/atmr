@@ -74,8 +74,12 @@ class SqlAlchemyDispatchRunRepository:
                 "assignments_count": dispatch_run.metrics.assignments_count,
                 "unassigned_count": dispatch_run.metrics.unassigned_count,
                 "total_distance_km": dispatch_run.metrics.total_distance_km,
-                "total_duration_minutes": dispatch_run.metrics.total_duration_minutes,
-                "average_wait_time_minutes": dispatch_run.metrics.average_wait_time_minutes,
+                "total_duration_minutes": (
+                    dispatch_run.metrics.total_duration_minutes
+                ),
+                "average_wait_time_minutes": (
+                    dispatch_run.metrics.average_wait_time_minutes
+                ),
             }
         else:
             data["metrics"] = None
