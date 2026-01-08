@@ -137,6 +137,86 @@ except Exception:
 # #endregion
 
 
+# ========================
+# ✅ C2: Redis Storage avec TTL automatiques
+# ========================
+
+class RedisStorageWithTTL:
+    """
+    Wrapper pour le storage Redis qui ajoute automatiquement des TTL aux clés.
+
+    Cela évite l'accumulation de clés obsolètes en mémoire Redis et garantit
+    un nettoyage automatique sans intervention manuelle.
+    """
+
+    def __init__(self, storage_uri: str, ttl_seconds: int = 7200):
+        """
+        Initialise le storage Redis avec TTL automatique.
+
+        Args:
+            storage_uri: URI de connexion Redis (ex: "redis://localhost:6379/0")
+            ttl_seconds: Durée de vie des clés en secondes (défaut: 2 heures)
+        """
+        # Import tardif pour éviter les cycles
+        from flask_limiter.storage import (  # pyright: ignore[reportMissingImports]
+            RedisStorage,
+        )
+
+        self.storage = RedisStorage(storage_uri)
+        self.ttl_seconds = ttl_seconds
+        app_logger.info(
+            "[Rate Limit] Storage Redis avec TTL automatique: %d secondes (%d heures)",
+            ttl_seconds,
+            ttl_seconds // 3600,
+        )
+
+    def __getattr__(self, name):
+        """Délègue tous les appels au storage Redis sous-jacent."""
+        return getattr(self.storage, name)
+
+    def incr(
+        self,
+        key: str,
+        expiry: int,
+        elastic_expiry: bool = False,
+        amount: int = 1,
+    ) -> int:
+        """
+        Incrémente le compteur et définit un TTL sur la clé.
+
+        Args:
+            key: Clé Redis à incrémenter
+            expiry: Expiration en secondes (paramètre Flask-Limiter, peut être ignoré)
+            elastic_expiry: Si True, prolonge le TTL à chaque hit
+            amount: Valeur d'incrémentation
+
+        Returns:
+            Nouvelle valeur du compteur
+        """
+        # Incrémenter via le storage sous-jacent
+        result = self.storage.incr(key, expiry, elastic_expiry, amount)
+
+        # ✅ Définir un TTL automatique sur la clé
+        # Si elastic_expiry=True, prolonge le TTL à chaque requête (comportement "sliding window")
+        # Sinon, utilise le TTL configuré une seule fois
+        try:
+            redis_conn = self.storage.storage
+            if (
+                redis_conn
+                and hasattr(redis_conn, "expire")
+                and (elastic_expiry or result == amount)
+            ):
+                # Première création ou mode élastique : définir/prolonger le TTL
+                redis_conn.expire(key, self.ttl_seconds)
+        except Exception as e:
+            # Ne pas crasher si le TTL échoue, juste logger
+            app_logger.warning(
+                "[Rate Limit] Échec définition TTL pour clé %s: %s", key, e
+            )
+
+        return result
+
+
 # ✅ C2: Fonction pour générer un hash de configuration (versioning des clés Redis)
 def get_rate_limit_config_hash() -> str:
     """Génère un hash unique basé sur les configurations de rate limit.
@@ -194,10 +274,25 @@ def get_rate_limit_key() -> str:
 # ✅ C2: Configuration dynamique depuis variables d'environnement
 # ⚠️ C2 LOAD TESTING: Temporairement augmenté à 100000/hour pour tests de charge
 _default_limit = os.getenv("RATELIMIT_DEFAULT_LIMITS", "100000 per hour")
+
+# ✅ C2 Phase 2: TTL automatiques sur les clés de rate limit
+# Durée de vie par défaut: 2 heures (7200 secondes)
+# Les clés expirent automatiquement, évitant l'accumulation en mémoire
+_rate_limit_ttl = int(os.getenv("RATELIMIT_KEY_TTL", "7200"))
+
+# Créer le storage avec TTL automatiques si Redis est disponible
+if limiter_storage != "memory://":
+    _limiter_storage_with_ttl: str | RedisStorageWithTTL = RedisStorageWithTTL(
+        limiter_storage, ttl_seconds=_rate_limit_ttl
+    )
+else:
+    # Mode memory: pas besoin de TTL (les clés sont en mémoire volatile)
+    _limiter_storage_with_ttl = limiter_storage
+
 limiter = Limiter(
     key_func=get_rate_limit_key,
     default_limits=[_default_limit],
-    storage_uri=limiter_storage,
+    storage_uri=_limiter_storage_with_ttl,
     strategy=os.getenv("RATELIMIT_STRATEGY", "moving-window"),
 )
 
