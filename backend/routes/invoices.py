@@ -4,7 +4,7 @@ import traceback
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from flask import request  # pyright: ignore[reportMissingImports]
+from flask import request
 from flask_jwt_extended import jwt_required  # pyright: ignore[reportMissingImports]
 from flask_restx import (  # pyright: ignore[reportMissingImports]
     Namespace,
