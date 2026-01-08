@@ -140,7 +140,8 @@ def haversine_seconds(
 def validate_coordinates(lat: float, lon: float) -> bool:
     """Valide que les coordonnées GPS sont dans les plages correctes.
 
-    ✅ S1: Validation stricte des coordonnées GPS pour éviter injection et valeurs invalides.
+    ✅ S1: Validation stricte des coordonnées GPS pour éviter injection et
+    valeurs invalides.
 
     Args:
         lat: Latitude en degrés décimaux

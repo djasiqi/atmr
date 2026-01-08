@@ -448,7 +448,8 @@ class SuggestionEngine:
                 available_driver_dtos = [
                     dto for dto in available_driver_dtos if dto.id != exclude_driver_id
                 ]
-            # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs pour la compatibilité
+            # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs pour
+            # la compatibilité
             driver_ids = [dto.id for dto in available_driver_dtos]
             drivers = (
                 Driver.query.filter(Driver.id.in_(driver_ids)).all()

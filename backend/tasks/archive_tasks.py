@@ -49,7 +49,8 @@ def archive_old_positions_task(
             from scripts.archive_old_positions import archive_positions_older_than
 
             logger.info(
-                "[ArchiveTask] Starting automatic archive of positions older than %d days",
+                "[ArchiveTask] Starting automatic archive of positions older "
+                "than %d days",
                 days,
             )
 

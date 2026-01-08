@@ -106,7 +106,8 @@ def safe_execute(
     À utiliser uniquement pour des cas spécifiques où on veut vraiment ignorer
     toutes les erreurs (ex: cleanup, logging, etc.).
 
-    Pour la plupart des cas, préférer handle_db_errors(), handle_validation_errors(), etc.
+    Pour la plupart des cas, préférer handle_db_errors(),
+    handle_validation_errors(), etc.
 
     Args:
         default_return: Valeur de retour par défaut en cas d'erreur (par défaut: None)

@@ -30,7 +30,8 @@ class ProblemBuilder:
         """Construit le problème de dispatch.
 
         Args:
-            company: Objet Company (non utilisé actuellement, conservé pour compatibilité)
+            company: Objet Company (non utilisé actuellement, conservé pour
+                compatibilité)
             company_id: ID de l'entreprise
             settings: Paramètres de dispatch
             for_date: Date au format YYYY-MM-DD

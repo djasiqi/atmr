@@ -62,8 +62,9 @@ def _begin_tx():
     avant d'essayer de créer un savepoint.
 
     ✅ FIX: Approche défensive : essaie toujours begin_nested() d'abord car
-    dans pytest il y a toujours une transaction active. Si ça échoue avec
-    une erreur spécifique indiquant qu'aucune transaction n'existe, alors utilise begin().
+    dans pytest il y a toujours une transaction active. Si ça échoue avec une
+    erreur spécifique indiquant qu'aucune transaction n'existe, alors utilise
+    begin().
 
     Usage:
         with _begin_tx():

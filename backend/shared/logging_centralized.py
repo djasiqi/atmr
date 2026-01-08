@@ -224,7 +224,8 @@ def setup_centralized_logging(app) -> None:
     endpoint = os.getenv("LOG_CENTRALIZATION_ENDPOINT")
     if not endpoint:
         app.logger.debug(
-            "[Centralized Logging] Désactivé (LOG_CENTRALIZATION_ENDPOINT non configuré)"
+            "[Centralized Logging] Désactivé "
+            "(LOG_CENTRALIZATION_ENDPOINT non configuré)"
         )
         return
 
