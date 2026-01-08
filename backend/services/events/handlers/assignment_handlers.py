@@ -48,7 +48,8 @@ def handle_assignment_cancelled(event: dict[str, Any]) -> None:
             driver_id=driver_id_int,
         )
         logger.info(
-            "✅ Assignment cancelled notification sent: assignment_id=%s, booking_id=%s, driver_id=%s",
+            "✅ Assignment cancelled notification sent: assignment_id=%s, "
+            "booking_id=%s, driver_id=%s",
             assignment_id,
             booking_id,
             driver_id,
@@ -56,14 +57,16 @@ def handle_assignment_cancelled(event: dict[str, Any]) -> None:
     except (ValueError, TypeError, AttributeError) as e:
         # Erreurs de validation attendues : conversion de types, attributs manquants
         logger.warning(
-            "❌ Failed to send assignment cancelled notification (validation error: %s): %s",
+            "❌ Failed to send assignment cancelled notification "
+            "(validation error: %s): %s",
             type(e).__name__,
             e,
         )
     except (ConnectionError, OSError) as e:
         # Erreurs réseau attendues : Socket.IO indisponible
         logger.warning(
-            "❌ Failed to send assignment cancelled notification (network error: %s): %s",
+            "❌ Failed to send assignment cancelled notification "
+            "(network error: %s): %s",
             type(e).__name__,
             e,
         )
