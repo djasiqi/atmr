@@ -292,7 +292,8 @@ class UserRepository:
         return User.query.filter_by(public_id=public_id).first()
 
     def find_by_public_id_with_driver_and_company(self, public_id: str) -> User | None:
-        """Trouve un utilisateur par son ID public avec eager loading de driver et company.
+        """Trouve un utilisateur par son ID public avec eager loading de
+        driver et company.
 
         Args:
             public_id: ID public de l'utilisateur

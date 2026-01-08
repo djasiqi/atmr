@@ -1,6 +1,7 @@
 """Schéma Marshmallow pour les overrides de dispatch.
 
-Placée dans `schemas/` (et non `routes/`) pour éviter les cycles d'imports avec Flask-RESTX.
+Placée dans `schemas/` (et non `routes/`) pour éviter les cycles d'imports
+avec Flask-RESTX.
 """
 
 from marshmallow import Schema  # pyright: ignore[reportMissingImports]

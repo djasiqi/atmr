@@ -440,7 +440,8 @@ def health_check():
 
     """
     try:
-        # ✅ DDD: Vérifier les composants via service (accès direct nécessaire pour health check)
+        # ✅ DDD: Vérifier les composants via service (accès direct
+        # nécessaire pour health check)
         from alerts.infrastructure.adapters.proactive_alerts_adapter import (
             create_proactive_alerts_service,
         )

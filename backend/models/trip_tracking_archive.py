@@ -117,7 +117,8 @@ class TripTrackingArchive(db.Model):
             logger.debug("Partition %s already exists", partition_name)
             return False
 
-        # Créer la partition (utiliser format() pour nom de table, mais paramètres pour dates)
+        # Créer la partition (utiliser format() pour nom de table, mais
+        # paramètres pour dates)
         # Note: Le nom de la partition doit être dans le SQL, pas un paramètre
         create_sql = text(
             f"""

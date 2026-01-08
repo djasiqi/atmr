@@ -1,4 +1,5 @@
-"""Module `infrastructure` - Services transversaux (cache, DB, feature flags, A/B testing)
+"""Module `infrastructure` - Services transversaux (cache, DB, feature flags,
+A/B testing)
 Migration B2 - 7 janvier 2025
 """
 
