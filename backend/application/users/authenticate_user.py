@@ -1,7 +1,8 @@
 """Use-case: authentifier un utilisateur (login).
 
-⚠️ TODO: Ce use case encapsule temporairement la logique d'authentification dans routes/auth.py
-pour permettre une migration progressive. La logique métier devrait être migrée progressivement
+⚠️ TODO: Ce use case encapsule temporairement la logique
+d'authentification dans routes/auth.py pour permettre une migration
+progressive. La logique métier devrait être migrée progressivement
 vers ce use case.
 """
 
@@ -62,10 +63,12 @@ class AuthenticateUserUseCase:
             input_data: Input avec email et password
 
         Returns:
-            AuthenticateUserOutput avec les tokens et l'utilisateur si authentification réussie
+            AuthenticateUserOutput avec les tokens et l'utilisateur si
+            authentification réussie
 
         Note:
-            La génération des tokens, audit logging, et métriques sont gérés dans les routes
+            La génération des tokens, audit logging, et métriques sont gérés
+            dans les routes
             pour l'instant. Ces aspects seront migrés progressivement vers ce use case.
         """
         # Validation
