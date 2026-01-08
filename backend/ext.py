@@ -165,7 +165,7 @@ class RedisStorageWithTTL:
 
         # Import tardif pour éviter les cycles
         # Flask-Limiter 3.x utilise le package 'limits' pour les storage backends
-        from limits.storage import RedisStorage
+        from limits.storage import RedisStorage  # pyright: ignore[reportMissingImports]
 
         self.storage = RedisStorage(storage_uri)
         self.ttl_seconds = ttl_seconds
