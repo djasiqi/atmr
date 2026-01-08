@@ -57,7 +57,8 @@ def validate_uploaded_file(
 ) -> dict[str, Any]:
     """Valide un fichier uploadé (image ou document).
 
-    ✅ S1: Validation serveur stricte pour uploads de fichiers (type MIME, signature magique).
+    ✅ S1: Validation serveur stricte pour uploads de fichiers (type MIME,
+    signature magique).
 
     Args:
         file_content: Contenu du fichier (bytes ou base64 string)
@@ -92,7 +93,8 @@ def validate_uploaded_file(
     if isinstance(file_content, str):
         file_content_bytes = decode_base64_file(file_content)
     elif isinstance(file_content, bytes):  # pyright: ignore[reportUnnecessaryIsInstance]
-        # Vérification nécessaire pour validation runtime (type checker ne peut pas garantir le type)
+        # Vérification nécessaire pour validation runtime (type checker ne peut
+        # pas garantir le type)
         file_content_bytes = file_content
     else:
         raise ValidationError("file_content doit être bytes ou base64 string")
@@ -133,7 +135,8 @@ def get_file_from_request(
 ) -> dict[str, Any]:
     """Récupère et valide un fichier depuis une requête Flask.
 
-    ✅ S1: Helper pour récupérer et valider un fichier depuis request.files ou request.json.
+    ✅ S1: Helper pour récupérer et valider un fichier depuis request.files ou
+    request.json.
 
     Args:
         field_name: Nom du champ dans la requête

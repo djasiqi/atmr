@@ -146,9 +146,11 @@ def check_app_version(platform: str, current_version: str) -> dict[str, str | No
     """
     config = get_version_config(platform)
     if not config:
-        # Si aucune config n'existe, on considère que tout est OK (comportement par défaut)
+        # Si aucune config n'existe, on considère que tout est OK
+        # (comportement par défaut)
         logger.warning(
-            "Aucune configuration de version trouvée pour %s. Comportement par défaut: OK",
+            "Aucune configuration de version trouvée pour %s. "
+            "Comportement par défaut: OK",
             platform,
         )
         return {
@@ -176,7 +178,8 @@ def check_app_version(platform: str, current_version: str) -> dict[str, str | No
         elif status == "UPDATE_RECOMMENDED":
             message = (
                 "Une nouvelle version de l'application est disponible. "
-                "Nous vous recommandons de mettre à jour pour bénéficier des dernières améliorations."
+                "Nous vous recommandons de mettre à jour pour bénéficier des "
+                "dernières améliorations."
             )
 
     return {
