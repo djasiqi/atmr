@@ -490,6 +490,32 @@ services:
           cpus: "0.25"
           memory: 256M
 
+  # ✅ C2: Service Locust pour tests de charge
+  locust:
+    image: locustio/locust:2.24.0
+    ports:
+      - "8089:8089" # Interface web Locust
+    volumes:
+      - ./backend:/app
+    working_dir: /app
+    command: >
+      locust
+      -f tests/load_testing/dispatch_load_test.py
+      --host=http://api:5000
+    environment:
+      - LOCUST_HOST=http://api:5000
+    depends_on:
+      - api
+    restart: "no" # Lancer manuellement quand nécessaire
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+
 volumes:
   pg_data:
   redis-data:
