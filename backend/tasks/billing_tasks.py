@@ -72,7 +72,8 @@ def check_overdues_and_trigger_reminders():
             )
 
         app_logger.info(
-            "Vérification des factures en retard terminée: %s factures mises à jour, %s rappels générés",
+            "Vérification des factures en retard terminée: %s factures mises "
+            "à jour, %s rappels générés",
             check_result.updated_count,
             process_result.reminders_generated,
         )

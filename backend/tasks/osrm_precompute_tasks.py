@@ -72,7 +72,8 @@ def _identify_frequent_zones(
 
         if not bookings:
             logger.info(
-                "[OSRM Precompute] No bookings found for analysis (company_id=%s, days=%d)",
+                "[OSRM Precompute] No bookings found for analysis "
+                "(company_id=%s, days=%d)",
                 company_id,
                 lookback_days,
             )

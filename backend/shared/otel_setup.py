@@ -70,7 +70,8 @@ def setup_opentelemetry(
         flask_config = os.getenv("FLASK_CONFIG", "")
         if flask_env != "testing" and flask_config != "testing":
             logger.warning(
-                "[2.9] OpenTelemetry non installé - installer avec: pip install -r requirements-otel.txt"
+                "[2.9] OpenTelemetry non installé - installer avec: "
+                "pip install -r requirements-otel.txt"
             )
         return
     # Créer resource avec métadonnées service
