@@ -99,4 +99,3 @@ def test_calculate_eta_fallback_uses_routing_service_eta_seconds(monkeypatch) ->
     assert eta == 123
     assert fake.last_eta_kwargs is not None
     assert fake.last_eta_kwargs["base_url"] == "http://osrm-test:5000"
-

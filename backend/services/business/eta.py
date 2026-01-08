@@ -364,5 +364,3 @@ def get_eta_service() -> EtaService:
         )
 
     return _eta_service_instance
-
-

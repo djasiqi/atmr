@@ -291,4 +291,3 @@ def precompute_osrm_matrices_task(
     except Exception as e:
         logger.exception("[OSRM Precompute] Task failed: %s", e)
         raise
-

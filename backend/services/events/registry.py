@@ -103,4 +103,3 @@ register("DispatchRequestedEvent", handle_event_metrics)
 register("DriverLocationUpdatedEvent", handle_event_metrics)
 register("DriverNewBookingEvent", handle_event_metrics)
 register("AssignmentCancelledEvent", handle_event_metrics)
-

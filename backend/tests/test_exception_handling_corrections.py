@@ -382,5 +382,3 @@ class TestExceptionRegression:
 if __name__ == "__main__":
     """Exécution directe pour tests rapides."""
     pytest.main([__file__, "-v"])
-
-

@@ -826,4 +826,3 @@ class TestDisasterScenarios:
         )
 
         logger.info("[D3] ✅ Test de non-régression : pas de redirections 302 confirmé")
-

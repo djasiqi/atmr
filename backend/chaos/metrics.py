@@ -330,4 +330,3 @@ def measure_rto(
         f"failed for service {service_name}"
     )
     raise RuntimeError(error_msg) from None
-

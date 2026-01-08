@@ -8,4 +8,3 @@ def get_distance_duration_fn() -> Callable[[str, str], tuple[int, int]]:
     from services.geolocation.maps import get_distance_duration
 
     return get_distance_duration
-

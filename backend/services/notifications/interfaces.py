@@ -155,4 +155,3 @@ def set_notification_service(service: NotificationServiceInterface) -> None:
     import services.interfaces.notification_interface as module
 
     module._default_notification_service = service
-

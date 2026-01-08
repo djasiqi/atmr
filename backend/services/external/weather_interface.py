@@ -107,4 +107,3 @@ def set_weather_service(service: WeatherServiceInterface) -> None:
     import services.external.weather_interface as module
 
     module._default_weather_service = service
-

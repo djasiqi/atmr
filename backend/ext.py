@@ -238,7 +238,8 @@ def get_rate_limit_config_hash() -> str:
     default_limits = os.getenv("RATELIMIT_DEFAULT_LIMITS", "1000 per hour")
 
     config_str = f"{version}:{environment}:{default_limits}"
-    return hashlib.md5(config_str.encode()).hexdigest()[:8]
+    # MD5 utilisé uniquement pour générer une clé de cache (non cryptographique)
+    return hashlib.md5(config_str.encode(), usedforsecurity=False).hexdigest()[:8]  # nosec B324
 
 
 # ✅ S2: Fonction key_func pour rate limiting par utilisateur (si authentifié) ou par IP

@@ -600,4 +600,3 @@ def get_location_service() -> LocationService:
         osrm_url = os.getenv("UD_OSRM_BASE_URL", DEFAULT_OSRM_BASE_URL)
         _location_service_instance = LocationService(osrm_base_url=osrm_url)
     return _location_service_instance
-

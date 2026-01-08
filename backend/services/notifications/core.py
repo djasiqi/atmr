@@ -281,5 +281,3 @@ def notify_urgent_alert(
         booking_id=booking_id,
         driver_id=driver_id,
     )
-
-

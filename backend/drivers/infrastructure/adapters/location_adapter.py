@@ -59,4 +59,3 @@ def create_location_update_fn() -> Callable[..., Any]:
     """
     adapter = LocationServiceAdapter()
     return adapter.update_driver_location
-

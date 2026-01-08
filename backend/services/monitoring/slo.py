@@ -259,4 +259,3 @@ def normalize_endpoint(endpoint: str) -> str:
         normalized = normalized[:MAX_ENDPOINT_LENGTH] + "..."
 
     return normalized
-

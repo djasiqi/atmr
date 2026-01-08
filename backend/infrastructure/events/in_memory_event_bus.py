@@ -26,4 +26,3 @@ class InMemoryEventBus(EventBus):
         from services.events.handlers_registry import dispatch_event
 
         dispatch_event(event.to_dict())
-

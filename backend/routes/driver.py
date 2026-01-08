@@ -1869,4 +1869,3 @@ class SwitchToEnterprise(Resource):
             }
             status_code = 500
         return result, status_code
-

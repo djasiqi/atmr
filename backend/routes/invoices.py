@@ -3695,4 +3695,3 @@ class BillablePartnersDebug(Resource):
         except Exception as e:
             logger.exception("Erreur lors du debug des partenaires facturables")
             return APIErrorHandler.handle_exception(e, logger)
-

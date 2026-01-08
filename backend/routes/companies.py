@@ -5389,5 +5389,3 @@ class DebugBookingTransfer(Resource):
         }
 
         return result, 200
-
-

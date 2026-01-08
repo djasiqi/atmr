@@ -581,4 +581,3 @@ def get_db_circuit_breaker_stats() -> dict[str, Any]:
         Dict avec les statistiques du circuit breaker
     """
     return _db_circuit_breaker.get_stats()
-

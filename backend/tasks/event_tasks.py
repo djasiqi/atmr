@@ -9,4 +9,3 @@ def handle_domain_event(event: dict) -> None:  # type: ignore[type-arg]
     from services.events.handlers_registry import dispatch_event
 
     dispatch_event(event)
-

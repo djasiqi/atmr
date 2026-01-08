@@ -212,4 +212,3 @@ class GenerateInvoiceReminderUseCase:
                 error={"error": "Erreur interne"},
                 status_code=500,
             )
-

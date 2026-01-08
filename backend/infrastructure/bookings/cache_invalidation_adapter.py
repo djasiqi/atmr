@@ -77,4 +77,3 @@ def create_cache_invalidation_ports() -> tuple[
         invalidate_osrm_matrix_cache_adapter(coords)
 
     return invalidate_geocoding_fn, invalidate_osrm_fn
-

@@ -164,4 +164,3 @@ def geocode_booking_addresses_task(
             db.session.rollback()
             # ✅ P1: Retry automatique pour erreurs transitoires
             raise self.retry(exc=e, countdown=5) from e
-

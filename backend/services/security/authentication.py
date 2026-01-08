@@ -30,7 +30,7 @@ from services.security.authentication import AccessTokenService, RefreshTokenSer
 
 ---
 
-**Version :** 1.0.0  
+**Version :** 1.0.0
 **Date :** 7 janvier 2025
 """
 
@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 
 class AccessTokenService:
     """Service pour gérer la révocation des access tokens.
-    
+
     Note: Les access tokens expirent rapidement (1-2h), donc la révocation
     est moins critique que pour les refresh tokens. Cependant, elle permet
     de révoquer immédiatement un token lors d'un logout ou d'une action
@@ -100,7 +100,7 @@ class AccessTokenService:
 
 class RefreshTokenService:
     """Service pour gérer les refresh tokens avec rotation et limitation.
-    
+
     Ce service utilise Redis pour stocker les tokens actifs et révoqués,
     permettant une rotation automatique des refresh tokens et une limitation
     du nombre de tokens actifs par utilisateur.
@@ -334,4 +334,3 @@ class RefreshTokenService:
             Hash SHA256 du token (64 caractères hexadécimaux)
         """
         return hashlib.sha256(token.encode()).hexdigest()
-

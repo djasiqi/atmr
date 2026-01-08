@@ -686,4 +686,3 @@ class PartnershipStatementService:
 
         logger.info("Décompte PDF généré: %s", pdf_url)
         return pdf_url
-

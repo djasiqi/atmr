@@ -233,4 +233,3 @@ if __name__ == "__main__":
 
     print("=" * 50)
     print("✅ TOUS LES TESTS DE FALLBACK OSRM RÉUSSIS")
-

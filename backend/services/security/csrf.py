@@ -387,7 +387,9 @@ def setup_csrf_protection(app: Any) -> None:
         if request.path.startswith("/api/v1/company_dispatch/"):
             should_check = False
         # ✅ Routes dispatch protégées par JWT, pas besoin de CSRF (tests de charge C2)
-        if request.path.startswith("/api/v1/dispatch/") or request.path.startswith("/api/dispatch/"):
+        if request.path.startswith("/api/v1/dispatch/") or request.path.startswith(
+            "/api/dispatch/"
+        ):
             should_check = False
 
         if not should_check:

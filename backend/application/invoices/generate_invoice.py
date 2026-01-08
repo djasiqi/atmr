@@ -586,4 +586,3 @@ class GenerateInvoiceUseCase:
                 error={"error": "Erreur interne"},
                 status_code=500,
             )
-

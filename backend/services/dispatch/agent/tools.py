@@ -1235,4 +1235,3 @@ class AgentTools:
         except Exception as e:
             logger.exception("[AgentTools] Error in notify: %s", e)
             return {"ok": False, "error": str(e)}
-

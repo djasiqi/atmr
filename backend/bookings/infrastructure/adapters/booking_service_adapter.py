@@ -60,4 +60,3 @@ def create_booking_via_use_case(
     use_case = create_booking_use_case()
     cmd = CreateBookingCommand(user_id=user_id, client_id=client_id, data=data)
     return use_case.execute(cmd)
-

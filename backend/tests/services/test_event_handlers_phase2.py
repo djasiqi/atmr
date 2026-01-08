@@ -651,4 +651,3 @@ class TestEventIntegration:
 
             # Vérifier que le handler a été appelé
             mock_notify.assert_called_once()
-

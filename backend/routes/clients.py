@@ -983,4 +983,3 @@ class ClientsList(Resource):
                 "❌ ERREUR clients POST / : %s - %s", type(e).__name__, str(e)
             )
             return APIErrorHandler.handle_exception(e, logger)
-

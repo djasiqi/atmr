@@ -138,5 +138,3 @@ def set_geocoding_service(service: GeocodingServiceInterface) -> None:
     import services.interfaces.geocoding_interface as module
 
     module._default_geocoding_service = service
-
-

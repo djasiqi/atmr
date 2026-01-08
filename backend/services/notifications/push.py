@@ -363,4 +363,3 @@ def _persist_failed_push(
             "timestamp": time.time(),
         },
     )
-

@@ -33,7 +33,7 @@ from services.partnerships.stats import PartnershipStatsService
 
 ---
 
-**Version :** 1.0.0 (B2 Refactoring)  
+**Version :** 1.0.0 (B2 Refactoring)
 **Date :** 7 janvier 2025
 """
 
@@ -41,5 +41,3 @@ __all__ = []
 
 __version__ = "1.0.0"
 __refactoring__ = "B2 - Services Consolidation"
-
-

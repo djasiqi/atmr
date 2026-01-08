@@ -165,4 +165,3 @@ class TestPartnershipService:
             db.session.refresh(partnership)
 
             assert partnership.is_active is False
-

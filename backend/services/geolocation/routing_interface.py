@@ -236,5 +236,3 @@ def set_routing_service(service: RoutingServiceInterface) -> None:
     import services.interfaces.routing_interface as module
 
     module._default_routing_service = service
-
-

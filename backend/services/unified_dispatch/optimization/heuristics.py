@@ -3826,4 +3826,3 @@ def estimate_wait_or_require_extra(
         suggestions.append("Élargir légèrement les fenêtres ou ajuster les priorités.")
 
     return {"summary": "ok", "items": items, "suggestions": suggestions}
-

@@ -821,7 +821,8 @@ def build_distance_matrix_osrm(
     )
 
     # ✅ P1: Créer clé de cache globale pour matrice complète (cache local L1)
-    full_matrix_cache_key = f"osrm:matrix:{hashlib.md5(json.dumps(coords, sort_keys=True).encode()).hexdigest()}:{n}"
+    # MD5 utilisé uniquement pour générer une clé de cache (non cryptographique)
+    full_matrix_cache_key = f"osrm:matrix:{hashlib.md5(json.dumps(coords, sort_keys=True).encode(), usedforsecurity=False).hexdigest()}:{n}"  # nosec B324
 
     # ✅ P1: Vérifier cache local LRU (L1 cache - ultra rapide)
     with _OSRM_MATRIX_LOCAL_CACHE_LOCK:
@@ -1448,7 +1449,7 @@ _osrm_circuit_breaker = CircuitBreaker(failure_threshold=5, timeout_duration=60)
 
 # ✅ Import métriques Prometheus pour circuit breaker
 try:
-    from services.unified_dispatch.dispatch_prometheus_metrics import (
+    from services.unified_dispatch.dispatch_prometheus_metrics import (  # type: ignore[import-not-found]
         record_circuit_breaker_state,
     )
 
