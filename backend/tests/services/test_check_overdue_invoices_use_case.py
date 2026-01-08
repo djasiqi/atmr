@@ -104,7 +104,8 @@ def test_check_overdue_invoices_no_overdue(db) -> None:
     result = uc.execute(CheckOverdueInvoicesInput(company_id=999))
 
     # Assert
-    # Si aucune facture en retard, le use case devrait retourner success=True avec updated_count=0
+    # Si aucune facture en retard, le use case devrait retourner success=True
+    # avec updated_count=0
     assert isinstance(result, CheckOverdueInvoicesOutput)
     # Le résultat peut être success=True avec updated_count=0 ou une erreur DB
     # selon l'état de la base de données de test

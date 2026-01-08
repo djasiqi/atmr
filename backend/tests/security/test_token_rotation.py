@@ -19,7 +19,8 @@ from services.security.authentication import RefreshTokenService
 
 
 class FakeRedis:
-    """Mock Redis simple qui simule les opérations nécessaires pour RefreshTokenService."""
+    """Mock Redis simple qui simule les opérations nécessaires pour
+    RefreshTokenService."""
 
     def __init__(self):
         self._data: dict[str, str] = {}

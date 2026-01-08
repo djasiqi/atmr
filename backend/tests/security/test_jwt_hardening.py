@@ -235,7 +235,8 @@ class TestJWTConfiguration:
     def test_jwt_decode_audience_config(self, app):
         """Vérifie que JWT_DECODE_AUDIENCE est configuré."""
         with app.app_context():
-            # La validation automatique est volontairement désactivée (validation manuelle via validate_jwt_audience)
+            # La validation automatique est volontairement désactivée
+            # (validation manuelle via validate_jwt_audience)
             assert current_app.config.get("JWT_DECODE_AUDIENCE") is None
 
     def test_jwt_access_token_expires_config(self, app):

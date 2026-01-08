@@ -252,7 +252,8 @@ class TestA06VulnerableComponents:
             else Path("backend/requirements.txt")
         )
         content = requirements_file.read_text().lower()
-        # Support des fichiers requirements "meta" qui incluent d'autres fichiers via `-r`
+        # Support des fichiers requirements "meta" qui incluent d'autres
+        # fichiers via `-r`
         if "-r requirements.base.txt" in content:
             included = requirements_file.parent / "requirements.base.txt"
             if included.exists():

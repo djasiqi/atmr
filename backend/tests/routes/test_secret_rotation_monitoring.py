@@ -141,7 +141,8 @@ class TestRotationHistoryEndpoint:
             # Créer plusieurs rotations
             for _ in range(5):
                 record_rotation("jwt", "success", "prod")
-            # Voir commentaire dans _sample_rotations: commit pour visibilité cross-connexion
+            # Voir commentaire dans _sample_rotations: commit pour visibilité
+            # cross-connexion
             db.session.commit()
 
             # ✅ FIX: Utiliser _cached_public_id ou recharger l'objet dans le contexte

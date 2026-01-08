@@ -78,7 +78,8 @@ def test_generate_consolidated_invoice_success(db) -> None:
     )
 
     # Assert
-    # Note: Ce use case utilise Invoice.query directement pour vérifier les factures existantes
+    # Note: Ce use case utilise Invoice.query directement pour vérifier les
+    # factures existantes
     # Le résultat peut varier selon l'état de la DB
     assert isinstance(result, GenerateConsolidatedInvoiceOutput)
     assert hasattr(result, "success")
