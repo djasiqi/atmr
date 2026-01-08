@@ -137,6 +137,6 @@ def set_geocoding_service(service: GeocodingServiceInterface) -> None:
     _geocoding_service_container = {"service": _default_geocoding_service}
     _geocoding_service_container["service"] = service
     # Mettre à jour la variable globale via le conteneur
-    import services.interfaces.geocoding_interface as module
+    import services.interfaces.geocoding_interface as module  # type: ignore[import-not-found]
 
     module._default_geocoding_service = service

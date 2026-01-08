@@ -20,8 +20,8 @@ import os
 from datetime import datetime, timedelta
 from typing import Any, cast
 
-import requests  # pyright: ignore[reportMissingModuleSource]
-from requests import (  # pyright: ignore[reportMissingModuleSource]
+import requests
+from requests import (
     RequestException,
     Timeout,
 )
@@ -428,9 +428,12 @@ class WeatherService:
                 )
             except (ValueError, TypeError) as e:
                 # Erreurs de validation attendues : JSON invalide
-                logger.debug(
+                msg = (
                     "[Weather] Failed to write to Redis cache "
-                    "(validation error: %s): %s",
+                    "(validation error: %s): %s"
+                )
+                logger.debug(
+                    msg,
                     type(e).__name__,
                     e,
                 )

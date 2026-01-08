@@ -235,6 +235,6 @@ def set_routing_service(service: RoutingServiceInterface) -> None:
         service: Instance du service de routing
     """
     # Mettre à jour via le module pour éviter global statement
-    import services.interfaces.routing_interface as module
+    import services.interfaces.routing_interface as module  # type: ignore[import-not-found]
 
     module._default_routing_service = service

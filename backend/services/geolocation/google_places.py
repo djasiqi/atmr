@@ -7,7 +7,7 @@ import logging
 import os
 from typing import Any, Dict, List
 
-import requests  # pyright: ignore[reportMissingModuleSource]
+import requests
 
 app_logger = logging.getLogger("app")
 
