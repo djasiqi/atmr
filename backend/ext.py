@@ -70,7 +70,8 @@ except Exception as e:
 
 # ⚠️ Ne fixe PAS CORS/path ici pour éviter les conflits
 # - tout est défini dans app.py (socketio.init_app)
-# ✅ FIX Socket.IO multi-workers: Active la file Redis si disponible (scaling multi-workers).
+# ✅ FIX Socket.IO multi-workers: Active la file Redis si disponible
+# (scaling multi-workers).
 # CRITIQUE: Utiliser REDIS_URL directement (pas redis_client) car Flask-SocketIO
 # se connectera à Redis quand nécessaire. Si redis_client est None au démarrage
 # (Redis pas encore disponible), message_queue=None causerait "Invalid session"
@@ -96,7 +97,8 @@ if REDIS_URL and REDIS_URL.strip() and not REDIS_URL.startswith("memory://"):
     )
 else:
     app_logger.warning(
-        "[Socket.IO] ⚠️  Message queue Redis non configurée - mode single-worker uniquement. Pour multi-workers, définissez REDIS_URL."
+        "[Socket.IO] ⚠️  Message queue Redis non configurée - "
+        "mode single-worker uniquement. Pour multi-workers, définissez REDIS_URL."
     )
 
 socketio = SocketIO(
@@ -200,7 +202,8 @@ class RedisStorageWithTTL:
         result = self.storage.incr(key, expiry, elastic_expiry, amount)
 
         # ✅ Définir un TTL automatique sur la clé
-        # Si elastic_expiry=True, prolonge le TTL à chaque requête (comportement "sliding window")
+        # Si elastic_expiry=True, prolonge le TTL à chaque requête
+        # (comportement "sliding window")
         # Sinon, utilise le TTL configuré une seule fois
         try:
             redis_conn = self.storage.storage
@@ -242,10 +245,12 @@ def get_rate_limit_config_hash() -> str:
     return hashlib.md5(config_str.encode(), usedforsecurity=False).hexdigest()[:8]  # nosec B324
 
 
-# ✅ S2: Fonction key_func pour rate limiting par utilisateur (si authentifié) ou par IP
+# ✅ S2: Fonction key_func pour rate limiting par utilisateur
+# (si authentifié) ou par IP
 # ✅ C2: Ajout du versioning pour invalider automatiquement les anciens rate limits
 def get_rate_limit_key() -> str:
-    """Génère une clé pour le rate limiting basée sur l'utilisateur (si authentifié) ou l'IP.
+    """Génère une clé pour le rate limiting basée sur l'utilisateur
+    (si authentifié) ou l'IP.
 
     ✅ S2: Rate limiting par utilisateur pour éviter qu'un utilisateur malveillant
     puisse contourner les limites en changeant d'IP.
@@ -254,7 +259,8 @@ def get_rate_limit_key() -> str:
     les anciens rate limits lors des changements de configuration.
 
     Returns:
-        Clé de rate limiting (format: "v{hash}:user:{user_id}" ou "v{hash}:ip:{ip_address}")
+        Clé de rate limiting
+        (format: "v{hash}:user:{user_id}" ou "v{hash}:ip:{ip_address}")
     """
     # Récupérer le hash de version
     version_hash = get_rate_limit_config_hash()
@@ -408,8 +414,10 @@ def invalid_token_callback(error):
 
     ✅ S3: Détecte si une legacy key pourrait fonctionner (pour audit).
 
-    Note: Flask-JWT-Extended ne permet pas de re-décoder avec une autre clé dans ce callback.
-    Les tokens signés avec des legacy keys nécessiteront une reconnexion de l'utilisateur.
+    Note: Flask-JWT-Extended ne permet pas de re-décoder avec une autre clé
+    dans ce callback.
+    Les tokens signés avec des legacy keys nécessiteront une reconnexion
+    de l'utilisateur.
     Ce callback sert principalement à détecter et logger l'utilisation de legacy keys.
 
     Note: Les tokens avec audience invalide sont rejetés via check_if_token_revoked()
@@ -431,10 +439,12 @@ def invalid_token_callback(error):
 
                 if payload and used_key:
                     # Token décodé avec une legacy key - logger pour audit
-                    # Note: Flask-JWT-Extended ne permet pas de "re-décoder" avec une autre
-                    # clé dans ce callback. Le token sera rejeté et l'utilisateur devra se reconnecter.
+                    # Note: Flask-JWT-Extended ne permet pas de "re-décoder"
+                    # avec une autre clé dans ce callback. Le token sera rejeté
+                    # et l'utilisateur devra se reconnecter.
                     app_logger.info(
-                        "[JWT Legacy] ✅ Token décodé avec legacy key (user_id: %s, endpoint: %s)",
+                        "[JWT Legacy] ✅ Token décodé avec legacy key "
+                        "(user_id: %s, endpoint: %s)",
                         payload.get("sub") or payload.get("identity"),
                         request.path,
                     )
@@ -474,7 +484,8 @@ def token_not_fresh_callback(_jwt_header, _jwt_payload):
 
 
 # ✅ Phase 3: Callback pour vérifier la blacklist des tokens
-# ✅ SECURITY: Validation audience intégrée pour rejeter automatiquement les tokens avec audience invalide
+# ✅ SECURITY: Validation audience intégrée pour rejeter automatiquement
+# les tokens avec audience invalide
 @jwt.token_in_blocklist_loader
 def check_if_token_revoked(_jwt_header, jwt_payload):
     """Vérifie si le token JWT est dans la blacklist et valide l'audience.
@@ -484,7 +495,8 @@ def check_if_token_revoked(_jwt_header, jwt_payload):
         jwt_payload: Payload JWT
 
     Returns:
-        True si le token est révoqué (blacklisté) ou a une audience invalide, False sinon
+        True si le token est révoqué (blacklisté) ou a une audience invalide,
+        False sinon
     """
     from security.security_metrics import security_invalid_audience_total
     from security.token_blacklist import is_token_blacklisted
@@ -500,8 +512,10 @@ def check_if_token_revoked(_jwt_header, jwt_payload):
         return True  # Rejeter token avec audience invalide
 
     # Vérifier si le token est dans la blacklist
-    # ✅ SECURITY: Flask-JWT-Extended génère automatiquement un jti pour chaque token
-    # Tous les tokens créés via create_access_token/create_refresh_token ont un jti unique
+    # ✅ SECURITY: Flask-JWT-Extended génère automatiquement un jti
+    # pour chaque token
+    # Tous les tokens créés via create_access_token/create_refresh_token
+    # ont un jti unique
     jti = jwt_payload.get("jti")
     if jti:
         return is_token_blacklisted(jti=jti)
@@ -510,7 +524,8 @@ def check_if_token_revoked(_jwt_header, jwt_payload):
     # La blacklist utilisera le hash du token comme fallback
     # Ce cas ne devrait jamais se produire avec Flask-JWT-Extended moderne
     app_logger.warning(
-        "[JWT Security] Token sans jti détecté dans check_if_token_revoked. Ce cas ne devrait pas se produire avec Flask-JWT-Extended moderne."
+        "[JWT Security] Token sans jti détecté dans check_if_token_revoked. "
+        "Ce cas ne devrait pas se produire avec Flask-JWT-Extended moderne."
     )
     # Ne pas vérifier la blacklist si pas de jti (le token sera accepté)
     # car on ne peut pas l'identifier de manière fiable sans jti
@@ -571,8 +586,10 @@ def role_required(*roles):
 
             user_public_id = get_jwt_identity()
 
-            # ✅ Vérifier d'abord le claim du token JWT (priorité pour les switchs de rôle)
-            # Cela permet aux tokens créés lors d'un switch (driver <-> company) de fonctionner
+            # ✅ Vérifier d'abord le claim du token JWT
+            # (priorité pour les switchs de rôle)
+            # Cela permet aux tokens créés lors d'un switch
+            # (driver <-> company) de fonctionner
             # même si l'utilisateur dans la DB a un rôle différent
             token_role = None
             try:
@@ -584,7 +601,8 @@ def role_required(*roles):
                 if jwt_data and "role" in jwt_data:
                     token_role = jwt_data["role"]
             except Exception:
-                # Si on ne peut pas récupérer le claim, continuer avec la vérification DB
+                # Si on ne peut pas récupérer le claim,
+                # continuer avec la vérification DB
                 pass
 
             user = User.query.filter_by(public_id=user_public_id).first()
@@ -621,23 +639,28 @@ def role_required(*roles):
                         allowed_roles.append(UserRole[role_str])
                     except KeyError:
                         app_logger.warning(
-                            "Rôle invalide dans la configuration : %s", role_str
+                            "Rôle invalide dans la configuration : %s",
+                            role_str,
                         )
 
-            # ✅ Vérifier d'abord le claim du token, puis le rôle de l'utilisateur dans la DB
+            # ✅ Vérifier d'abord le claim du token,
+            # puis le rôle de l'utilisateur dans la DB
             # Cela permet aux tokens créés lors d'un switch de fonctionner
             role_check_passed = False
             if token_role:
-                # Vérifier si le claim du token correspond à un des rôles autorisés
+                # Vérifier si le claim du token correspond
+                # à un des rôles autorisés
                 try:
                     token_user_role = UserRole[token_role.upper()]
                     if token_user_role in allowed_roles:
                         role_check_passed = True
                 except KeyError:
-                    # Le claim du token n'est pas un rôle valide, continuer avec la vérification DB
+                    # Le claim du token n'est pas un rôle valide,
+                    # continuer avec la vérification DB
                     pass
 
-            # Si le claim du token n'a pas passé, vérifier le rôle de l'utilisateur dans la DB
+            # Si le claim du token n'a pas passé,
+            # vérifier le rôle de l'utilisateur dans la DB
             if not role_check_passed and user.role not in allowed_roles:
                 warning_msg = (
                     "⛔ Accès refusé : %s (%s) a tenté d'accéder "
