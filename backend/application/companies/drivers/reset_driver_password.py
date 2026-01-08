@@ -58,7 +58,8 @@ class ResetDriverPasswordUseCase:
         self._policy = password_policy
 
     def execute(self, user: _UserLike) -> ResetDriverPasswordResult:
-        # On tente quelques générations au cas où une contrainte externe (HIBP/historique) rejette.
+        # On tente quelques générations au cas où une contrainte externe
+        # (HIBP/historique) rejette.
         last_error: str | None = None
         for _ in range(5):
             pwd = _generate_strong_password()
