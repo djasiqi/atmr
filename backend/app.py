@@ -1699,6 +1699,11 @@ def create_app(config_name: str | None = None):
 
             app.register_blueprint(swagger_ui_bp)
 
+            # ✅ Enregistrer les routes admin (rate limits, redis)
+            from routes.admin import admin_bp
+
+            app.register_blueprint(admin_bp)
+
             # ✅ Enregistrer les routes d'alertes proactives
             register_proactive_alerts_routes(app)
 

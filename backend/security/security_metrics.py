@@ -130,3 +130,27 @@ csrf_validation_failures_total = Counter(
     "security_csrf_validation_failures_total",
     "Nombre total d'échecs de validation CSRF",
 )
+
+# ========================
+# ✅ C2: Métriques avancées de rate limiting
+# ========================
+
+# Compteur des limites atteintes par endpoint spécifique
+rate_limit_exceeded_total = Counter(
+    "rate_limit_exceeded_total",
+    "Nombre total de dépassements de rate limit par endpoint",
+    ["endpoint", "user_type"],  # user_type: "authenticated", "anonymous"
+)
+
+# Gauge du nombre de clés actives de rate limit dans Redis
+rate_limit_active_keys = Gauge(
+    "rate_limit_active_keys",
+    "Nombre de clés actives de rate limit dans Redis",
+)
+
+# Compteur des flushes de rate limit (via endpoint admin)
+rate_limit_flushes_total = Counter(
+    "rate_limit_flushes_total",
+    "Nombre total de flushes de rate limits (via admin endpoint)",
+    ["admin_user_id"],  # ID de l'admin qui a effectué le flush
+)

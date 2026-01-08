@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import redis  # pyright: ignore[reportMissingImports]
-from flask import (  # pyright: ignore[reportMissingImports]
+from flask import (
     abort,
     jsonify,
     request,
@@ -137,37 +137,68 @@ except Exception:
 # #endregion
 
 
+# ✅ C2: Fonction pour générer un hash de configuration (versioning des clés Redis)
+def get_rate_limit_config_hash() -> str:
+    """Génère un hash unique basé sur les configurations de rate limit.
+
+    Ce hash est inclus dans les clés Redis pour invalider automatiquement
+    les anciens rate limits lorsque la configuration change.
+
+    Returns:
+        Hash de configuration (8 caractères hexadécimaux)
+    """
+    import hashlib
+
+    # Récupérer la version depuis la config ou l'environnement
+    version = os.getenv("RATELIMIT_CONFIG_VERSION", "v1")
+    environment = os.getenv("ENVIRONMENT", "development")
+    default_limits = os.getenv("RATELIMIT_DEFAULT_LIMITS", "1000 per hour")
+
+    config_str = f"{version}:{environment}:{default_limits}"
+    return hashlib.md5(config_str.encode()).hexdigest()[:8]
+
+
 # ✅ S2: Fonction key_func pour rate limiting par utilisateur (si authentifié) ou par IP
+# ✅ C2: Ajout du versioning pour invalider automatiquement les anciens rate limits
 def get_rate_limit_key() -> str:
     """Génère une clé pour le rate limiting basée sur l'utilisateur (si authentifié) ou l'IP.
 
     ✅ S2: Rate limiting par utilisateur pour éviter qu'un utilisateur malveillant
     puisse contourner les limites en changeant d'IP.
 
+    ✅ C2: Inclut un hash de configuration pour invalider automatiquement
+    les anciens rate limits lors des changements de configuration.
+
     Returns:
-        Clé de rate limiting (format: "user:{user_id}" ou "ip:{ip_address}")
+        Clé de rate limiting (format: "v{hash}:user:{user_id}" ou "v{hash}:ip:{ip_address}")
     """
+    # Récupérer le hash de version
+    version_hash = get_rate_limit_config_hash()
+
     # Essayer de récupérer l'utilisateur authentifié
     try:
         user_public_id = get_jwt_identity()
         if user_public_id:
             # Utiliser l'ID utilisateur comme clé (plus sécurisé que l'IP seule)
-            return f"user:{user_public_id}"
+            return f"v{version_hash}:user:{user_public_id}"
     except Exception:
         # Si l'authentification échoue, fallback sur IP
         pass
 
     # Fallback : utiliser l'adresse IP
     ip_address = get_remote_address()
-    return f"ip:{ip_address}"
+    return f"v{version_hash}:ip:{ip_address}"
 
 
 # ✅ S2: Rate limiting amélioré - limite par défaut réduite (5000 → 1000/heure)
+# ✅ C2: Configuration dynamique depuis variables d'environnement
 # ⚠️ C2 LOAD TESTING: Temporairement augmenté à 100000/hour pour tests de charge
+_default_limit = os.getenv("RATELIMIT_DEFAULT_LIMITS", "100000 per hour")
 limiter = Limiter(
     key_func=get_rate_limit_key,
-    default_limits=["100000 per hour"],  # ⚠️ C2: Augmenté temporairement (normalement 1000)
+    default_limits=[_default_limit],
     storage_uri=limiter_storage,
+    strategy=os.getenv("RATELIMIT_STRATEGY", "moving-window"),
 )
 
 dispatch_status = {"is_running": False, "last_run_time": None}
@@ -289,7 +320,7 @@ def invalid_token_callback(error):
     error_str = str(error) if error else ""
     if "signature" in error_str.lower() or "Invalid signature" in str(error):
         try:
-            from flask import request  # pyright: ignore[reportMissingImports]
+            from flask import request
 
             from security.jwt_legacy_keys import try_decode_with_legacy_keys
 
