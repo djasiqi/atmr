@@ -83,7 +83,8 @@ def autocomplete_address(
 
     # ✅ FIX: Utiliser le paramètre country pour limiter la recherche
     # Si country est spécifié, limiter à ce pays
-    # Si country n'est pas spécifié, pas de restriction (recherche mondiale avec biais Genève)
+    # Si country n'est pas spécifié, pas de restriction
+    # (recherche mondiale avec biais Genève)
     if country:
         params["components"] = f"country:{country.lower()}"
 
@@ -113,7 +114,8 @@ def autocomplete_address(
             if status in ("REQUEST_DENIED", "INVALID_REQUEST", "OVER_QUERY_LIMIT"):
                 msg = f"Google Places API error ({status}): {error_msg}"
                 raise GooglePlacesError(msg)
-            # Pour les autres erreurs, retourner une liste vide (le fallback ne sera pas déclenché)
+            # Pour les autres erreurs, retourner une liste vide
+            # (le fallback ne sera pas déclenché)
             return []
 
         predictions = data.get("predictions", [])

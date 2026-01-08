@@ -86,7 +86,8 @@ def create_authenticated_client(
 
         def __init__(self, client: FlaskClient, token: str) -> None:  # noqa: D107  # pyright: ignore[reportMissingSuperCall]
             # En Python 3, toutes les classes héritent implicitement d'object
-            # et object.__init__() est un noop, donc pas besoin d'appeler super().__init__()
+            # et object.__init__() est un noop, donc pas besoin d'appeler
+            # super().__init__()
             self._client = client
             self._token = token
             self._headers = {"Authorization": f"Bearer {token}"}
@@ -365,7 +366,8 @@ def assert_dispatch_run_created(
         DispatchRun trouvé
 
     Raises:
-        AssertionError: Si aucun DispatchRun n'est trouvé ou si le statut ne correspond pas
+        AssertionError: Si aucun DispatchRun n'est trouvé ou si le statut ne
+            correspond pas
 
     Exemple:
         ```python

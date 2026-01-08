@@ -109,7 +109,8 @@ class TestDriverStatusUpdateFlow:
         )
 
         assert update_status_response.status_code in (200, 201), (
-            f"Mise à jour statut doit réussir, reçu {update_status_response.status_code}: "
+            f"Mise à jour statut doit réussir, "
+            f"reçu {update_status_response.status_code}: "
             f"{update_status_response.get_json()}"
         )
 
@@ -198,7 +199,8 @@ class TestDriverBookingCompletionFlow:
             headers={"Content-Type": "application/json"},
         )
         assert update_status_response.status_code in (200, 201), (
-            f"Terminaison booking doit réussir, reçu {update_status_response.status_code}: "
+            f"Terminaison booking doit réussir, "
+            f"reçu {update_status_response.status_code}: "
             f"{update_status_response.get_json()}"
         )
 

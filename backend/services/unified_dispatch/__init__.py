@@ -2,7 +2,8 @@
 unified_dispatch - Système d'optimisation et orchestration du dispatch
 
 ⚠️ REFACTORING B1 EN COURS (7 janvier 2025)
-Ce module a été réorganisé pour améliorer la maintenabilité et réduire la complexité cognitive.
+Ce module a été réorganisé pour améliorer la maintenabilité et réduire la
+complexité cognitive.
 
 ## Nouvelle Structure
 
@@ -48,8 +49,9 @@ from services.unified_dispatch.optimization import solver
 """
 
 # pyright: reportImportCycles=false
-# Les imports ci-dessous créent des cycles détectés par basedpyright, mais sont nécessaires
-# pour maintenir l'API publique du module. Les cycles seront résolus en Semaine 3.
+# Les imports ci-dessous créent des cycles détectés par basedpyright, mais
+# sont nécessaires pour maintenir l'API publique du module. Les cycles seront
+# résolus en Semaine 3.
 from . import locking  # noqa: I001
 from . import orchestration
 

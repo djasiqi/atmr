@@ -159,7 +159,8 @@ class WebSocketRateLimiter:
                     retry_after = window_seconds
 
                 logger.warning(
-                    "Rate limit dépassé: event=%s, key=%s, count=%d, limit=%d, retry_after=%d",
+                    "Rate limit dépassé: event=%s, key=%s, count=%d, limit=%d, "
+                    "retry_after=%d",
                     key.split(":")[1],
                     key,
                     count + 1,
@@ -214,7 +215,8 @@ class WebSocketRateLimiter:
                 retry_after = window_seconds
 
             logger.warning(
-                "Rate limit dépassé (mémoire): event=%s, key=%s, count=%d, limit=%d, retry_after=%d",
+                "Rate limit dépassé (mémoire): event=%s, key=%s, count=%d, "
+                "limit=%d, retry_after=%d",
                 key.split(":")[1],
                 key,
                 count + 1,

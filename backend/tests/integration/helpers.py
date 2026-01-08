@@ -14,7 +14,8 @@ import pytest
 def assert_response_status(response, expected_status: int) -> None:
     """Vérifie que le statut HTTP de la réponse correspond à celui attendu."""
     assert response.status_code == expected_status, (
-        f"Expected status {expected_status}, got {response.status_code}. Response: {response.get_data(as_text=True)}"
+        f"Expected status {expected_status}, got {response.status_code}. "
+        f"Response: {response.get_data(as_text=True)}"
     )
 
 
@@ -67,7 +68,8 @@ def measure_performance(threshold_seconds: float):
                 elapsed = time.time() - start_time
                 if elapsed > threshold_seconds:
                     pytest.fail(
-                        f"Performance threshold exceeded: {elapsed:.2f}s > {threshold_seconds}s"
+                        f"Performance threshold exceeded: {elapsed:.2f}s > "
+                        f"{threshold_seconds}s"
                     )
                 return result
             except Exception:

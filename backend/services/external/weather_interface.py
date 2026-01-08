@@ -6,13 +6,15 @@ Cette interface permet de :
 3. Améliorer la séparation des responsabilités
 """
 # pyright: reportImplicitOverride=false
-# Note: Les méthodes de WeatherServiceLocal utilisent @override mais basedpyright
-# ne le reconnaît pas toujours dans ce contexte (problème connu avec les imports conditionnels)
+# Note: Les méthodes de WeatherServiceLocal utilisent @override mais
+# basedpyright ne le reconnaît pas toujours dans ce contexte (problème connu
+# avec les imports conditionnels)
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict
 
-# Import override - typing_extensions est garanti disponible (dans requirements.base.txt)
+# Import override - typing_extensions est garanti disponible
+# (dans requirements.base.txt)
 try:
     from typing import (
         override,

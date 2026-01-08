@@ -168,7 +168,8 @@ class HyperparameterTuner:
                     trial.set_user_attr("recent_avg_reward", recent_avg)
                     trial.set_user_attr("best_episode_reward", max(episode_rewards))
                     trial.set_user_attr("worst_episode_reward", min(episode_rewards))
-                    # Détecter dégradation: si les 10 derniers sont pires que les 10 précédents
+                    # Détecter dégradation: si les 10 derniers sont pires que
+                    # les 10 précédents
                     if len(episode_rewards) >= DEGRADATION_CHECK_WINDOW:
                         previous_avg = (
                             sum(
@@ -308,7 +309,8 @@ class HyperparameterTuner:
             )
 
         # Créer pruner pour arrêter trials non prometteurs
-        # ✅ FIX: Réduire n_warmup_steps pour arrêter plus tôt les trials non prometteurs
+        # ✅ FIX: Réduire n_warmup_steps pour arrêter plus tôt les trials
+        # non prometteurs
         pruner = optuna.pruners.MedianPruner(
             n_startup_trials=5,  # Laisser 5 trials complets avant pruning
             n_warmup_steps=10,  # Attendre 10 étapes avant pruning (réduit de 20)

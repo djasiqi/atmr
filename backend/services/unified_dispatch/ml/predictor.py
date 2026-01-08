@@ -80,7 +80,8 @@ except ImportError:
         RandomForestRegressor = Any
         StandardScaler = Any
     logger.warning(
-        "[MLPredictor] scikit-learn not available. Install with: pip install scikit-learn"
+        "[MLPredictor] scikit-learn not available. "
+        "Install with: pip install scikit-learn"
     )
 
 
@@ -240,7 +241,8 @@ class DelayMLPredictor:
                 return 0.75
 
             # Calculer combien de courses étaient à l'heure
-            # ✅ Utilisation directe des DTOs au lieu de reconvertir en modèles SQLAlchemy
+            # ✅ Utilisation directe des DTOs au lieu de reconvertir en modèles
+            # SQLAlchemy
             on_time_count = 0
             total_count = 0
 

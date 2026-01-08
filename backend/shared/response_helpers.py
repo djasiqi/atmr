@@ -53,8 +53,9 @@ def created_response(
 
     Args:
         data: Données de la ressource créée
-        location: URL de la ressource créée (pour header Location) - non utilisé actuellement,
-                  le header Location doit être ajouté séparément dans la route si nécessaire
+        location: URL de la ressource créée (pour header Location) - non
+            utilisé actuellement, le header Location doit être ajouté
+            séparément dans la route si nécessaire
         message: Message optionnel
 
     Returns:
