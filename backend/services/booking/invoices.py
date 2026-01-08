@@ -251,9 +251,12 @@ class InvoiceTransferService:
             # 9. Commit
             db.session.commit()
 
-            logger.info(
+            msg = (
                 "Facture sous-traitance créée: %s - Entreprise %s facture %s "
-                "pour %s %s",
+                "pour %s %s"
+            )
+            logger.info(
+                msg,
                 invoice_number,
                 transfer.executing_company_id,
                 transfer.owner_company_id,
@@ -279,11 +282,11 @@ class InvoiceTransferService:
         # via le système de facturation normal lors de la génération mensuelle
         # car le booking appartient maintenant à l'entreprise exécutante
 
-        logger.info(
+        msg = (
             "Modèle ASSIGN_TO_PARTNER: La facture client sera créée lors de "
-            "la génération mensuelle pour l'entreprise %s",
-            transfer.executing_company_id,
+            "la génération mensuelle pour l'entreprise %s"
         )
+        logger.info(msg, transfer.executing_company_id)
 
         # Optionnel: Commission A → B (à implémenter si nécessaire)
         # Pour l'instant, on ne crée pas de facture de commission automatiquement

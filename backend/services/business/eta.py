@@ -206,10 +206,11 @@ class EtaService:
                     )
                     # Fallback gracieux : utiliser ETA de base sans correction
                 else:
-                    logger.warning(
+                    msg = (
                         "[EtaService] Impossible d'appliquer correction ML: "
                         "base_eta_seconds <= 0"
                     )
+                    logger.warning(msg)
 
             except Exception as e:
                 logger.warning(
