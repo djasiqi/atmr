@@ -40,7 +40,8 @@ class AggregateClientReservationsAndInvoicesResult:
 
 
 class AggregateClientReservationsAndInvoicesUseCase:
-    """Use-case Application: détails client + réservations + factures + total_pending_amount."""
+    """Use-case Application: détails client + réservations + factures
+    + total_pending_amount."""
 
     def __init__(
         self,

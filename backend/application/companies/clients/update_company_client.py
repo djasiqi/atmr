@@ -37,7 +37,8 @@ class UpdateCompanyClientResult:
 
 
 class UpdateCompanyClientUseCase:
-    """Use-case Application: mise à jour d'un client (coordonnées, facturation, statut, etc.)."""
+    """Use-case Application: mise à jour d'un client
+    (coordonnées, facturation, statut, etc.)."""
 
     def execute(
         self, *, client: _ClientLike, data: dict[str, Any]
@@ -105,7 +106,10 @@ class UpdateCompanyClientUseCase:
                     return UpdateCompanyClientResult(
                         ok=False,
                         error={
-                            "error": "Format de date de naissance invalide. Utiliser YYYY-MM-DD."
+                            "error": (
+                                "Format de date de naissance invalide. "
+                                "Utiliser YYYY-MM-DD."
+                            )
                         },
                         status_code=400,
                     )

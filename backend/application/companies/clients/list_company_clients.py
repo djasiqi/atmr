@@ -53,7 +53,8 @@ class ListCompanyClientsOutput:
 
 
 class ListCompanyClientsUseCase:
-    """Use-case Application: liste + search + pagination (slice) pour les clients d'une company."""
+    """Use-case Application: liste + search + pagination (slice)
+    pour les clients d'une company."""
 
     MAX_PER_PAGE = 1000  # ✅ Aligné avec la validation de la route backend (max: 1000)
 
@@ -90,7 +91,8 @@ class ListCompanyClientsUseCase:
         if input_data.per_page < 1 or input_data.per_page > self.MAX_PER_PAGE:
             # #region agent log
             logger.error(
-                "[ListCompanyClientsUseCase] Validation failed: per_page=%s > MAX_PER_PAGE=%s",
+                "[ListCompanyClientsUseCase] Validation failed: "
+                "per_page=%s > MAX_PER_PAGE=%s",
                 input_data.per_page,
                 self.MAX_PER_PAGE,
             )
@@ -98,7 +100,9 @@ class ListCompanyClientsUseCase:
             return ListCompanyClientsOutput(
                 success=False,
                 error={
-                    "per_page": f"Le nombre par page doit être entre 1 et {self.MAX_PER_PAGE}"
+                    "per_page": (
+                        f"Le nombre par page doit être entre 1 et {self.MAX_PER_PAGE}"
+                    )
                 },
                 status_code=400,
             )
