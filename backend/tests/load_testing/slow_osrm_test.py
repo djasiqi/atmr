@@ -243,7 +243,9 @@ class SlowOSRMDispatchTest(HttpUser):
             failure_rate = data.get("failure_rate", 0)
 
             logger.debug(
-                "[CIRCUIT BREAKER] State: %s | Failure rate: %.1f%%", state, failure_rate * 100
+                "[CIRCUIT BREAKER] State: %s | Failure rate: %.1f%%",
+                state,
+                failure_rate * 100,
             )
 
             if state == "open":
