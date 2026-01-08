@@ -30,7 +30,11 @@ services:
     networks:
       - atmr-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-atmr_user}",
+        ]
       interval: 5s
       timeout: 3s
       retries: 20
