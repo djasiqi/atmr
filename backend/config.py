@@ -299,6 +299,21 @@ def validate_production_security(app) -> None:
     )
 
     if flask_env == "production":
+        # Vérifier les secrets critiques
+        secret_key = app.config.get("SECRET_KEY") or os.getenv("SECRET_KEY")
+        jwt_secret_key = app.config.get("JWT_SECRET_KEY") or os.getenv("JWT_SECRET_KEY")
+
+        if not secret_key:
+            raise RuntimeError(
+                "❌ SECURITÉ: SECRET_KEY doit être défini en production. "
+                "Placez la valeur dans Vault ou dans la variable d'environnement SECRET_KEY."
+            )
+        if not jwt_secret_key:
+            raise RuntimeError(
+                "❌ SECURITÉ: JWT_SECRET_KEY doit être défini en production. "
+                "Placez la valeur dans Vault ou dans la variable d'environnement JWT_SECRET_KEY."
+            )
+
         # Vérifier COOKIE_SECURE
         cookie_secure = app.config.get("COOKIE_SECURE")
         if not cookie_secure:
@@ -441,17 +456,18 @@ class ProductionConfig(Config):
 
     DEBUG = False
     # ✅ 4.1: En production, utiliser Vault (recommandé) ou variables d'environnement
+    # Note: required=False pour permettre l'import en CI, validation au runtime dans validate_production_security
     SECRET_KEY = _get_secret_from_vault_or_env(
         vault_path="prod/flask/secret_key",
         vault_key="value",
         env_key="SECRET_KEY",
-        required=True,  # Requis en production
+        required=False,
     )
     JWT_SECRET_KEY = _get_secret_from_vault_or_env(
         vault_path="prod/jwt/secret_key",
         vault_key="value",
         env_key="JWT_SECRET_KEY",
-        required=True,  # Requis en production
+        required=False,
     )
     # ✅ S3: Support legacy keys JWT (chargement depuis Vault ou env)
     _jwt_legacy_keys_raw = _get_secret_from_vault_or_env(
