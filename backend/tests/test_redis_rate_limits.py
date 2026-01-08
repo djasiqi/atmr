@@ -55,18 +55,20 @@ class TestRateLimitFlush:
         mock_redis.delete.return_value = 2
 
         # Act
-        with patch("backend.routes.admin.jwt_required", return_value=lambda f: f):
-            with patch(
+        with (
+            patch("backend.routes.admin.jwt_required", return_value=lambda f: f),
+            patch(
                 "backend.routes.admin.role_required", return_value=lambda r: lambda f: f
-            ):
-                with patch(
-                    "backend.routes.admin.ip_whitelist_required",
-                    return_value=lambda f: f,
-                ):
-                    response = client.post(
-                        "/api/v1/admin/rate-limit/flush",
-                        headers={"Authorization": admin_token},
-                    )
+            ),
+            patch(
+                "backend.routes.admin.ip_whitelist_required",
+                return_value=lambda f: f,
+            ),
+        ):
+            response = client.post(
+                "/api/v1/admin/rate-limit/flush",
+                headers={"Authorization": admin_token},
+            )
 
         # Assert
         assert response.status_code == 200
@@ -79,18 +81,20 @@ class TestRateLimitFlush:
     def test_flush_redis_down(self, client, admin_token):
         """Test flush quand Redis est indisponible."""
         # Act
-        with patch("backend.routes.admin.jwt_required", return_value=lambda f: f):
-            with patch(
+        with (
+            patch("backend.routes.admin.jwt_required", return_value=lambda f: f),
+            patch(
                 "backend.routes.admin.role_required", return_value=lambda r: lambda f: f
-            ):
-                with patch(
-                    "backend.routes.admin.ip_whitelist_required",
-                    return_value=lambda f: f,
-                ):
-                    response = client.post(
-                        "/api/v1/admin/rate-limit/flush",
-                        headers={"Authorization": admin_token},
-                    )
+            ),
+            patch(
+                "backend.routes.admin.ip_whitelist_required",
+                return_value=lambda f: f,
+            ),
+        ):
+            response = client.post(
+                "/api/v1/admin/rate-limit/flush",
+                headers={"Authorization": admin_token},
+            )
 
         # Assert
         assert response.status_code == 503
@@ -124,18 +128,20 @@ class TestRateLimitStats:
         mock_redis.info.return_value = {"used_memory_human": "10M"}
 
         # Act
-        with patch("backend.routes.admin.jwt_required", return_value=lambda f: f):
-            with patch(
+        with (
+            patch("backend.routes.admin.jwt_required", return_value=lambda f: f),
+            patch(
                 "backend.routes.admin.role_required", return_value=lambda r: lambda f: f
-            ):
-                with patch(
-                    "backend.routes.admin.ip_whitelist_required",
-                    return_value=lambda f: f,
-                ):
-                    response = client.get(
-                        "/api/v1/admin/rate-limit/stats",
-                        headers={"Authorization": admin_token},
-                    )
+            ),
+            patch(
+                "backend.routes.admin.ip_whitelist_required",
+                return_value=lambda f: f,
+            ),
+        ):
+            response = client.get(
+                "/api/v1/admin/rate-limit/stats",
+                headers={"Authorization": admin_token},
+            )
 
         # Assert
         assert response.status_code == 200
@@ -149,18 +155,20 @@ class TestRateLimitStats:
     def test_stats_redis_down(self, client, admin_token):
         """Test stats quand Redis est indisponible."""
         # Act
-        with patch("backend.routes.admin.jwt_required", return_value=lambda f: f):
-            with patch(
+        with (
+            patch("backend.routes.admin.jwt_required", return_value=lambda f: f),
+            patch(
                 "backend.routes.admin.role_required", return_value=lambda r: lambda f: f
-            ):
-                with patch(
-                    "backend.routes.admin.ip_whitelist_required",
-                    return_value=lambda f: f,
-                ):
-                    response = client.get(
-                        "/api/v1/admin/rate-limit/stats",
-                        headers={"Authorization": admin_token},
-                    )
+            ),
+            patch(
+                "backend.routes.admin.ip_whitelist_required",
+                return_value=lambda f: f,
+            ),
+        ):
+            response = client.get(
+                "/api/v1/admin/rate-limit/stats",
+                headers={"Authorization": admin_token},
+            )
 
         # Assert
         assert response.status_code == 503
@@ -183,18 +191,20 @@ class TestRedisInfo:
         ]
 
         # Act
-        with patch("backend.routes.admin.jwt_required", return_value=lambda f: f):
-            with patch(
+        with (
+            patch("backend.routes.admin.jwt_required", return_value=lambda f: f),
+            patch(
                 "backend.routes.admin.role_required", return_value=lambda r: lambda f: f
-            ):
-                with patch(
-                    "backend.routes.admin.ip_whitelist_required",
-                    return_value=lambda f: f,
-                ):
-                    response = client.get(
-                        "/api/v1/admin/redis/info",
-                        headers={"Authorization": admin_token},
-                    )
+            ),
+            patch(
+                "backend.routes.admin.ip_whitelist_required",
+                return_value=lambda f: f,
+            ),
+        ):
+            response = client.get(
+                "/api/v1/admin/redis/info",
+                headers={"Authorization": admin_token},
+            )
 
         # Assert
         assert response.status_code == 200
@@ -211,26 +221,28 @@ class TestRateLimitConfig:
     def test_config_success(self, client, admin_token):
         """Test récupération de la configuration des rate limits."""
         # Act
-        with patch("backend.routes.admin.jwt_required", return_value=lambda f: f):
-            with patch(
+        with (
+            patch("backend.routes.admin.jwt_required", return_value=lambda f: f),
+            patch(
                 "backend.routes.admin.role_required", return_value=lambda r: lambda f: f
-            ):
-                with patch(
-                    "backend.routes.admin.ip_whitelist_required",
-                    return_value=lambda f: f,
-                ):
-                    with patch("backend.routes.admin.current_app") as mock_app:
-                        mock_app.config.get.side_effect = lambda key, default=None: {
-                            "RATELIMIT_DEFAULT_LIMITS": "1000 per hour",
-                            "ENVIRONMENT": "test",
-                            "RATELIMIT_STORAGE_URL": "redis://localhost:6379/0",
-                            "RATELIMIT_STRATEGY": "moving-window",
-                            "RATELIMIT_CONFIG_VERSION": "v1",
-                        }.get(key, default)
+            ),
+            patch(
+                "backend.routes.admin.ip_whitelist_required",
+                return_value=lambda f: f,
+            ),
+            patch("backend.routes.admin.current_app") as mock_app,
+        ):
+            mock_app.config.get.side_effect = lambda key, default=None: {
+                "RATELIMIT_DEFAULT_LIMITS": "1000 per hour",
+                "ENVIRONMENT": "test",
+                "RATELIMIT_STORAGE_URL": "redis://localhost:6379/0",
+                "RATELIMIT_STRATEGY": "moving-window",
+                "RATELIMIT_CONFIG_VERSION": "v1",
+            }.get(key, default)
 
-                        response = client.get(
-                            "/api/v1/admin/rate-limit/config",
-                            headers={"Authorization": admin_token},
+            response = client.get(
+                "/api/v1/admin/rate-limit/config",
+                headers={"Authorization": admin_token},
                         )
 
         # Assert
