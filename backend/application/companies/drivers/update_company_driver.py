@@ -88,7 +88,9 @@ class UpdateCompanyDriverUseCase:
                     )
                     if existing:
                         validation_error = {
-                            "error": "Cet email est déjà utilisé par un autre utilisateur"
+                            "error": (
+                                "Cet email est déjà utilisé par un autre utilisateur"
+                            )
                         }
                         validation_status = 400
                 if not validation_error:
@@ -128,7 +130,10 @@ class UpdateCompanyDriverUseCase:
                         driver.vehicle_id = vehicle_id_int
                     else:
                         validation_error = {
-                            "error": f"Véhicule {vehicle_id_int} non trouvé ou n'appartient pas à cette entreprise"
+                            "error": (
+                                f"Véhicule {vehicle_id_int} non trouvé ou "
+                                f"n'appartient pas à cette entreprise"
+                            )
                         }
                         validation_status = 400
 

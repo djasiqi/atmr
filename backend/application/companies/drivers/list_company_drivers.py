@@ -20,7 +20,8 @@ class ListCompanyDriversResult:
 
 
 class ListCompanyDriversUseCase:
-    """Use-case Application: lister les chauffeurs d'une company (avec user + vacations)."""
+    """Use-case Application: lister les chauffeurs d'une company
+    (avec user + vacations)."""
 
     def __init__(self, *, driver_repo: _DriverRepo) -> None:
         super().__init__()

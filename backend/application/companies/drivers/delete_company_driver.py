@@ -15,7 +15,8 @@ class DeleteCompanyDriverResult:
 
 
 class DeleteCompanyDriverUseCase:
-    """Use-case Application: suppression d'un chauffeur (la route gère db.session.delete)."""
+    """Use-case Application: suppression d'un chauffeur
+    (la route gère db.session.delete)."""
 
     def execute(self, driver: _DriverLike) -> DeleteCompanyDriverResult:
         _ = driver
