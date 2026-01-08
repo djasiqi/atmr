@@ -78,7 +78,8 @@ def _format_foreign_key_error(
     """Formate une erreur de foreign key en message clair."""
     # Analyser le message pour extraire la table référencée
     # Exemples de messages PostgreSQL:
-    # "insert or update on table "booking" violates foreign key constraint "booking_client_id_fkey""
+    # "insert or update on table "booking" violates foreign key constraint
+    # "booking_client_id_fkey""
     # "Key (client_id)=(999) is not present in table "client"."
 
     message = "Référence invalide dans les données."
@@ -174,7 +175,10 @@ def _format_check_constraint_error(
     """Formate une erreur de contrainte check en message clair."""
     return {
         "error": "check_constraint_violation",
-        "message": "Valeur invalide pour ce champ. Vérifiez les contraintes de validation.",
+        "message": (
+            "Valeur invalide pour ce champ. "
+            "Vérifiez les contraintes de validation."
+        ),
     }, 400
 
 

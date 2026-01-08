@@ -97,7 +97,8 @@ class CompanyRepository:
         return Company.query.first()
 
     def find_model_by_user_id(self, user_id: int) -> Company | None:
-        """Trouve une entreprise par l'ID de son utilisateur (retourne le modèle SQLAlchemy).
+        """Trouve une entreprise par l'ID de son utilisateur
+        (retourne le modèle SQLAlchemy).
 
         Args:
             user_id: ID de l'utilisateur
@@ -108,7 +109,8 @@ class CompanyRepository:
         return Company.query.filter_by(user_id=user_id).first()
 
     def find_all_models_ordered_by_name(self) -> list[Company]:
-        """Trouve toutes les entreprises triées par nom (retourne les modèles SQLAlchemy).
+        """Trouve toutes les entreprises triées par nom
+        (retourne les modèles SQLAlchemy).
 
         Returns:
             Liste de Company triées par nom ascendant

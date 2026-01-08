@@ -477,7 +477,10 @@ class PDFService:
                     and client.domicile_city
                 ):
                     # Construire l'adresse complète puis la formater
-                    full_address = f"{street_address}, {client.domicile_zip} {client.domicile_city}"
+                    full_address = (
+                        f"{street_address}, {client.domicile_zip} "
+                        f"{client.domicile_city}"
+                    )
                     billed_to_address = _format_address_for_display(full_address)
                 else:
                     billed_to_address = _format_address_for_display(street_address)
@@ -2248,9 +2251,10 @@ class PDFService:
                 message = template
             else:
                 message = (
-                    "Dernier rappel : Merci d'effectuer votre règlement net sous 5 jours. "
-                    "En l'absence de paiement, une mise en demeure sera engagée, "
-                    "entraînant des frais supplémentaires et une éventuelle "
+                    "Dernier rappel : Merci d'effectuer votre règlement net "
+                    "sous 5 jours. En l'absence de paiement, une mise en "
+                    "demeure sera engagée, entraînant des frais "
+                    "supplémentaires et une éventuelle "
                     "procédure légale."
                 )
 

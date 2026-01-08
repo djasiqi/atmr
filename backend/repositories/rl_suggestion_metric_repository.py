@@ -15,7 +15,8 @@ class RLSuggestionMetricRepository:
         assignment_id: int,
         suggested_driver_id: int,
     ) -> RLSuggestionMetric | None:
-        """Trouve une métrique par assignment_id et suggested_driver_id (non appliquée, non rejetée).
+        """Trouve une métrique par assignment_id et suggested_driver_id
+        (non appliquée, non rejetée).
 
         Args:
             assignment_id: ID de l'assignment
@@ -75,7 +76,8 @@ class RLSuggestionMetricRepository:
     def find_by_assignment_and_suggested_driver_not_applied(
         self, assignment_id: int, suggested_driver_id: int
     ) -> RLSuggestionMetric | None:
-        """Trouve une métrique par assignment_id et suggested_driver_id (non appliquée, non rejetée).
+        """Trouve une métrique par assignment_id et suggested_driver_id
+        (non appliquée, non rejetée).
 
         Args:
             assignment_id: ID de l'assignment

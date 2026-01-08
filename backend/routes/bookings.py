@@ -79,8 +79,8 @@ booking_create_model = bookings_ns.model(
             required=True,
             description=(
                 "ISO 8601 (ex: 2024-01-15T14:30:00). "
-                "Note: Les dates passées sont normalement rejetées, sauf si time_confirmed=False "
-                "(permis pour imports historiques)."
+                "Note: Les dates passées sont normalement rejetées, sauf si "
+                "time_confirmed=False (permis pour imports historiques)."
             ),
         ),
         "amount": fields.Float(
@@ -675,7 +675,8 @@ class BookingResource(Resource):
                         invalidate_osrm_matrix_cache_adapter(coords=coords)
 
                     logger.info(
-                        "[Cache] ✅ Invalidated geocoding and OSRM cache for booking #%s (addresses changed)",
+                        "[Cache] ✅ Invalidated geocoding and OSRM cache for "
+                        "booking #%s (addresses changed)",
                         booking.id,
                     )
                 except Exception as e:

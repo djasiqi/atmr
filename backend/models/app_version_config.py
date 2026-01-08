@@ -1,8 +1,10 @@
 # models/app_version_config.py
-"""Modèle pour la configuration des versions minimales et recommandées de l'application mobile.
+"""Modèle pour la configuration des versions minimales et recommandées de
+l'application mobile.
 
-Ce modèle stocke les versions minimales requises et les dernières versions disponibles
-pour chaque plateforme (Android/iOS), permettant de forcer ou recommander des mises à jour.
+Ce modèle stocke les versions minimales requises et les dernières versions
+disponibles pour chaque plateforme (Android/iOS), permettant de forcer ou
+recommander des mises à jour.
 """
 
 from __future__ import annotations
