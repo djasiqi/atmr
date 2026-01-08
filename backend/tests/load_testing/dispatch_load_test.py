@@ -99,7 +99,7 @@ class DispatchLoadTest(HttpUser):
         start_time = time.time()
 
         response = self.client.post(
-            "/api/dispatch/run",
+            "/api/v1/company_dispatch/run",
             json={
                 "company_id": self.company_id,
                 "date": self.test_date,
@@ -121,7 +121,7 @@ class DispatchLoadTest(HttpUser):
     def dispatch_with_heuristics(self) -> None:
         """Test dispatch avec heuristiques (fallback rapide)."""
         response = self.client.post(
-            "/api/dispatch/run",
+            "/api/v1/company_dispatch/run",
             json={
                 "company_id": self.company_id,
                 "date": self.test_date,
@@ -139,7 +139,7 @@ class DispatchLoadTest(HttpUser):
     def check_dispatch_status(self) -> None:
         """Vérifier l'état d'un dispatch en cours."""
         response = self.client.get(
-            f"/api/dispatch/status?company_id={self.company_id}&date={self.test_date}",
+            f"/api/v1/company_dispatch/status?company_id={self.company_id}&date={self.test_date}",
             headers=self._get_headers(),
             name="[DISPATCH] Check Status",
         )
@@ -153,7 +153,7 @@ class DispatchLoadTest(HttpUser):
     def get_dispatch_metrics(self) -> None:
         """Récupérer les métriques du dernier dispatch."""
         response = self.client.get(
-            f"/api/dispatch/metrics?company_id={self.company_id}",
+            f"/api/v1/company_dispatch/metrics?company_id={self.company_id}",
             headers=self._get_headers(),
             name="[METRICS] Get Dispatch Metrics",
         )

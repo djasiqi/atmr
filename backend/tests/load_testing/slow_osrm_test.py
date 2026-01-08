@@ -111,7 +111,7 @@ class SlowOSRMDispatchTest(HttpUser):
         start_time = time.time()
 
         response = self.client.post(
-            "/api/dispatch/run",
+            "/api/v1/company_dispatch/run",
             json={
                 "company_id": self.company_id,
                 "date": self.test_date,
@@ -152,7 +152,7 @@ class SlowOSRMDispatchTest(HttpUser):
         start_time = time.time()
 
         response = self.client.post(
-            "/api/dispatch/run",
+            "/api/v1/company_dispatch/run",
             json={
                 "company_id": self.company_id,
                 "date": self.test_date,
@@ -191,7 +191,7 @@ class SlowOSRMDispatchTest(HttpUser):
         Forcer le fallback pour vérifier qu'il fonctionne.
         """
         response = self.client.post(
-            "/api/dispatch/run",
+            "/api/v1/company_dispatch/run",
             json={
                 "company_id": self.company_id,
                 "date": self.test_date,
