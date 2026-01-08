@@ -305,6 +305,8 @@ def setup_csrf_protection(app: Any) -> None:
         "/api/v1/prometheus/metrics",
         "/api/v1/auth/login",
         "/api/v1/auth/register",
+        "/api/v1/auth/login-test",  # ✅ Endpoint login pour tests de charge (dev/test)
+        "/api/auth/login-test",  # ✅ Variante sans /v1 (compatibilité)
         "/api/v1/csrf-token",  # Endpoint pour obtenir le token
         "/api/v1/app/version-check",  # ✅ Endpoint public de vérification de version
         "/api/v1/company_mobile/auth/login",  # ✅ Endpoint de login mobile (public)
