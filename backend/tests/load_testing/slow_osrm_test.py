@@ -72,7 +72,7 @@ class SlowOSRMDispatchTest(HttpUser):
     def _login(self) -> None:
         """Authentification."""
         response = self.client.post(
-            "/api/auth/login",
+            "/api/auth/login-test",  # Endpoint test (sans CSRF)
             json={
                 "email": "admin@test.com",
                 "password": "test123",

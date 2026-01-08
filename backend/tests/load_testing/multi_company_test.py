@@ -75,7 +75,7 @@ class MultiCompanyDispatchTest(HttpUser):
         password = "test123"
 
         response = self.client.post(
-            "/api/auth/login",
+            "/api/auth/login-test",  # Endpoint test (sans CSRF)
             json={
                 "email": email,
                 "password": password,
@@ -98,7 +98,7 @@ class MultiCompanyDispatchTest(HttpUser):
     def _login_as_admin(self) -> None:
         """Fallback : Login admin (pour tests)."""
         response = self.client.post(
-            "/api/auth/login",
+            "/api/auth/login-test",  # Endpoint test (sans CSRF)
             json={
                 "email": "admin@test.com",
                 "password": "test123",

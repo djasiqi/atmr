@@ -1133,6 +1133,75 @@ refresh_token_response_model = auth_ns.model(
 )
 
 
+# ========================
+# Login Test (sans CSRF pour tests de charge)
+# ========================
+@auth_ns.route("/login-test")
+class LoginTest(Resource):
+    """Endpoint de login pour tests de charge (dev/test uniquement, sans CSRF)."""
+
+    @auth_ns.expect(login_model)
+    @auth_ns.response(200, "Connexion réussie", login_success_model)
+    @auth_ns.response(401, "Credentials invalides")
+    @auth_ns.response(403, "Endpoint disponible uniquement en dev/test")
+    def post(self):
+        """Authentifie un utilisateur sans vérification CSRF (tests uniquement)."""
+        import os
+
+        from flask import abort, current_app, request
+        from flask_jwt_extended import create_access_token, create_refresh_token
+
+        from models.user import User
+
+        # ⚠️ Sécurité : Disponible uniquement en environnement dev/test
+        flask_env = os.getenv("FLASK_ENV", "production")
+        if flask_env not in ["development", "testing"]:
+            abort(
+                403,
+                description="Endpoint disponible uniquement en environnement dev/test",
+            )
+
+        # Récupérer les données
+        data = request.get_json()
+        if not data:
+            return {"error": "Pas de données JSON fournies"}, 400
+
+        email = data.get("email")
+        password = data.get("password")
+
+        if not email or not password:
+            return {"error": "Email et mot de passe requis"}, 400
+
+        # Chercher l'utilisateur
+        user = User.query.filter_by(email=email).first()
+
+        if not user or not user.check_password(password):
+            return {"error": "Identifiants invalides"}, 401
+
+        # Vérifier que le compte est actif
+        if not user.is_active:
+            return {"error": "Compte désactivé"}, 403
+
+        # Générer les tokens JWT
+        access_token = create_access_token(identity=user.public_id)
+        refresh_token = create_refresh_token(identity=user.public_id)
+
+        # Retourner la réponse (format simplifié pour tests)
+        return {
+            "message": "Connexion réussie",
+            "token": access_token,
+            "access_token": access_token,  # Compatibilité
+            "refresh_token": refresh_token,
+            "user": {
+                "id": user.id,
+                "public_id": user.public_id,
+                "username": user.username,
+                "email": user.email,
+                "role": user.role.value,
+            },
+        }, 200
+
+
 @auth_ns.route("/refresh-token")
 class RefreshToken(Resource):
     @auth_ns.expect(refresh_token_request_model)
