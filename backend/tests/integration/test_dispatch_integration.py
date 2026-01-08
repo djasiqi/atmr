@@ -70,7 +70,8 @@ class TestDispatchIntegration:
 
         if response.status_code in [200, 202]:
             # Vérifier que des assignments ont été créés
-            # ✅ FIX: Assignment n'a pas de colonne company_id, il faut joindre avec Booking
+            # ✅ FIX: Assignment n'a pas de colonne company_id, il faut
+            # joindre avec Booking
             assignments = (
                 Assignment.query.join(Booking)
                 .filter(Booking.company_id == test_company.id)

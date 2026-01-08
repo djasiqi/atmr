@@ -1,6 +1,7 @@
 """Script de validation des tests Locust.
 
-Vérifie que les fichiers de test peuvent être importés et n'ont pas d'erreurs de syntaxe.
+Vérifie que les fichiers de test peuvent être importés et n'ont pas d'erreurs
+de syntaxe.
 """
 
 import sys

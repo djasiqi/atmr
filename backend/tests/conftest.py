@@ -1430,7 +1430,8 @@ def frozen_time():
         return  # type: ignore[unreachable]
 
     # Date fixe par défaut pour tests déterministes.
-    # now_local() convertit depuis datetime.now(UTC) vers Europe/Zurich puis retire tzinfo.
+    # now_local() convertit depuis datetime.now(UTC) vers Europe/Zurich puis
+    # retire tzinfo.
     # Pour obtenir 10:00 "local" (Zurich) en hiver, on fige donc 09:00 en UTC.
     FIXED_DATE = datetime(2025, 1, 15, 9, 0, 0, tzinfo=UTC)
 

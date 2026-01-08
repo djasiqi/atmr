@@ -226,8 +226,8 @@ def authenticated_client(client, auth_headers):
     class AuthenticatedClient:  # noqa: D101
         """Wrapper pour client Flask avec authentification automatique.
 
-        Note: Cette classe n'hérite d'aucune classe, donc pas besoin d'appeler super().__init__().
-        Le warning basedpyright est un faux positif.
+        Note: Cette classe n'hérite d'aucune classe, donc pas besoin d'appeler
+        super().__init__(). Le warning basedpyright est un faux positif.
         """
 
         def __init__(self, client, headers):  # noqa: D107  # pyright: ignore[reportMissingSuperCall]

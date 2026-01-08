@@ -377,7 +377,8 @@ class TestDispatchEnvHelpers:
         for driver in env.drivers:
             driver["load"] = 4  # Tous égaux
 
-        # ✅ FIX: Marquer certains bookings comme assignés pour que le bonus soit positif
+        # ✅ FIX: Marquer certains bookings comme assignés pour que le bonus
+        # soit positif
         # Le bonus est calculé comme: 100.0 * (completed_bookings / total_bookings)
         # où completed_bookings = sum(1 for b in bookings if b.get("assigned", False))
         if env.bookings:

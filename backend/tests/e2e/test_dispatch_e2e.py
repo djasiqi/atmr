@@ -694,7 +694,8 @@ class TestDispatchE2E:
         company = db.session.query(Company).get(company_id)
         assert company is not None, "Company must be persisted"
 
-        # ✅ FIX: S'assurer que les bookings sont persistés et utilisent la bonne company
+        # ✅ FIX: S'assurer que les bookings sont persistés et utilisent la
+        # bonne company
         db.session.flush()
         db.session.commit()
 
