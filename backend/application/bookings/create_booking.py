@@ -150,8 +150,8 @@ class CreateBookingUseCase:
             )
         except OSError as e:
             logger.error(
-                "❌ Erreur configuration géocodage pour booking "
-                + "(pickup=%s, dropoff=%s): %s",
+                "❌ Erreur configuration géocodage pour booking (pickup=%s, "
+                "dropoff=%s): %s",
                 validated_data["pickup_location"],
                 validated_data["dropoff_location"],
                 e,
@@ -325,7 +325,7 @@ class CreateBookingUseCase:
             else:
                 logger.info(
                     "⚠️ %s géocodage cache miss, utilisation coordonnées "
-                    + "approximatives: (%.6f, %.6f) - géocodage asynchrone en cours",
+                    "approximatives: (%.6f, %.6f) - géocodage asynchrone en cours",
                     address_type.capitalize(),
                     lat,
                     lon,
@@ -333,7 +333,7 @@ class CreateBookingUseCase:
         else:
             logger.info(
                 "⚠️ %s géocodage cache miss, utilisation coordonnées "
-                + "approximatives: (%.6f, %.6f) - géocodage asynchrone en cours",
+                "approximatives: (%.6f, %.6f) - géocodage asynchrone en cours",
                 address_type.capitalize(),
                 lat,
                 lon,
