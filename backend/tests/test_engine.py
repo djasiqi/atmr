@@ -493,7 +493,8 @@ class TestEngineEdgeCases:
                 # Tenter un 2e run (devrait être bloqué)
                 result = engine.run(company_id=company.id, for_date=day.isoformat())
 
-                # Selon l'implémentation de locking (Redis disponible, orchestrator, etc.),
+                # Selon l'implémentation de locking (Redis disponible,
+                # orchestrator, etc.),
                 # le second run peut être bloqué (reason="locked") ou continuer.
                 meta = result.get("meta", {})
                 if isinstance(meta, dict) and "reason" in meta:

@@ -25,9 +25,11 @@ class TestSqlAlchemyBookingRepository:
         """
         # Ce test nécessite un contexte d'application Flask
         # Il sera mieux adapté comme test d'intégration
-        # Pour l'instant, on le skip car il nécessite une configuration Flask complète
+        # Pour l'instant, on le skip car il nécessite une configuration Flask
+        # complète
         pytest.skip(
-            "Test d'intégration nécessitant un contexte Flask - à implémenter dans test_integration.py"
+            "Test d'intégration nécessitant un contexte Flask - "
+            "à implémenter dans test_integration.py"
         )
 
     # Note: Les tests d'intégration avec la DB nécessitent une session de test

@@ -36,7 +36,8 @@ class TestMergeOverrides:
         assert merged.solver.time_limit_sec == 120
 
         logger.info(
-            "✅ Merge imbriqué réussi: heuristic.proximity=%s, solver.time_limit_sec=%s",
+            "✅ Merge imbriqué réussi: heuristic.proximity=%s, "
+            "solver.time_limit_sec=%s",
             merged.heuristic.proximity,
             merged.solver.time_limit_sec,
         )
