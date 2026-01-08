@@ -156,7 +156,8 @@ class Config:
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     # ✅ Phase 1 N+1: Configuration profilage SQLAlchemy
-    # Activer SQLALCHEMY_ECHO pour logger toutes les requêtes SQL (développement uniquement)
+    # Activer SQLALCHEMY_ECHO pour logger toutes les requêtes SQL
+    # (développement uniquement)
     SQLALCHEMY_ECHO = os.getenv("SQLALCHEMY_ECHO", "false").lower() in (
         "true",
         "1",
@@ -306,12 +307,14 @@ def validate_production_security(app) -> None:
         if not secret_key:
             raise RuntimeError(
                 "❌ SECURITÉ: SECRET_KEY doit être défini en production. "
-                + "Placez la valeur dans Vault ou dans la variable d'environnement SECRET_KEY."
+                + "Placez la valeur dans Vault ou dans la variable "
+                + "d'environnement SECRET_KEY."
             )
         if not jwt_secret_key:
             raise RuntimeError(
                 "❌ SECURITÉ: JWT_SECRET_KEY doit être défini en production. "
-                + "Placez la valeur dans Vault ou dans la variable d'environnement JWT_SECRET_KEY."
+                + "Placez la valeur dans Vault ou dans la variable "
+                + "d'environnement JWT_SECRET_KEY."
             )
 
         # Vérifier COOKIE_SECURE
@@ -330,11 +333,11 @@ def validate_production_security(app) -> None:
             )
 
         # Vérifier COOKIE_SAME_SITE
-        cookie_samesite = app.config.get("COOKIE_SAME_SITE")
-        if cookie_samesite not in ["Strict", "Lax"]:
+        samesite = app.config.get("COOKIE_SAME_SITE")
+        if samesite not in ["Strict", "Lax"]:
             raise RuntimeError(
-                "❌ SECURITÉ: COOKIE_SAME_SITE doit être 'Strict' ou 'Lax' en production, "
-                + f"actuellement: {cookie_samesite}"
+                "❌ SECURITÉ: COOKIE_SAME_SITE doit être 'Strict' "
+                + f"ou 'Lax' en production, actuellement: {samesite}"
             )
 
 
@@ -370,7 +373,8 @@ class DevelopmentConfig(Config):
                 # Liste directement depuis Vault
                 JWT_LEGACY_SECRET_KEYS = ",".join(_jwt_legacy_keys_raw)
             else:
-                # À ce point, _jwt_legacy_keys_raw est forcément une str (pas None car vérifié dans le if)
+                # À ce point, _jwt_legacy_keys_raw est forcément une str
+                # (pas None car vérifié dans le if)
                 legacy_keys_str: str = str(_jwt_legacy_keys_raw)
                 if legacy_keys_str.startswith("["):
                     # Format JSON string depuis Vault
@@ -455,8 +459,10 @@ class ProductionConfig(Config):
     """Configuration pour la production (PostgreSQL)."""
 
     DEBUG = False
-    # ✅ 4.1: En production, utiliser Vault (recommandé) ou variables d'environnement
-    # Note: required=False pour permettre l'import en CI, validation au runtime dans validate_production_security
+    # ✅ 4.1: En production, utiliser Vault (recommandé)
+    # ou variables d'environnement
+    # Note: required=False pour permettre l'import en CI,
+    # validation au runtime dans validate_production_security
     SECRET_KEY = _get_secret_from_vault_or_env(
         vault_path="prod/flask/secret_key",
         vault_key="value",
@@ -482,7 +488,8 @@ class ProductionConfig(Config):
             if isinstance(_jwt_legacy_keys_raw, list):
                 JWT_LEGACY_SECRET_KEYS = ",".join(_jwt_legacy_keys_raw)
             else:
-                # À ce point, _jwt_legacy_keys_raw est forcément une str (pas None car vérifié dans le if)
+                # À ce point, _jwt_legacy_keys_raw est forcément une str
+                # (pas None car vérifié dans le if)
                 legacy_keys_str: str = str(_jwt_legacy_keys_raw)
                 if legacy_keys_str.startswith("["):
                     JWT_LEGACY_SECRET_KEYS = ",".join(json.loads(legacy_keys_str))
@@ -541,7 +548,9 @@ class ProductionConfig(Config):
         "max_overflow": 20,  # ✅ PERF: Max connections overflow (PostgreSQL uniquement)
         "connect_args": {
             "client_encoding": "utf8",
-            "sslmode": _sslmode,  # ✅ SECURITY: SSL désactivé pour Docker interne, requis pour DB externes
+            # ✅ SECURITY: SSL désactivé pour Docker interne,
+            # requis pour DB externes
+            "sslmode": _sslmode,
         },
     }
     # Cookies plus stricts en prod (peuvent être ajustés via env si reverse proxy HTTP)
@@ -561,7 +570,8 @@ class ProductionConfig(Config):
     # ✅ Prod: URL backend publique (depuis env)
     # En production, PDF_BASE_URL est REQUIS et doit être HTTPS
     # Exception: localhost/127.0.0.1 autorisé en développement local
-    # ⚠️ Ne vérifier que si on est réellement en production (pas lors de l'import du module)
+    # ⚠️ Ne vérifier que si on est réellement en production
+    # (pas lors de l'import du module)
     _flask_config = os.getenv("FLASK_CONFIG", default=None)
     _pdf_base_url = os.getenv("PDF_BASE_URL", default=None)
     if _flask_config == "production":
@@ -581,23 +591,28 @@ class ProductionConfig(Config):
             )
         PDF_BASE_URL = _pdf_base_url
     else:
-        # Pour les autres environnements, utiliser une valeur par défaut si non définie
+        # Pour les autres environnements, utiliser une valeur par défaut
+        # si non définie
         PDF_BASE_URL = _pdf_base_url or "http://localhost:5000"
 
     # ✅ Prod: Validation SOCKETIO_CORS_ORIGINS en production
-    # En production, SOCKETIO_CORS_ORIGINS doit être défini, non vide, et ne pas contenir "*"
-    # ⚠️ Ne vérifier que si on est réellement en production (pas lors de l'import du module)
+    # En production, SOCKETIO_CORS_ORIGINS doit être défini, non vide,
+    # et ne pas contenir "*"
+    # ⚠️ Ne vérifier que si on est réellement en production
+    # (pas lors de l'import du module)
     _socketio_cors_origins = os.getenv("SOCKETIO_CORS_ORIGINS", "").strip()
     if _flask_config == "production":
         if not _socketio_cors_origins:
             raise RuntimeError(
                 "SOCKETIO_CORS_ORIGINS est requis en production. "
-                + "Définissez cette variable d'environnement avec une liste d'origines HTTPS séparées par des virgules."
+                + "Définissez cette variable d'environnement avec une liste "
+                + "d'origines HTTPS séparées par des virgules."
             )
         if _socketio_cors_origins == "*":
             raise RuntimeError(
-                "SOCKETIO_CORS_ORIGINS ne peut pas être '*' en production pour des raisons de sécurité. "
-                + "Définissez une liste explicite d'origines HTTPS."
+                "SOCKETIO_CORS_ORIGINS ne peut pas être '*' en production "
+                + "pour des raisons de sécurité. Définissez une liste "
+                + "explicite d'origines HTTPS."
             )
         # Valider que toutes les origines sont HTTPS (sauf localhost pour tests)
         for origin in (origin.strip() for origin in _socketio_cors_origins.split(",")):
@@ -605,8 +620,9 @@ class ProductionConfig(Config):
                 ("https://", "http://localhost", "http://127.0.0.1")
             ):
                 raise RuntimeError(
-                    f"SOCKETIO_CORS_ORIGINS contient une origine non sécurisée en production: {origin}. "
-                    + "Toutes les origines doivent être HTTPS (sauf localhost pour tests)."
+                    f"SOCKETIO_CORS_ORIGINS contient une origine non sécurisée "
+                    + f"en production: {origin}. Toutes les origines doivent être "
+                    + "HTTPS (sauf localhost pour tests)."
                 )
         SOCKETIO_CORS_ORIGINS = _socketio_cors_origins
     else:
