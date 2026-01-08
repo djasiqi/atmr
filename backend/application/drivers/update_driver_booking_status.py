@@ -169,7 +169,10 @@ class UpdateDriverBookingStatusUseCase:
                             response = {"message": "Return trip already completed"}
                         elif status_val != BOOKING_STATUS_IN_PROGRESS:
                             response = {
-                                "error": "Booking must be in_progress before completing return"
+                                "error": (
+                                    "Booking must be in_progress before "
+                                    "completing return"
+                                )
                             }
                             status_code = 400
                         else:
@@ -200,7 +203,10 @@ class UpdateDriverBookingStatusUseCase:
                         response = {"message": "Return trip already completed"}
                     elif status_val != BOOKING_STATUS_IN_PROGRESS:
                         response = {
-                            "error": "Booking must be in_progress before completing return"
+                            "error": (
+                                "Booking must be in_progress before "
+                                "completing return"
+                            )
                         }
                         status_code = 400
                     elif not booking.is_return:
@@ -227,7 +233,10 @@ class UpdateDriverBookingStatusUseCase:
                         status_code = 400
                     elif status_val == BOOKING_STATUS_IN_PROGRESS:
                         response = {
-                            "error": "Impossible d'annuler une course en cours : le client est déjà à bord"
+                            "error": (
+                                "Impossible d'annuler une course en cours : "
+                                "le client est déjà à bord"
+                            )
                         }
                         status_code = 400
                     elif status_val not in {
@@ -235,7 +244,10 @@ class UpdateDriverBookingStatusUseCase:
                         BOOKING_STATUS_EN_ROUTE,
                     }:
                         response = {
-                            "error": "Impossible d'annuler une course qui n'est pas assignée ou en route"
+                            "error": (
+                                "Impossible d'annuler une course qui n'est "
+                                "pas assignée ou en route"
+                            )
                         }
                         status_code = 400
                     else:
@@ -273,9 +285,11 @@ class UpdateDriverBookingStatusUseCase:
                                         )
                                     )
                                 except Exception as e:
-                                    # Fallback vers notification directe si événement échoue
+                                    # Fallback vers notification directe
+                                    # si événement échoue
                                     logger.warning(
-                                        "[UpdateDriverBookingStatus] Event publish failed, using direct notification: %s",
+                                        "[UpdateDriverBookingStatus] Event publish "
+                                        "failed, using direct notification: %s",
                                         e,
                                     )
                                     self._emit_assignment_cancelled(
@@ -294,7 +308,8 @@ class UpdateDriverBookingStatusUseCase:
                         should_commit = True
 
         if should_commit and booking is not None:
-            # ✅ Valider automatiquement les transferts associés si la course est complétée
+            # ✅ Valider automatiquement les transferts associés si la
+            # course est complétée
             status_val_after = _status_value(booking)
             if status_val_after in {
                 BOOKING_STATUS_COMPLETED,
@@ -331,7 +346,8 @@ class UpdateDriverBookingStatusUseCase:
                             booking.id,
                         )
                 except Exception as e:
-                    # Ne pas bloquer la complétion de la course si la validation du transfert échoue
+                    # Ne pas bloquer la complétion de la course si la
+                    # validation du transfert échoue
                     logger.warning(
                         (
                             "⚠️ Erreur lors de la validation automatique du transfert "
@@ -357,12 +373,16 @@ class UpdateDriverBookingStatusUseCase:
             except Exception as e:
                 # Fallback vers notification directe si événement échoue
                 logger.warning(
-                    "[UpdateDriverBookingStatus] Event publish failed, using direct notification: %s",
+                    "[UpdateDriverBookingStatus] Event publish failed, "
+                    "using direct notification: %s",
                     e,
                 )
                 self._notify_booking_update(cmd.driver_id, booking)
             response = {
-                "message": f"Booking status updated to {cmd.payload.get('status') if cmd.payload else None}"
+                "message": (
+                    f"Booking status updated to "
+                    f"{cmd.payload.get('status') if cmd.payload else None}"
+                )
             }
             status_code = 200
         elif not response:
