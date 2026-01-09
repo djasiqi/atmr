@@ -143,9 +143,11 @@ except Exception:
 # ========================
 # ✅ C2: Redis Storage avec TTL automatiques
 # ========================
+# NOTE: Flask-Limiter 3.x avec 'limits' gère automatiquement les TTL Redis.
+# Cette classe n'est plus nécessaire et n'est pas utilisée.
 
 
-class RedisStorageWithTTL:
+class RedisStorageWithTTL:  # DEPRECATED: Non utilisée avec Flask-Limiter 3.x
     """
     Wrapper pour le storage Redis qui ajoute automatiquement des TTL aux clés.
 
@@ -286,24 +288,18 @@ def get_rate_limit_key() -> str:
 _default_limit = os.getenv("RATELIMIT_DEFAULT_LIMITS", "100000 per hour")
 
 # ✅ C2 Phase 2: TTL automatiques sur les clés de rate limit
-# Durée de vie par défaut: 2 heures (7200 secondes)
-# Les clés expirent automatiquement, évitant l'accumulation en mémoire
-_rate_limit_ttl = int(os.getenv("RATELIMIT_KEY_TTL", "7200"))
-
-# Créer le storage avec TTL automatiques si Redis est disponible
-if limiter_storage != "memory://":
-    _limiter_storage_with_ttl: str | RedisStorageWithTTL = RedisStorageWithTTL(
-        limiter_storage, ttl_seconds=_rate_limit_ttl
-    )
-else:
-    # Mode memory: pas besoin de TTL (les clés sont en mémoire volatile)
-    _limiter_storage_with_ttl = limiter_storage
-
+# Flask-Limiter 3.x avec limits gère automatiquement les TTL Redis
+# Pas besoin de wrapper personnalisé, passer directement l'URI
 limiter = Limiter(
     key_func=get_rate_limit_key,
     default_limits=[_default_limit],
-    storage_uri=_limiter_storage_with_ttl,
+    storage_uri=limiter_storage,
     strategy=os.getenv("RATELIMIT_STRATEGY", "moving-window"),
+    # Les options Redis sont gérées automatiquement par limits
+    storage_options={
+        "socket_connect_timeout": 5,
+        "socket_timeout": 5,
+    },
 )
 
 dispatch_status = {"is_running": False, "last_run_time": None}
