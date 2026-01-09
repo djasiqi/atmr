@@ -592,8 +592,9 @@ class Login(Resource):
                 # ✅ P0: Ajouter trace_id dans l'erreur
                 trace_id = get_trace_id()
                 logger.warning(
-                    "Login failed",
-                    extra={"trace_id": trace_id, "email": mask_email(email)},
+                    "Login failed - email: %s, trace_id: %s",
+                    mask_email(email),
+                    trace_id,
                 )
                 error_response, status_code = APIErrorHandler.handle_permission_error(
                     "Email ou mot de passe invalide.",
@@ -1260,8 +1261,8 @@ class RefreshToken(Resource):
             if not refresh_token:
                 trace_id = get_trace_id()
                 logger.warning(
-                    "Refresh token missing",
-                    extra={"trace_id": trace_id},
+                    "Refresh token missing - trace_id: %s",
+                    trace_id,
                 )
                 error_response, _ = APIErrorHandler.handle_validation_error(
                     "refresh_token requis (cookie, body ou Authorization header)",
@@ -1275,8 +1276,8 @@ class RefreshToken(Resource):
             if error_response or not user_public_id:
                 trace_id = get_trace_id()
                 logger.warning(
-                    "Refresh token invalid",
-                    extra={"trace_id": trace_id},
+                    "Refresh token invalid - trace_id: %s",
+                    trace_id,
                 )
                 if error_response:
                     error_response["trace_id"] = trace_id
@@ -1428,8 +1429,9 @@ class RefreshToken(Resource):
             # ✅ P0: Ajouter trace_id dans la réponse
             trace_id = get_trace_id()
             logger.info(
-                "Token refresh success",
-                extra={"trace_id": trace_id, "user_id": user.id},
+                "Token refresh success - user_id: %s, trace_id: %s",
+                user.id,
+                trace_id,
             )
 
             # Construire la réponse JSON
