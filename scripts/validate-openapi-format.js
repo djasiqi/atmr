@@ -33,6 +33,9 @@ try {
         }
     } else {
         console.error("❌ Format inconnu: ni 'swagger' ni 'openapi' trouvé");
+        console.error("   Clés trouvées dans la spec: " + Object.keys(spec).join(", "));
+        console.error("   Contenu de la spec (premiers 200 caractères):");
+        console.error("   " + JSON.stringify(spec).substring(0, 200) + "...");
         process.exit(1);
     }
     
