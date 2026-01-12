@@ -355,54 +355,74 @@ import sys
 import logging
 logging.basicConfig(level=logging.INFO)
 
-# Vérifier si RL est activé
-rl_enabled = os.getenv('RL_ENABLED', 'false').lower() in ('true', '1', 'yes')
-with_rl = os.getenv('WITH_RL', 'false').lower() in ('true', '1', 'yes')
-rl_active = rl_enabled or with_rl
+try:
+    # Vérifier si RL est activé
+    rl_enabled = os.getenv('RL_ENABLED', 'false').lower() in ('true', '1', 'yes')
+    with_rl = os.getenv('WITH_RL', 'false').lower() in ('true', '1', 'yes')
+    rl_active = rl_enabled or with_rl
 
-if not rl_active:
-    print('ℹ️  RL désactivé dans cet environnement – on ignore les dépendances RL.')
-    print('   (torch, gymnasium, optuna ne sont pas installés en production)')
+    if not rl_active:
+        print('ℹ️  RL désactivé dans cet environnement – on ignore les dépendances RL.')
+        print('   (torch, gymnasium, optuna ne sont pas installés en production)')
 
-# Dépendances critiques (toujours requises)
-critical_deps = ['flask', 'sqlalchemy', 'celery', 'redis', 'pandas', 'numpy', 'sklearn']
-missing_critical = []
+    # Dépendances critiques (toujours requises)
+    critical_deps = ['flask', 'sqlalchemy', 'celery', 'redis', 'pandas', 'numpy', 'sklearn']
+    missing_critical = []
 
-# Vérifier les dépendances critiques
-for dep in critical_deps:
-    try:
-        __import__(dep)
-        print(f'✅ {dep}')
-    except ImportError:
-        print(f'❌ {dep} manquant')
-        missing_critical.append(dep)
-
-# Faire échouer si des dépendances critiques manquent
-if missing_critical:
-    print(f'❌ ERREUR CRITIQUE: {len(missing_critical)} dépendance(s) critique(s) manquante(s): {missing_critical}')
-    sys.exit(1)
-
-# Vérifier les dépendances ML uniquement si RL est activé
-if rl_active:
-    print('📦 Vérification des dépendances RL/ML...')
-    ml_deps = ['torch', 'gymnasium', 'optuna']
-    missing_ml = []
-    for dep in ml_deps:
+    # Vérifier les dépendances critiques
+    for dep in critical_deps:
         try:
             __import__(dep)
             print(f'✅ {dep}')
-        except ImportError:
-            print(f'❌ {dep} manquant (requis pour RL)')
-            missing_ml.append(dep)
-    
-    # Faire échouer si RL activé mais dépendances manquantes
-    if missing_ml:
-        print(f'❌ ERREUR CRITIQUE: RL activé mais {len(missing_ml)} dépendance(s) RL manquante(s): {missing_ml}')
-        sys.exit(1)
-else:
-    print('ℹ️  Dépendances RL ignorées (RL_ENABLED=false)')
+        except ImportError as e:
+            print(f'❌ {dep} manquant: {e}')
+            missing_critical.append(dep)
+        except Exception as e:
+            print(f'⚠️  Erreur lors de l'\''import de {dep}: {e}')
+            missing_critical.append(dep)
 
-sys.exit(0)  # Succès
+    # Faire échouer si des dépendances critiques manquent
+    if missing_critical:
+        print(f'❌ ERREUR CRITIQUE: {len(missing_critical)} dépendance(s) critique(s) manquante(s): {missing_critical}')
+        sys.stdout.flush()
+        sys.stderr.flush()
+        sys.exit(1)
+
+    # Vérifier les dépendances ML uniquement si RL est activé
+    if rl_active:
+        print('📦 Vérification des dépendances RL/ML...')
+        ml_deps = ['torch', 'gymnasium', 'optuna']
+        missing_ml = []
+        for dep in ml_deps:
+            try:
+                __import__(dep)
+                print(f'✅ {dep}')
+            except ImportError as e:
+                print(f'❌ {dep} manquant (requis pour RL): {e}')
+                missing_ml.append(dep)
+            except Exception as e:
+                print(f'⚠️  Erreur lors de l'\''import de {dep}: {e}')
+                missing_ml.append(dep)
+        
+        # Faire échouer si RL activé mais dépendances manquantes
+        if missing_ml:
+            print(f'❌ ERREUR CRITIQUE: RL activé mais {len(missing_ml)} dépendance(s) RL manquante(s): {missing_ml}')
+            sys.exit(1)
+    else:
+        print('ℹ️  Dépendances RL ignorées (RL_ENABLED=false)')
+
+    print('✅ Toutes les dépendances critiques sont présentes')
+    sys.stdout.flush()
+    sys.stderr.flush()
+    sys.exit(0)  # Succès
+
+except Exception as e:
+    print(f'❌ ERREUR FATALE lors de la vérification des dépendances: {e}')
+    import traceback
+    traceback.print_exc()
+    sys.stdout.flush()
+    sys.stderr.flush()
+    sys.exit(1)
 "
 }
 
