@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, cast
 from typing import cast as tcast
 
-from flask import current_app, request  # pyright: ignore[reportMissingImports]
+from flask import current_app, request
 from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
     create_access_token,
     create_refresh_token,
@@ -224,7 +224,7 @@ class DriverProfile(Resource):
             from datetime import UTC, datetime
             from pathlib import Path
 
-            from flask import (  # pyright: ignore[reportMissingImports]
+            from flask import (
                 current_app,
                 request,
             )
@@ -994,7 +994,8 @@ class UpdateBookingStatus(Resource):
         status_code = 200
 
         data = request.get_json()
-        logger.info("Body reçu pour status update: %s", data)
+        logger.info("📦 Body reçu pour status update booking %s: %s", booking_id, data)
+        logger.info("📦 Type de data: %s", type(data))
 
         try:
             driver, error_response, status_code = get_driver_from_token()
@@ -1008,64 +1009,126 @@ class UpdateBookingStatus(Resource):
 
                 booking_repo = BookingRepository()
                 booking = booking_repo.find_model_by_id(booking_id=booking_id)
+
+                # ✅ Debug logs pour diagnostiquer le problème
+                if booking:
+                    logger.info(
+                        "📦 Booking trouvé: id=%s, company_id=%s, executing_company_id=%s, driver_id=%s, status=%s",
+                        booking.id,
+                        booking.company_id,
+                        booking.executing_company_id,
+                        booking.driver_id,
+                        booking.status,
+                    )
+                    logger.info(
+                        "🚗 Driver: id=%s, company_id=%s", driver.id, driver.company_id
+                    )
+
                 if not booking:
                     logger.error("Booking with id %s not found", booking_id)
                     result = {"error": "Booking not found"}
                     status_code = 404
-                elif (
-                    booking.driver_id is None
-                    and booking.status == BookingStatus.PENDING
-                ):
-                    booking.driver_id = driver.id
-                elif booking.driver_id != driver.id:
-                    result = {"error": "Unauthorized access to this booking"}
-                    status_code = 403
-                elif not data:
-                    result = {"error": "Missing JSON payload"}
-                    status_code = 400
                 else:
-                    from application.drivers.update_driver_booking_status import (
-                        UpdateDriverBookingStatusCommand,
-                        UpdateDriverBookingStatusUseCase,
-                    )
-                    from repositories.assignment_repository import AssignmentRepository
-                    # ✅ DDD: Plus besoin d'importer emit_assignment_cancelled, le use-case publie un événement
+                    # ✅ Extraire les valeurs pour éviter les problèmes de type SQLAlchemy
+                    # Ces valeurs sont déjà des entiers Python une fois le modèle chargé
+                    executing_company_id = booking.executing_company_id
+                    booking_company_id = cast(int, booking.company_id)
+                    driver_company_id = cast(int, driver.company_id)
 
-                    # Helper pour fallback si événement échoue
-                    def _emit_assignment_cancelled_fallback(
-                        company_id: int,
-                        assignment_id: str,
-                        booking_id: int,
-                        driver_id: int,
-                    ) -> None:
-                        """Fallback pour notification directe si événement échoue."""
-                        from services.realtime.socketio import emit_assignment_cancelled
-
-                        emit_assignment_cancelled(
-                            company_id=company_id,
-                            assignment_id=assignment_id,
-                            booking_id=booking_id,
-                            driver_id=driver_id,
+                    # ✅ Vérifier que le chauffeur appartient à l'entreprise qui exécute (originale OU transférée)
+                    has_executing_company = executing_company_id is not None
+                    if (
+                        has_executing_company
+                        and driver_company_id != executing_company_id
+                    ):
+                        logger.error(
+                            "❌ Chauffeur (company_id=%s) non autorisé pour booking exécuté par company_id=%s",
+                            driver_company_id,
+                            executing_company_id,
                         )
-
-                    uc = UpdateDriverBookingStatusUseCase(
-                        booking_repo=booking_repo,
-                        assignment_repo=AssignmentRepository(),
-                        db_session=db.session,
-                        notify_booking_update_fn=notify_booking_update,
-                        resolve_delays_fn=DelayEvent.resolve_delays_for_booking,
-                        emit_assignment_cancelled_fn=_emit_assignment_cancelled_fallback,
-                        maybe_trigger_dispatch_fn=_maybe_trigger_dispatch,
-                    )
-                    uc_res = uc.execute(
-                        UpdateDriverBookingStatusCommand(
-                            booking_id=booking_id,
-                            driver_id=driver.id,
-                            payload=cast("dict[str, Any] | None", data),
+                        result = {
+                            "error": "Ce chauffeur n'appartient pas à l'entreprise qui exécute cette course"
+                        }
+                        status_code = 403
+                    elif (
+                        not has_executing_company
+                        and driver_company_id != booking_company_id
+                    ):
+                        logger.error(
+                            "❌ Chauffeur (company_id=%s) non autorisé pour booking créé par company_id=%s",
+                            driver_company_id,
+                            booking_company_id,
                         )
-                    )
-                    result = uc_res.response
-                    status_code = uc_res.status_code
+                        result = {
+                            "error": "Ce chauffeur n'appartient pas à l'entreprise de cette course"
+                        }
+                        status_code = 403
+                    elif (
+                        booking.driver_id is None
+                        and booking.status == BookingStatus.PENDING
+                    ):
+                        booking.driver_id = driver.id
+                    elif booking.driver_id != driver.id:
+                        logger.error(
+                            "❌ Chauffeur %s (id=%s) essaie de modifier booking assigné à driver_id=%s",
+                            driver.user.username if driver.user else "Unknown",
+                            driver.id,
+                            booking.driver_id,
+                        )
+                        result = {
+                            "error": "Cette course est assignée à un autre chauffeur"
+                        }
+                        status_code = 403
+                    elif not data:
+                        result = {"error": "Missing JSON payload"}
+                        status_code = 400
+                    else:
+                        from application.drivers.update_driver_booking_status import (
+                            UpdateDriverBookingStatusCommand,
+                            UpdateDriverBookingStatusUseCase,
+                        )
+                        from repositories.assignment_repository import (
+                            AssignmentRepository,
+                        )
+                        # ✅ DDD: Plus besoin d'importer emit_assignment_cancelled, le use-case publie un événement
+
+                        # Helper pour fallback si événement échoue
+                        def _emit_assignment_cancelled_fallback(
+                            company_id: int,
+                            assignment_id: str,
+                            booking_id: int,
+                            driver_id: int,
+                        ) -> None:
+                            """Fallback pour notification directe si événement échoue."""
+                            from services.realtime.socketio import (
+                                emit_assignment_cancelled,
+                            )
+
+                            emit_assignment_cancelled(
+                                company_id=company_id,
+                                assignment_id=assignment_id,
+                                booking_id=booking_id,
+                                driver_id=driver_id,
+                            )
+
+                        uc = UpdateDriverBookingStatusUseCase(
+                            booking_repo=booking_repo,
+                            assignment_repo=AssignmentRepository(),
+                            db_session=db.session,
+                            notify_booking_update_fn=notify_booking_update,
+                            resolve_delays_fn=DelayEvent.resolve_delays_for_booking,
+                            emit_assignment_cancelled_fn=_emit_assignment_cancelled_fallback,
+                            maybe_trigger_dispatch_fn=_maybe_trigger_dispatch,
+                        )
+                        uc_res = uc.execute(
+                            UpdateDriverBookingStatusCommand(
+                                booking_id=booking_id,
+                                driver_id=driver.id,
+                                payload=cast("dict[str, Any] | None", data),
+                            )
+                        )
+                        result = uc_res.response
+                        status_code = uc_res.status_code
 
         except (ValueError, TypeError, AttributeError) as e:
             logger.warning(

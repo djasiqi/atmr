@@ -23,6 +23,7 @@ const GeneralTab = ({
   fieldErrors,
   handleChange,
   handleAddressSelect,
+  handleDomicileAddressSelect,
   logoPreview,
   onClickPickFile: _onClickPickFile,
   onPickFile,
@@ -280,11 +281,12 @@ const GeneralTab = ({
 
             <div className={styles.formGroup}>
               <label htmlFor="domicile_address_line1">Adresse (ligne 1)</label>
-              <input
-                id="domicile_address_line1"
+              <AddressAutocomplete
                 name="domicile_address_line1"
                 value={form.domicile_address_line1}
                 onChange={handleChange}
+                onSelect={handleDomicileAddressSelect}
+                placeholder="Saisir l'adresse de domiciliation..."
               />
             </div>
 

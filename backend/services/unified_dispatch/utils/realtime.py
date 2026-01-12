@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Tuple
 from typing import cast as tcast
 
 from cachetools import TTLCache  # pyright: ignore[reportMissingModuleSource]
-from flask import current_app  # pyright: ignore[reportMissingImports]
+from flask import current_app
 
 from ext import db
 from models import Assignment, Booking, BookingStatus, DelayEvent, Driver
@@ -25,8 +25,10 @@ from services.dispatch.auto_reassignment import get_auto_reassignment_service
 from services.geolocation.osrm import _table
 from services.ml.models.eta_delay import get_eta_delay_model
 from services.notifications.core import notify_dispatcher_optimization_opportunity
-from services.unified_dispatch.data import calculate_eta
-from services.unified_dispatch.delay_predictor import DelayPredictor
+
+# ✅ FIX: Import lazy de calculate_eta pour éviter import circulaire
+# from services.unified_dispatch.data import calculate_eta  # ❌ Cause import circulaire
+from services.unified_dispatch.ml.delay_predictor import DelayPredictor
 from services.unified_dispatch.utils.suggestions import Suggestion, SuggestionEngine
 from shared.time_utils import day_local_bounds, now_local
 
@@ -492,6 +494,9 @@ class RealtimeOptimizer:
             # ⭐ CAS 1 : GPS disponible → Calcul ETA précis
             if all(driver_pos) and all(pickup_pos):
                 try:
+                    # ✅ FIX: Import lazy pour éviter import circulaire
+                    from services.unified_dispatch.data import calculate_eta
+
                     # Cast pour typage strict (déjà validé par all())
                     driver_pos_valid = tcast("tuple[float, float]", driver_pos)
                     pickup_pos_valid = tcast("tuple[float, float]", pickup_pos)

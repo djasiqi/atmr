@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import { View, Text, StyleSheet, ViewStyle } from "react-native";
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from "react-native-maps";
+import { createShadow } from "@/styles/shadowStyles";
 
 type DriverMarker = {
   id: string;
@@ -232,11 +233,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 2,
-    shadowColor: "#0f172a",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
+    ...createShadow({
+      shadowColor: "#0f172a",
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.3,
+      shadowRadius: 4,
+      elevation: 5,
+    }),
   },
   markerInitials: {
     color: "#f8faff",

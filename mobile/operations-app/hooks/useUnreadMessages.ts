@@ -38,6 +38,28 @@ export const useUnreadMessages = () => {
     loadLastRead();
   }, []);
 
+  // ✅ Marquer tous les messages comme lus (déclaré AVANT le useEffect qui l'utilise)
+  const markAsRead = useCallback(async (messageId?: number, timestamp?: number) => {
+    try {
+      const currentTimestamp = timestamp || Date.now();
+      const currentMessageId = messageId || (lastReadMessageIdRef.current ?? 0);
+
+      // Mettre à jour les refs
+      lastReadMessageIdRef.current = currentMessageId;
+      lastReadTimestampRef.current = currentTimestamp;
+
+      // Sauvegarder dans AsyncStorage
+      await AsyncStorage.setItem(LAST_READ_MESSAGE_KEY, String(currentMessageId));
+      await AsyncStorage.setItem(LAST_READ_TIMESTAMP_KEY, String(currentTimestamp));
+
+      // Réinitialiser le compteur de messages non lus
+      unreadMessagesRef.current.clear();
+      setUnreadCount(0);
+    } catch (error) {
+      console.warn("[useUnreadMessages] Erreur lors de la sauvegarde du dernier message lu:", error);
+    }
+  }, []);
+
   // Écouter les nouveaux messages via Socket.IO
   useEffect(() => {
     if (!socket || !enterpriseSession?.user?.id) {
@@ -85,28 +107,6 @@ export const useUnreadMessages = () => {
       socket.off("team_chat_message", handleNewMessage);
     };
   }, [socket, enterpriseSession, markAsRead]);
-
-  // Marquer tous les messages comme lus
-  const markAsRead = useCallback(async (messageId?: number, timestamp?: number) => {
-    try {
-      const currentTimestamp = timestamp || Date.now();
-      const currentMessageId = messageId || (lastReadMessageIdRef.current ?? 0);
-
-      // Mettre à jour les refs
-      lastReadMessageIdRef.current = currentMessageId;
-      lastReadTimestampRef.current = currentTimestamp;
-
-      // Sauvegarder dans AsyncStorage
-      await AsyncStorage.setItem(LAST_READ_MESSAGE_KEY, String(currentMessageId));
-      await AsyncStorage.setItem(LAST_READ_TIMESTAMP_KEY, String(currentTimestamp));
-
-      // Réinitialiser le compteur de messages non lus
-      unreadMessagesRef.current.clear();
-      setUnreadCount(0);
-    } catch (error) {
-      console.warn("[useUnreadMessages] Erreur lors de la sauvegarde du dernier message lu:", error);
-    }
-  }, []);
 
   // Marquer comme lu quand l'écran chat est au focus
   useFocusEffect(

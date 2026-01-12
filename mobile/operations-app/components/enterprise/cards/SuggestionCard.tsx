@@ -112,12 +112,13 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
 
 const styles = StyleSheet.create({
   card: {
-    gap: 10,
+    paddingBottom: 10,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    marginBottom: 10,
   },
   booking: {
     color: "#FFFFFF",
@@ -127,21 +128,22 @@ const styles = StyleSheet.create({
   address: {
     color: "rgba(214,224,255,0.9)",
     fontSize: 13,
+    marginBottom: 10,
   },
   schedule: {
     color: "rgba(141,160,220,0.85)",
     fontSize: 12,
     textTransform: "uppercase",
     letterSpacing: 0.3,
+    marginBottom: 10,
   },
   list: {
-    gap: 12,
     marginTop: 8,
   },
   suggestionRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 12,
+    marginBottom: 12,
   },
   rankBadge: {
     width: 28,
@@ -150,6 +152,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(73,109,241,0.35)",
     justifyContent: "center",
     alignItems: "center",
+    marginRight: 12,
   },
   rankText: {
     color: "#FFFFFF",
@@ -157,32 +160,35 @@ const styles = StyleSheet.create({
   },
   driverContent: {
     flex: 1,
-    gap: 4,
   },
   driverName: {
     color: "#FFFFFF",
     fontWeight: "600",
     fontSize: 15,
+    marginBottom: 4,
   },
   metaRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    marginBottom: 4,
   },
   metaText: {
     color: "rgba(182,196,245,0.9)",
     fontSize: 12,
+    marginLeft: 6,
   },
   tagRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 6,
+    marginTop: 4,
   },
   tag: {
     backgroundColor: "rgba(94,234,212,0.18)",
     borderRadius: 10,
     paddingHorizontal: 8,
     paddingVertical: 4,
+    marginRight: 6,
+    marginBottom: 6,
   },
   tagText: {
     color: "#5EEAD4",
@@ -196,7 +202,6 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: "row",
-    gap: 12,
     marginTop: 8,
   },
   secondaryButton: {
@@ -206,6 +211,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(148,163,255,0.4)",
     paddingVertical: 12,
     alignItems: "center",
+    marginRight: 12,
   },
   secondaryText: {
     color: "rgba(208,217,255,0.9)",

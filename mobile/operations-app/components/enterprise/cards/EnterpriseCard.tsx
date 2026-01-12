@@ -1,5 +1,6 @@
 import React from "react";
 import { View, StyleSheet, StyleProp, ViewStyle } from "react-native";
+import { createShadow } from "@/styles/shadowStyles";
 
 type Props = {
   children: React.ReactNode;
@@ -27,11 +28,13 @@ const styles = StyleSheet.create({
     padding: 18,
     borderWidth: 1,
     borderColor: palette.border,
-    shadowColor: palette.shadow,
-    shadowOpacity: 1,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 12,
-    elevation: 2,
+    ...createShadow({
+      shadowColor: palette.shadow,
+      shadowOpacity: 1,
+      shadowOffset: { width: 0, height: 4 },
+      shadowRadius: 12,
+      elevation: 2,
+    }),
   },
   cardBleed: {
     paddingHorizontal: 0,

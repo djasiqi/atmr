@@ -11,8 +11,8 @@ from typing import Any, Dict, List, Tuple
 from ext import db
 from models import Assignment, Booking, Driver
 from services.unified_dispatch.core.settings import Settings
-from services.unified_dispatch.data import haversine_minutes
 from shared.time_utils import now_local
+from shared.utils.geo_utils import haversine_minutes
 
 DELAY_MINUTES_THRESHOLD = 15
 DELAY_MINUTES_ZERO = 0
@@ -478,9 +478,13 @@ class SuggestionEngine:
                 if distance_km <= radius_km:
                     # ETA en minutes
                     eta_minutes = haversine_minutes(
-                        driver_pos,
-                        pickup_pos,
-                        avg_kmh=getattr(self.settings.matrix, "avg_speed_kmh", 25.0),
+                        driver_pos[0],
+                        driver_pos[1],
+                        pickup_pos[0],
+                        pickup_pos[1],
+                        avg_speed_kmh=getattr(
+                            self.settings.matrix, "avg_speed_kmh", 25.0
+                        ),
                     )
 
                     results.append((driver, distance_km, eta_minutes))

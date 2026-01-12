@@ -9,6 +9,12 @@ export const useSocket = (
   onNewBooking?: (data: any) => void,
   onTeamMessage?: (msg: any) => void
 ): Socket | null => {
+  console.log("🔵 [useSocket] Hook exécuté (mount ou update)", {
+    timestamp: new Date().toISOString(),
+    hasOnNewBooking: !!onNewBooking,
+    hasOnTeamMessage: !!onTeamMessage
+  });
+  
   const [socketInstance, setSocketInstance] = useState<Socket | null>(null);
   const isMountedRef = useRef(true);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -16,6 +22,9 @@ export const useSocket = (
   const lastReconnectAttemptRef = useRef<number>(0); // ✅ Cooldown entre reconnexions
 
   useEffect(() => {
+    console.log("🔵 [useSocket] useEffect START", {
+      timestamp: new Date().toISOString()
+    });
     isMountedRef.current = true;
 
     const bindHandlers = (s: Socket) => {
@@ -236,6 +245,12 @@ export const useSocket = (
     (async () => {
       // ✅ FIX: Utiliser secureStorage.getAccessToken() au lieu d'AsyncStorage
       const token = await secureStorage.getAccessToken();
+      console.log("[useSocket] 🔑 Token check:", {
+        hasToken: !!token,
+        tokenLength: token?.length || 0,
+        timestamp: new Date().toISOString()
+      });
+      
       if (!token) {
         console.warn(JSON.stringify({
           event: "socket_init_aborted",
@@ -244,17 +259,32 @@ export const useSocket = (
         }));
         return;
       }
+      
+      console.log("[useSocket] 🔌 Attempting to connect socket...");
       try {
-        const s = await connectSocket(token).catch(() => null);
+        const s = await connectSocket(token).catch((err) => {
+          console.error("[useSocket] ❌ connectSocket failed:", err);
+          return null;
+        });
+        
+        console.log("[useSocket] Socket connection result:", {
+          success: !!s,
+          connected: s?.connected,
+          id: s?.id,
+        });
+        
         if (!s || !isMountedRef.current) {
           // échec initial → planifie une reconnexion
+          console.warn("[useSocket] ⚠️ Socket connection failed, scheduling reconnection");
           scheduleReconnection();
           return;
         }
         setSocketInstance(s);
         bindHandlers(s);
-      } catch {
+        console.log("[useSocket] ✅ Socket initialized and handlers bound");
+      } catch (err) {
         // fallback: planifier une reconnexion
+        console.error("[useSocket] ❌ Unexpected error:", err);
         scheduleReconnection();
       }
     })();

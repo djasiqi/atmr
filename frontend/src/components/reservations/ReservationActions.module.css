@@ -1,10 +1,12 @@
 /* ReservationActions.module.css - Styles centralisés pour les boutons d'action de réservation */
 
 .actionsContainer {
-  display: flex;
-  gap: var(--spacing-xxs);
+  display: inline-flex !important;
+  gap: var(--spacing-xs);
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  margin-left: var(--spacing-xs);
 }
 
 .actionButton {

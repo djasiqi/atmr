@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import sentry_sdk  # pyright: ignore[reportMissingImports]
-from flask import (  # pyright: ignore[reportMissingImports]
+from flask import (
     current_app,
     request,
 )
@@ -20,6 +20,7 @@ from flask_restx import (  # pyright: ignore[reportMissingImports]
     reqparse,
 )
 from sqlalchemy.exc import IntegrityError
+from werkzeug.exceptions import HTTPException
 
 from ext import db, limiter, role_required
 
@@ -559,6 +560,11 @@ class CompanyMe(Resource):
                         "[Company] Geocoded company address -> (%s, %s)",
                         uc_result.geocoded_lat,
                         uc_result.geocoded_lon,
+                    )
+                if uc_result.billing_profile_synced:
+                    logger.info(
+                        "[Company] ✅ CompanyBillingProfile synchronisé (company_id=%s)",
+                        company.id,
                     )
                 db.session.commit()
                 if company:
@@ -1286,6 +1292,31 @@ class CompanyReservations(Resource):
             "per_page": per_page,
             "total_pages": (total + per_page - 1) // per_page,
         }, 200
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    @limiter.limit("100 per hour")
+    def post(self):
+        """Crée une nouvelle course depuis l'interface mobile (endpoint harmonisé).
+
+        Cet endpoint est un alias de /me/reservations/manual pour l'harmonisation
+        avec l'application mobile qui utilise /companies/me/reservations.
+        """
+        # Rediriger vers la logique de création manuelle
+        from flask import g
+
+        # Sauvegarder le contexte
+        original_endpoint = g.get("endpoint")
+
+        # Appeler directement la logique de CreateManualReservation
+        manual_resource = CreateManualReservation()
+        result = manual_resource.post()
+
+        # Restaurer le contexte
+        if original_endpoint:
+            g.endpoint = original_endpoint
+
+        return result
 
 
 # ======================================================
@@ -2690,7 +2721,7 @@ class CreateManualReservation(Resource):
         final_dropoff_coords = None
 
         try:
-            import requests  # pyright: ignore[reportMissingModuleSource]
+            import requests
 
             from config import Config
 
@@ -2945,10 +2976,26 @@ class CreateManualReservation(Resource):
                 occurrence_return_dt = None
                 if is_rt:
                     if return_dt and scheduled and occurrence_date:
-                        # Heure de retour fournie : garder le même écart de
-                        # temps
+                        # Heure de retour fournie : garder le même écart de temps
                         time_diff = return_dt - scheduled
-                        occurrence_return_dt = occurrence_date + time_diff
+
+                        # ✅ VALIDATION: Vérifier que l'heure de retour n'est pas avant l'aller
+                        if time_diff.total_seconds() < 0:
+                            logger.warning(
+                                "⚠️ Heure de retour antérieure à l'aller : return_dt=%s, scheduled=%s, time_diff=%s jours. Utilisation de l'occurrence_date comme base.",
+                                return_dt,
+                                scheduled,
+                                time_diff.days,
+                            )
+                            # Utiliser occurrence_date comme base pour éviter une année incorrecte
+                            # Extraire seulement l'heure de return_dt
+                            occurrence_return_dt = occurrence_date.replace(
+                                hour=return_dt.hour,
+                                minute=return_dt.minute,
+                                second=return_dt.second,
+                            )
+                        else:
+                            occurrence_return_dt = occurrence_date + time_diff
                     else:
                         # Pas d'heure de retour : laisser scheduled_time à None
                         # (à confirmer plus tard)
@@ -2971,7 +3018,8 @@ class CreateManualReservation(Resource):
                 outbound.status = BookingStatus.ACCEPTED  # directement dispatchable
                 outbound.company_id = cid
                 outbound.booking_type = "manual"
-                outbound.user_id = getattr(company, "user_id", None)
+                # ✅ Utiliser l'utilisateur du client, pas celui de la company
+                outbound.user_id = user.id if user else None
                 outbound.is_return = False
                 outbound.duration_seconds = dur_s
                 outbound.distance_meters = dist_m
@@ -3029,7 +3077,8 @@ class CreateManualReservation(Resource):
                     return_booking.amount = amount_to_use  # 💰 Même tarif que l'aller
                     return_booking.company_id = cid
                     return_booking.booking_type = "manual"
-                    return_booking.user_id = getattr(company, "user_id", None)
+                    # ✅ Utiliser l'utilisateur du client, pas celui de la company
+                    return_booking.user_id = user.id if user else None
                     return_booking.is_round_trip = False
                     return_booking.duration_seconds = dur_s
                     return_booking.distance_meters = dist_m
@@ -3180,7 +3229,8 @@ class TriggerReturnBooking(Resource):
         from repositories.booking_repository import BookingRepository
 
         booking_repo = BookingRepository()
-        booking = booking_repo.find_model_by_id_and_company(booking_id, cid)
+        # ✅ Utiliser find_model_by_id_with_visibility pour supporter les transferts partenaires
+        booking = booking_repo.find_model_by_id_with_visibility(booking_id, cid)
         if not booking:
             return APIErrorHandler.handle_not_found(
                 "Réservation",
@@ -4034,6 +4084,11 @@ class CreateDriver(Resource):
                 _driver_trigger(company, "availability")
             return new_driver.serialize, 201
 
+        except HTTPException:
+            # ✅ Ne pas attraper les HTTPException (409, 400, etc.)
+            # qui sont déjà gérées par Flask et doivent être propagées
+            db.session.rollback()
+            raise
         except Exception as e:
             db.session.rollback()
             logger.error("❌ ERREUR create_driver: %s", str(e))
@@ -4079,7 +4134,8 @@ class SingleReservation(Resource):
         from repositories.booking_repository import BookingRepository
 
         booking_repo = BookingRepository()
-        booking = booking_repo.find_model_by_id_and_company(reservation_id, cid)
+        # ✅ Utiliser find_model_by_id_with_visibility pour supporter les transferts partenaires
+        booking = booking_repo.find_model_by_id_with_visibility(reservation_id, cid)
         if not booking:
             return APIErrorHandler.handle_not_found(
                 "Réservation",
@@ -4522,7 +4578,8 @@ class UpdateReservation(Resource):
         from repositories.booking_repository import BookingRepository
 
         booking_repo = BookingRepository()
-        booking = booking_repo.find_model_by_id_and_company(booking_id, cid)
+        # ✅ Utiliser find_model_by_id_with_visibility pour supporter les transferts partenaires
+        booking = booking_repo.find_model_by_id_with_visibility(booking_id, cid)
         if not booking:
             return APIErrorHandler.handle_not_found(
                 "Réservation",
@@ -4619,7 +4676,8 @@ class ScheduleReservation(Resource):
         from repositories.booking_repository import BookingRepository
 
         booking_repo = BookingRepository()
-        booking = booking_repo.find_model_by_id_and_company(booking_id, cid)
+        # ✅ Utiliser find_model_by_id_with_visibility pour supporter les transferts partenaires
+        booking = booking_repo.find_model_by_id_with_visibility(booking_id, cid)
         if not booking:
             return APIErrorHandler.handle_not_found(
                 "Réservation",
@@ -4746,7 +4804,8 @@ class DispatchNowReservation(Resource):
         from repositories.booking_repository import BookingRepository
 
         booking_repo = BookingRepository()
-        booking = booking_repo.find_model_by_id_and_company(booking_id, cid)
+        # ✅ Utiliser find_model_by_id_with_visibility pour supporter les transferts partenaires
+        booking = booking_repo.find_model_by_id_with_visibility(booking_id, cid)
         if not booking:
             return APIErrorHandler.handle_not_found(
                 "Réservation",

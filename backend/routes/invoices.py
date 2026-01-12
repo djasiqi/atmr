@@ -25,6 +25,10 @@ from application.invoices import (
     GenerateInvoiceReminderUseCase,
     GenerateInvoiceUseCase,
     GetInvoiceUseCase,
+    SendInvoiceByEmailInput,
+    SendInvoiceByEmailUseCase,
+    SendReminderByEmailInput,
+    SendReminderByEmailUseCase,
 )
 from application.invoices.duplicate_invoice import DuplicateInvoiceInput
 from application.invoices.generate_invoice_reminder import (
@@ -143,6 +147,28 @@ reminder_model = invoices_ns.model(
     "Reminder",
     {
         "level": fields.Integer(required=True),
+    },
+)
+
+send_email_model = invoices_ns.model(
+    "SendEmail",
+    {
+        "recipient_email": fields.String(
+            required=False,
+            allow_null=True,
+            description="Email du destinataire (optionnel, utilise client.contact_email par défaut)",
+        ),
+        "force_regenerate_pdf": fields.Boolean(
+            required=False,
+            default=False,
+            description="Regénérer le PDF même s'il existe déjà",
+        ),
+        "send_method": fields.String(
+            required=False,
+            default="email",
+            enum=["email", "paper"],
+            description="Méthode d'envoi (email ou papier)",
+        ),
     },
 )
 
@@ -1707,12 +1733,34 @@ class InvoiceDetail(Resource):
 
 @invoices_ns.route("/companies/<int:company_id>/invoices/<int:invoice_id>/send")
 class SendInvoice(Resource):
-    """Endpoint pour marquer une facture comme envoyée."""
+    """Endpoint pour envoyer une facture par email ou la marquer comme envoyée."""
 
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
+    @invoices_ns.expect(send_email_model, validate=False)
+    @invoices_ns.response(200, "Facture envoyée avec succès")
+    @invoices_ns.response(
+        400, "Erreur de validation (email invalide, client sans email)"
+    )
+    @invoices_ns.response(404, "Facture non trouvée")
+    @invoices_ns.response(500, "Erreur lors de l'envoi")
     def post(self, company_id, invoice_id):  # noqa: PLR0911
-        """Marquer une facture comme envoyée."""
+        """
+        Envoie une facture par email ou la marque comme envoyée (papier).
+
+        **Méthodes d'envoi** :
+        - `email` (défaut) : Envoie par email au client
+        - `paper` : Marque uniquement comme envoyée (envoi papier manuel)
+
+        **Body** :
+        ```json
+        {
+            "recipient_email": "client@example.com",  // Optionnel
+            "force_regenerate_pdf": false,
+            "send_method": "email"  // ou "paper"
+        }
+        ```
+        """
         try:
             # ✅ DDD: Utilise use-case au lieu de service directement
             from routes.companies import _get_current_company_via_use_case
@@ -1726,10 +1774,8 @@ class SendInvoice(Resource):
             try:
                 cid = int(cid_obj) if cid_obj is not None else None
             except (ValueError, TypeError, OverflowError):
-                # Erreurs de conversion attendues : valeur invalide, type incorrect, overflow
                 cid = None
             except Exception:
-                # Erreur inattendue : logger et utiliser None
                 logger.debug(
                     "Unexpected error converting company.id to int: %s", cid_obj
                 )
@@ -1740,6 +1786,42 @@ class SendInvoice(Resource):
                     logger_instance=logger,
                 )
 
+            # Parser le body
+            data = request.get_json() or {}
+            send_method = data.get("send_method", "email")
+            recipient_email = data.get("recipient_email")
+            force_regenerate_pdf = data.get("force_regenerate_pdf", False)
+
+            if send_method == "email":
+                # Envoi par email avec use case
+                send_use_case = SendInvoiceByEmailUseCase()
+                input_data = SendInvoiceByEmailInput(
+                    invoice_id=invoice_id,
+                    recipient_email=recipient_email,
+                    force_regenerate_pdf=force_regenerate_pdf,
+                )
+
+                result = send_use_case.execute(input_data)
+
+                if not result.success:
+                    return {
+                        "success": False,
+                        "error": result.error,
+                    }, result.status_code
+
+                return success_response(
+                    data={
+                        "invoice_id": result.invoice_id,
+                        "recipient": result.recipient,
+                        "sent_at": result.sent_at.isoformat()
+                        if result.sent_at
+                        else None,
+                        "send_method": "email",
+                    },
+                    message=f"Facture envoyée par email à {result.recipient}",
+                )
+
+            # send_method == "paper" : Marquer juste comme envoyée
             # Utiliser le repository pour récupérer la facture
             from repositories.invoice_repository import InvoiceRepository
 
@@ -1748,7 +1830,7 @@ class SendInvoice(Resource):
             if not invoice:
                 return APIErrorHandler.handle_not_found(
                     "Facture",
-                    invoice_id if "invoice_id" in locals() else None,
+                    invoice_id,
                     logger,
                 )
 
@@ -1758,12 +1840,15 @@ class SendInvoice(Resource):
             db.session.commit()
 
             return success_response(
-                data={"status": invoice.status.value},
-                message="Facture marquée comme envoyée",
+                data={
+                    "invoice_id": invoice_id,
+                    "sent_at": invoice.sent_at.isoformat() if invoice.sent_at else None,  # pyright: ignore[reportOptionalMemberAccess]
+                    "send_method": "paper",
+                },
+                message="Facture marquée comme envoyée (courrier papier)",
             )
 
         except (OperationalError, DBAPIError, IntegrityError) as e:
-            # Erreurs DB attendues : connexion, contraintes, timeout
             logger.error(
                 "Erreur DB lors de l'envoi de la facture (DB error: %s): %s",
                 type(e).__name__,
@@ -1772,7 +1857,6 @@ class SendInvoice(Resource):
             db.session.rollback()
             return APIErrorHandler.handle_exception(e, logger)
         except (ValueError, TypeError, AttributeError) as e:
-            # Erreurs de validation attendues : données invalides, attributs manquants
             logger.error(
                 "Erreur de validation lors de l'envoi de la facture (validation error: %s): %s",
                 type(e).__name__,
@@ -1783,7 +1867,6 @@ class SendInvoice(Resource):
                 str(e), logger_instance=logger
             )
         except Exception as e:
-            # Erreur inattendue : logger avec trace complète
             logger.exception("Erreur inattendue lors de l'envoi de la facture")
             db.session.rollback()
             return APIErrorHandler.handle_exception(e, logger)
@@ -2266,6 +2349,113 @@ class InvoiceReminders(Resource):
         except Exception as e:
             # Erreur inattendue : logger avec trace complète
             logger.exception("Erreur inattendue lors de la génération du rappel")
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@invoices_ns.route(
+    "/companies/<int:company_id>/invoices/<int:invoice_id>/reminders/<int:reminder_id>/send"
+)
+class SendReminder(Resource):
+    """Endpoint pour envoyer un rappel par email."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    @invoices_ns.expect(send_email_model, validate=False)
+    @invoices_ns.response(200, "Rappel envoyé avec succès")
+    @invoices_ns.response(
+        400, "Erreur de validation (email invalide, client sans email)"
+    )
+    @invoices_ns.response(404, "Rappel non trouvé")
+    @invoices_ns.response(500, "Erreur lors de l'envoi")
+    def post(self, company_id, invoice_id, reminder_id):  # noqa: PLR0911, ARG002
+        """
+        Envoie un rappel de paiement par email.
+
+        **Body** :
+        ```json
+        {
+            "recipient_email": "client@example.com",  // Optionnel
+            "force_regenerate_pdf": false
+        }
+        ```
+        """
+        try:
+            # ✅ DDD: Utilise use-case au lieu de service directement
+            from routes.companies import _get_current_company_via_use_case
+
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                return error_response, status_code
+
+            # Vérifier que l'ID de l'entreprise correspond
+            cid_obj = getattr(company, "id", None)
+            try:
+                cid = int(cid_obj) if cid_obj is not None else None
+            except (ValueError, TypeError, OverflowError):
+                cid = None
+            except Exception:
+                logger.debug(
+                    "Unexpected error converting company.id to int: %s", cid_obj
+                )
+                cid = None
+            if cid != company_id:
+                return APIErrorHandler.handle_permission_error(
+                    "Non autorisé",
+                    logger_instance=logger,
+                )
+
+            # Parser le body
+            data = request.get_json() or {}
+            recipient_email = data.get("recipient_email")
+            force_regenerate_pdf = data.get("force_regenerate_pdf", False)
+
+            # Envoi par email avec use case
+            send_use_case = SendReminderByEmailUseCase()
+            input_data = SendReminderByEmailInput(
+                reminder_id=reminder_id,
+                recipient_email=recipient_email,
+                force_regenerate_pdf=force_regenerate_pdf,
+            )
+
+            result = send_use_case.execute(input_data)
+
+            if not result.success:
+                return {
+                    "success": False,
+                    "error": result.error,
+                }, result.status_code
+
+            return success_response(
+                data={
+                    "reminder_id": result.reminder_id,
+                    "invoice_id": result.invoice_id,
+                    "recipient": result.recipient,
+                    "sent_at": result.sent_at.isoformat() if result.sent_at else None,
+                },
+                message=f"Rappel envoyé par email à {result.recipient}",
+            )
+
+        except (OperationalError, DBAPIError, IntegrityError) as e:
+            logger.error(
+                "Erreur DB lors de l'envoi du rappel (DB error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+            db.session.rollback()
+            return APIErrorHandler.handle_exception(e, logger)
+        except (ValueError, TypeError, AttributeError) as e:
+            logger.error(
+                "Erreur de validation lors de l'envoi du rappel (validation error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+            db.session.rollback()
+            return APIErrorHandler.handle_validation_error(
+                str(e), logger_instance=logger
+            )
+        except Exception as e:
+            logger.exception("Erreur inattendue lors de l'envoi du rappel")
+            db.session.rollback()
             return APIErrorHandler.handle_exception(e, logger)
 
 

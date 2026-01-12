@@ -41,10 +41,22 @@ class BookingRepository:
                 (Booking.executing_company_id == company_id),
                 (Booking.status == BookingStatus.PENDING),
             ),
-            # Courses transférées acceptées/assignées où l'entreprise est l'exécutante
+            # Courses transférées acceptées/en cours où l'entreprise est l'exécutante
+            # ✅ Inclure TOUS les statuts actifs : ACCEPTED, ASSIGNED, EN_ROUTE, IN_PROGRESS, COMPLETED, RETURN_COMPLETED
             and_(
                 (Booking.executing_company_id == company_id),
-                (Booking.status.in_([BookingStatus.ACCEPTED, BookingStatus.ASSIGNED])),
+                (
+                    Booking.status.in_(
+                        [
+                            BookingStatus.ACCEPTED,
+                            BookingStatus.ASSIGNED,
+                            BookingStatus.EN_ROUTE,
+                            BookingStatus.IN_PROGRESS,
+                            BookingStatus.COMPLETED,
+                            BookingStatus.RETURN_COMPLETED,
+                        ]
+                    )
+                ),
             ),
         )
 
@@ -119,27 +131,44 @@ class BookingRepository:
 
         # Utiliser le filtre de visibilité pour les courses transférées
         # Pour le dispatch, on veut seulement ACCEPTED et ASSIGNED
+        # ✅ NOUVEAU : Inclure les courses retour sans heure attribuée
+        from sqlalchemy import case, or_
+
         bookings = (
             Booking.query.filter(
                 self._company_visibility_filter(company_id),
                 Booking.status.in_([BookingStatus.ACCEPTED, BookingStatus.ASSIGNED]),
-                Booking.scheduled_time.isnot(None),
-                Booking.scheduled_time <= horizon_local,
+                # Inclure les courses avec heure planifiée OU les retours sans heure
+                or_(
+                    Booking.scheduled_time.isnot(None),
+                    Booking.is_return,  # Inclure les retours même sans heure
+                ),
             )
-            .order_by(Booking.scheduled_time.asc())
+            .filter(
+                # Si scheduled_time existe, doit être <= horizon
+                or_(
+                    Booking.scheduled_time.is_(None),
+                    Booking.scheduled_time <= horizon_local,
+                )
+            )
+            # Trier : courses avec heure d'abord (par heure), puis courses sans heure à la fin
+            .order_by(
+                case((Booking.scheduled_time.is_(None), 1), else_=0),
+                Booking.scheduled_time.asc().nullslast(),
+                Booking.id.asc(),
+            )
             .all()
         )
 
-        # Filtrer les retours avec heure à confirmer
+        # Filtrer uniquement les retours avec time_confirmed=False (mais garder ceux avec scheduled_time=None)
         filtered_bookings = []
         for booking in bookings:
-            if booking.scheduled_time is None:
-                continue
-
             is_return = bool(getattr(booking, "is_return", False))
             time_confirmed = bool(getattr(booking, "time_confirmed", True))
 
-            if is_return and not time_confirmed:
+            # Exclure seulement les retours avec time_confirmed=False ET scheduled_time défini
+            # (les retours sans heure sont OK)
+            if is_return and not time_confirmed and booking.scheduled_time is not None:
                 continue
 
             filtered_bookings.append(booking)
@@ -245,6 +274,28 @@ class BookingRepository:
         """
         return Booking.query.filter_by(id=booking_id, company_id=company_id).first()
 
+    def find_model_by_id_with_visibility(
+        self, booking_id: int, company_id: int
+    ) -> Booking | None:
+        """Trouve un booking par son ID avec visibilité transferts partenaires.
+
+        Utilise le filtre de visibilité pour supporter les transferts partenaires.
+        Une entreprise peut voir une réservation si :
+        - Elle est propriétaire (company_id)
+        - Elle est exécutante d'un transfert (executing_company_id)
+
+        Args:
+            booking_id: ID du booking
+            company_id: ID de l'entreprise
+
+        Returns:
+            Booking ou None si non trouvé
+        """
+        return Booking.query.filter(
+            Booking.id == booking_id,
+            self._company_visibility_filter(company_id),
+        ).first()
+
     def find_models_by_company_with_filters(
         self,
         company_id: int,
@@ -269,7 +320,7 @@ class BookingRepository:
         # Utiliser le filtre de visibilité pour les courses transférées
         query = Booking.query.filter(self._company_visibility_filter(company_id))
 
-        logger.info(
+        logger.warning(
             (
                 "[BookingRepository] find_models_by_company_with_filters: company_id=%s, "
                 "day_str=%s, status=%s"
@@ -280,18 +331,83 @@ class BookingRepository:
         )
 
         if day_str:
+            from sqlalchemy import or_
+
             from shared.time_utils import day_local_bounds
 
             try:
                 start_local, end_local = day_local_bounds(day_str)
-                query = query.filter(
+
+                # ÉTAPE 1 : Récupérer d'abord les IDs des courses aller du jour
+                outbound_bookings_query = Booking.query.filter(
+                    self._company_visibility_filter(company_id),
                     Booking.scheduled_time >= start_local,
                     Booking.scheduled_time < end_local,
+                    ~Booking.is_return,
                 )
-                logger.info(
-                    "[BookingRepository] Date filter applied: %s to %s",
+                outbound_bookings = outbound_bookings_query.all()
+                outbound_ids = [b.id for b in outbound_bookings]
+
+                logger.warning(
+                    "[BookingRepository] Found %s outbound bookings for date range: %s",
+                    len(outbound_ids),
+                    outbound_ids[:5] if outbound_ids else [],
+                )
+
+                # Vérifier si des retours sans heure existent pour ces courses aller
+                if outbound_ids:
+                    # ✅ FIX: Inclure les retours avec scheduled_time=None OU time_confirmed=False
+                    return_bookings_query = Booking.query.filter(
+                        self._company_visibility_filter(company_id),
+                        Booking.is_return,
+                        or_(
+                            Booking.scheduled_time.is_(None),
+                            ~Booking.time_confirmed,  # Inclure les retours avec heure non confirmée
+                        ),
+                        Booking.parent_booking_id.in_(outbound_ids),
+                    )
+                    return_bookings = return_bookings_query.all()
+                    logger.warning(
+                        "[BookingRepository] Found %s return bookings without time linked to outbound bookings: %s",
+                        len(return_bookings),
+                        [
+                            {
+                                "id": b.id,
+                                "parent_id": b.parent_booking_id,
+                                "status": b.status.value,
+                            }
+                            for b in return_bookings[:3]
+                        ],
+                    )
+
+                # ÉTAPE 2 : Inclure les courses avec heure dans la plage OU les retours liés aux courses aller du jour
+                if outbound_ids:
+                    # Si on a des courses aller, inclure aussi leurs retours sans heure ou heure non confirmée
+                    query = query.filter(
+                        or_(
+                            # Courses avec heure planifiée dans la plage
+                            (Booking.scheduled_time >= start_local)
+                            & (Booking.scheduled_time < end_local),
+                            # Courses retour sans heure confirmée dont la course aller est aujourd'hui
+                            Booking.is_return
+                            & or_(
+                                Booking.scheduled_time.is_(None),
+                                ~Booking.time_confirmed,
+                            )
+                            & (Booking.parent_booking_id.in_(outbound_ids)),
+                        )
+                    )
+                else:
+                    # Pas de courses aller, filtrer normalement par date
+                    query = query.filter(
+                        (Booking.scheduled_time >= start_local)
+                        & (Booking.scheduled_time < end_local)
+                    )
+                logger.warning(
+                    "[BookingRepository] Date filter applied: %s to %s (including returns without time linked to %s outbound bookings)",
                     start_local,
                     end_local,
+                    len(outbound_ids),
                 )
             except ValueError:
                 # Retourner une liste vide si la date est invalide
@@ -300,9 +416,16 @@ class BookingRepository:
 
         if status:
             query = query.filter(Booking.status == status)
-            logger.info("[BookingRepository] Status filter applied: %s", status)
+            logger.warning("[BookingRepository] Status filter applied: %s", status)
 
-        bookings = query.order_by(Booking.scheduled_time.desc()).all()
+        # Trier : courses avec heure en premier (desc), puis courses sans heure à la fin
+        from sqlalchemy import case
+
+        bookings = query.order_by(
+            case((Booking.scheduled_time.is_(None), 1), else_=0),
+            Booking.scheduled_time.desc().nullslast(),
+            Booking.id.desc(),
+        ).all()
 
         logger.info(
             (
@@ -612,41 +735,6 @@ class BookingRepository:
         Returns:
             Liste de Booking triés par scheduled_time ascendant
         """
-        # #region agent log
-        import json
-        from pathlib import Path
-
-        log_path = Path(r"c:\Users\jasiq\atmr\.cursor\debug.log")
-        try:
-            with log_path.open("a", encoding="utf-8") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "C",
-                            "location": "booking_repository.py:find_by_company_and_client_and_period",
-                            "message": "Recherche bookings pour facturation",
-                            "data": {
-                                "company_id": company_id,
-                                "client_id": client_id,
-                                "period_year": period_year,
-                                "period_month": period_month,
-                            },
-                            "timestamp": int(
-                                __import__("datetime")
-                                .datetime.now(__import__("datetime").UTC)
-                                .timestamp()
-                                * 1000
-                            ),
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion
-
         # ✅ Pour les courses transférées :
         # - L'entreprise propriétaire (company_id) peut facturer le client
         # - L'entreprise exécutante (executing_company_id) peut facturer l'entreprise propriétaire
@@ -661,47 +749,6 @@ class BookingRepository:
         )
         # Note: Les courses transférées ont toujours company_id = entreprise propriétaire,
         # donc elles sont incluses automatiquement dans cette requête
-
-        # #region agent log
-        # Vérifier s'il y a des bookings transférés pour ce client
-        try:
-            transferred_count = Booking.query.filter(
-                Booking.executing_company_id == company_id,
-                Booking.company_id != company_id,
-                Booking.client_id == client_id,
-                Booking.status.in_(
-                    [BookingStatus.COMPLETED, BookingStatus.RETURN_COMPLETED]
-                ),
-                Booking.invoice_line_id.is_(None),
-            ).count()
-            with log_path.open("a", encoding="utf-8") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "D",
-                            "location": "booking_repository.py:find_by_company_and_client_and_period",
-                            "message": "Bookings transférés trouvés pour ce client",
-                            "data": {
-                                "company_id": company_id,
-                                "client_id": client_id,
-                                "transferred_count": transferred_count,
-                                "note": "Bookings où cette entreprise est l'exécutante mais pas le propriétaire",
-                            },
-                            "timestamp": int(
-                                __import__("datetime")
-                                .datetime.now(__import__("datetime").UTC)
-                                .timestamp()
-                                * 1000
-                            ),
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion
 
         # Filtrer par période si fournie
         if period_year and period_month:

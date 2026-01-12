@@ -128,6 +128,10 @@ class BookingTransfer(db.Model):
             "vat_rate": float(self.vat_rate),
             "vat_included": self.vat_included,
             "status": self.status.value,
+            # ✅ Alias pour compatibilité frontend
+            "proposed_at": (
+                self.requested_at.isoformat() if self.requested_at else None
+            ),
             "requested_at": (
                 self.requested_at.isoformat() if self.requested_at else None
             ),

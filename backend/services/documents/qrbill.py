@@ -1,3 +1,4 @@
+# ruff: noqa: G004
 import logging
 import tempfile
 from io import BytesIO
@@ -8,6 +9,7 @@ from reportlab.graphics import renderPDF  # pyright: ignore[reportMissingModuleS
 from svglib.svglib import svg2rlg  # pyright: ignore[reportMissingImports]
 
 from models import CompanyBillingSettings
+from services.billing import BillingProfileService, generate_scor_reference
 
 # Constantes pour éviter les valeurs magiques
 MIN_ADDRESS_PARTS = 2
@@ -23,6 +25,134 @@ class QRBillService:
 
     def __init__(self):
         super().__init__()
+
+    def _get_payment_reference(self, invoice):
+        """Génère la référence de paiement selon le mode configuré.
+
+        Args:
+            invoice: Facture pour laquelle générer la référence
+
+        Returns:
+            str | None: Référence de paiement (SCOR/QRR) ou None
+        """
+        try:
+            # Récupérer le profil de facturation
+            profile = BillingProfileService.get_by_company_id(invoice.company_id)
+
+            if not profile:
+                app_logger.warning(
+                    "[QR-Bill] Pas de profil pour company_id=%s, pas de référence générée",
+                    invoice.company_id,
+                )
+                return None
+
+            # Vérifier le mode de référence
+            if profile.payment_reference_mode == "NONE":
+                app_logger.debug("[QR-Bill] Mode NONE : pas de référence")
+                return None
+
+            if profile.payment_reference_mode == "SCOR":
+                # Générer une référence SCOR (ISO 11649)
+                app_logger.debug(
+                    "[QR-Bill] Génération SCOR pour %s", invoice.invoice_number
+                )
+                return generate_scor_reference(
+                    invoice.invoice_number, company_id=invoice.company_id
+                )
+
+            if profile.payment_reference_mode == "QRR":
+                # TODO: Implémenter QRR (nécessite QR-IBAN)
+                app_logger.warning(
+                    "[QR-Bill] Mode QRR non encore implémenté, fallback sur SCOR"
+                )
+                return generate_scor_reference(
+                    invoice.invoice_number, company_id=invoice.company_id
+                )
+
+            app_logger.error(
+                "[QR-Bill] Mode de référence inconnu : %s",
+                profile.payment_reference_mode,
+            )
+            return None
+
+        except Exception as e:
+            app_logger.error(f"[QR-Bill] Erreur génération référence : {e}")
+            return None
+
+    def _get_creditor_info(self, company):
+        """✅ Méthode helper pour obtenir toutes les infos du créancier (entreprise).
+
+        Utilise CompanyBillingProfile comme source unique.
+        Retourne adresse + IBAN + mode de paiement.
+
+        Returns:
+            dict: {
+                'address': {...},  # Adresse structurée
+                'iban': str,       # IBAN du profil
+                'address_type': 'S' ou 'K'  # Type d'adresse QR-Bill
+            }
+        """
+        # Essayer de récupérer le profil de facturation
+        profile = BillingProfileService.get_by_company_id(company.id)
+
+        if profile:
+            # ✅ Utiliser le profil comme source unique
+            # Type S (Structured) : rue et numéro séparés
+            # Si building_number est vide, street_name contient déjà l'adresse complète
+            if profile.building_number and profile.building_number.strip():
+                creditor_street = (
+                    f"{profile.street_name} {profile.building_number}".strip()
+                )
+            else:
+                creditor_street = profile.street_name or ""
+            creditor_pcode = profile.postal_code
+            creditor_city = profile.city
+            creditor_country = profile.country_code
+            creditor_name = profile.legal_name
+
+            # IBAN depuis le profil (priorité : qr_iban puis iban)
+            iban = profile.qr_iban or profile.iban
+
+            address_type = "S"  # Type structuré
+
+            app_logger.debug(
+                "[QR-Bill] Utilisation profil (ID=%s) pour company_id=%s (Type %s)",
+                profile.id,
+                company.id,
+                address_type,
+            )
+        else:
+            # Fallback sur les anciennes données (Type K - Combined)
+            app_logger.warning(
+                "[QR-Bill] Pas de profil pour company_id=%s, utilisation données company.* (Type K)",
+                company.id,
+            )
+            creditor_street = (
+                company.domicile_address_line1
+                or company.address
+                or "[Adresse non configurée]"
+            )
+            creditor_pcode = company.domicile_zip or "0000"
+            creditor_city = company.domicile_city or "[Ville non configurée]"
+            creditor_country = company.domicile_country or "CH"
+            creditor_name = company.name or "[Entreprise non configurée]"
+
+            # IBAN depuis company.iban (fallback)
+            iban = company.iban or None
+
+            address_type = "K"  # Type combiné (fallback)
+
+        return {
+            "address": {
+                "name": creditor_name,
+                "street": creditor_street,
+                "pcode": creditor_pcode,
+                "city": creditor_city,
+                "country": creditor_country,
+            },
+            "iban": iban,
+            "address_type": address_type,
+        }
 
     def generate_qr_bill_svg(self, invoice):
         """Génère un QR-Bill SVG pour une facture."""
@@ -78,12 +208,6 @@ class QRBillService:
                 pass
             # #endregion
 
-            if not billing_settings or not billing_settings.iban:
-                app_logger.warning(
-                    "Pas d'IBAN configuré pour l'entreprise %s", invoice.company_id
-                )
-                return None
-
             # Récupérer les informations de la facture
             company = invoice.company
             client = invoice.client
@@ -157,16 +281,27 @@ class QRBillService:
                         # Ville
                         debtor_city = parts[3]
 
+            # ✅ Utiliser l'adresse de domiciliation (cohérence avec PDF)
+            creditor_info = self._get_creditor_info(company)
+            creditor_data = creditor_info["address"]
+            iban_from_profile = creditor_info["iban"]
+
+            # Utiliser l'IBAN du profil en priorité (fallback sur billing_settings)
+            iban_to_use = iban_from_profile or (
+                billing_settings.iban if billing_settings else None
+            )
+
+            if not iban_to_use:
+                app_logger.warning(
+                    "Pas d'IBAN configuré pour company_id=%s (ni profil ni settings)",
+                    invoice.company_id,
+                )
+                return None
+
             # Créer le QR-Bill avec la vraie bibliothèque qrbill
             qr_bill = QRBill(
-                account=billing_settings.iban,
-                creditor={
-                    "name": company.name or "Emmenez Moi",
-                    "street": company.address or "Route de Chevrens 145",
-                    "pcode": "1247",
-                    "city": "Anières",
-                    "country": "CH",
-                },
+                account=iban_to_use,
+                creditor=creditor_data,
                 debtor={
                     "name": debtor_name,
                     "street": debtor_street,
@@ -176,7 +311,7 @@ class QRBillService:
                 },
                 amount=str(invoice.total_amount),
                 currency="CHF",
-                reference_number=None,  # Pas de référence QR pour l'instant
+                reference_number=self._get_payment_reference(invoice),
                 additional_information=(
                     f"Facture {invoice.invoice_number} - "
                     f"Période: {invoice.period_month:02d}."
@@ -215,12 +350,6 @@ class QRBillService:
                 company_id=invoice.company_id
             ).first()
 
-            if not billing_settings or not billing_settings.iban:
-                app_logger.warning(
-                    "Pas d'IBAN configuré pour l'entreprise %s", invoice.company_id
-                )
-                return None
-
             # Récupérer les informations de la facture
             company = invoice.company
             client = invoice.client
@@ -294,16 +423,27 @@ class QRBillService:
                         # Ville
                         debtor_city = parts[3]
 
+            # ✅ Utiliser l'adresse de domiciliation (cohérence avec PDF)
+            creditor_info = self._get_creditor_info(company)
+            creditor_data = creditor_info["address"]
+            iban_from_profile = creditor_info["iban"]
+
+            # Utiliser l'IBAN du profil en priorité (fallback sur billing_settings)
+            iban_to_use = iban_from_profile or (
+                billing_settings.iban if billing_settings else None
+            )
+
+            if not iban_to_use:
+                app_logger.warning(
+                    "Pas d'IBAN configuré pour company_id=%s (ni profil ni settings)",
+                    invoice.company_id,
+                )
+                return None
+
             # Créer le QR-Bill avec la vraie bibliothèque qrbill
             qr_bill = QRBill(
-                account=billing_settings.iban,
-                creditor={
-                    "name": company.name or "Emmenez Moi",
-                    "street": company.address or "Route de Chevrens 145",
-                    "pcode": "1247",
-                    "city": "Anières",
-                    "country": "CH",
-                },
+                account=iban_to_use,
+                creditor=creditor_data,
                 debtor={
                     "name": debtor_name,
                     "street": debtor_street,
@@ -313,7 +453,7 @@ class QRBillService:
                 },
                 amount=str(invoice.total_amount),
                 currency="CHF",
-                reference_number=None,  # Pas de référence QR pour l'instant
+                reference_number=self._get_payment_reference(invoice),
                 additional_information=(
                     f"Facture {invoice.invoice_number} - "
                     f"Période: {invoice.period_month:02d}."

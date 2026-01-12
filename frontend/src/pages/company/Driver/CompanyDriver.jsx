@@ -90,7 +90,27 @@ const CompanyDriver = () => {
       alert('Chauffeur ajouté avec succès !');
     } catch (err) {
       console.error("Erreur lors de l'ajout du chauffeur:", err);
-      alert(`Erreur : ${err.error || 'Veuillez réessayer.'}`);
+      
+      // Extraire le message d'erreur du backend
+      let errorMessage = err?.message || err?.error || 'Une erreur est survenue.';
+      
+      // Gérer les erreurs 409 (conflit) de manière spécifique
+      if (err?.status === 409 || errorMessage.includes('Conflict')) {
+        errorMessage = "Ce nom d'utilisateur ou cet email est déjà utilisé. Veuillez en choisir un autre.";
+      } else if (err?.details) {
+        errorMessage = `${errorMessage}\nDétails: ${err.details}`;
+      }
+      
+      // Afficher l'erreur complète dans la console pour débogage
+      console.error("Détails complets de l'erreur:", {
+        message: err?.message,
+        error: err?.error,
+        details: err?.details,
+        status: err?.status,
+        fullError: err
+      });
+      
+      alert(`Erreur : ${errorMessage}`);
     }
   };
 

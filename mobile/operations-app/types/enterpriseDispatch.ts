@@ -57,11 +57,19 @@ export interface RideSummary {
     dropoff_address: string;
     distance_km?: number | null;
   };
-  status: "assigned" | "unassigned" | "completed" | "return_completed" | "in_progress" | "en_route" | "cancelled";
+  status: "assigned" | "unassigned" | "completed" | "return_completed" | "in_progress" | "en_route" | "cancelled" | "pending";
   driver: {
     id?: string | null;
     name?: string | null;
     is_emergency: boolean;
+  } | null;
+  transfer?: {
+    id: string;
+    status: "PENDING" | "ACCEPTED" | "REJECTED" | "COMPLETED";
+    is_sender: boolean;
+    is_receiver: boolean;
+    partner_company_id: string;
+    partner_company_name?: string | null;
   } | null;
   flags: {
     risk_delay: boolean;
@@ -229,6 +237,12 @@ export interface RideCreatePayload {
   assign_driver_id?: string;
   wheelchair_client_has?: boolean;
   wheelchair_need?: boolean;
+  // 🔄 Champs de récurrence
+  is_recurring?: boolean;
+  recurrence_type?: "daily" | "weekly" | "custom";
+  recurrence_days?: number[]; // 0=Lundi, 1=Mardi, ..., 6=Dimanche
+  recurrence_end_date?: string; // YYYY-MM-DD
+  occurrences?: number; // Nombre de répétitions
 }
 
 export interface AddressSuggestion {

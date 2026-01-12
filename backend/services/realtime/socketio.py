@@ -243,16 +243,17 @@ def emit_dispatch_run_started(
     *,
     namespace: str = DEFAULT_NAMESPACE,
 ) -> None:
+    # ✅ FIX: Standardiser avec '_' au lieu de ':' pour cohérence
     emit_company_event(
         company_id,
-        "dispatch:run:started",
+        "dispatch_run_started",
         {"dispatch_run_id": dispatch_run_id, "date": date_str},
         namespace=namespace,
     )
     # Optionnel: cibler aussi la room date_YYYY-MM-DD
     emit_date_event(
         date_str,
-        "dispatch:run:started",
+        "dispatch_run_started",
         {"dispatch_run_id": dispatch_run_id, "date": date_str},
         namespace=namespace,
     )
@@ -291,8 +292,9 @@ def emit_dispatch_run_failed(
         "date": date_str,
         "error": str(error),
     }
-    emit_company_event(company_id, "dispatch:run:failed", payload, namespace=namespace)
-    emit_date_event(date_str, "dispatch:run:failed", payload, namespace=namespace)
+    # ✅ FIX: Standardiser avec '_' au lieu de ':' pour cohérence
+    emit_company_event(company_id, "dispatch_run_failed", payload, namespace=namespace)
+    emit_date_event(date_str, "dispatch_run_failed", payload, namespace=namespace)
 
 
 def emit_assignment_created(
@@ -313,8 +315,9 @@ def emit_assignment_created(
         "booking_id": booking_id,
         "driver_id": driver_id,
     }
+    # ✅ FIX: Standardiser avec '_' au lieu de ':' pour cohérence
     emit_company_event(
-        company_id, "dispatch:assignment:created", company_payload, namespace=namespace
+        company_id, "dispatch_assignment_created", company_payload, namespace=namespace
     )
 
     driver_payload = {
@@ -322,7 +325,7 @@ def emit_assignment_created(
         "booking_id": booking_id,
     }
     emit_driver_event(
-        driver_id, "driver:assignment:received", driver_payload, namespace=namespace
+        driver_id, "driver_assignment_received", driver_payload, namespace=namespace
     )
 
 
@@ -341,11 +344,12 @@ def emit_assignment_updated(
         "driver_id": driver_id,
         "fields": fields,
     }
+    # ✅ FIX: Standardiser avec '_' au lieu de ':' pour cohérence
     emit_company_event(
-        company_id, "dispatch:assignment:updated", payload, namespace=namespace
+        company_id, "dispatch_assignment_updated", payload, namespace=namespace
     )
     emit_driver_event(
-        driver_id, "driver:assignment:updated", payload, namespace=namespace
+        driver_id, "driver_assignment_updated", payload, namespace=namespace
     )
 
 
@@ -362,11 +366,12 @@ def emit_assignment_cancelled(
         "booking_id": booking_id,
         "driver_id": driver_id,
     }
+    # ✅ FIX: Standardiser avec '_' au lieu de ':' pour cohérence
     emit_company_event(
-        company_id, "dispatch:assignment:cancelled", payload, namespace=namespace
+        company_id, "dispatch_assignment_cancelled", payload, namespace=namespace
     )
     emit_driver_event(
-        driver_id, "driver:assignment:cancelled", payload, namespace=namespace
+        driver_id, "driver_assignment_cancelled", payload, namespace=namespace
     )
 
 
@@ -464,10 +469,11 @@ def emit_delay_detected(
     if alternative_delay_minutes is not None:
         payload["alternative_delay_minutes"] = float(alternative_delay_minutes)
 
+    # ✅ FIX: Standardiser avec '_' au lieu de ':' pour cohérence
     emit_company_event(
-        company_id, "dispatch:delay:detected", payload, namespace=namespace
+        company_id, "dispatch_delay_detected", payload, namespace=namespace
     )
-    emit_driver_event(driver_id, "driver:delay:detected", payload, namespace=namespace)
+    emit_driver_event(driver_id, "driver_delay_detected", payload, namespace=namespace)
 
     # ✅ P0: Push notification pour delay.detected (fan-out hybride)
     # Import depuis push_service pour éviter les cycles d'import

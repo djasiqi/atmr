@@ -21,6 +21,7 @@ const ReservationTable = ({
   hideEdit = false,
   hideTransfer = false,
   hideDelete = false,
+  currentCompanyId, // ✅ ID de l'entreprise connectée pour déterminer la direction du transfert
 }) => {
   const deletableStatuses = ['pending', 'accepted', 'assigned'];
 
@@ -54,6 +55,14 @@ const ReservationTable = ({
             ];
             const hasActions = !noActionStatuses.includes(status);
 
+            // ✅ Déterminer si l'entreprise actuelle peut gérer cette réservation transférée
+            const isTransferredSender = currentCompanyId && r.is_transferred && r.company_id === currentCompanyId;
+            const _isTransferredReceiver = currentCompanyId && r.is_transferred && r.executing_company_id === currentCompanyId;
+            
+            // L'entreprise émettrice (A) ne peut PAS assigner/modifier une course transférée acceptée
+            // Seule l'entreprise receveuse (B) peut la gérer
+            const canManageReservation = !isTransferredSender || status === 'pending';
+
             // Vérifier si c'est un retour sans heure définie (à confirmer)
             // Utiliser le champ time_confirmed pour déterminer si l'heure est à confirmer
             // Conservé pour référence future (géré par ReservationActions)
@@ -78,6 +87,36 @@ const ReservationTable = ({
                   <span className={`${styles.statusBadge} ${styles[status] || ''}`}>
                     {(r.status || '').replace('_', ' ') || status}
                   </span>
+                  {/* ✅ Badge transfert partenaire avec direction */}
+                  {r.is_transferred && r.active_transfer && (() => {
+                    // Déterminer si je suis l'émetteur (A) ou le receveur (B)
+                    const isSender = currentCompanyId && r.company_id === currentCompanyId;
+                    const isReceiver = currentCompanyId && r.executing_company_id === currentCompanyId;
+                    
+                    let direction = '';
+                    let partnerName = '';
+                    
+                    if (isSender) {
+                      direction = 'à';
+                      partnerName = r.executing_company_name || 'partenaire';
+                    } else if (isReceiver) {
+                      direction = 'de';
+                      partnerName = r.company_name || 'partenaire';
+                    } else {
+                      // Fallback si currentCompanyId n'est pas fourni
+                      direction = 'vers';
+                      partnerName = r.executing_company_name || r.company_name || 'partenaire';
+                    }
+                    
+                    return (
+                      <span 
+                        className={styles.transferBadge}
+                        title={`Transférée ${direction} ${partnerName}`}
+                      >
+                        🔄 Transférée
+                      </span>
+                    );
+                  })()}
                 </td>
                 <td
                   className={styles.actionsCell}
@@ -96,14 +135,26 @@ const ReservationTable = ({
                     >
                       Aucune action
                     </span>
+                  ) : !canManageReservation ? (
+                    /* ✅ Entreprise émettrice : Lecture seule après transfert accepté */
+                    <span
+                      style={{
+                        color: '#6b7280',
+                        fontSize: '0.85rem',
+                        fontStyle: 'italic',
+                      }}
+                      title="Cette course est gérée par l'entreprise partenaire"
+                    >
+                      👁️ Lecture seule
+                    </span>
                   ) : (
                     <>
-                      {/* B) Courses PENDING normales => Accepter + Rejeter */}
-                      {status === 'pending' && !isReturn && (
+                      {/* B) Courses PENDING => Toujours afficher Accepter/Rejeter */}
+                      {status === 'pending' && (
                         <>
                           <button
                             onClick={() => onAccept?.(r.id)}
-                            title="Accepter"
+                            title={r.is_transferred ? "Accepter (récupère ou prend en charge)" : "Accepter"}
                             className={`${styles.actionButton} ${styles.acceptButton}`}
                           >
                             <FiCheckCircle />
@@ -118,7 +169,7 @@ const ReservationTable = ({
                         </>
                       )}
 
-                      {/* Actions centralisées : Planifier, Urgent, Assigner, Transférer, Supprimer */}
+                      {/* Actions centralisées : Transférer pour pending, autres actions pour accepted/assigned */}
                       <ReservationActions
                         reservation={r}
                         onSchedule={onSchedule}
@@ -128,11 +179,11 @@ const ReservationTable = ({
                         onTransfer={onTransfer}
                         onDelete={onDelete}
                         hideAssign={hideAssign}
-                        hideSchedule={hideSchedule}
-                        hideUrgent={hideUrgent}
-                        hideEdit={hideEdit}
+                        hideSchedule={status === 'pending' ? true : hideSchedule}
+                        hideUrgent={status === 'pending' ? true : hideUrgent}
+                        hideEdit={status === 'pending' ? true : hideEdit}
                         hideTransfer={hideTransfer}
-                        hideDelete={hideDelete}
+                        hideDelete={status === 'pending' ? true : hideDelete}
                       />
                     </>
                   )}

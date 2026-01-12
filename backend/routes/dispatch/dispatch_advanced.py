@@ -7,7 +7,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any, Dict, cast
 
-from flask import current_app, request  # pyright: ignore[reportMissingImports]
+from flask import current_app, request
 from flask_jwt_extended import jwt_required  # pyright: ignore[reportMissingImports]
 from flask_restx import Resource  # pyright: ignore[reportMissingImports]
 from http import HTTPStatus
@@ -67,7 +67,19 @@ class RealtimeDashboardResource(Resource):
                 metrics = collector.collect_for_date(date_str)
                 quality_metrics = metrics.to_summary()
             except Exception as e:
-                logger.warning("[Dashboard] Failed to get quality metrics: %s", e)
+                # ✅ Log plus informatif : distinguer absence de DispatchRun vs vraie erreur
+                if "No DispatchRun found" in str(e):
+                    logger.info(
+                        "[Dashboard] No dispatch data for company %s on %s (normal if no dispatch run yet)",
+                        company_id,
+                        date_str,
+                    )
+                else:
+                    logger.warning(
+                        "[Dashboard] Failed to get quality metrics for company %s: %s",
+                        company_id,
+                        e,
+                    )
                 quality_metrics = {
                     "quality_score": 0,
                     "assignment_rate": 0,

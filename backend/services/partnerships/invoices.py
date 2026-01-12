@@ -425,7 +425,7 @@ class PartnerInvoiceService:
         """
         from pathlib import Path
 
-        from flask import current_app  # pyright: ignore[reportMissingImports]
+        from flask import current_app
 
         from services.partnerships.invoices_pdf import (
             generate_partner_invoice_pdf_content,
@@ -439,7 +439,8 @@ class PartnerInvoiceService:
             f"partner_invoice_{partner_invoice.invoice_number}_"
             f"{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.pdf"
         )
-        uploads_dir = Path(Path(Path(__file__).parent.parent), "uploads")
+        # ✅ Chemin correct: /app/uploads (pas /app/services/uploads)
+        uploads_dir = Path(current_app.config.get("UPLOAD_FOLDER", "/app/uploads"))
         invoices_dir = Path(uploads_dir, "invoices")
         invoices_dir.mkdir(parents=True, exist_ok=True)
         filepath = Path(invoices_dir, filename)

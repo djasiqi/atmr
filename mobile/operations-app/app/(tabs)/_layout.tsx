@@ -13,6 +13,10 @@ import { tabBarStyles } from "@/styles/tabBarStyles";
 // NOTE : On retire AuthProvider et useNotifications. Ils sont déjà gérés par le layout parent.
 
 export default function TabLayout() {
+  console.log("🟡 [TabLayout] Composant rendu", {
+    timestamp: new Date().toISOString()
+  });
+  
   const insets = useSafeAreaInsets();
 
   // ✅ Adapter le style de la tabBar pour prendre en compte les safe areas Android

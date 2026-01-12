@@ -123,7 +123,9 @@ class UpdateDriverBookingStatusUseCase:
                 response = {"error": "Missing JSON payload"}
                 status_code = 400
 
-            new_status_str = None if not data else data.get("status")
+            # ✅ Normaliser le statut reçu (accepter MAJUSCULES ou minuscules)
+            raw_status = None if not data else data.get("status")
+            new_status_str = raw_status.lower() if raw_status else None
             valid_statuses = {
                 "en_route",
                 "in_progress",
@@ -132,6 +134,12 @@ class UpdateDriverBookingStatusUseCase:
                 "canceled",
             }
             if not response and new_status_str not in valid_statuses:
+                logger.error(
+                    "❌ Statut invalide reçu: %s (normalisé: %s). Statuts valides: %s",
+                    raw_status,
+                    new_status_str,
+                    valid_statuses,
+                )
                 response = {"error": "Invalid status"}
                 status_code = 400
 

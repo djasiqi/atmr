@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>{% block title %}Email ATMR{% endblock %}</title>
+    <style>
+        /* Reset CSS pour emails */
+        body, table, td, a {
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
+        }
+        /* Propriétés Microsoft Outlook (mso-*) - Ne pas supprimer */
+        /* stylelint-disable property-no-unknown */
+        table, td {
+            mso-table-lspace: 0pt;
+            mso-table-rspace: 0pt;
+        }
+        /* stylelint-enable property-no-unknown */
+        img {
+            -ms-interpolation-mode: bicubic;
+            border: 0;
+            height: auto;
+            line-height: 100%;
+            outline: none;
+            text-decoration: none;
+        }
+
+        /* Style de base */
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100% !important;
+            height: 100% !important;
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            background-color: #f4f4f7;
+            color: #333333;
+            line-height: 1.6;
+        }
+
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+        }
+
+        .email-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 30px 20px;
+            text-align: center;
+            color: #ffffff;
+        }
+
+        .email-header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .email-body {
+            padding: 40px 30px;
+        }
+
+        .email-footer {
+            background-color: #f9f9f9;
+            padding: 20px 30px;
+            text-align: center;
+            font-size: 12px;
+            color: #999999;
+            border-top: 1px solid #eeeeee;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 12px 30px;
+            margin: 20px 0;
+            font-size: 16px;
+            font-weight: 600;
+            color: #ffffff !important;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            text-decoration: none;
+            border-radius: 6px;
+            box-shadow: 0 4px 6px rgba(50, 50, 93, 0.11), 0 1px 3px rgba(0, 0, 0, 0.08);
+        }
+
+        .button:hover {
+            opacity: 0.9;
+        }
+
+        .info-box {
+            background-color: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        .alert-box {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+            color: #856404;
+        }
+
+        .success-box {
+            background-color: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+            color: #155724;
+        }
+
+        .divider {
+            height: 1px;
+            background-color: #eeeeee;
+            margin: 30px 0;
+        }
+
+        h2 {
+            color: #333333;
+            font-size: 20px;
+            font-weight: 600;
+            margin-top: 0;
+        }
+
+        p {
+            margin: 15px 0;
+            color: #555555;
+        }
+
+        .text-muted {
+            color: #999999;
+            font-size: 14px;
+        }
+
+        .text-bold {
+            font-weight: 600;
+            color: #333333;
+        }
+
+        .amount {
+            font-size: 28px;
+            font-weight: 700;
+            color: #667eea;
+            margin: 20px 0;
+        }
+
+        /* Responsive */
+        @media only screen and (max-width: 600px) {
+            .email-body {
+                padding: 20px 15px !important;
+            }
+            .email-header h1 {
+                font-size: 20px !important;
+            }
+            .amount {
+                font-size: 24px !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+        <tr>
+            <td style="padding: 20px 0;">
+                <table role="presentation" class="email-container" cellspacing="0" cellpadding="0" border="0">
+                    <!-- Header -->
+                    <tr>
+                        <td class="email-header">
+                            <h1>{% block header_title %}{{ company_name|default('ATMR') }}{% endblock %}</h1>
+                        </td>
+                    </tr>
+
+                    <!-- Body -->
+                    <tr>
+                        <td class="email-body">
+                            {% block content %}
+                            <p>Contenu de l'email</p>
+                            {% endblock %}
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td class="email-footer">
+                            {% block footer %}
+                            <p style="margin: 0;">
+                                Cet email a été envoyé automatiquement, merci de ne pas y répondre.<br>
+                                Pour toute question, veuillez contacter notre service client.
+                            </p>
+                            <p style="margin: 10px 0 0 0;">
+                                &copy; {{ current_year|default('2026') }} {{ company_name|default('ATMR') }}. Tous droits réservés.
+                            </p>
+                            {% endblock %}
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

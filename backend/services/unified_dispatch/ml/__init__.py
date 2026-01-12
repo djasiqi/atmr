@@ -12,5 +12,10 @@ Ce module contient :
 Créé lors du refactoring B1 - 7 janvier 2025
 """
 
-# Exports publics (à compléter lors de la migration)
-__all__ = []
+# ✅ Exports publics pour faciliter les imports
+from .delay_predictor import DelayPrediction, DelayPredictor
+
+__all__ = [
+    "DelayPrediction",
+    "DelayPredictor",
+]

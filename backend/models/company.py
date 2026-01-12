@@ -171,6 +171,13 @@ class Company(db.Model):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    billing_profile = relationship(
+        "CompanyBillingProfile",
+        back_populates="company",
+        uselist=False,
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     @property
     def serialize(self):
@@ -182,13 +189,12 @@ class Company(db.Model):
             "address": self.address,
             "latitude": self.latitude,
             "longitude": self.longitude,
-            "domicile": {
-                "line1": self.domicile_address_line1,
-                "line2": self.domicile_address_line2,
-                "zip": self.domicile_zip,
-                "city": self.domicile_city,
-                "country": self.domicile_country,
-            },
+            # Adresse de domiciliation (champs directs pour compatibilité frontend)
+            "domicile_address_line1": self.domicile_address_line1,
+            "domicile_address_line2": self.domicile_address_line2,
+            "domicile_zip": self.domicile_zip,
+            "domicile_city": self.domicile_city,
+            "domicile_country": self.domicile_country,
             "contact_email": self.contact_email,
             "contact_phone": self.contact_phone,
             "iban": self.iban,

@@ -134,7 +134,7 @@ export const RideCardEnhanced: React.FC<RideCardEnhancedProps> = ({
     return (
         <EnterpriseCard style={[styles.card, style]}>
             <TouchableOpacity
-                style={[styles.header, { gap: headerGap }]}
+                style={styles.header}
                 onPress={onToggle}
                 activeOpacity={0.85}
             >
@@ -266,14 +266,18 @@ export const RideCardEnhanced: React.FC<RideCardEnhancedProps> = ({
                 <>
                     <View style={styles.route}>
                         <View style={styles.routeRow}>
-                            <Ionicons name="location-outline" size={16} color={palette.accent} />
+                            <View style={styles.routeIcon}>
+                                <Ionicons name="location-outline" size={16} color={palette.accent} />
+                            </View>
                             <Text style={styles.routeText} numberOfLines={1}>
                                 {ride.route.pickup_address}
                             </Text>
                         </View>
                         <View style={styles.routeDivider} />
                         <View style={styles.routeRow}>
-                            <Ionicons name="flag-outline" size={16} color={palette.accent} />
+                            <View style={styles.routeIcon}>
+                                <Ionicons name="flag-outline" size={16} color={palette.accent} />
+                            </View>
                             <Text style={styles.routeText} numberOfLines={1}>
                                 {ride.route.dropoff_address}
                             </Text>
@@ -347,16 +351,15 @@ export const RideCardEnhanced: React.FC<RideCardEnhancedProps> = ({
 const styles = StyleSheet.create({
     card: {
         padding: 16,
-        gap: 12,
     },
     header: {
         flexDirection: "row",
         alignItems: "center",
-        gap: 12,
     },
     timeContainer: {
         width: 54,
         alignItems: "flex-start",
+        marginRight: 12,
     },
     time: {
         color: palette.time,
@@ -367,7 +370,7 @@ const styles = StyleSheet.create({
     clientContainer: {
         flex: 1,
         minWidth: 0,
-        marginHorizontal: 0, // Pas de marge supplémentaire, le gap du header suffit
+        marginRight: 12,
     },
     client: {
         color: palette.client,
@@ -421,13 +424,14 @@ const styles = StyleSheet.create({
     },
     route: {
         marginTop: 14,
-        gap: 4,
     },
     routeRow: {
         flexDirection: "row",
         alignItems: "center",
-        gap: 8,
         marginBottom: 4,
+    },
+    routeIcon: {
+        marginRight: 8,
     },
     routeDivider: {
         height: 1,

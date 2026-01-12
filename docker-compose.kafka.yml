@@ -1,0 +1,172 @@
+# docker-compose.kafka.yml
+# Infrastructure Kafka pour notifications haute performance
+
+version: "3.8"
+
+services:
+  # Zookeeper (requis par Kafka)
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    hostname: zookeeper
+    container_name: atmr-zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SYNC_LIMIT: 2
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-logs:/var/lib/zookeeper/log
+    networks:
+      - atmr-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Kafka Broker
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    hostname: kafka
+    container_name: atmr-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+      - "9101:9101"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_METRIC_REPORTERS: io.confluent.metrics.reporter.ConfluentMetricsReporter
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_CONFLUENT_METRICS_REPORTER_TOPIC_REPLICAS: 1
+      KAFKA_CONFLUENT_METRICS_ENABLE: "false"
+      KAFKA_JMX_PORT: 9101
+      KAFKA_JMX_HOSTNAME: localhost
+      # Performance tuning
+      KAFKA_NUM_NETWORK_THREADS: 8
+      KAFKA_NUM_IO_THREADS: 8
+      KAFKA_SOCKET_SEND_BUFFER_BYTES: 102400
+      KAFKA_SOCKET_RECEIVE_BUFFER_BYTES: 102400
+      KAFKA_SOCKET_REQUEST_MAX_BYTES: 104857600
+      KAFKA_NUM_PARTITIONS: 10
+      KAFKA_LOG_RETENTION_HOURS: 168 # 7 jours
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 300000
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - atmr-network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "kafka-broker-api-versions",
+          "--bootstrap-server",
+          "localhost:9092",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Kafka UI (interface web pour monitoring)
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: atmr-kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: atmr-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+      KAFKA_CLUSTERS_0_METRICS_PORT: 9101
+    networks:
+      - atmr-network
+    restart: unless-stopped
+
+  # Kafka Consumer (Worker pour traiter les notifications)
+  kafka-consumer:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: atmr-kafka-consumer
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: python -m services.notifications.kafka_consumer
+    environment:
+      # Database
+      DATABASE_URL: postgresql://atmr_user:atmr_password@postgres:5432/atmr_db
+      # Kafka
+      KAFKA_ENABLED: "true"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_CONSUMER_GROUP: notifications-consumer-group
+      # Redis
+      REDIS_URL: redis://redis:6379/0
+      # Notifications
+      SMS_NOTIFICATIONS_ENABLED: "${SMS_NOTIFICATIONS_ENABLED:-false}"
+      EMAIL_NOTIFICATIONS_ENABLED: "${EMAIL_NOTIFICATIONS_ENABLED:-false}"
+      TWILIO_ACCOUNT_SID: "${TWILIO_ACCOUNT_SID}"
+      TWILIO_AUTH_TOKEN: "${TWILIO_AUTH_TOKEN}"
+      TWILIO_PHONE_NUMBER: "${TWILIO_PHONE_NUMBER}"
+      SMTP_HOST: "${SMTP_HOST}"
+      SMTP_PORT: "${SMTP_PORT}"
+      SMTP_USER: "${SMTP_USER}"
+      SMTP_PASSWORD: "${SMTP_PASSWORD}"
+    networks:
+      - atmr-network
+    restart: unless-stopped
+    deploy:
+      replicas: 3 # 3 consumers pour scaling
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+
+  # Redis secondaire (failover region)
+  redis-failover:
+    image: redis:7-alpine
+    container_name: atmr-redis-failover
+    ports:
+      - "6380:6379"
+    command: >
+      redis-server 
+      --appendonly yes
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-failover-data:/data
+    networks:
+      - atmr-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  zookeeper-data:
+  zookeeper-logs:
+  kafka-data:
+  redis-failover-data:
+
+networks:
+  atmr-network:
+    external: true

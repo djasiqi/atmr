@@ -1,0 +1,82 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}Test Email ATMR{% endblock %}
+
+{% block header_title %}Configuration Email ATMR{% endblock %}
+
+{% block content %}
+<h2>🧪 Email de test</h2>
+
+<p>Bonjour,</p>
+
+<p>
+    Ceci est un email de test pour vérifier que la configuration SMTP fonctionne correctement.
+</p>
+
+<div class="success-box">
+    <p style="margin: 0; font-weight: 600;">✅ Configuration validée !</p>
+    <p style="margin: 10px 0 0 0;">
+        Si vous recevez cet email, cela signifie que le service d'envoi d'emails
+        est correctement configuré et opérationnel.
+    </p>
+</div>
+
+<div class="divider"></div>
+
+<h2>📋 Informations techniques</h2>
+
+<table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+    <tr style="border-bottom: 1px solid #eeeeee;">
+        <td style="padding: 10px 0; color: #666;">Service</td>
+        <td style="padding: 10px 0; text-align: right; font-weight: 600;">ATMR Email Service</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #eeeeee;">
+        <td style="padding: 10px 0; color: #666;">Type</td>
+        <td style="padding: 10px 0; text-align: right; font-weight: 600;">Email transactionnel</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #eeeeee;">
+        <td style="padding: 10px 0; color: #666;">Template</td>
+        <td style="padding: 10px 0; text-align: right; font-weight: 600;">test_email.html</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #eeeeee;">
+        <td style="padding: 10px 0; color: #666;">Date d'envoi</td>
+        <td style="padding: 10px 0; text-align: right; font-weight: 600;">{{ now().strftime('%d/%m/%Y %H:%M') }}</td>
+    </tr>
+</table>
+
+<div class="divider"></div>
+
+<h2>🚀 Prochaines étapes</h2>
+
+<p>
+    Maintenant que la configuration est validée, vous pouvez :
+</p>
+
+<ul style="color: #555;">
+    <li>Envoyer des factures par email aux clients</li>
+    <li>Automatiser les rappels de paiement</li>
+    <li>Envoyer des confirmations de paiement</li>
+    <li>Gérer les notifications transactionnelles</li>
+</ul>
+
+<div style="text-align: center; margin: 40px 0;">
+    <p style="color: #28a745; font-size: 18px; font-weight: 600; margin: 0;">
+        ✓ Système opérationnel
+    </p>
+</div>
+
+<p style="margin-top: 40px;">
+    Cordialement,<br>
+    <strong>L'équipe ATMR</strong>
+</p>
+{% endblock %}
+
+{% block footer %}
+<p style="margin: 0;">
+    Cet email a été généré automatiquement pour tester la configuration.<br>
+    Vous pouvez ignorer ce message en toute sécurité.
+</p>
+<p style="margin: 10px 0 0 0;">
+    &copy; 2026 ATMR. Tous droits réservés.
+</p>
+{% endblock %}

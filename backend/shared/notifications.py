@@ -15,11 +15,18 @@ def notify_driver_new_booking(driver_id: int, booking) -> None:
 
 
 def notify_booking_update(driver_id: int, booking) -> None:
-    """Notifie le chauffeur d'une mise à jour de mission."""
-    room = f"driver_{driver_id}"
-    # ✅ FIX: Émettre "new_booking" au lieu de "booking_updated"
-    # pour cohérence avec le mobile
-    socketio.emit("new_booking", booking.to_dict(), to=room)
+    """Notifie le chauffeur ET l'entreprise d'une mise à jour de mission."""
+    # 1️⃣ Notifier le driver
+    driver_room = f"driver_{driver_id}"
+    socketio.emit("new_booking", booking.to_dict(), to=driver_room)
     app_logger.info(
-        f"📤 new_booking (update) émis vers {room} pour booking_id={booking.id}"
+        f"📤 new_booking (update) émis vers {driver_room} pour booking_id={booking.id}"
+    )
+
+    # 2️⃣ Notifier l'entreprise (pour Dashboard/Dispatch)
+    company_room = f"company_{booking.company_id}"
+    # ✅ FIX: Standardiser avec '_' au lieu de ':' pour cohérence avec mobile
+    socketio.emit("booking_updated", booking.to_dict(), to=company_room)
+    app_logger.info(
+        f"📤 booking_updated émis vers {company_room} pour booking_id={booking.id}"
     )

@@ -28,6 +28,7 @@ const ManualModePanel = ({
   currentDate, // 🆕 Date actuelle pour charger suggestions
   drivers: _drivers = [], // 🆕 Liste des chauffeurs pour l'assignation (utilisée dans UnifiedDispatchRefactored)
   styles = {},
+  currentCompanyId, // ✅ ID de l'entreprise pour la direction des transferts
 }) => {
   // 🆕 État pour collapsible suggestions
   const [suggestionsExpanded, setSuggestionsExpanded] = useState(true);
@@ -142,6 +143,7 @@ const ManualModePanel = ({
           formatTime={formatTime}
           hideEdit={true}
           hideDelete={true}
+          currentCompanyId={currentCompanyId}
         />
       )}
 

@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from typing import Any, cast
 from urllib.parse import urlencode
 
-from flask import request  # pyright: ignore[reportMissingImports]
+from flask import request
 from flask_jwt_extended import jwt_required  # pyright: ignore[reportMissingImports]
 from flask_mail import Message  # pyright: ignore[reportMissingImports]
 from flask_restx import (  # pyright: ignore[reportMissingImports]
@@ -186,6 +186,8 @@ class ManageClientProfile(Resource):
                 client_data["domicile_address"] = validated_data["address"]
             if validated_data.get("birth_date"):
                 client_data["birth_date"] = validated_data["birth_date"]
+            if "avs_number" in validated_data:
+                client_data["avs_number"] = validated_data["avs_number"]
 
             # Utiliser le use case pour les champs Client
             if client_data:

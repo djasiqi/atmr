@@ -387,7 +387,7 @@ const VirtualizedDispatchTable = ({
       }));
     };
 
-    const onBookingStatusChanged = (data) => {
+    const _onBookingStatusChanged = (data) => {
       setRows((prev) =>
         prev.map((b) => (b.id === data.booking_id ? { ...b, status: data.status } : b))
       );
@@ -429,19 +429,19 @@ const VirtualizedDispatchTable = ({
       }, 800);
     };
 
-    socket.on('dispatch:assignment:created', onAssignmentCreated);
-    socket.on('dispatch:assignment:updated', onAssignmentUpdated);
-    socket.on('dispatch:assignment:cancelled', onAssignmentCancelled);
-    socket.on('dispatch:delay:detected', onDelayDetected);
-    socket.on('booking:status:changed', onBookingStatusChanged);
+    // ✅ FIX: Standardiser avec '_' au lieu de ':' pour cohérence avec backend
+    socket.on('dispatch_assignment_created', onAssignmentCreated);
+    socket.on('dispatch_assignment_updated', onAssignmentUpdated);
+    socket.on('dispatch_assignment_cancelled', onAssignmentCancelled);
+    socket.on('dispatch_delay_detected', onDelayDetected);
+    // booking_status_changed supprimé (jamais émis par backend, remplacé par booking_updated)
     socket.on('driver_location_update', onDriverLocationUpdated);
 
     return () => {
-      socket.off('dispatch:assignment:created', onAssignmentCreated);
-      socket.off('dispatch:assignment:updated', onAssignmentUpdated);
-      socket.off('dispatch:assignment:cancelled', onAssignmentCancelled);
-      socket.off('dispatch:delay:detected', onDelayDetected);
-      socket.off('booking:status:changed', onBookingStatusChanged);
+      socket.off('dispatch_assignment_created', onAssignmentCreated);
+      socket.off('dispatch_assignment_updated', onAssignmentUpdated);
+      socket.off('dispatch_assignment_cancelled', onAssignmentCancelled);
+      socket.off('dispatch_delay_detected', onDelayDetected);
       socket.off('driver_location_update', onDriverLocationUpdated);
       if (locTimer) clearTimeout(locTimer);
       try {

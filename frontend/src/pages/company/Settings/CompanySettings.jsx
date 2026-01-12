@@ -167,12 +167,42 @@ export default function CompanySettings() {
   };
 
   const handleAddressSelect = (selectedItem) => {
-    // Mettre à jour l'adresse et les coordonnées GPS depuis AddressAutocomplete
+    // ✅ Utiliser le label complet qui contient déjà "Rue, Numéro, CP, Ville"
     setForm((prev) => ({
       ...prev,
-      address: selectedItem?.address || selectedItem?.label || prev.address,
+      address: selectedItem?.label || selectedItem?.address || prev.address,
       latitude: selectedItem?.lat || null,
       longitude: selectedItem?.lon || null,
+    }));
+  };
+
+  const handleDomicileAddressSelect = (selectedItem) => {
+    // ✅ Extraire les différentes parties de l'adresse pour les champs séparés
+    // selectedItem contient : { label, address, postcode, city, country, lat, lon, raw }
+    
+    let streetAddress = selectedItem?.address || selectedItem?.label || '';
+    
+    // ✅ Photon retourne "Rue, Numéro" (ex: "Route de Chevrens, 145")
+    // Certaines sources peuvent retourner "Numéro Rue", on normalise au format suisse
+    // Format suisse standard : "Rue Numéro" SANS virgule (ex: "Route de Chevrens 145")
+    if (streetAddress.includes(',')) {
+      const parts = streetAddress.split(',').map(p => p.trim());
+      // Si le premier élément est un nombre, on inverse
+      if (parts.length === 2 && /^\d+/.test(parts[0])) {
+        // Cas "145, Route de Chevrens" -> "Route de Chevrens 145"
+        streetAddress = `${parts[1]} ${parts[0]}`;
+      } else if (parts.length === 2) {
+        // Cas "Route de Chevrens, 145" -> "Route de Chevrens 145"
+        streetAddress = `${parts[0]} ${parts[1]}`;
+      }
+    }
+    
+    setForm((prev) => ({
+      ...prev,
+      domicile_address_line1: streetAddress || prev.domicile_address_line1,
+      domicile_zip: selectedItem?.postcode || prev.domicile_zip,
+      domicile_city: selectedItem?.city || prev.domicile_city,
+      domicile_country: selectedItem?.country || prev.domicile_country || 'CH',
     }));
   };
 
@@ -487,6 +517,7 @@ export default function CompanySettings() {
                     fieldErrors={fieldErrors}
                     handleChange={handleChange}
                     handleAddressSelect={handleAddressSelect}
+                    handleDomicileAddressSelect={handleDomicileAddressSelect}
                     logoPreview={logoPreview}
                     onClickPickFile={() => fileInputRef.current?.click()}
                     onPickFile={onPickFile}
@@ -524,7 +555,7 @@ export default function CompanySettings() {
               {activeTab === 'operations' && <OperationsTab />}
               {activeTab === 'partnerships' && <PartnershipsTab />}
               {activeTab === 'vehicles' && <VehiclesTab />}
-              {activeTab === 'billing' && <BillingTab />}
+              {activeTab === 'billing' && <BillingTab companyId={company?.id} />}
               {activeTab === 'notifications' && <NotificationsTab />}
               {activeTab === 'security' && <SecurityTab />}
             </div>

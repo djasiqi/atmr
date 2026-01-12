@@ -356,10 +356,14 @@ export async function connectSocket(
     console.log("✅ Message event listeners setup complete");
   }
 
+  console.log(`[connectSocket] 📍 Avant création socket, SOCKET_ORIGIN=${SOCKET_ORIGIN}`);
+  
   connectPromise = new Promise<Socket>((resolve, reject) => {
     try {
+      console.log(`[connectSocket] 📍 Appel io() avec options:`, buildOptions(token));
       // ⚠️ Utiliser l'origine sans /api sinon 404 sur /api/socket.io
       socket = io(SOCKET_ORIGIN, buildOptions(token));
+      console.log(`[connectSocket] ✅ Socket créé:`, socket ? `id=${socket.id || 'pending'}` : 'NULL');
 
       socket.on("connect", async () => {
         // ✅ Logs structurés
@@ -763,6 +767,60 @@ export async function connectSocket(
           data: data,
           timestamp: new Date().toISOString()
         }));
+      });
+
+      // ✅ Événements supplémentaires du backend
+      socket.on("joined_room", (data: any) => {
+        console.log(JSON.stringify({
+          event: "socket_joined_room",
+          rooms: data?.rooms,
+          timestamp: new Date().toISOString()
+        }));
+      });
+
+      socket.on("joined_company", (data: any) => {
+        console.log(JSON.stringify({
+          event: "socket_joined_company",
+          company_id: data?.company_id,
+          room: data?.room,
+          timestamp: new Date().toISOString()
+        }));
+      });
+
+      socket.on("typing_indicator", (data: any) => {
+        console.log(JSON.stringify({
+          event: "user_typing",
+          user_id: data?.user_id,
+          timestamp: new Date().toISOString()
+        }));
+        // TODO: Afficher indicateur de frappe dans UI
+      });
+
+      socket.on("stop_typing", (data: any) => {
+        console.log(JSON.stringify({
+          event: "user_stop_typing",
+          user_id: data?.user_id,
+          timestamp: new Date().toISOString()
+        }));
+      });
+
+      // ✅ Événements d'arrivée driver
+      socket.on("driver_arrived_at_pickup", (data: any) => {
+        console.log(JSON.stringify({
+          event: "driver_arrived_pickup",
+          driver_id: data?.driver_id,
+          timestamp: new Date().toISOString()
+        }));
+        // TODO: Afficher notification "Driver arrivé au point de départ"
+      });
+
+      socket.on("driver_arrived_at_dropoff", (data: any) => {
+        console.log(JSON.stringify({
+          event: "driver_arrived_dropoff",
+          driver_id: data?.driver_id,
+          timestamp: new Date().toISOString()
+        }));
+        // TODO: Afficher notification "Driver arrivé à destination"
       });
     } catch (e) {
       connectPromise = null;

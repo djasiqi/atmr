@@ -20,6 +20,16 @@ from .list_invoices import (
     ListInvoicesOutput,
     ListInvoicesUseCase,
 )
+from .send_invoice_by_email import (
+    SendInvoiceByEmailInput,
+    SendInvoiceByEmailResult,
+    SendInvoiceByEmailUseCase,
+)
+from .send_reminder_by_email import (
+    SendReminderByEmailInput,
+    SendReminderByEmailResult,
+    SendReminderByEmailUseCase,
+)
 
 __all__ = [
     "CancelInvoiceInput",
@@ -38,4 +48,10 @@ __all__ = [
     "ListInvoicesInput",
     "ListInvoicesOutput",
     "ListInvoicesUseCase",
+    "SendInvoiceByEmailInput",
+    "SendInvoiceByEmailResult",
+    "SendInvoiceByEmailUseCase",
+    "SendReminderByEmailInput",
+    "SendReminderByEmailResult",
+    "SendReminderByEmailUseCase",
 ]

@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Alert } from "react-native";
+import { Alert, Platform } from "react-native";
 import * as Crypto from "expo-crypto";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -9,11 +9,30 @@ import {
     getDispatchRideDetails,
     getAvailableDrivers,
 } from "@/services/enterpriseDispatch";
+import { acceptTransfer, rejectTransfer } from "@/services/partnershipService";
 import type {
     RideSummary,
     RideDetail,
     DriverSuggestion,
 } from "@/types/enterpriseDispatch";
+
+// ✅ Helper pour afficher des alertes cross-platform (web + native)
+const showAlert = (title: string, message: string, buttons: Array<{ text: string; style?: string; onPress?: () => void }>) => {
+    if (Platform.OS === "web") {
+        // Sur web, utiliser window.confirm
+        const confirmed = window.confirm(`${title}\n\n${message}`);
+        if (confirmed) {
+            const confirmButton = buttons.find(b => b.style !== "cancel");
+            confirmButton?.onPress?.();
+        } else {
+            const cancelButton = buttons.find(b => b.style === "cancel");
+            cancelButton?.onPress?.();
+        }
+    } else {
+        // Sur native, utiliser Alert.alert
+        Alert.alert(title, message, buttons as any);
+    }
+};
 
 /**
  * Hook partagé pour les actions sur les courses (assignation, urgent, etc.)
@@ -309,6 +328,106 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
         [selectedRide, handleCloseAssignModal, onSuccess]
     );
 
+    // ✅ Accepter un transfert de course
+    const handleAcceptTransfer = useCallback(
+        async (transferId: string) => {
+            // #region agent log
+            try {
+                fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useRideActions.tsx:handleAcceptTransfer', message: 'handleAcceptTransfer called', data: { transferId: transferId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H1-H2' }) }).catch(() => { });
+            } catch { }
+            // #endregion
+            showAlert(
+                "Accepter le transfert",
+                "Voulez-vous accepter cette course transférée ?",
+                [
+                    { text: "Annuler", style: "cancel" },
+                    {
+                        text: "Accepter",
+                        style: "default",
+                        onPress: async () => {
+                            try {
+                                // #region agent log
+                                try {
+                                    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useRideActions.tsx:handleAcceptTransfer:onPress', message: 'Calling acceptTransfer', data: { transferId: transferId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H3' }) }).catch(() => { });
+                                } catch { }
+                                // #endregion
+                                await acceptTransfer(transferId);
+                                showAlert(
+                                    "Transfert accepté",
+                                    "La course vous a été transférée avec succès.",
+                                    [{ text: "OK" }]
+                                );
+                                await onSuccess?.();
+                            } catch (error: any) {
+                                // #region agent log
+                                try {
+                                    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useRideActions.tsx:handleAcceptTransfer:error', message: 'acceptTransfer error', data: { transferId: transferId, error: String(error), errorMessage: error?.message, errorResponse: error?.response?.data }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H4' }) }).catch(() => { });
+                                } catch { }
+                                // #endregion
+                                const message =
+                                    error?.response?.data?.error ??
+                                    error?.message ??
+                                    "Impossible d'accepter le transfert.";
+                                showAlert("Erreur", message, [{ text: "OK" }]);
+                            }
+                        },
+                    },
+                ]
+            );
+        },
+        [onSuccess]
+    );
+
+    // ✅ Refuser un transfert de course
+    const handleRejectTransfer = useCallback(
+        async (transferId: string) => {
+            // #region agent log
+            try {
+                fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useRideActions.tsx:handleRejectTransfer', message: 'handleRejectTransfer called', data: { transferId: transferId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H1-H2' }) }).catch(() => { });
+            } catch { }
+            // #endregion
+            showAlert(
+                "Refuser le transfert",
+                "Voulez-vous refuser cette course transférée ?",
+                [
+                    { text: "Annuler", style: "cancel" },
+                    {
+                        text: "Refuser",
+                        style: "destructive",
+                        onPress: async () => {
+                            try {
+                                // #region agent log
+                                try {
+                                    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useRideActions.tsx:handleRejectTransfer:onPress', message: 'Calling rejectTransfer', data: { transferId: transferId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H3' }) }).catch(() => { });
+                                } catch { }
+                                // #endregion
+                                await rejectTransfer(transferId);
+                                showAlert(
+                                    "Transfert refusé",
+                                    "La course a été retournée à l'entreprise émettrice.",
+                                    [{ text: "OK" }]
+                                );
+                                await onSuccess?.();
+                            } catch (error: any) {
+                                // #region agent log
+                                try {
+                                    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useRideActions.tsx:handleRejectTransfer:error', message: 'rejectTransfer error', data: { transferId: transferId, error: String(error), errorMessage: error?.message, errorResponse: error?.response?.data }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H4' }) }).catch(() => { });
+                                } catch { }
+                                // #endregion
+                                const message =
+                                    error?.response?.data?.error ??
+                                    error?.message ??
+                                    "Impossible de refuser le transfert.";
+                                showAlert("Erreur", message, [{ text: "OK" }]);
+                            }
+                        },
+                    },
+                ]
+            );
+        },
+        [onSuccess]
+    );
+
     return {
         // États
         assigning,
@@ -324,6 +443,8 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
         handleOpenAssignModal,
         handleCloseAssignModal,
         handleAssignDriver,
+        handleAcceptTransfer,
+        handleRejectTransfer,
         // Setters pour contrôle externe si nécessaire
         setAssignModalVisible,
     };

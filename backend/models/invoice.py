@@ -480,6 +480,35 @@ class CompanyBillingSettings(db.Model):
     auto_reminders_enabled = Column(Boolean, nullable=False, default=True)
     email_sender: Mapped[str] = mapped_column(String(200), nullable=True)
 
+    # Configuration SMTP par entreprise (multi-tenant)
+    # Si non configuré, utilise la config globale du .env
+    smtp_server: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    smtp_port: Mapped[int | None] = mapped_column(Integer, nullable=True, default=587)
+    smtp_use_tls: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    smtp_use_ssl: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    smtp_username: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+    # ✅ Mot de passe SMTP chiffré (même système que IBAN)
+    _smtp_password_raw = Column(
+        String(200), nullable=True, name="smtp_password"
+    )  # Stocke le texte chiffré
+
+    smtp_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )  # Active/désactive le SMTP custom
+
+    # Configuration Brevo (email transactionnel)
+    # Remplace progressivement la config SMTP complexe
+    from_name: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )  # Nom d'expéditeur (ex: "Lirie Transports")
+    domain_verified: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )  # Domaine validé dans Brevo (SPF/DKIM configurés)
+    domain_dns_records = Column(
+        JSON, nullable=True
+    )  # {"spf": "v=spf1...", "dkim": "k=rsa..."}
+
     # Format de numérotation
     invoice_number_format = Column(
         String(50), nullable=False, default="{PREFIX}-{YYYY}-{MM}-{SEQ4}"
@@ -551,6 +580,14 @@ class CompanyBillingSettings(db.Model):
             "vat_rate": float(self.vat_rate) if self.vat_rate is not None else None,
             "vat_label": self.vat_label,
             "vat_number": self.vat_number,
+            # Configuration SMTP (ne pas exposer le mot de passe)
+            "smtp_enabled": self.smtp_enabled,
+            "smtp_server": self.smtp_server,
+            "smtp_port": self.smtp_port,
+            "smtp_use_tls": self.smtp_use_tls,
+            "smtp_use_ssl": self.smtp_use_ssl,
+            "smtp_username": self.smtp_username,
+            "smtp_password_configured": bool(self.smtp_password),  # Juste un booléen
         }
 
     @hybrid_property  # Le linter détecte un conflit mais c'est intentionnel : _iban_raw mappe la colonne "iban" et iban est la propriété Python
@@ -599,6 +636,63 @@ class CompanyBillingSettings(db.Model):
             logger = logging.getLogger(__name__)
             logger.error(
                 "[CompanyBillingSettings] Erreur chiffrement IBAN pour company_id=%s: %s",
+                self.company_id,
+                e,
+            )
+            raise
+
+    @hybrid_property
+    def smtp_password(self) -> str | None:
+        """✅ Propriété hybride pour déchiffrer automatiquement le mot de passe SMTP.
+
+        Returns:
+            Mot de passe SMTP en clair ou None si vide
+        """
+        if not bool(getattr(self, "_smtp_password_raw", None)):
+            return None
+        try:
+            encryption_service = get_encryption_service()
+            return encryption_service.decrypt_field(
+                str(getattr(self, "_smtp_password_raw", None))
+            )
+        except Exception as e:
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.error(
+                (
+                    "[CompanyBillingSettings] Erreur déchiffrement SMTP password "
+                    "pour company_id=%s: %s"
+                ),
+                self.company_id,
+                e,
+            )
+            return None
+
+    @smtp_password.setter
+    def smtp_password(self, value: str | None) -> None:
+        """✅ Setter pour chiffrer automatiquement le mot de passe SMTP avant stockage.
+
+        Args:
+            value: Mot de passe en clair ou None
+        """
+        if not value:
+            self._smtp_password_raw = None
+            return
+
+        # Chiffrer le mot de passe
+        try:
+            encryption_service = get_encryption_service()
+            self._smtp_password_raw = encryption_service.encrypt_field(value.strip())
+        except Exception as e:
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.error(
+                (
+                    "[CompanyBillingSettings] Erreur chiffrement SMTP password "
+                    "pour company_id=%s: %s"
+                ),
                 self.company_id,
                 e,
             )

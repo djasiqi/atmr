@@ -1,4 +1,3 @@
-// app/_layout.tsx
 import * as Sentry from "@sentry/react-native";
 import React, { useEffect, useRef } from "react";
 import { Slot, useSegments, useRouter } from "expo-router";
@@ -11,7 +10,7 @@ import {
 import { Platform, View, Text, ActivityIndicator, StyleSheet } from "react-native";
 import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { registerPushToken } from "@/services/api"; // si l'alias '@' n'est pas configuré: ../services/api
+import { registerPushToken, initializeCSRFToken } from "@/services/api"; // si l'alias '@' n'est pas configuré: ../services/api
 import {
   startAdaptiveLocationTracking,
   stopAdaptiveLocationTracking,
@@ -195,7 +194,10 @@ function RootNav() {
     if (loading || !isDriverAuthenticated || !driver) return;
     const currentUserId = driver.id;
 
-    // Expo Go n’embarque pas google-services.json → skip pour éviter l’erreur Firebase
+    // ✅ Initialiser le token CSRF au démarrage (pour les requêtes POST/PUT/DELETE/PATCH)
+    initializeCSRFToken();
+
+    // Expo Go n'embarque pas google-services.json → skip pour éviter l'erreur Firebase
     if (Constants.appOwnership === "expo") {
       console.warn(
         "Skip FCM in Expo Go. Use a Development Build to test push."
@@ -268,6 +270,14 @@ function RootNav() {
     };
   }, [driver, isDriverAuthenticated, loading]);
 
+  // ✅ Initialiser le token CSRF pour les entreprises
+  useEffect(() => {
+    if (loading || !isEnterpriseAuthenticated) return;
+
+    // ✅ Initialiser le token CSRF au démarrage (pour les requêtes POST/PUT/DELETE/PATCH)
+    initializeCSRFToken();
+  }, [isEnterpriseAuthenticated, loading]);
+
   // ✅ Deep link handling: listen for deep links when app is running
   useEffect(() => {
     if (Platform.OS === "web") return;
@@ -334,7 +344,18 @@ function RootNav() {
   }, [driver, isDriverAuthenticated, loading]);
 
   // ✅ UX : Afficher un écran de chargement pendant l'auto-login
+  console.log("🔴 [RootNav] État de chargement:", {
+    loading,
+    versionLoading,
+    isAuthenticated,
+    isDriverAuthenticated,
+    isEnterpriseAuthenticated,
+    mode,
+    timestamp: new Date().toISOString()
+  });
+
   if (loading || versionLoading) {
+    console.log("⏳ [RootNav] Affichage écran de chargement...");
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
@@ -342,6 +363,8 @@ function RootNav() {
       </View>
     );
   }
+
+  console.log("✅ [RootNav] Rendu <Slot /> (tabs vont être affichés)");
 
   return (
     <>

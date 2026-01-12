@@ -37,6 +37,76 @@ class BookingTransferService:
         Raises:
             ValueError: Si la course n'appartient pas à l'entreprise propriétaire
         """
+        # ✅ FIX CRITIQUE: Convertir explicitement booking_id en int pour éviter
+        # l'erreur SQL "operator does not exist: integer = character varying"
+        # Les annotations de type Python ne sont pas enforçées à l'exécution
+        try:
+            booking_id = int(booking_id)
+            partnership_id = int(partnership_id)
+            # #region agent log
+            try:
+                import json
+                from pathlib import Path
+
+                log_path = Path(__file__).parent.parent.parent / ".cursor" / "debug.log"
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "H3",
+                                "location": "transfers.py:44",
+                                "message": "Service: booking_id and partnership_id converted",
+                                "data": {
+                                    "booking_id": booking_id,
+                                    "booking_id_type": type(booking_id).__name__,
+                                    "partnership_id": partnership_id,
+                                    "partnership_id_type": type(
+                                        partnership_id
+                                    ).__name__,
+                                },
+                                "timestamp": int(__import__("time").time() * 1000),
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
+        except (ValueError, TypeError) as e:
+            # #region agent log
+            try:
+                import json
+                from pathlib import Path
+
+                log_path = Path(__file__).parent.parent.parent / ".cursor" / "debug.log"
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "H3",
+                                "location": "transfers.py:46",
+                                "message": "Service: conversion FAILED",
+                                "data": {
+                                    "booking_id_raw": str(booking_id),
+                                    "partnership_id_raw": str(partnership_id),
+                                    "error": str(e),
+                                },
+                                "timestamp": int(__import__("time").time() * 1000),
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
+            raise ValueError(
+                f"booking_id et partnership_id doivent être des entiers valides: {e}"
+            ) from e
+
         booking = Booking.query.get_or_404(booking_id)
         partnership = Partnership.query.get_or_404(partnership_id)
 
@@ -54,6 +124,33 @@ class BookingTransferService:
             raise ValueError("Le partenariat n'est pas actif")
 
         # Vérifier que la course n'est pas déjà transférée
+        # #region agent log
+        try:
+            import json
+            from pathlib import Path
+
+            log_path = Path(__file__).parent.parent.parent / ".cursor" / "debug.log"
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "H3",
+                            "location": "transfers.py:68",
+                            "message": "Before filter_by query",
+                            "data": {
+                                "booking_id": booking_id,
+                                "booking_id_type": type(booking_id).__name__,
+                            },
+                            "timestamp": int(__import__("time").time() * 1000),
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion
         existing_transfer = (
             BookingTransfer.query.filter_by(booking_id=booking_id)
             .filter(
@@ -63,6 +160,30 @@ class BookingTransferService:
             )
             .first()
         )
+        # #region agent log
+        try:
+            import json
+            from pathlib import Path
+
+            log_path = Path(__file__).parent.parent.parent / ".cursor" / "debug.log"
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "H3",
+                            "location": "transfers.py:76",
+                            "message": "After filter_by query",
+                            "data": {"has_existing_transfer": bool(existing_transfer)},
+                            "timestamp": int(__import__("time").time() * 1000),
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion
         if existing_transfer:
             raise ValueError("Cette course est déjà en cours de transfert")
 
@@ -235,10 +356,11 @@ class BookingTransferService:
         # Notifier les entreprises concernées via Socket.IO
         try:
             transfer_dict = transfer.to_dict()
+            # ✅ FIX: Standardiser avec '_' au lieu de ':' pour cohérence
             # Notifier l'entreprise propriétaire (celle qui possède la course)
             emit_company_event(
                 transfer_owner_company_id,
-                "transfer:proposed",
+                "transfer_proposed",
                 {
                     "transfer": transfer_dict,
                     "booking_id": booking_id,
@@ -248,7 +370,7 @@ class BookingTransferService:
             # Notifier l'entreprise partenaire (celle qui va exécuter la course)
             emit_company_event(
                 transfer_executing_company_id,
-                "transfer:received",
+                "transfer_received",
                 {
                     "transfer": transfer_dict,
                     "booking_id": booking_id,
@@ -274,6 +396,15 @@ class BookingTransferService:
         Raises:
             ValueError: Si l'entreprise n'est pas autorisée ou si le transfert ne peut plus être accepté
         """
+        # ✅ FIX CRITIQUE: Convertir explicitement les IDs en int
+        try:
+            transfer_id = int(transfer_id)
+            executing_company_id = int(executing_company_id)
+        except (ValueError, TypeError) as e:
+            raise ValueError(
+                f"transfer_id et executing_company_id doivent être des entiers valides: {e}"
+            ) from e
+
         transfer = BookingTransfer.query.get_or_404(transfer_id)
 
         if transfer.executing_company_id != executing_company_id:
@@ -297,8 +428,10 @@ class BookingTransferService:
         transfer.status = TransferStatus.ACCEPTED
         transfer.accepted_at = datetime.now(UTC)
 
-        # Mettre à jour la course
+        # Mettre à jour la course pour qu'elle appartienne à l'entreprise receveuse
         transfer.booking.executing_company_id = transfer.executing_company_id
+        # ✅ CRITIQUE: Changer le company_id pour que la course appartienne à l'entreprise receveuse
+        transfer.booking.company_id = transfer.executing_company_id
         # Changer le statut de la course à ACCEPTED pour qu'elle apparaisse dans le dispatch
         # de l'entreprise partenaire (la course est toujours PENDING à ce stade car
         # elle a été réinitialisée lors de la proposition du transfert)
@@ -369,27 +502,43 @@ class BookingTransferService:
 
     @staticmethod
     def reject_transfer(transfer_id: int, executing_company_id: int) -> BookingTransfer:
-        """Refuser un transfert.
+        """Refuser ou annuler un transfert.
+
+        - Si appelé par le receveur (executing_company) : REFUSER le transfert
+        - Si appelé par l'émetteur (owner_company) : ANNULER le transfert
 
         Args:
             transfer_id: ID du transfert
-            executing_company_id: ID de l'entreprise qui refuse
+            executing_company_id: ID de l'entreprise qui refuse/annule
 
         Returns:
-            BookingTransfer refusé
+            BookingTransfer refusé/annulé
 
         Raises:
-            ValueError: Si l'entreprise n'est pas autorisée ou si le transfert ne peut plus être refusé
+            ValueError: Si l'entreprise n'est pas autorisée ou si le transfert ne peut plus être refusé/annulé
         """
+        # ✅ FIX CRITIQUE: Convertir explicitement les IDs en int
+        try:
+            transfer_id = int(transfer_id)
+            executing_company_id = int(executing_company_id)
+        except (ValueError, TypeError) as e:
+            raise ValueError(
+                f"transfer_id et executing_company_id doivent être des entiers valides: {e}"
+            ) from e
+
         transfer = BookingTransfer.query.get_or_404(transfer_id)
 
-        if transfer.executing_company_id != executing_company_id:
+        # ✅ Permettre au receveur (executing_company) OU à l'émetteur (owner_company) de refuser/annuler
+        is_receiver = transfer.executing_company_id == executing_company_id
+        is_sender = transfer.owner_company_id == executing_company_id
+
+        if not (is_receiver or is_sender):
             raise ValueError(
-                "Cette entreprise n'est pas autorisée à refuser ce transfert"
+                "Cette entreprise n'est pas autorisée à refuser/annuler ce transfert"
             )
 
         if transfer.status != TransferStatus.PENDING:
-            raise ValueError("Ce transfert ne peut plus être refusé")
+            raise ValueError("Ce transfert ne peut plus être refusé/annulé")
 
         transfer.status = TransferStatus.REJECTED
         transfer.rejected_at = datetime.now(UTC)
@@ -438,6 +587,15 @@ class BookingTransferService:
         Raises:
             ValueError: Si la course n'est pas complétée
         """
+        # ✅ FIX CRITIQUE: Convertir explicitement les IDs en int
+        try:
+            transfer_id = int(transfer_id)
+            validator_user_id = int(validator_user_id)
+        except (ValueError, TypeError) as e:
+            raise ValueError(
+                f"transfer_id et validator_user_id doivent être des entiers valides: {e}"
+            ) from e
+
         transfer = BookingTransfer.query.get_or_404(transfer_id)
 
         if transfer.booking.status != BookingStatus.COMPLETED:
@@ -520,6 +678,16 @@ class BookingTransferService:
         Returns:
             BookingTransfer ou None
         """
+        # ✅ FIX CRITIQUE: Convertir explicitement transfer_id en int
+        try:
+            transfer_id = int(transfer_id)
+        except (ValueError, TypeError):
+            logger.warning(
+                "get_transfer: Invalid transfer_id type: %s",
+                type(transfer_id).__name__,
+            )
+            return None
+
         return BookingTransfer.query.get(transfer_id)
 
     @staticmethod
@@ -532,6 +700,16 @@ class BookingTransferService:
         Returns:
             Liste des transferts
         """
+        # ✅ FIX CRITIQUE: Convertir explicitement booking_id en int
+        try:
+            booking_id = int(booking_id)
+        except (ValueError, TypeError):
+            logger.warning(
+                "get_transfers_for_booking: Invalid booking_id type: %s",
+                type(booking_id).__name__,
+            )
+            return []
+
         return BookingTransfer.query.filter_by(booking_id=booking_id).all()
 
     @staticmethod
@@ -547,6 +725,16 @@ class BookingTransferService:
         Returns:
             Liste des transferts
         """
+        # ✅ FIX CRITIQUE: Convertir explicitement partnership_id en int
+        try:
+            partnership_id = int(partnership_id)
+        except (ValueError, TypeError):
+            logger.warning(
+                "get_transfers_for_partnership: Invalid partnership_id type: %s",
+                type(partnership_id).__name__,
+            )
+            return []
+
         query = BookingTransfer.query.filter_by(partnership_id=partnership_id)
         if status:
             query = query.filter_by(status=status)

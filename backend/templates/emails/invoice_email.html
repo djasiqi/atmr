@@ -1,0 +1,69 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}Facture {{ invoice_number }}{% endblock %}
+
+{% block header_title %}{{ company_name }}{% endblock %}
+
+{% block content %}
+<h2>📄 Nouvelle facture</h2>
+
+<p>Bonjour {{ client_name }},</p>
+
+<p>
+    Nous vous remercions pour votre confiance. Veuillez trouver ci-joint votre facture.
+</p>
+
+<div class="info-box">
+    <p style="margin: 0;"><strong>Numéro de facture :</strong> {{ invoice_number }}</p>
+    <p style="margin: 5px 0;"><strong>Date d'émission :</strong> {{ invoice_date }}</p>
+    <p style="margin: 5px 0 0 0;"><strong>Date d'échéance :</strong> {{ due_date }}</p>
+</div>
+
+<div style="text-align: center;">
+    <div class="amount">{{ "%.2f"|format(total_amount) }} {{ currency }}</div>
+    <p class="text-muted">Montant total à payer</p>
+</div>
+
+<div class="divider"></div>
+
+<h2>💳 Modalités de paiement</h2>
+
+<p>
+    Le paiement est attendu dans un délai de <strong>{{ payment_terms_days }} jours</strong> suivant la date d'émission.
+</p>
+
+<p>
+    <strong>Moyens de paiement acceptés :</strong>
+</p>
+<ul>
+    <li>Virement bancaire (IBAN disponible sur la facture)</li>
+    <li>QR-facture (code QR en bas de la facture)</li>
+</ul>
+
+<p style="margin-top: 30px;">
+    La facture PDF est jointe à cet email. Pour toute question concernant cette facture,
+    n'hésitez pas à nous contacter.
+</p>
+
+<p style="margin-top: 40px;">
+    Cordialement,<br>
+    <strong>{{ company_name }}</strong>
+</p>
+
+<div class="divider"></div>
+
+<p class="text-muted" style="font-size: 12px;">
+    ⚠️ En cas de non-paiement à la date d'échéance, des frais de rappel pourront être appliqués
+    conformément à nos conditions générales.
+</p>
+{% endblock %}
+
+{% block footer %}
+<p style="margin: 0;">
+    Cet email a été envoyé automatiquement, merci de ne pas y répondre.<br>
+    Pour toute question, veuillez contacter notre service comptabilité.
+</p>
+<p style="margin: 10px 0 0 0;">
+    &copy; 2026 {{ company_name }}. Tous droits réservés.
+</p>
+{% endblock %}

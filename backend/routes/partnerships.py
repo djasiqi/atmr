@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from flask import request  # pyright: ignore[reportMissingImports]
+from flask import request
 from flask_jwt_extended import jwt_required  # pyright: ignore[reportMissingImports]
 from flask_restx import Namespace, Resource  # pyright: ignore[reportMissingImports]
 from sqlalchemy.orm import joinedload
@@ -404,15 +404,105 @@ class PartnershipTransfers(Resource):
                 ), status_code or 404
 
             data = request.get_json(silent=True) or {}
-            booking_id = data.get("booking_id")
+            booking_id_raw = data.get("booking_id")
             transfer_model_str = data.get("transfer_model")
 
-            if not booking_id:
-                return APIErrorHandler.handle_validation_error(
-                    "booking_id is required",
-                    field="booking_id",
-                    logger_instance=logger,
-                ), 400
+            # #region agent log
+            try:
+                import json
+
+                log_path = Path(__file__).parent.parent / ".cursor" / "debug.log"
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "H1",
+                                "location": "partnerships.py:407",
+                                "message": "Received data",
+                                "data": {
+                                    "booking_id_raw": str(booking_id_raw),
+                                    "booking_id_type": type(booking_id_raw).__name__,
+                                    "partnership_id": partnership_id,
+                                    "partnership_id_type": type(
+                                        partnership_id
+                                    ).__name__,
+                                },
+                                "timestamp": int(__import__("time").time() * 1000),
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
+
+            # ✅ Valider et convertir booking_id en entier pour éviter l'erreur SQL "integer = character varying"
+            if not booking_id_raw:
+                raise ValueError("booking_id is required")
+
+            try:
+                booking_id = int(booking_id_raw)
+                # #region agent log
+                try:
+                    import json
+
+                    log_path = Path(__file__).parent.parent / ".cursor" / "debug.log"
+                    with log_path.open("a", encoding="utf-8") as f:
+                        f.write(
+                            json.dumps(
+                                {
+                                    "sessionId": "debug-session",
+                                    "runId": "run1",
+                                    "hypothesisId": "H2",
+                                    "location": "partnerships.py:415",
+                                    "message": "booking_id converted successfully",
+                                    "data": {
+                                        "booking_id": booking_id,
+                                        "booking_id_type": type(booking_id).__name__,
+                                    },
+                                    "timestamp": int(__import__("time").time() * 1000),
+                                }
+                            )
+                            + "\n"
+                        )
+                except Exception:
+                    pass
+                # #endregion
+            except (ValueError, TypeError) as e:
+                # #region agent log
+                try:
+                    import json
+
+                    log_path = Path(__file__).parent.parent / ".cursor" / "debug.log"
+                    with log_path.open("a", encoding="utf-8") as f:
+                        f.write(
+                            json.dumps(
+                                {
+                                    "sessionId": "debug-session",
+                                    "runId": "run1",
+                                    "hypothesisId": "H2",
+                                    "location": "partnerships.py:416",
+                                    "message": "booking_id conversion FAILED",
+                                    "data": {
+                                        "booking_id_raw": str(booking_id_raw),
+                                        "error": str(e),
+                                    },
+                                    "timestamp": int(__import__("time").time() * 1000),
+                                }
+                            )
+                            + "\n"
+                        )
+                except Exception:
+                    pass
+                # #endregion
+                logger.warning(
+                    "[PartnershipTransfers] Invalid booking_id: %s (type: %s)",
+                    booking_id_raw,
+                    type(booking_id_raw).__name__,
+                )
+                raise ValueError("booking_id must be a valid integer") from e
 
             # Convertir transfer_model de string à enum si nécessaire
             transfer_model = None
@@ -442,8 +532,69 @@ class PartnershipTransfers(Resource):
             error_response, status_code = _validate_transfer_request(
                 company, booking_id
             )
+            # #region agent log
+            try:
+                import json
+
+                log_path = Path(__file__).parent.parent / ".cursor" / "debug.log"
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "H4",
+                                "location": "partnerships.py:449",
+                                "message": "After validation",
+                                "data": {
+                                    "has_error": bool(error_response),
+                                    "error_response": str(error_response)
+                                    if error_response
+                                    else None,
+                                    "status_code": status_code,
+                                },
+                                "timestamp": int(__import__("time").time() * 1000),
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
             if error_response:
-                return error_response, status_code
+                # Lever une ValueError pour traitement uniforme dans le bloc except
+                raise ValueError(error_response.get("error", "Validation failed"))
+
+            # #region agent log
+            try:
+                import json
+
+                log_path = Path(__file__).parent.parent / ".cursor" / "debug.log"
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "H3",
+                                "location": "partnerships.py:457",
+                                "message": "Before propose_transfer call",
+                                "data": {
+                                    "booking_id": booking_id,
+                                    "booking_id_type": type(booking_id).__name__,
+                                    "partnership_id": partnership_id,
+                                    "partnership_id_type": type(
+                                        partnership_id
+                                    ).__name__,
+                                },
+                                "timestamp": int(__import__("time").time() * 1000),
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
 
             # Utiliser le service pour créer le transfert
             transfer = BookingTransferService.propose_transfer(
@@ -461,10 +612,285 @@ class PartnershipTransfers(Resource):
                 data=transfer.to_dict(), message="Transfert proposé avec succès"
             )
         except ValueError as e:
+            # ✅ Erreurs de validation métier (ValueError)
             logger.warning("[PartnershipTransfers] Validation error: %s", e)
             return APIErrorHandler.handle_validation_error(
                 str(e), logger_instance=logger
             ), 400
         except Exception as e:
-            logger.exception("[PartnershipTransfers] Error: %s", e)
+            # ✅ Erreurs inattendues ou erreurs système
+            logger.exception("[PartnershipTransfers] Unexpected error: %s", e)
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@partnerships_ns.route("/transfers")
+class TransfersList(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        """Récupère la liste des transferts (entrants et sortants).
+
+        Query params:
+            - partnership_id (optionnel): Filtrer par partenariat
+            - status (optionnel): Filtrer par statut (PENDING, ACCEPTED, REJECTED)
+        """
+        try:
+            logger.info("[TransfersList] GET /partnerships/transfers called")
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                logger.warning(
+                    "[TransfersList] Company not found or error: %s", error_response
+                )
+                return error_response or APIErrorHandler.handle_not_found(
+                    "Company", None, logger
+                ), status_code or 404
+
+            # Récupérer les filtres
+            partnership_id = request.args.get("partnership_id", type=int)
+            status_filter = request.args.get("status")
+
+            logger.info(
+                "[TransfersList] Company %s requesting transfers: partnership_id=%s, status=%s",
+                company.id,
+                partnership_id,
+                status_filter,
+            )
+
+            # Construire la requête de base
+            from models.booking_transfer import BookingTransfer
+            from models.partnership import Partnership
+
+            query = db.session.query(BookingTransfer).options(
+                joinedload(BookingTransfer.partnership),
+                joinedload(BookingTransfer.booking),
+            )
+
+            # Filtrer les transferts liés à l'entreprise (entrants OU sortants)
+            query = query.join(Partnership).filter(
+                (Partnership.owner_company_id == company.id)
+                | (Partnership.partner_company_id == company.id)
+            )
+
+            # Appliquer les filtres
+            if partnership_id:
+                query = query.filter(BookingTransfer.partnership_id == partnership_id)
+
+            if status_filter:
+                from models.enums import TransferStatus
+
+                try:
+                    status_enum = TransferStatus(status_filter)
+                    query = query.filter(BookingTransfer.status == status_enum)
+                except ValueError:
+                    logger.warning(
+                        "[TransfersList] Invalid status filter: %s", status_filter
+                    )
+
+            # Ordonner par date de proposition (plus récent d'abord)
+            query = query.order_by(BookingTransfer.requested_at.desc())
+
+            transfers = query.all()
+
+            logger.info(
+                "[TransfersList] Company %s: Found %s transfers",
+                company.id,
+                len(transfers),
+            )
+
+            # Sérialiser les transferts
+            result = [transfer.to_dict() for transfer in transfers]
+
+            return success_response(data=result)
+        except Exception as e:
+            logger.exception("[TransfersList] Error: %s", e)
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@partnerships_ns.route("/transfers/<int:transfer_id>/accept")
+class TransferAccept(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self, transfer_id: int):  # noqa: PLR0911
+        """Accepte un transfert de course proposé par une entreprise partenaire.
+
+        Args:
+            transfer_id: ID du transfert à accepter
+        """
+        try:
+            logger.info(
+                "[TransferAccept] POST /partnerships/transfers/%s/accept called",
+                transfer_id,
+            )
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                logger.warning(
+                    "[TransferAccept] Company not found or error: %s", error_response
+                )
+                return error_response or APIErrorHandler.handle_not_found(
+                    "Company", None, logger
+                ), status_code or 404
+
+            # Récupérer le transfert
+            from models.booking_transfer import BookingTransfer
+
+            transfer = BookingTransfer.query.get(transfer_id)
+            if not transfer:
+                return APIErrorHandler.handle_not_found(
+                    "Transfer", transfer_id, logger
+                ), 404
+
+            # Vérifier que l'entreprise est le destinataire du transfert
+            partnership = transfer.partnership
+            if not partnership:
+                return APIErrorHandler.handle_validation_error(
+                    "Partenariat introuvable",
+                    field="partnership_id",
+                    logger_instance=logger,
+                ), 400
+
+            # L'entreprise doit être le partenaire qui reçoit le transfert
+            # Si owner_company_id a proposé, partner_company_id accepte et vice-versa
+            is_recipient = False
+            if (
+                transfer.booking
+                and transfer.booking.company_id == partnership.owner_company_id
+            ):
+                # La course vient du owner, donc partner doit accepter
+                is_recipient = partnership.partner_company_id == company.id
+            else:
+                # La course vient du partner, donc owner doit accepter
+                is_recipient = partnership.owner_company_id == company.id
+
+            if not is_recipient:
+                logger.warning(
+                    "[TransferAccept] Company %s attempted to accept transfer %s but is not the recipient",
+                    company.id,
+                    transfer_id,
+                )
+                return APIErrorHandler.handle_validation_error(
+                    "Vous n'êtes pas le destinataire de ce transfert",
+                    field="transfer_id",
+                    logger_instance=logger,
+                ), 403
+
+            # Utiliser le service pour accepter le transfert
+            accepted_transfer = BookingTransferService.accept_transfer(
+                transfer_id, executing_company_id=company.id
+            )
+
+            logger.info(
+                "[TransferAccept] Transfer %s accepted successfully by company %s",
+                transfer_id,
+                company.id,
+            )
+
+            return success_response(
+                data=accepted_transfer.to_dict(),
+                message="Transfert accepté avec succès",
+            )
+        except ValueError as e:
+            logger.warning("[TransferAccept] Validation error: %s", e)
+            return APIErrorHandler.handle_validation_error(
+                str(e), logger_instance=logger
+            ), 400
+        except Exception as e:
+            logger.exception("[TransferAccept] Error: %s", e)
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@partnerships_ns.route("/transfers/<int:transfer_id>/reject")
+class TransferReject(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self, transfer_id: int):  # noqa: PLR0911
+        """Refuse un transfert de course proposé par une entreprise partenaire.
+
+        Args:
+            transfer_id: ID du transfert à refuser
+            reason (optionnel): Raison du refus (dans le body)
+        """
+        try:
+            logger.info(
+                "[TransferReject] POST /partnerships/transfers/%s/reject called",
+                transfer_id,
+            )
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                logger.warning(
+                    "[TransferReject] Company not found or error: %s", error_response
+                )
+                return error_response or APIErrorHandler.handle_not_found(
+                    "Company", None, logger
+                ), status_code or 404
+
+            data = request.get_json(silent=True) or {}
+            reason = data.get("reason")
+
+            # Récupérer le transfert
+            from models.booking_transfer import BookingTransfer
+
+            transfer = BookingTransfer.query.get(transfer_id)
+            if not transfer:
+                return APIErrorHandler.handle_not_found(
+                    "Transfer", transfer_id, logger
+                ), 404
+
+            # Vérifier que l'entreprise est le destinataire du transfert
+            partnership = transfer.partnership
+            if not partnership:
+                return APIErrorHandler.handle_validation_error(
+                    "Partenariat introuvable",
+                    field="partnership_id",
+                    logger_instance=logger,
+                ), 400
+
+            # L'entreprise doit être le partenaire qui reçoit le transfert
+            is_recipient = False
+            if (
+                transfer.booking
+                and transfer.booking.company_id == partnership.owner_company_id
+            ):
+                # La course vient du owner, donc partner doit accepter/refuser
+                is_recipient = partnership.partner_company_id == company.id
+            else:
+                # La course vient du partner, donc owner doit accepter/refuser
+                is_recipient = partnership.owner_company_id == company.id
+
+            if not is_recipient:
+                logger.warning(
+                    "[TransferReject] Company %s attempted to reject transfer %s but is not the recipient",
+                    company.id,
+                    transfer_id,
+                )
+                return APIErrorHandler.handle_validation_error(
+                    "Vous n'êtes pas le destinataire de ce transfert",
+                    field="transfer_id",
+                    logger_instance=logger,
+                ), 403
+
+            # Utiliser le service pour refuser le transfert
+            # Note: Le paramètre 'reason' n'est pas supporté par le service actuellement
+            # Il pourrait être ajouté dans une future version pour stocker la raison du refus
+            rejected_transfer = BookingTransferService.reject_transfer(
+                transfer_id, executing_company_id=company.id
+            )
+
+            logger.info(
+                "[TransferReject] Transfer %s rejected successfully by company %s (reason: %s)",
+                transfer_id,
+                company.id,
+                reason or "non spécifiée",
+            )
+
+            return success_response(
+                data=rejected_transfer.to_dict(),
+                message="Transfert refusé avec succès",
+            )
+        except ValueError as e:
+            logger.warning("[TransferReject] Validation error: %s", e)
+            return APIErrorHandler.handle_validation_error(
+                str(e), logger_instance=logger
+            ), 400
+        except Exception as e:
+            logger.exception("[TransferReject] Error: %s", e)
             return APIErrorHandler.handle_exception(e, logger)

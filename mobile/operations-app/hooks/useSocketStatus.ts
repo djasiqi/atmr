@@ -28,11 +28,18 @@ export function useSocketStatus(): SocketStatus {
     const updateStatus = () => {
       const socket = getSocket();
       if (!socket) {
+        console.log("[useSocketStatus] ❌ Aucun socket disponible (getSocket() retourne null)");
         setConnected(false);
         setReconnecting(false);
         connectedRef.current = false;
         return;
       }
+      
+      console.log("[useSocketStatus] Socket état:", {
+        connected: socket.connected,
+        id: socket.id,
+        disconnected: socket.disconnected,
+      });
 
       // Mettre à jour l'état initial
       const wasConnected = connectedRef.current;

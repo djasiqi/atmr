@@ -112,6 +112,9 @@ class Client(db.Model):
     # Nom de l'établissement (ex: "EMS Maison de Vessy")
     residence_facility: Mapped[str] = mapped_column(String(200), nullable=True)
 
+    # Numéro AVS (assurance vieillesse et survivants)
+    avs_number: Mapped[str] = mapped_column(String(20), nullable=True)
+
     # Tarif préférentiel
     preferential_rate: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=True)
 

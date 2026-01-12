@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import styles from './InvoicesRegistry.module.css';
 import {
   fetchInvoices,
-  sendInvoice,
+  sendInvoiceByEmail,
+  markInvoiceAsSent,
+  sendReminderByEmail,
   postPayment,
   postReminder,
   regenerateInvoicePdf,
@@ -16,6 +18,7 @@ import InvoiceRowActions from './components/InvoiceRowActions';
 import PaymentModal from './components/PaymentModal';
 import ReminderModal from './components/ReminderModal';
 import NewInvoiceModal from './components/NewInvoiceModal';
+import SendEmailModal from './components/SendEmailModal';
 
 const InvoicesRegistry = () => {
   const { company } = useCompanyData();
@@ -47,6 +50,12 @@ const InvoicesRegistry = () => {
     invoice: null,
   });
   const [newInvoiceModal, setNewInvoiceModal] = useState({ open: false, invoiceDraft: null });
+  const [sendEmailModal, setSendEmailModal] = useState({
+    open: false,
+    invoice: null,
+    isReminder: false,
+    reminderId: null,
+  });
 
   // Charger les factures
   const loadInvoices = useCallback(async () => {
@@ -83,12 +92,72 @@ const InvoicesRegistry = () => {
     setFilters((prev) => ({ ...prev, page }));
   };
 
-  const handleSendInvoice = async (invoiceId) => {
+  // Marquer comme envoyée (papier) sans email
+  const handleMarkAsSent = async (invoiceId) => {
+    if (!window.confirm('Marquer cette facture comme envoyée par courrier papier ?')) {
+      return;
+    }
     try {
-      await sendInvoice(company.id, invoiceId);
+      await markInvoiceAsSent(company.id, invoiceId);
       await loadInvoices();
     } catch (err) {
       setError(err.message || "Erreur lors de l'envoi de la facture");
+    }
+  };
+
+  // Ouvrir le modal d'envoi par email
+  const handleOpenSendEmail = (invoice) => {
+    setSendEmailModal({
+      open: true,
+      invoice,
+      isReminder: false,
+      reminderId: null,
+    });
+  };
+
+  // Ouvrir le modal d'envoi de rappel par email
+  const handleOpenSendReminderEmail = (invoice) => {
+    // Trouver le dernier rappel
+    const latestReminder = invoice.reminders?.[invoice.reminders.length - 1];
+    if (!latestReminder) {
+      setError('Aucun rappel trouvé pour cette facture');
+      return;
+    }
+    
+    setSendEmailModal({
+      open: true,
+      invoice,
+      isReminder: true,
+      reminderId: latestReminder.id,
+    });
+  };
+
+  // Envoyer par email
+  const handleSendEmail = async (options) => {
+    try {
+      if (options.reminder_id) {
+        // Envoi d'un rappel
+        await sendReminderByEmail(
+          company.id,
+          sendEmailModal.invoice.id,
+          options.reminder_id,
+          {
+            recipient_email: options.recipient_email,
+            force_regenerate_pdf: options.force_regenerate_pdf,
+          }
+        );
+      } else {
+        // Envoi d'une facture
+        await sendInvoiceByEmail(company.id, sendEmailModal.invoice.id, {
+          recipient_email: options.recipient_email,
+          force_regenerate_pdf: options.force_regenerate_pdf,
+        });
+      }
+      
+      await loadInvoices();
+      setSendEmailModal({ open: false, invoice: null, isReminder: false, reminderId: null });
+    } catch (err) {
+      throw err; // Laisser le modal gérer l'erreur
     }
   };
 
@@ -339,9 +408,11 @@ const InvoicesRegistry = () => {
                   <td>
                     <InvoiceRowActions
                       invoice={invoice}
-                      onSend={() => handleSendInvoice(invoice.id)}
+                      onSend={() => handleMarkAsSent(invoice.id)}
+                      onSendEmail={() => handleOpenSendEmail(invoice)}
                       onPayment={() => setPaymentModal({ open: true, invoice })}
                       onReminder={() => setReminderModal({ open: true, invoice })}
+                      onSendReminderEmail={() => handleOpenSendReminderEmail(invoice)}
                       onRegeneratePdf={() => handleRegeneratePdf(invoice.id)}
                       onCancel={() => handleCancelInvoice(invoice.id)}
                       onDuplicate={() => handleDuplicateInvoice(invoice.id)}
@@ -398,6 +469,16 @@ const InvoicesRegistry = () => {
         onInvoiceGenerated={handleNewInvoiceGenerated}
         companyId={company?.id}
       />
+
+      {sendEmailModal.open && (
+        <SendEmailModal
+          invoice={sendEmailModal.invoice}
+          isReminder={sendEmailModal.isReminder}
+          reminderId={sendEmailModal.reminderId}
+          onClose={() => setSendEmailModal({ open: false, invoice: null, isReminder: false, reminderId: null })}
+          onSend={handleSendEmail}
+        />
+      )}
     </>
   );
 };

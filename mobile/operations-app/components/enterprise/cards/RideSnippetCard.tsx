@@ -13,7 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { EnterpriseCard } from "./EnterpriseCard";
 import { isCompletedStatus } from "@/utils/bookingStatus";
 
-type BadgeTone = "default" | "warning" | "danger" | "info";
+type BadgeTone = "default" | "warning" | "danger" | "info" | "success";
 
 type Badge = {
   label: string;
@@ -27,12 +27,15 @@ export type RideSnippet = {
   pickup: string;
   dropoff: string;
   assignedTo?: string | null;
-  status?: "unassigned" | "assigned" | "completed" | "return_completed" | "in_progress" | "en_route"; // ✅ Statut de la course
+  status?: "unassigned" | "assigned" | "completed" | "return_completed" | "in_progress" | "en_route" | "pending"; // ✅ Ajout du statut pending pour les transferts
   badges?: Badge[];
   onPress?: (event: GestureResponderEvent) => void;
   onPrimaryAction?: (event: GestureResponderEvent) => void;
   onQuickAction?: (event: GestureResponderEvent) => void;
-  primaryIcon?: string;
+  primaryIcon?: string; // ✅ Icône personnalisée pour l'action principale
+  quickIcon?: string; // ✅ Icône personnalisée pour l'action rapide
+  primaryIconColor?: string; // ✅ Couleur personnalisée pour l'icône principale
+  quickIconColor?: string; // ✅ Couleur personnalisée pour l'icône rapide
   footerActions?: React.ReactNode;
   showUndefinedIcon?: boolean;
   delayMinutes?: number | null; // ✅ Minutes de retard (positif) ou d'avance (négatif)
@@ -291,8 +294,12 @@ export const RideSnippetCard: React.FC<{
               const delayMinutes = ride.delayMinutes ?? 0;
               const hasDelay = delayMinutes > 0;
               const isLongDelay = hasDelay && delayMinutes >= 15;
+              // ✅ Raccourcir le texte de retard : utiliser seulement le prénom pour garder la même hauteur
+              const shortName = hasDelay
+                ? ride.assignedTo.split(' ')[0].toUpperCase() // Seulement le prénom
+                : ride.assignedTo;
               const delayText = hasDelay
-                ? `${ride.assignedTo.toUpperCase()} ${delayMinutes}min de retard`
+                ? `${shortName} ${delayMinutes}min`
                 : formatBadge(ride.assignedTo);
 
               // ✅ Utiliser les couleurs de retard si présent, sinon les couleurs de statut
@@ -319,32 +326,20 @@ export const RideSnippetCard: React.FC<{
                     hasDelay && !isLongDelay && styles.badgeShortDelay,
                   ]}
                 >
-                  {hasDelay ? (
-                    <ScrollingText
-                      text={delayText}
-                      textStyle={[
-                        styles.badgeLabel,
-                        {
-                          color: badgeText,
-                        },
-                        hasDelay && isLongDelay && styles.badgeLabelLongDelay,
-                        hasDelay && !isLongDelay && styles.badgeLabelShortDelay,
-                      ]}
-                    />
-                  ) : (
-                    <Text
-                      style={[
-                        styles.badgeLabel,
-                        {
-                          color: badgeText,
-                        },
-                      ]}
-                      numberOfLines={1}
-                      ellipsizeMode="tail"
-                    >
-                      {formatBadge(ride.assignedTo)}
-                    </Text>
-                  )}
+                  <Text
+                    style={[
+                      styles.badgeLabel,
+                      {
+                        color: badgeText,
+                      },
+                      hasDelay && isLongDelay && styles.badgeLabelLongDelay,
+                      hasDelay && !isLongDelay && styles.badgeLabelShortDelay,
+                    ]}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    {delayText}
+                  </Text>
                 </View>
               );
             }
@@ -390,22 +385,26 @@ export const RideSnippetCard: React.FC<{
         <View style={styles.expandedContent}>
           <View style={styles.routeColumn}>
             <View style={styles.routeRow}>
-              <Ionicons
-                name="location-outline"
-                size={16}
-                color={palette.pickupIcon}
-              />
+              <View style={styles.routeIcon}>
+                <Ionicons
+                  name="location-outline"
+                  size={16}
+                  color={palette.pickupIcon}
+                />
+              </View>
               <Text style={styles.route} numberOfLines={1} ellipsizeMode="tail">
                 {ride.pickup}
               </Text>
             </View>
             <View style={styles.routeDivider} />
             <View style={styles.routeRow}>
-              <Ionicons
-                name="flag-outline"
-                size={16}
-                color={palette.dropoffIcon}
-              />
+              <View style={styles.routeIcon}>
+                <Ionicons
+                  name="flag-outline"
+                  size={16}
+                  color={palette.dropoffIcon}
+                />
+              </View>
               <Text style={styles.route} numberOfLines={1} ellipsizeMode="tail">
                 {ride.dropoff}
               </Text>
@@ -419,29 +418,56 @@ export const RideSnippetCard: React.FC<{
             // ✅ P0-1: Utiliser la fonction de normalisation
             const isCompleted = isCompletedStatus(normalizedStatus);
 
+            // #region agent log
+            (() => {
+              try {
+                fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'RideSnippetCard.tsx:427', message: 'Quick actions rendering', data: { rideId: ride.id, hasOnQuickAction: !!ride.onQuickAction, hasOnPrimaryAction: !!ride.onPrimaryAction, isCompleted: isCompleted, assignedTo: ride.assignedTo, quickIcon: ride.quickIcon, primaryIcon: ride.primaryIcon, willShowActions: !!(ride.onQuickAction || ride.onPrimaryAction) && !isCompleted, willShowQuick: !!(ride.onQuickAction && (!ride.assignedTo || ride.quickIcon)) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run8', hypothesisId: 'H3-H4' }) }).catch(() => { });
+              } catch { }
+            })();
+            // #endregion
             return (ride.onQuickAction || ride.onPrimaryAction) && !isCompleted ? (
               <View style={styles.expandedActions}>
-                {ride.onQuickAction && !ride.assignedTo ? (
+                {ride.onQuickAction && (!ride.assignedTo || ride.quickIcon) ? (
                   <TouchableOpacity
-                    style={styles.chipButton}
-                    onPress={ride.onQuickAction}
+                    style={[
+                      styles.chipButton,
+                      ride.quickIconColor && { backgroundColor: ride.quickIconColor + "15" }, // Bg semi-transparent
+                    ]}
+                    onPress={(e) => {
+                      // #region agent log
+                      try {
+                        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'RideSnippetCard.tsx:onQuickAction:click', message: 'Quick action button clicked', data: { rideId: ride.id, hasOnQuickAction: !!ride.onQuickAction }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H1' }) }).catch(() => { });
+                      } catch { }
+                      // #endregion
+                      ride.onQuickAction?.(e);
+                    }}
                   >
                     <Ionicons
-                      name="flash-outline"
+                      name={(ride.quickIcon as any) || "flash-outline"}
                       size={16}
-                      color={palette.chipIcon}
+                      color={ride.quickIconColor || palette.chipIcon} // ✅ Couleur personnalisée
                     />
                   </TouchableOpacity>
                 ) : null}
                 {ride.onPrimaryAction ? (
                   <TouchableOpacity
-                    style={styles.assignButton}
-                    onPress={ride.onPrimaryAction}
+                    style={[
+                      styles.assignButton,
+                      ride.primaryIconColor && { backgroundColor: ride.primaryIconColor }, // ✅ Couleur personnalisée
+                    ]}
+                    onPress={(e) => {
+                      // #region agent log
+                      try {
+                        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'RideSnippetCard.tsx:onPrimaryAction:click', message: 'Primary action button clicked', data: { rideId: ride.id, hasOnPrimaryAction: !!ride.onPrimaryAction }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H1' }) }).catch(() => { });
+                      } catch { }
+                      // #endregion
+                      ride.onPrimaryAction?.(e);
+                    }}
                   >
                     <Ionicons
-                      name="person-add-outline"
+                      name={(ride.primaryIcon as any) || "person-add-outline"}
                       size={18}
-                      color={palette.assignIcon}
+                      color={ride.primaryIconColor ? "#FFFFFF" : palette.assignIcon} // ✅ Blanc si couleur personnalisée
                     />
                   </TouchableOpacity>
                 ) : null}
@@ -464,11 +490,11 @@ const styles = StyleSheet.create({
   summaryRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
   },
   timeContainer: {
     width: 54,
     alignItems: "flex-start",
+    marginRight: 12,
   },
   time: {
     color: palette.time,
@@ -481,11 +507,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     width: 130,
+    marginRight: 12,
   },
   chevronContainer: {
     width: 24,
     alignItems: "center",
     marginLeft: 2,
+    marginRight: 12,
   },
   badgeContainer: {
     flex: 1,
@@ -561,6 +589,7 @@ const styles = StyleSheet.create({
     backgroundColor: palette.chipBg,
     borderWidth: 1,
     borderColor: palette.badgeBorder,
+    marginLeft: 10,
   },
   assignButton: {
     flexDirection: "row",
@@ -570,12 +599,15 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 999,
     backgroundColor: palette.assignBg,
+    marginLeft: 10,
   },
   routeRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
     marginBottom: 4,
+  },
+  routeIcon: {
+    marginRight: 8,
   },
   routeDivider: {
     height: 1,
@@ -594,16 +626,16 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginTop: 14,
-    gap: 16,
   },
   routeColumn: {
     flex: 1,
+    marginRight: 16,
   },
   expandedActions: {
     flexDirection: "row",
-    gap: 10,
     alignItems: "center",
     justifyContent: "flex-end",
+    marginLeft: -10, // Compenser les marges des boutons
   },
   footerActions: {
     marginTop: 12,

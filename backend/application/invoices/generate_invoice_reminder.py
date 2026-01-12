@@ -14,6 +14,7 @@ from decimal import Decimal
 from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
 
 from ext import db
+from infrastructure.invoices.invoice_calculator import round_to_5_cents
 from models import Invoice, InvoiceLineType, InvoiceReminder
 from repositories.company_billing_settings_repository import (
     CompanyBillingSettingsRepository,
@@ -123,14 +124,20 @@ class GenerateInvoiceReminderUseCase:
                 msg = "Paramètres de facturation non trouvés"
                 raise ValueError(msg)
 
-            # 4. Calculer les frais selon le niveau
+            # 4. Calculer les frais selon le niveau et arrondir à 5 centimes
             fee_amount = Decimal("0.00")
             if input_data.level == LEVEL_ONE:
-                fee_amount = Decimal(str(billing_settings.reminder1_fee or 0))
+                fee_amount = round_to_5_cents(
+                    Decimal(str(billing_settings.reminder1_fee or 0))
+                )
             elif input_data.level == LEVEL_THRESHOLD:
-                fee_amount = Decimal(str(billing_settings.reminder2_fee or 0))
+                fee_amount = round_to_5_cents(
+                    Decimal(str(billing_settings.reminder2_fee or 0))
+                )
             elif input_data.level == LEVEL_THREE:
-                fee_amount = Decimal(str(billing_settings.reminder3_fee or 0))
+                fee_amount = round_to_5_cents(
+                    Decimal(str(billing_settings.reminder3_fee or 0))
+                )
 
             # 5. Créer le rappel
             reminder = InvoiceReminder()
@@ -160,8 +167,11 @@ class GenerateInvoiceReminderUseCase:
 
                 # Mettre à jour les montants de la facture
                 invoice.reminder_fee_amount += fee_amount
-                invoice.total_amount += fee_amount
-                invoice.balance_due += fee_amount
+                # ✅ Arrondir le total à 5 centimes (règle suisse)
+                invoice.total_amount = round_to_5_cents(
+                    invoice.total_amount + fee_amount
+                )
+                invoice.balance_due = round_to_5_cents(invoice.balance_due + fee_amount)
 
             # 7. Mettre à jour le niveau de rappel
             invoice.reminder_level = input_data.level
@@ -170,6 +180,20 @@ class GenerateInvoiceReminderUseCase:
             # 8. Générer le PDF du rappel
             pdf_url = self.pdf_service.generate_reminder_pdf(invoice, input_data.level)
             reminder.pdf_url = pdf_url
+
+            # ✅ 8bis. Régénérer le PDF de la facture avec la mention "RAPPEL N°X"
+            # Cela garantit que le PDF de la facture affiche clairement qu'un rappel a été émis
+            try:
+                invoice_pdf_url = self.pdf_service.generate_invoice_pdf(invoice)
+                invoice.pdf_url = invoice_pdf_url
+                logger.info(
+                    "PDF de facture régénéré avec mention RAPPEL N°%s: %s",
+                    input_data.level,
+                    invoice_pdf_url,
+                )
+            except Exception as e:
+                logger.warning("Échec de la régénération du PDF de facture: %s", str(e))
+                # Ne pas bloquer l'opération si la régénération échoue
 
             # 9. Commit de la transaction
             db.session.commit()

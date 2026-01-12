@@ -19,6 +19,7 @@ const SemiAutoPanel = ({
   onAssign, // 🆕 Ajouter onAssign pour permettre l'assignation manuelle
   currentDate,
   styles = {},
+  currentCompanyId, // ✅ ID de l'entreprise pour la direction des transferts
 }) => {
   // Charger suggestions RL (filtrage strict côté hook)
   const {
@@ -145,6 +146,7 @@ const SemiAutoPanel = ({
             hideAssign={false} // 🆕 Afficher le bouton d'assignation pour les courses transférées
             formatTime={formatTime}
             showSuggestions={false}
+            currentCompanyId={currentCompanyId}
           />
 
           {/* Suggestions IMPORTANTES seulement (si gain > 15 min ET confiance > 75%) */}

@@ -11,6 +11,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useClientSearch } from "@/hooks/useClientSearch";
 import { ClientOption } from "@/types/enterpriseDispatch";
+import { createShadow } from "@/styles/shadowStyles";
 
 const palette = {
     background: "#FFFFFF",
@@ -252,11 +253,13 @@ const styles = StyleSheet.create({
         borderRadius: 14,
         borderWidth: 1,
         borderColor: palette.suggestionBorder,
-        shadowColor: "rgba(15,54,43,0.1)",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 1,
-        shadowRadius: 8,
-        elevation: 4,
+        ...createShadow({
+            shadowColor: "rgba(15,54,43,0.1)",
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 1,
+            shadowRadius: 8,
+            elevation: 4,
+        }),
     },
     suggestionsList: {
         maxHeight: 200,

@@ -631,7 +631,7 @@ def create_app(config_name: str | None = None):
             max_http_buffer_size=10_000_000,  # int
             allow_upgrades=allow_ws_upgrades,
             cors_credentials=True,
-            # ✅ FIX: Passer message_queue explicitement
+            # ✅ FIX: Ré-activer Redis pour synchroniser les handlers entre workers Gunicorn
             message_queue=_socketio_message_queue,
             # ✅ Note: La compression Socket.IO est gérée automatiquement
             # par le protocole lors de la négociation client/serveur.
@@ -1873,9 +1873,21 @@ def create_app(config_name: str | None = None):
 
         if not skip_socketio:
             app.logger.info("🔧 [INIT] Enregistrement des handlers Socket.IO chat...")
-            from sockets.chat import init_chat_socket
 
-            init_chat_socket(socketio)
+            # ✅ Enregistrer le vrai handler avec authentification JWT
+            try:
+                from sockets.chat import init_chat_socket
+
+                app.logger.info("✅ Import init_chat_socket réussi")
+
+                init_chat_socket(socketio)
+                app.logger.info("✅ init_chat_socket(socketio) exécuté")
+            except Exception as e:
+                app.logger.exception(
+                    "❌ ERREUR lors de l'enregistrement des handlers Socket.IO: %s", e
+                )
+                raise
+
             app.logger.info("✅ Handlers Socket.IO chat enregistrés")
 
         @app.route("/")

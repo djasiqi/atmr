@@ -16,6 +16,7 @@ class UpdateCompanyProfileResult:
     geocoded: bool = False
     geocoded_lat: float | None = None
     geocoded_lon: float | None = None
+    billing_profile_synced: bool = False
 
 
 class UpdateCompanyProfileUseCase:
@@ -78,13 +79,85 @@ class UpdateCompanyProfileUseCase:
                     validated_data["longitude"] = geo_lon
                     geocoded = True
 
+        # ✅ Détecter si des champs domicile_* sont modifiés
+        domicile_fields_modified = any(
+            k in validated_data
+            for k in [
+                "domicile_address_line1",
+                "domicile_zip",
+                "domicile_city",
+                "domicile_country",
+            ]
+        )
+
         for k, v in validated_data.items():
             if k in self._ALLOWED_FIELDS:
                 setattr(company, k, v)
+
+        # ✅ Synchroniser CompanyBillingProfile si champs domicile_* modifiés
+        billing_profile_synced = False
+        if domicile_fields_modified:
+            billing_profile_synced = self._sync_billing_profile(company, validated_data)
 
         return UpdateCompanyProfileResult(
             ok=True,
             geocoded=geocoded,
             geocoded_lat=geo_lat,
             geocoded_lon=geo_lon,
+            billing_profile_synced=billing_profile_synced,
         )
+
+    def _sync_billing_profile(
+        self, company: _CompanyLike, validated_data: dict[str, Any]
+    ) -> bool:
+        """Synchronise CompanyBillingProfile avec les données de domicile.
+
+        Args:
+            company: Instance de Company (avec id)
+            validated_data: Données validées contenant les champs domicile_*
+
+        Returns:
+            bool: True si synchronisé, False sinon
+        """
+        try:
+            from models import CompanyBillingProfile
+
+            # Récupérer le profil existant
+            profile = CompanyBillingProfile.query.filter_by(
+                company_id=company.id
+            ).first()
+
+            if not profile:
+                # Pas de profil, pas de synchronisation
+                return False
+
+            # ✅ Synchroniser les champs modifiés
+            # Mapping : Company.domicile_* → CompanyBillingProfile.*
+            sync_mapping = {
+                "domicile_address_line1": "street_name",  # Note: simplifié
+                "domicile_zip": "postal_code",
+                "domicile_city": "city",
+                "domicile_country": "country_code",
+            }
+
+            synced = False
+            for company_field, profile_field in sync_mapping.items():
+                if company_field in validated_data:
+                    new_value = validated_data[company_field]
+
+                    # Cas spécial pour street_name : stocker toute l'adresse
+                    if profile_field == "street_name":
+                        # domicile_address_line1 contient déjà "Rue Numéro" complet
+                        # On stocke tout dans street_name et on vide building_number
+                        address_str = str(new_value or "").strip()
+                        profile.street_name = address_str
+                        profile.building_number = ""  # ✅ Vider building_number
+                    else:
+                        setattr(profile, profile_field, new_value)
+
+                    synced = True
+
+            return synced
+        except Exception:
+            # En cas d'erreur, on ne bloque pas la mise à jour de Company
+            return False

@@ -8,16 +8,17 @@ if TYPE_CHECKING:
     from flask_socketio import SocketIO  # pyright: ignore[reportMissingModuleSource]
 
 
+# ✅ FIX: Standardiser avec '_' au lieu de ':' pour cohérence
 def emit_shift_created(company_id: int, payload: dict[str, Any]) -> None:
-    emit_company_event(company_id, "planning:shift_created", payload)
+    emit_company_event(company_id, "planning_shift_created", payload)
 
 
 def emit_shift_updated(company_id: int, payload: dict[str, Any]) -> None:
-    emit_company_event(company_id, "planning:shift_updated", payload)
+    emit_company_event(company_id, "planning_shift_updated", payload)
 
 
 def emit_shift_deleted(company_id: int, payload: dict[str, Any]) -> None:
-    emit_company_event(company_id, "planning:shift_deleted", payload)
+    emit_company_event(company_id, "planning_shift_deleted", payload)
 
 
 def init_planning_socket(socketio: SocketIO) -> None:  # noqa: ARG001

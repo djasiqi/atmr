@@ -104,7 +104,13 @@ else:
 
 socketio = SocketIO(
     async_mode=ASYNC_MODE,
-    message_queue=_socketio_message_queue,
+    message_queue=None,  # ❌ TEST: Désactiver Redis complètement
+    # ✅ Configuration des timeouts pour éviter "Bad file descriptor"
+    ping_timeout=60,  # Timeout avant de considérer le client déconnecté (secondes)
+    ping_interval=25,  # Intervalle entre les pings (secondes)
+    # ✅ Gestion propre des déconnexions
+    engineio_logger=True,  # ✅ ACTIVÉ TEMPORAIREMENT POUR DEBUG
+    logger=True,  # ✅ ACTIVÉ TEMPORAIREMENT POUR DEBUG
 )
 
 # #region agent log

@@ -378,6 +378,12 @@ class Booking(db.Model):
             # ✅ P1-4 Phase 1.2: Remplacer company (string) par company_id + company_name
             "company_id": self.company_id,
             "company_name": self.company.name if self.company else None,
+            # ✅ Informations de transfert partenaire
+            "executing_company_id": self.executing_company_id,
+            "executing_company_name": (
+                self.executing_company.name if self.executing_company else None
+            ),
+            "is_transferred": self.executing_company_id is not None,
             "driver": {
                 "id": self.driver.id,
                 "username": self.driver.user.username if self.driver.user else None,
@@ -447,7 +453,38 @@ class Booking(db.Model):
             },
             # ✅ P1-4 Phase 1.1: patient_name reste pour compatibilité (utilise customer_name de la DB)
             "patient_name": _as_str(self.customer_name),
+            # ✅ Informations du transfert actif (si existe)
+            "active_transfer": self._get_active_transfer_info(),
         }
+
+    def _get_active_transfer_info(self):
+        """Récupère les informations du transfert actif pour cette réservation."""
+        try:
+            from models.booking_transfer import BookingTransfer
+            from models.enums import TransferStatus
+
+            # Chercher un transfert actif (PENDING, ACCEPTED ou COMPLETED)
+            # ✅ Inclure COMPLETED pour afficher le badge même après la fin de la course
+            active_transfer = (
+                BookingTransfer.query.filter_by(booking_id=self.id)
+                .filter(
+                    BookingTransfer.status.in_(
+                        [
+                            TransferStatus.PENDING,
+                            TransferStatus.ACCEPTED,
+                            TransferStatus.COMPLETED,
+                        ]
+                    )
+                )
+                .first()
+            )
+
+            if active_transfer:
+                return active_transfer.to_dict()
+            return None
+        except Exception:
+            # En cas d'erreur, retourner None pour ne pas bloquer la sérialisation
+            return None
 
     # Validations
     @validates("user_id")

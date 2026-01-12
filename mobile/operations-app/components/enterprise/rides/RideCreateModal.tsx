@@ -18,6 +18,8 @@ import { AddressSelector } from "./AddressSelector";
 import { TimeDatePicker } from "./TimeDatePicker";
 import { ClientSelector } from "./ClientSelector";
 import { NotesEditor } from "./NotesEditor";
+import { RecurrenceSelector } from "./RecurrenceSelector";
+import { shadowPresets } from "@/styles/shadowStyles";
 
 const palette = {
     modalOverlay: "rgba(21,54,43,0.75)",
@@ -107,6 +109,13 @@ export const RideCreateModal: React.FC<RideCreateModalProps> = ({
     const [scheduledTime, setScheduledTime] = useState<Date | null>(null);
     const [isReturn, setIsReturn] = useState(false);
     const [returnTime, setReturnTime] = useState<Date | null>(null);
+
+    // 🔄 Récurrence
+    const [isRecurring, setIsRecurring] = useState(false);
+    const [recurrenceType, setRecurrenceType] = useState<"daily" | "weekly" | "custom">("weekly");
+    const [recurrenceDays, setRecurrenceDays] = useState<number[]>([]);
+    const [occurrences, setOccurrences] = useState(4);
+    const [recurrenceEndDate, setRecurrenceEndDate] = useState("");
 
     // Étape 4: Détails
     const [notes, setNotes] = useState("");
@@ -208,6 +217,19 @@ export const RideCreateModal: React.FC<RideCreateModalProps> = ({
             })() : undefined,
             wheelchair_client_has: wheelchairClientHas || undefined,
             wheelchair_need: wheelchairNeed || undefined,
+            // 🔄 Champs de récurrence
+            ...(isRecurring
+                ? {
+                    is_recurring: true,
+                    recurrence_type: recurrenceType,
+                    recurrence_days:
+                        recurrenceType === "custom" && recurrenceDays.length > 0
+                            ? recurrenceDays
+                            : undefined,
+                    recurrence_end_date: recurrenceEndDate || undefined,
+                    occurrences: occurrences > 0 ? occurrences : undefined,
+                }
+                : {}),
         };
 
         try {
@@ -455,6 +477,28 @@ export const RideCreateModal: React.FC<RideCreateModalProps> = ({
                                 )}
                             </View>
                         )}
+
+                        {/* 🔄 Récurrence */}
+                        <RecurrenceSelector
+                            enabled={isRecurring}
+                            onEnabledChange={(enabled) => {
+                                setIsRecurring(enabled);
+                                // Réinitialiser les valeurs si désactivé
+                                if (!enabled) {
+                                    setRecurrenceDays([]);
+                                    setOccurrences(4);
+                                    setRecurrenceEndDate("");
+                                }
+                            }}
+                            recurrenceType={recurrenceType}
+                            onRecurrenceTypeChange={setRecurrenceType}
+                            recurrenceDays={recurrenceDays}
+                            onRecurrenceDaysChange={setRecurrenceDays}
+                            occurrences={occurrences}
+                            onOccurrencesChange={setOccurrences}
+                            endDate={recurrenceEndDate}
+                            onEndDateChange={setRecurrenceEndDate}
+                        />
                     </View>
                 );
 
@@ -678,11 +722,7 @@ const styles = StyleSheet.create({
         borderRadius: 24,
         borderWidth: 1,
         borderColor: palette.modalBorder,
-        shadowColor: "rgba(15,54,43,0.15)",
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 1,
-        shadowRadius: 24,
-        elevation: 8,
+        ...shadowPresets.large, // ✅ Compatible web/native
         flexDirection: "column",
         overflow: "hidden",
     },
