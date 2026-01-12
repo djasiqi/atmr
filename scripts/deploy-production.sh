@@ -54,6 +54,11 @@ export SMTP_PASSWORD="${22}"
 export ALERTMANAGER_FROM_EMAIL="${23}"
 export ALERT_EMAIL_TO="${24}"
 export SOCKETIO_CORS_ORIGINS="${25}"
+export BREVO_API_KEY="${26}"
+export POSTGRES_HOST="${27:-postgres}"
+export FLASK_ENV="${28:-production}"
+export FLASK_CONFIG="${29:-production}"
+export ENVIRONMENT="${30:-production}"
 
 # Validation des secrets
 MISSING_SECRETS=()
@@ -63,10 +68,15 @@ MISSING_SECRETS=()
 [ -z "${POSTGRES_PASSWORD:-}" ] && MISSING_SECRETS+=("POSTGRES_PASSWORD")
 [ -z "${POSTGRES_USER:-}" ] && MISSING_SECRETS+=("POSTGRES_USER")
 [ -z "${POSTGRES_DB:-}" ] && MISSING_SECRETS+=("POSTGRES_DB")
+[ -z "${POSTGRES_HOST:-}" ] && MISSING_SECRETS+=("POSTGRES_HOST")
 [ -z "${REDIS_PASSWORD:-}" ] && MISSING_SECRETS+=("REDIS_PASSWORD")
 [ -z "${DOCKER_IMAGE:-}" ] && MISSING_SECRETS+=("DOCKER_IMAGE")
 [ -z "${DOCKER_TAG:-}" ] && MISSING_SECRETS+=("DOCKER_TAG")
 [ -z "${SOCKETIO_CORS_ORIGINS:-}" ] && MISSING_SECRETS+=("SOCKETIO_CORS_ORIGINS")
+[ -z "${BREVO_API_KEY:-}" ] && MISSING_SECRETS+=("BREVO_API_KEY")
+[ -z "${FLASK_ENV:-}" ] && MISSING_SECRETS+=("FLASK_ENV")
+[ -z "${FLASK_CONFIG:-}" ] && MISSING_SECRETS+=("FLASK_CONFIG")
+[ -z "${ENVIRONMENT:-}" ] && MISSING_SECRETS+=("ENVIRONMENT")
 [ ${#MISSING_SECRETS[@]} -ne 0 ] && { echo "❌ Secrets manquants: ${MISSING_SECRETS[*]}"; exit 1; }
 
 # Construction des URLs
@@ -115,6 +125,7 @@ docker volume prune -a -f || true
   echo "POSTGRES_USER=${POSTGRES_USER}"
   echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}"
   echo "POSTGRES_DB=${POSTGRES_DB}"
+  echo "POSTGRES_HOST=${POSTGRES_HOST}"
   echo "REDIS_PASSWORD=${REDIS_PASSWORD}"
   echo "REDIS_URL=${REDIS_URL}"
   echo "SECRET_KEY=${SECRET_KEY}"
@@ -139,6 +150,10 @@ docker volume prune -a -f || true
   echo "ALERTMANAGER_FROM_EMAIL=${ALERTMANAGER_FROM_EMAIL:-}"
   echo "ALERT_EMAIL_TO=${ALERT_EMAIL_TO:-}"
   echo "SOCKETIO_CORS_ORIGINS=${SOCKETIO_CORS_ORIGINS:-}"
+  echo "BREVO_API_KEY=${BREVO_API_KEY:-}"
+  echo "FLASK_ENV=${FLASK_ENV}"
+  echo "FLASK_CONFIG=${FLASK_CONFIG}"
+  echo "ENVIRONMENT=${ENVIRONMENT}"
 } > .env.production && chmod 600 .env.production
 cp .env.production .env && chmod 600 .env
 
