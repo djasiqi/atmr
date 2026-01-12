@@ -35,7 +35,17 @@ with suppress(OSError):
 
     os.chdir(backend_dir)
 
-# Import après changement de répertoire pour éviter les erreurs d'import
+# ✅ Définir les variables d'environnement AVANT d'importer create_app
+import os
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-openapi-generation")
+os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-key-for-openapi-generation")
+os.environ.setdefault("APP_ENCRYPTION_KEY_B64", "dGVzdC1lbmNyeXB0aW9uLWtleQ==")
+os.environ.setdefault("MASTER_ENCRYPTION_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+os.environ.setdefault("DATABASE_URL", "sqlite:///test.db")
+os.environ.setdefault("FLASK_ENV", "testing")
+os.environ.setdefault("SKIP_ROUTES_INIT", "0")
+
+# Import après changement de répertoire et définition des variables d'environnement
 from app import create_app  # noqa: E402
 
 
@@ -46,7 +56,8 @@ def generate_openapi(output_path: Path, format_type: str = "json") -> None:
         output_path: Chemin du fichier de sortie
         format_type: Format de sortie ('json' ou 'yaml')
     """
-    app = create_app("development")
+    # Les variables d'environnement sont déjà définies au niveau du module
+    app = create_app("testing")
 
     # ✅ Configurer SERVER_NAME pour permettre la génération d'URLs sans contexte de requête
     app.config["SERVER_NAME"] = "localhost:5000"
