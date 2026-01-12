@@ -1,7 +1,21 @@
 #!/usr/bin/env bash
 # docker-entrypoint.sh
 # Script d'entrée Docker avec warmup des modèles ML et vérifications de santé
-
+#
+# 🔍 STRATÉGIE DE GESTION DES ERREURS :
+#
+# ✅ ERREURS CRITIQUES (exit 1 - démarrage échoue) :
+#    - Dépendances Python critiques manquantes (flask, sqlalchemy, etc.)
+#    - DATABASE_URL manquante en production
+#    - Base de données inaccessible en production
+#    - Dépendances RL manquantes si RL_ENABLED=true
+#
+# ⚠️ ERREURS NON-CRITIQUES (exit 0 - démarrage continue) :
+#    - Redis inaccessible (fallback vers memory storage)
+#    - Modèles ML non chargés (optionnels)
+#    - Scalers ML manquants (optionnels)
+#    - DATABASE_URL manquante en développement/testing
+#
 # ⚠️ IMPORTANT: Ne pas utiliser 'set -e' ici car on veut gérer les erreurs de permissions gracieusement
 set -uo pipefail
 
@@ -254,8 +268,12 @@ check_database() {
     
     python -c "
 import os
+import sys
 import logging
 logging.basicConfig(level=logging.INFO)
+
+flask_env = os.getenv('FLASK_ENV', 'development')
+is_production = flask_env == 'production'
 
 # Vérifier les variables d'environnement de la DB
 db_url = os.getenv('DATABASE_URL', '')
@@ -263,20 +281,25 @@ if db_url:
     print(f'✅ DATABASE_URL configurée: {db_url[:20]}...')
 else:
     print('⚠️  DATABASE_URL non configurée')
+    if is_production:
+        print('❌ ERREUR CRITIQUE: DATABASE_URL obligatoire en production')
+        sys.exit(1)  # Échec en production si DB manquante
 
 # Test de connexion si possible
 try:
     from sqlalchemy import create_engine, text
     if db_url:
-        engine = create_engine(db_url)
+        engine = create_engine(db_url, pool_pre_ping=True, connect_args={'connect_timeout': 5})
         with engine.connect() as conn:
             result = conn.execute(text('SELECT 1'))
             print('✅ Connexion à la base de données réussie')
 except Exception as e:
     print(f'⚠️  Erreur de connexion à la base de données: {e}')
+    if is_production:
+        print('❌ ERREUR CRITIQUE: Impossible de se connecter à la DB en production')
+        sys.exit(1)  # Échec en production si DB inaccessible
 
-import sys
-sys.exit(0)
+sys.exit(0)  # Succès
 "
 }
 
@@ -286,6 +309,7 @@ check_redis() {
     
     python -c "
 import os
+import sys
 import logging
 logging.basicConfig(level=logging.INFO)
 
@@ -310,14 +334,14 @@ print(f'Redis URL: {redis_url}')
 
 try:
     import redis
-    r = redis.from_url(redis_url)
+    r = redis.from_url(redis_url, socket_connect_timeout=5)
     r.ping()
     print('✅ Connexion à Redis réussie')
 except Exception as e:
-    print(f'⚠️  Erreur de connexion à Redis: {e}')
+    # ⚠️  Redis est NON-CRITIQUE: le backend peut démarrer avec fallback memory
+    print(f'⚠️  Erreur de connexion à Redis (non-critique, fallback memory utilisé): {e}')
 
-import sys
-sys.exit(0)
+sys.exit(0)  # Toujours succès car Redis est optionnel
 "
 }
 
@@ -327,6 +351,7 @@ check_dependencies() {
     
     python -c "
 import os
+import sys
 import logging
 logging.basicConfig(level=logging.INFO)
 
@@ -341,6 +366,7 @@ if not rl_active:
 
 # Dépendances critiques (toujours requises)
 critical_deps = ['flask', 'sqlalchemy', 'celery', 'redis', 'pandas', 'numpy', 'sklearn']
+missing_critical = []
 
 # Vérifier les dépendances critiques
 for dep in critical_deps:
@@ -349,22 +375,34 @@ for dep in critical_deps:
         print(f'✅ {dep}')
     except ImportError:
         print(f'❌ {dep} manquant')
+        missing_critical.append(dep)
+
+# Faire échouer si des dépendances critiques manquent
+if missing_critical:
+    print(f'❌ ERREUR CRITIQUE: {len(missing_critical)} dépendance(s) critique(s) manquante(s): {missing_critical}')
+    sys.exit(1)
 
 # Vérifier les dépendances ML uniquement si RL est activé
 if rl_active:
     print('📦 Vérification des dépendances RL/ML...')
     ml_deps = ['torch', 'gymnasium', 'optuna']
+    missing_ml = []
     for dep in ml_deps:
         try:
             __import__(dep)
             print(f'✅ {dep}')
         except ImportError:
             print(f'❌ {dep} manquant (requis pour RL)')
+            missing_ml.append(dep)
+    
+    # Faire échouer si RL activé mais dépendances manquantes
+    if missing_ml:
+        print(f'❌ ERREUR CRITIQUE: RL activé mais {len(missing_ml)} dépendance(s) RL manquante(s): {missing_ml}')
+        sys.exit(1)
 else:
     print('ℹ️  Dépendances RL ignorées (RL_ENABLED=false)')
 
-import sys
-sys.exit(0)
+sys.exit(0)  # Succès
 "
 }
 
