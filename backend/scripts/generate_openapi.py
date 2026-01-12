@@ -14,6 +14,7 @@ Usage:
 
 import argparse
 import json
+import os
 import sys
 from contextlib import suppress
 from pathlib import Path
@@ -31,16 +32,16 @@ sys.path.insert(0, str(backend_dir))
 original_cwd = Path.cwd()
 with suppress(OSError):
     # Si on est déjà dans backend, ne rien faire
-    import os
-
     os.chdir(backend_dir)
 
 # ✅ Définir les variables d'environnement AVANT d'importer create_app
-import os
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-openapi-generation")
 os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-key-for-openapi-generation")
 os.environ.setdefault("APP_ENCRYPTION_KEY_B64", "dGVzdC1lbmNyeXB0aW9uLWtleQ==")
-os.environ.setdefault("MASTER_ENCRYPTION_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+os.environ.setdefault(
+    "MASTER_ENCRYPTION_KEY",
+    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+)
 os.environ.setdefault("DATABASE_URL", "sqlite:///test.db")
 os.environ.setdefault("FLASK_ENV", "testing")
 os.environ.setdefault("SKIP_ROUTES_INIT", "0")
