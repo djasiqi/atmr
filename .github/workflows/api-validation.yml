@@ -78,8 +78,8 @@ jobs:
           SKIP_ROUTES_INIT: "0"
           SECRET_KEY: "test-secret-key-for-ci"
           JWT_SECRET_KEY: "test-jwt-secret-key-for-ci"
-          APP_ENCRYPTION_KEY_B64: "dGVzdC1lbmNyeXB0aW9uLWtleQ=="
-          MASTER_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+          APP_ENCRYPTION_KEY_B64: ${{ secrets.APP_ENCRYPTION_KEY_B64 }}
+          MASTER_ENCRYPTION_KEY: ${{ secrets.MASTER_ENCRYPTION_KEY }}
 
       - name: Validate OpenAPI format
         run: node scripts/validate-openapi-format.js
