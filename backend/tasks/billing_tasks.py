@@ -72,8 +72,10 @@ def check_overdues_and_trigger_reminders():
             )
 
         app_logger.info(
-            "Vérification des factures en retard terminée: %s factures mises "
-            "à jour, %s rappels générés",
+            (
+                "Vérification des factures en retard terminée: %s factures mises "
+                "à jour, %s rappels générés"
+            ),
             check_result.updated_count,
             process_result.reminders_generated,
         )
@@ -93,66 +95,108 @@ def check_overdues_and_trigger_reminders():
     autoretry_for=(Exception,),
 )
 def send_reminder_notifications() -> None:
-    """Tâche pour envoyer les notifications de rappel par email."""
+    """Tâche pour envoyer automatiquement les rappels par email.
+
+    Cette tâche :
+    1. Récupère les rappels générés récemment qui n'ont pas été envoyés
+    2. Vérifie que le client a un email valide
+    3. Envoie le rappel par email via SendReminderByEmailUseCase
+    4. Marque le rappel comme envoyé
+
+    Rate limiting : Max 50 emails par exécution pour éviter d'être blacklisté
+    """
     try:
-        app_logger.info("Début de l'envoi des notifications de rappel")
+        app_logger.info("Début de l'envoi automatique des rappels par email")
 
-        # Note: NotificationService n'existe pas dans notification_service
-        # Le code attend un objet avec des méthodes send_reminder_notification
-        # et send_monthly_invoice_summary
-        notification_service: Any = (
-            NotificationService() if NotificationService else None
+        from application.invoices.send_reminder_by_email import (
+            SendReminderByEmailInput,
+            SendReminderByEmailUseCase,
         )
-        if notification_service is None:
-            app_logger.warning(
-                "NotificationService non disponible, notifications non envoyées"
-            )
-            return
 
-        # Récupérer les rappels générés aujourd'hui qui n'ont pas encore été
-        # envoyés
-        today = datetime.now(UTC).date()
+        send_reminder_uc = SendReminderByEmailUseCase()
+
+        # Récupérer les rappels générés récemment (dernières 24h)
+        # qui n'ont pas encore été envoyés et qui ont un PDF
+        yesterday = datetime.now(UTC) - timedelta(days=1)
         reminders_to_send = (
             db.session.query(InvoiceReminder)
             .filter(
-                InvoiceReminder.generated_at >= today,
+                InvoiceReminder.generated_at >= yesterday,
                 InvoiceReminder.sent_at.is_(None),
                 InvoiceReminder.pdf_url.isnot(None),
             )
+            .limit(50)  # Rate limiting : max 50 emails par batch
             .all()
         )
 
+        if not reminders_to_send:
+            app_logger.info("Aucun rappel à envoyer")
+            return
+
+        success_count = 0
+        skip_count = 0
+        error_count = 0
+
         for reminder in reminders_to_send:
             try:
-                # Envoyer la notification
-                notification_service.send_reminder_notification(reminder)
+                # Vérifier que le client a un email
+                invoice = reminder.invoice
+                if not invoice:
+                    app_logger.warning(
+                        "Rappel %s : facture introuvable, skip", reminder.id
+                    )
+                    skip_count += 1
+                    continue
 
-                # Marquer comme envoyé
-                reminder.sent_at = datetime.now(UTC)
-                db.session.commit()
+                client = invoice.client if hasattr(invoice, "client") else None
+                if not client or not getattr(client, "contact_email", None):
+                    app_logger.info(
+                        "Rappel %s : client sans email, marquage pour envoi papier",
+                        reminder.id,
+                    )
+                    # Note : le rappel reste avec sent_at=None pour envoi papier manuel
+                    skip_count += 1
+                    continue
 
-                app_logger.info(
-                    "Notification de rappel envoyée pour la facture %s",
-                    reminder.invoice.invoice_number,
-                )
+                # Envoyer le rappel par email
+                send_input = SendReminderByEmailInput(reminder_id=reminder.id)
+                result = send_reminder_uc.execute(send_input)
+
+                if result.success:
+                    success_count += 1
+                    app_logger.info(
+                        "Rappel N°%s envoyé avec succès pour la facture %s à %s",
+                        reminder.level,
+                        invoice.invoice_number,
+                        result.recipient,
+                    )
+                else:
+                    error_count += 1
+                    app_logger.error(
+                        "Échec de l'envoi du rappel %s: %s", reminder.id, result.error
+                    )
 
             except Exception as e:
-                app_logger.error(
-                    "Erreur lors de l'envoi de la notification pour le rappel %s: %s",
-                    reminder.id,
-                    str(e),
+                error_count += 1
+                app_logger.exception(
+                    "Erreur lors du traitement du rappel %s: %s", reminder.id, e
                 )
                 db.session.rollback()
+                continue
 
         app_logger.info(
-            "Envoi des notifications terminé: %s rappels traités",
+            (
+                "Envoi automatique des rappels terminé: "
+                "%s succès, %s ignorés, %s erreurs (total: %s)"
+            ),
+            success_count,
+            skip_count,
+            error_count,
             len(reminders_to_send),
         )
 
     except Exception as e:
-        app_logger.error(
-            "Erreur lors de l'envoi des notifications de rappel: %s", str(e)
-        )
+        app_logger.exception("Erreur lors de l'envoi automatique des rappels: %s", e)
         raise
 
 

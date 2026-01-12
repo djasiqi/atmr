@@ -12,5 +12,26 @@ Ce module contient :
 Créé lors du refactoring B1 - 7 janvier 2025
 """
 
-# Exports publics (à compléter lors de la migration)
-__all__ = []
+# Exports depuis dispatch.py pour compatibilité
+from .dispatch import (
+    DELAY_MINUTES_THRESHOLD,
+    QUALITY_FORMULA_VERSION,
+    QUALITY_THRESHOLD,
+    QUALITY_WEIGHTS,
+    DispatchMetricsCollector,
+    DispatchQualityMetrics,
+    collect_dispatch_metrics,
+    get_quality_formula_hash,
+)
+
+# Exports publics
+__all__ = [
+    "DELAY_MINUTES_THRESHOLD",
+    "QUALITY_FORMULA_VERSION",
+    "QUALITY_THRESHOLD",
+    "QUALITY_WEIGHTS",
+    "DispatchMetricsCollector",
+    "DispatchQualityMetrics",
+    "collect_dispatch_metrics",
+    "get_quality_formula_hash",
+]

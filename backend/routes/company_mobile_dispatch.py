@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import logging
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Any, Dict, List, cast
 
 from flask import current_app, request
@@ -39,6 +38,7 @@ from services.dispatch.agent.orchestrator import (
     stop_agent_for_company,
 )
 from services.dispatch.agent.tools import AgentTools
+from services.cache import cache_response
 from infrastructure.dispatch import settings_module_adapter as dispatch_settings
 from infrastructure.dispatch.heuristics_adapter import MAX_FAIRNESS_GAP
 from infrastructure.dispatch.queue_adapter import trigger_job
@@ -198,12 +198,72 @@ def _serialize_driver(driver: Driver | None) -> Dict[str, Any] | None:
 
 def _resolve_booking_status(booking: Booking) -> str:
     status_value = getattr(booking.status, "value", str(booking.status or "")).upper()
+
+    # #region agent log - Log EVERY status check
+    try:
+        import json
+        from pathlib import Path
+
+        with Path(".cursor/debug.log").open("a", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "timestamp": __import__("datetime").datetime.now().isoformat(),
+                    "sessionId": "debug-session",
+                    "runId": "run7",
+                    "hypothesisId": "H7",
+                    "location": "company_mobile_dispatch.py:202",
+                    "message": "resolve_booking_status entry",
+                    "data": {
+                        "booking_id": booking.id,
+                        "raw_status": str(booking.status),
+                        "status_value": status_value,
+                        "status_type": type(booking.status).__name__,
+                        "has_value_attr": hasattr(booking.status, "value"),
+                        "driver_id": booking.driver_id,
+                    },
+                },
+                f,
+            )
+            f.write("\n")
+    except Exception:
+        pass
+    # #endregion
+
     if status_value in {"CANCELED", "CANCELLED"}:
         return "cancelled"
     if status_value == "RETURN_COMPLETED":
         return "return_completed"
     if status_value == "COMPLETED":
         return "completed"
+    # ✅ Gérer le status PENDING (course en attente d'acceptation/refus)
+    if status_value == "PENDING":
+        # #region agent log
+        try:
+            import json
+            from pathlib import Path
+
+            with Path(".cursor/debug.log").open("a", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "timestamp": __import__("datetime").datetime.now().isoformat(),
+                        "sessionId": "debug-session",
+                        "runId": "run7",
+                        "hypothesisId": "H7-CONFIRMED",
+                        "location": "company_mobile_dispatch.py:242",
+                        "message": "Booking status PENDING detected",
+                        "data": {
+                            "booking_id": booking.id,
+                            "booking_status": status_value,
+                            "resolved_status": "pending",
+                        },
+                    },
+                    f,
+                )
+                f.write("\n")
+        except Exception:
+            pass
+        # #endregion
+        return "pending"
     driver_id_value = getattr(booking, "driver_id", None)
     if isinstance(driver_id_value, int):
         return "assigned"
@@ -231,7 +291,9 @@ def _get_active_assignment(booking: Booking) -> Assignment | None:
     return None
 
 
-def _build_ride_summary(booking: Booking) -> Dict[str, Any]:
+def _build_ride_summary(
+    booking: Booking, current_company_id: int | None = None
+) -> Dict[str, Any]:
     active_assignment = _get_active_assignment(booking)
     driver = booking.driver or (
         active_assignment.driver
@@ -307,6 +369,52 @@ def _build_ride_summary(booking: Booking) -> Dict[str, Any]:
             if client.user.last_name:
                 client_info["last_name"] = client.user.last_name
 
+    # ✅ Récupérer les informations de transfert
+    transfer_info: Dict[str, Any] | None = None
+    active_transfer = None
+
+    # Chercher un transfert actif (PENDING ou ACCEPTED)
+    if hasattr(booking, "transfers") and booking.transfers:
+        from models.enums import TransferStatus as TransferStatusEnum
+
+        for transfer in booking.transfers:
+            if transfer.status in [
+                TransferStatusEnum.PENDING,
+                TransferStatusEnum.ACCEPTED,
+            ]:
+                active_transfer = transfer
+                break
+
+    if active_transfer:
+        from models.enums import TransferStatus as TransferStatusEnum
+
+        # Utiliser current_company_id si fourni, sinon fallback sur booking.company_id
+        company_id_for_transfer = (
+            current_company_id if current_company_id is not None else booking.company_id
+        )
+
+        transfer_info = {
+            "id": str(active_transfer.id),
+            "status": active_transfer.status.value
+            if hasattr(active_transfer.status, "value")
+            else str(active_transfer.status),
+            "is_sender": company_id_for_transfer == active_transfer.owner_company_id,
+            "is_receiver": company_id_for_transfer
+            == active_transfer.executing_company_id,
+            "partner_company_id": str(active_transfer.executing_company_id)
+            if company_id_for_transfer == active_transfer.owner_company_id
+            else str(active_transfer.owner_company_id),
+            "partner_company_name": active_transfer.executing_company.name
+            if hasattr(active_transfer, "executing_company")
+            and active_transfer.executing_company
+            else (
+                active_transfer.owner_company.name
+                if hasattr(active_transfer, "owner_company")
+                and active_transfer.owner_company
+                else None
+            ),
+        }
+
     summary: Dict[str, Any] = {
         "id": str(booking.id),
         "time": {
@@ -325,6 +433,7 @@ def _build_ride_summary(booking: Booking) -> Dict[str, Any]:
         },
         "status": _resolve_booking_status(booking),
         "driver": _serialize_driver(driver),
+        "transfer": transfer_info,  # ✅ Ajouter les informations de transfert
         "flags": {
             "risk_delay": risk_delay,
             "prefs_respected": True,
@@ -332,6 +441,39 @@ def _build_ride_summary(booking: Booking) -> Dict[str, Any]:
             "override_pending": False,
         },
     }
+
+    # #region agent log
+    try:
+        import json
+        from pathlib import Path
+
+        with Path(".cursor/debug.log").open("a", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "timestamp": __import__("datetime").datetime.now().isoformat(),
+                    "sessionId": "debug-session",
+                    "runId": "run6",
+                    "hypothesisId": "H4",
+                    "location": "company_mobile_dispatch.py:367",
+                    "message": "Ride summary built",
+                    "data": {
+                        "booking_id": booking.id,
+                        "resolved_status": summary.get("status"),
+                        "transfer_status": transfer_info.get("status")
+                        if transfer_info
+                        else None,
+                        "raw_booking_status": getattr(
+                            booking.status, "value", str(booking.status or "")
+                        ),
+                    },
+                },
+                f,
+            )
+            f.write("\n")
+    except Exception:
+        pass
+    # #endregion
+
     return summary
 
 
@@ -569,11 +711,36 @@ def _execute_assignment_action(
         raise AssertionError("Assign failure should abort") from None
 
     from repositories.booking_repository import BookingRepository
+    from models.enums import TransferStatus
+    from sqlalchemy.orm import joinedload
 
     booking_repo = BookingRepository()
     booking = booking_repo.find_model_by_id_with_full_eager_loading(
         booking_id=booking_id, company_id=company_id
     )
+
+    # Si pas trouvé avec company_id, vérifier si c'est un transfert accepté dont on est le receveur
+    if booking is None:
+        # Récupérer la course sans filtre de company_id, avec les transferts
+        booking = (
+            Booking.query.filter(Booking.id == booking_id)
+            .options(joinedload(Booking.transfers))
+            .first()
+        )
+
+        # Vérifier si on est le receveur d'un transfert accepté
+        if booking:
+            has_accepted_transfer = False
+            for transfer in booking.transfers:
+                if (
+                    transfer.status == TransferStatus.ACCEPTED
+                    and transfer.executing_company_id == company_id
+                ):
+                    has_accepted_transfer = True
+                    break
+
+            if not has_accepted_transfer:
+                booking = None  # Pas autorisé à gérer cette course
 
     if booking is None:
         company_mobile_dispatch_ns.abort(404, "Course introuvable après assignation")
@@ -813,9 +980,11 @@ class MobileDispatchStatus(Resource):
 class MobileDispatchRides(Resource):
     @jwt_required()
     @role_required(UserRole.company)
+    @cache_response("api:company_mobile:rides", ttl=3)
     def get(self):
         # #region agent log
         import json
+        from pathlib import Path
 
         log_path = r"c:\Users\jasiq\atmr\.cursor\debug.log"
         try:
@@ -960,6 +1129,7 @@ class MobileDispatchRides(Resource):
             raise AssertionError("Invalid date should abort") from exc
 
         ACTIVE_BOOKING_STATUSES = [
+            BookingStatus.PENDING,  # ✅ Inclure les courses transférées en attente
             BookingStatus.ACCEPTED,
             BookingStatus.ASSIGNED,
             BookingStatus.EN_ROUTE,
@@ -977,6 +1147,16 @@ class MobileDispatchRides(Resource):
                 start_datetime=window_start,
                 end_datetime=window_end,
                 statuses=ACTIVE_BOOKING_STATUSES,
+            )
+            # ✅ Eager load des transferts et partenaires pour éviter les requêtes N+1
+            from sqlalchemy.orm import joinedload
+            from models.booking_transfer import BookingTransfer
+
+            bookings_query = bookings_query.options(
+                joinedload(Booking.transfers).joinedload(BookingTransfer.partnership),
+                joinedload(Booking.transfers).joinedload(
+                    BookingTransfer.executing_company
+                ),
             )
             # #region agent log
             try:
@@ -1116,6 +1296,45 @@ class MobileDispatchRides(Resource):
             )
             # #region agent log
             try:
+                import json
+                from pathlib import Path
+
+                log_path_debug = Path(__file__).parent.parent / ".cursor" / "debug.log"
+                with log_path_debug.open("a", encoding="utf-8") as f:
+                    status_distribution = {}
+                    for b in bookings:
+                        status_str = (
+                            str(b.status.value)
+                            if hasattr(b.status, "value")
+                            else str(b.status)
+                        )
+                        status_distribution[status_str] = (
+                            status_distribution.get(status_str, 0) + 1
+                        )
+                    f.write(
+                        json.dumps(
+                            {
+                                "sessionId": "debug-session",
+                                "runId": "run2",
+                                "hypothesisId": "H2",
+                                "location": "company_mobile_dispatch.py:1120",
+                                "message": "Bookings fetched - status distribution",
+                                "data": {
+                                    "total_bookings": len(bookings),
+                                    "status_distribution": status_distribution,
+                                    "date": requested_date,
+                                    "status_filter": status_filter,
+                                },
+                                "timestamp": int(__import__("time").time() * 1000),
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
+            # #region agent log
+            try:
                 with Path(log_path).open("a", encoding="utf-8") as f:
                     f.write(
                         json.dumps(
@@ -1164,7 +1383,7 @@ class MobileDispatchRides(Resource):
             items = []
             for i, booking in enumerate(bookings):
                 try:
-                    item = _build_ride_summary(booking)
+                    item = _build_ride_summary(booking, current_company_id=company_id)
                     items.append(item)
                 except Exception as e:
                     # #region agent log
@@ -1239,12 +1458,43 @@ class MobileDispatchRides(Resource):
             # #endregion
             raise
 
-        return {
+        result = {
             "page": page,
             "page_size": page_size,
             "total": total,
             "items": items,
-        }, 200
+        }
+
+        # #region agent log - Log FULL response
+        try:
+            import json
+            from pathlib import Path
+
+            # Log only the first item to avoid huge logs
+            first_item_status = items[0].get("status") if items else None
+            with Path(".cursor/debug.log").open("a", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "timestamp": __import__("datetime").datetime.now().isoformat(),
+                        "sessionId": "debug-session",
+                        "runId": "run8",
+                        "hypothesisId": "H8-FINAL",
+                        "location": "company_mobile_dispatch.py:1427",
+                        "message": "Response JSON about to be sent",
+                        "data": {
+                            "total_items": len(items),
+                            "first_item_status": first_item_status,
+                            "first_item_id": items[0].get("id") if items else None,
+                        },
+                    },
+                    f,
+                )
+                f.write("\n")
+        except Exception:
+            pass
+        # #endregion
+
+        return result, 200
 
     @jwt_required()
     @role_required(UserRole.company)
@@ -1344,6 +1594,10 @@ class MobileDispatchRides(Resource):
             booking.customer_name = display_name
             if client:
                 booking.client_id = client.id
+                # ✅ Utiliser l'utilisateur du client (harmonisation avec route web)
+                user = getattr(client, "user", None)
+                if user:
+                    booking.user_id = user.id
             booking.scheduled_time = scheduled_time
             booking.is_round_trip = bool(payload.get("is_return", False))
             booking.pickup_location = payload["pickup_address"]
@@ -1390,6 +1644,10 @@ class MobileDispatchRides(Resource):
                     return_booking.customer_name = display_name
                     if client:
                         return_booking.client_id = client.id
+                        # ✅ Utiliser l'utilisateur du client (harmonisation avec route web)
+                        user = getattr(client, "user", None)
+                        if user:
+                            return_booking.user_id = user.id
                     return_booking.scheduled_time = return_scheduled
                     return_booking.is_round_trip = True
                     return_booking.pickup_location = payload[
@@ -1425,10 +1683,12 @@ class MobileDispatchRides(Resource):
             db.session.commit()
 
             # ✅ Construire les réponses
-            summary = _build_ride_summary(booking)
+            summary = _build_ride_summary(booking, current_company_id=company_id)
             return_summary = None
             if return_booking:
-                return_summary = _build_ride_summary(return_booking)
+                return_summary = _build_ride_summary(
+                    return_booking, current_company_id=company_id
+                )
 
             response = {
                 "summary": summary,
@@ -1480,7 +1740,7 @@ class MobileRideDetail(Resource):
 
         try:
             active_assignment = _get_active_assignment(booking)
-            summary = _build_ride_summary(booking)
+            summary = _build_ride_summary(booking, current_company_id=company_id)
             suggestions = _compute_driver_suggestions(company_id, booking)
             history = _build_ride_history(booking, active_assignment)
             conflicts = _build_ride_conflicts(booking)
@@ -2557,7 +2817,20 @@ class MobileRealtimeDashboard(Resource):
                 metrics = collector.collect_for_date(date_str)
                 quality_metrics = metrics.to_summary()
             except Exception as e:
-                logger.warning("[Dashboard] Failed to get quality metrics: %s", e)
+                # ✅ Log plus informatif : distinguer absence de DispatchRun vs vraie erreur
+                if "No DispatchRun found" in str(e):
+                    logger.info(
+                        "[Dashboard] No dispatch data for company %s on %s (normal if no dispatch run yet)",
+                        company_id,
+                        date_str,
+                    )
+                else:
+                    logger.warning(
+                        "[Dashboard] Failed to get quality metrics for company %s: %s",
+                        company_id,
+                        e,
+                    )
+                # Retourner des métriques par défaut dans tous les cas
                 quality_metrics = {
                     "quality_score": 0,
                     "assignment_rate": 0,
@@ -3055,10 +3328,12 @@ class MobileCreateRide(Resource):
         )
 
         # Retourner le détail de la course créée
-        summary = _build_ride_summary(new_booking)
+        summary = _build_ride_summary(new_booking, current_company_id=company_id)
         result = {"summary": summary}
         if return_booking:
-            return_summary = _build_ride_summary(return_booking)
+            return_summary = _build_ride_summary(
+                return_booking, current_company_id=company_id
+            )
             result["return_summary"] = return_summary
         return result, 201
 
@@ -3184,7 +3459,7 @@ class MobileUpdateRide(Resource):
             reasoning=f"Mise à jour course mobile {booking_id}",
         )
 
-        summary = _build_ride_summary(booking)
+        summary = _build_ride_summary(booking, current_company_id=company_id)
         return {"summary": summary}, 200
 
 

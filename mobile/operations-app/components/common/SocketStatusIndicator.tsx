@@ -13,6 +13,20 @@ export default function SocketStatusIndicator() {
     const { connected, reconnecting, lastConnected } = useSocketStatus();
     const [showDetails, setShowDetails] = React.useState(false);
 
+    // ✅ DEBUG: Obtenir plus d'informations sur le socket
+    const [debugInfo, setDebugInfo] = React.useState<string>("");
+
+    React.useEffect(() => {
+        import("@/services/socket").then(({ getSocket }) => {
+            const socket = getSocket();
+            if (!socket) {
+                setDebugInfo("Socket non initialisé (getSocket() = null)");
+            } else {
+                setDebugInfo(`Socket ID: ${socket.id || "non connecté"}, connected: ${socket.connected}, disconnected: ${socket.disconnected}`);
+            }
+        });
+    }, [connected, reconnecting]);
+
     // Déterminer la couleur et le texte
     let statusColor = "#F44336"; // Rouge - déconnecté
     let statusText = "Déconnecté";
@@ -61,6 +75,12 @@ export default function SocketStatusIndicator() {
                             <Text style={styles.modalText}>{statusText}</Text>
                         </View>
                         <Text style={styles.modalSubtext}>{lastConnectedText}</Text>
+                        {/* ✅ DEBUG: Afficher les infos techniques */}
+                        {debugInfo ? (
+                            <Text style={[styles.modalSubtext, { fontSize: 10, marginTop: 8, color: "#999" }]}>
+                                Debug: {debugInfo}
+                            </Text>
+                        ) : null}
                         <TouchableOpacity
                             style={styles.modalButton}
                             onPress={() => setShowDetails(false)}

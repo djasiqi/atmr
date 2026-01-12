@@ -184,7 +184,23 @@ export const createDriver = async (driverData) => {
     const { data } = await apiClient.post('/companies/me/drivers/create', driverData);
     return data;
   } catch (error) {
-    throw error.response?.data || error;
+    // Améliorer le message d'erreur pour le débogage
+    const errorData = error.response?.data || {};
+    const status = error.response?.status;
+    
+    console.error('[createDriver] Erreur backend:', {
+      status,
+      data: errorData,
+      message: error.message
+    });
+    
+    // Créer un objet Error enrichi avec les données du backend
+    const enrichedError = new Error(errorData.message || errorData.error || error.message);
+    enrichedError.status = status;
+    enrichedError.details = errorData.details;
+    enrichedError.error = errorData.error;
+    
+    throw enrichedError;
   }
 };
 
@@ -734,17 +750,33 @@ export const fetchAssignedReservations = async (forDate) => {
 
     console.log(`Filtering bookings for target day: ${targetDay}`);
 
+    // #region agent log
+    // DEBUG H8: Log pour voir si #29791 est dans les réservations reçues du backend
+    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'companyService.js:751',message:'Reservations received from backend',data:{targetDay,reservations_count:reservations.length,has_29791:reservations.some(r=>r.id===29791),reservation_29791:reservations.find(r=>r.id===29791)},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix-transfer',hypothesisId:'H8'})}).catch(()=>{});
+    // #endregion
+
     // 🔧 filtre plus tolérant : accepte scheduled_time, pickup_time, date_time, datetime
     const bookingsOfDay = reservations.filter((r) => {
       try {
         const rawWhen = pickBestDateField(r);
         const ymd = toYMD(rawWhen);
+        // #region agent log
+        // DEBUG H8: Log chaque réservation filtrée pour voir si #29791 passe le filtre
+        if (r.id === 29791) {
+          fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'companyService.js:756',message:'Booking #29791 date filter check',data:{id:r.id,rawWhen,ymd,targetDay,passes:!targetDay||ymd===targetDay},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix-transfer',hypothesisId:'H8'})}).catch(()=>{});
+        }
+        // #endregion
         return !targetDay || ymd === targetDay;
       } catch (e) {
         console.error('Error filtering booking:', e);
         return false;
       }
     });
+
+    // #region agent log
+    // DEBUG H8: Log après le filtre de date
+    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'companyService.js:765',message:'After date filter',data:{targetDay,bookingsOfDay_count:bookingsOfDay.length,has_29791:bookingsOfDay.some(r=>r.id===29791)},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix-transfer',hypothesisId:'H8'})}).catch(()=>{});
+    // #endregion
 
     console.log(`Found ${bookingsOfDay.length} bookings for the target day`);
 

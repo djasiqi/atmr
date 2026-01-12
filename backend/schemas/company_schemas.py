@@ -121,6 +121,14 @@ class ClientCreateSchema(Schema):
     birth_date = fields.Date(allow_none=True)
     notes = fields.Str(validate=validate.Length(max=1000), allow_none=True)
 
+    # ✅ Civilité (obligatoire) et Numéro AVS (optionnel)
+    gender = fields.Str(
+        required=True,
+        validate=validate.OneOf(["male", "female"]),
+        error_messages={"required": "La civilité (Madame/Monsieur) est obligatoire"},
+    )
+    avs_number = fields.Str(validate=validate.Length(max=20), allow_none=True)
+
     # Champs institution
     is_institution = fields.Bool(load_default=False)
     institution_name = fields.Str(validate=validate.Length(max=200), allow_none=True)

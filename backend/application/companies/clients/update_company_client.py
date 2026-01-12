@@ -27,6 +27,7 @@ class _ClientLike(Protocol):
     domicile_lat: Any
     domicile_lon: Any
     preferential_rate: Any
+    avs_number: Any  # ✅ Ajout du numéro AVS
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,6 +92,10 @@ class UpdateCompanyClientUseCase:
                         error={"error": "Tarif préférentiel invalide"},
                         status_code=400,
                     )
+
+        # ✅ Numéro AVS
+        if "avs_number" in data:
+            client.avs_number = data["avs_number"] or None
 
         # Champ User.birth_date (format YYYY-MM-DD)
         if "birth_date" in data and getattr(client, "user", None):

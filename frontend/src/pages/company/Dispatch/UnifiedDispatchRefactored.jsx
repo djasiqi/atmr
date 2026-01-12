@@ -201,6 +201,13 @@ const UnifiedDispatchRefactored = () => {
 
   // Charger le statut de l'optimiseur
   const loadOptimizerStatus = useCallback(async () => {
+    // ✅ En développement, ne pas appeler l'optimizer (évite les erreurs 500)
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    if (isDevelopment) {
+      setOptimizerStatus(null);
+      return;
+    }
+    
     try {
       const status = await getOptimizerStatus();
       if (status) {
@@ -1005,6 +1012,7 @@ const UnifiedDispatchRefactored = () => {
 
     socket.on('dispatch_run_started', handleDispatchStarted);
     socket.on('dispatch_run_completed', handleDispatchComplete);
+    // ✅ FIX: Standardisé sur 'booking_updated' (underscore) pour cohérence avec backend
     socket.on('booking_updated', handleBookingUpdated);
     socket.on('new_booking', handleBookingUpdated);
 
@@ -1024,6 +1032,7 @@ const UnifiedDispatchRefactored = () => {
       loading: dispatchesLoading,
       error: dispatchesError,
       styles,
+      currentCompanyId: company?.id, // ✅ Pour déterminer la direction des transferts
     };
 
     switch (dispatchMode) {

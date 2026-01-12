@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from flask import Response, make_response  # pyright: ignore[reportMissingImports]
+from flask import Response, make_response
 from flask_restx import Api  # pyright: ignore[reportMissingImports]
 
 # ✅ Imports tardifs des namespaces pour éviter les cycles d'imports
@@ -139,12 +139,14 @@ def init_namespaces(app):
     from routes.companies import companies_ns
     from routes.company_mobile_auth import company_mobile_auth_ns
     from routes.company_mobile_dispatch import company_mobile_dispatch_ns
+    from routes.company_mobile_partnerships import company_mobile_partnerships_ns
     from routes.company_settings import settings_ns
     from routes.dispatch import (
         dispatch_ns as company_dispatch_ns,  # /company_dispatch
     )
     from routes.dispatch_health import dispatch_health_ns  # /company_dispatch_health
     from routes.driver import driver_ns
+    from routes.email import email_ns  # Configuration emails transactionnels (Brevo)
     from routes.geocode import geocode_ns
     from routes.invoices import invoices_ns
     from routes.medical import medical_ns
@@ -172,11 +174,11 @@ def init_namespaces(app):
     # Enregistrer le Blueprint Shadow Mode (non-RESTX)
     app.register_blueprint(shadow_mode_bp)
 
+    # ❌ TEMPORAIREMENT DÉSACTIVÉ POUR TEST
     # ✅ Enregistrer les handlers Socket.IO pour alertes proactives
-    from ext import socketio
-    from sockets.proactive_alerts import register_proactive_alerts_sockets
-
-    register_proactive_alerts_sockets(socketio)
+    # from ext import socketio
+    # from sockets.proactive_alerts import register_proactive_alerts_sockets
+    # register_proactive_alerts_sockets(socketio)
 
     # ✅ IMPORTANT:
     # api_v1/api_legacy sont des singletons de module. Ils peuvent déjà avoir été
@@ -233,6 +235,9 @@ def init_namespaces(app):
     # Routes invoices
     api_v1.add_namespace(invoices_ns, path="/invoices")
 
+    # Routes email (configuration Brevo)
+    api_v1.add_namespace(email_ns, path="/email")
+
     # Routes planning
     api_v1.add_namespace(planning_ns, path="/planning")
 
@@ -247,6 +252,12 @@ def init_namespaces(app):
     api_v1.add_namespace(company_mobile_auth_ns, path="/company_mobile/auth")
     api_v1.add_namespace(company_mobile_dispatch_ns, path="/company_mobile/dispatch")
 
+    # ✅ Partnerships namespace sous /company_mobile pour l'application mobile
+    # (utilise un namespace séparé pour éviter les conflits d'enregistrement)
+    api_v1.add_namespace(
+        company_mobile_partnerships_ns, path="/company_mobile/partnerships"
+    )
+
     api_v1.add_namespace(prometheus_metrics_ns, path="/prometheus")
 
     # Analytics namespace
@@ -254,6 +265,8 @@ def init_namespaces(app):
 
     # Company settings
     api_v1.add_namespace(settings_ns, path="/company-settings")
+
+    # SMTP configuration
 
     # Routes RL (uniquement dans l'environnement RL)
     if rl_ns:
@@ -297,6 +310,10 @@ def init_namespaces(app):
         api_legacy.add_namespace(company_mobile_auth_ns, path="/company_mobile/auth")
         api_legacy.add_namespace(
             company_mobile_dispatch_ns, path="/company_mobile/dispatch"
+        )
+        # ✅ Partnerships namespace sous /company_mobile pour l'application mobile
+        api_legacy.add_namespace(
+            company_mobile_partnerships_ns, path="/company_mobile/partnerships"
         )
         api_legacy.add_namespace(prometheus_metrics_ns, path="/prometheus")
         api_legacy.add_namespace(analytics_ns, path="/analytics")

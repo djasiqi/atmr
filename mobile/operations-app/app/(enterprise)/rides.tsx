@@ -22,11 +22,14 @@ import "dayjs/locale/fr";
 
 import { useAuth } from "@/hooks/useAuth";
 import { useEnterpriseContext } from "@/context/EnterpriseContext";
+import { useThrottledCallback } from "@/hooks/useDebouncedCallback";
+import { createShadow } from "@/styles/shadowStyles";
 import { RideSnippetCard } from "@/components/enterprise/cards/RideSnippetCard";
 import { RideEditModal } from "@/components/enterprise/rides/RideEditModal";
 import { RideCreateModal } from "@/components/enterprise/rides/RideCreateModal";
 import { ClientCreateModal } from "@/components/enterprise/rides/ClientCreateModal";
 import { TimeDatePicker } from "@/components/enterprise/rides/TimeDatePicker";
+import { TransferRideModal } from "@/components/enterprise/transfers/TransferRideModal";
 import {
   getDispatchRides,
   scheduleRide,
@@ -96,6 +99,9 @@ export default function EnterpriseRidesScreen() {
     shouldBill: boolean;
   }>({ ride: null, shouldBill: false });
   const [clientCreateModalVisible, setClientCreateModalVisible] = useState(false);
+  const [transferModal, setTransferModal] = useState<{
+    ride: RideSummary | null;
+  }>({ ride: null });
 
   const currentDate = useMemo(() => {
     return selectedDate ?? dayjs().format("YYYY-MM-DD");
@@ -158,14 +164,18 @@ export default function EnterpriseRidesScreen() {
     }
   }, [currentDate, enterpriseSession, search]);
 
+  // ✅ Version throttled de loadRides pour éviter les requêtes en doublon
+  // Maximum 1 appel par seconde même si déclenchée plusieurs fois
+  const throttledLoadRides = useThrottledCallback(loadRides, 1000);
+
   // Référence pour le polling automatique
   const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const appStateRef = useRef(AppState.currentState);
 
   // Charger les courses au montage et quand la date change
   useEffect(() => {
-    loadRides();
-  }, [loadRides]);
+    throttledLoadRides();
+  }, [throttledLoadRides]);
 
   // Polling automatique : récupérer les courses toutes les 30 secondes quand l'app est active
   useEffect(() => {
@@ -191,7 +201,7 @@ export default function EnterpriseRidesScreen() {
         // Seulement charger si l'app est active
         if (currentAppState === "active") {
           console.log("[rides.tsx] Polling automatique : rechargement des courses");
-          loadRides();
+          throttledLoadRides();
         }
       }, 30000); // 30 secondes
     };
@@ -209,7 +219,7 @@ export default function EnterpriseRidesScreen() {
       ) {
         // L'app revient au premier plan : recharger immédiatement et redémarrer le polling
         console.log("[rides.tsx] Application revenue au premier plan : rechargement des courses");
-        loadRides();
+        throttledLoadRides();
         startPolling();
       } else if (nextAppState.match(/inactive|background/)) {
         // L'app passe en arrière-plan : arrêter le polling
@@ -230,16 +240,16 @@ export default function EnterpriseRidesScreen() {
       }
       subscription.remove();
     };
-  }, [enterpriseSession, loadRides]);
+  }, [enterpriseSession, throttledLoadRides]);
 
   // Recharger les courses quand l'écran revient au focus
   useFocusEffect(
     useCallback(() => {
       if (enterpriseSession) {
         console.log("[rides.tsx] Écran au focus : rechargement des courses");
-        loadRides();
+        throttledLoadRides();
       }
-    }, [enterpriseSession, loadRides])
+    }, [enterpriseSession, throttledLoadRides])
   );
 
 
@@ -342,6 +352,14 @@ export default function EnterpriseRidesScreen() {
     []
   );
 
+  const handleTransfer = useCallback(
+    (ride: RideSummary) => {
+      // Ouvrir le modal de transfert
+      setTransferModal({ ride });
+    },
+    []
+  );
+
   const confirmCancel = useCallback(async () => {
     if (!cancelModal.ride) return;
 
@@ -440,7 +458,7 @@ export default function EnterpriseRidesScreen() {
             </Text>
           </View>
         ) : (
-          <View style={{ gap: palette.listGap }}>
+          <View style={styles.ridesListContainer}>
             {sortedRides.map((ride, index) => {
               const isLast = index === sortedRides.length - 1;
               const isExpanded = expandedRideId === ride.id;
@@ -481,76 +499,96 @@ export default function EnterpriseRidesScreen() {
                     : undefined;
 
               return (
-                <RideSnippetCard
-                  key={ride.id}
-                  ride={{
-                    id: ride.id,
-                    time: pickupTime ?? "",
-                    showUndefinedIcon: pickupTime === null,
-                    client: ride.client.name,
-                    pickup: ride.route.pickup_address,
-                    dropoff: ride.route.dropoff_address,
-                    assignedTo: ride.driver?.name ?? null,
-                    status: normalizedStatus as "unassigned" | "assigned" | "completed" | "return_completed" | "in_progress" | "en_route" | undefined,
-                    delayMinutes: delayMinutes,
-                    badges: priorityBadge ? [priorityBadge] : undefined,
-                    onPress: () => handleOpenDetails(ride.id),
-                    onQuickAction: isCompleted ? undefined : () => handleUrgent(ride),
-                    onPrimaryAction: isCompleted ? undefined : () => rideActions.handleOpenAssignModal(ride),
-                    footerActions: (
-                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-                        {isCompleted ? (
-                          // ✅ Si la course est terminée, afficher uniquement "Détails"
-                          <TouchableOpacity
-                            style={[styles.actionButtonGhost, { flexBasis: "30%" }]}
-                            onPress={() => handleOpenDetails(ride.id)}
-                          >
-                            <Ionicons name="open-outline" size={16} color={palette.modalText} />
-                            <Text style={[styles.actionButtonGhostText, { color: palette.modalText }]}>Détails</Text>
-                          </TouchableOpacity>
-                        ) : (
-                          // ✅ Sinon, afficher toutes les actions
-                          <>
-                            <TouchableOpacity
-                              style={[styles.actionButtonGhost, { flexBasis: "30%" }]}
-                              onPress={() => handleEdit(ride)}
-                            >
-                              <Ionicons name="create-outline" size={16} color={palette.modalButton} />
-                              <Text style={[styles.actionButtonGhostText, { color: palette.modalButton }]}>Éditer</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              style={[styles.actionButtonGhost, { flexBasis: "30%" }]}
-                              onPress={() => handleSchedule(ride)}
-                            >
-                              <Ionicons name="time-outline" size={16} color={palette.modalButton} />
-                              <Text style={[styles.actionButtonGhostText, { color: palette.modalButton }]}>Planifier</Text>
-                            </TouchableOpacity>
+                <View key={ride.id} style={styles.rideCardWrapper}>
+                  <RideSnippetCard
+                    ride={{
+                      id: ride.id,
+                      time: pickupTime ?? "",
+                      showUndefinedIcon: pickupTime === null,
+                      client: ride.client.name,
+                      pickup: ride.route.pickup_address,
+                      dropoff: ride.route.dropoff_address,
+                      assignedTo: ride.driver?.name ?? null,
+                      status: normalizedStatus as "unassigned" | "assigned" | "completed" | "return_completed" | "in_progress" | "en_route" | undefined,
+                      delayMinutes: delayMinutes,
+                      badges: priorityBadge ? [priorityBadge] : undefined,
+                      onPress: () => handleOpenDetails(ride.id),
+                      onQuickAction: isCompleted ? undefined : () => handleUrgent(ride),
+                      onPrimaryAction: isCompleted ? undefined : () => rideActions.handleOpenAssignModal(ride),
+                      footerActions: (
+                        <View style={styles.footerActionsContainer}>
+                          {isCompleted ? (
+                            // ✅ Si la course est terminée, afficher uniquement "Détails"
                             <TouchableOpacity
                               style={[styles.actionButtonGhost, { flexBasis: "30%" }]}
                               onPress={() => handleOpenDetails(ride.id)}
                             >
-                              <Ionicons name="open-outline" size={16} color={palette.modalText} />
+                              <View style={styles.actionButtonIcon}>
+                                <Ionicons name="open-outline" size={16} color={palette.modalText} />
+                              </View>
                               <Text style={[styles.actionButtonGhostText, { color: palette.modalText }]}>Détails</Text>
                             </TouchableOpacity>
-                            {ride.status !== "cancelled" && (
+                          ) : (
+                            // ✅ Sinon, afficher toutes les actions
+                            <>
                               <TouchableOpacity
                                 style={[styles.actionButtonGhost, { flexBasis: "30%" }]}
-                                onPress={() => handleCancel(ride)}
+                                onPress={() => handleEdit(ride)}
                               >
-                                <Ionicons name="close-circle-outline" size={16} color="#EF4444" />
-                                <Text style={[styles.actionButtonGhostText, { color: "#EF4444" }]}>Annuler</Text>
+                                <View style={styles.actionButtonIcon}>
+                                  <Ionicons name="create-outline" size={16} color={palette.modalButton} />
+                                </View>
+                                <Text style={[styles.actionButtonGhostText, { color: palette.modalButton }]}>Éditer</Text>
                               </TouchableOpacity>
-                            )}
-                          </>
-                        )}
-                      </View>
-                    ),
-                  }}
-                  expanded={isExpanded}
-                  onToggle={() => {
-                    setExpandedRideId(expandedRideId === ride.id ? null : ride.id);
-                  }}
-                />
+                              <TouchableOpacity
+                                style={[styles.actionButtonGhost, { flexBasis: "30%" }]}
+                                onPress={() => handleSchedule(ride)}
+                              >
+                                <View style={styles.actionButtonIcon}>
+                                  <Ionicons name="time-outline" size={16} color={palette.modalButton} />
+                                </View>
+                                <Text style={[styles.actionButtonGhostText, { color: palette.modalButton }]}>Planifier</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[styles.actionButtonGhost, { flexBasis: "30%" }]}
+                                onPress={() => handleOpenDetails(ride.id)}
+                              >
+                                <View style={styles.actionButtonIcon}>
+                                  <Ionicons name="open-outline" size={16} color={palette.modalText} />
+                                </View>
+                                <Text style={[styles.actionButtonGhostText, { color: palette.modalText }]}>Détails</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[styles.actionButtonGhost, { flexBasis: "30%" }]}
+                                onPress={() => handleTransfer(ride)}
+                              >
+                                <View style={styles.actionButtonIcon}>
+                                  <Ionicons name="swap-horizontal-outline" size={16} color="#0EA5E9" />
+                                </View>
+                                <Text style={[styles.actionButtonGhostText, { color: "#0EA5E9" }]}>Transférer</Text>
+                              </TouchableOpacity>
+                              {ride.status !== "cancelled" && (
+                                <TouchableOpacity
+                                  style={[styles.actionButtonGhost, { flexBasis: "30%" }]}
+                                  onPress={() => handleCancel(ride)}
+                                >
+                                  <View style={styles.actionButtonIcon}>
+                                    <Ionicons name="close-circle-outline" size={16} color="#EF4444" />
+                                  </View>
+                                  <Text style={[styles.actionButtonGhostText, { color: "#EF4444" }]}>Annuler</Text>
+                                </TouchableOpacity>
+                              )}
+                            </>
+                          )}
+                        </View>
+                      ),
+                    }}
+                    expanded={isExpanded}
+                    onToggle={() => {
+                      setExpandedRideId(expandedRideId === ride.id ? null : ride.id);
+                    }}
+                  />
+                </View>
               );
             })}
           </View>
@@ -618,7 +656,7 @@ export default function EnterpriseRidesScreen() {
                 <Text style={styles.modalTitle}>Annuler la course</Text>
                 {cancelModal.ride && (
                   <Text style={styles.modalSubtitle}>
-                    Course #{cancelModal.ride.id.slice(-4)} • {cancelModal.ride.client.name}
+                    Course #{cancelModal.ride.id.slice(-4)} - {cancelModal.ride.client.name}
                   </Text>
                 )}
               </View>
@@ -733,6 +771,18 @@ export default function EnterpriseRidesScreen() {
           />
         </View>
       )}
+
+      {transferModal.ride && (
+        <TransferRideModal
+          visible={!!transferModal.ride}
+          onClose={() => setTransferModal({ ride: null })}
+          ride={transferModal.ride}
+          onSuccess={() => {
+            setTransferModal({ ride: null });
+            loadRides();
+          }}
+        />
+      )}
     </View>
   );
 }
@@ -748,7 +798,6 @@ const styles = StyleSheet.create({
   content: {
     padding: 20,
     paddingBottom: 32,
-    gap: 20,
   },
   hero: {
     borderRadius: 24,
@@ -756,14 +805,15 @@ const styles = StyleSheet.create({
     height: 150,
     flexDirection: "row",
     alignItems: "center",
-    gap: 18,
     borderWidth: 1,
     borderColor: palette.heroBorder,
-    shadowColor: "rgba(10,127,89,0.15)",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 1,
-    shadowRadius: 24,
-    elevation: 8,
+    ...createShadow({
+      shadowColor: "rgba(10,127,89,0.15)",
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 1,
+      shadowRadius: 24,
+      elevation: 8,
+    }), // ✅ Compatible web/native
   },
   heroKicker: {
     color: palette.heroMeta,
@@ -791,11 +841,14 @@ const styles = StyleSheet.create({
     backgroundColor: palette.modalButton,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "rgba(10,127,89,0.3)",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 12,
-    elevation: 6,
+    ...createShadow({
+      shadowColor: "rgba(10,127,89,0.3)",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 1,
+      shadowRadius: 12,
+      elevation: 6,
+    }), // ✅ Compatible web/native
+    marginLeft: 18,
   },
   searchBar: {
     flexDirection: "row",
@@ -806,11 +859,14 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderWidth: 1,
     borderColor: palette.searchBorder,
-    shadowColor: "rgba(15,54,43,0.06)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 8,
-    elevation: 2,
+    ...createShadow({
+      shadowColor: "rgba(15,54,43,0.06)",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 1,
+      shadowRadius: 8,
+      elevation: 2,
+    }), // ✅ Compatible web/native
+    marginTop: 20,
   },
   searchInput: {
     flex: 1,
@@ -826,45 +882,56 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: palette.divider,
+    marginTop: 20,
   },
   loading: {
     alignItems: "center",
     paddingVertical: 40,
-    gap: 12,
+    marginTop: 20,
   },
   loadingText: {
     color: palette.loadingText,
     fontSize: 14,
+    marginTop: 12,
   },
   emptyState: {
     alignItems: "center",
     paddingVertical: 48,
-    gap: 12,
+    marginTop: 20,
   },
   emptyStateTitle: {
     color: palette.heroText,
     fontWeight: "600",
     fontSize: 16,
+    marginTop: 12,
   },
   emptyStateText: {
     color: palette.emptyState,
     fontSize: 14,
     textAlign: "center",
     paddingHorizontal: 20,
+    marginTop: 12,
+  },
+  ridesListContainer: {
+    // Les cards auront leur propre marginBottom
+    marginTop: 20,
+  },
+  rideCardWrapper: {
+    marginBottom: 18, // équivalent à palette.listGap
   },
   cardActions: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10,
+    marginRight: -10, // Compenser les marges des boutons
   },
   actionButtonPrimary: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 14,
     backgroundColor: palette.modalButton,
+    marginRight: 10,
   },
   actionButtonPrimaryText: {
     color: palette.modalButtonText,
@@ -874,38 +941,50 @@ const styles = StyleSheet.create({
   actionButtonGhost: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
     paddingHorizontal: 18,
     paddingVertical: 12,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: palette.tabBorder,
     backgroundColor: "#FFFFFF",
-    shadowColor: "rgba(15,54,43,0.06)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
-    elevation: 1,
+    ...createShadow({
+      shadowColor: "rgba(15,54,43,0.06)",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 1,
+      shadowRadius: 4,
+      elevation: 1,
+    }), // ✅ Compatible web/native
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  actionButtonIcon: {
+    marginRight: 8,
   },
   actionButtonGhostText: {
     color: palette.heroText,
     fontWeight: "600",
     fontSize: 13,
   },
+  footerActionsContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 8,
+  },
   errorBanner: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
     padding: 14,
     backgroundColor: "rgba(248,113,113,0.12)",
     borderRadius: 14,
     borderWidth: 1,
     borderColor: "rgba(248,113,113,0.24)",
+    marginTop: 20,
   },
   errorText: {
     color: palette.error,
     flex: 1,
     fontSize: 13,
+    marginLeft: 10,
   },
   modalOverlay: {
     flex: 1,
@@ -922,7 +1001,6 @@ const styles = StyleSheet.create({
     padding: 24,
     borderWidth: 1,
     borderColor: palette.modalBorder,
-    gap: 16,
   },
   modalTitle: {
     color: palette.modalTitle,
@@ -946,11 +1024,12 @@ const styles = StyleSheet.create({
   modalActions: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    gap: 12,
+    marginTop: 16,
   },
   modalCancel: {
     paddingHorizontal: 14,
     paddingVertical: 10,
+    marginRight: 12,
   },
   modalCancelText: {
     color: palette.modalCancelText,
@@ -980,7 +1059,7 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     padding: 24,
-    gap: 20,
+    marginTop: 16,
   },
   modalConfirmDisabled: {
     opacity: 0.5,
@@ -992,25 +1071,26 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   billingSection: {
-    gap: 12,
+    marginTop: 20,
   },
   billingLabel: {
     color: palette.modalTitle,
     fontSize: 14,
     fontWeight: "600",
+    marginBottom: 12,
   },
   billingOptions: {
-    gap: 10,
+    // Les options auront leur propre marginBottom
   },
   billingOption: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
     padding: 12,
     borderRadius: 12,
     borderWidth: 1.5,
     borderColor: palette.divider,
     backgroundColor: palette.background,
+    marginBottom: 10,
   },
   billingOptionActive: {
     borderColor: palette.modalButton,
@@ -1024,6 +1104,7 @@ const styles = StyleSheet.create({
     borderColor: palette.modalButton,
     alignItems: "center",
     justifyContent: "center",
+    marginRight: 12,
   },
   radioButtonInner: {
     width: 10,

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
@@ -14,6 +15,8 @@ from models.booking_transfer import BookingTransfer
 from models.enums import PartnershipStatus, TransferStatus
 from models.partner_invoice import PartnerInvoice, PartnerInvoiceStatus
 from models.partnership import Partnership
+
+logger = logging.getLogger(__name__)
 
 
 class PartnershipStatsService:
@@ -165,8 +168,7 @@ class PartnershipStatsService:
         else:
             end_of_month = datetime(year, month + 1, 1, tzinfo=UTC)
 
-        # Déterminer si l'entreprise est propriétaire ou partenaire
-        is_owner = partnership.owner_company_id == company_id
+        # ✅ Note: is_owner sera déterminé APRÈS le calcul des sent_transfers/received_transfers
 
         # Courses envoyées (où l'entreprise actuelle est propriétaire)
         # Utiliser requested_at pour être cohérent avec les courses reçues
@@ -197,6 +199,11 @@ class PartnershipStatsService:
             or 0
         )
 
+        # ✅ Déterminer le rôle réel basé sur les transferts
+        # Si on a ENVOYÉ des courses, on est ÉMETTEUR (on doit payer)
+        # Si on a REÇU des courses, on est EXÉCUTEUR (on doit recevoir)
+        is_owner = sent_transfers > 0  # True si on a envoyé des courses (émetteur)
+
         # CA généré (somme des client_price des transferts acceptés/complétés)
         total_revenue = db.session.query(
             func.coalesce(func.sum(BookingTransfer.client_price), 0)
@@ -210,42 +217,88 @@ class PartnershipStatsService:
         ).scalar() or Decimal("0")
 
         # À payer (factures reçues non payées où l'entreprise est propriétaire)
-        amount_to_pay = (
-            (
-                db.session.query(
-                    func.coalesce(func.sum(PartnerInvoice.total_amount), 0)
-                )
-                .filter(
-                    PartnerInvoice.partnership_id == partnership.id,
-                    PartnerInvoice.status.in_(
-                        [PartnerInvoiceStatus.SENT, PartnerInvoiceStatus.DRAFT]
-                    ),
-                )
-                .scalar()
-                or Decimal("0")
+        # OU montant estimé basé sur les transfer_price si aucune facture générée
+        invoiced_to_pay = db.session.query(
+            func.coalesce(func.sum(PartnerInvoice.total_amount), 0)
+        ).filter(
+            PartnerInvoice.partnership_id == partnership.id,
+            PartnerInvoice.status.in_(
+                [PartnerInvoiceStatus.SENT, PartnerInvoiceStatus.DRAFT]
+            ),
+        ).scalar() or Decimal("0")
+
+        # Si l'entreprise est owner (émetteur) et qu'aucune facture n'a été générée,
+        # calculer un montant estimé basé sur les transfer_price des transferts complétés
+        if is_owner and invoiced_to_pay == 0:
+            estimated_to_pay = db.session.query(
+                func.coalesce(func.sum(BookingTransfer.transfer_price), 0)
+            ).filter(
+                BookingTransfer.partnership_id == partnership.id,
+                BookingTransfer.owner_company_id == company_id,
+                BookingTransfer.status.in_(
+                    [TransferStatus.ACCEPTED, TransferStatus.COMPLETED]
+                ),
+                BookingTransfer.requested_at >= start_of_month,
+                BookingTransfer.requested_at < end_of_month,
+            ).scalar() or Decimal("0")
+            logger.info(
+                "📊 [Partnership Stats] company_id=%s, is_owner=%s, estimated_to_pay=%s",
+                company_id,
+                is_owner,
+                estimated_to_pay,
             )
-            if is_owner
-            else Decimal("0")
-        )
+            amount_to_pay = estimated_to_pay
+        else:
+            amount_to_pay = invoiced_to_pay if is_owner else Decimal("0")
+            logger.info(
+                "📊 [Partnership Stats] company_id=%s, is_owner=%s, invoiced_to_pay=%s, amount_to_pay=%s",
+                company_id,
+                is_owner,
+                invoiced_to_pay,
+                amount_to_pay,
+            )
 
         # À recevoir (factures émises non payées où l'entreprise est partenaire)
-        amount_to_receive = (
-            (
-                db.session.query(
-                    func.coalesce(func.sum(PartnerInvoice.total_amount), 0)
-                )
-                .filter(
-                    PartnerInvoice.partnership_id == partnership.id,
-                    PartnerInvoice.status.in_(
-                        [PartnerInvoiceStatus.SENT, PartnerInvoiceStatus.DRAFT]
-                    ),
-                )
-                .scalar()
-                or Decimal("0")
+        # OU montant estimé basé sur les transfer_price si aucune facture générée
+        invoiced_to_receive = db.session.query(
+            func.coalesce(func.sum(PartnerInvoice.total_amount), 0)
+        ).filter(
+            PartnerInvoice.partnership_id == partnership.id,
+            PartnerInvoice.status.in_(
+                [PartnerInvoiceStatus.SENT, PartnerInvoiceStatus.DRAFT]
+            ),
+        ).scalar() or Decimal("0")
+
+        # Si l'entreprise est partner (exécuteur) et qu'aucune facture n'a été générée,
+        # calculer un montant estimé basé sur les transfer_price des transferts complétés
+        if not is_owner and invoiced_to_receive == 0:
+            estimated_to_receive = db.session.query(
+                func.coalesce(func.sum(BookingTransfer.transfer_price), 0)
+            ).filter(
+                BookingTransfer.partnership_id == partnership.id,
+                BookingTransfer.executing_company_id == company_id,
+                BookingTransfer.status.in_(
+                    [TransferStatus.ACCEPTED, TransferStatus.COMPLETED]
+                ),
+                BookingTransfer.requested_at >= start_of_month,
+                BookingTransfer.requested_at < end_of_month,
+            ).scalar() or Decimal("0")
+            logger.info(
+                "📊 [Partnership Stats] company_id=%s, is_owner=%s, estimated_to_receive=%s",
+                company_id,
+                is_owner,
+                estimated_to_receive,
             )
-            if not is_owner
-            else Decimal("0")
-        )
+            amount_to_receive = estimated_to_receive
+        else:
+            amount_to_receive = invoiced_to_receive if not is_owner else Decimal("0")
+            logger.info(
+                "📊 [Partnership Stats] company_id=%s, is_owner=%s, invoiced_to_receive=%s, amount_to_receive=%s",
+                company_id,
+                is_owner,
+                invoiced_to_receive,
+                amount_to_receive,
+            )
 
         # Solde
         balance = float(amount_to_receive - amount_to_pay)

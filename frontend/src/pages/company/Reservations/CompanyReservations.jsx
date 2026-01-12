@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
 import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/CompanySidebar';
+import useCompanyData from '../../../hooks/useCompanyData';
 import {
   fetchCompanyReservations,
   deleteReservation,
@@ -24,6 +25,9 @@ import { toast } from 'sonner';
 import styles from './CompanyReservations.module.css';
 
 const CompanyReservations = () => {
+  // ✅ Récupérer les infos de l'entreprise connectée pour gérer les transferts
+  const { company } = useCompanyData();
+  
   // États existants
   const [reservations, setReservations] = useState([]);
   const [filteredReservations, setFilteredReservations] = useState([]);
@@ -614,6 +618,7 @@ const CompanyReservations = () => {
                     onDispatchNow={handleDispatchNow}
                     hideAssign={true}
                     hideUrgent={true}
+                    currentCompanyId={company?.id}
                   />
                   {/* Pagination avec sélecteur d'éléments par page */}
                   <div className={styles.paginationContainer}>

@@ -37,10 +37,47 @@ export const invoiceService = {
     return response.data;
   },
 
-  // Marquer une facture comme envoyée
+  // Marquer une facture comme envoyée (legacy - utiliser sendInvoiceByEmail ou markInvoiceAsSent)
   async sendInvoice(companyId, invoiceId) {
     const response = await apiClient.post(
-      `${API_BASE}/invoices/companies/${companyId}/invoices/${invoiceId}/send`
+      `${API_BASE}/invoices/companies/${companyId}/invoices/${invoiceId}/send`,
+      { send_method: 'paper' } // Par défaut, marquer comme envoyée (papier)
+    );
+    return response.data;
+  },
+
+  // Envoyer une facture par email
+  async sendInvoiceByEmail(companyId, invoiceId, options = {}) {
+    const payload = {
+      send_method: 'email',
+      recipient_email: options.recipient_email || null,
+      force_regenerate_pdf: options.force_regenerate_pdf || false,
+    };
+    const response = await apiClient.post(
+      `${API_BASE}/invoices/companies/${companyId}/invoices/${invoiceId}/send`,
+      payload
+    );
+    return response.data;
+  },
+
+  // Marquer une facture comme envoyée (papier) sans envoyer d'email
+  async markInvoiceAsSent(companyId, invoiceId) {
+    const response = await apiClient.post(
+      `${API_BASE}/invoices/companies/${companyId}/invoices/${invoiceId}/send`,
+      { send_method: 'paper' }
+    );
+    return response.data;
+  },
+
+  // Envoyer un rappel par email
+  async sendReminderByEmail(companyId, invoiceId, reminderId, options = {}) {
+    const payload = {
+      recipient_email: options.recipient_email || null,
+      force_regenerate_pdf: options.force_regenerate_pdf || false,
+    };
+    const response = await apiClient.post(
+      `${API_BASE}/invoices/companies/${companyId}/invoices/${invoiceId}/reminders/${reminderId}/send`,
+      payload
     );
     return response.data;
   },
@@ -351,6 +388,9 @@ export const {
   fetchInvoices,
   generateInvoice,
   sendInvoice,
+  sendInvoiceByEmail,
+  markInvoiceAsSent,
+  sendReminderByEmail,
   postPayment,
   postReminder,
   regenerateInvoicePdf,

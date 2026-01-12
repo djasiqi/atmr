@@ -1,0 +1,96 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}RAPPEL N°{{ reminder_level }} - Facture {{ invoice_number }}{% endblock %}
+
+{% block header_title %}{{ company_name }}{% endblock %}
+
+{% block content %}
+<h2>⚠️ RAPPEL DE PAIEMENT N°{{ reminder_level }}</h2>
+
+<p>Bonjour {{ client_name }},</p>
+
+<p>
+    Nous vous informons que la facture ci-dessous n'a pas été réglée à la date d'échéance.
+</p>
+
+<div class="alert-box">
+    <p style="margin: 0;"><strong>Numéro de facture :</strong> {{ invoice_number }}</p>
+    <p style="margin: 5px 0;"><strong>Date d'émission initiale :</strong> {{ invoice_date }}</p>
+    <p style="margin: 5px 0;"><strong>Date d'échéance initiale :</strong> {{ original_due_date }}</p>
+    <p style="margin: 5px 0 0 0;"><strong>Jours de retard :</strong> {{ days_overdue }} jour{% if days_overdue > 1 %}s{% endif %}</p>
+</div>
+
+<div style="text-align: center;">
+    <div class="amount" style="color: #dc3545;">{{ "%.2f"|format(balance_due) }} {{ currency }}</div>
+    <p class="text-muted">Solde dû (frais de rappel inclus)</p>
+</div>
+
+{% if reminder_fee > 0 %}
+<div class="info-box">
+    <p style="margin: 0;">
+        <strong>Frais de rappel N°{{ reminder_level }} :</strong> {{ "%.2f"|format(reminder_fee) }} {{ currency }}
+    </p>
+    <p style="margin: 5px 0 0 0; font-size: 13px; color: #666;">
+        Ces frais ont été ajoutés conformément à nos conditions générales.
+    </p>
+</div>
+{% endif %}
+
+<div class="divider"></div>
+
+<h2>💳 Régularisation immédiate</h2>
+
+<p>
+    Nous vous invitons à régulariser votre situation dans les <strong>plus brefs délais</strong>
+    afin d'éviter des frais supplémentaires et d'éventuelles mesures de recouvrement.
+</p>
+
+<p>
+    <strong>Moyens de paiement :</strong>
+</p>
+<ul>
+    <li>Virement bancaire (IBAN disponible sur la facture)</li>
+    <li>QR-facture (code QR en bas de la facture)</li>
+</ul>
+
+<p class="text-bold" style="margin-top: 30px;">
+    📎 La facture actualisée avec les frais de rappel est jointe à cet email.
+</p>
+
+{% if reminder_level == 1 %}
+<p style="margin-top: 30px; color: #856404;">
+    ⚠️ <strong>Attention :</strong> Si aucun paiement n'est reçu dans les 7 jours,
+    un deuxième rappel avec des frais supplémentaires sera émis.
+</p>
+{% elif reminder_level == 2 %}
+<p style="margin-top: 30px; color: #dc3545;">
+    ⚠️ <strong>Dernière relance avant mesures de recouvrement :</strong> Si aucun paiement n'est reçu
+    dans les 5 jours, nous serons contraints d'engager une procédure de recouvrement.
+</p>
+{% elif reminder_level >= 3 %}
+<p style="margin-top: 30px; color: #dc3545; font-weight: 600;">
+    ⚠️ <strong>DERNIER RAPPEL :</strong> En l'absence de règlement immédiat, nous transmettrons
+    ce dossier à notre service de recouvrement juridique.
+</p>
+{% endif %}
+
+<p style="margin-top: 40px;">
+    Si vous avez déjà effectué ce paiement ou si vous rencontrez des difficultés,
+    merci de nous contacter immédiatement.
+</p>
+
+<p style="margin-top: 40px;">
+    Cordialement,<br>
+    <strong>Service Comptabilité<br>{{ company_name }}</strong>
+</p>
+{% endblock %}
+
+{% block footer %}
+<p style="margin: 0;">
+    Cet email concerne une facture en retard de paiement.<br>
+    Pour toute question, veuillez contacter notre service comptabilité <strong>immédiatement</strong>.
+</p>
+<p style="margin: 10px 0 0 0;">
+    &copy; 2026 {{ company_name }}. Tous droits réservés.
+</p>
+{% endblock %}

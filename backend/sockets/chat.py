@@ -31,7 +31,8 @@ from schemas.socket_events import EVENT_VERSION, SocketEvent
 from services.geolocation.location import get_location_service
 from services.monitoring.websocket_rate_limiter import ws_rate_limiter
 from services.monitoring.websocket_metrics import ws_metrics
-from services.notifications.push import send_push_message
+
+# from services.notifications.push import send_push_message  # Unused, using fanout now
 from services.security.spam import can_send_message
 
 # Constantes pour éviter les valeurs magiques
@@ -40,6 +41,8 @@ LAT_THRESHOLD = 90
 LON_THRESHOLD = 180
 MAX_MESSAGE_LENGTH = 1000
 MESSAGE_PREVIEW_LENGTH = 50
+# ✅ errno pour "Bad file descriptor" - survient lors de déconnexions brutales
+ERRNO_BAD_FILE_DESCRIPTOR = 9
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -409,9 +412,49 @@ def _extract_token(auth) -> str | None:
 
 def init_chat_socket(socketio: SocketIO):
     logger.info("🔧 [INIT] Initialisation des handlers Socket.IO chat")
+    # #region agent log
+    debug_log_path = Path(".cursor/debug.log")
+    debug_log_path.parent.mkdir(parents=True, exist_ok=True)
+    with debug_log_path.open("a") as f:
+        import json
+
+        f.write(
+            json.dumps(
+                {
+                    "location": "chat.py:init_chat_socket",
+                    "message": "init_chat_socket CALLED",
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "H3",
+                }
+            )
+            + "\n"
+        )
+    # #endregion
 
     @socketio.on("connect", namespace="/")
     def handle_connect(auth: dict[str, Any] | None) -> bool:  # noqa: PLR0911
+        # #region agent log
+        debug_log_path = Path(".cursor/debug.log")
+        with debug_log_path.open("a") as f:
+            import json
+
+            f.write(
+                json.dumps(
+                    {
+                        "location": "chat.py:handle_connect:ENTRY",
+                        "message": "CONNECT HANDLER INVOKED",
+                        "data": {"auth": str(auth)[:200] if auth else None},
+                        "timestamp": datetime.now(UTC).isoformat(),
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "H3",
+                    }
+                )
+                + "\n"
+            )
+        # #endregion
         # ✅ Try-except global pour capturer TOUTES les exceptions, y compris celles du rate limiting
         try:
             client_ip = request.environ.get("REMOTE_ADDR", "unknown")
@@ -1425,14 +1468,14 @@ def init_chat_socket(socketio: SocketIO):
                 logger.info("📨 Message relayé vers %s", driver_room)
 
             # ✅ P0: Push notification pour message.new (fan-out hybride)
-            # Envoyer push notification au destinataire si c'est un driver
+            # Utiliser le système de fan-out centralisé pour cohérence
             if receiver_id:
                 try:
                     receiver_user = User.query.get(receiver_id)
                     if receiver_user and receiver_user.role == UserRole.driver:
                         driver = Driver.query.filter_by(user_id=receiver_id).first()
-                        if driver and driver.push_token:
-                            # Préparer le titre et le corps du message
+                        if driver:
+                            # Préparer le preview du message
                             sender_name = user.first_name or "Quelqu'un"
                             message_preview = (
                                 content[:MESSAGE_PREVIEW_LENGTH]
@@ -1442,32 +1485,21 @@ def init_chat_socket(socketio: SocketIO):
                             if content and len(content) > MESSAGE_PREVIEW_LENGTH:
                                 message_preview += "..."
 
-                            result = send_push_message(
-                                token=driver.push_token,
-                                title=f"Nouveau message de {sender_name}",
-                                body=message_preview,
-                                data={
-                                    "type": "message",
-                                    "message_id": message.id,
-                                    "sender_id": sender_id,
-                                    "company_id": company_id,
-                                    "deepLink": f"atmr://chat/message/{message.id}",
-                                },
-                                timeout=5,
-                            )
+                            # ✅ Utiliser fanout_message_new pour fan-out centralisé
+                            from services.events.fanout import fanout_message_new
 
-                            if result.get("ok"):
-                                logger.info(
-                                    "[chat] Push sent to driver %s for message %s",
-                                    receiver_id,
-                                    message.id,
-                                )
-                            else:
-                                logger.warning(
-                                    "[chat] Push failed for driver %s: %s",
-                                    receiver_id,
-                                    result.get("error", "Unknown error"),
-                                )
+                            fanout_message_new(
+                                driver_id=driver.id,
+                                message_id=message.id,
+                                sender_name=sender_name,
+                                message_preview=message_preview,
+                                company_id=company_id,
+                            )
+                            logger.info(
+                                "[chat] Push notification queued for driver %s (message %s)",
+                                driver.id,
+                                message.id,
+                            )
                 except (ValueError, TypeError, AttributeError) as e:
                     logger.error(
                         "[chat] Push notification failed (validation error: %s): %s",
@@ -1919,9 +1951,11 @@ def init_chat_socket(socketio: SocketIO):
                 # Émettre events geofencing si détectés
                 for event in result.geofence_events:
                     if event == "arrived_at_pickup":
-                        emit("driver:arrived_at_pickup", {"driver_id": driver.id})
+                        # ✅ FIX: Standardiser avec '_' au lieu de ':' pour cohérence avec mobile
+                        emit("driver_arrived_at_pickup", {"driver_id": driver.id})
                     elif event == "arrived_at_dropoff":
-                        emit("driver:arrived_at_dropoff", {"driver_id": driver.id})
+                        # ✅ FIX: Standardiser avec '_' au lieu de ':' pour cohérence avec mobile
+                        emit("driver_arrived_at_dropoff", {"driver_id": driver.id})
 
                 logger.info(
                     "[LocationService] Position updated: driver=%d source=%s geofence_events=%s trip_logged=%s",
@@ -2556,44 +2590,96 @@ def init_chat_socket(socketio: SocketIO):
 
     @socketio.on("disconnect")
     def handle_disconnect():
-        sid = _get_sid()
-        info = _SID_INDEX.pop(sid, None)
-        trace_id = request.headers.get("X-Trace-ID") or request.headers.get("Trace-Id")
-        now = datetime.now(UTC)
+        try:
+            sid = _get_sid()
+            info = _SID_INDEX.pop(sid, None)
+            trace_id = request.headers.get("X-Trace-ID") or request.headers.get(
+                "Trace-Id"
+            )
+            now = datetime.now(UTC)
 
-        company_id = info.get("company_id") if info else None
-        user_id = info.get("user_id") if info else None
-        driver_id = info.get("driver_id") if info else None
-        role = info.get("role") if info else None
+            company_id = info.get("company_id") if info else None
+            user_id = info.get("user_id") if info else None
+            driver_id = info.get("driver_id") if info else None
+            role = info.get("role") if info else None
 
-        # ✅ Tracking rooms : quitter les rooms appropriées
-        if role == "driver" and driver_id and company_id:
-            driver_room = f"driver_{driver_id}"
-            company_room = f"company_{company_id}"
-            ws_metrics.on_room_leave(driver_room)
-            ws_metrics.on_room_leave(company_room)
-        elif role == "company" and company_id:
-            company_room = f"company_{company_id}"
-            ws_metrics.on_room_leave(company_room)
+            # ✅ Tracking rooms : quitter les rooms appropriées
+            if role == "driver" and driver_id and company_id:
+                driver_room = f"driver_{driver_id}"
+                company_room = f"company_{company_id}"
+                try:
+                    ws_metrics.on_room_leave(driver_room)
+                    ws_metrics.on_room_leave(company_room)
+                except (ConnectionError, OSError) as e:
+                    # ✅ Ignorer les erreurs de socket déjà fermé (errno 9 = Bad file descriptor)
+                    if getattr(e, "errno", None) != ERRNO_BAD_FILE_DESCRIPTOR:
+                        logger.warning(
+                            "Error leaving rooms for driver (network error: %s): %s",
+                            type(e).__name__,
+                            e,
+                        )
+                except Exception as e:
+                    logger.warning("Unexpected error leaving rooms for driver: %s", e)
+            elif role == "company" and company_id:
+                company_room = f"company_{company_id}"
+                try:
+                    ws_metrics.on_room_leave(company_room)
+                except (ConnectionError, OSError) as e:
+                    # ✅ Ignorer les erreurs de socket déjà fermé (errno 9 = Bad file descriptor)
+                    if getattr(e, "errno", None) != ERRNO_BAD_FILE_DESCRIPTOR:
+                        logger.warning(
+                            "Error leaving room for company (network error: %s): %s",
+                            type(e).__name__,
+                            e,
+                        )
+                except Exception as e:
+                    logger.warning("Unexpected error leaving room for company: %s", e)
 
-        # ✅ Métriques
-        ws_metrics.on_disconnect(company_id=company_id)
+            # ✅ Métriques
+            try:
+                ws_metrics.on_disconnect(company_id=company_id)
+            except (ConnectionError, OSError) as e:
+                # ✅ Ignorer les erreurs de socket déjà fermé
+                if getattr(e, "errno", None) != ERRNO_BAD_FILE_DESCRIPTOR:
+                    logger.warning(
+                        "Error updating metrics on disconnect (network error: %s): %s",
+                        type(e).__name__,
+                        e,
+                    )
+            except Exception as e:
+                logger.warning("Unexpected error updating metrics on disconnect: %s", e)
 
-        logger.info(
-            "socket_disconnect",
-            extra={
-                "event": "disconnect",
-                "sid": sid,
-                "user_id": user_id,
-                "user_public_id": info.get("user_public_id") if info else None,
-                "driver_id": info.get("driver_id") if info else None,
-                "company_id": company_id,
-                "role": info.get("role") if info else None,
-                "ip": info.get("ip") if info else None,
-                "timestamp": now.isoformat(),
-                "request_trace_id": trace_id,
-            },
-        )
+            logger.info(
+                "socket_disconnect",
+                extra={
+                    "event": "disconnect",
+                    "sid": sid,
+                    "user_id": user_id,
+                    "user_public_id": info.get("user_public_id") if info else None,
+                    "driver_id": info.get("driver_id") if info else None,
+                    "company_id": company_id,
+                    "role": info.get("role") if info else None,
+                    "ip": info.get("ip") if info else None,
+                    "timestamp": now.isoformat(),
+                    "request_trace_id": trace_id,
+                },
+            )
+        except (ConnectionError, OSError) as e:
+            # ✅ Gérer proprement les erreurs de socket fermé lors de la déconnexion
+            if getattr(e, "errno", None) == ERRNO_BAD_FILE_DESCRIPTOR:
+                # Bad file descriptor - socket déjà fermé, c'est normal lors d'une déconnexion
+                logger.debug(
+                    "Socket already closed during disconnect (errno 9), this is expected"
+                )
+            else:
+                logger.warning(
+                    "Network error during disconnect (error: %s): %s",
+                    type(e).__name__,
+                    e,
+                )
+        except Exception as e:
+            # ✅ Ne pas crasher le handler de déconnexion, juste logger
+            logger.exception("Unexpected error in disconnect handler: %s", e)
 
     @socketio.on("ping")
     def handle_ping():

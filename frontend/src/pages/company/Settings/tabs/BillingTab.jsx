@@ -3,8 +3,9 @@ import React, { useState, useEffect } from 'react';
 import styles from '../CompanySettings.module.css';
 import ToggleField from '../../../../components/ui/ToggleField';
 import { fetchBillingSettings, updateBillingSettings } from '../../../../services/settingsService';
+import EmailConfigSection from './EmailConfigSection';
 
-const BillingTab = () => {
+const BillingTab = ({ companyId }) => {
   const [form, setForm] = useState({
     payment_terms_days: 10,
     overdue_fee: 15,
@@ -35,6 +36,15 @@ const BillingTab = () => {
     vat_rate: null,
     vat_label: '',
     vat_number: '',
+    // Configuration SMTP
+    smtp_enabled: false,
+    smtp_server: '',
+    smtp_port: 587,
+    smtp_use_tls: true,
+    smtp_use_ssl: false,
+    smtp_username: '',
+    smtp_password: '',
+    smtp_password_configured: false,
   });
 
   const [loading, setLoading] = useState(true);
@@ -56,16 +66,16 @@ const BillingTab = () => {
       
       if (data) {
         setForm({
-          payment_terms_days: data.payment_terms_days || 10,
-          overdue_fee: data.overdue_fee || 15,
+          payment_terms_days: data.payment_terms_days ?? 10,
+          overdue_fee: data.overdue_fee ?? 15,
           reminder_schedule_days: data.reminder_schedule_days || {
             1: 10,
             2: 5,
             3: 3,
           },
-          reminder1_fee: data.reminder1_fee || 5,
-          reminder2_fee: data.reminder2_fee || 10,
-          reminder3_fee: data.reminder3_fee || 20,
+          reminder1_fee: data.reminder1_fee ?? 5,
+          reminder2_fee: data.reminder2_fee ?? 10,
+          reminder3_fee: data.reminder3_fee ?? 20,
           auto_reminders_enabled: data.auto_reminders_enabled || false,
           email_templates_enabled: data.email_templates_enabled || false,
           email_sender: data.email_sender || '',
@@ -85,6 +95,15 @@ const BillingTab = () => {
           vat_rate: data.vat_rate || null,
           vat_label: data.vat_label || '',
           vat_number: data.vat_number || '',
+          // Configuration SMTP
+          smtp_enabled: data.smtp_enabled || false,
+          smtp_server: data.smtp_server || '',
+          smtp_port: data.smtp_port ?? 587,
+          smtp_use_tls: data.smtp_use_tls !== undefined ? data.smtp_use_tls : true,
+          smtp_use_ssl: data.smtp_use_ssl || false,
+          smtp_username: data.smtp_username || '',
+          smtp_password: '', // Ne jamais charger le mot de passe
+          smtp_password_configured: data.smtp_password_configured || false,
         });
       }
     } catch (err) {
@@ -147,7 +166,7 @@ const BillingTab = () => {
         reminder2_fee: parseFloat(formData.reminder2_fee) || 0,
         reminder3_fee: parseFloat(formData.reminder3_fee) || 0,
         overdue_fee: parseFloat(formData.overdue_fee) || 0,
-        payment_terms_days: parseInt(formData.payment_terms_days) || 10,
+        payment_terms_days: parseInt(formData.payment_terms_days, 10) || (formData.payment_terms_days === '0' ? 0 : 10),
       };
 
       // #region agent log
@@ -579,8 +598,9 @@ const BillingTab = () => {
                 name="invoice_number_format"
                 value={form.invoice_number_format}
                 onChange={(e) => {
-                  handleChange(e);
-                  autoSave({ ...form, invoice_number_format: e.target.value });
+                  const newForm = { ...form, invoice_number_format: e.target.value };
+                  setForm(newForm);
+                  autoSave(newForm);
                 }}
               >
                 <option value="{PREFIX}-{YYYY}-{MM}-{SEQ4}">
@@ -619,8 +639,9 @@ const BillingTab = () => {
                 name="pdf_template_variant"
                 value={form.pdf_template_variant}
                 onChange={(e) => {
-                  handleChange(e);
-                  autoSave({ ...form, pdf_template_variant: e.target.value });
+                  const newForm = { ...form, pdf_template_variant: e.target.value };
+                  setForm(newForm);
+                  autoSave(newForm);
                 }}
               >
                 <option value="standard">Standard</option>
@@ -759,6 +780,9 @@ const BillingTab = () => {
               </small>
             </div>
           </section>
+
+          {/* Configuration Email Transactionnel (Brevo) */}
+          {companyId && <EmailConfigSection companyId={companyId} />}
         </div>
       </div>
     </div>

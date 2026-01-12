@@ -12,6 +12,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import type { RideSummary, DriverSuggestion } from "@/types/enterpriseDispatch";
+import { shadowPresets } from "@/styles/shadowStyles";
 
 // ✅ Palette professionnelle cohérente avec le dashboard driver
 const palette = {
@@ -215,11 +216,7 @@ const styles = StyleSheet.create({
         borderColor: palette.modalBorder,
         maxHeight: "80%",
         gap: 16,
-        shadowColor: "rgba(15,54,43,0.15)",
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 1,
-        shadowRadius: 24,
-        elevation: 8,
+        ...shadowPresets.large, // ✅ Compatible web/native
     },
     modalTitle: {
         color: palette.modalTitle,
@@ -296,11 +293,7 @@ const styles = StyleSheet.create({
         marginBottom: 10,
         borderWidth: 1.5,
         borderColor: palette.surfaceBorder,
-        shadowColor: "rgba(15,54,43,0.08)",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 1,
-        shadowRadius: 6,
-        elevation: 2,
+        ...shadowPresets.small, // ✅ Compatible web/native
     },
     modalDriverOptionPressed: {
         backgroundColor: "rgba(10,127,89,0.08)",

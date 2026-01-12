@@ -26,7 +26,9 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { useAuth } from "@/hooks/useAuth";
 import { useEnterpriseNotifications } from "@/hooks/useEnterpriseNotifications";
+import { useThrottledCallback } from "@/hooks/useDebouncedCallback";
 import { isCompletedStatus } from "@/utils/bookingStatus";
+import { createShadow } from "@/styles/shadowStyles";
 import {
   getDispatchRides,
   getDispatchStatus,
@@ -47,6 +49,14 @@ import { useEnterpriseDriverTracking } from "@/hooks/useEnterpriseDriverTracking
 import { useEnterpriseContext } from "@/context/EnterpriseContext";
 import { useRideActions } from "@/hooks/useRideActions";
 import { AssignDriverModal } from "@/components/enterprise/AssignDriverModal";
+import {
+  fetchIncomingTransfers,
+  acceptTransfer,
+  rejectTransfer,
+  type Transfer,
+} from "@/services/partnershipService";
+import { TransferCard } from "@/components/enterprise/transfers/TransferCard";
+import { TransferRideModal } from "@/components/enterprise/transfers/TransferRideModal";
 
 // ✅ Palette professionnelle cohérente avec le dashboard driver
 const enterprisePalette = {
@@ -106,7 +116,7 @@ dayjs.extend(timezone);
 dayjs.extend(relativeTime);
 dayjs.locale("fr");
 
-type RideFilter = "all" | "unassigned" | "assigned" | "completed" | "delayed";
+type RideFilter = "all" | "pending" | "unassigned" | "assigned" | "completed" | "delayed";
 
 export default function EnterpriseDashboardScreen() {
   const { enterpriseSession, refreshEnterprise, enterpriseLoading } = useAuth();
@@ -147,6 +157,22 @@ export default function EnterpriseDashboardScreen() {
   // ✅ État pour le filtre des courses
   const [rideFilter, setRideFilter] = useState<RideFilter>("all");
 
+  // ✅ État pour les transferts entrants
+  const [incomingTransfers, setIncomingTransfers] = useState<Transfer[]>([]);
+  const [transferModalVisible, setTransferModalVisible] = useState(false);
+  const [selectedRideForTransfer, setSelectedRideForTransfer] = useState<RideSummary | null>(null);
+
+  const handleOpenTransferModal = useCallback((ride: RideSummary) => {
+    setSelectedRideForTransfer(ride);
+    setTransferModalVisible(true);
+  }, []);
+
+  const handleCloseTransferModal = useCallback(() => {
+    setTransferModalVisible(false);
+    setSelectedRideForTransfer(null);
+  }, []);
+  const [loadingTransfers, setLoadingTransfers] = useState(false);
+
   const { markers: driverMarkers, refreshLocations } =
     useEnterpriseDriverTracking();
 
@@ -164,6 +190,20 @@ export default function EnterpriseDashboardScreen() {
     const zoned = localized.tz ? localized.tz("Europe/Zurich") : localized;
     return zoned.format("dddd D MMMM");
   }, [selectedDate]);
+
+  // ✅ Charger les transferts entrants (en attente)
+  const loadIncomingTransfers = useCallback(async () => {
+    try {
+      setLoadingTransfers(true);
+      const transfers = await fetchIncomingTransfers();
+      setIncomingTransfers(transfers);
+    } catch (error: any) {
+      console.error("[Dashboard] Erreur chargement transferts:", error);
+      // Ne pas afficher d'erreur, juste logger
+    } finally {
+      setLoadingTransfers(false);
+    }
+  }, []);
 
   const loadData = useCallback(async () => {
     if (!enterpriseSession) return;
@@ -208,6 +248,9 @@ export default function EnterpriseDashboardScreen() {
         setRealtimeDashboard(realtimeResponse);
       }
       refreshLocations();
+
+      // ✅ Charger les transferts entrants en arrière-plan
+      loadIncomingTransfers();
     } catch (error: any) {
       const message =
         error?.response?.data?.error ??
@@ -217,7 +260,11 @@ export default function EnterpriseDashboardScreen() {
     } finally {
       setLoading(false);
     }
-  }, [currentDate, enterpriseSession, refreshLocations]);
+  }, [currentDate, enterpriseSession, refreshLocations, loadIncomingTransfers]);
+
+  // ✅ Version throttled de loadData pour éviter les requêtes en doublon
+  // Maximum 1 appel par seconde même si déclenchée plusieurs fois
+  const throttledLoadData = useThrottledCallback(loadData, 1000);
 
   // Référence pour le polling automatique
   const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -225,8 +272,8 @@ export default function EnterpriseDashboardScreen() {
 
   useEffect(() => {
     if (!enterpriseSession) return;
-    loadData();
-  }, [enterpriseSession, loadData, currentDate]);
+    throttledLoadData();
+  }, [enterpriseSession, throttledLoadData, currentDate]);
 
   // Polling automatique : récupérer les données toutes les 30 secondes quand l'app est active
   useEffect(() => {
@@ -252,7 +299,7 @@ export default function EnterpriseDashboardScreen() {
         // Seulement charger si l'app est active
         if (currentAppState === "active") {
           console.log("[dashboard.tsx] Polling automatique : rechargement des données");
-          loadData();
+          throttledLoadData();
         }
       }, 30000); // 30 secondes
     };
@@ -270,7 +317,7 @@ export default function EnterpriseDashboardScreen() {
       ) {
         // L'app revient au premier plan : recharger immédiatement et redémarrer le polling
         console.log("[dashboard.tsx] Application revenue au premier plan : rechargement des données");
-        loadData();
+        throttledLoadData();
         startPolling();
       } else if (nextAppState.match(/inactive|background/)) {
         // L'app passe en arrière-plan : arrêter le polling
@@ -291,16 +338,16 @@ export default function EnterpriseDashboardScreen() {
       }
       subscription.remove();
     };
-  }, [enterpriseSession, loadData, currentDate]);
+  }, [enterpriseSession, throttledLoadData, currentDate]);
 
   // Recharger les données quand l'écran revient au focus
   useFocusEffect(
     useCallback(() => {
       if (enterpriseSession) {
         console.log("[dashboard.tsx] Écran au focus : rechargement des données");
-        loadData();
+        throttledLoadData();
       }
-    }, [enterpriseSession, loadData])
+    }, [enterpriseSession, throttledLoadData])
   );
 
   // ✅ Actions sur les courses : utilisent le hook partagé
@@ -396,14 +443,34 @@ export default function EnterpriseDashboardScreen() {
   const { filteredRides, filterCounts } = useMemo(() => {
     const counts = {
       all: sortedManualRides.length,
+      pending: 0,
       unassigned: 0,
       assigned: 0,
       completed: 0,
       delayed: 0,
     };
 
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'dashboard.tsx:filteredRides', message: 'All rides before filtering', data: { total_rides: sortedManualRides.length, rides_sample: sortedManualRides.slice(0, 3).map(r => ({ id: r.id, status: r.status, status_type: typeof r.status, driver_name: r.driver?.name })) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'H1' }) }).catch(() => { });
+    } catch { }
+    // #endregion
+
     sortedManualRides.forEach((ride) => {
       const status = ride.status ? String(ride.status).toLowerCase().trim() : undefined;
+      // ✅ Compter les courses PENDING (transférées en attente)
+      if (status === "pending") {
+        counts.pending++;
+        // #region agent log
+        try {
+          fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'dashboard.tsx:pendingCount', message: 'Found PENDING ride', data: { ride_id: ride.id, status: ride.status, status_normalized: status }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'H1' }) }).catch(() => { });
+        } catch { }
+        // #endregion
+      }
+      // ✅ Compter aussi les courses avec transfert PENDING (en attente d'acceptation)
+      if (ride.transfer?.status === "PENDING") {
+        counts.pending++;
+      }
       if (status === "unassigned" || !ride.driver?.name) {
         counts.unassigned++;
       }
@@ -430,7 +497,19 @@ export default function EnterpriseDashboardScreen() {
 
     // Filtrer selon le filtre sélectionné
     let filtered = [...sortedManualRides];
-    if (rideFilter === "unassigned") {
+    if (rideFilter === "pending") {
+      // #region agent log
+      try {
+        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'dashboard.tsx:pendingFilter', message: 'Applying PENDING filter', data: { total_before_filter: sortedManualRides.length, pending_count: counts.pending }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'H3' }) }).catch(() => { });
+      } catch { }
+      // #endregion
+      // ✅ Filtre pour afficher les courses PENDING ou avec transfert PENDING
+      filtered = filtered.filter((r) => {
+        const status = r.status ? String(r.status).toLowerCase().trim() : undefined;
+        const hasPendingTransfer = r.transfer?.status === "PENDING";
+        return status === "pending" || hasPendingTransfer;
+      });
+    } else if (rideFilter === "unassigned") {
       filtered = filtered.filter((r) => {
         const status = r.status ? String(r.status).toLowerCase().trim() : undefined;
         return status === "unassigned" || !r.driver?.name;
@@ -459,6 +538,12 @@ export default function EnterpriseDashboardScreen() {
     }
     // "all" : pas de filtre
 
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'dashboard.tsx:filterResult', message: 'Filter result', data: { filter: rideFilter, filtered_count: filtered.length, counts: counts }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'H3' }) }).catch(() => { });
+    } catch { }
+    // #endregion
+
     return { filteredRides: filtered, filterCounts: counts };
   }, [sortedManualRides, rideFilter]);
 
@@ -477,6 +562,7 @@ export default function EnterpriseDashboardScreen() {
       <View style={styles.filtersContainer}>
         {[
           { label: "Toutes", value: "all" as const, icon: "grid-outline" },
+          { label: "En attente", value: "pending" as const, icon: "hourglass-outline" },
           { label: "Non assignées", value: "unassigned" as const, icon: "alert-circle-outline" },
           { label: "Assignées", value: "assigned" as const, icon: "checkmark-circle-outline" },
           { label: "Terminées", value: "completed" as const, icon: "checkmark-done-circle-outline" },
@@ -512,13 +598,15 @@ export default function EnterpriseDashboardScreen() {
         <Text style={styles.muted}>
           {rideFilter === "all"
             ? "Aucune course planifiée pour cette date."
-            : rideFilter === "unassigned"
-              ? "Aucune course non assignée."
-              : rideFilter === "assigned"
-                ? "Aucune course assignée."
-                : rideFilter === "completed"
-                  ? "Aucune course terminée."
-                  : "Aucune course en retard."}
+            : rideFilter === "pending"
+              ? "Aucune course en attente."
+              : rideFilter === "unassigned"
+                ? "Aucune course non assignée."
+                : rideFilter === "assigned"
+                  ? "Aucune course assignée."
+                  : rideFilter === "completed"
+                    ? "Aucune course terminée."
+                    : "Aucune course en retard."}
         </Text>
       ) : (
         filteredRides.map((ride) => {
@@ -539,6 +627,13 @@ export default function EnterpriseDashboardScreen() {
           // ✅ Calcul du retard : uniquement si la course est assignée, l'heure prévue est passée, ET la course n'est pas terminée
           let delayMinutes: number | null = null;
           const isCompleted = isCompletedStatus(ride.status);
+
+          // #region agent log
+          try {
+            fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'dashboard.tsx:611', message: 'Ride processing', data: { rideId: ride.id, status: ride.status, normalizedStatus: normalizedStatus, isCompleted: isCompleted, hasTransfer: !!ride.transfer, transferStatus: ride.transfer?.status, isReceiver: ride.transfer?.is_receiver }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run3', hypothesisId: 'H1-H2-H3' }) }).catch(() => { });
+          } catch { }
+          // #endregion
+
           if (!isCompleted && ride.driver?.name && ride.time.pickup_at) {
             const scheduledTime = dayjs(ride.time.pickup_at);
             const now = dayjs();
@@ -554,6 +649,41 @@ export default function EnterpriseDashboardScreen() {
                 ? { label: "Basse", tone: "info" as const }
                 : undefined;
 
+          // ✅ Badge de transfert si la course est transférée
+          const transferBadge = ride.transfer
+            ? {
+              label: ride.transfer.is_receiver
+                ? `🔄 Reçu de ${ride.transfer.partner_company_name || "partenaire"}`
+                : `🔄 Envoyé à ${ride.transfer.partner_company_name || "partenaire"}`,
+              tone: "info" as const,
+            }
+            : undefined;
+
+          // ✅ Déterminer si l'entreprise peut gérer cette course
+          // L'entreprise peut gérer si :
+          // - Pas de transfert, OU
+          // - Transfert PENDING et on est sender/receiver, OU
+          // - Transfert ACCEPTED et on est le receveur (on gère maintenant la course)
+          const canManageRide = !ride.transfer
+            || (ride.transfer.status === "PENDING" && (ride.transfer.is_receiver || ride.transfer.is_sender))
+            || (ride.transfer.status === "ACCEPTED" && ride.transfer.is_receiver);
+          const isPendingTransferReceiver = ride.transfer?.status === "PENDING" && ride.transfer.is_receiver;
+          const isPendingTransferSender = ride.transfer?.status === "PENDING" && ride.transfer.is_sender;
+
+          // #region agent log - Debug transfer roles
+          if (ride.transfer?.status === "PENDING") {
+            try {
+              fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'dashboard.tsx:663', message: 'Transfer roles check', data: { rideId: ride.id, transferId: ride.transfer?.id, transferStatus: ride.transfer?.status, is_sender: ride.transfer?.is_sender, is_receiver: ride.transfer?.is_receiver, isPendingTransferSender: isPendingTransferSender, isPendingTransferReceiver: isPendingTransferReceiver }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run13-roles', hypothesisId: 'ROLES' }) }).catch(() => { });
+            } catch { }
+          }
+          // #endregion
+
+          // ✅ Logique d'affichage des boutons :
+          // - Receveur : Accepter (droite) + Refuser (gauche) + Transférer (footer)
+          // - Émetteur : Annuler (footer)
+
+          const badges = [priorityBadge, transferBadge].filter(Boolean) as Array<{ label: string; tone: "danger" | "info" | "warning" | "success" }>;
+
           return (
             <RideSnippetCard
               key={ride.id}
@@ -565,17 +695,74 @@ export default function EnterpriseDashboardScreen() {
                 pickup: ride.route.pickup_address,
                 dropoff: ride.route.dropoff_address,
                 assignedTo: ride.driver?.name ?? null,
-                status: normalizedStatus as "unassigned" | "assigned" | "completed" | "return_completed" | "in_progress" | "en_route" | undefined, // ✅ Passer le statut normalisé
+                status: normalizedStatus as "unassigned" | "assigned" | "completed" | "return_completed" | "in_progress" | "en_route" | "pending" | undefined,
                 delayMinutes: delayMinutes,
-                badges: priorityBadge ? [priorityBadge] : undefined,
+                badges: badges.length > 0 ? badges : undefined,
                 onPress: () =>
                   router.push({
                     pathname: "/(enterprise)/ride-details",
                     params: { rideId: ride.id },
                   } as any),
-                onQuickAction: isCompleted ? undefined : () => handleUrgentDelay(ride.id), // ✅ Désactiver si terminée
-                onPrimaryAction: isCompleted ? undefined : () => rideActions.handleOpenAssignModal(ride), // ✅ Désactiver si terminée
+                // ✅ RECEVEUR : Accepter/Refuser à droite + Transférer dans footer
+                // ✅ ÉMETTEUR : Annuler dans le footer
+                // ✅ Autres courses : Urgence/Assigner à droite
+                onQuickAction: (() => {
+                  const value = isCompleted
+                    ? undefined
+                    : isPendingTransferReceiver && ride.transfer?.id
+                      ? () => rideActions.handleRejectTransfer(ride.transfer!.id) // ❌ Refuser (receveur)
+                      : !canManageRide
+                        ? undefined
+                        : () => handleUrgentDelay(ride.id); // 🚨 Marquer urgent
+                  // #region agent log
+                  try {
+                    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'dashboard.tsx:697-onQuickAction', message: 'onQuickAction computed', data: { rideId: ride.id, transferId: ride.transfer?.id, hasValue: !!value, isCompleted: isCompleted, canManageRide: canManageRide, isPendingTransferReceiver: isPendingTransferReceiver }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run12-final', hypothesisId: 'H1-FIX' }) }).catch(() => { });
+                  } catch { }
+                  // #endregion
+                  return value;
+                })(),
+                onPrimaryAction: (() => {
+                  const value = isCompleted
+                    ? undefined
+                    : isPendingTransferReceiver && ride.transfer?.id
+                      ? () => rideActions.handleAcceptTransfer(ride.transfer!.id) // ✅ Accepter (receveur)
+                      : !canManageRide
+                        ? undefined
+                        : () => rideActions.handleOpenAssignModal(ride); // 👤 Assigner un chauffeur
+                  // #region agent log
+                  try {
+                    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'dashboard.tsx:708-onPrimaryAction', message: 'onPrimaryAction computed', data: { rideId: ride.id, transferId: ride.transfer?.id, hasValue: !!value, isCompleted: isCompleted, canManageRide: canManageRide, isPendingTransferReceiver: isPendingTransferReceiver }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run12-final', hypothesisId: 'H1-FIX' }) }).catch(() => { });
+                  } catch { }
+                  // #endregion
+                  return value;
+                })(),
+                // ✅ Icônes et couleurs pour le RECEVEUR uniquement
+                quickIcon: isPendingTransferReceiver ? "close-circle-outline" : undefined,
+                primaryIcon: isPendingTransferReceiver ? "checkmark-circle-outline" : undefined,
+                quickIconColor: isPendingTransferReceiver ? "#EF4444" : undefined, // Rouge pour Refuser
+                primaryIconColor: isPendingTransferReceiver ? "#0A7F59" : undefined, // Vert entreprise pour Accepter
+                // ✅ Footer : Transférer (receveur) OU Annuler (émetteur)
+                footerActions: isPendingTransferReceiver ? (
+                  <TouchableOpacity
+                    style={styles.transferButtonFooter}
+                    onPress={() => handleOpenTransferModal(ride)}
+                  >
+                    <Ionicons name="git-network-outline" size={16} color="#0A7F59" />
+                    <Text style={styles.transferButtonText}>Transférer</Text>
+                  </TouchableOpacity>
+                ) : isPendingTransferSender && ride.transfer?.id ? (
+                  <TouchableOpacity
+                    style={styles.cancelButtonFooter}
+                    onPress={() => rideActions.handleRejectTransfer(ride.transfer!.id)}
+                  >
+                    <Ionicons name="close-circle-outline" size={16} color="#EF4444" />
+                    <Text style={styles.cancelButtonText}>Annuler le transfert</Text>
+                  </TouchableOpacity>
+                ) : undefined,
               }}
+              // #region agent log
+              {...(() => { try { fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'dashboard.tsx:679', message: 'RideSnippetCard props', data: { rideId: ride.id, hasOnQuickAction: !!(isCompleted || !canManageRide ? undefined : isPendingTransferReceiver ? () => { } : () => { }), hasOnPrimaryAction: !!(isCompleted || !canManageRide ? undefined : isPendingTransferReceiver ? () => { } : () => { }), quickIcon: isPendingTransferReceiver ? "close-circle-outline" : undefined, primaryIcon: isPendingTransferReceiver ? "checkmark-circle-outline" : undefined }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run3', hypothesisId: 'H4' }) }).catch(() => { }); } catch { } return {}; })()}
+              // #endregion
               expanded={expandedRideId === ride.id}
               onToggle={() => {
                 setExpandedRideId(expandedRideId === ride.id ? null : ride.id);
@@ -738,6 +925,61 @@ export default function EnterpriseDashboardScreen() {
     );
   }, [currentDate, loadData]);
 
+  // ✅ Accepter un transfert
+  const handleAcceptTransfer = useCallback(async (transfer: Transfer) => {
+    Alert.alert(
+      "Accepter le transfert",
+      `Voulez-vous accepter ce transfert ? La course sera ajoutée à vos réservations.`,
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Accepter",
+          onPress: async () => {
+            try {
+              await acceptTransfer(transfer.id);
+              Alert.alert("Succès", "Transfert accepté avec succès");
+              loadIncomingTransfers();
+              loadData(); // Recharger les courses
+            } catch (error: any) {
+              Alert.alert(
+                "Erreur",
+                error?.response?.data?.error || "Impossible d'accepter le transfert"
+              );
+            }
+          },
+        },
+      ]
+    );
+  }, [loadData, loadIncomingTransfers]);
+
+  // ✅ Refuser un transfert
+  const handleRejectTransfer = useCallback(async (transfer: Transfer) => {
+    Alert.prompt(
+      "Refuser le transfert",
+      "Voulez-vous indiquer une raison (optionnel) ?",
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Refuser",
+          style: "destructive",
+          onPress: async (reason?: string) => {
+            try {
+              await rejectTransfer(transfer.id, reason);
+              Alert.alert("Succès", "Transfert refusé");
+              loadIncomingTransfers();
+            } catch (error: any) {
+              Alert.alert(
+                "Erreur",
+                error?.response?.data?.error || "Impossible de refuser le transfert"
+              );
+            }
+          },
+        },
+      ],
+      "plain-text"
+    );
+  }, [loadIncomingTransfers]);
+
   const semiAutoControls = (
     <View style={styles.semiAutoControls}>
       <Text style={styles.sectionTitle}>Mode semi-automatique</Text>
@@ -785,6 +1027,35 @@ export default function EnterpriseDashboardScreen() {
       )}
     </Section>
   );
+
+  // ✅ Section transferts entrants
+  const incomingTransfersSection = incomingTransfers.length > 0 ? (
+    <Section title={`Transferts entrants (${incomingTransfers.length})`}>
+      {incomingTransfers.slice(0, 3).map((transfer) => (
+        <View key={transfer.id} style={{ marginBottom: 12 }}>
+          <TransferCard
+            transfer={transfer}
+            type="incoming"
+            onAccept={handleAcceptTransfer}
+            onReject={handleRejectTransfer}
+            onViewDetails={(t) => {
+              if (t.booking_id) {
+                router.push({
+                  pathname: "/(enterprise)/ride-details",
+                  params: { rideId: t.booking_id },
+                } as any);
+              }
+            }}
+          />
+        </View>
+      ))}
+      {incomingTransfers.length > 3 && (
+        <Text style={styles.muted}>
+          + {incomingTransfers.length - 3} autres transferts
+        </Text>
+      )}
+    </Section>
+  ) : null;
 
   // ✅ 3.4.2: Section opportunités critiques avec bouton "Appliquer"
   const criticalOpportunitiesSection =
@@ -924,10 +1195,16 @@ export default function EnterpriseDashboardScreen() {
           {semiAutoControls}
           {manualRidesList}
           {urgentSection}
+          {incomingTransfersSection}
         </>
       )}
 
-      {dispatchMode === "fully_auto" && urgentSection}
+      {dispatchMode === "fully_auto" && (
+        <>
+          {urgentSection}
+          {incomingTransfersSection}
+        </>
+      )}
 
       {/* ✅ Statut dispatch en cours */}
       {status?.dispatch_run && status.dispatch_run.status !== "completed" && (
@@ -1081,6 +1358,17 @@ export default function EnterpriseDashboardScreen() {
         onClose={rideActions.handleCloseAssignModal}
         onAssign={rideActions.handleAssignDriver}
       />
+
+      {/* ✅ Modal de transfert pour les courses PENDING */}
+      <TransferRideModal
+        visible={transferModalVisible}
+        ride={selectedRideForTransfer}
+        onClose={handleCloseTransferModal}
+        onSuccess={() => {
+          handleCloseTransferModal();
+          loadData();
+        }}
+      />
     </ScrollView>
   );
 }
@@ -1166,11 +1454,13 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     height: 150,
     overflow: "hidden",
-    shadowColor: "rgba(10,127,89,0.15)",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 1,
-    shadowRadius: 24,
-    elevation: 8,
+    ...createShadow({
+      shadowColor: "rgba(10,127,89,0.15)",
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 1,
+      shadowRadius: 24,
+      elevation: 8,
+    }), // ✅ Compatible web/native
     justifyContent: "space-between",
   },
   heroHeader: {
@@ -1295,11 +1585,13 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     borderWidth: 1,
     borderColor: enterprisePalette.sectionBorder,
-    shadowColor: "rgba(15,54,43,0.08)",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 12,
-    elevation: 2,
+    ...createShadow({
+      shadowColor: "rgba(15,54,43,0.08)",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 1,
+      shadowRadius: 12,
+      elevation: 2,
+    }), // ✅ Compatible web/native
   },
   sectionHeader: {
     flexDirection: "row",
@@ -1372,11 +1664,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderWidth: 1,
     borderColor: enterprisePalette.surfaceBorder,
-    shadowColor: "rgba(15,54,43,0.06)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 6,
-    elevation: 2,
+    ...createShadow({
+      shadowColor: "rgba(15,54,43,0.06)",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 1,
+      shadowRadius: 6,
+      elevation: 2,
+    }), // ✅ Compatible web/native
   },
   alertHeader: {
     flexDirection: "row",
@@ -1441,11 +1735,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 16,
-    shadowColor: enterprisePalette.dispatchButton,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 6,
+    ...createShadow({
+      shadowColor: enterprisePalette.dispatchButton,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.3,
+      shadowRadius: 16,
+      elevation: 6,
+    }), // ✅ Compatible web/native
   },
   dispatchButtonDisabled: {
     backgroundColor: enterprisePalette.dispatchButtonDisabled,
@@ -1465,11 +1761,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
     borderColor: enterprisePalette.cardBorder,
-    shadowColor: "rgba(15,54,43,0.06)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 8,
-    elevation: 2,
+    ...createShadow({
+      shadowColor: "rgba(15,54,43,0.06)",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 1,
+      shadowRadius: 8,
+      elevation: 2,
+    }), // ✅ Compatible web/native
   },
   rideTitle: {
     color: enterprisePalette.textStrong,
@@ -1634,11 +1932,13 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: enterprisePalette.surfaceBorder,
-    shadowColor: "rgba(15,54,43,0.08)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
-    elevation: 2,
+    ...createShadow({
+      shadowColor: "rgba(15,54,43,0.08)",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 1,
+      shadowRadius: 4,
+      elevation: 2,
+    }), // ✅ Compatible web/native
   },
   optimizerToggleButtonActive: {
     backgroundColor: enterprisePalette.alertSurface,
@@ -1683,11 +1983,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: enterprisePalette.surfaceBorder,
-    shadowColor: "rgba(15,54,43,0.08)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 8,
-    elevation: 2,
+    ...createShadow({
+      shadowColor: "rgba(15,54,43,0.08)",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 1,
+      shadowRadius: 8,
+      elevation: 2,
+    }), // ✅ Compatible web/native
   },
   quickActionButtonDanger: {
     backgroundColor: enterprisePalette.alertSurface,
@@ -1721,6 +2023,42 @@ const styles = StyleSheet.create({
   applyOpportunityText: {
     color: enterprisePalette.dispatchText,
     fontSize: 13,
+    fontWeight: "600",
+  },
+  // ✅ Styles pour le bouton "Transférer" dans le footer (receveur)
+  transferButtonFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "rgba(10,127,89,0.08)",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    alignSelf: "flex-start",
+  },
+  transferButtonText: {
+    color: "#0A7F59",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  // ✅ Styles pour le bouton "Annuler" dans le footer (émetteur)
+  cancelButtonFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "rgba(239,68,68,0.08)",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    alignSelf: "flex-start",
+  },
+  cancelButtonText: {
+    color: "#EF4444",
+    fontSize: 14,
     fontWeight: "600",
   },
 });

@@ -82,23 +82,45 @@ const ReservationActions = ({
   const showDelete = !hideDelete && (needsTimeConfirmation || isDeletable) && !!onDelete;
 
   // Debug log pour comprendre pourquoi les boutons ne s'affichent pas
-  if (process.env.NODE_ENV === 'development' && isReturn) {
+  if (process.env.NODE_ENV === 'development') {
     console.debug('[ReservationActions]', {
       reservationId: reservation?.id,
+      status,
       isReturn,
-      time_confirmed: reservation?.time_confirmed,
-      scheduled_time: reservation?.scheduled_time,
+      is_transferred: reservation?.is_transferred,
       needsTimeConfirmation,
       showSchedule,
       showUrgent,
-      hasOnSchedule: !!onSchedule,
-      hasOnDispatchNow: !!onDispatchNow,
+      showAssign,
+      showEdit,
+      showTransfer,
+      showDelete,
+      hideEdit,
+      hideTransfer,
+      hideDelete,
+      hasOnEdit: !!onEdit,
+      hasOnTransfer: !!onTransfer,
+      hasOnDelete: !!onDelete,
     });
   }
 
   // Si aucune action à afficher
   if (!showSchedule && !showUrgent && !showAssign && !showEdit && !showTransfer && !showDelete && !showAll) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(`⚠️ [ReservationActions] Aucune action pour réservation #${reservation?.id}`);
+    }
     return null;
+  }
+  
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`✅ [ReservationActions] Affichage actions pour #${reservation?.id}:`, {
+      showSchedule,
+      showUrgent,
+      showAssign,
+      showEdit,
+      showTransfer,
+      showDelete,
+    });
   }
 
   const handleDelete = (e) => {

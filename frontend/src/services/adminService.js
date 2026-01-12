@@ -103,8 +103,8 @@ export const fetchCompanies = async () => {
     // ✅ apiClient gère automatiquement l'authentification (token dans localStorage ou cookies httpOnly)
     const token = getAuthToken();
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    const response = await apiClient.get('/companies', { headers });
-    console.log('📌 Données reçues de /companies :', response.data);
+    const response = await apiClient.get('/admin/companies', { headers });
+    console.log('📌 Données reçues de /admin/companies :', response.data);
     // La réponse peut être un array ou un objet { companies: [...] }
     return response.data?.companies ?? (Array.isArray(response.data) ? response.data : []);
   } catch (error) {

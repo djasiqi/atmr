@@ -400,7 +400,7 @@ const DispatchTable = ({
       // Note: L'invalidation React Query est gérée par useSocketInvalidation
     };
 
-    const onBookingStatusChanged = (data) => {
+    const _onBookingStatusChanged = (data) => {
       setRows((prev) =>
         prev.map((b) => (b.id === data.booking_id ? { ...b, status: data.status } : b))
       );
@@ -444,19 +444,19 @@ const DispatchTable = ({
       }, 800);
     };
 
-    socket.on('dispatch:assignment:created', onAssignmentCreated);
-    socket.on('dispatch:assignment:updated', onAssignmentUpdated);
-    socket.on('dispatch:assignment:cancelled', onAssignmentCancelled);
-    socket.on('dispatch:delay:detected', onDelayDetected);
-    socket.on('booking:status:changed', onBookingStatusChanged);
+    // ✅ FIX: Standardiser avec '_' au lieu de ':' pour cohérence avec backend
+    socket.on('dispatch_assignment_created', onAssignmentCreated);
+    socket.on('dispatch_assignment_updated', onAssignmentUpdated);
+    socket.on('dispatch_assignment_cancelled', onAssignmentCancelled);
+    socket.on('dispatch_delay_detected', onDelayDetected);
+    // booking_status_changed supprimé (jamais émis par backend, remplacé par booking_updated)
     socket.on('driver_location_update', onDriverLocationUpdated);
 
     return () => {
-      socket.off('dispatch:assignment:created', onAssignmentCreated);
-      socket.off('dispatch:assignment:updated', onAssignmentUpdated);
-      socket.off('dispatch:assignment:cancelled', onAssignmentCancelled);
-      socket.off('dispatch:delay:detected', onDelayDetected);
-      socket.off('booking:status:changed', onBookingStatusChanged);
+      socket.off('dispatch_assignment_created', onAssignmentCreated);
+      socket.off('dispatch_assignment_updated', onAssignmentUpdated);
+      socket.off('dispatch_assignment_cancelled', onAssignmentCancelled);
+      socket.off('dispatch_delay_detected', onDelayDetected);
       socket.off('driver_location_update', onDriverLocationUpdated);
       if (locTimer) clearTimeout(locTimer);
       try {
@@ -474,18 +474,19 @@ const DispatchTable = ({
         ['dispatch-delays', dispatchDay],
         ['reservations'],
       ],
-      'dispatch:assignment:created': [
+      // ✅ FIX: Standardiser avec '_' au lieu de ':' pour cohérence avec backend
+      'dispatch_assignment_created': [
         ['assigned-reservations', dispatchDay],
         ['reservations'],
       ],
-      'dispatch:assignment:updated': [['assigned-reservations', dispatchDay]],
-      'dispatch:assignment:cancelled': [
+      'dispatch_assignment_updated': [['assigned-reservations', dispatchDay]],
+      'dispatch_assignment_cancelled': [
         ['assigned-reservations', dispatchDay],
         ['reservations'],
       ],
-      'dispatch:delay:detected': [['dispatch-delays', dispatchDay]],
-      'booking:status:changed': [
-        ['reservations'],
+      'dispatch_delay_detected': [['dispatch-delays', dispatchDay]],
+      // booking_status_changed supprimé (jamais émis, remplacé par booking_updated)
+      'booking_updated': [
         ['assigned-reservations', dispatchDay],
       ],
     },

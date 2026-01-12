@@ -3,10 +3,11 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
-from flask import current_app  # pyright: ignore[reportMissingImports]
+from flask import current_app
 from sqlalchemy.orm import joinedload
 
 from models import Client, CompanyBillingSettings, Invoice, InvoiceLineType
+from services.documents.invoice_template_builder import InvoiceTemplateBuilder
 from services.documents.qrbill import QRBillService
 
 LEVEL_ONE = 1
@@ -90,12 +91,66 @@ class PDFService:
 
     def __init__(self):
         super().__init__()
+        from flask import current_app
+
         self.qrbill_service = QRBillService()
-        self.uploads_dir = Path(Path(Path(__file__).parent.parent), "uploads")
+        # ✅ Chemin correct: /app/uploads (pas /app/services/uploads)
+        self.uploads_dir = Path(current_app.config.get("UPLOAD_FOLDER", "/app/uploads"))
         self.invoices_dir = Path(self.uploads_dir, "invoices")
 
         # Créer les dossiers s'ils n'existent pas
-        Path(self.invoices_dir, exist_ok=True).mkdir(parents=True, exist_ok=True)
+        self.invoices_dir.mkdir(parents=True, exist_ok=True)
+
+        # Builder pour templates HTML
+        self.template_builder = InvoiceTemplateBuilder()
+
+    def _get_company_address_for_pdf(self, company):
+        """Récupère l'adresse de l'entreprise depuis le profil de facturation.
+
+        Args:
+            company: Instance de Company
+
+        Returns:
+            str: Adresse formatée pour affichage PDF
+        """
+        from services.billing import BillingProfileService
+
+        # Essayer de récupérer le profil
+        profile = BillingProfileService.get_by_company_id(company.id)
+
+        if profile:
+            # Utiliser l'adresse du profil (source unique)
+            # Si building_number est vide, street_name contient déjà l'adresse complète
+            if profile.building_number and profile.building_number.strip():
+                address_line1 = (
+                    f"{profile.street_name} {profile.building_number}".strip()
+                )
+            else:
+                address_line1 = profile.street_name or ""
+            address_line2 = f"{profile.postal_code} {profile.city}"
+            country = profile.country_code
+            return f"{address_line1}<br/>{address_line2} {country}"
+
+        # Fallback : utiliser domicile_address (pas company.address qui est l'adresse opérationnelle)
+        if company.domicile_address_line1:
+            address_parts = [company.domicile_address_line1]
+            if company.domicile_zip and company.domicile_city:
+                address_parts.append(f"{company.domicile_zip} {company.domicile_city}")
+            return "<br/>".join(address_parts)
+
+        # Dernier fallback
+        return company.address or "[Adresse non configurée]"
+
+    def _test_builder_extraction(self, invoice):
+        """Méthode de test pour valider l'extraction de données par le builder.
+
+        Args:
+            invoice: Instance d'Invoice
+
+        Returns:
+            InvoiceData | None: Données extraites ou None
+        """
+        return self.template_builder.extract_invoice_data(invoice)
 
     def generate_invoice_pdf(self, invoice):
         """Génère le PDF d'une facture."""
@@ -218,6 +273,7 @@ class PDFService:
         """Crée le contenu PDF d'une facture avec le template standard
         (format actuel)."""
         # Import ici pour éviter les problèmes de dépendances circulaires
+        # ruff: noqa: I001
         from io import BytesIO
 
         from reportlab.lib import colors  # pyright: ignore[reportMissingModuleSource]
@@ -233,6 +289,10 @@ class PDFService:
             getSampleStyleSheet,
         )
         from reportlab.lib.units import cm  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.pdfbase import pdfmetrics  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.pdfbase.ttfonts import (  # pyright: ignore[reportMissingModuleSource]
+            TTFont,
+        )
         from reportlab.platypus import (  # pyright: ignore[reportMissingModuleSource]
             Image,
             Paragraph,
@@ -241,6 +301,16 @@ class PDFService:
             Table,
             TableStyle,
         )
+
+        # ✅ Enregistrer une police TrueType pour supporter l'Unicode (caractères accentués)
+        try:
+            pdfmetrics.registerFont(
+                TTFont("DejaVuSans", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
+            )
+            font_name = "DejaVuSans"
+        except Exception:
+            # Fallback sur Helvetica si DejaVu n'est pas disponible
+            font_name = "Helvetica"
 
         buffer = BytesIO()
         doc = SimpleDocTemplate(
@@ -263,7 +333,7 @@ class PDFService:
             textColor=colors.black,
             alignment=TA_LEFT,
             spaceAfter=6,
-            fontName="Helvetica",
+            fontName=font_name,
         )
 
         # Style pour le texte centré (pied de page)
@@ -274,7 +344,7 @@ class PDFService:
             textColor=colors.black,
             alignment=TA_CENTER,
             spaceAfter=6,
-            fontName="Helvetica",
+            fontName=font_name,
         )
 
         # Contenu
@@ -309,7 +379,12 @@ class PDFService:
                         logo_url_clean = logo_url_clean[8:]  # Supprimer 'uploads/'
 
                     # Construire le chemin absolu
-                    uploads_dir = Path(Path(Path(__file__).parent.parent), "uploads")
+                    # ✅ Chemin correct: /app/uploads
+                    from flask import current_app
+
+                    uploads_dir = Path(
+                        current_app.config.get("UPLOAD_FOLDER", "/app/uploads")
+                    )
                     logo_path = uploads_dir / logo_url_clean
 
                 if logo_path and Path(logo_path).exists():
@@ -365,14 +440,22 @@ class PDFService:
                 app_logger.warning("Impossible de charger le logo: %s", e)
 
         # Informations de l'entreprise
-        company_name = company.name or "Emmenez Moi"
-        company_address_raw = company.address or "Route de Chevrens 145, 1247 Anières"
-        company_address = _format_address_for_display(company_address_raw)
-        company_phone = company.contact_phone or "0225120203"
+        company_name = company.name or "[Nom entreprise non configuré]"
+        company_address = self._get_company_address_for_pdf(company)
+        company_phone = company.contact_phone or "[Téléphone non configuré]"
         company_email = (
-            company.billing_email or company.contact_email or "info@casa-famiglia.ch"
+            company.billing_email or company.contact_email or "[Email non configuré]"
         )
-        company_uid = company.uid_ide or "CHE-27348.653"
+        company_uid = company.uid_ide or "[IDE/UID non configuré]"
+
+        # ✅ Statut TVA (conformité facturation suisse)
+        vat_status_text = "Non assujetti à la TVA"
+        if billing_settings and billing_settings.vat_applicable:
+            vat_number = billing_settings.vat_number or ""
+            if vat_number:
+                vat_status_text = f"N° TVA : {vat_number}"
+            else:
+                vat_status_text = f"TVA {billing_settings.vat_rate or 7.7}% incluse"
 
         # === LOGO ET COORDONNÉES ENTREPRISE (GAUCHE) ===
         if logo_img:
@@ -433,7 +516,8 @@ class PDFService:
         {company_address}<br/>
         Email facturation : {company_email}<br/>
         Téléphone : {company_phone}<br/>
-        IDE/UID : {company_uid}
+        IDE/UID : {company_uid}<br/>
+        {vat_status_text}
         """
 
         story.append(Paragraph(company_info_left, normal_style))
@@ -505,8 +589,13 @@ class PDFService:
         story.append(Spacer(1, 20))
 
         # === INFORMATIONS FACTURE (GAUCHE) ===
+        # ✅ Ajouter mention de rappel si applicable
+        reminder_text = ""
+        if invoice.reminder_level and invoice.reminder_level > 0:
+            reminder_text = f'<br/><b><font color="red">RAPPEL N°{invoice.reminder_level}</font></b>'
+
         invoice_info_left = f"""
-        <b>Numéro de facture :</b> {invoice.invoice_number}<br/>
+        <b>Numéro de facture :</b> {invoice.invoice_number}{reminder_text}<br/>
         <b>Date d'émission :</b> {invoice.issued_at.strftime("%d.%m.%Y")}<br/>
         <b>Date d'échéance :</b> {invoice.due_date.strftime("%d.%m.%Y")}<br/>
         <b>Période :</b> {invoice.period_month:02d}.{invoice.period_year}
@@ -831,7 +920,7 @@ class PDFService:
         jours_text = "jours" if payment_terms_days > 1 else "jour"
 
         # Informations bancaires (récupérer depuis billing_settings)
-        iban_value = "CH6509000000152631289"  # Valeur par défaut
+        iban_value = "[IBAN non configuré]"  # Valeur par défaut si non configuré
         if billing_settings and billing_settings.iban:
             iban_value = billing_settings.iban
         elif hasattr(company, "iban") and company.iban:
@@ -942,6 +1031,7 @@ class PDFService:
     def _create_minimal_invoice_pdf(self, invoice, billing_settings):
         """Crée le contenu PDF d'une facture avec le template minimal
         (version simplifiée)."""
+        # ruff: noqa: I001
         from io import BytesIO
 
         from reportlab.lib import colors  # pyright: ignore[reportMissingModuleSource]
@@ -957,6 +1047,10 @@ class PDFService:
             getSampleStyleSheet,
         )
         from reportlab.lib.units import cm  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.pdfbase import pdfmetrics  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.pdfbase.ttfonts import (  # pyright: ignore[reportMissingModuleSource]
+            TTFont,
+        )
         from reportlab.platypus import (  # pyright: ignore[reportMissingModuleSource]
             PageBreak,
             Paragraph,
@@ -965,6 +1059,16 @@ class PDFService:
             Table,
             TableStyle,
         )
+
+        # ✅ Enregistrer une police TrueType pour supporter l'Unicode (caractères accentués)
+        try:
+            pdfmetrics.registerFont(
+                TTFont("DejaVuSans", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
+            )
+            font_name = "DejaVuSans"
+        except Exception:
+            # Fallback sur Helvetica si DejaVu n'est pas disponible
+            font_name = "Helvetica"
 
         buffer = BytesIO()
         doc = SimpleDocTemplate(
@@ -984,7 +1088,7 @@ class PDFService:
             textColor=colors.black,
             alignment=TA_LEFT,
             spaceAfter=4,
-            fontName="Helvetica",
+            fontName=font_name,
         )
         centered_style = ParagraphStyle(
             "Centered",
@@ -993,15 +1097,15 @@ class PDFService:
             textColor=colors.black,
             alignment=TA_CENTER,
             spaceAfter=4,
-            fontName="Helvetica",
+            fontName=font_name,
         )
 
         story = []
         company = invoice.company
 
         # === EN-TÊTE SIMPLIFIÉ (SANS LOGO) ===
-        company_name = company.name or "Emmenez Moi"
-        company_address = company.address or "Route de Chevrens 145, 1247 Anières"
+        company_name = company.name or "[Nom entreprise non configuré]"
+        company_address = self._get_company_address_for_pdf(company)
         company_info = f"{company_name}<br/>{company_address}"
         story.append(Paragraph(company_info, normal_style))
         story.append(Spacer(1, 15))
@@ -1028,8 +1132,15 @@ class PDFService:
         story.append(Spacer(1, 10))
 
         # === INFORMATIONS FACTURE (SIMPLIFIÉES) ===
+        # ✅ Ajouter mention de rappel si applicable
+        reminder_text = ""
+        if invoice.reminder_level and invoice.reminder_level > 0:
+            reminder_text = (
+                f' - <b><font color="red">RAPPEL N°{invoice.reminder_level}</font></b>'
+            )
+
         invoice_info = (
-            f"<b>Facture {invoice.invoice_number}</b> - "
+            f"<b>Facture {invoice.invoice_number}</b>{reminder_text} - "
             f"{invoice.issued_at.strftime('%d.%m.%Y')} - "
             f"Échéance: {invoice.due_date.strftime('%d.%m.%Y')}"
         )
@@ -1175,6 +1286,7 @@ class PDFService:
     def _create_detailed_invoice_pdf(self, invoice, billing_settings):
         """Crée le contenu PDF d'une facture avec le template détaillé
         (version enrichie)."""
+        # ruff: noqa: I001
         from io import BytesIO
 
         from reportlab.lib import colors  # pyright: ignore[reportMissingModuleSource]
@@ -1190,6 +1302,10 @@ class PDFService:
             getSampleStyleSheet,
         )
         from reportlab.lib.units import cm  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.pdfbase import pdfmetrics  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.pdfbase.ttfonts import (  # pyright: ignore[reportMissingModuleSource]
+            TTFont,
+        )
         from reportlab.platypus import (  # pyright: ignore[reportMissingModuleSource]
             Image,
             PageBreak,
@@ -1199,6 +1315,16 @@ class PDFService:
             Table,
             TableStyle,
         )
+
+        # ✅ Enregistrer une police TrueType pour supporter l'Unicode (caractères accentués)
+        try:
+            pdfmetrics.registerFont(
+                TTFont("DejaVuSans", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
+            )
+            font_name = "DejaVuSans"
+        except Exception:
+            # Fallback sur Helvetica si DejaVu n'est pas disponible
+            font_name = "Helvetica"
 
         buffer = BytesIO()
         doc = SimpleDocTemplate(
@@ -1218,7 +1344,7 @@ class PDFService:
             textColor=colors.black,
             alignment=TA_LEFT,
             spaceAfter=6,
-            fontName="Helvetica",
+            fontName=font_name,
         )
         centered_style = ParagraphStyle(
             "Centered",
@@ -1227,7 +1353,7 @@ class PDFService:
             textColor=colors.black,
             alignment=TA_CENTER,
             spaceAfter=6,
-            fontName="Helvetica",
+            fontName=font_name,
         )
         detail_style = ParagraphStyle(
             "Detail",
@@ -1236,7 +1362,7 @@ class PDFService:
             textColor=colors.darkgrey,
             alignment=TA_LEFT,
             spaceAfter=4,
-            fontName="Helvetica",
+            fontName=font_name,
         )
 
         story = []
@@ -1254,7 +1380,12 @@ class PDFService:
                     logo_url_clean = logo_url.lstrip("/")
                     if logo_url_clean.startswith("uploads/"):
                         logo_url_clean = logo_url_clean[8:]
-                    uploads_dir = Path(Path(Path(__file__).parent.parent), "uploads")
+                    # ✅ Chemin correct: /app/uploads
+                    from flask import current_app
+
+                    uploads_dir = Path(
+                        current_app.config.get("UPLOAD_FOLDER", "/app/uploads")
+                    )
                     logo_path = uploads_dir / logo_url_clean
                     if logo_path and Path(logo_path).exists():
                         logo_width_percent = 0.15
@@ -1321,19 +1452,30 @@ class PDFService:
                 story.append(logo_para)
 
         # === INFORMATIONS ENTREPRISE DÉTAILLÉES ===
-        company_name = company.name or "Emmenez Moi"
-        company_address = company.address or "Route de Chevrens 145, 1247 Anières"
-        company_phone = company.contact_phone or "0225120203"
+        company_name = company.name or "[Nom entreprise non configuré]"
+        company_address = self._get_company_address_for_pdf(company)
+        company_phone = company.contact_phone or "[Téléphone non configuré]"
         company_email = (
-            company.billing_email or company.contact_email or "info@casa-famiglia.ch"
+            company.billing_email or company.contact_email or "[Email non configuré]"
         )
-        company_uid = company.uid_ide or "CHE-27348.653"
+        company_uid = company.uid_ide or "[IDE/UID non configuré]"
+
+        # ✅ Statut TVA (conformité facturation suisse)
+        vat_status_text = "Non assujetti à la TVA"
+        if billing_settings and billing_settings.vat_applicable:
+            vat_number = billing_settings.vat_number or ""
+            if vat_number:
+                vat_status_text = f"N° TVA : {vat_number}"
+            else:
+                vat_status_text = f"TVA {billing_settings.vat_rate or 7.7}% incluse"
+
         company_info_detailed = f"""
         <b>{company_name}</b><br/>
         {company_address}<br/>
         Téléphone: {company_phone}<br/>
         Email: {company_email}<br/>
-        IDE/UID: {company_uid}
+        IDE/UID: {company_uid}<br/>
+        {vat_status_text}
         """
         story.append(Paragraph(company_info_detailed, normal_style))
         story.append(Spacer(1, 20))
@@ -1391,8 +1533,14 @@ class PDFService:
             else str(invoice.status)
         )
         period_str = f"{invoice.period_month:02d}.{invoice.period_year}"
+
+        # ✅ Ajouter mention de rappel si applicable
+        reminder_text = ""
+        if invoice.reminder_level and invoice.reminder_level > 0:
+            reminder_text = f'<br/><b><font color="red">RAPPEL N°{invoice.reminder_level}</font></b>'
+
         invoice_info_detailed = f"""
-        <b>Numéro de facture :</b> {invoice.invoice_number}<br/>
+        <b>Numéro de facture :</b> {invoice.invoice_number}{reminder_text}<br/>
         <b>Date d'émission :</b> {invoice.issued_at.strftime("%d.%m.%Y")}<br/>
         <b>Date d'échéance :</b> {invoice.due_date.strftime("%d.%m.%Y")}<br/>
         <b>Période de facturation :</b> {period_str}<br/>
@@ -1622,7 +1770,7 @@ class PDFService:
             overdue_fee = billing_settings.overdue_fee
 
         jours_text = "jours" if payment_terms_days > 1 else "jour"
-        iban_value = "CH6509000000152631289"
+        iban_value = "[IBAN non configuré]"
         if billing_settings and billing_settings.iban:
             iban_value = billing_settings.iban
         elif hasattr(company, "iban") and company.iban:
@@ -1681,6 +1829,7 @@ class PDFService:
 
     def _create_swiss_qr_bill_layout(self, invoice, billing_settings, qr_image):
         """Crée le layout authentique du QR-Bill suisse."""
+        # ruff: noqa: I001
         from reportlab.lib import colors  # pyright: ignore[reportMissingModuleSource]
         from reportlab.lib.enums import (  # pyright: ignore[reportMissingModuleSource]
             TA_CENTER,
@@ -1690,10 +1839,32 @@ class PDFService:
             ParagraphStyle,
             getSampleStyleSheet,
         )
+        from reportlab.pdfbase import pdfmetrics  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.pdfbase.ttfonts import (  # pyright: ignore[reportMissingModuleSource]
+            TTFont,
+        )
         from reportlab.platypus import (  # pyright: ignore[reportMissingModuleSource]
             Paragraph,
             Spacer,
         )
+
+        # ✅ Enregistrer une police TrueType pour supporter l'Unicode (caractères accentués)
+        try:
+            pdfmetrics.registerFont(
+                TTFont("DejaVuSans", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
+            )
+            pdfmetrics.registerFont(
+                TTFont(
+                    "DejaVuSans-Bold",
+                    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                )
+            )
+            font_name = "DejaVuSans"
+            font_name_bold = "DejaVuSans-Bold"
+        except Exception:
+            # Fallback sur Helvetica si DejaVu n'est pas disponible
+            font_name = "Helvetica"
+            font_name_bold = "Helvetica-Bold"
 
         styles = getSampleStyleSheet()
 
@@ -1705,7 +1876,7 @@ class PDFService:
             textColor=colors.black,
             alignment=TA_LEFT,
             spaceAfter=2,
-            fontName="Helvetica",
+            fontName=font_name,
         )
 
         # Style pour les titres de section
@@ -1713,7 +1884,7 @@ class PDFService:
             "SectionTitle",
             parent=styles["Normal"],
             fontSize=12,
-            fontName="Helvetica-Bold",
+            fontName=font_name_bold,
             alignment=TA_LEFT,
             spaceAfter=8,
             textColor=colors.black,
@@ -1724,7 +1895,7 @@ class PDFService:
             "Label",
             parent=styles["Normal"],
             fontSize=8,
-            fontName="Helvetica",
+            fontName=font_name,
             alignment=TA_LEFT,
             spaceAfter=2,
             textColor=colors.black,
@@ -1735,7 +1906,7 @@ class PDFService:
             "Value",
             parent=styles["Normal"],
             fontSize=8,
-            fontName="Helvetica-Bold",
+            fontName=font_name_bold,
             alignment=TA_LEFT,
             spaceAfter=4,
             textColor=colors.black,
@@ -1750,13 +1921,22 @@ class PDFService:
         # Informations créancier
         left_section.append(Paragraph("Konto / Zahlbar an", label_style))
         left_section.append(Paragraph(billing_settings.iban, value_style))
+        company = invoice.company
         left_section.append(
-            Paragraph(invoice.company.name or "Emmenez Moi", normal_style)
+            Paragraph(company.name or "[Nom non configuré]", normal_style)
         )
-        left_section.append(
-            Paragraph(invoice.company.address or "Route de Chevrens 145", normal_style)
+        # Utiliser l'adresse de domiciliation
+        street = (
+            company.domicile_address_line1
+            or company.address
+            or "[Adresse non configurée]"
         )
-        left_section.append(Paragraph("1247 Anières", normal_style))
+        left_section.append(Paragraph(street, normal_style))
+        postal_city = (
+            f"{company.domicile_zip or ''} {company.domicile_city or ''}".strip()
+            or "[Code postal/ville non configuré]"
+        )
+        left_section.append(Paragraph(postal_city, normal_style))
         left_section.append(Spacer(1, 8))
 
         # Informations débiteur
@@ -1820,12 +2000,10 @@ class PDFService:
         right_section.append(Paragraph("Konto / Zahlbar an", label_style))
         right_section.append(Paragraph(billing_settings.iban, value_style))
         right_section.append(
-            Paragraph(invoice.company.name or "Emmenez Moi", normal_style)
+            Paragraph(company.name or "[Nom non configuré]", normal_style)
         )
-        right_section.append(
-            Paragraph(invoice.company.address or "Route de Chevrens 145", normal_style)
-        )
-        right_section.append(Paragraph("1247 Anières", normal_style))
+        right_section.append(Paragraph(street, normal_style))
+        right_section.append(Paragraph(postal_city, normal_style))
         right_section.append(Spacer(1, 8))
 
         # QR Code
@@ -1887,6 +2065,7 @@ class PDFService:
 
     def _create_official_swiss_qr_bill(self, invoice, billing_settings, qr_image):
         """Crée un QR-Bill suisse officiel avec le format exact."""
+        # ruff: noqa: I001
         from reportlab.lib import colors  # pyright: ignore[reportMissingModuleSource]
         from reportlab.lib.enums import (  # pyright: ignore[reportMissingModuleSource]
             TA_CENTER,
@@ -1897,12 +2076,34 @@ class PDFService:
             getSampleStyleSheet,
         )
         from reportlab.lib.units import cm  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.pdfbase import pdfmetrics  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.pdfbase.ttfonts import (  # pyright: ignore[reportMissingModuleSource]
+            TTFont,
+        )
         from reportlab.platypus import (  # pyright: ignore[reportMissingModuleSource]
             Paragraph,
             Spacer,
             Table,
             TableStyle,
         )
+
+        # ✅ Enregistrer une police TrueType pour supporter l'Unicode (caractères accentués)
+        try:
+            pdfmetrics.registerFont(
+                TTFont("DejaVuSans", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
+            )
+            pdfmetrics.registerFont(
+                TTFont(
+                    "DejaVuSans-Bold",
+                    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                )
+            )
+            font_name = "DejaVuSans"
+            font_name_bold = "DejaVuSans-Bold"
+        except Exception:
+            # Fallback sur Helvetica si DejaVu n'est pas disponible
+            font_name = "Helvetica"
+            font_name_bold = "Helvetica-Bold"
 
         styles = getSampleStyleSheet()
 
@@ -1911,7 +2112,7 @@ class PDFService:
             "QRTitle",
             parent=styles["Normal"],
             fontSize=11,
-            fontName="Helvetica-Bold",
+            fontName=font_name_bold,
             alignment=TA_LEFT,
             spaceAfter=6,
             textColor=colors.black,
@@ -1921,7 +2122,7 @@ class PDFService:
             "QRLabel",
             parent=styles["Normal"],
             fontSize=7,
-            fontName="Helvetica",
+            fontName=font_name,
             alignment=TA_LEFT,
             spaceAfter=1,
             textColor=colors.black,
@@ -1931,7 +2132,7 @@ class PDFService:
             "QRValue",
             parent=styles["Normal"],
             fontSize=7,
-            fontName="Helvetica-Bold",
+            fontName=font_name_bold,
             alignment=TA_LEFT,
             spaceAfter=3,
             textColor=colors.black,
@@ -1941,7 +2142,7 @@ class PDFService:
             "QRNormal",
             parent=styles["Normal"],
             fontSize=7,
-            fontName="Helvetica",
+            fontName=font_name,
             alignment=TA_LEFT,
             spaceAfter=1,
             textColor=colors.black,
@@ -1957,15 +2158,21 @@ class PDFService:
         # Konto / Zahlbar an
         left_content.append(Paragraph("Konto / Zahlbar an", label_style))
         left_content.append(Paragraph(billing_settings.iban, value_style))
+        company = invoice.company
         left_content.append(
-            Paragraph(invoice.company.name or "Emmenez Moi", normal_text_style)
+            Paragraph(company.name or "[Nom non configuré]", normal_text_style)
         )
-        left_content.append(
-            Paragraph(
-                invoice.company.address or "Route de Chevrens 145", normal_text_style
-            )
+        street = (
+            company.domicile_address_line1
+            or company.address
+            or "[Adresse non configurée]"
         )
-        left_content.append(Paragraph("1247 Anières", normal_text_style))
+        left_content.append(Paragraph(street, normal_text_style))
+        postal_city = (
+            f"{company.domicile_zip or ''} {company.domicile_city or ''}".strip()
+            or "[Code postal/ville non configuré]"
+        )
+        left_content.append(Paragraph(postal_city, normal_text_style))
         left_content.append(Spacer(1, 6))
 
         # Zahlbar durch
@@ -2028,14 +2235,10 @@ class PDFService:
         right_content.append(Paragraph("Konto / Zahlbar an", label_style))
         right_content.append(Paragraph(billing_settings.iban, value_style))
         right_content.append(
-            Paragraph(invoice.company.name or "Emmenez Moi", normal_text_style)
+            Paragraph(company.name or "[Nom non configuré]", normal_text_style)
         )
-        right_content.append(
-            Paragraph(
-                invoice.company.address or "Route de Chevrens 145", normal_text_style
-            )
-        )
-        right_content.append(Paragraph("1247 Anières", normal_text_style))
+        right_content.append(Paragraph(street, normal_text_style))
+        right_content.append(Paragraph(postal_city, normal_text_style))
         right_content.append(Spacer(1, 6))
 
         # QR Code
@@ -2164,13 +2367,29 @@ class PDFService:
         story.append(Paragraph(title, title_style))
         story.append(Spacer(1, 20))
 
-        # Informations de la facture
+        # ✅ Informations enrichies du rappel
         invoice_info = [
             ["Numéro de facture:", invoice.invoice_number],
-            ["Date d'émission:", invoice.issued_at.strftime("%d.%m.%Y")],
-            ["Date d'échéance:", invoice.due_date.strftime("%d.%m.%Y")],
-            ["Montant dû:", f"{invoice.balance_due:.2f}"],
+            ["Date d'émission initiale:", invoice.issued_at.strftime("%d.%m.%Y")],
+            ["Nouvelle échéance:", invoice.due_date.strftime("%d.%m.%Y")],
         ]
+
+        # ✅ Afficher le montant initial vs frais de rappel (si applicable)
+        if invoice.reminder_fee_amount and invoice.reminder_fee_amount > 0:
+            initial_amount = invoice.total_amount - invoice.reminder_fee_amount
+            invoice_info.extend(
+                [
+                    ["Montant facture initiale:", f"CHF {initial_amount:.2f}"],
+                    [
+                        f"Frais de rappel N°{level}:",
+                        f"CHF {invoice.reminder_fee_amount:.2f}",
+                    ],
+                    ["Solde total dû:", f"CHF {invoice.balance_due:.2f}"],
+                ]
+            )
+        else:
+            # Si frais = 0, afficher juste le solde dû
+            invoice_info.append(["Solde total dû:", f"CHF {invoice.balance_due:.2f}"])
 
         invoice_table = Table(invoice_info, colWidths=[6 * cm, 6 * cm])
         invoice_table.setStyle(

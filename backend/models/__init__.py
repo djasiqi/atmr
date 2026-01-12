@@ -1,4 +1,5 @@
 # models/__init__.py
+# ruff: noqa: I001, RUF022
 """Point d'entrée principal du package models.
 Importe tous les models extraits depuis les fichiers individuels.
 """
@@ -71,6 +72,7 @@ from .enums import (
     UserRole,
     VacationType,
 )
+from .billing_profile import CompanyBillingProfile
 from .eta_accuracy_log import EtaAccuracyLog
 from .invoice import (
     CompanyBillingSettings,
@@ -114,6 +116,7 @@ __all__ = [
     "ClientType",
     "Company",
     "CompanyBillingSettings",
+    "CompanyBillingProfile",
     "CompanyPlanningSettings",
     "DailyStats",
     "DelayEvent",  # ✅ 3.5.1: Historique événements retards

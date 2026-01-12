@@ -263,19 +263,46 @@ const CompanyDashboard = () => {
       // window.alert(err?.message || "Une erreur est survenue pendant l'optimisation.");
       refetchAll();
     };
-    socket.on('assignment_created', onAssignCreated);
-    socket.on('assignment_updated', onAssignUpdated);
-    socket.on('assignment_deleted', onAssignDeleted);
+    const onTransferReceived = (data) => {
+      // Notification: une course a été transférée à cette entreprise
+      console.log('📥 Transfert reçu:', data);
+      // Rafraîchir les réservations pour afficher la nouvelle course
+      refetchAll();
+      // TODO: Afficher une notification toast si souhaité
+      // toast.info(`Nouvelle course transférée : #${data.booking_id}`);
+    };
+    const onTransferProposed = (data) => {
+      // Notification: cette entreprise a proposé un transfert (pour info)
+      console.log('📤 Transfert proposé:', data);
+      // Rafraîchir pour mettre à jour le statut de la course
+      refetchAll();
+    };
+    const onBookingUpdated = (data) => {
+      // Notification: une course a été mise à jour (statut changé par le chauffeur)
+      console.log('🔄 Course mise à jour:', data);
+      // Rafraîchir les réservations pour afficher le nouveau statut
+      refetchAll();
+    };
+    // ✅ FIX: Corriger les noms d'événements pour correspondre au backend
+    socket.on('dispatch_assignment_created', onAssignCreated);
+    socket.on('dispatch_assignment_updated', onAssignUpdated);
+    socket.on('dispatch_assignment_cancelled', onAssignDeleted); // Note: "cancelled" pas "deleted"
     socket.on('dispatch_progress', onDispatchProgress);
     socket.on('dispatch_error', onDispatchError);
     socket.on('dispatch_run_completed', onDispatchRunCompleted);
+    socket.on('transfer_received', onTransferReceived);
+    socket.on('transfer_proposed', onTransferProposed);
+    socket.on('booking_updated', onBookingUpdated);
     return () => {
-      socket.off('assignment_created', onAssignCreated);
-      socket.off('assignment_updated', onAssignUpdated);
-      socket.off('assignment_deleted', onAssignDeleted);
+      socket.off('dispatch_assignment_created', onAssignCreated);
+      socket.off('dispatch_assignment_updated', onAssignUpdated);
+      socket.off('dispatch_assignment_cancelled', onAssignDeleted);
       socket.off('dispatch_progress', onDispatchProgress);
       socket.off('dispatch_error', onDispatchError);
       socket.off('dispatch_run_completed', onDispatchRunCompleted);
+      socket.off('transfer_received', onTransferReceived);
+      socket.off('transfer_proposed', onTransferProposed);
+      socket.off('booking_updated', onBookingUpdated);
     };
   }, [socket, refetchAssigned, reloadReservations, refetchDelays]);
 
@@ -725,7 +752,7 @@ const CompanyDashboard = () => {
                     onSchedule={handleScheduleReservation}
                     onDispatchNow={handleDispatchNow}
                     hideSchedule={true}
-                    hideEdit={true}
+                    currentCompanyId={company?.id}
                   />
               )}
 
@@ -740,7 +767,7 @@ const CompanyDashboard = () => {
                   onSchedule={handleScheduleReservation}
                   onDispatchNow={handleDispatchNow}
                   hideSchedule={true}
-                  hideEdit={true}
+                  currentCompanyId={company?.id}
                 />
               )}
             </div>

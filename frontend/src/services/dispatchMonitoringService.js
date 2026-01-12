@@ -97,11 +97,17 @@ export const getOptimizerStatus = async () => {
       return null;
     }
 
-    // Ne logger que les vraies erreurs (pas les 401 en cours de refresh)
-    if (error?.response?.status !== 401) {
-      console.error('[DispatchMonitoring] Error fetching optimizer status:', error);
-    } else {
+    // Ne logger que les vraies erreurs (pas les 401 en cours de refresh, ni les 500 en dev)
+    const status = error?.response?.status;
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    
+    if (status === 401) {
       console.debug('[DispatchMonitoring] 401 error, refresh token will be attempted');
+    } else if (isDevelopment && status === 500) {
+      // En développement, ne pas polluer la console avec les erreurs 500 (backend peut ne pas être démarré)
+      console.debug('[DispatchMonitoring] Backend optimizer endpoint unavailable (500) - backend may not be running');
+    } else {
+      console.error('[DispatchMonitoring] Error fetching optimizer status:', error);
     }
     throw error;
   }

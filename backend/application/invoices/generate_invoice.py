@@ -210,7 +210,9 @@ class GenerateInvoiceUseCase:
                             from models.enums import TransferModel, TransferStatus
 
                             transfer = BookingTransfer.query.filter_by(
-                                booking_id=dto.id,
+                                booking_id=int(
+                                    dto.id
+                                ),  # ✅ Conversion explicite pour sécurité
                                 executing_company_id=input_data.company_id,
                                 transfer_model=TransferModel.ASSIGN_TO_PARTNER,
                                 is_validated=True,

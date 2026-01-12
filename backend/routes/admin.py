@@ -242,6 +242,25 @@ class RecentUsers(Resource):
             admin_ns.abort(500, "Une erreur interne est survenue.")
 
 
+@admin_ns.route("/companies")
+class AllCompanies(Resource):
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @ip_whitelist_required()  # ✅ Phase 3: IP whitelist pour endpoints admin
+    @limiter.limit("100 per hour")  # ✅ Rate limiting pour liste entreprises
+    def get(self):
+        """Récupère toutes les entreprises pour l'admin."""
+        try:
+            companies = company_repo.find_all()
+            return {
+                "companies": [cast("Any", c).serialize for c in companies]
+            }, 200
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.exception("❌ ERREUR get_companies: %s", e)
+            admin_ns.abort(500, "Une erreur interne est survenue.")
+
+
 @admin_ns.route("/users/<int:user_id>")
 class ManageUser(Resource):
     @jwt_required()

@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { router } from "expo-router";
 import { useAuth } from "@/hooks/useAuth";
+import { createShadow } from "@/styles/shadowStyles";
 import {
   getMyDriverAccount,
   DriverAccountInfo,
@@ -403,11 +404,13 @@ const styles = StyleSheet.create({
     gap: 18,
     borderWidth: 1,
     borderColor: palette.heroBorder,
-    shadowColor: "rgba(10,127,89,0.15)",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 1,
-    shadowRadius: 24,
-    elevation: 8,
+    ...createShadow({
+      shadowColor: "rgba(10,127,89,0.15)",
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 1,
+      shadowRadius: 24,
+      elevation: 8,
+    }), // ✅ Compatible web/native
   },
   heroTitle: {
     color: palette.heroText,
@@ -442,11 +445,13 @@ const styles = StyleSheet.create({
     padding: 22,
     borderWidth: 1,
     borderColor: palette.cardBorder,
-    shadowColor: palette.cardShadow,
-    shadowOpacity: 1,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 12,
-    elevation: 2,
+    ...createShadow({
+      shadowColor: palette.cardShadow,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 1,
+      shadowRadius: 12,
+      elevation: 2,
+    }), // ✅ Compatible web/native
     gap: 16,
   },
   switchAccountHeader: {
@@ -475,11 +480,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
-    shadowColor: palette.primary,
-    shadowOpacity: 0.35,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 12,
-    elevation: 6,
+    ...createShadow({
+      shadowColor: palette.primary,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.35,
+      shadowRadius: 12,
+      elevation: 6,
+    }), // ✅ Compatible web/native
   },
   switchButtonDisabled: {
     opacity: 0.6,
@@ -496,11 +503,13 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: palette.logoutBg,
-    shadowOpacity: 0.35,
-    shadowOffset: { width: 0, height: 10 },
-    shadowRadius: 18,
-    elevation: 6,
+    ...createShadow({
+      shadowColor: palette.logoutBg,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.35,
+      shadowRadius: 18,
+      elevation: 6,
+    }), // ✅ Compatible web/native
   },
   logoutButtonText: {
     color: palette.heroText,
@@ -571,11 +580,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 14,
-    shadowColor: palette.primary,
-    shadowOpacity: 0.35,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 12,
-    elevation: 6,
+    ...createShadow({
+      shadowColor: palette.primary,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.35,
+      shadowRadius: 12,
+      elevation: 6,
+    }), // ✅ Compatible web/native
   },
   modalConfirmText: {
     color: "#FFFFFF",

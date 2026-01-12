@@ -92,6 +92,9 @@ from . import orchestration
 # Imports de compatibilité pour app.py et tasks
 from .core import engine
 from .core import queue
+from .core import (
+    settings,
+)  # Ajouté pour compatibilité avec agent/tools.py et agent/orchestrator.py
 
 # TODO: Compléter lors de la migration (Semaine 2)
 # from .core.types import *
@@ -106,6 +109,7 @@ __all__ = [
     "locking",
     "orchestration",
     "queue",  # Compatibilité app.py
+    "settings",  # Compatibilité agent/tools.py et agent/orchestrator.py
     # Les autres exports seront ajoutés lors de la migration
 ]
 

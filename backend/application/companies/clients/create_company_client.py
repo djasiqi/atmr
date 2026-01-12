@@ -132,6 +132,8 @@ class CreateCompanyClientUseCase:
         first_name = _norm_str(validated_data.get("first_name")) or ""
         last_name = _norm_str(validated_data.get("last_name")) or ""
         address = _norm_str(validated_data.get("address"))
+        # ✅ Validation du genre obligatoire
+        gender = _norm_str(validated_data.get("gender"))
 
         if ct_upper == "SELF_SERVICE" and not email:
             return CreateCompanyClientOutput(
@@ -147,6 +149,7 @@ class CreateCompanyClientUseCase:
                     ("first_name", first_name),
                     ("last_name", last_name),
                     ("address", address),
+                    ("gender", gender),  # ✅ Le genre est maintenant obligatoire
                 )
                 if not v
             ]
@@ -182,6 +185,8 @@ class CreateCompanyClientUseCase:
             "phone": validated_data.get("phone"),
             "address": validated_data.get("address"),
             "birth_date": validated_data.get("birth_date"),
+            # ✅ Civilité (gender) ajoutée
+            "gender": validated_data.get("gender"),
             "role": "client",
             "password": pwd,
         }
@@ -207,6 +212,8 @@ class CreateCompanyClientUseCase:
             "preferential_rate": validated_data.get("preferential_rate"),
             "notes": validated_data.get("notes"),
             "residence_facility": validated_data.get("residence_facility"),
+            # ✅ Numéro AVS ajouté
+            "avs_number": validated_data.get("avs_number"),
         }
 
         try:

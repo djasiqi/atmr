@@ -11,6 +11,8 @@ const NewClientModal = ({ onClose, onSave }) => {
     phone: '',
     address: '',
     birth_date: '',
+    gender: '', // ✅ Civilité obligatoire (male/female)
+    avs_number: '', // ✅ Numéro AVS optionnel
     is_institution: false,
     institution_name: '',
     residence_facility: '',
@@ -115,6 +117,12 @@ const NewClientModal = ({ onClose, onSave }) => {
       return;
     }
 
+    // ✅ Validation civilité obligatoire
+    if (!formData.gender) {
+      setError('La civilité (Madame/Monsieur) est obligatoire');
+      return;
+    }
+
     // Vérifier que l'adresse de domicile est complète (rue + code postal + ville)
     const hasCompleteAddress =
       formData.domicile_address.trim() &&
@@ -152,9 +160,15 @@ const NewClientModal = ({ onClose, onSave }) => {
         client_type: 'PRIVATE',
         first_name: formData.first_name.trim(),
         last_name: formData.last_name.trim(),
+        // ✅ Civilité obligatoire
+        gender: formData.gender,
         address:
           `${formData.domicile_address}, ${formData.domicile_zip}, ${formData.domicile_city}`.trim(),
         birth_date: formData.birth_date || undefined,
+        // ✅ Numéro AVS optionnel
+        avs_number: formData.avs_number?.trim() || undefined,
+        // ✅ Établissement de résidence (EMS, clinique, foyer, etc.)
+        residence_facility: formData.residence_facility?.trim() || undefined,
         // Adresse de domicile (structurée)
         domicile_address: formData.domicile_address.trim() || undefined,
         domicile_zip: formData.domicile_zip.trim() || undefined,
@@ -310,6 +324,44 @@ const NewClientModal = ({ onClose, onSave }) => {
                   onChange={handleChange}
                   className={styles.input}
                   required
+                  disabled={loading}
+                />
+              </div>
+            </div>
+
+            {/* ✅ Civilité et Numéro AVS */}
+            <div className={styles.formRow}>
+              <div className={styles.formGroup}>
+                <label htmlFor="gender" className={styles.label}>
+                  Civilité *
+                </label>
+                <select
+                  id="gender"
+                  name="gender"
+                  value={formData.gender}
+                  onChange={handleChange}
+                  className={styles.input}
+                  required
+                  disabled={loading}
+                >
+                  <option value="">-- Sélectionnez --</option>
+                  <option value="male">Monsieur</option>
+                  <option value="female">Madame</option>
+                </select>
+              </div>
+
+              <div className={styles.formGroup}>
+                <label htmlFor="avs_number" className={styles.label}>
+                  Numéro AVS
+                </label>
+                <input
+                  type="text"
+                  id="avs_number"
+                  name="avs_number"
+                  value={formData.avs_number}
+                  onChange={handleChange}
+                  className={styles.input}
+                  placeholder="756.XXXX.XXXX.XX"
                   disabled={loading}
                 />
               </div>

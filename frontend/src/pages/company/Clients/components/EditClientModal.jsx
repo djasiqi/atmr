@@ -9,6 +9,8 @@ const EditClientModal = ({ client, onClose, onSave }) => {
     institution_name: client.institution_name || '',
     residence_facility: client.residence_facility || '',
     birth_date: client.user?.birth_date || '',
+    gender: client.user?.gender || '',
+    avs_number: client.avs_number || '',
     contact_email: client.contact_email || '',
     contact_phone: client.contact_phone || '',
     billing_address: client.billing_address || '',
@@ -191,6 +193,42 @@ const EditClientModal = ({ client, onClose, onSave }) => {
                       value={formData.birth_date}
                       onChange={handleChange}
                       className="form-input"
+                      disabled={loading}
+                    />
+                  </div>
+
+                  {/* ✅ Civilité */}
+                  <div className="form-group mt-sm">
+                    <label htmlFor="gender" className="form-label">
+                      Civilité
+                    </label>
+                    <select
+                      id="gender"
+                      name="gender"
+                      value={formData.gender}
+                      onChange={handleChange}
+                      className="form-input"
+                      disabled={loading}
+                    >
+                      <option value="">-- Sélectionnez --</option>
+                      <option value="male">Monsieur</option>
+                      <option value="female">Madame</option>
+                    </select>
+                  </div>
+
+                  {/* ✅ Numéro AVS */}
+                  <div className="form-group mt-sm">
+                    <label htmlFor="avs_number" className="form-label">
+                      Numéro AVS
+                    </label>
+                    <input
+                      type="text"
+                      id="avs_number"
+                      name="avs_number"
+                      value={formData.avs_number}
+                      onChange={handleChange}
+                      className="form-input"
+                      placeholder="756.XXXX.XXXX.XX"
                       disabled={loading}
                     />
                   </div>

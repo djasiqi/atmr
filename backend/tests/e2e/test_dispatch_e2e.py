@@ -366,7 +366,9 @@ class TestDispatchE2E:
         # Simuler une erreur en créant un booking avec un driver_id invalide
         # dans les assignations proposées
 
-        from services.unified_dispatch.apply import apply_assignments
+        from services.unified_dispatch.optimization.assignment_applier import (
+            apply_assignments,
+        )
 
         # ✅ FIX: S'assurer que les bookings sont bien persistés
         db.session.flush()
@@ -684,7 +686,9 @@ class TestDispatchE2E:
         Ce test vérifie que apply_assignments peut trouver les bookings en DB
         même après un commit, garantissant que booking_map n'est pas vide.
         """
-        from services.unified_dispatch.apply import apply_assignments
+        from services.unified_dispatch.optimization.assignment_applier import (
+            apply_assignments,
+        )
 
         # ✅ FIX: S'assurer que company est bien persistée et rechargée
         db.session.flush()

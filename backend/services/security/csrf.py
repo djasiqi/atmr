@@ -374,6 +374,9 @@ def setup_csrf_protection(app: Any) -> None:
         # ✅ Routes mobile dispatch protégées par JWT, pas besoin de CSRF
         if request.path.startswith("/api/v1/company_mobile/dispatch/"):
             should_check = False
+        # ✅ Routes partnerships protégées par JWT, pas besoin de CSRF
+        if request.path.startswith("/api/v1/company_mobile/partnerships/"):
+            should_check = False
         # ✅ Routes company_mobile/auth protégées par JWT, pas besoin de CSRF (sauf login qui est déjà exempté)
         if request.path.startswith("/api/v1/company_mobile/auth/"):
             should_check = False

@@ -14,6 +14,10 @@ export const useDispatchData = (date, dispatchMode) => {
     setError(null);
 
     try {
+      // 🐛 DEBUG: Log pour voir quelle valeur de dispatchMode est utilisée
+      console.log('[useDispatchData] dispatchMode:', dispatchMode, 'type:', typeof dispatchMode);
+      console.log('[useDispatchData] Comparison with "manual":', dispatchMode === 'manual');
+      
       // En mode Manuel : charger TOUTES les réservations du jour (pas seulement les assignées)
       // En modes Semi-Auto et Fully-Auto : charger les réservations assignées/dispatched
       const data =

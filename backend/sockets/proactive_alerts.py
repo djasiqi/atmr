@@ -19,7 +19,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any, Dict, Set
 
-from flask import request  # pyright: ignore[reportMissingImports]
+from flask import request
 from flask_socketio import (  # pyright: ignore[reportMissingModuleSource]
     SocketIO,
     emit,
@@ -42,10 +42,53 @@ active_connections: Dict[str, Set[str]] = {}
 
 def register_proactive_alerts_sockets(socketio: SocketIO):
     """Enregistre les handlers Socket.IO pour les alertes proactives."""
+    # #region agent log
+    from datetime import UTC, datetime
+    from pathlib import Path
+
+    debug_log_path = Path(".cursor/debug.log")
+    debug_log_path.parent.mkdir(parents=True, exist_ok=True)
+    with debug_log_path.open("a") as f:
+        import json
+
+        f.write(
+            json.dumps(
+                {
+                    "location": "proactive_alerts.py:register",
+                    "message": "register_proactive_alerts_sockets CALLED",
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "H1",
+                }
+            )
+            + "\n"
+        )
+    # #endregion
 
     @socketio.on("connect")
     def handle_connect():
         """Gère la connexion d'un client."""
+        # #region agent log
+        debug_log_path = Path(".cursor/debug.log")
+        with debug_log_path.open("a") as f:
+            import json
+            from datetime import UTC, datetime
+
+            f.write(
+                json.dumps(
+                    {
+                        "location": "proactive_alerts.py:handle_connect:ENTRY",
+                        "message": "PROACTIVE CONNECT HANDLER INVOKED",
+                        "timestamp": datetime.now(UTC).isoformat(),
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "H1",
+                    }
+                )
+                + "\n"
+            )
+        # #endregion
         try:
             client_id = getattr(request, "sid", "unknown")
             logger.info("[ProactiveAlerts] Client connecté: %s", client_id)

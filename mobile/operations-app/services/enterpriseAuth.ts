@@ -6,6 +6,7 @@ import axios, {
 } from "axios";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
+import * as Sentry from "@sentry/react-native";
 
 const expoExtra = Constants.expoConfig?.extra || {};
 const ENV_API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -119,6 +120,148 @@ type AxiosConfig = InternalAxiosRequestConfig<any> & {
   __isRetryRequest?: boolean;
 };
 
+// ✅ Fonction helper pour valider le token
+export const hasValidToken = async (): Promise<boolean> => {
+  try {
+    const token = await AsyncStorage.getItem(ENTERPRISE_TOKEN_KEY);
+    if (!token) {
+      // ✅ Capturer l'absence de token pour monitoring
+      if (!__DEV__) {
+        Sentry.captureMessage("Guard Pattern: Token manquant", {
+          level: "warning",
+          tags: {
+            type: "token_validation",
+            reason: "missing_token",
+          },
+          contexts: {
+            tokenInfo: {
+              hasToken: false,
+              timestamp: new Date().toISOString(),
+            },
+          },
+        });
+      }
+      return false;
+    }
+    
+    // Vérifier que le token a un format JWT valide (3 parties séparées par .)
+    const parts = token.split(".");
+    if (parts.length !== 3) {
+      console.warn("[ENT] Token invalide (format incorrect)");
+      
+      // ✅ Capturer token invalide pour monitoring
+      if (!__DEV__) {
+        Sentry.captureMessage("Guard Pattern: Token format invalide", {
+          level: "error",
+          tags: {
+            type: "token_validation",
+            reason: "invalid_format",
+          },
+          contexts: {
+            tokenInfo: {
+              hasToken: true,
+              parts: parts.length,
+              timestamp: new Date().toISOString(),
+            },
+          },
+        });
+      }
+      
+      await clearEnterpriseStorage();
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.warn("[ENT] Erreur lors de la validation du token:", error);
+    
+    // ✅ Capturer erreur validation pour monitoring
+    if (!__DEV__) {
+      Sentry.captureException(error, {
+        tags: {
+          type: "token_validation",
+          reason: "exception",
+        },
+      });
+    }
+    
+    return false;
+  }
+};
+
+// ✅ Fonction pour attendre qu'un token soit disponible (avec timeout)
+export const waitForToken = async (
+  timeoutMs: number = 5000
+): Promise<string | null> => {
+  const startTime = Date.now();
+  
+  while (Date.now() - startTime < timeoutMs) {
+    const token = await AsyncStorage.getItem(ENTERPRISE_TOKEN_KEY);
+    if (token) {
+      return token;
+    }
+    
+    // Attendre 100ms avant de réessayer
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  
+  return null;
+};
+
+// ✅ Fonction de retry avec backoff exponentiel
+export const retryWithBackoff = async <T>(
+  fn: () => Promise<T>,
+  options: {
+    maxRetries?: number;
+    baseDelay?: number;
+    maxDelay?: number;
+    shouldRetry?: (error: any) => boolean;
+  } = {}
+): Promise<T> => {
+  const {
+    maxRetries = 3,
+    baseDelay = 1000,
+    maxDelay = 10000,
+    shouldRetry = (error) => {
+      // Retry sur erreurs réseau ou 5xx
+      const status = error?.response?.status;
+      return (
+        !status || // Erreur réseau
+        status >= 500 // Erreur serveur
+      );
+    },
+  } = options;
+
+  let lastError: any;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+
+      // Ne pas retry si c'est le dernier essai ou si on ne doit pas retry
+      if (attempt === maxRetries || !shouldRetry(error)) {
+        throw error;
+      }
+
+      // Calculer le délai (exponential backoff + jitter)
+      const delay = Math.min(
+        baseDelay * Math.pow(2, attempt) + Math.random() * 1000,
+        maxDelay
+      );
+
+      console.warn(
+        `[ENT] Tentative ${attempt + 1}/${maxRetries} échouée, retry dans ${Math.round(delay)}ms`
+      );
+
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+
+  throw lastError;
+};
+
 export interface EnterpriseUserPayload {
   id: number;
   public_id: string;
@@ -224,6 +367,37 @@ const persistEnterpriseSession = async (
   } else {
     await AsyncStorage.removeItem(ENTERPRISE_REFRESH_KEY);
   }
+
+  // ✅ Vérifier que le token a bien été sauvegardé
+  const savedToken = await AsyncStorage.getItem(ENTERPRISE_TOKEN_KEY);
+  if (!savedToken || savedToken !== session.token) {
+    console.error("[ENT] ❌ ERREUR CRITIQUE : Token non sauvegardé correctement !");
+    
+    // ✅ Capturer échec de persistence pour monitoring
+    if (!__DEV__) {
+      Sentry.captureMessage("Token persistence failed", {
+        level: "fatal",
+        tags: {
+          type: "token_persistence",
+          reason: "save_failed",
+        },
+        contexts: {
+          persistenceInfo: {
+            tokenLength: session.token.length,
+            savedTokenExists: !!savedToken,
+            savedTokenMatches: savedToken === session.token,
+            timestamp: new Date().toISOString(),
+          },
+        },
+      });
+    }
+    
+    throw new Error("Échec de la persistence du token");
+  }
+
+  if (__DEV__) {
+    console.log("[ENT] ✅ Session sauvegardée et vérifiée");
+  }
 };
 
 let tokenRefreshPromise:
@@ -288,24 +462,22 @@ enterpriseApi.interceptors.request.use(
           // #endregion
           if (token) {
             headers.set("Authorization", `Bearer ${token}`);
-            // eslint-disable-next-line no-console
-            console.log("[ENT] Token ajouté à la requête depuis AsyncStorage", {
-              url: config.url,
-              hasToken: !!token,
-              tokenLength: token.length,
-              tokenPreview: token.substring(0, 20) + "...",
-            });
+            // ✅ Log uniquement en mode debug
+            if (__DEV__) {
+              console.debug("[ENT] Token ajouté à la requête:", config.url);
+            }
           } else {
-            // eslint-disable-next-line no-console
-            console.warn("[ENT] Aucun token disponible pour la requête", {
-              url: config.url,
-            });
+            // ⚠️ Log WARNING uniquement si ce n'est pas une requête publique
+            const isPublicEndpoint = config.url?.includes("/auth/") || 
+                                      config.url?.includes("/public");
+            if (!isPublicEndpoint) {
+              console.warn("[ENT] ⚠️ Aucun token disponible pour:", config.url);
+            }
           }
         } else {
-          // eslint-disable-next-line no-console
-          console.log("[ENT] Token déjà présent dans les headers", {
-            url: config.url,
-          });
+          if (__DEV__) {
+            console.debug("[ENT] Token déjà présent dans les headers:", config.url);
+          }
         }
       }
 
@@ -321,30 +493,27 @@ enterpriseApi.interceptors.request.use(
             const session = JSON.parse(sessionRaw);
             if (session?.company?.id && !headers.has("X-Company-ID")) {
               headers.set("X-Company-ID", String(session.company.id));
-              // eslint-disable-next-line no-console
-              console.log("[ENT] X-Company-ID ajouté", {
-                url: config.url,
-                companyId: session.company.id,
-              });
+              if (__DEV__) {
+                console.debug("[ENT] X-Company-ID ajouté:", session.company.id);
+              }
             }
             if (session?.sessionId && !headers.has("X-Session-ID")) {
               headers.set("X-Session-ID", session.sessionId);
-              // eslint-disable-next-line no-console
-              console.log("[ENT] X-Session-ID ajouté", {
-                url: config.url,
-                sessionId: session.sessionId,
-              });
+              if (__DEV__) {
+                console.debug("[ENT] X-Session-ID ajouté:", session.sessionId);
+              }
             }
           } catch (e) {
-            // eslint-disable-next-line no-console
-            console.warn("[ENT] Erreur parsing session pour headers", e);
-            // ignore parsing issues, will be refreshed later
+            if (__DEV__) {
+              console.warn("[ENT] Erreur parsing session pour headers", e);
+            }
           }
         } else {
-          // eslint-disable-next-line no-console
-          console.warn("[ENT] Aucune session disponible pour ajouter X-Company-ID/X-Session-ID", {
-            url: config.url,
-          });
+          const isPublicEndpoint = config.url?.includes("/auth/") || 
+                                    config.url?.includes("/public");
+          if (!isPublicEndpoint && __DEV__) {
+            console.warn("[ENT] ⚠️ Aucune session disponible pour:", config.url);
+          }
         }
       }
 

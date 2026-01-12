@@ -144,9 +144,12 @@ async function fetchCSRFToken(): Promise<string | null> {
   csrfTokenPromise = (async () => {
     try {
       // ✅ P2-2: Récupérer le token CSRF depuis l'endpoint backend
-      // Note: Cet endpoint doit exister dans backend/routes/auth.py
-      const response = await axios.get(`${baseURL.replace("/api/v1", "")}/auth/csrf-token`, {
-        withCredentials: false, // Pas de cookies sur mobile
+      // Note: Cet endpoint DOIT exister dans backend/routes/auth.py à /api/v1/auth/csrf-token
+      console.log(`🔄 [CSRF] Fetch token depuis: ${baseURL}/auth/csrf-token`);
+      
+      // ✅ Utiliser l'instance 'api' pour s'assurer que withCredentials est appliqué
+      const response = await api.get(`${baseURL}/auth/csrf-token`, {
+        withCredentials: Platform.OS === "web", // Sur web, envoyer les cookies
       });
 
       const token = response.data?.csrf_token || null;
@@ -154,13 +157,23 @@ async function fetchCSRFToken(): Promise<string | null> {
         csrfToken = token;
         console.log("✅ [CSRF] Token CSRF récupéré avec succès");
       } else {
-        console.warn("⚠️ [CSRF] Token CSRF non reçu du backend");
+        console.warn("⚠️ [CSRF] Token CSRF non reçu du backend. Response:", response.data);
       }
 
       return token;
     } catch (error) {
       // ✅ P2-2: En cas d'erreur, ne pas bloquer l'application (CSRF optionnel)
-      console.warn("⚠️ [CSRF] Impossible de récupérer le token CSRF:", error);
+      if (isAxiosError(error)) {
+        console.warn("⚠️ [CSRF] Erreur lors de la récupération du token CSRF:", {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          url: error.config?.url,
+          data: error.response?.data,
+        });
+      } else {
+        console.warn("⚠️ [CSRF] Impossible de récupérer le token CSRF:", error);
+      }
+      csrfToken = null;
       return null;
     } finally {
       csrfTokenPromise = null; // Réinitialiser pour permettre un nouveau fetch si nécessaire
@@ -169,6 +182,17 @@ async function fetchCSRFToken(): Promise<string | null> {
 
   return csrfTokenPromise;
 }
+
+/**
+ * ✅ Initialise le token CSRF (à appeler après le login ou au démarrage)
+ */
+export const initializeCSRFToken = async (): Promise<void> => {
+  try {
+    await fetchCSRFToken();
+  } catch (error) {
+    console.warn("⚠️ [CSRF] Erreur lors de l'initialisation du token CSRF:", error);
+  }
+};
 
 /**
  * ✅ P2-2: Invalide le token CSRF (utile lors du logout ou changement de session).
@@ -250,12 +274,55 @@ export const invalidateInterceptorCache = () => {
 // --- Authorization bearer + Device ID ---
 api.interceptors.request.use(
   async (config) => {
-    // ✅ P2-2: Ajouter le token CSRF pour les requêtes mutantes (optionnel, mobile uniquement)
+    // ✅ P2-2: Ajouter le token CSRF pour les requêtes mutantes
     const isMutatingMethod = ["POST", "PUT", "DELETE", "PATCH"].includes(
       config.method?.toUpperCase() || ""
     );
-    if (isMutatingMethod && Platform.OS !== "web" && csrfToken) {
-      config.headers["X-CSRF-Token"] = csrfToken;
+    
+    if (isMutatingMethod) {
+      let tokenToUse: string | null = null;
+
+      // Sur web, essayer de récupérer le token du cookie d'abord
+      if (Platform.OS === "web" && typeof document !== "undefined") {
+        try {
+          const cookieToken = document.cookie
+            .split("; ")
+            .find((row) => row.startsWith("csrf_token="))
+            ?.split("=")[1];
+          
+          if (cookieToken) {
+            console.log("✅ [CSRF] Token trouvé dans document.cookie");
+            tokenToUse = cookieToken;
+          } else {
+            console.log("ℹ️ [CSRF] Token non trouvé dans document.cookie (peut-être httpOnly)");
+          }
+        } catch (error) {
+          console.warn("[CSRF] Erreur lors de la récupération du token CSRF depuis les cookies:", error);
+        }
+      }
+
+      // Fallback: utiliser le token en cache (récupéré via initializeCSRFToken)
+      if (!tokenToUse && csrfToken) {
+        console.log("✅ [CSRF] Utilisation du token en cache");
+        tokenToUse = csrfToken;
+      }
+
+      // Si toujours pas de token, essayer de le récupérer maintenant (dernière chance)
+      if (!tokenToUse) {
+        console.log("🔄 [CSRF] Aucun token disponible, tentative de récupération...");
+        const token = await fetchCSRFToken();
+        if (token) {
+          tokenToUse = token;
+        }
+      }
+
+      // Ajouter le token à la requête si disponible
+      if (tokenToUse) {
+        config.headers["X-CSRF-Token"] = tokenToUse;
+        console.log(`✅ [CSRF] Token ajouté pour ${config.method} ${config.url}`);
+      } else {
+        console.warn(`⚠️ [CSRF] Aucun token disponible pour ${config.method} ${config.url}`);
+      }
     }
 
     // #region agent log

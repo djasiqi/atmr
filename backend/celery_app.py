@@ -1,4 +1,5 @@
 # backend/celery_app.py
+# pyright: reportImportCycles=false
 from __future__ import annotations
 
 import logging
@@ -9,7 +10,7 @@ from urllib.parse import quote_plus
 from celery import Celery  # pyright: ignore[reportMissingImports]
 
 if TYPE_CHECKING:
-    from flask import Flask  # pyright: ignore[reportMissingImports]
+    from flask import Flask
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +88,7 @@ celery: Celery = Celery(
         "tasks.profiling_tasks",  # ✅ 3.4: Profiling CPU/mémoire automatique
         "tasks.dlq_cleanup_task",  # ✅ DLQ: Cleanup automatique DLQ
         "tasks.archive_tasks",  # ✅ 3.5.2: Archivage positions automatique
+        "tasks.notification_tasks",  # ✅ Notifications push avec fallback SMS/Email
     ],
 )
 
@@ -118,13 +120,16 @@ celery.conf.update(
     worker_prefetch_multiplier=1,  # One task at a time
     task_acks_late=True,  # Acknowledge task after execution
     task_reject_on_worker_lost=True,  # Requeue task if worker dies
-    # ✅ A3: Configuration des queues (default, realtime, dlq)
+    # ✅ A3: Configuration des queues (default, realtime, dlq, notifications)
     task_routes={
         "tasks.dispatch_tasks.*": {"queue": "default"},
         "tasks.dispatch_tasks.realtime_monitoring_tick": {"queue": "realtime"},
         "tasks.dispatch_tasks.autorun_tick": {"queue": "default"},
         "tasks.planning_tasks.*": {"queue": "default"},
         "tasks.rl_tasks.*": {"queue": "default"},
+        "tasks.notification_tasks.*": {
+            "queue": "notifications"
+        },  # Queue dédiée pour notifications
     },
     task_default_queue="default",
     task_create_missing_queues=True,
@@ -399,7 +404,7 @@ def _register_dlq_handlers():
 
         # ✅ DLQ: Enregistrer métrique Prometheus
         try:
-            from services.unified_dispatch.dispatch_prometheus_metrics import (
+            from services.unified_dispatch.dispatch_prometheus_metrics import (  # pyright: ignore[reportMissingImports]
                 PROMETHEUS_AVAILABLE,
             )
 
@@ -554,8 +559,7 @@ def _get_queue_length_gauge():
             logger.info("[Celery] Prometheus metric 'celery_queue_length' initialized")
         except ImportError:
             logger.warning(
-                "[Celery] prometheus_client non disponible, "
-                "métrique queue_length désactivée"
+                "[Celery] prometheus_client non disponible, métrique queue_length désactivée"
             )
         except Exception as e:
             logger.warning(

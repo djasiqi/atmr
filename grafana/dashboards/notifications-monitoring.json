@@ -1,0 +1,276 @@
+{
+  "dashboard": {
+    "title": "🔔 ATMR Notifications Monitoring",
+    "tags": ["notifications", "push", "sms", "email", "kafka"],
+    "timezone": "browser",
+    "schemaVersion": 30,
+    "version": 1,
+    "refresh": "10s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "📈 Notification Throughput (Total/sec)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(rate(notifications_sent_total[1m]))",
+            "legendFormat": "Total notifications/sec",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "reqps", "label": "Requests/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 2,
+        "title": "📊 Notifications par Canal",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(rate(notifications_sent_total{channel=\"push\"}[1m]))",
+            "legendFormat": "Push",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(rate(notifications_sent_total{channel=\"sms\"}[1m]))",
+            "legendFormat": "SMS",
+            "refId": "B"
+          },
+          {
+            "expr": "sum(rate(notifications_sent_total{channel=\"email\"}[1m]))",
+            "legendFormat": "Email",
+            "refId": "C"
+          }
+        ],
+        "stack": true
+      },
+      {
+        "id": 3,
+        "title": "❌ Taux d'Échec par Canal",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(notifications_failed_total{channel=\"push\"}[5m])) / sum(rate(notifications_sent_total{channel=\"push\"}[5m]))",
+            "legendFormat": "Push failure rate",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(rate(notifications_failed_total{channel=\"sms\"}[5m])) / sum(rate(notifications_sent_total{channel=\"sms\"}[5m]))",
+            "legendFormat": "SMS failure rate",
+            "refId": "B"
+          },
+          {
+            "expr": "sum(rate(notifications_failed_total{channel=\"email\"}[5m])) / sum(rate(notifications_sent_total{channel=\"email\"}[5m]))",
+            "legendFormat": "Email failure rate",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {"format": "percentunit", "max": 1, "min": 0},
+          {"format": "short"}
+        ],
+        "alert": {
+          "name": "High notification failure rate",
+          "conditions": [
+            {
+              "evaluator": {"params": [0.1], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "frequency": "1m",
+          "handler": 1,
+          "noDataState": "no_data",
+          "notifications": []
+        }
+      },
+      {
+        "id": 4,
+        "title": "⏱️ Latence P50/P95/P99 (Push)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(push_notification_duration_seconds_bucket[5m]))",
+            "legendFormat": "P50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(push_notification_duration_seconds_bucket[5m]))",
+            "legendFormat": "P95",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(push_notification_duration_seconds_bucket[5m]))",
+            "legendFormat": "P99",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Latency"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 5,
+        "title": "🔄 Circuit Breaker Status",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "circuit_breaker_state{service=\"expo_push\"}",
+            "refId": "A"
+          }
+        ],
+        "mappings": [
+          {"type": "value", "value": "0", "text": "CLOSED ✅"},
+          {"type": "value", "value": "1", "text": "OPEN ❌"},
+          {"type": "value", "value": "2", "text": "HALF-OPEN ⚠️"}
+        ],
+        "thresholds": {
+          "mode": "absolute",
+          "steps": [
+            {"color": "green", "value": null},
+            {"color": "yellow", "value": 1},
+            {"color": "red", "value": 2}
+          ]
+        }
+      },
+      {
+        "id": 6,
+        "title": "🌍 Active Region",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 16},
+        "targets": [
+          {
+            "expr": "active_region",
+            "refId": "A"
+          }
+        ],
+        "mappings": [
+          {"type": "value", "value": "1", "text": "EU-West-1 🇮🇪"},
+          {"type": "value", "value": "2", "text": "EU-Central-1 🇩🇪"}
+        ]
+      },
+      {
+        "id": 7,
+        "title": "📦 Kafka Consumer Lag",
+        "type": "graph",
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 16},
+        "targets": [
+          {
+            "expr": "kafka_consumer_lag{topic=\"notifications.push\"}",
+            "legendFormat": "Push topic lag",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Messages"},
+          {"format": "short"}
+        ],
+        "alert": {
+          "name": "High Kafka consumer lag",
+          "conditions": [
+            {
+              "evaluator": {"params": [10000], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ]
+        }
+      },
+      {
+        "id": 8,
+        "title": "💀 Dead Letter Queue Size",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 16},
+        "targets": [
+          {
+            "expr": "dlq_messages_total",
+            "refId": "A"
+          }
+        ],
+        "thresholds": {
+          "mode": "absolute",
+          "steps": [
+            {"color": "green", "value": null},
+            {"color": "yellow", "value": 100},
+            {"color": "red", "value": 1000}
+          ]
+        }
+      },
+      {
+        "id": 9,
+        "title": "📱 Tokens Invalides (dernière heure)",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 20},
+        "targets": [
+          {
+            "expr": "increase(push_tokens_invalidated_total[1h])",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "🚫 Notifications Déduplicatées",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 20},
+        "targets": [
+          {
+            "expr": "increase(notifications_deduplicated_total[1h])",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 11,
+        "title": "⚡ Redis Queue Depth",
+        "type": "graph",
+        "gridPos": {"h": 4, "w": 12, "x": 12, "y": 20},
+        "targets": [
+          {
+            "expr": "redis_queue_length{queue=\"notifications\"}",
+            "legendFormat": "Celery notifications queue",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "title": "📊 Notifications par Type (dernières 24h)",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+        "targets": [
+          {
+            "expr": "sum(increase(notifications_sent_total[24h])) by (notification_type)",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 13,
+        "title": "🎯 Top 10 Drivers par Volume",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+        "targets": [
+          {
+            "expr": "topk(10, sum(increase(notifications_sent_total[24h])) by (driver_id))",
+            "format": "table",
+            "refId": "A"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -22,8 +22,12 @@ from models import Assignment, AssignmentStatus, Booking, Driver
 from repositories.assignment_repository import AssignmentRepository
 from repositories.booking_repository import BookingRepository
 from repositories.driver_repository import DriverRepository
-from services.unified_dispatch.apply import apply_assignments
-from services.unified_dispatch.data import calculate_eta
+from services.unified_dispatch.optimization.assignment_applier import (
+    apply_assignments,
+)
+
+# ✅ FIX: Import lazy de calculate_eta pour éviter import circulaire
+# from services.unified_dispatch.data import calculate_eta  # ❌ Cause import circulaire
 from services.unified_dispatch.utils.suggestions import SuggestionEngine
 from shared.time_utils import now_local
 
@@ -322,6 +326,9 @@ class AutoReassignmentService:
                 and bool(booking.pickup_lon)
             ):
                 try:
+                    # ✅ FIX: Import lazy pour éviter import circulaire
+                    from services.unified_dispatch.data import calculate_eta
+
                     driver_position = (float(driver.latitude), float(driver.longitude))
                     pickup_position = (
                         float(booking.pickup_lat),  # type: ignore[reportArgumentType]
@@ -539,8 +546,9 @@ class AutoReassignmentService:
             booking = Booking.query.get(booking_dto.id) if booking_dto else None
             if booking:
                 company_room = f"company_{booking.company_id}"
+                # ✅ FIX: Standardiser avec '_' au lieu de ':' pour cohérence avec mobile
                 socketio.emit(
-                    "dispatch:assignment:reassigned",
+                    "dispatch_assignment_reassigned",
                     {
                         "assignment_id": assignment_id,
                         "old_driver_id": old_driver_id,

@@ -116,3 +116,11 @@ class CompanyRepository:
             Liste de Company triées par nom ascendant
         """
         return Company.query.order_by(Company.name.asc()).all()
+
+    def find_all(self) -> list[Company]:
+        """Trouve toutes les entreprises (retourne les modèles SQLAlchemy).
+
+        Returns:
+            Liste de toutes les Company
+        """
+        return Company.query.all()

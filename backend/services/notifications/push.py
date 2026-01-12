@@ -6,17 +6,13 @@ Module séparé pour éviter les cycles d'import avec notification_service et so
 
 from __future__ import annotations
 
+import hashlib
 import time
 from typing import Any, Dict, cast
 
-import requests  # pyright: ignore[reportMissingModuleSource]
-from requests import (  # pyright: ignore[reportMissingModuleSource]
-    RequestException,
-    Timeout,
-)
-from requests.exceptions import (  # pyright: ignore[reportMissingModuleSource]
-    ConnectionError as RequestsConnectionError,
-)
+import requests
+from requests import RequestException, Timeout
+from requests.exceptions import ConnectionError as RequestsConnectionError
 
 from ext import app_logger, redis_client
 
@@ -40,6 +36,179 @@ BODY_PREVIEW_LENGTH = 100  # Longueur du body à afficher dans les logs
 # Configuration rate limiting
 PUSH_RATE_LIMIT_PER_MINUTE = 10  # Max 10 pushes/minute par driver
 PUSH_RATE_LIMIT_WINDOW = 60  # Fenêtre de 60 secondes
+
+# Configuration circuit breaker
+CIRCUIT_BREAKER_THRESHOLD = 10  # Nombre d'échecs avant d'ouvrir le circuit
+CIRCUIT_BREAKER_WINDOW = 300  # Fenêtre de 5 minutes
+CIRCUIT_BREAKER_COOLDOWN = 60  # Cooldown de 60 secondes avant de réessayer
+
+# Configuration déduplication
+DEDUP_WINDOW = 60  # Fenêtre de déduplication de 60 secondes
+
+
+def _check_circuit_breaker() -> tuple[bool, str | None]:
+    """Vérifie si le circuit breaker est ouvert (trop d'échecs Expo Push).
+
+    Returns:
+        Tuple (is_open, reason):
+            - is_open: True si le circuit est ouvert (arrêt temporaire)
+            - reason: Raison de l'ouverture si applicable
+    """
+    if not redis_client:
+        return False, None  # Pas de circuit breaker sans Redis
+
+    try:
+        circuit_key = "push:circuit_breaker:expo"
+        failure_count_key = "push:circuit_breaker:failures"
+
+        # Vérifier si le circuit est ouvert
+        is_open = redis_client.get(circuit_key)
+        if is_open:
+            ttl = redis_client.ttl(circuit_key)
+            return True, f"Circuit breaker ouvert (réessai dans {ttl}s)"
+
+        # Vérifier le nombre d'échecs récents
+        failure_count = redis_client.get(failure_count_key)
+        if failure_count:
+            count = int(failure_count)
+            if count >= CIRCUIT_BREAKER_THRESHOLD:
+                # Ouvrir le circuit
+                redis_client.setex(circuit_key, CIRCUIT_BREAKER_COOLDOWN, "1")
+                app_logger.error(
+                    "[push] Circuit breaker OUVERT : %d échecs en %ds",
+                    count,
+                    CIRCUIT_BREAKER_WINDOW,
+                )
+                return True, f"Circuit breaker ouvert après {count} échecs"
+
+        return False, None
+    except Exception as e:
+        app_logger.warning(
+            "[push] Circuit breaker check failed: %s. Continuing without breaker.",
+            e,
+        )
+        return False, None  # Fail-open en cas d'erreur
+
+
+def _record_push_failure() -> None:
+    """Enregistre un échec de push pour le circuit breaker."""
+    if not redis_client:
+        return
+
+    try:
+        failure_count_key = "push:circuit_breaker:failures"
+        count = redis_client.incr(failure_count_key)
+        if count == 1:
+            # Première erreur de la fenêtre : définir expiration
+            redis_client.expire(failure_count_key, CIRCUIT_BREAKER_WINDOW)
+    except Exception:
+        pass  # Silent fail pour ne pas bloquer l'envoi
+
+
+def _record_push_success() -> None:
+    """Enregistre un succès de push (réinitialise le compteur d'échecs)."""
+    if not redis_client:
+        return
+
+    try:
+        failure_count_key = "push:circuit_breaker:failures"
+        circuit_key = "push:circuit_breaker:expo"
+
+        # Réinitialiser le compteur d'échecs après un succès
+        redis_client.delete(failure_count_key)
+
+        # Si le circuit était ouvert, le fermer
+        if redis_client.get(circuit_key):
+            redis_client.delete(circuit_key)
+            app_logger.info("[push] Circuit breaker FERMÉ après succès")
+    except Exception:
+        pass  # Silent fail
+
+
+def __check_duplicate_notification(  # pyright: ignore[reportUnusedFunction]
+    driver_id: int,
+    title: str,
+    body: str,
+    notification_type: str,
+) -> bool:
+    """Vérifie si une notification identique a déjà été envoyée récemment.
+
+    Args:
+        driver_id: ID du driver
+        title: Titre de la notification
+        body: Corps de la notification
+        notification_type: Type de notification (booking, message, etc.)
+
+    Returns:
+        True si c'est un doublon (ne pas envoyer), False sinon
+    """
+    if not redis_client:
+        return False  # Pas de déduplication sans Redis
+
+    try:
+        # Créer un hash du contenu de la notification
+        content = f"{driver_id}:{notification_type}:{title}:{body}"
+        content_hash = hashlib.sha256(content.encode()).hexdigest()[:16]
+
+        dedup_key = f"push:dedup:{driver_id}:{content_hash}"
+
+        # Vérifier si cette notification a déjà été envoyée
+        if redis_client.get(dedup_key):
+            app_logger.debug(
+                "[push] Notification dupliquée détectée pour driver %s (type: %s)",
+                driver_id,
+                notification_type,
+            )
+            return True  # C'est un doublon
+
+        # Marquer cette notification comme envoyée
+        redis_client.setex(dedup_key, DEDUP_WINDOW, "1")
+        return False
+    except Exception as e:
+        app_logger.warning(
+            "[push] Deduplication check failed: %s. Continuing without dedup.",
+            e,
+        )
+        return False  # Fail-open en cas d'erreur
+
+
+def __invalidate_push_token(driver_id: int) -> None:  # pyright: ignore[reportUnusedFunction]
+    """Invalide le push token d'un driver dans la base de données.
+
+    Appelé automatiquement quand Expo détecte un token invalide/expiré.
+
+    Args:
+        driver_id: ID du driver dont le token doit être invalidé
+    """
+    try:
+        from ext import db
+        from models import Driver
+
+        driver = db.session.get(Driver, driver_id)
+        if driver and driver.push_token:
+            old_token_preview = (
+                driver.push_token[:TOKEN_DISPLAY_LENGTH]
+                if len(driver.push_token) > TOKEN_DISPLAY_LENGTH
+                else driver.push_token
+            )
+            driver.push_token = None
+            db.session.commit()
+            app_logger.info(
+                "[push] Token invalidé pour driver %s (token: %s...)",
+                driver_id,
+                old_token_preview,
+            )
+        else:
+            app_logger.debug(
+                "[push] Driver %s n'a pas de token à invalider",
+                driver_id,
+            )
+    except Exception:
+        app_logger.exception(
+            "[push] Erreur lors de l'invalidation du token pour driver %s",
+            driver_id,
+        )
+        # Ne pas propager l'erreur car c'est une opération de nettoyage non-critique
 
 
 def send_push_message(
@@ -69,6 +238,12 @@ def send_push_message(
         Dict avec "ok" (bool) et "error" (str) ou "data" selon le résultat.
         Si use_retry=True, contient aussi "attempts" (int) et "final_error" (str) en cas d'échec.
     """
+    # ✅ AMÉLIORATION: Circuit breaker pour éviter les storms
+    is_open, reason = _check_circuit_breaker()
+    if is_open:
+        app_logger.warning("[push] Push skipped: %s", reason)
+        return {"ok": False, "error": reason, "circuit_breaker_open": True}
+
     # Utiliser retry par défaut pour améliorer la robustesse
     if use_retry:
         return send_push_message_with_retry(
@@ -81,12 +256,21 @@ def send_push_message(
             bypass_rate_limit=bypass_rate_limit,
         )
 
+    # ✅ AMÉLIORATION: Déterminer la priorité selon le type de notification
+    notification_type = data.get("type") if data else None
+    priority = (
+        "high"
+        if notification_type in ["urgent_alert", "booking", "booking_cancelled"]
+        else "default"
+    )
+
     message = {
         "to": token,
         "sound": "default",
         "title": title,
         "body": body,
         "data": data or {},
+        "priority": priority,  # high, default, or normal
     }
     result: Dict[str, Any] = {"ok": False, "error": "Unknown error"}
     try:
@@ -104,14 +288,40 @@ def send_push_message(
             )
             if all_ok:
                 result = {"ok": True, "data": response_data.get("data")}
+                _record_push_success()  # ✅ Enregistrer succès pour circuit breaker
             else:
                 # Au moins un ticket a échoué
-                errors = [
-                    ticket.get("message", "Unknown error")
-                    for ticket in response_data["data"]
-                    if ticket.get("status") != "ok"
-                ]
-                result = {"ok": False, "error": "; ".join(errors)}
+                errors = []
+                token_is_invalid = False
+                for ticket in response_data["data"]:
+                    if ticket.get("status") != "ok":
+                        error_msg = ticket.get("message", "Unknown error")
+                        error_type = ticket.get("details", {}).get("error")
+                        errors.append(error_msg)
+
+                        # ✅ AMÉLIORATION: Détecter les tokens invalides/expirés
+                        # Expo renvoie ces erreurs quand le token n'est plus valide
+                        if error_type in [
+                            "DeviceNotRegistered",
+                            "InvalidCredentials",
+                            "MessageTooBig",
+                            "MessageRateExceeded",
+                        ]:
+                            token_is_invalid = True
+                            app_logger.warning(
+                                "[push] Token invalide détecté: %s (error: %s)",
+                                token[:TOKEN_DISPLAY_LENGTH]
+                                if len(token) > TOKEN_DISPLAY_LENGTH
+                                else token,
+                                error_type,
+                            )
+
+                result = {
+                    "ok": False,
+                    "error": "; ".join(errors),
+                    "token_invalid": token_is_invalid,  # Flag pour invalidation
+                }
+                _record_push_failure()  # ✅ Enregistrer échec pour circuit breaker
         else:
             # Format inattendu mais pas d'erreur HTTP
             result = {"ok": True, "data": response_data}
@@ -123,6 +333,7 @@ def send_push_message(
             e,
         )
         result = {"ok": False, "error": str(e)}
+        _record_push_failure()  # ✅ Enregistrer échec pour circuit breaker
     except (ValueError, TypeError, KeyError) as e:
         # Erreurs de validation attendues : JSON invalide
         app_logger.warning(

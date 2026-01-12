@@ -13,8 +13,8 @@ const SENTRY_DSN = process.env.REACT_APP_SENTRY_DSN;
 const ENVIRONMENT =
   process.env.REACT_APP_SENTRY_ENVIRONMENT || process.env.NODE_ENV || 'development';
 
-// Initialiser Sentry uniquement si DSN est configuré
-if (SENTRY_DSN) {
+// ✅ Initialiser Sentry uniquement en production (évite les erreurs de connexion en dev)
+if (SENTRY_DSN && ENVIRONMENT !== 'development') {
   Sentry.init({
     dsn: SENTRY_DSN,
     environment: ENVIRONMENT,
@@ -30,26 +30,21 @@ if (SENTRY_DSN) {
       }),
     ],
     // Performance Monitoring
-    tracesSampleRate: ENVIRONMENT === 'production' ? 0.1 : 1.0, // 10% en prod, 100% en dev
+    tracesSampleRate: 0.1, // 10% en production
     // Session Replay
     replaysSessionSampleRate: 0.1, // 10% des sessions
     replaysOnErrorSampleRate: 1.0, // 100% des sessions avec erreur
-    // Ne pas envoyer en développement local (optionnel)
-    beforeSend(event) {
-      if (ENVIRONMENT === 'development' && window.location.hostname === 'localhost') {
-        // En dev local, on affiche juste dans la console sans envoyer
-        return null;
-      }
-      return event;
-    },
   });
+  console.log('✅ Sentry initialisé en mode', ENVIRONMENT);
+} else {
+  console.log('ℹ️ Sentry désactivé en développement');
 }
-// Note: Sentry est désactivé si REACT_APP_SENTRY_DSN n'est pas configuré
+// Note: Sentry est désactivé en développement pour éviter les erreurs de connexion
 
 // ===== WEB VITALS MONITORING =====
 function sendWebVitalToSentry({ name, delta, value, id }) {
-  // Envoyer les métriques Web Vitals à Sentry
-  if (SENTRY_DSN) {
+  // ✅ Envoyer les métriques Web Vitals à Sentry uniquement en production
+  if (SENTRY_DSN && ENVIRONMENT !== 'development') {
     Sentry.captureMessage(`Web Vital: ${name}`, {
       level: 'info',
       tags: {
@@ -68,12 +63,14 @@ function sendWebVitalToSentry({ name, delta, value, id }) {
   }
 }
 
-// Mesurer les Web Vitals
-onCLS(sendWebVitalToSentry);
-onINP(sendWebVitalToSentry);
-onFCP(sendWebVitalToSentry);
-onLCP(sendWebVitalToSentry);
-onTTFB(sendWebVitalToSentry);
+// ✅ Mesurer les Web Vitals uniquement en production
+if (ENVIRONMENT !== 'development') {
+  onCLS(sendWebVitalToSentry);
+  onINP(sendWebVitalToSentry);
+  onFCP(sendWebVitalToSentry);
+  onLCP(sendWebVitalToSentry);
+  onTTFB(sendWebVitalToSentry);
+}
 
 // ===== GESTION ERREURS EXTENSIONS NAVIGATEUR =====
 // ⚡ Ignorer l'erreur "listener indicated asynchronous response"

@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { createClient, CreateClientPayload } from "@/services/enterpriseDispatch";
 import { AddressSelector } from "./AddressSelector";
 import { AddressSuggestion } from "@/types/enterpriseDispatch";
+import { shadowPresets } from "@/styles/shadowStyles";
 
 const palette = {
   modalOverlay: "rgba(21,54,43,0.75)",
@@ -44,9 +45,16 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
   // Informations personnelles
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [gender, setGender] = useState<'male' | 'female' | ''>(''); // ✅ Civilité obligatoire
+  const [avsNumber, setAvsNumber] = useState(''); // ✅ Numéro AVS optionnel
   const [phone, setPhone] = useState("");
   const [isInstitution, setIsInstitution] = useState(false);
   const [institutionName, setInstitutionName] = useState("");
+
+  // ✅ Priority 2: Nouveaux champs de contact et tarif
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [preferentialRate, setPreferentialRate] = useState("");
 
   // Adresse de domicile
   const [domicileAddress, setDomicileAddress] = useState("");
@@ -126,9 +134,15 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
       // Reset form when modal closes
       setFirstName("");
       setLastName("");
+      setGender(''); // ✅ Reset civilité
+      setAvsNumber(''); // ✅ Reset numéro AVS
       setPhone("");
       setIsInstitution(false);
       setInstitutionName("");
+      // ✅ Priority 2: Reset nouveaux champs
+      setContactEmail("");
+      setContactPhone("");
+      setPreferentialRate("");
       setDomicileAddress("");
       setDomicileSuggestion(undefined);
       setResidenceFacility("");
@@ -140,6 +154,12 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
     // Validation
     if (!firstName.trim() || !lastName.trim()) {
       setError("Le prénom et le nom sont requis");
+      return;
+    }
+
+    // ✅ Validation civilité obligatoire
+    if (!gender) {
+      setError("La civilité (Madame/Monsieur) est obligatoire");
       return;
     }
 
@@ -276,11 +296,19 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
         client_type: "PRIVATE",
         first_name: firstName.trim(),
         last_name: lastName.trim(),
+        // ✅ Civilité obligatoire
+        gender: gender as 'male' | 'female',
         phone: phone.trim() || undefined,
+        // ✅ Numéro AVS optionnel
+        avs_number: avsNumber.trim() || undefined,
         is_institution: isInstitution,
         institution_name: isInstitution ? institutionName.trim() : undefined,
         // ✅ Établissement de résidence si détecté
         residence_facility: establishment || undefined,
+        // ✅ Priority 2: Nouveaux champs de contact et tarif
+        contact_email: contactEmail.trim() || undefined,
+        contact_phone: contactPhone.trim() || undefined,
+        preferential_rate: preferentialRate ? parseFloat(preferentialRate) : undefined,
         // Adresse complète (comme dans le frontend)
         address: addressComplete,
         // Adresse de domicile structurée
@@ -466,6 +494,67 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
                 </View>
               </View>
 
+              {/* ✅ Civilité obligatoire */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Civilité *</Text>
+                <View style={styles.genderButtonGroup}>
+                  <TouchableOpacity
+                    style={[
+                      styles.genderButton,
+                      gender === 'male' && styles.genderButtonActive
+                    ]}
+                    onPress={() => setGender('male')}
+                  >
+                    <Ionicons
+                      name="male"
+                      size={18}
+                      color={gender === 'male' ? '#FFFFFF' : palette.modalButton}
+                    />
+                    <Text style={[
+                      styles.genderButtonText,
+                      gender === 'male' && styles.genderButtonTextActive
+                    ]}>
+                      Monsieur
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.genderButton,
+                      gender === 'female' && styles.genderButtonActive
+                    ]}
+                    onPress={() => setGender('female')}
+                  >
+                    <Ionicons
+                      name="female"
+                      size={18}
+                      color={gender === 'female' ? '#FFFFFF' : palette.modalButton}
+                    />
+                    <Text style={[
+                      styles.genderButtonText,
+                      gender === 'female' && styles.genderButtonTextActive
+                    ]}>
+                      Madame
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* ✅ Numéro AVS optionnel */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Numéro AVS</Text>
+                <View style={styles.textInputContainer}>
+                  <Ionicons name="card-outline" size={18} color={palette.modalButton} />
+                  <TextInput
+                    style={styles.textInput}
+                    value={avsNumber}
+                    onChangeText={setAvsNumber}
+                    placeholder="756.XXXX.XXXX.XX"
+                    placeholderTextColor={palette.modalText}
+                    keyboardType="numbers-and-punctuation"
+                  />
+                </View>
+              </View>
+
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Téléphone</Text>
                 <View style={styles.textInputContainer}>
@@ -480,6 +569,65 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
                   />
                 </View>
               </View>
+            </View>
+
+            {/* ✅ Priority 2: Coordonnées de facturation (optionnelles) */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>📋 Coordonnées de facturation</Text>
+              <Text style={styles.sectionDescription}>
+                Informations optionnelles pour la facturation
+              </Text>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Email de contact</Text>
+                <View style={styles.textInputContainer}>
+                  <Ionicons name="mail-outline" size={18} color={palette.modalButton} />
+                  <TextInput
+                    style={styles.textInput}
+                    value={contactEmail}
+                    onChangeText={setContactEmail}
+                    placeholder="facturation@example.com"
+                    placeholderTextColor={palette.modalText}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Téléphone de contact</Text>
+                <View style={styles.textInputContainer}>
+                  <Ionicons name="call-outline" size={18} color={palette.modalButton} />
+                  <TextInput
+                    style={styles.textInput}
+                    value={contactPhone}
+                    onChangeText={setContactPhone}
+                    placeholder="+41 22 123 45 67"
+                    placeholderTextColor={palette.modalText}
+                    keyboardType="phone-pad"
+                  />
+                </View>
+              </View>
+
+              {!isInstitution && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>💰 Tarif préférentiel (CHF)</Text>
+                  <View style={styles.textInputContainer}>
+                    <Ionicons name="cash-outline" size={18} color={palette.modalButton} />
+                    <TextInput
+                      style={styles.textInput}
+                      value={preferentialRate}
+                      onChangeText={setPreferentialRate}
+                      placeholder="Ex: 45.00"
+                      placeholderTextColor={palette.modalText}
+                      keyboardType="decimal-pad"
+                    />
+                  </View>
+                  <Text style={styles.inputHint}>
+                    Prix d'un trajet simple. Laisser vide pour le tarif standard.
+                  </Text>
+                </View>
+              )}
             </View>
 
             {/* Adresse de domicile */}
@@ -557,11 +705,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 1,
     borderColor: palette.modalBorder,
-    shadowColor: "rgba(15,54,43,0.15)",
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 1,
-    shadowRadius: 24,
-    elevation: 8,
+    ...shadowPresets.large, // ✅ Compatible web/native
   },
   modalHeader: {
     flexDirection: "row",
@@ -616,6 +760,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
   },
+  sectionDescription: {
+    color: palette.modalText,
+    fontSize: 13,
+    marginTop: -8,
+    marginBottom: 8,
+  },
   inputGroup: {
     gap: 8,
   },
@@ -623,6 +773,12 @@ const styles = StyleSheet.create({
     color: palette.modalTitle,
     fontSize: 14,
     fontWeight: "600",
+  },
+  inputHint: {
+    color: palette.modalText,
+    fontSize: 12,
+    marginTop: -4,
+    fontStyle: "italic",
   },
   textInputContainer: {
     flexDirection: "row",
@@ -661,6 +817,36 @@ const styles = StyleSheet.create({
     color: palette.modalTitle,
     fontSize: 15,
     flex: 1,
+  },
+  // ✅ Styles pour les boutons de civilité
+  genderButtonGroup: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  genderButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: palette.modalBorder,
+    backgroundColor: palette.modalBackground,
+  },
+  genderButtonActive: {
+    backgroundColor: palette.modalButton,
+    borderColor: palette.modalButton,
+  },
+  genderButtonText: {
+    color: palette.modalTitle,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  genderButtonTextActive: {
+    color: '#FFFFFF',
   },
   modalActions: {
     flexDirection: "row",

@@ -198,7 +198,7 @@ class DispatchMetricsCollector:
             target_date: Date à analyser (date object ou string YYYY-MM-DD)
 
         Returns:
-            DispatchQualityMetrics
+            DispatchQualityMetrics (métriques par défaut si aucun run trouvé)
 
         """
         if isinstance(target_date, str):
@@ -210,14 +210,79 @@ class DispatchMetricsCollector:
             self.company_id, target_date
         )
         if not dispatch_run_dto:
+            # ✅ FIX CRITIQUE: Retourner des métriques par défaut au lieu de lever une erreur
+            # Cela évite de bloquer le dashboard quand aucun dispatch n'a été lancé
             msg = f"No DispatchRun found for company {self.company_id} on {target_date}"
-            raise ValueError(msg)
+            logger.info(msg)  # Info au lieu de warning car c'est un cas normal
+            return DispatchQualityMetrics(
+                dispatch_run_id=None,
+                company_id=self.company_id,
+                date=target_date,
+                calculated_at=now_local(),
+                total_bookings=0,
+                assigned_bookings=0,
+                unassigned_bookings=0,
+                assignment_rate=0.0,
+                pooled_bookings=0,
+                pooling_rate=0.0,
+                on_time_bookings=0,
+                delayed_bookings=0,
+                average_delay_minutes=0.0,
+                max_delay_minutes=0,
+                drivers_used=0,
+                avg_bookings_per_driver=0.0,
+                max_bookings_per_driver=0,
+                min_bookings_per_driver=0,
+                fairness_coefficient=0.0,
+                gini_index=0.0,
+                total_distance_km=0.0,
+                avg_distance_per_booking=0.0,
+                emergency_drivers_used=0,
+                emergency_bookings=0,
+                solver_used=False,
+                heuristic_used=False,
+                fallback_used=False,
+                execution_time_sec=0.0,
+                quality_score=0.0,
+            )
         # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
         run = DispatchRun.query.get(dispatch_run_dto.id)
 
         if not run:
-            msg = f"No DispatchRun found for company {self.company_id} on {target_date}"
-            raise ValueError(msg)
+            # ✅ FIX: Gestion du cas où le DTO existe mais pas le modèle (race condition)
+            msg = f"No DispatchRun model found for company {self.company_id} on {target_date}"
+            logger.warning(msg)
+            return DispatchQualityMetrics(
+                dispatch_run_id=None,
+                company_id=self.company_id,
+                date=target_date,
+                calculated_at=now_local(),
+                total_bookings=0,
+                assigned_bookings=0,
+                unassigned_bookings=0,
+                assignment_rate=0.0,
+                pooled_bookings=0,
+                pooling_rate=0.0,
+                on_time_bookings=0,
+                delayed_bookings=0,
+                average_delay_minutes=0.0,
+                max_delay_minutes=0,
+                drivers_used=0,
+                avg_bookings_per_driver=0.0,
+                max_bookings_per_driver=0,
+                min_bookings_per_driver=0,
+                fairness_coefficient=0.0,
+                gini_index=0.0,
+                total_distance_km=0.0,
+                avg_distance_per_booking=0.0,
+                emergency_drivers_used=0,
+                emergency_bookings=0,
+                solver_used=False,
+                heuristic_used=False,
+                fallback_used=False,
+                execution_time_sec=0.0,
+                quality_score=0.0,
+            )
 
         return self.collect_for_run(run.id)
 

@@ -1,0 +1,105 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}Confirmation de paiement - {{ invoice_number }}{% endblock %}
+
+{% block header_title %}{{ company_name }}{% endblock %}
+
+{% block content %}
+{% if is_fully_paid %}
+<h2>✅ Paiement confirmé</h2>
+{% else %}
+<h2>✅ Paiement partiel reçu</h2>
+{% endif %}
+
+<p>Bonjour {{ client_name }},</p>
+
+<p>
+    Nous vous confirmons la réception de votre paiement pour la facture ci-dessous.
+</p>
+
+<div class="success-box">
+    <p style="margin: 0;"><strong>Numéro de facture :</strong> {{ invoice_number }}</p>
+    <p style="margin: 5px 0;"><strong>Montant payé :</strong> {{ "%.2f"|format(payment_amount) }} {{ currency }}</p>
+    <p style="margin: 5px 0;"><strong>Date de paiement :</strong> {{ payment_date }}</p>
+    <p style="margin: 5px 0 0 0;"><strong>Moyen de paiement :</strong> {{ payment_method }}</p>
+</div>
+
+{% if is_fully_paid %}
+<div style="text-align: center; margin: 30px 0;">
+    <div style="
+        display: inline-block;
+        padding: 15px 30px;
+        background-color: #d4edda;
+        border-radius: 50px;
+        color: #155724;
+        font-size: 18px;
+        font-weight: 600;
+    ">
+        ✓ Facture entièrement réglée
+    </div>
+</div>
+
+<p style="text-align: center; color: #666;">
+    Votre compte est à jour. Merci pour votre ponctualité !
+</p>
+{% else %}
+<div style="text-align: center;">
+    <div class="amount" style="color: #ffc107;">{{ "%.2f"|format(remaining_balance) }} {{ currency }}</div>
+    <p class="text-muted">Solde restant à payer</p>
+</div>
+
+<p style="margin-top: 20px; color: #856404;">
+    ℹ️ Un solde de <strong>{{ "%.2f"|format(remaining_balance) }} {{ currency }}</strong> reste dû sur cette facture.
+    Nous vous remercions de bien vouloir procéder au règlement du montant restant.
+</p>
+{% endif %}
+
+<div class="divider"></div>
+
+<h2>📋 Récapitulatif</h2>
+
+<table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+    <tr style="border-bottom: 1px solid #eeeeee;">
+        <td style="padding: 10px 0; color: #666;">Facture</td>
+        <td style="padding: 10px 0; text-align: right; font-weight: 600;">{{ invoice_number }}</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #eeeeee;">
+        <td style="padding: 10px 0; color: #666;">Paiement reçu</td>
+        <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #28a745;">
+            + {{ "%.2f"|format(payment_amount) }} {{ currency }}
+        </td>
+    </tr>
+    <tr style="border-bottom: 2px solid #333;">
+        <td style="padding: 10px 0; color: #666; font-weight: 600;">Solde restant</td>
+        <td style="padding: 10px 0; text-align: right; font-weight: 700; font-size: 18px;">
+            {{ "%.2f"|format(remaining_balance) }} {{ currency }}
+        </td>
+    </tr>
+</table>
+
+{% if is_fully_paid %}
+<p style="margin-top: 40px;">
+    Nous vous remercions de votre confiance et restons à votre disposition pour toute future collaboration.
+</p>
+{% else %}
+<p style="margin-top: 40px;">
+    Pour le règlement du solde restant, vous pouvez utiliser les mêmes coordonnées bancaires
+    que pour le premier versement.
+</p>
+{% endif %}
+
+<p style="margin-top: 40px;">
+    Cordialement,<br>
+    <strong>{{ company_name }}</strong>
+</p>
+{% endblock %}
+
+{% block footer %}
+<p style="margin: 0;">
+    Cet email confirme la réception de votre paiement.<br>
+    Pour toute question, veuillez contacter notre service comptabilité.
+</p>
+<p style="margin: 10px 0 0 0;">
+    &copy; 2026 {{ company_name }}. Tous droits réservés.
+</p>
+{% endblock %}

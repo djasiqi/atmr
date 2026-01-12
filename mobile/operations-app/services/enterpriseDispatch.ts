@@ -1,7 +1,8 @@
-import { enterpriseApi } from "./enterpriseAuth";
+import { enterpriseApi, hasValidToken, retryWithBackoff } from "./enterpriseAuth";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ENTERPRISE_TOKEN_KEY, ENTERPRISE_SESSION_KEY } from "./enterpriseAuth";
+import * as Sentry from "@sentry/react-native";
 import {
   DispatchRunResponse,
   DispatchStatus,
@@ -363,36 +364,139 @@ export const updateRide = async (
   rideId: string,
   payload: RideEditPayload
 ): Promise<RideDetail> => {
-  const response = await enterpriseApi.put<RideDetail>(
-    `/dispatch/v1/rides/${rideId}`,
-    payload
+  // 🔄 Retry avec backoff pour résilience réseau
+  return retryWithBackoff(
+    async () => {
+      // ✅ Guard Pattern : Vérifier qu'on a un token valide avant d'envoyer
+      if (!(await hasValidToken())) {
+        // ✅ Capturer tentative sans token pour monitoring
+        if (!__DEV__) {
+          Sentry.captureMessage("updateRide: Token invalide détecté par guard", {
+            level: "warning",
+            tags: {
+              type: "guard_pattern",
+              function: "updateRide",
+            },
+          });
+        }
+        throw new Error("Aucun token valide. Veuillez vous reconnecter.");
+      }
+
+      try {
+        const response = await enterpriseApi.put<RideDetail>(
+          `/dispatch/v1/rides/${rideId}`,
+          payload
+        );
+        return response.data;
+      } catch (error: any) {
+        // ✅ Capturer erreurs critiques (401 inattendu après guard)
+        if (error?.response?.status === 401 && !__DEV__) {
+          Sentry.captureMessage("updateRide: 401 après guard pattern", {
+            level: "error",
+            tags: {
+              type: "unexpected_401",
+              function: "updateRide",
+            },
+            contexts: {
+              requestInfo: {
+                endpoint: `/dispatch/v1/rides/${rideId}`,
+                rideId,
+                timestamp: new Date().toISOString(),
+              },
+            },
+          });
+        }
+        throw error;
+      }
+    },
+    {
+      maxRetries: 2,
+      baseDelay: 500,
+      maxDelay: 5000,
+      shouldRetry: (error) => {
+        const status = error?.response?.status;
+        return !status || status >= 500;
+      },
+    }
   );
-  return response.data;
 };
 
 export const createRide = async (
   payload: RideCreatePayload
 ): Promise<RideDetail> => {
-  console.log("[createRide] Envoi payload:", JSON.stringify(payload, null, 2));
-  try {
-    const response = await enterpriseApi.post<{ summary: RideDetail; return_summary?: RideDetail }>(
-      "/dispatch/v1/rides",
-      payload
-    );
-    console.log("[createRide] Réponse complète:", response.data);
-    // Le backend retourne {summary: RideDetail, return_summary?: RideDetail}, on extrait summary
-    const rideDetail = response.data.summary || response.data;
-    console.log("[createRide] RideDetail extrait:", rideDetail);
-    if (response.data.return_summary) {
-      console.log("[createRide] Course retour créée:", response.data.return_summary);
+  // 🔄 Retry avec backoff pour résilience réseau
+  return retryWithBackoff(
+    async () => {
+      // ✅ Guard Pattern : Vérifier qu'on a un token valide avant d'envoyer
+      if (!(await hasValidToken())) {
+        // ✅ Capturer tentative sans token pour monitoring
+        if (!__DEV__) {
+          Sentry.captureMessage("createRide: Token invalide détecté par guard", {
+            level: "warning",
+            tags: {
+              type: "guard_pattern",
+              function: "createRide",
+            },
+          });
+        }
+        throw new Error("Aucun token valide. Veuillez vous reconnecter.");
+      }
+
+      console.log("[createRide] Envoi payload:", JSON.stringify(payload, null, 2));
+      try {
+        const response = await enterpriseApi.post<{ summary: RideDetail; return_summary?: RideDetail }>(
+          "/dispatch/v1/rides",
+          payload
+        );
+        console.log("[createRide] Réponse complète:", response.data);
+        // Le backend retourne {summary: RideDetail, return_summary?: RideDetail}, on extrait summary
+        const rideDetail = response.data.summary || response.data;
+        console.log("[createRide] RideDetail extrait:", rideDetail);
+        if (response.data.return_summary) {
+          console.log("[createRide] Course retour créée:", response.data.return_summary);
+        }
+        return rideDetail as RideDetail;
+      } catch (error: any) {
+        console.error("[createRide] Erreur:", error);
+        console.error("[createRide] Erreur response:", error?.response?.data);
+        console.error("[createRide] Erreur status:", error?.response?.status);
+        
+        // ✅ Capturer erreurs critiques (401 inattendu après guard)
+        if (error?.response?.status === 401 && !__DEV__) {
+          Sentry.captureMessage("createRide: 401 après guard pattern", {
+            level: "error",
+            tags: {
+              type: "unexpected_401",
+              function: "createRide",
+            },
+            contexts: {
+              requestInfo: {
+                endpoint: "/dispatch/v1/rides",
+                hasPayload: !!payload,
+                timestamp: new Date().toISOString(),
+              },
+            },
+          });
+        }
+        
+        throw error;
+      }
+    },
+    {
+      maxRetries: 2, // 3 essais au total
+      baseDelay: 500, // 500ms de base
+      maxDelay: 5000, // Max 5 secondes
+      shouldRetry: (error) => {
+        const status = error?.response?.status;
+        // Retry sur erreurs réseau ou 5xx
+        // PAS sur 401 (géré par intercepteur) ou 4xx (erreurs client)
+        return (
+          !status || // Erreur réseau (pas de status)
+          status >= 500 // Erreur serveur
+        );
+      },
     }
-    return rideDetail as RideDetail;
-  } catch (error: any) {
-    console.error("[createRide] Erreur:", error);
-    console.error("[createRide] Erreur response:", error?.response?.data);
-    console.error("[createRide] Erreur status:", error?.response?.status);
-    throw error;
-  }
+  );
 };
 
 export const searchAddresses = async (
@@ -470,6 +574,8 @@ export interface CreateClientPayload {
   email?: string; // Généré automatiquement si non fourni
   first_name: string;
   last_name: string;
+  gender: 'male' | 'female'; // ✅ Civilité obligatoire
+  avs_number?: string; // ✅ Numéro AVS optionnel
   phone?: string;
   address?: string; // Adresse complète formatée
   birth_date?: string;
@@ -492,6 +598,21 @@ export interface CreateClientPayload {
 export const createClient = async (
   payload: CreateClientPayload
 ): Promise<ClientOption> => {
+  // ✅ Guard Pattern : Vérifier qu'on a un token valide avant d'envoyer
+  if (!(await hasValidToken())) {
+    // ✅ Capturer tentative sans token pour monitoring
+    if (!__DEV__) {
+      Sentry.captureMessage("createClient: Token invalide détecté par guard", {
+        level: "warning",
+        tags: {
+          type: "guard_pattern",
+          function: "createClient",
+        },
+      });
+    }
+    throw new Error("Aucun token valide. Veuillez vous reconnecter.");
+  }
+
   // Générer un email interne unique pour le User
   const randomId = Math.random().toString(36).substring(2, 10);
   const timestamp = Date.now().toString(36);
@@ -598,10 +719,47 @@ export const createClient = async (
   console.log("[createClient] Payload envoyé:", JSON.stringify(fullPayload, null, 2));
   console.log("[createClient] URL:", `${standardApiURL}/companies/me/clients`);
 
-  const response = await axios.post<{ data: ClientOption }>(
-    `${standardApiURL}/companies/me/clients`,
-    fullPayload,
-    { headers }
+  // 🔄 Retry avec backoff pour résilience réseau (prudent : maxRetries=1 pour éviter doublons)
+  return retryWithBackoff(
+    async () => {
+      try {
+        const response = await axios.post<{ data: ClientOption }>(
+          `${standardApiURL}/companies/me/clients`,
+          fullPayload,
+          { headers }
+        );
+        return response.data.data || response.data;
+      } catch (error: any) {
+        // ✅ Capturer erreurs critiques (401 inattendu après guard)
+        if (error?.response?.status === 401 && !__DEV__) {
+          Sentry.captureMessage("createClient: 401 après guard pattern", {
+            level: "error",
+            tags: {
+              type: "unexpected_401",
+              function: "createClient",
+            },
+            contexts: {
+              requestInfo: {
+                endpoint: "/companies/me/clients",
+                hasPayload: !!fullPayload,
+                timestamp: new Date().toISOString(),
+              },
+            },
+          });
+        }
+        throw error;
+      }
+    },
+    {
+      maxRetries: 1, // 2 essais seulement (création unique, éviter doublons)
+      baseDelay: 1000, // 1s (plus long pour éviter doublons)
+      maxDelay: 3000, // Max 3s
+      shouldRetry: (error) => {
+        const status = error?.response?.status;
+        // Retry UNIQUEMENT sur erreurs réseau (pas de status)
+        // PAS sur 4xx/5xx (risque doublon)
+        return !status;
+      },
+    }
   );
-  return response.data.data || response.data;
 };

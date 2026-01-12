@@ -15,6 +15,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { switchDispatchMode } from "@/services/enterpriseDispatch";
 import { ModeSelectionModal } from "@/components/modals/ModeSelectionModal";
 import { DateSelectionModal } from "@/components/modals/DateSelectionModal";
+import { createShadow } from "@/styles/shadowStyles";
 
 // ✅ Palette professionnelle cohérente avec le dashboard driver
 const headerPalette = {
@@ -212,11 +213,13 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     borderBottomWidth: 1,
     borderBottomColor: headerPalette.border,
-    shadowColor: "rgba(15,54,43,0.06)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 8,
-    elevation: 2,
+    ...createShadow({
+      shadowColor: "rgba(15,54,43,0.06)",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 1,
+      shadowRadius: 8,
+      elevation: 2,
+    }),
   },
   rightGroup: {
     flexDirection: "row",
@@ -233,11 +236,13 @@ const styles = StyleSheet.create({
     backgroundColor: headerPalette.dateBackground,
     borderWidth: 1,
     borderColor: headerPalette.border,
-    shadowColor: "rgba(15,54,43,0.04)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
-    elevation: 1,
+    ...createShadow({
+      shadowColor: "rgba(15,54,43,0.04)",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 1,
+      shadowRadius: 4,
+      elevation: 1,
+    }),
   },
   dateText: {
     color: headerPalette.dateText,
@@ -256,11 +261,13 @@ const styles = StyleSheet.create({
     backgroundColor: headerPalette.modeBackground,
     borderWidth: 1,
     borderColor: headerPalette.modeBorder,
-    shadowColor: "rgba(15,54,43,0.06)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
-    elevation: 1,
+    ...createShadow({
+      shadowColor: "rgba(15,54,43,0.06)",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 1,
+      shadowRadius: 4,
+      elevation: 1,
+    }),
   },
   modeDot: {
     width: 10,
@@ -283,15 +290,23 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 18,
     backgroundColor: headerPalette.autoButton,
-    shadowColor: headerPalette.autoButton,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
+    ...createShadow({
+      shadowColor: headerPalette.autoButton,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.25,
+      shadowRadius: 8,
+      elevation: 4,
+    }),
   },
   autoButtonPaused: {
     backgroundColor: headerPalette.autoButtonPaused,
-    shadowColor: headerPalette.autoButtonPaused,
+    ...createShadow({
+      shadowColor: headerPalette.autoButtonPaused,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.25,
+      shadowRadius: 8,
+      elevation: 4,
+    }),
   },
   autoButtonIcon: {
     marginTop: 1,

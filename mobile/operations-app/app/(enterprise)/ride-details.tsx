@@ -19,6 +19,7 @@ import "dayjs/locale/fr";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { isCompletedStatus, normalizeBookingStatus } from "@/utils/bookingStatus";
+import { TransferRideModal } from "@/components/enterprise/transfers/TransferRideModal";
 
 // ✅ Palette professionnelle cohérente avec les autres pages
 const palette = {
@@ -134,6 +135,7 @@ export default function RideDetailsScreen() {
   const [scheduleValue, setScheduleValue] = useState("");
   const [scheduleVisible, setScheduleVisible] = useState(false);
   const [driverPickerVisible, setDriverPickerVisible] = useState(false);
+  const [transferModalVisible, setTransferModalVisible] = useState(false);
 
   const summary = detail?.summary;
   const suggestions = detail?.suggestions ?? [];
@@ -615,6 +617,15 @@ export default function RideDetailsScreen() {
             <Text style={styles.secondaryButtonText}>Annuler la course</Text>
           </TouchableOpacity>
         )}
+        {!isActionDisabled && (
+          <TouchableOpacity
+            style={[styles.secondaryButton, styles.flexButton]}
+            onPress={() => setTransferModalVisible(true)}
+            disabled={actionLoading}
+          >
+            <Text style={styles.secondaryButtonText}>Transférer</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <TouchableOpacity style={styles.linkButton} onPress={() => router.back()}>
@@ -733,6 +744,17 @@ export default function RideDetailsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ✅ Modal de transfert de course */}
+      <TransferRideModal
+        visible={transferModalVisible}
+        onClose={() => setTransferModalVisible(false)}
+        ride={summary || null}
+        onSuccess={() => {
+          setTransferModalVisible(false);
+          loadDetail();
+        }}
+      />
     </ScrollView>
   );
 }

@@ -2,8 +2,11 @@
 
 const SML_EXCLUDE = /node_modules[\\/](svg-engine)/; // adapte le nom du paquet si besoin
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
+const fs = require('fs');
+const path = require('path');
 
-module.exports = function override(config, _env) {
+module.exports = {
+  webpack: function override(config, _env) {
   const isSmlRule = (rule) => {
     const inUse =
       Array.isArray(rule?.use) &&
@@ -113,4 +116,53 @@ module.exports = function override(config, _env) {
   }
 
   return config;
+  },
+
+  // ✅ Configuration personnalisée pour webpack-dev-server v5
+  devServer: function(configFunction) {
+    return function(proxy, allowedHost) {
+      // Obtenir la configuration par défaut
+      const config = configFunction(proxy, allowedHost);
+      
+      // ✅ Supprimer les propriétés obsolètes de webpack-dev-server v5
+      delete config.onAfterSetupMiddleware;
+      delete config.onBeforeSetupMiddleware;
+      
+      // ✅ Convertir https en server si nécessaire
+      if (config.https !== undefined) {
+        // Si https est true ou un objet de configuration, convertir en server
+        if (config.https === true) {
+          config.server = 'https';
+        } else if (typeof config.https === 'object' && config.https !== null) {
+          config.server = {
+            type: 'https',
+            options: config.https,
+          };
+        }
+        // Sinon (false, undefined), on ne fait rien, juste supprimer https
+        delete config.https;
+      }
+      
+      // ✅ Migrer les middlewares vers setupMiddlewares
+      if (!config.setupMiddlewares) {
+        config.setupMiddlewares = (middlewares, devServer) => {
+          if (!devServer) {
+            throw new Error('webpack-dev-server is not defined');
+          }
+          
+          // Charger setupProxy.js s'il existe
+          const appPath = path.resolve(fs.realpathSync(process.cwd()));
+          const appSrc = path.resolve(appPath, 'src');
+          const proxySetupPath = path.resolve(appSrc, 'setupProxy.js');
+          if (fs.existsSync(proxySetupPath)) {
+            require(proxySetupPath)(devServer.app);
+          }
+          
+          return middlewares;
+        };
+      }
+      
+      return config;
+    };
+  },
 };

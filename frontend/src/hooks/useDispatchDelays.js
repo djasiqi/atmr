@@ -51,13 +51,22 @@ export const useDispatchDelays = (date = null, refreshInterval = 0) => {
 
   // Récupérer le statut de l'optimizer
   const fetchOptimizerStatus = useCallback(async () => {
+    // ✅ En développement, ne pas appeler l'optimizer (évite les erreurs 500)
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    if (isDevelopment) {
+      setOptimizerStatus(null);
+      return;
+    }
+    
     try {
       const status = await getOptimizerStatus();
       setOptimizerStatus(status);
     } catch (err) {
-      // Ne pas logger les erreurs 403/404/401 comme des erreurs critiques (permissions manquantes)
+      // Ne pas logger les erreurs 403/404/401 comme des erreurs critiques
       const status = err?.response?.status;
-      if (status !== 403 && status !== 404 && status !== 401) {
+      const isExpectedError = status === 403 || status === 404 || status === 401;
+      
+      if (!isExpectedError) {
         console.error('[useDispatchDelays] Error fetching optimizer status:', err);
       }
     }

@@ -26,21 +26,64 @@ def _send_push_to_driver(
     data: Dict[str, Any],
     *,
     timeout: int = 5,
+    use_celery: bool = True,
 ) -> bool:
-    """Envoie une push notification à un chauffeur.
+    """Envoie une push notification à un chauffeur via Celery (queue persistante + fallback).
 
     Args:
         driver_id: ID du chauffeur
         title: Titre de la notification
         body: Corps du message
         data: Données additionnelles (pour deep linking, etc.)
-        timeout: Timeout en secondes (défaut: 5)
+        timeout: Timeout en secondes (défaut: 5) - ignoré si use_celery=True
+        use_celery: Si True, utilise Celery avec fallback SMS/Email (recommandé)
 
     Returns:
-        True si la push a été envoyée avec succès, False sinon
+        True si la notification a été queued/envoyée avec succès, False sinon
     """
     success = False
     try:
+        # ✅ AMÉLIORATION: Vérifier la déduplication avant d'envoyer
+        notification_type = data.get("type", "unknown") if data else "unknown"
+        from services.notifications.push import _check_duplicate_notification
+
+        if _check_duplicate_notification(driver_id, title, body, notification_type):
+            app_logger.debug(
+                "[event_fanout] Notification dupliquée ignorée pour driver %s",
+                driver_id,
+            )
+            return True  # Considéré comme succès (déjà envoyée)
+
+        # Déterminer si on doit bypasser le rate limit (alertes urgentes)
+        is_urgent = notification_type == "urgent_alert"
+        bypass_rate_limit = is_urgent
+
+        # ✅ AMÉLIORATION MAJEURE: Utiliser Celery pour queue persistante + fallback SMS/Email
+        if use_celery:
+            from tasks.notification_tasks import send_push_notification_task
+
+            app_logger.info(
+                "[event_fanout] Queueing notification to driver %s via Celery (type: %s)",
+                driver_id,
+                notification_type,
+            )
+
+            # Envoyer la task en asynchrone (non-bloquant)
+            send_push_notification_task.delay(  # pyright: ignore[reportFunctionMemberAccess]
+                driver_id=driver_id,
+                title=title,
+                body=body,
+                data=data,
+                notification_type=notification_type,
+                bypass_rate_limit=bypass_rate_limit,
+                fallback_to_sms=True,  # Activer fallback SMS si push échoue
+                fallback_to_email=True,  # Activer fallback Email en dernier recours
+            )
+
+            # Considéré comme succès car la notification est en queue
+            return True
+
+        # Mode legacy: envoi direct (sans fallback ni queue persistante)
         from models import Driver
 
         driver = Driver.query.get(driver_id)
@@ -53,10 +96,6 @@ def _send_push_to_driver(
                 "[event_fanout] Driver %s has no push_token, push skipped", driver_id
             )
         else:
-            # Déterminer si on doit bypasser le rate limit (alertes urgentes)
-            is_urgent = data.get("type") == "urgent_alert" if data else False
-            bypass_rate_limit = is_urgent
-
             result = send_push_message(
                 token=driver.push_token,
                 title=title,
@@ -71,11 +110,18 @@ def _send_push_to_driver(
                 app_logger.info("[event_fanout] Push sent to driver %s", driver_id)
                 success = True
             else:
+                error_msg = result.get("error", "Unknown error")
                 app_logger.warning(
                     "[event_fanout] Push failed for driver %s: %s",
                     driver_id,
-                    result.get("error", "Unknown error"),
+                    error_msg,
                 )
+
+                # ✅ AMÉLIORATION: Invalider automatiquement les tokens invalides
+                if result.get("token_invalid"):
+                    from services.notifications.push import _invalidate_push_token
+
+                    _invalidate_push_token(driver_id)
     except (ValueError, TypeError, AttributeError) as e:
         app_logger.error(
             "[event_fanout] Push failed (validation error: %s): %s",
@@ -513,9 +559,10 @@ def fanout_urgent_alert(
             base_data["driver_id"] = driver_id
 
         payload = _create_event_payload(base_data, "urgent_alert")
+        # ✅ FIX: Standardiser avec '_' au lieu de ':' pour cohérence
         emit_company_event(company_id, "urgent_alert", payload)
         if driver_id:
-            emit_driver_event(driver_id, "driver:urgent_alert", payload)
+            emit_driver_event(driver_id, "driver_urgent_alert", payload)
     except Exception:
         app_logger.exception(
             "[event_fanout] Socket.IO failed for urgent_alert (company %s)",

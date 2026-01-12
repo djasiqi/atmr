@@ -53,6 +53,10 @@ function isMissionReturn(is_return: any): boolean {
 }
 
 export default function MissionScreen() {
+  console.log("🟢 [MissionScreen] Composant rendu", {
+    timestamp: new Date().toISOString()
+  });
+  
   const { driver } = useAuth();
   const { location } = useLocation();
   const socket = useSocket();

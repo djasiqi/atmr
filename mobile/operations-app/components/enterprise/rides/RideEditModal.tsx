@@ -16,6 +16,7 @@ import { useRideEdit } from "@/hooks/useRideEdit";
 import { AddressSelector } from "./AddressSelector";
 import { TimeDatePicker } from "./TimeDatePicker";
 import { NotesEditor } from "./NotesEditor";
+import { shadowPresets } from "@/styles/shadowStyles";
 
 const palette = {
     modalOverlay: "rgba(21,54,43,0.75)",
@@ -294,11 +295,7 @@ const styles = StyleSheet.create({
         borderRadius: 24,
         borderWidth: 1,
         borderColor: palette.modalBorder,
-        shadowColor: "rgba(15,54,43,0.15)",
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 1,
-        shadowRadius: 24,
-        elevation: 8,
+        ...shadowPresets.large,
     },
     modalHeader: {
         flexDirection: "row",

@@ -76,17 +76,13 @@ services:
     # ✅ 3.5: Si nginx est activé, l'API n'a pas besoin d'exposer le port 5000 publiquement
     # expose:
     #   - "5000"
-    # Healthcheck temporairement désactivé pour tests B2
-    # healthcheck:
-    #   test:
-    #     [
-    #       "CMD-SHELL",
-    #       'python -c "import sys,urllib.request; r=urllib.request.urlopen(''http://127.0.0.1:5000/health'', timeout=10); sys.exit(0 if getattr(r,''status'',200)==200 else 1)"',
-    #     ]
-    #   interval: 15s
-    #   timeout: 10s
-    #   retries: 10
-    #   start_period: 90s
+    # Healthcheck: vérifie que l'API répond correctement
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
     # En développement, on peut surcharger la commande par défaut
     # Le docker-entrypoint.sh sera utilisé si aucune commande n'est spécifiée
     command: >
@@ -128,6 +124,8 @@ services:
       - API_LEGACY_ENABLED=${API_LEGACY_ENABLED:-false}
       # Sécurité - Clé de chiffrement (doit être dans backend/.env)
       - APP_ENCRYPTION_KEY_B64=${APP_ENCRYPTION_KEY_B64}
+      # Configuration Brevo pour envoi d'emails transactionnels
+      - BREVO_API_KEY=${BREVO_API_KEY}
       # Optimisations PyTorch (même que production)
       - OMP_NUM_THREADS=2
       - MKL_NUM_THREADS=2
@@ -211,6 +209,8 @@ services:
       - TZ=Europe/Zurich
       # Sécurité - Clé de chiffrement (doit être dans backend/.env)
       - APP_ENCRYPTION_KEY_B64=${APP_ENCRYPTION_KEY_B64}
+      # Configuration Brevo pour envoi d'emails transactionnels
+      - BREVO_API_KEY=${BREVO_API_KEY}
       # Optimisations PyTorch (même que production)
       - OMP_NUM_THREADS=1
       - MKL_NUM_THREADS=1
@@ -283,6 +283,21 @@ services:
       - FLASK_CONFIG=${FLASK_CONFIG:-development}
       - FLASK_ENV=${FLASK_ENV:-development}
       - PDF_BASE_URL=${PDF_BASE_URL:-http://localhost:5000}
+      - TZ=Europe/Zurich
+      # Sécurité - Clé de chiffrement (doit être dans backend/.env)
+      - APP_ENCRYPTION_KEY_B64=${APP_ENCRYPTION_KEY_B64}
+      # Configuration Brevo pour envoi d'emails transactionnels
+      - BREVO_API_KEY=${BREVO_API_KEY}
+      # Optimisations PyTorch (même que production)
+      - OMP_NUM_THREADS=1
+      - MKL_NUM_THREADS=1
+      - OPENBLAS_NUM_THREADS=1
+      - NUMEXPR_NUM_THREADS=1
+      # ML/RL Models paths (même que production)
+      - ML_MODELS_PATH=/app/data/ml
+      - RL_MODELS_PATH=/app/data/rl
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
     volumes:
       - ./backend:/app
     depends_on:
@@ -333,6 +348,8 @@ services:
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       # Sécurité - Clé de chiffrement (doit être dans backend/.env)
       - APP_ENCRYPTION_KEY_B64=${APP_ENCRYPTION_KEY_B64}
+      # Configuration Brevo pour envoi d'emails transactionnels
+      - BREVO_API_KEY=${BREVO_API_KEY}
       # Optimisations PyTorch (même que production)
       - OMP_NUM_THREADS=1
       - MKL_NUM_THREADS=1

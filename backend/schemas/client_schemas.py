@@ -29,6 +29,7 @@ class ClientUpdateSchema(Schema):
     )
     gender = fields.Str(
         validate=validate.OneOf(
-            ["HOMME", "FEMME", "AUTRE"], error="gender doit être: HOMME, FEMME ou AUTRE"
+            ["male", "female"], error="gender doit être: male ou female"
         )
     )
+    avs_number = fields.Str(validate=validate.Length(max=20), allow_none=True)
