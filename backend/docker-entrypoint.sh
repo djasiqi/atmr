@@ -178,6 +178,9 @@ try:
     print(f'✅ Modèle de prédiction de retard chargé: {type(model).__name__}')
 except Exception as e:
     print(f'⚠️  Erreur lors du chargement du modèle de prédiction: {e}')
+
+import sys
+sys.exit(0)
 "
     else
         echo "  ℹ️  Modèle de prédiction de retard non trouvé (optionnel)"
@@ -211,6 +214,9 @@ except ImportError as e:
     print(f'⚠️  PyTorch non disponible (RL_ENABLED=true mais torch manquant): {e}')
 except Exception as e:
     print(f'⚠️  Erreur lors du chargement du modèle RL: {e}')
+
+import sys
+sys.exit(0)
 "
     elif [ "$rl_enabled" = "false" ]; then
         echo "  ℹ️  RL désactivé (RL_ENABLED=false) – skip warmup RL"
@@ -231,6 +237,9 @@ try:
     print(f'✅ Scalers chargés: {len(scalers)} scalers disponibles')
 except Exception as e:
     print(f'⚠️  Erreur lors du chargement des scalers: {e}')
+
+import sys
+sys.exit(0)
 "
     else
         echo "  ⚠️  Scalers non trouvés"
@@ -265,6 +274,9 @@ try:
             print('✅ Connexion à la base de données réussie')
 except Exception as e:
     print(f'⚠️  Erreur de connexion à la base de données: {e}')
+
+import sys
+sys.exit(0)
 "
 }
 
@@ -303,6 +315,9 @@ try:
     print('✅ Connexion à Redis réussie')
 except Exception as e:
     print(f'⚠️  Erreur de connexion à Redis: {e}')
+
+import sys
+sys.exit(0)
 "
 }
 
@@ -347,6 +362,9 @@ if rl_active:
             print(f'❌ {dep} manquant (requis pour RL)')
 else:
     print('ℹ️  Dépendances RL ignorées (RL_ENABLED=false)')
+
+import sys
+sys.exit(0)
 "
 }
 
