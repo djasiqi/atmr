@@ -247,6 +247,50 @@ docker_exec flask db upgrade heads || {
 }
 echo "✅ Migrations appliquées"
 
+# Attendre que le backend soit vraiment prêt (healthcheck Docker)
+echo "⏳ Attente du healthcheck backend (jusqu'à 2 minutes)..."
+BACKEND_HEALTHY=false
+for i in $(seq 1 120); do
+  BACKEND_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' atmr-backend 2>/dev/null || echo "none")
+  if [ "$BACKEND_HEALTH" = "healthy" ]; then
+    echo "✅ Backend healthy (healthcheck Docker passé)"
+    BACKEND_HEALTHY=true
+    break
+  fi
+  
+  # Afficher un message toutes les 10 secondes
+  if [ $((i % 10)) -eq 0 ]; then
+    echo "   Attente healthcheck... ($i/120s, status: $BACKEND_HEALTH)"
+  fi
+  sleep 1
+done
+
+if [ "$BACKEND_HEALTHY" = "false" ]; then
+  echo "❌ Backend healthcheck timeout après 2 minutes"
+  echo "📋 Logs du backend (dernières 50 lignes):"
+  docker compose -f docker-compose.production.yml logs backend --tail=50
+  exit 1
+fi
+
+# Attente supplémentaire pour s'assurer que l'endpoint /health est disponible
+echo "⏳ Vérification de l'endpoint /health..."
+HEALTH_OK=false
+for i in $(seq 1 30); do
+  if curl -f -s --max-time 5 "http://localhost:5000/health" > /dev/null 2>&1; then
+    echo "✅ Endpoint /health répond"
+    HEALTH_OK=true
+    break
+  fi
+  sleep 1
+done
+
+if [ "$HEALTH_OK" = "false" ]; then
+  echo "❌ Endpoint /health ne répond pas après 30 secondes"
+  echo "📋 Logs du backend (dernières 50 lignes):"
+  docker compose -f docker-compose.production.yml logs backend --tail=50
+  exit 1
+fi
+
 # Smoke tests
 if [ -f "/srv/atmr/scripts/smoke_tests.sh" ]; then
   export BACKEND_URL="http://localhost:5000"

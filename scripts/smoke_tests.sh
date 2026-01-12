@@ -35,6 +35,31 @@ error() {
 info "🧪 Démarrage des smoke tests pour ATMR"
 info "Backend URL: ${BACKEND_URL}"
 
+# Attendre que le backend réponde (retry avec backoff)
+info "⏳ Attente de la disponibilité du backend..."
+MAX_RETRIES=30
+RETRY_COUNT=0
+BACKEND_READY=false
+
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    if curl -f -s --max-time "${TIMEOUT}" "${BACKEND_URL}${HEALTH_ENDPOINT}" > /dev/null 2>&1; then
+        BACKEND_READY=true
+        break
+    fi
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+        echo "   Tentative $RETRY_COUNT/$MAX_RETRIES, attente 2 secondes..."
+        sleep 2
+    fi
+done
+
+if [ "$BACKEND_READY" = "false" ]; then
+    error "❌ Le backend ne répond pas après $MAX_RETRIES tentatives"
+    exit 1
+fi
+
+info "✅ Backend disponible, démarrage des tests"
+
 # Test 1: Vérifier que l'endpoint /health répond avec status 200
 info "Test 1: Vérification de l'endpoint /health"
 if curl -f -s --max-time "${TIMEOUT}" "${BACKEND_URL}${HEALTH_ENDPOINT}" > /dev/null; then
