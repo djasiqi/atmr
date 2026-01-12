@@ -13,6 +13,7 @@ Usage:
 """
 
 import argparse
+import base64
 import json
 import os
 import sys
@@ -35,9 +36,17 @@ with suppress(OSError):
     os.chdir(backend_dir)
 
 # ✅ Définir les variables d'environnement AVANT d'importer create_app
+# Note: APP_ENCRYPTION_KEY_B64 et MASTER_ENCRYPTION_KEY doivent être fournis
+# par le workflow GitHub Actions (depuis les secrets) ou manuellement
+
+# Fallback: générer une clé AES-256 valide (32 octets) pour tests locaux uniquement
+if not os.getenv("APP_ENCRYPTION_KEY_B64"):
+    test_encryption_key = b"test-encryption-key-for-test!"  # Exactement 32 octets
+    test_encryption_key_b64 = base64.b64encode(test_encryption_key).decode()
+    os.environ.setdefault("APP_ENCRYPTION_KEY_B64", test_encryption_key_b64)
+
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-openapi-generation")
 os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-key-for-openapi-generation")
-os.environ.setdefault("APP_ENCRYPTION_KEY_B64", "dGVzdC1lbmNyeXB0aW9uLWtleQ==")
 os.environ.setdefault(
     "MASTER_ENCRYPTION_KEY",
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
