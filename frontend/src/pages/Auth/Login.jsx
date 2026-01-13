@@ -94,7 +94,7 @@ const Login = () => {
       // Vérification si l'utilisateur doit réinitialiser son mot de passe
       if (user.force_password_change) {
         console.log('🔄 Redirection vers la réinitialisation forcée du mot de passe...');
-        navigate(`/force-reset-password/${user.id}`, { replace: true });
+        navigate(`/force-reset-password/${user.public_id}`, { replace: true });
       } else {
         // Redirection normale vers le dashboard
         navigate(`/dashboard/${roleSegment}/${user.public_id}`, {
