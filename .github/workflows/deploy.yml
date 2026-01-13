@@ -48,7 +48,7 @@ jobs:
       push_success: ${{ steps.verify_push.outputs.success }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Validate required secrets
         run: |
@@ -277,7 +277,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Validate required secrets
         run: |
