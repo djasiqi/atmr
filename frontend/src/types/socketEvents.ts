@@ -115,10 +115,21 @@ export interface JoinedCompanyPayload {
 
 export interface DriverLocationUpdatePayload {
   driver_id: number;
-  first_name: string | null;
-  latitude: number;
-  longitude: number;
-  timestamp: string;
+  company_id?: number;
+  first_name?: string | null;
+  // ✅ Backend émet "lat"/"lon" (format abrégé optimisé)
+  // Pour compatibilité, les frontends doivent accepter les deux formats
+  lat: number;
+  lon: number;
+  // Propriétés optionnelles pour compatibilité ascendante
+  latitude?: number; // Alias de "lat"
+  longitude?: number; // Alias de "lon"
+  speed?: number;
+  heading?: number;
+  accuracy?: number;
+  ts?: string; // Backend utilise "ts" (pas "timestamp")
+  timestamp?: string; // Alias de "ts"
+  source?: string;
 }
 
 export interface TeamChatMessageReceivedPayload {
@@ -146,9 +157,18 @@ export interface TypingStopReceivedPayload {
 
 export interface DriverLocationItem {
   driver_id: number;
-  latitude: number;
-  longitude: number;
-  timestamp: string;
+  // ✅ Backend émet "lat"/"lon" (cohérent avec Redis et Socket.IO)
+  lat: number;
+  lon: number;
+  // Propriétés optionnelles pour compatibilité ascendante
+  latitude?: number; // Alias de "lat"
+  longitude?: number; // Alias de "lon"
+  speed?: number;
+  heading?: number;
+  accuracy?: number;
+  ts?: string;
+  timestamp?: string; // Alias de "ts"
+  source?: string;
 }
 
 export interface DriverLocationsPayload {
