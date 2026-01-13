@@ -22,6 +22,7 @@ import {
   onBookingUpdated,
   onBookingCancelled,
 } from "@/services/socket";
+import { filterActiveMissions } from "@/utils/missionGrouping";
 
 function categorizeTripByTime(trip: Booking) {
   const hour = new Date(trip.scheduled_time).getHours();
@@ -59,12 +60,18 @@ export default function TripsScreen() {
 
       const today = new Date().toDateString();
 
+      // Filtrer les courses complétées d'aujourd'hui uniquement
       const todayTrips = completed.filter(
         (t) => new Date(t.scheduled_time).toDateString() === today
       );
 
+      // ✅ Filtrer les courses assignées selon la logique :
+      // - Courses d'aujourd'hui
+      // - Après 19h00 : afficher aussi les courses de demain
+      const filteredAssigned = filterActiveMissions(assigned);
+
       setCompletedTrips(todayTrips);
-      setAssignedTrips(assigned);
+      setAssignedTrips(filteredAssigned);
     } catch (e) {
       Alert.alert("Erreur", "Impossible de charger les trajets.");
     } finally {

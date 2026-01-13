@@ -15,9 +15,15 @@ export default function TripHeader({ date }: { date?: string | null }) {
   // ✅ Sécurité : garantir que date est toujours une string valide
   const safeDate = typeof date === "string" ? date : String(date ?? "");
 
+  // ✅ Déterminer le titre selon l'heure
+  const currentHour = new Date().getHours();
+  const title = currentHour >= 19
+    ? "Vos courses (aujourd'hui et demain)"
+    : "Vos courses du jour";
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Vos courses du jour</Text>
+      <Text style={styles.title}>{title}</Text>
       <Text style={styles.subtitle}>{safeDate}</Text>
     </View>
   );
