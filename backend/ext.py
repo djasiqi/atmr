@@ -488,6 +488,34 @@ def token_not_fresh_callback(_jwt_header, _jwt_payload):
     ), 401
 
 
+def register_jwt_error_handlers(app):
+    """Enregistre les gestionnaires d'erreurs globaux pour les exceptions JWT.
+
+    ⚠️ IMPORTANT : Ces handlers interceptent les ExpiredSignatureError qui échappent
+    aux callbacks JWT et qui seraient autrement retournées comme des erreurs 500.
+    Cela permet au client mobile de détecter les tokens expirés et de les rafraîchir
+    automatiquement via l'intercepteur HTTP.
+    """
+    from jwt.exceptions import (  # pyright: ignore[reportMissingImports]
+        ExpiredSignatureError,
+        InvalidTokenError,
+    )
+
+    @app.errorhandler(ExpiredSignatureError)
+    def handle_expired_token(e):
+        """Convertit ExpiredSignatureError en 401 au lieu de 500."""
+        app_logger.warning("[JWT] Token expiré intercepté : %s", str(e))
+        return jsonify(
+            {"error": "token_expired", "message": "Signature has expired"}
+        ), 401
+
+    @app.errorhandler(InvalidTokenError)
+    def handle_invalid_token(e):
+        """Convertit InvalidTokenError en 422 au lieu de 500."""
+        app_logger.warning("[JWT] Token invalide intercepté : %s", str(e))
+        return jsonify({"error": "invalid_token", "message": str(e)}), 422
+
+
 # ✅ Phase 3: Callback pour vérifier la blacklist des tokens
 # ✅ SECURITY: Validation audience intégrée pour rejeter automatiquement
 # les tokens avec audience invalide

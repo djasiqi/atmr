@@ -70,6 +70,41 @@ api_v2 = Api(
 # importées qu'au moment de l'initialisation de l'application, pas au chargement du module
 
 
+# ✅ Gestionnaires d'erreurs JWT pour Flask-RESTX
+# ⚠️ IMPORTANT : Flask-RESTX a ses propres gestionnaires d'erreurs qui prennent
+# priorité sur les gestionnaires Flask globaux. Il faut donc les enregistrer ici.
+@api_v1.errorhandler(Exception)
+def handle_jwt_errors_v1(error):
+    """Intercepte les erreurs JWT pour retourner 401 au lieu de 500."""
+    from jwt.exceptions import (  # pyright: ignore[reportMissingImports]
+        ExpiredSignatureError,
+        InvalidTokenError,
+    )
+
+    if isinstance(error, ExpiredSignatureError):
+        return {"error": "token_expired", "message": "Signature has expired"}, 401
+    if isinstance(error, InvalidTokenError):
+        return {"error": "invalid_token", "message": str(error)}, 422
+    # Laisser les autres exceptions être gérées par le handler par défaut
+    raise error
+
+
+@api_v2.errorhandler(Exception)
+def handle_jwt_errors_v2(error):
+    """Intercepte les erreurs JWT pour retourner 401 au lieu de 500."""
+    from jwt.exceptions import (  # pyright: ignore[reportMissingImports]
+        ExpiredSignatureError,
+        InvalidTokenError,
+    )
+
+    if isinstance(error, ExpiredSignatureError):
+        return {"error": "token_expired", "message": "Signature has expired"}, 401
+    if isinstance(error, InvalidTokenError):
+        return {"error": "invalid_token", "message": str(error)}, 422
+    # Laisser les autres exceptions être gérées par le handler par défaut
+    raise error
+
+
 # Prometheus metrics export
 # Ajouter une représentation personnalisée pour text/plain
 # qui accepte les objets Response
