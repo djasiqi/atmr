@@ -6,6 +6,7 @@ from typing import Any, Protocol, Sequence
 
 class _DriverLike(Protocol):
     id: int
+    user: Any | None
 
 
 class _DriverRepo(Protocol):
@@ -40,7 +41,22 @@ class GetCompanyDriversLiveLocationsUseCase:
             rec = self._get_last_location(int(d.id))
             if not rec:
                 continue
-            items.append({"driver_id": int(d.id), **rec})
+
+            # Extraire first_name et last_name depuis d.user
+            first_name = None
+            last_name = None
+            if hasattr(d, "user") and d.user is not None:
+                first_name = getattr(d.user, "first_name", None)
+                last_name = getattr(d.user, "last_name", None)
+
+            items.append(
+                {
+                    "driver_id": int(d.id),
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    **rec,
+                }
+            )
         return GetCompanyDriversLiveLocationsResult(
             response={"items": items}, status_code=200
         )

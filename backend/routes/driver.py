@@ -835,6 +835,14 @@ class DriverLocation(Resource):
                         # 5) Diffusion temps réel à la room entreprise
                         try:
                             room = f"company_{driver.company_id}"
+
+                            # Extraire first_name et last_name depuis driver.user
+                            first_name = None
+                            last_name = None
+                            if hasattr(driver, "user") and driver.user is not None:
+                                first_name = getattr(driver.user, "first_name", None)
+                                last_name = getattr(driver.user, "last_name", None)
+
                             # ✅ FIX: Émettre "driver_location_update" pour correspondre au frontend
                             socketio.emit(
                                 "driver_location_update",
@@ -848,6 +856,8 @@ class DriverLocation(Resource):
                                     "accuracy": accuracy,
                                     "ts": ts,
                                     "source": source,
+                                    "first_name": first_name,
+                                    "last_name": last_name,
                                 },
                                 to=room,
                             )
