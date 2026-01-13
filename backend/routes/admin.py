@@ -540,8 +540,7 @@ class UpdateUserRole(Resource):
 class ResetUserPassword(Resource):
     @jwt_required()
     @role_required(UserRole.admin)
-    # ✅ S2: Rate limiting très strict pour reset mot de passe admin (action critique)
-    @limiter.limit("5 per hour")
+    # ✅ Pas de rate limiting pour les admins (déjà protégé par @role_required)
     def post(self, user_id):
         """Réinitialise le mot de passe d'un utilisateur."""
         try:
