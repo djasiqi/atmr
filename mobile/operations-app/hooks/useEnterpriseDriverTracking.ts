@@ -19,9 +19,13 @@ type DriverLocationEvent = {
   driver_id?: number | string;
   first_name?: string | null;
   last_name?: string | null;
+  // ✅ Accepter les deux formats pour compatibilité
   latitude?: number | string | null;
+  lat?: number | string | null;
   longitude?: number | string | null;
+  lon?: number | string | null;
   timestamp?: string | null;
+  ts?: string | null;
 };
 
 const toNumber = (value: unknown): number | null => {
@@ -64,9 +68,13 @@ export const useEnterpriseDriverTracking = () => {
           driver_id: number;
           first_name?: string | null;
           last_name?: string | null;
+          // ✅ Accepter les deux formats pour compatibilité
           latitude?: number | null;
+          lat?: number | null;
           longitude?: number | null;
+          lon?: number | null;
           timestamp?: string | null;
+          ts?: string | null;
         }>;
       }>(url, {
         headers: {
@@ -79,8 +87,10 @@ export const useEnterpriseDriverTracking = () => {
       console.log('[useEnterpriseDriverTracking] 📍 Items count:', items.length);
       const newMarkers: DriverMarker[] = items
         .map((item) => {
-          const latitude = toNumber(item.latitude);
-          const longitude = toNumber(item.longitude);
+          // ✅ FIX: Accepter les deux formats (lat/latitude, lon/longitude)
+          // Backend retourne "lat"/"lon", pas "latitude"/"longitude"
+          const latitude = toNumber(item.latitude ?? item.lat);
+          const longitude = toNumber(item.longitude ?? item.lon);
           if (latitude === null || longitude === null) return null;
 
           const nameParts = [item.first_name, item.last_name]
@@ -156,8 +166,10 @@ export const useEnterpriseDriverTracking = () => {
       if (driverIdRaw === undefined || driverIdRaw === null) return;
       const driverId = String(driverIdRaw);
 
-      const latitude = toNumber(payload.latitude);
-      const longitude = toNumber(payload.longitude);
+      // ✅ FIX: Accepter les deux formats (lat/latitude, lon/longitude)
+      // Backend émet "lat"/"lon" via Socket.IO, pas "latitude"/"longitude"
+      const latitude = toNumber(payload.latitude ?? payload.lat);
+      const longitude = toNumber(payload.longitude ?? payload.lon);
       if (latitude === null || longitude === null) return;
 
       const nameParts = [payload.first_name, payload.last_name]
