@@ -80,7 +80,8 @@ export const ClientSelector: React.FC<ClientSelectorProps> = ({
 
     const handleBlur = () => {
         setIsFocused(false);
-        setTimeout(() => setShowSuggestions(false), 200);
+        // Délai plus long pour permettre le clic sur "Créer un nouveau client"
+        setTimeout(() => setShowSuggestions(false), 300);
     };
 
     return (
@@ -126,7 +127,15 @@ export const ClientSelector: React.FC<ClientSelectorProps> = ({
                         searchQuery.length >= 2 &&
                         !loading &&
                         suggestions.length === 0 && (
-                            <TouchableOpacity style={styles.newClientButton} onPress={onNewClient}>
+                            <TouchableOpacity 
+                                style={styles.newClientButton} 
+                                onPress={() => {
+                                    setShowSuggestions(false);
+                                    onNewClient();
+                                }}
+                                // Empêcher le blur de masquer le bouton avant le clic
+                                onPressIn={() => setShowSuggestions(true)}
+                            >
                                 <Ionicons name="add-circle-outline" size={18} color={palette.accent} />
                                 <Text style={styles.newClientText}>Créer un nouveau client</Text>
                             </TouchableOpacity>
@@ -240,6 +249,8 @@ const styles = StyleSheet.create({
         paddingVertical: 10,
         paddingHorizontal: 14,
         gap: 8,
+        zIndex: 10, // S'assurer que le bouton est cliquable
+        position: "relative",
     },
     newClientText: {
         color: palette.accent,
