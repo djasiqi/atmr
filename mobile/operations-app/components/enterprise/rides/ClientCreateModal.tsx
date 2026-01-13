@@ -42,9 +42,11 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 🔍 DEBUG: Logger la prop visible
+  // 🔍 DEBUG: Logger la prop visible (dev only)
   useEffect(() => {
-    console.log('[ClientCreateModal] 🔍 visible prop changed:', visible);
+    if (__DEV__) {
+      console.log('[ClientCreateModal] 🔍 visible prop changed:', visible);
+    }
   }, [visible]);
 
   // Informations personnelles
@@ -426,241 +428,241 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
               keyboardShouldPersistTaps="handled"
             >
               {error && (
-              <View style={styles.errorContainer}>
-                <Ionicons name="alert-circle" size={18} color={palette.error} />
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            )}
-
-            {/* Type de client */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Type de client</Text>
-              <TouchableOpacity
-                style={styles.checkboxRow}
-                onPress={() => setIsInstitution(!isInstitution)}
-              >
-                <View style={styles.checkbox}>
-                  {isInstitution && (
-                    <Ionicons name="checkmark" size={16} color={palette.modalButton} />
-                  )}
-                </View>
-                <Text style={styles.checkboxLabel}>
-                  Est une institution (clinique, hôpital, etc.)
-                </Text>
-              </TouchableOpacity>
-
-              {isInstitution && (
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Nom de l'institution *</Text>
-                  <View style={styles.textInputContainer}>
-                    <Ionicons name="business-outline" size={18} color={palette.modalButton} />
-                    <TextInput
-                      style={styles.textInput}
-                      value={institutionName}
-                      onChangeText={setInstitutionName}
-                      placeholder="Ex: Clinique du Léman"
-                      placeholderTextColor={palette.modalText}
-                    />
-                  </View>
+                <View style={styles.errorContainer}>
+                  <Ionicons name="alert-circle" size={18} color={palette.error} />
+                  <Text style={styles.errorText}>{error}</Text>
                 </View>
               )}
-            </View>
 
-            {/* Informations personnelles */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>
-                {isInstitution
-                  ? "Contact principal"
-                  : "Informations personnelles"}
-              </Text>
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Prénom *</Text>
-                <View style={styles.textInputContainer}>
-                  <Ionicons name="person-outline" size={18} color={palette.modalButton} />
-                  <TextInput
-                    style={styles.textInput}
-                    value={firstName}
-                    onChangeText={setFirstName}
-                    placeholder="Prénom"
-                    placeholderTextColor={palette.modalText}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Nom *</Text>
-                <View style={styles.textInputContainer}>
-                  <Ionicons name="person-outline" size={18} color={palette.modalButton} />
-                  <TextInput
-                    style={styles.textInput}
-                    value={lastName}
-                    onChangeText={setLastName}
-                    placeholder="Nom"
-                    placeholderTextColor={palette.modalText}
-                  />
-                </View>
-              </View>
-
-              {/* ✅ Civilité obligatoire */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Civilité *</Text>
-                <View style={styles.genderButtonGroup}>
-                  <TouchableOpacity
-                    style={[
-                      styles.genderButton,
-                      gender === 'male' && styles.genderButtonActive
-                    ]}
-                    onPress={() => setGender('male')}
-                  >
-                    <Ionicons
-                      name="male"
-                      size={18}
-                      color={gender === 'male' ? '#FFFFFF' : palette.modalButton}
-                    />
-                    <Text style={[
-                      styles.genderButtonText,
-                      gender === 'male' && styles.genderButtonTextActive
-                    ]}>
-                      Monsieur
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.genderButton,
-                      gender === 'female' && styles.genderButtonActive
-                    ]}
-                    onPress={() => setGender('female')}
-                  >
-                    <Ionicons
-                      name="female"
-                      size={18}
-                      color={gender === 'female' ? '#FFFFFF' : palette.modalButton}
-                    />
-                    <Text style={[
-                      styles.genderButtonText,
-                      gender === 'female' && styles.genderButtonTextActive
-                    ]}>
-                      Madame
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* ✅ Numéro AVS optionnel */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Numéro AVS</Text>
-                <View style={styles.textInputContainer}>
-                  <Ionicons name="card-outline" size={18} color={palette.modalButton} />
-                  <TextInput
-                    style={styles.textInput}
-                    value={avsNumber}
-                    onChangeText={setAvsNumber}
-                    placeholder="756.XXXX.XXXX.XX"
-                    placeholderTextColor={palette.modalText}
-                    keyboardType="numbers-and-punctuation"
-                  />
-                </View>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Téléphone</Text>
-                <View style={styles.textInputContainer}>
-                  <Ionicons name="call-outline" size={18} color={palette.modalButton} />
-                  <TextInput
-                    style={styles.textInput}
-                    value={phone}
-                    onChangeText={setPhone}
-                    placeholder="+41 22 123 45 67"
-                    placeholderTextColor={palette.modalText}
-                    keyboardType="phone-pad"
-                  />
-                </View>
-              </View>
-            </View>
-
-            {/* ✅ Priority 2: Coordonnées de facturation (optionnelles) */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>📋 Coordonnées de facturation</Text>
-              <Text style={styles.sectionDescription}>
-                Informations optionnelles pour la facturation
-              </Text>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Email de contact</Text>
-                <View style={styles.textInputContainer}>
-                  <Ionicons name="mail-outline" size={18} color={palette.modalButton} />
-                  <TextInput
-                    style={styles.textInput}
-                    value={contactEmail}
-                    onChangeText={setContactEmail}
-                    placeholder="facturation@example.com"
-                    placeholderTextColor={palette.modalText}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                  />
-                </View>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Téléphone de contact</Text>
-                <View style={styles.textInputContainer}>
-                  <Ionicons name="call-outline" size={18} color={palette.modalButton} />
-                  <TextInput
-                    style={styles.textInput}
-                    value={contactPhone}
-                    onChangeText={setContactPhone}
-                    placeholder="+41 22 123 45 67"
-                    placeholderTextColor={palette.modalText}
-                    keyboardType="phone-pad"
-                  />
-                </View>
-              </View>
-
-              {!isInstitution && (
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>💰 Tarif préférentiel (CHF)</Text>
-                  <View style={styles.textInputContainer}>
-                    <Ionicons name="cash-outline" size={18} color={palette.modalButton} />
-                    <TextInput
-                      style={styles.textInput}
-                      value={preferentialRate}
-                      onChangeText={setPreferentialRate}
-                      placeholder="Ex: 45.00"
-                      placeholderTextColor={palette.modalText}
-                      keyboardType="decimal-pad"
-                    />
+              {/* Type de client */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Type de client</Text>
+                <TouchableOpacity
+                  style={styles.checkboxRow}
+                  onPress={() => setIsInstitution(!isInstitution)}
+                >
+                  <View style={styles.checkbox}>
+                    {isInstitution && (
+                      <Ionicons name="checkmark" size={16} color={palette.modalButton} />
+                    )}
                   </View>
-                  <Text style={styles.inputHint}>
-                    Prix d'un trajet simple. Laisser vide pour le tarif standard.
+                  <Text style={styles.checkboxLabel}>
+                    Est une institution (clinique, hôpital, etc.)
                   </Text>
-                </View>
-              )}
-            </View>
+                </TouchableOpacity>
 
-            {/* Adresse de domicile */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>
-                {isInstitution
-                  ? "📍 Adresse de l'institution"
-                  : "🏠 Adresse de domicile"}
-              </Text>
-              <AddressSelector
-                label="Adresse complète *"
-                value={domicileAddress}
-                onChange={(address, suggestion) => {
-                  // Nettoyer l'adresse dès la sélection pour éviter les doublons
-                  let cleanedAddress = address;
-                  if (suggestion?.label) {
-                    cleanedAddress = cleanAddressString(suggestion.label);
-                  } else if (address) {
-                    cleanedAddress = cleanAddressString(address);
-                  }
-                  setDomicileAddress(cleanedAddress);
-                  setDomicileSuggestion(suggestion);
-                }}
-                icon="location-outline"
-              />
-            </View>
+                {isInstitution && (
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Nom de l'institution *</Text>
+                    <View style={styles.textInputContainer}>
+                      <Ionicons name="business-outline" size={18} color={palette.modalButton} />
+                      <TextInput
+                        style={styles.textInput}
+                        value={institutionName}
+                        onChangeText={setInstitutionName}
+                        placeholder="Ex: Clinique du Léman"
+                        placeholderTextColor={palette.modalText}
+                      />
+                    </View>
+                  </View>
+                )}
+              </View>
+
+              {/* Informations personnelles */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>
+                  {isInstitution
+                    ? "Contact principal"
+                    : "Informations personnelles"}
+                </Text>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Prénom *</Text>
+                  <View style={styles.textInputContainer}>
+                    <Ionicons name="person-outline" size={18} color={palette.modalButton} />
+                    <TextInput
+                      style={styles.textInput}
+                      value={firstName}
+                      onChangeText={setFirstName}
+                      placeholder="Prénom"
+                      placeholderTextColor={palette.modalText}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Nom *</Text>
+                  <View style={styles.textInputContainer}>
+                    <Ionicons name="person-outline" size={18} color={palette.modalButton} />
+                    <TextInput
+                      style={styles.textInput}
+                      value={lastName}
+                      onChangeText={setLastName}
+                      placeholder="Nom"
+                      placeholderTextColor={palette.modalText}
+                    />
+                  </View>
+                </View>
+
+                {/* ✅ Civilité obligatoire */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Civilité *</Text>
+                  <View style={styles.genderButtonGroup}>
+                    <TouchableOpacity
+                      style={[
+                        styles.genderButton,
+                        gender === 'male' && styles.genderButtonActive
+                      ]}
+                      onPress={() => setGender('male')}
+                    >
+                      <Ionicons
+                        name="male"
+                        size={18}
+                        color={gender === 'male' ? '#FFFFFF' : palette.modalButton}
+                      />
+                      <Text style={[
+                        styles.genderButtonText,
+                        gender === 'male' && styles.genderButtonTextActive
+                      ]}>
+                        Monsieur
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.genderButton,
+                        gender === 'female' && styles.genderButtonActive
+                      ]}
+                      onPress={() => setGender('female')}
+                    >
+                      <Ionicons
+                        name="female"
+                        size={18}
+                        color={gender === 'female' ? '#FFFFFF' : palette.modalButton}
+                      />
+                      <Text style={[
+                        styles.genderButtonText,
+                        gender === 'female' && styles.genderButtonTextActive
+                      ]}>
+                        Madame
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* ✅ Numéro AVS optionnel */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Numéro AVS</Text>
+                  <View style={styles.textInputContainer}>
+                    <Ionicons name="card-outline" size={18} color={palette.modalButton} />
+                    <TextInput
+                      style={styles.textInput}
+                      value={avsNumber}
+                      onChangeText={setAvsNumber}
+                      placeholder="756.XXXX.XXXX.XX"
+                      placeholderTextColor={palette.modalText}
+                      keyboardType="numbers-and-punctuation"
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Téléphone</Text>
+                  <View style={styles.textInputContainer}>
+                    <Ionicons name="call-outline" size={18} color={palette.modalButton} />
+                    <TextInput
+                      style={styles.textInput}
+                      value={phone}
+                      onChangeText={setPhone}
+                      placeholder="+41 22 123 45 67"
+                      placeholderTextColor={palette.modalText}
+                      keyboardType="phone-pad"
+                    />
+                  </View>
+                </View>
+              </View>
+
+              {/* ✅ Priority 2: Coordonnées de facturation (optionnelles) */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>📋 Coordonnées de facturation</Text>
+                <Text style={styles.sectionDescription}>
+                  Informations optionnelles pour la facturation
+                </Text>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Email de contact</Text>
+                  <View style={styles.textInputContainer}>
+                    <Ionicons name="mail-outline" size={18} color={palette.modalButton} />
+                    <TextInput
+                      style={styles.textInput}
+                      value={contactEmail}
+                      onChangeText={setContactEmail}
+                      placeholder="facturation@example.com"
+                      placeholderTextColor={palette.modalText}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Téléphone de contact</Text>
+                  <View style={styles.textInputContainer}>
+                    <Ionicons name="call-outline" size={18} color={palette.modalButton} />
+                    <TextInput
+                      style={styles.textInput}
+                      value={contactPhone}
+                      onChangeText={setContactPhone}
+                      placeholder="+41 22 123 45 67"
+                      placeholderTextColor={palette.modalText}
+                      keyboardType="phone-pad"
+                    />
+                  </View>
+                </View>
+
+                {!isInstitution && (
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>💰 Tarif préférentiel (CHF)</Text>
+                    <View style={styles.textInputContainer}>
+                      <Ionicons name="cash-outline" size={18} color={palette.modalButton} />
+                      <TextInput
+                        style={styles.textInput}
+                        value={preferentialRate}
+                        onChangeText={setPreferentialRate}
+                        placeholder="Ex: 45.00"
+                        placeholderTextColor={palette.modalText}
+                        keyboardType="decimal-pad"
+                      />
+                    </View>
+                    <Text style={styles.inputHint}>
+                      Prix d'un trajet simple. Laisser vide pour le tarif standard.
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Adresse de domicile */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>
+                  {isInstitution
+                    ? "📍 Adresse de l'institution"
+                    : "🏠 Adresse de domicile"}
+                </Text>
+                <AddressSelector
+                  label="Adresse complète *"
+                  value={domicileAddress}
+                  onChange={(address, suggestion) => {
+                    // Nettoyer l'adresse dès la sélection pour éviter les doublons
+                    let cleanedAddress = address;
+                    if (suggestion?.label) {
+                      cleanedAddress = cleanAddressString(suggestion.label);
+                    } else if (address) {
+                      cleanedAddress = cleanAddressString(address);
+                    }
+                    setDomicileAddress(cleanedAddress);
+                    setDomicileSuggestion(suggestion);
+                  }}
+                  icon="location-outline"
+                />
+              </View>
             </ScrollView>
           </View>
 
