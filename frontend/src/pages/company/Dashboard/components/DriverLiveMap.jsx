@@ -201,19 +201,65 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
 
   // Init carte Leaflet
   useEffect(() => {
-    if (mapRef.current) return; // évite double init hors StrictMode
-    if (!mapElRef.current) return;
+    if (mapRef.current) {
+      console.log('[DriverLiveMap] ⚠️ Carte déjà initialisée, skip');
+      return; // évite double init hors StrictMode
+    }
+    if (!mapElRef.current) {
+      console.log('[DriverLiveMap] ❌ mapElRef.current is null');
+      return;
+    }
 
-    const map = L.map(mapElRef.current, {
-      center: defaultCenter,
-      zoom: 9,
+    console.log('[DriverLiveMap] 🗺️ Initialisation de la carte Leaflet...', {
+      element: mapElRef.current,
+      dimensions: {
+        width: mapElRef.current.offsetWidth,
+        height: mapElRef.current.offsetHeight,
+      },
     });
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors',
-    }).addTo(map);
 
-    mapRef.current = map;
+    try {
+      const map = L.map(mapElRef.current, {
+        center: defaultCenter,
+        zoom: 9,
+        zoomControl: true,
+        scrollWheelZoom: true,
+      });
+
+      console.log('[DriverLiveMap] ✅ Carte Leaflet créée');
+
+      const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors',
+      });
+
+      tileLayer.on('loading', () => {
+        console.log('[DriverLiveMap] 📥 Chargement des tiles...');
+      });
+
+      tileLayer.on('load', () => {
+        console.log('[DriverLiveMap] ✅ Tiles chargées');
+      });
+
+      tileLayer.on('tileerror', (error) => {
+        console.error('[DriverLiveMap] ❌ Erreur chargement tile:', error);
+      });
+
+      tileLayer.addTo(map);
+
+      // Forcer un redimensionnement après un court délai
+      setTimeout(() => {
+        if (map) {
+          map.invalidateSize();
+          console.log('[DriverLiveMap] 🔄 Carte redimensionnée');
+        }
+      }, 100);
+
+      mapRef.current = map;
+      console.log('[DriverLiveMap] ✅ Carte initialisée avec succès');
+    } catch (error) {
+      console.error('[DriverLiveMap] ❌ Erreur initialisation carte:', error);
+    }
 
     return () => {
       // ⚠️ StrictMode va appeler le cleanup immédiatement en dev -> remets tout à zéro
@@ -653,8 +699,45 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
   }, [searchQuery]);
 
   return (
-    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-      <div ref={mapElRef} style={{ width: '100%', height: '100%' }} />
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        position: 'relative',
+        minHeight: '400px',
+        background: '#e0e0e0', // Fond gris pour debug
+      }}
+    >
+      <div
+        ref={mapElRef}
+        style={{
+          width: '100%',
+          height: '100%',
+          minHeight: '400px',
+          background: '#f5f5f5', // Fond gris clair pour debug
+          border: '2px solid #00796b', // Bordure verte pour debug
+        }}
+      />
+      {!mapRef.current && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            padding: '16px 24px',
+            background: 'rgba(255, 255, 255, 0.9)',
+            borderRadius: '8px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            zIndex: 9999,
+            fontSize: '14px',
+            fontWeight: '500',
+            color: '#00796b',
+          }}
+        >
+          🗺️ Initialisation de la carte...
+        </div>
+      )}
     </div>
   );
 }
