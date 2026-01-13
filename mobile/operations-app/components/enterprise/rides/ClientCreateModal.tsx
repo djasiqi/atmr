@@ -413,12 +413,14 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          <ScrollView
-            style={styles.modalScroll}
-            contentContainerStyle={styles.modalContent}
-            showsVerticalScrollIndicator={false}
-          >
-            {error && (
+          <View style={styles.scrollContainer}>
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={styles.modalContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {error && (
               <View style={styles.errorContainer}>
                 <Ionicons name="alert-circle" size={18} color={palette.error} />
                 <Text style={styles.errorText}>{error}</Text>
@@ -654,7 +656,8 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
                 icon="location-outline"
               />
             </View>
-          </ScrollView>
+            </ScrollView>
+          </View>
 
           <View style={styles.modalActions}>
             <TouchableOpacity
@@ -700,12 +703,14 @@ const styles = StyleSheet.create({
   modalCard: {
     width: "100%",
     maxWidth: 500,
-    maxHeight: "90%",
+    height: "90%",
     backgroundColor: palette.modalBackground,
     borderRadius: 24,
     borderWidth: 1,
     borderColor: palette.modalBorder,
     ...shadowPresets.large, // ✅ Compatible web/native
+    flexDirection: "column",
+    overflow: "hidden",
   },
   modalHeader: {
     flexDirection: "row",
@@ -728,6 +733,9 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     padding: 4,
+  },
+  scrollContainer: {
+    flex: 1,
   },
   modalScroll: {
     flex: 1,

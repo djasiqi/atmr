@@ -106,17 +106,45 @@ pull_with_retry() {
 
 pull_with_retry
 
-# Nettoyage complet de l'état Docker
-echo "🧹 Nettoyage de l'état Docker..."
-docker compose -f docker-compose.production.yml down --remove-orphans --volumes || true
+# ✅ SAUVEGARDE AUTOMATIQUE avant déploiement
+echo "💾 Sauvegarde automatique de la base de données avant déploiement..."
+BACKUP_DIR="/srv/atmr/backups"
+BACKUP_FILE="${BACKUP_DIR}/pre-deploy-$(date +%Y%m%d-%H%M%S).sql"
+mkdir -p "${BACKUP_DIR}"
+
+# Vérifier si PostgreSQL est en cours d'exécution
+if docker compose -f docker-compose.production.yml ps postgres --format json 2>/dev/null | grep -q '"State":"running"'; then
+  echo "📦 Création du backup dans ${BACKUP_FILE}..."
+  docker compose -f docker-compose.production.yml exec -T postgres pg_dump -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" > "${BACKUP_FILE}" 2>/dev/null || {
+    echo "⚠️  Backup échoué (peut-être le premier déploiement ou PostgreSQL non démarré)"
+    echo "   Poursuite du déploiement..."
+  }
+  
+  # Garder seulement les 10 derniers backups
+  if [ -d "${BACKUP_DIR}" ]; then
+    echo "🧹 Conservation des 10 derniers backups..."
+    ls -t "${BACKUP_DIR}"/pre-deploy-*.sql 2>/dev/null | tail -n +11 | xargs -r rm -f || true
+  fi
+  
+  echo "✅ Backup créé (ou ignoré si premier déploiement)"
+else
+  echo "ℹ️  PostgreSQL non actif, pas de backup nécessaire (peut-être le premier déploiement)"
+fi
+
+# ✅ Nettoyage SÉCURISÉ : Arrêt des conteneurs SANS supprimer les volumes de données
+echo "🧹 Arrêt des conteneurs existants (conservation des données)..."
+# ⚠️ IMPORTANT: Ne JAMAIS utiliser --volumes en production pour préserver les données
+docker compose -f docker-compose.production.yml down --remove-orphans || true
 docker compose -f docker-compose.monitoring.yml down --remove-orphans || true
 
-# Supprimer les conteneurs orphelins manuellement
+# Supprimer les conteneurs orphelins manuellement (mais PAS les volumes)
 docker ps -a --filter "name=atmr-" --format "{{.ID}}" | xargs -r docker rm -f || true
 
-# Nettoyer TOUS les volumes Docker non utilisés (résout les conflits de volumes)
-echo "🧹 Nettoyage approfondi des volumes Docker..."
-docker volume prune -a -f || true
+# ⚠️ DÉSACTIVÉ EN PRODUCTION: Ne JAMAIS nettoyer les volumes automatiquement
+# Les volumes contiennent les données PostgreSQL et ne doivent être supprimés que manuellement
+# echo "🧹 Nettoyage approfondi des volumes Docker..."
+# docker volume prune -a -f || true
+echo "✅ Conteneurs arrêtés (volumes de données préservés)"
 
 # Créer .env.production
 {
