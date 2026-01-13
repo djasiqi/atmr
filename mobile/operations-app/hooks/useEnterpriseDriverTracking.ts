@@ -56,6 +56,9 @@ export const useEnterpriseDriverTracking = () => {
       // Récupérer le token pour l'authentification
       const token = await AsyncStorage.getItem(ENTERPRISE_TOKEN_KEY);
       
+      const url = `${standardApiURL}/driver/company/${companyId}/live-locations`;
+      console.log('[useEnterpriseDriverTracking] 🔍 Fetching from:', url);
+      
       const response = await axios.get<{
         items: Array<{
           driver_id: number;
@@ -65,13 +68,15 @@ export const useEnterpriseDriverTracking = () => {
           longitude?: number | null;
           timestamp?: string | null;
         }>;
-      }>(`${standardApiURL}/driver/company/${companyId}/live-locations`, {
+      }>(url, {
         headers: {
           Authorization: token ? `Bearer ${token}` : undefined,
         },
       });
 
+      console.log('[useEnterpriseDriverTracking] ✅ Response received:', response.status);
       const items = response.data?.items || [];
+      console.log('[useEnterpriseDriverTracking] 📍 Items count:', items.length);
       const newMarkers: DriverMarker[] = items
         .map((item) => {
           const latitude = toNumber(item.latitude);
@@ -96,6 +101,8 @@ export const useEnterpriseDriverTracking = () => {
         })
         .filter((marker): marker is DriverMarker => marker !== null);
 
+      console.log('[useEnterpriseDriverTracking] 📌 New markers:', newMarkers.length);
+      
       setMarkers((prev) => {
         // Fusionner avec les markers existants (priorité aux sockets si disponibles)
         const merged = new Map<string, DriverMarker>();
@@ -110,10 +117,17 @@ export const useEnterpriseDriverTracking = () => {
             merged.set(marker.id, marker);
           }
         });
-        return Array.from(merged.values());
+        const result = Array.from(merged.values());
+        console.log('[useEnterpriseDriverTracking] 🗺️ Final markers count:', result.length);
+        return result;
       });
     } catch (error) {
-      console.warn("❗ Erreur récupération positions HTTP:", error);
+      console.error('[useEnterpriseDriverTracking] ❌ Erreur récupération positions HTTP:', error);
+      if (axios.isAxiosError(error)) {
+        console.error('[useEnterpriseDriverTracking] 📡 Status:', error.response?.status);
+        console.error('[useEnterpriseDriverTracking] 📡 Data:', error.response?.data);
+        console.error('[useEnterpriseDriverTracking] 📡 URL:', error.config?.url);
+      }
     }
   }, [enterpriseSession?.company?.id]);
 

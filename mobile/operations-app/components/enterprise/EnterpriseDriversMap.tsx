@@ -30,6 +30,14 @@ export const EnterpriseDriversMap: React.FC<EnterpriseDriversMapProps> = ({
   style,
   fallbackMessage = "Position des chauffeurs indisponible pour le moment",
 }) => {
+  // 🔍 DEBUG: Logger les markers reçus
+  useEffect(() => {
+    console.log('[EnterpriseDriversMap] 🗺️ Markers received:', markers.length);
+    if (markers.length > 0) {
+      console.log('[EnterpriseDriversMap] 📍 First marker:', markers[0]);
+    }
+  }, [markers]);
+
   const getInitials = useCallback((label: string) => {
     return label
       .trim()
