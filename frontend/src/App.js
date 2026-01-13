@@ -198,10 +198,10 @@ const App = () => {
               }
             />
             <Route
-              path="/force-reset-password/:userId"
+              path="/force-reset-password/:token"
               element={
                 <DefaultLayout>
-                  <ResetPassword resetMode="userId" />
+                  <ResetPassword resetMode="forced" />
                 </DefaultLayout>
               }
             />
