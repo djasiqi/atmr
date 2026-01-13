@@ -39,6 +39,20 @@ const ENTERPRISE_DEVICE_KEY = "enterprise.device_id";
 
 type AuthMode = "driver" | "enterprise";
 
+/**
+ * Décoder un JWT et extraire le timestamp d'expiration (exp)
+ * @returns timestamp d'expiration en millisecondes, ou null si décodage échoue
+ */
+const getTokenExpiration = (token: string): number | null => {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return payload.exp ? payload.exp * 1000 : null; // Convertir en ms
+  } catch (error) {
+    console.warn("[getTokenExpiration] Erreur décodage JWT:", error);
+    return null;
+  }
+};
+
 interface EnterpriseSessionState {
   token: string;
   refreshToken: string | null;
@@ -441,6 +455,126 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       isMounted = false;
     };
   }, [clearDriverStorage, clearEnterpriseStorage, storeMode, handleEnterpriseSuccess]);
+
+  // ✅ REFRESH PROACTIF : Rafraîchir le token driver 5 minutes avant expiration
+  // Évite les erreurs 401 et améliore l'expérience utilisateur (comme WhatsApp)
+  useEffect(() => {
+    if (!driverToken || mode !== "driver") return;
+
+    const expiresAt = getTokenExpiration(driverToken);
+    if (!expiresAt) {
+      console.warn("[useAuth] Impossible de décoder l'expiration du token driver");
+      return;
+    }
+
+    const now = Date.now();
+    const timeUntilExpiry = expiresAt - now;
+    const refreshBeforeExpiry = 5 * 60 * 1000; // 5 minutes
+
+    // Si le token expire dans plus de 5 minutes, planifier le refresh
+    if (timeUntilExpiry > refreshBeforeExpiry) {
+      const timeoutId = setTimeout(async () => {
+        console.log("[useAuth] 🔄 Refresh proactif du token driver (5min avant expiration)");
+        try {
+          const refreshToken = await secureStorage.getRefreshToken();
+          if (refreshToken) {
+            const refreshResponse = await refreshAccessToken(refreshToken);
+            
+            // Stocker le nouveau access_token
+            await secureStorage.setAccessToken(refreshResponse.access_token);
+            setDriverToken(refreshResponse.access_token);
+            
+            // Mettre à jour refresh_token si rotation activée
+            if (refreshResponse.refresh_token) {
+              await secureStorage.setRefreshToken(refreshResponse.refresh_token);
+            }
+            
+            // Invalider le cache de l'intercepteur pour forcer l'utilisation du nouveau token
+            invalidateInterceptorCache();
+            
+            console.log("[useAuth] ✅ Refresh proactif réussi");
+          }
+        } catch (error) {
+          console.warn("[useAuth] ⚠️ Refresh proactif échoué (fallback sur intercepteur 401):", error);
+          // Ne pas déconnecter l'utilisateur, l'intercepteur gérera le 401
+        }
+      }, timeUntilExpiry - refreshBeforeExpiry);
+
+      console.log(`[useAuth] ⏰ Refresh proactif planifié dans ${Math.round((timeUntilExpiry - refreshBeforeExpiry) / 1000 / 60)} minutes`);
+
+      return () => clearTimeout(timeoutId);
+    } else if (timeUntilExpiry > 0 && timeUntilExpiry <= refreshBeforeExpiry) {
+      // Token expire bientôt (< 5min), rafraîchir immédiatement
+      console.log("[useAuth] ⚡ Token expire dans moins de 5min, refresh immédiat");
+      (async () => {
+        try {
+          const refreshToken = await secureStorage.getRefreshToken();
+          if (refreshToken) {
+            const refreshResponse = await refreshAccessToken(refreshToken);
+            await secureStorage.setAccessToken(refreshResponse.access_token);
+            setDriverToken(refreshResponse.access_token);
+            if (refreshResponse.refresh_token) {
+              await secureStorage.setRefreshToken(refreshResponse.refresh_token);
+            }
+            invalidateInterceptorCache();
+            console.log("[useAuth] ✅ Refresh immédiat réussi");
+          }
+        } catch (error) {
+          console.warn("[useAuth] ⚠️ Refresh immédiat échoué:", error);
+        }
+      })();
+    }
+  }, [driverToken, mode]);
+
+  // ✅ REFRESH PROACTIF : Rafraîchir le token entreprise 5 minutes avant expiration
+  useEffect(() => {
+    if (!enterpriseSession?.token || mode !== "enterprise") return;
+
+    const expiresAt = getTokenExpiration(enterpriseSession.token);
+    if (!expiresAt) {
+      console.warn("[useAuth] Impossible de décoder l'expiration du token entreprise");
+      return;
+    }
+
+    const now = Date.now();
+    const timeUntilExpiry = expiresAt - now;
+    const refreshBeforeExpiry = 5 * 60 * 1000; // 5 minutes
+
+    if (timeUntilExpiry > refreshBeforeExpiry) {
+      const timeoutId = setTimeout(async () => {
+        console.log("[useAuth] 🔄 Refresh proactif du token entreprise (5min avant expiration)");
+        try {
+          const refreshToken = enterpriseSession.refreshToken || await AsyncStorage.getItem(ENTERPRISE_REFRESH_KEY);
+          if (refreshToken) {
+            const refreshResponse = await refreshEnterpriseToken(refreshToken);
+            await handleEnterpriseSuccess(refreshResponse);
+            console.log("[useAuth] ✅ Refresh proactif entreprise réussi");
+          }
+        } catch (error) {
+          console.warn("[useAuth] ⚠️ Refresh proactif entreprise échoué:", error);
+        }
+      }, timeUntilExpiry - refreshBeforeExpiry);
+
+      console.log(`[useAuth] ⏰ Refresh proactif entreprise planifié dans ${Math.round((timeUntilExpiry - refreshBeforeExpiry) / 1000 / 60)} minutes`);
+
+      return () => clearTimeout(timeoutId);
+    } else if (timeUntilExpiry > 0 && timeUntilExpiry <= refreshBeforeExpiry) {
+      // Token expire bientôt (< 5min), rafraîchir immédiatement
+      console.log("[useAuth] ⚡ Token entreprise expire dans moins de 5min, refresh immédiat");
+      (async () => {
+        try {
+          const refreshToken = enterpriseSession.refreshToken || await AsyncStorage.getItem(ENTERPRISE_REFRESH_KEY);
+          if (refreshToken) {
+            const refreshResponse = await refreshEnterpriseToken(refreshToken);
+            await handleEnterpriseSuccess(refreshResponse);
+            console.log("[useAuth] ✅ Refresh immédiat entreprise réussi");
+          }
+        } catch (error) {
+          console.warn("[useAuth] ⚠️ Refresh immédiat entreprise échoué:", error);
+        }
+      })();
+    }
+  }, [enterpriseSession?.token, mode, handleEnterpriseSuccess]);
 
   // ✅ Recharger la session entreprise après un switchMode vers "enterprise"
   // Ce useEffect se déclenche quand le mode change vers "enterprise" et qu'il n'y a pas encore de session chargée
