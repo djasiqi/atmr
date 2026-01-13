@@ -1,6 +1,7 @@
 // frontend/src/components/common/AddressAutocomplete.jsx
 import React, { useEffect, useMemo, useRef, useState, useDeferredValue, useTransition, useCallback } from 'react';
-// Using fetch with relative '/api' path to leverage CRA proxy in dev and avoid CORS
+import apiClient from '../../utils/apiClient';
+// Using apiClient instead of fetch to properly handle HTTPS redirects
 
 export default function AddressAutocomplete({
   name,
@@ -158,24 +159,16 @@ export default function AddressAutocomplete({
 
     // 1) Proxy backend — mélange alias/favoris + Photon si ton backend le fait
     try {
-      // ✅ FIX: Utiliser l'URL complète de l'API en production (api.lirie.ch)
-      // ou l'URL relative en développement
-      const apiBaseUrl =
-        process.env.REACT_APP_API_BASE_URL ||
-        process.env.REACT_APP_API_URL ||
-        (typeof window !== 'undefined' && window.location.hostname === 'localhost'
-          ? '/api/v1'
-          : 'https://api.lirie.ch/api/v1');
-      
-      const url = `${apiBaseUrl}/geocode/autocomplete?q=${encodeURIComponent(q)}&lat=${encodeURIComponent(
+      // ✅ Utiliser apiClient qui gère automatiquement le baseURL
+      const url = `/geocode/autocomplete?q=${encodeURIComponent(q)}&lat=${encodeURIComponent(
         BIAS.lat
       )}&lon=${encodeURIComponent(BIAS.lon)}&limit=${encodeURIComponent(maxResults)}`;
       // #region agent log
       fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:153',message:'Before backend fetch',data:{url,signalAborted:signal?.aborted},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
       // #endregion
-      const res = await fetch(url, { signal });
-      if (res.ok) {
-        const data = await res.json().catch(() => []);
+      const res = await apiClient.get(url, { signal });
+      if (res.status === 200) {
+        const data = res.data || [];
         if (Array.isArray(data)) {
           if (data.length > 0) {
             console.log(`[AddressAutocomplete] ✅ Backend retourne ${data.length} résultats pour "${q}"`);
@@ -398,12 +391,12 @@ export default function AddressAutocomplete({
     
     if (shouldEnrich) {
       try {
-        const response = await fetch(
-          `/api/v1/geocode/place-details?place_id=${encodeURIComponent(it.place_id)}`
+        const response = await apiClient.get(
+          `/geocode/place-details?place_id=${encodeURIComponent(it.place_id)}`
         );
 
-        if (response.ok) {
-          const details = await response.json();
+        if (response.status === 200 && response.data) {
+          const details = response.data;
 
           // Extraire les composants d'adresse depuis address_components
           const addressComponents = details.address_components || [];
