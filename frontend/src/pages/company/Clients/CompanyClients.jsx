@@ -37,7 +37,16 @@ const CompanyClients = () => {
       setLoading(true);
       setError(null);
       const data = await fetchCompanyClients();
-      setClients(Array.isArray(data) ? data : []);
+      const clientsArray = Array.isArray(data) ? data : [];
+      
+      // 🐛 DEBUG: Afficher les 3 premiers clients pour voir la structure
+      if (clientsArray.length > 0) {
+        console.log('📊 Structure des clients (3 premiers):');
+        console.log(JSON.stringify(clientsArray.slice(0, 3), null, 2));
+        console.log('🔑 Clés disponibles:', Object.keys(clientsArray[0] || {}));
+      }
+      
+      setClients(clientsArray);
     } catch (err) {
       console.error('Erreur lors du chargement des clients:', err);
       setError('Impossible de charger les clients');
@@ -60,34 +69,51 @@ const CompanyClients = () => {
         ? (() => {
             const search = searchTerm.toLowerCase().trim();
             
-            // Construire un nom complet combiné
-            const fullName = (
-              client.full_name || 
-              `${client.first_name || ''} ${client.last_name || ''}`.trim() ||
-              client.institution_name ||
-              ''
-            ).toLowerCase();
+            // Fonction helper pour normaliser et chercher
+            const normalizeText = (text) => {
+              return (text || '')
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, ''); // Enlever les accents
+            };
             
-            // Récupérer tous les champs cherchables
-            const firstName = (client.first_name || '').toLowerCase();
-            const lastName = (client.last_name || '').toLowerCase();
-            const institutionName = (client.institution_name || '').toLowerCase();
-            const email = (client.contact_email || client.email || '').toLowerCase();
-            const phone = (client.contact_phone || client.phone || '').toLowerCase();
-            const address = (client.address || client.contact_address || '').toLowerCase();
-            const clientId = String(client.id || '');
+            const searchNormalized = normalizeText(searchTerm);
             
-            // Rechercher dans tous les champs pertinents
-            return (
-              fullName.includes(search) ||
-              firstName.includes(search) ||
-              lastName.includes(search) ||
-              institutionName.includes(search) ||
-              email.includes(search) ||
-              phone.includes(search) ||
-              address.includes(search) ||
-              clientId.includes(search)
-            );
+            // Construire un nom complet combiné - essayer toutes les variantes
+            const fullNameVariants = [
+              client.full_name,
+              `${client.first_name || ''} ${client.last_name || ''}`.trim(),
+              client.institution_name,
+              client.name, // Parfois le nom est dans un champ "name"
+            ].filter(Boolean);
+            
+            // Tous les champs de texte possibles
+            const textFields = [
+              ...fullNameVariants,
+              client.first_name,
+              client.last_name,
+              client.institution_name,
+              client.contact_email,
+              client.email,
+              client.contact_phone,
+              client.phone,
+              client.address,
+              client.contact_address,
+              String(client.id || ''),
+            ];
+            
+            // Rechercher dans tous les champs (avec et sans normalisation)
+            return textFields.some((field) => {
+              if (!field) return false;
+              const fieldLower = String(field).toLowerCase();
+              const fieldNormalized = normalizeText(field);
+              
+              // Recherche avec et sans accents
+              return (
+                fieldLower.includes(search) ||
+                fieldNormalized.includes(searchNormalized)
+              );
+            });
           })()
         : true;
 
