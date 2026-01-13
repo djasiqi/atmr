@@ -24,6 +24,7 @@ import {
   organizeMissionsForDisplay,
   getNextDestination,
   filterActiveMissions,
+  filterNextMissionsOnly,
   type DisplayMission,
 } from "@/utils/missionGrouping";
 
@@ -57,7 +58,7 @@ export default function MissionScreen() {
   console.log("🟢 [MissionScreen] Composant rendu", {
     timestamp: new Date().toISOString()
   });
-  
+
   const { driver } = useAuth();
   const { location } = useLocation();
   const socket = useSocket();
@@ -76,9 +77,11 @@ export default function MissionScreen() {
 
   const MISSIONS_CACHE_KEY = "missions_cache_v1";
 
-  // Filtrer les missions actives et proches (ne pas afficher toute la journée)
+  // Filtrer les missions actives (aujourd'hui ou demain si après 19h)
   const activeMissions = useMemo(() => {
-    return filterActiveMissions(missions);
+    const todayMissions = filterActiveMissions(missions);
+    // Ne garder que le prochain groupe de missions
+    return filterNextMissionsOnly(todayMissions);
   }, [missions]);
 
   // Organiser les missions pour l'affichage avec groupement (avec intervalle de 5min)

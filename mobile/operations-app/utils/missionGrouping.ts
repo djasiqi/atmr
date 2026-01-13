@@ -217,31 +217,98 @@ export function organizeMissionsForDisplay(missions: Booking[]): DisplayMission[
 /**
  * Filtre les missions pour n'afficher que celles qui sont actives ou proches
  * - En cours (in_progress, en_route)
- * - Assignées dans les prochaines 3 heures
- * Cela évite d'afficher toutes les missions de la journée
+ * - Assignées pour aujourd'hui
+ * - À partir de 19h00, affiche aussi les courses du lendemain
  */
 export function filterActiveMissions(missions: Booking[]): Booking[] {
-  const now = Date.now();
-  const THREE_HOURS_MS = 3 * 60 * 60 * 1000; // 3 heures en millisecondes
+  const now = new Date();
+  const currentHour = now.getHours();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(now);
+  todayEnd.setHours(23, 59, 59, 999);
+
+  // Si après 19h00, étendre jusqu'à demain 23h59
+  const endOfPeriod = currentHour >= 19
+    ? new Date(todayEnd.getTime() + 24 * 60 * 60 * 1000) // +1 jour
+    : todayEnd;
 
   return missions.filter((mission) => {
     const status = mission.status?.toLowerCase() || "";
     const scheduledTime = new Date(mission.scheduled_time).getTime();
-    const timeDiff = scheduledTime - now;
 
     // Toujours afficher les missions en cours ou en route
     if (status === "in_progress" || status === "en_route") {
       return true;
     }
 
-    // Afficher les missions assignées dans les 3 prochaines heures
-    // OU les missions assignées qui sont déjà passées (au cas où il y a du retard)
+    // Afficher les missions assignées d'aujourd'hui (ou demain si après 19h)
     if (status === "assigned") {
-      return timeDiff <= THREE_HOURS_MS; // Inclut les missions passées (timeDiff négatif)
+      return scheduledTime >= todayStart.getTime() && scheduledTime <= endOfPeriod.getTime();
     }
 
     return false;
   });
+}
+
+/**
+ * Filtre pour n'afficher QUE le prochain groupe de missions
+ * 
+ * Logique :
+ * - Affiche uniquement la prochaine mission OU le prochain groupe de missions
+ * - Critères de groupement :
+ *   1. Même adresse de pickup (normalisée)
+ *   2. Écart de temps ≤ 5 minutes entre les courses
+ * 
+ * Exemples :
+ * - Course A 10h00, Course B 11h00 → Affiche uniquement Course A
+ * - Course A 10h00, Course B 10h00 (même lieu) → Affiche A et B (groupe)
+ * - Course A 10h00, Course B 10h05 (même lieu) → Affiche A et B (groupe)
+ * - Après complétion de A → Affiche B automatiquement
+ */
+export function filterNextMissionsOnly(missions: Booking[]): Booking[] {
+  if (missions.length === 0) return [];
+
+  // 1. Priorité : missions en cours ou en route (toujours afficher)
+  const inProgressOrEnRoute = missions.filter((m) => {
+    const status = m.status?.toLowerCase() || "";
+    return status === "in_progress" || status === "en_route";
+  });
+
+  if (inProgressOrEnRoute.length > 0) {
+    return inProgressOrEnRoute;
+  }
+
+  // 2. Trier les missions assignées par heure
+  const assignedMissions = missions
+    .filter((m) => m.status?.toLowerCase() === "assigned")
+    .sort(
+      (a, b) =>
+        new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime()
+    );
+
+  if (assignedMissions.length === 0) return [];
+
+  // 3. Prendre la première mission (la plus proche dans le temps)
+  const firstMission = assignedMissions[0];
+  const firstMissionTime = new Date(firstMission.scheduled_time).getTime();
+  const firstPickup = normalizeAddress(firstMission.pickup_location || "");
+
+  // 4. Trouver toutes les missions dans le même groupe
+  const GROUPING_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+
+  const nextGroup = assignedMissions.filter((mission) => {
+    const missionTime = new Date(mission.scheduled_time).getTime();
+    const missionPickup = normalizeAddress(mission.pickup_location || "");
+    const timeDiff = Math.abs(missionTime - firstMissionTime);
+
+    // Grouper si :
+    // - Même adresse de pickup (normalisée) ET
+    // - Dans les 5 minutes de la première mission
+    return missionPickup === firstPickup && timeDiff <= GROUPING_WINDOW_MS;
+  });
+
+  return nextGroup;
 }
 
 /**
