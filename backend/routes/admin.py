@@ -252,9 +252,7 @@ class AllCompanies(Resource):
         """Récupère toutes les entreprises pour l'admin."""
         try:
             companies = company_repo.find_all()
-            return {
-                "companies": [cast("Any", c).serialize for c in companies]
-            }, 200
+            return {"companies": [cast("Any", c).serialize for c in companies]}, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
             logger.exception("❌ ERREUR get_companies: %s", e)
@@ -547,14 +545,30 @@ class ResetUserPassword(Resource):
     def post(self, user_id):
         """Réinitialise le mot de passe d'un utilisateur."""
         try:
-            user = user_repo.find_by_id(user_id)
-            if user is None:
+            # Récupérer le modèle User SQLAlchemy (pas le DTO)
+            from models.user import User
+
+            u = db.session.query(User).filter_by(id=user_id).first()
+            if u is None:
                 admin_ns.abort(404, "User not found")
                 return None  # abort() lève, mais ce return rassure l'analyste statique
-            u = cast("Any", user)
-            new_password = "".join(
-                random.choices(string.ascii_letters + string.digits, k=12)
+            # Générer un mot de passe avec au moins: 1 maj, 1 min, 1 chiffre, 1 spécial
+            special_chars = "!@#$%^&*()_+-=[]{}|;:,.<>?"
+            new_password = (
+                random.choice(string.ascii_uppercase)  # 1 majuscule
+                + random.choice(string.ascii_lowercase)  # 1 minuscule
+                + random.choice(string.digits)  # 1 chiffre
+                + random.choice(special_chars)  # 1 caractère spécial
+                + "".join(
+                    random.choices(  # 8 caractères aléatoires supplémentaires
+                        string.ascii_letters + string.digits + special_chars, k=8
+                    )
+                )
             )
+            # Mélanger les caractères pour plus de sécurité
+            password_list = list(new_password)
+            random.shuffle(password_list)
+            new_password = "".join(password_list)
             # ✅ S3: Validation avec politique renforcée (complexité + HIBP + historique)
             from security.password_policy import (
                 PasswordPolicyError,
