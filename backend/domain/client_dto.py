@@ -58,6 +58,11 @@ class ClientDTO:
     is_institution: bool = False
     is_active: bool = True
 
+    # Informations complémentaires
+    residence_facility: str | None = None
+    preferential_rate: Decimal | None = None
+    avs_number: str | None = None
+
     # Timestamps
     created_at: datetime | None = None
 
@@ -67,6 +72,8 @@ class ClientDTO:
     user_email: str | None = None
     user_phone: str | None = None
     user_public_id: str | None = None
+    user_gender: str | None = None  # GenderEnum value (HOMME/FEMME/AUTRE)
+    user_birth_date: str | None = None  # ISO format YYYY-MM-DD
 
     def to_dict(self) -> dict[str, Any]:
         """Convertit le DTO en dictionnaire pour sérialisation."""
@@ -97,10 +104,17 @@ class ClientDTO:
             "institution_phone": self.institution_phone,
             "is_institution": self.is_institution,
             "is_active": self.is_active,
+            "residence_facility": self.residence_facility,
+            "preferential_rate": (
+                float(self.preferential_rate) if self.preferential_rate else None
+            ),
+            "avs_number": self.avs_number,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "user_first_name": self.user_first_name,
             "user_last_name": self.user_last_name,
             "user_email": self.user_email,
             "user_phone": self.user_phone,
             "user_public_id": self.user_public_id,
+            "user_gender": self.user_gender,
+            "user_birth_date": self.user_birth_date,
         }

@@ -92,6 +92,14 @@ class ClientRepository:
                 "user_email": client.user.email,
                 "user_phone": client.user.phone,
                 "user_public_id": client.user.public_id,
+                "user_gender": (
+                    client.user.gender.value if client.user.gender else None
+                ),
+                "user_birth_date": (
+                    client.user.birth_date.isoformat()
+                    if client.user.birth_date
+                    else None
+                ),
             }
 
         return ClientDTO(
@@ -117,6 +125,9 @@ class ClientRepository:
             institution_phone=getattr(client, "institution_phone", None),
             is_institution=client.is_institution,  # type: ignore[reportGeneralTypeIssues]
             is_active=client.is_active,
+            residence_facility=getattr(client, "residence_facility", None),
+            preferential_rate=getattr(client, "preferential_rate", None),
+            avs_number=getattr(client, "avs_number", None),
             created_at=getattr(client, "created_at", None),
             **user_data,
         )

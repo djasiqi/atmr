@@ -9,13 +9,17 @@ const EditClientModal = ({ client, onClose, onSave }) => {
     is_institution: client.is_institution || false,
     institution_name: client.institution_name || '',
     residence_facility: client.residence_facility || '',
-    birth_date: client.user?.birth_date || '',
+    // ✅ CORRECTION: Les données user viennent avec préfixe user_ (user_gender, user_birth_date)
+    birth_date: client.user_birth_date || client.user?.birth_date || '',
     // ✅ Convertir gender de "HOMME"/"FEMME" vers "male"/"female" pour le select
-    gender: client.user?.gender 
-      ? (client.user.gender.toLowerCase() === 'homme' || client.user.gender === 'MALE' ? 'male' : 
-         client.user.gender.toLowerCase() === 'femme' || client.user.gender === 'FEMALE' ? 'female' : 
-         client.user.gender.toLowerCase())
-      : '',
+    gender: (() => {
+      const genderValue = client.user_gender || client.user?.gender || '';
+      if (!genderValue) return '';
+      const genderStr = String(genderValue).toLowerCase();
+      if (genderStr === 'homme' || genderStr === 'male') return 'male';
+      if (genderStr === 'femme' || genderStr === 'female') return 'female';
+      return genderStr;
+    })(),
     avs_number: client.avs_number || '',
     contact_email: client.contact_email || '',
     contact_phone: client.contact_phone || '',
@@ -184,7 +188,7 @@ const EditClientModal = ({ client, onClose, onSave }) => {
                   <div className={styles.infoRow}>
                     <span className={styles.label}>Contact interne :</span>
                     <span className={styles.value}>
-                      {client.first_name} {client.last_name}
+                      {client.user_first_name || client.first_name || ''} {client.user_last_name || client.last_name || ''}
                     </span>
                   </div>
                 </>
@@ -193,7 +197,7 @@ const EditClientModal = ({ client, onClose, onSave }) => {
                   <div className={styles.infoRow}>
                     <span className={styles.label}>Nom :</span>
                     <span className={styles.value}>
-                      {client.first_name} {client.last_name}
+                      {client.user_first_name || client.first_name || ''} {client.user_last_name || client.last_name || ''}
                     </span>
                   </div>
                   <div className="form-group mt-sm">
@@ -248,10 +252,10 @@ const EditClientModal = ({ client, onClose, onSave }) => {
                   </div>
                 </>
               )}
-              {client.user?.email && (
+              {(client.user_email || client.user?.email) && (
                 <div className={styles.infoRow}>
                   <span className={styles.label}>Email utilisateur :</span>
-                  <span className={styles.value}>{client.user.email}</span>
+                  <span className={styles.value}>{client.user_email || client.user?.email}</span>
                 </div>
               )}
             </div>
