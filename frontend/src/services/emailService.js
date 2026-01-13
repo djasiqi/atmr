@@ -9,7 +9,7 @@ import apiClient from '../utils/apiClient';
  * @returns {Promise<Object>} Configuration email
  */
 export const getEmailConfig = async () => {
-  const response = await apiClient.get(`/api/v1/email/config`);
+  const response = await apiClient.get(`/email/config`);
   return response.data;
 };
 
@@ -21,7 +21,7 @@ export const getEmailConfig = async () => {
  * @returns {Promise<Object>} Résultat de la configuration avec les DNS records
  */
 export const setupEmailDomain = async (data) => {
-  const response = await apiClient.post(`/api/v1/email/domain/setup`, data);
+  const response = await apiClient.post(`/email/domain/setup`, data);
   return response.data;
 };
 
@@ -30,7 +30,7 @@ export const setupEmailDomain = async (data) => {
  * @returns {Promise<Object>} Résultat de la vérification
  */
 export const verifyEmailDomain = async () => {
-  const response = await apiClient.post(`/api/v1/email/domain/verify`);
+  const response = await apiClient.post(`/email/domain/verify`);
   return response.data;
 };
 
@@ -39,7 +39,7 @@ export const verifyEmailDomain = async () => {
  * @returns {Promise<Object>} Diagnostic détaillé avec réponse Brevo complète
  */
 export const diagnosticEmailDomain = async () => {
-  const response = await apiClient.post(`/api/v1/email/domain/diagnostic`);
+  const response = await apiClient.post(`/email/domain/diagnostic`);
   return response.data;
 };
 
