@@ -69,7 +69,7 @@ const CompanyClients = () => {
         ? (() => {
             const search = searchTerm.toLowerCase().trim();
             
-            // Fonction helper pour normaliser et chercher
+            // Fonction helper pour normaliser et chercher (enlever accents)
             const normalizeText = (text) => {
               return (text || '')
                 .toLowerCase()
@@ -79,27 +79,36 @@ const CompanyClients = () => {
             
             const searchNormalized = normalizeText(searchTerm);
             
-            // Construire un nom complet combiné - essayer toutes les variantes
-            const fullNameVariants = [
-              client.full_name,
-              `${client.first_name || ''} ${client.last_name || ''}`.trim(),
-              client.institution_name,
-              client.name, // Parfois le nom est dans un champ "name"
-            ].filter(Boolean);
+            // ✅ VRAIS CHAMPS du backend (voir ClientDTO.to_dict() et ClientsTable.jsx)
+            const firstName = client.user_first_name || '';
+            const lastName = client.user_last_name || '';
+            const fullName = `${firstName} ${lastName}`.trim();
+            const institutionName = client.institution_name || '';
+            const email = client.contact_email || '';
+            const phone = client.contact_phone || '';
             
-            // Tous les champs de texte possibles
+            // Adresse : client.domicile.address + zip + city
+            const address = client.domicile?.address || client.billing_address || '';
+            const zip = client.domicile?.zip || '';
+            const city = client.domicile?.city || '';
+            const fullAddress = `${address} ${zip} ${city}`.trim();
+            
+            // ID client
+            const clientId = String(client.id || '');
+            
+            // ✅ Tous les champs cherchables (VRAIS champs du backend)
             const textFields = [
-              ...fullNameVariants,
-              client.first_name,
-              client.last_name,
-              client.institution_name,
-              client.contact_email,
-              client.email,
-              client.contact_phone,
-              client.phone,
-              client.address,
-              client.contact_address,
-              String(client.id || ''),
+              fullName,
+              firstName,
+              lastName,
+              institutionName,
+              email,
+              phone,
+              address,
+              fullAddress,
+              zip,
+              city,
+              clientId,
             ];
             
             // Rechercher dans tous les champs (avec et sans normalisation)
@@ -134,22 +143,21 @@ const CompanyClients = () => {
 
       switch (sortBy) {
         case 'name':
+          // ✅ Utiliser les VRAIS champs : user_first_name et user_last_name
           compareA = (
-            a.full_name ||
-            `${a.first_name} ${a.last_name}` ||
             a.institution_name ||
+            `${a.user_first_name || ''} ${a.user_last_name || ''}`.trim() ||
             ''
           ).toLowerCase();
           compareB = (
-            b.full_name ||
-            `${b.first_name} ${b.last_name}` ||
             b.institution_name ||
+            `${b.user_first_name || ''} ${b.user_last_name || ''}`.trim() ||
             ''
           ).toLowerCase();
           break;
         case 'email':
-          compareA = (a.contact_email || a.email || '').toLowerCase();
-          compareB = (b.contact_email || b.email || '').toLowerCase();
+          compareA = (a.contact_email || '').toLowerCase();
+          compareB = (b.contact_email || '').toLowerCase();
           break;
         case 'created':
           compareA = new Date(a.created_at || 0);
