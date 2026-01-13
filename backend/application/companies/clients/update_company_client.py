@@ -133,25 +133,39 @@ class UpdateCompanyClientUseCase:
 
                 try:
                     if isinstance(gender_value, str):
-                        # Accepter "male", "female" ou "MALE", "FEMALE"
-                        gender_str = gender_value.lower()
-                        if gender_str == "male":
-                            user.gender = GenderEnum.MALE
-                        elif gender_str == "female":
-                            user.gender = GenderEnum.FEMALE
+                        # ✅ Accepter "male"/"female" (anglais) ET "homme"/"femme" (français)
+                        # GenderEnum utilise: HOMME, FEMME, AUTRE
+                        gender_str = gender_value.lower().strip()
+                        
+                        # Mapping: anglais → français
+                        if gender_str == "male" or gender_str == "homme":
+                            user.gender = GenderEnum.HOMME
+                        elif gender_str == "female" or gender_str == "femme":
+                            user.gender = GenderEnum.FEMME
+                        elif gender_str == "autre" or gender_str == "other":
+                            user.gender = GenderEnum.AUTRE
                         else:
-                            return UpdateCompanyClientResult(
-                                ok=False,
-                                error={"error": "Genre invalide. Utiliser 'male' ou 'female'."},
-                                status_code=400,
-                            )
+                            # Essayer directement avec la valeur (si déjà au bon format)
+                            try:
+                                user.gender = GenderEnum(gender_value.upper())
+                            except (ValueError, AttributeError):
+                                return UpdateCompanyClientResult(
+                                    ok=False,
+                                    error={
+                                        "error": (
+                                            "Genre invalide. Utiliser 'male'/'homme', "
+                                            "'female'/'femme' ou 'autre'/'other'."
+                                        )
+                                    },
+                                    status_code=400,
+                                )
                     else:
                         # Si c'est déjà un GenderEnum
                         user.gender = gender_value
-                except (ValueError, TypeError, AttributeError):
+                except (ValueError, TypeError, AttributeError) as e:
                     return UpdateCompanyClientResult(
                         ok=False,
-                        error={"error": "Genre invalide."},
+                        error={"error": f"Genre invalide: {str(e)}"},
                         status_code=400,
                     )
             else:
