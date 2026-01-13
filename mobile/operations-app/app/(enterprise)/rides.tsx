@@ -103,6 +103,11 @@ export default function EnterpriseRidesScreen() {
     ride: RideSummary | null;
   }>({ ride: null });
 
+  // 🔍 DEBUG: Logger les changements de clientCreateModalVisible
+  useEffect(() => {
+    console.log('[rides.tsx] 🔍 clientCreateModalVisible changed:', clientCreateModalVisible);
+  }, [clientCreateModalVisible]);
+
   const currentDate = useMemo(() => {
     return selectedDate ?? dayjs().format("YYYY-MM-DD");
   }, [selectedDate]);
@@ -618,7 +623,11 @@ export default function EnterpriseRidesScreen() {
         visible={createModalVisible}
         onClose={() => setCreateModalVisible(false)}
         onSuccess={refreshData}
-        onOpenClientCreate={() => setClientCreateModalVisible(true)}
+        onOpenClientCreate={() => {
+          console.log('[rides.tsx] 🔴 Opening client create modal');
+          setClientCreateModalVisible(true);
+          console.log('[rides.tsx] 🔴 clientCreateModalVisible set to true');
+        }}
         onClientCreated={async (client) => {
           // Le client créé sera automatiquement sélectionné dans RideCreateModal
           // via le callback onClientCreated

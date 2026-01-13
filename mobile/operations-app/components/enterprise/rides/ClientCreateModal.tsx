@@ -42,6 +42,11 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // 🔍 DEBUG: Logger la prop visible
+  useEffect(() => {
+    console.log('[ClientCreateModal] 🔍 visible prop changed:', visible);
+  }, [visible]);
+
   // Informations personnelles
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
