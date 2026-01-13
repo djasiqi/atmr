@@ -23,6 +23,7 @@ import { sendDriverHeartbeat, onBookingsResync } from "@/services/socket";
 import {
   organizeMissionsForDisplay,
   getNextDestination,
+  filterActiveMissions,
   type DisplayMission,
 } from "@/utils/missionGrouping";
 
@@ -75,15 +76,20 @@ export default function MissionScreen() {
 
   const MISSIONS_CACHE_KEY = "missions_cache_v1";
 
-  // Organiser les missions pour l'affichage avec groupement
-  const displayMissions = useMemo(() => {
-    return organizeMissionsForDisplay(missions);
+  // Filtrer les missions actives et proches (ne pas afficher toute la journée)
+  const activeMissions = useMemo(() => {
+    return filterActiveMissions(missions);
   }, [missions]);
+
+  // Organiser les missions pour l'affichage avec groupement (avec intervalle de 5min)
+  const displayMissions = useMemo(() => {
+    return organizeMissionsForDisplay(activeMissions);
+  }, [activeMissions]);
 
   // Trouver la prochaine destination pour la carte
   const nextDestination = useMemo(() => {
-    return getNextDestination(missions);
-  }, [missions]);
+    return getNextDestination(activeMissions);
+  }, [activeMissions]);
 
   // Charger missions actives depuis le cache au démarrage
   useEffect(() => {

@@ -28,36 +28,62 @@ export interface MissionGroup {
 
 /**
  * Groupe les missions par point de départ (pickup_location)
+ * AVEC vérification de l'intervalle de 5 minutes entre les missions
  */
 export function groupMissionsByPickup(missions: Booking[]): MissionGroup[] {
   const groupsMap = new Map<string, Booking[]>();
+  const FIVE_MINUTES_MS = 5 * 60 * 1000; // 5 minutes en millisecondes
 
-  // Grouper les missions par adresse de départ normalisée
-  missions.forEach((mission) => {
+  // Trier les missions par heure d'abord
+  const sortedMissions = [...missions].sort(
+    (a, b) =>
+      new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime()
+  );
+
+  // Grouper les missions par adresse ET intervalle de 5min
+  sortedMissions.forEach((mission) => {
     if (!mission.pickup_location) return;
 
     const normalized = normalizeAddress(mission.pickup_location);
-    if (!groupsMap.has(normalized)) {
-      groupsMap.set(normalized, []);
+    const missionTime = new Date(mission.scheduled_time).getTime();
+
+    // Chercher un groupe existant avec la même adresse ET dans les 5 minutes
+    let groupKey: string | null = null;
+    
+    groupsMap.forEach((missionsInGroup, key) => {
+      if (key.startsWith(`pickup_${normalized}_`)) {
+        // Vérifier si cette mission est dans les 5 minutes de la dernière mission du groupe
+        const lastMissionInGroup = missionsInGroup[missionsInGroup.length - 1];
+        const lastMissionTime = new Date(lastMissionInGroup.scheduled_time).getTime();
+        const timeDiff = missionTime - lastMissionTime;
+
+        if (timeDiff >= 0 && timeDiff <= FIVE_MINUTES_MS) {
+          groupKey = key;
+        }
+      }
+    });
+
+    // Si aucun groupe trouvé dans les 5min, créer un nouveau groupe
+    if (!groupKey) {
+      groupKey = `pickup_${normalized}_${missionTime}`;
+      groupsMap.set(groupKey, []);
     }
-    groupsMap.get(normalized)!.push(mission);
+
+    groupsMap.get(groupKey)!.push(mission);
   });
 
   // Convertir en array de groupes
   const groups: MissionGroup[] = [];
-  groupsMap.forEach((missionsInGroup, normalizedAddress) => {
-    // Trouver l'adresse d'affichage (la première du groupe)
-    const displayAddress = missionsInGroup[0]?.pickup_location || normalizedAddress;
+  groupsMap.forEach((missionsInGroup, groupKey) => {
+    const displayAddress = missionsInGroup[0]?.pickup_location || "";
+    const normalized = groupKey.split("_")[1] || "";
 
     groups.push({
-      id: `pickup_${normalizedAddress}`,
-      location: normalizedAddress,
+      id: groupKey,
+      location: normalized,
       locationDisplay: displayAddress,
       type: "pickup",
-      missions: missionsInGroup.sort(
-        (a, b) =>
-          new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime()
-      ),
+      missions: missionsInGroup,
       isGrouped: missionsInGroup.length > 1,
     });
   });
@@ -72,34 +98,63 @@ export function groupMissionsByPickup(missions: Booking[]): MissionGroup[] {
 
 /**
  * Groupe les missions par point d'arrivée (dropoff_location)
+ * AVEC vérification de l'intervalle de 5 minutes entre les missions
  * Utile pour les cas où plusieurs clients vont au même endroit
  */
 export function groupMissionsByDropoff(missions: Booking[]): MissionGroup[] {
   const groupsMap = new Map<string, Booking[]>();
+  const FIVE_MINUTES_MS = 5 * 60 * 1000; // 5 minutes en millisecondes
 
-  missions.forEach((mission) => {
+  // Trier les missions par heure d'abord
+  const sortedMissions = [...missions].sort(
+    (a, b) =>
+      new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime()
+  );
+
+  // Grouper les missions par adresse ET intervalle de 5min
+  sortedMissions.forEach((mission) => {
     if (!mission.dropoff_location) return;
 
     const normalized = normalizeAddress(mission.dropoff_location);
-    if (!groupsMap.has(normalized)) {
-      groupsMap.set(normalized, []);
+    const missionTime = new Date(mission.scheduled_time).getTime();
+
+    // Chercher un groupe existant avec la même adresse ET dans les 5 minutes
+    let groupKey: string | null = null;
+    
+    groupsMap.forEach((missionsInGroup, key) => {
+      if (key.startsWith(`dropoff_${normalized}_`)) {
+        // Vérifier si cette mission est dans les 5 minutes de la dernière mission du groupe
+        const lastMissionInGroup = missionsInGroup[missionsInGroup.length - 1];
+        const lastMissionTime = new Date(lastMissionInGroup.scheduled_time).getTime();
+        const timeDiff = missionTime - lastMissionTime;
+
+        if (timeDiff >= 0 && timeDiff <= FIVE_MINUTES_MS) {
+          groupKey = key;
+        }
+      }
+    });
+
+    // Si aucun groupe trouvé dans les 5min, créer un nouveau groupe
+    if (!groupKey) {
+      groupKey = `dropoff_${normalized}_${missionTime}`;
+      groupsMap.set(groupKey, []);
     }
-    groupsMap.get(normalized)!.push(mission);
+
+    groupsMap.get(groupKey)!.push(mission);
   });
 
+  // Convertir en array de groupes
   const groups: MissionGroup[] = [];
-  groupsMap.forEach((missionsInGroup, normalizedAddress) => {
-    const displayAddress = missionsInGroup[0]?.dropoff_location || normalizedAddress;
+  groupsMap.forEach((missionsInGroup, groupKey) => {
+    const displayAddress = missionsInGroup[0]?.dropoff_location || "";
+    const normalized = groupKey.split("_")[1] || "";
 
     groups.push({
-      id: `dropoff_${normalizedAddress}`,
-      location: normalizedAddress,
+      id: groupKey,
+      location: normalized,
       locationDisplay: displayAddress,
       type: "dropoff",
-      missions: missionsInGroup.sort(
-        (a, b) =>
-          new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime()
-      ),
+      missions: missionsInGroup,
       isGrouped: missionsInGroup.length > 1,
     });
   });
@@ -157,6 +212,36 @@ export function organizeMissionsForDisplay(missions: Booking[]): DisplayMission[
   });
 
   return result;
+}
+
+/**
+ * Filtre les missions pour n'afficher que celles qui sont actives ou proches
+ * - En cours (in_progress, en_route)
+ * - Assignées dans les prochaines 3 heures
+ * Cela évite d'afficher toutes les missions de la journée
+ */
+export function filterActiveMissions(missions: Booking[]): Booking[] {
+  const now = Date.now();
+  const THREE_HOURS_MS = 3 * 60 * 60 * 1000; // 3 heures en millisecondes
+
+  return missions.filter((mission) => {
+    const status = mission.status?.toLowerCase() || "";
+    const scheduledTime = new Date(mission.scheduled_time).getTime();
+    const timeDiff = scheduledTime - now;
+
+    // Toujours afficher les missions en cours ou en route
+    if (status === "in_progress" || status === "en_route") {
+      return true;
+    }
+
+    // Afficher les missions assignées dans les 3 prochaines heures
+    // OU les missions assignées qui sont déjà passées (au cas où il y a du retard)
+    if (status === "assigned") {
+      return timeDiff <= THREE_HOURS_MS; // Inclut les missions passées (timeDiff négatif)
+    }
+
+    return false;
+  });
 }
 
 /**
