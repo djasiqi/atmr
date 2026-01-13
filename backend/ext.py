@@ -502,7 +502,7 @@ def register_jwt_error_handlers(app):
     )
 
     @app.errorhandler(ExpiredSignatureError)
-    def handle_expired_token(e):
+    def handle_expired_token(e):  # pyright: ignore[reportUnusedFunction]
         """Convertit ExpiredSignatureError en 401 au lieu de 500."""
         app_logger.warning("[JWT] Token expiré intercepté : %s", str(e))
         return jsonify(
@@ -510,7 +510,7 @@ def register_jwt_error_handlers(app):
         ), 401
 
     @app.errorhandler(InvalidTokenError)
-    def handle_invalid_token(e):
+    def handle_invalid_token(e):  # pyright: ignore[reportUnusedFunction]
         """Convertit InvalidTokenError en 422 au lieu de 500."""
         app_logger.warning("[JWT] Token invalide intercepté : %s", str(e))
         return jsonify({"error": "invalid_token", "message": str(e)}), 422
