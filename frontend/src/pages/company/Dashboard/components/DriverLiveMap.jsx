@@ -456,25 +456,54 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
     const map = getMap();
     if (!map) return;
 
-    // Créer le contrôle personnalisé
+    // Créer le contrôle personnalisé avec indicateur GPS temps réel
     const DriverCounterControl = L.Control.extend({
       onAdd: function (_map) {
         const container = L.DomUtil.create('div', 'driver-counter-control');
         container.style.cssText = `
-          background: rgba(255,255,255,0.9);
-          border: 1px solid #ddd;
+          background: rgba(255,255,255,0.95);
+          border: 1px solid #00796b;
           border-radius: 8px;
-          padding: 6px 10px;
+          padding: 8px 12px;
           font-size: 12px;
           pointer-events: none;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.15);
         `;
 
+        const visibleCount = Object.keys(markersRef.current).length;
+        const totalCount = allDrivers.length;
+        const isActive = visibleCount > 0;
+
         container.innerHTML = `
-          <span class="driver-count">${
-            Object.keys(markersRef.current).length
-          }</span> chauffeur(s) visible(s)
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="
+              width: 8px;
+              height: 8px;
+              border-radius: 50%;
+              background: ${isActive ? '#00c853' : '#9e9e9e'};
+              display: inline-block;
+              ${isActive ? 'animation: pulse 2s infinite;' : ''}
+            "></span>
+            <div style="line-height: 1.4;">
+              <div style="font-weight: 600; color: #00796b;">
+                <span class="driver-count">${visibleCount}</span> / ${totalCount} GPS actifs
+              </div>
+              ${visibleCount === 0 && totalCount > 0 ? '<div style="font-size: 10px; color: #f57c00;">⚠️ Aucun chauffeur localisé</div>' : ''}
+              ${visibleCount === 0 && totalCount === 0 ? '<div style="font-size: 10px; color: #9e9e9e;">Aucun chauffeur</div>' : ''}
+            </div>
+          </div>
         `;
+
+        // Ajouter l'animation pulse
+        const style = document.createElement('style');
+        style.textContent = `
+          @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+          }
+        `;
+        container.appendChild(style);
 
         return container;
       },
