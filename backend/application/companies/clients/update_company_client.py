@@ -8,6 +8,7 @@ from typing import Any, Protocol
 
 class _UserLike(Protocol):
     birth_date: Any
+    gender: Any  # ✅ Ajout du genre
 
 
 class _ClientLike(Protocol):
@@ -120,5 +121,40 @@ class UpdateCompanyClientUseCase:
                     )
             else:
                 user.birth_date = None
+
+        # ✅ Champ User.gender
+        if "gender" in data and getattr(client, "user", None):
+            user = client.user
+            assert user is not None
+            gender_value = data["gender"]
+            if gender_value:
+                # Convertir en GenderEnum
+                from models.enums import GenderEnum
+
+                try:
+                    if isinstance(gender_value, str):
+                        # Accepter "male", "female" ou "MALE", "FEMALE"
+                        gender_str = gender_value.lower()
+                        if gender_str == "male":
+                            user.gender = GenderEnum.MALE
+                        elif gender_str == "female":
+                            user.gender = GenderEnum.FEMALE
+                        else:
+                            return UpdateCompanyClientResult(
+                                ok=False,
+                                error={"error": "Genre invalide. Utiliser 'male' ou 'female'."},
+                                status_code=400,
+                            )
+                    else:
+                        # Si c'est déjà un GenderEnum
+                        user.gender = gender_value
+                except (ValueError, TypeError, AttributeError):
+                    return UpdateCompanyClientResult(
+                        ok=False,
+                        error={"error": "Genre invalide."},
+                        status_code=400,
+                    )
+            else:
+                user.gender = None
 
         return UpdateCompanyClientResult(ok=True)
