@@ -62,7 +62,8 @@ const CompanyDashboard = () => {
   useDispatchStatus(socket); // Monitor dispatch status via WebSocket
 
   // 🆕 Hook pour les retards dispatch (refresh toutes les 2 minutes)
-  const { delayCount, hasCriticalDelays, hasDelays } = useDispatchDelays(dispatchDay, 120000);
+  // Variables préfixées avec _ car l'alerte est désactivée mais le hook reste actif
+  const { delayCount: _delayCount, hasCriticalDelays: _hasCriticalDelays, hasDelays: _hasDelays } = useDispatchDelays(dispatchDay, 120000);
 
   // ✅ 3.4.2: Hook pour dashboard temps réel dispatch (refresh toutes les 2 minutes)
   const {
