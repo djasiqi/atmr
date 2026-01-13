@@ -282,13 +282,13 @@ const VehicleModal = ({ vehicle, onSave, onClose }) => {
       };
       
       // Ajouter les champs optionnels seulement s'ils ont une valeur
-      if (formData.year && formData.year.trim()) {
+      if (formData.year && String(formData.year).trim()) {
         payload.year = parseInt(formData.year);
       }
-      if (formData.vin && formData.vin.trim()) {
-        payload.vin = formData.vin.trim();
+      if (formData.vin && String(formData.vin).trim()) {
+        payload.vin = String(formData.vin).trim();
       }
-      if (formData.seats && formData.seats.trim()) {
+      if (formData.seats && String(formData.seats).trim()) {
         payload.seats = parseInt(formData.seats);
       }
       
