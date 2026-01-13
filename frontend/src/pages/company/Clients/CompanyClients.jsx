@@ -55,13 +55,40 @@ const CompanyClients = () => {
   const filteredAndSortedClients = React.useMemo(() => {
     // 1. Filtrer
     let filtered = clients.filter((client) => {
-      // Filtre par texte
+      // Filtre par texte - Recherche complète et insensible à la casse
       const matchesSearch = searchTerm
-        ? (client.first_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (client.last_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (client.full_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (client.institution_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (client.contact_email || '').toLowerCase().includes(searchTerm.toLowerCase())
+        ? (() => {
+            const search = searchTerm.toLowerCase().trim();
+            
+            // Construire un nom complet combiné
+            const fullName = (
+              client.full_name || 
+              `${client.first_name || ''} ${client.last_name || ''}`.trim() ||
+              client.institution_name ||
+              ''
+            ).toLowerCase();
+            
+            // Récupérer tous les champs cherchables
+            const firstName = (client.first_name || '').toLowerCase();
+            const lastName = (client.last_name || '').toLowerCase();
+            const institutionName = (client.institution_name || '').toLowerCase();
+            const email = (client.contact_email || client.email || '').toLowerCase();
+            const phone = (client.contact_phone || client.phone || '').toLowerCase();
+            const address = (client.address || client.contact_address || '').toLowerCase();
+            const clientId = String(client.id || '');
+            
+            // Rechercher dans tous les champs pertinents
+            return (
+              fullName.includes(search) ||
+              firstName.includes(search) ||
+              lastName.includes(search) ||
+              institutionName.includes(search) ||
+              email.includes(search) ||
+              phone.includes(search) ||
+              address.includes(search) ||
+              clientId.includes(search)
+            );
+          })()
         : true;
 
       // Filtre par type
