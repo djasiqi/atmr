@@ -259,27 +259,67 @@ export function filterActiveMissions(missions: Booking[]): Booking[] {
  * - Critères de groupement :
  *   1. Même adresse de pickup (normalisée)
  *   2. Écart de temps ≤ 5 minutes entre les courses
+ * - Si une course d'un groupe passe "en_route", TOUTES les courses du groupe restent affichées
  * 
  * Exemples :
  * - Course A 10h00, Course B 11h00 → Affiche uniquement Course A
  * - Course A 10h00, Course B 10h00 (même lieu) → Affiche A et B (groupe)
  * - Course A 10h00, Course B 10h05 (même lieu) → Affiche A et B (groupe)
- * - Après complétion de A → Affiche B automatiquement
+ * - Course A "en_route", Course B "assigned" (même groupe) → Affiche A ET B
+ * - Après complétion de A et B → Affiche la course suivante
  */
 export function filterNextMissionsOnly(missions: Booking[]): Booking[] {
   if (missions.length === 0) return [];
 
-  // 1. Priorité : missions en cours ou en route (toujours afficher)
+  // 1. Trouver les missions en cours ou en route
   const inProgressOrEnRoute = missions.filter((m) => {
     const status = m.status?.toLowerCase() || "";
     return status === "in_progress" || status === "en_route";
   });
 
+  // 2. Si des missions sont en cours/en route, on doit inclure TOUT leur groupe
   if (inProgressOrEnRoute.length > 0) {
-    return inProgressOrEnRoute;
+    // Construire un Set des pickups et times des missions actives
+    const activeGroupKeys = new Set<string>();
+    const GROUPING_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+
+    inProgressOrEnRoute.forEach((activeMission) => {
+      const activePickup = normalizeAddress(activeMission.pickup_location || "");
+      const activeTime = new Date(activeMission.scheduled_time).getTime();
+      
+      // Trouver toutes les missions du même groupe (même pickup, dans les 5 min)
+      missions.forEach((mission) => {
+        const missionPickup = normalizeAddress(mission.pickup_location || "");
+        const missionTime = new Date(mission.scheduled_time).getTime();
+        const timeDiff = Math.abs(missionTime - activeTime);
+
+        // Si même pickup ET dans les 5 minutes → même groupe
+        if (missionPickup === activePickup && timeDiff <= GROUPING_WINDOW_MS) {
+          const groupKey = `${missionPickup}_${Math.floor(missionTime / GROUPING_WINDOW_MS)}`;
+          activeGroupKeys.add(groupKey);
+        }
+      });
+    });
+
+    // Filtrer pour garder toutes les missions des groupes actifs
+    const groupedMissions = missions.filter((mission) => {
+      const status = mission.status?.toLowerCase() || "";
+      // Exclure les missions completed ou cancelled
+      if (status === "completed" || status === "cancelled" || status === "canceled") {
+        return false;
+      }
+
+      const missionPickup = normalizeAddress(mission.pickup_location || "");
+      const missionTime = new Date(mission.scheduled_time).getTime();
+      const groupKey = `${missionPickup}_${Math.floor(missionTime / GROUPING_WINDOW_MS)}`;
+
+      return activeGroupKeys.has(groupKey);
+    });
+
+    return groupedMissions;
   }
 
-  // 2. Trier les missions assignées par heure
+  // 3. Si aucune mission en cours, trier les missions assignées par heure
   const assignedMissions = missions
     .filter((m) => m.status?.toLowerCase() === "assigned")
     .sort(
@@ -289,12 +329,12 @@ export function filterNextMissionsOnly(missions: Booking[]): Booking[] {
 
   if (assignedMissions.length === 0) return [];
 
-  // 3. Prendre la première mission (la plus proche dans le temps)
+  // 4. Prendre la première mission (la plus proche dans le temps)
   const firstMission = assignedMissions[0];
   const firstMissionTime = new Date(firstMission.scheduled_time).getTime();
   const firstPickup = normalizeAddress(firstMission.pickup_location || "");
 
-  // 4. Trouver toutes les missions dans le même groupe
+  // 5. Trouver toutes les missions dans le même groupe
   const GROUPING_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
 
   const nextGroup = assignedMissions.filter((mission) => {
