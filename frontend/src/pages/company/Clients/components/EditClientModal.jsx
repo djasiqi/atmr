@@ -4,19 +4,26 @@ import AddressAutocomplete from '../../../../components/common/AddressAutocomple
 import { parseAddressWithEstablishment } from '../../../../utils/addressParser';
 
 const EditClientModal = ({ client, onClose, onSave }) => {
+  // ✅ CORRECTION: Les données viennent directement de client, pas de client.domicile
   const [formData, setFormData] = useState({
     is_institution: client.is_institution || false,
     institution_name: client.institution_name || '',
     residence_facility: client.residence_facility || '',
     birth_date: client.user?.birth_date || '',
-    gender: client.user?.gender || '',
+    // ✅ Convertir gender de "HOMME"/"FEMME" vers "male"/"female" pour le select
+    gender: client.user?.gender 
+      ? (client.user.gender.toLowerCase() === 'homme' || client.user.gender === 'MALE' ? 'male' : 
+         client.user.gender.toLowerCase() === 'femme' || client.user.gender === 'FEMALE' ? 'female' : 
+         client.user.gender.toLowerCase())
+      : '',
     avs_number: client.avs_number || '',
     contact_email: client.contact_email || '',
     contact_phone: client.contact_phone || '',
     billing_address: client.billing_address || '',
-    domicile_address: client.domicile?.address || '',
-    domicile_zip: client.domicile?.zip || '',
-    domicile_city: client.domicile?.city || '',
+    // ✅ CORRECTION: Lire directement depuis client.domicile_address, pas client.domicile.address
+    domicile_address: client.domicile_address || client.domicile?.address || '',
+    domicile_zip: client.domicile_zip || client.domicile?.zip || '',
+    domicile_city: client.domicile_city || client.domicile?.city || '',
     preferential_rate: client.preferential_rate || '',
     is_active: client.is_active !== false, // Par défaut actif
   });
@@ -25,9 +32,10 @@ const EditClientModal = ({ client, onClose, onSave }) => {
   const [error, setError] = useState(null);
 
   // Coordonnées GPS pour adresse de domicile
+  // ✅ CORRECTION: Lire directement depuis client.domicile_lat, pas client.domicile.lat
   const [domicileCoords, setDomicileCoords] = useState({
-    lat: client.domicile?.lat || null,
-    lon: client.domicile?.lon || null,
+    lat: client.domicile_lat || client.domicile?.lat || null,
+    lon: client.domicile_lon || client.domicile?.lon || null,
   });
 
   // Coordonnées GPS pour adresse de facturation
@@ -129,9 +137,9 @@ const EditClientModal = ({ client, onClose, onSave }) => {
       const result = await onSave(payload);
       console.log('✅ Sauvegarde réussie:', result);
       
-      // ✅ Fermer le modal après succès
+      // ✅ Ne pas fermer ici - laisser handleSaveClient gérer la fermeture après rechargement
       setLoading(false);
-      onClose();
+      // onClose() sera appelé par handleSaveClient après le rechargement des données
     } catch (err) {
       console.error('❌ Erreur lors de la sauvegarde:', err);
       setError(err.response?.data?.error || err.message || 'Erreur lors de la sauvegarde');
