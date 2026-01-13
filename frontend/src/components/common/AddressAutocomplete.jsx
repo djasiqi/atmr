@@ -150,6 +150,15 @@ export default function AddressAutocomplete({
     });
   }
 
+  // Helper pour détecter les erreurs d'annulation (fetch natif ou Axios)
+  const isCanceledError = useCallback((error) => {
+    // AbortError pour fetch natif
+    if (error?.name === 'AbortError') return true;
+    // CanceledError pour Axios
+    if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED') return true;
+    return false;
+  }, []);
+
   // Fetch proxy backend puis fallback Photon direct
   const fetchSuggestions = useCallback(async (queryText, signal) => {
     // #region agent log
@@ -181,12 +190,12 @@ export default function AddressAutocomplete({
         console.warn(`[AddressAutocomplete] ⚠️ Erreur backend (${res.status}) pour "${q}"`);
       }
     } catch (error) {
-      // ✅ Ne pas logger les AbortError (annulation normale)
-      if (error?.name === 'AbortError') {
+      // ✅ Ne pas logger les erreurs d'annulation (AbortError pour fetch natif, CanceledError pour Axios)
+      if (isCanceledError(error)) {
         return [];
       }
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:168',message:'Backend fetch error',data:{errorName:error?.name,errorMessage:error?.message,isAbortError:error?.name==='AbortError',signalAborted:signal?.aborted},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:168',message:'Backend fetch error',data:{errorName:error?.name,errorMessage:error?.message,isCanceledError:isCanceledError(error),signalAborted:signal?.aborted},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
       // #endregion
       console.error(`[AddressAutocomplete] ❌ Erreur lors de l'appel backend:`, error);
     }
@@ -218,17 +227,17 @@ export default function AddressAutocomplete({
       }
       return normalized;
     } catch (error) {
-      // ✅ Ne pas logger les AbortError (annulation normale)
-      if (error?.name === 'AbortError') {
+      // ✅ Ne pas logger les erreurs d'annulation (AbortError pour fetch natif, CanceledError pour Axios)
+      if (isCanceledError(error)) {
         return [];
       }
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:193',message:'Photon fallback error',data:{errorName:error?.name,errorMessage:error?.message,isAbortError:error?.name==='AbortError',signalAborted:signal?.aborted},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:193',message:'Photon fallback error',data:{errorName:error?.name,errorMessage:error?.message,isCanceledError:isCanceledError(error),signalAborted:signal?.aborted},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
       // #endregion
       console.error(`[AddressAutocomplete] ❌ Erreur Photon fallback:`, error);
       return [];
     }
-  }, [BIAS.lat, BIAS.lon, PHOTON_BASE, maxResults]);
+  }, [BIAS.lat, BIAS.lon, PHOTON_BASE, maxResults, isCanceledError]);
 
   // Charger les suggestions (debounce + abort)
   useEffect(() => {
@@ -309,12 +318,12 @@ export default function AddressAutocomplete({
         });
       } catch (error) {
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:255',message:'debounce catch error',data:{errorName:error?.name,errorMessage:error?.message,isAbortError:error?.name==='AbortError'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:255',message:'debounce catch error',data:{errorName:error?.name,errorMessage:error?.message,isCanceledError:isCanceledError(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
         // #endregion
-        // ✅ PHASE 3: Ignorer les AbortError (annulation normale lors de nouvelle saisie)
-        if (error?.name === 'AbortError') {
+        // ✅ PHASE 3: Ignorer les erreurs d'annulation (AbortError pour fetch natif, CanceledError pour Axios)
+        if (isCanceledError(error)) {
           // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:259',message:'AbortError in debounce ignored',data:{queryToUse},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+          fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:259',message:'CanceledError in debounce ignored',data:{queryToUse},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
           // #endregion
           return; // Ne pas mettre à jour l'état si la requête a été annulée
         }
@@ -336,6 +345,8 @@ export default function AddressAutocomplete({
       abortRef.current?.abort();
       abortRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // isCanceledError est inclus indirectement via fetchSuggestions qui est dans les dépendances
   }, [query, minChars, debounceMs, BIAS.lat, BIAS.lon, PHOTON_BASE, maxResults, justSelected, debounce, deferredQuery, fetchSuggestions, userIsTyping]);
 
   function handleInputChange(e) {
