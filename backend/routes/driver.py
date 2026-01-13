@@ -1942,3 +1942,216 @@ class SwitchToEnterprise(Resource):
             }
             status_code = 500
         return result, status_code
+
+
+@driver_ns.route("/night-mode-status")
+class NightModeStatus(Resource):
+    """Endpoint pour vérifier le statut du mode nuit.
+
+    Utile pour debugging et monitoring.
+    """
+
+    def get(self):
+        """Récupère le statut actuel du mode nuit.
+
+        Returns:
+            {
+                "is_night": bool,
+                "current_time": "HH:MM",
+                "night_start": "22:00",
+                "night_end": "06:00"
+            }
+        """
+        try:
+            from services.events.night_mode import get_night_mode_status
+
+            status = get_night_mode_status()
+            return status, 200
+        except Exception as e:
+            logger.exception("❌ Erreur récupération statut mode nuit")
+            return {"error": str(e)}, 500
+
+
+@driver_ns.route("/me/bookings/<int:booking_id>/quick-accept")
+class QuickAcceptBooking(Resource):
+    """Endpoint pour accepter rapidement une mission depuis une notification.
+
+    Phase 2 - Actions directes.
+    """
+
+    @jwt_required()
+    @role_required(UserRole.driver)
+    def post(self, booking_id: int):
+        """Accepte une mission rapidement (depuis notification).
+
+        Args:
+            booking_id: ID de la mission
+
+        Returns:
+            {
+                "ok": true,
+                "message": "Mission acceptée",
+                "booking_id": int
+            }
+        """
+        try:
+            driver, error_response, status_code = get_driver_from_token()
+            if error_response:
+                logger.error("Driver not found for token: %s", get_jwt_identity())
+                return error_response, status_code
+
+            driver = cast("Driver", driver)
+
+            from repositories.booking_repository import BookingRepository
+
+            booking_repo = BookingRepository()
+            booking = booking_repo.find_model_by_id(booking_id=booking_id)
+
+            if not booking:
+                logger.error("Booking %s not found for quick-accept", booking_id)
+                return {"error": "Booking not found"}, 404
+
+            # Vérifier que la mission est assignée au chauffeur
+            if booking.driver_id != driver.id:
+                logger.warning(
+                    "Driver %s tried to accept booking %s not assigned to them",
+                    driver.id,
+                    booking_id,
+                )
+                return {"error": "Cette mission ne vous est pas assignée"}, 403
+
+            # Vérifier que la mission est dans un statut acceptable
+            if booking.status not in [
+                BookingStatus.assigned,
+                BookingStatus.pending,
+            ]:
+                logger.warning(
+                    "Booking %s cannot be accepted from status %s",
+                    booking_id,
+                    booking.status,
+                )
+                return {
+                    "error": f"Mission dans un statut non accepté: {booking.status}"
+                }, 400
+
+            # Mettre à jour le statut
+            booking.status = BookingStatus.accepted
+            db.session.commit()
+
+            logger.info(
+                "✅ Mission %s quickly accepted by driver %s",
+                booking_id,
+                driver.id,
+            )
+
+            # Notifier les autres parties prenantes
+            try:
+                from shared.notifications import notify_booking_update
+
+                notify_booking_update(booking, "accepted")
+            except Exception:
+                logger.exception("Erreur notification après quick-accept")
+
+            return {
+                "ok": True,
+                "message": "Mission acceptée",
+                "booking_id": booking_id,
+            }, 200
+
+        except Exception as e:
+            logger.exception("❌ Erreur quick-accept booking %s", booking_id)
+            sentry_sdk.capture_exception(e)
+            return {"error": "Erreur interne"}, 500
+
+
+@driver_ns.route("/me/bookings/<int:booking_id>/quick-reject")
+class QuickRejectBooking(Resource):
+    """Endpoint pour refuser rapidement une mission depuis une notification.
+
+    Phase 2 - Actions directes.
+    """
+
+    @jwt_required()
+    @role_required(UserRole.driver)
+    def post(self, booking_id: int):
+        """Refuse une mission rapidement (depuis notification).
+
+        Args:
+            booking_id: ID de la mission
+
+        Returns:
+            {
+                "ok": true,
+                "message": "Mission refusée",
+                "booking_id": int
+            }
+        """
+        try:
+            driver, error_response, status_code = get_driver_from_token()
+            if error_response:
+                logger.error("Driver not found for token: %s", get_jwt_identity())
+                return error_response, status_code
+
+            driver = cast("Driver", driver)
+
+            from repositories.booking_repository import BookingRepository
+
+            booking_repo = BookingRepository()
+            booking = booking_repo.find_model_by_id(booking_id=booking_id)
+
+            if not booking:
+                logger.error("Booking %s not found for quick-reject", booking_id)
+                return {"error": "Booking not found"}, 404
+
+            # Vérifier que la mission est assignée au chauffeur
+            if booking.driver_id != driver.id:
+                logger.warning(
+                    "Driver %s tried to reject booking %s not assigned to them",
+                    driver.id,
+                    booking_id,
+                )
+                return {"error": "Cette mission ne vous est pas assignée"}, 403
+
+            # Vérifier que la mission est dans un statut refusable
+            if booking.status not in [
+                BookingStatus.assigned,
+                BookingStatus.pending,
+            ]:
+                logger.warning(
+                    "Booking %s cannot be rejected from status %s",
+                    booking_id,
+                    booking.status,
+                )
+                return {
+                    "error": f"Mission dans un statut non refusable: {booking.status}"
+                }, 400
+
+            # Mettre à jour le statut
+            booking.status = BookingStatus.cancelled
+            booking.driver_id = None  # Libérer le chauffeur
+            db.session.commit()
+
+            logger.info(
+                "❌ Mission %s quickly rejected by driver %s",
+                booking_id,
+                driver.id,
+            )
+
+            # Notifier les autres parties prenantes
+            try:
+                from shared.notifications import notify_booking_update
+
+                notify_booking_update(booking, "cancelled")
+            except Exception:
+                logger.exception("Erreur notification après quick-reject")
+
+            return {
+                "ok": True,
+                "message": "Mission refusée",
+                "booking_id": booking_id,
+            }, 200
+
+        except Exception as e:
+            logger.exception("❌ Erreur quick-reject booking %s", booking_id)
+            sentry_sdk.capture_exception(e)
+            return {"error": "Erreur interne"}, 500

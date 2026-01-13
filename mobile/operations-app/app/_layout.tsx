@@ -7,6 +7,9 @@ import {
   configureNotifications,
   initNotifications,
 } from "@/services/notification";
+import { setupNotificationChannels } from "@/services/notificationChannels";
+import { setupNotificationActions } from "@/services/notificationActions";
+import { useNotificationActions } from "@/hooks/useNotificationActions";
 import { Platform, View, Text, ActivityIndicator, StyleSheet } from "react-native";
 import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -30,6 +33,17 @@ if (Platform.OS !== "web") {
     // Module natif non disponible (Expo Go ou build non mis à jour)
     // C'est normal en développement, le tracking arrière-plan nécessite un development build
     console.log("ℹ️ TaskManager non disponible (normal en Expo Go, nécessite un development build)");
+  }
+}
+
+// ✅ Phase 2.6: Définir la tâche de synchronisation silencieuse en arrière-plan
+if (Platform.OS !== "web") {
+  try {
+    const { defineBackgroundSyncTask } = require("@/services/silentNotifications");
+    defineBackgroundSyncTask();
+    console.log("✅ Tâche background sync définie");
+  } catch (error) {
+    console.log("ℹ️ defineBackgroundSyncTask non disponible:", error);
   }
 }
 
@@ -70,6 +84,9 @@ function RootNav() {
   const segments = useSegments();
   const router = useRouter();
   const registeringRef = useRef(false);
+
+  // ✅ Phase 2 - Gestionnaire des actions de notifications
+  useNotificationActions();
 
   // ✅ Deep link handler: parse atmr:// URLs and navigate to appropriate routes
   const handleDeepLink = React.useCallback((url: string) => {
@@ -215,6 +232,16 @@ function RootNav() {
       try {
         console.log("🔔 Initialisation des notifications…");
         await configureNotifications();
+
+        // ✅ Configurer les canaux Android (Phase 1 - Quick Wins)
+        await setupNotificationChannels();
+
+        // ✅ Configurer les actions directes (Phase 2 - Enrichissement)
+        await setupNotificationActions();
+
+        // ✅ Configurer la synchronisation silencieuse en arrière-plan (Phase 2.6)
+        const { setupBackgroundSync } = await import("@/services/silentNotifications");
+        await setupBackgroundSync();
 
         // Récupération token (device ou expo) avec peu de retries pour éviter le spam
         const tokens = await initNotifications({

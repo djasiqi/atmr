@@ -27,6 +27,12 @@ import {
   filterNextMissionsOnly,
   type DisplayMission,
 } from "@/utils/missionGrouping";
+import {
+  scheduleMissionReminder,
+  cancelMissionReminder,
+  scheduleRemindersForActiveMissions,
+  cleanupExpiredReminders,
+} from "@/services/localNotifications";
 
 /**
  * Détecte si la mission est un retour, quel que soit le type de donnée reçu (bool, int, string, etc.)
@@ -93,6 +99,18 @@ export default function MissionScreen() {
   const nextDestination = useMemo(() => {
     return getNextDestination(activeMissions);
   }, [activeMissions]);
+
+  // ✅ Phase 1 - Quick Wins: Planifier rappels pour les missions actives
+  useEffect(() => {
+    if (activeMissions.length > 0) {
+      scheduleRemindersForActiveMissions(activeMissions);
+    }
+  }, [activeMissions]);
+
+  // ✅ Phase 1 - Quick Wins: Nettoyer rappels expirés au démarrage
+  useEffect(() => {
+    cleanupExpiredReminders();
+  }, []);
 
   // Charger missions actives depuis le cache au démarrage
   useEffect(() => {
@@ -222,6 +240,9 @@ export default function MissionScreen() {
       // et sera réassignée automatiquement, pas besoin d'alerte
       const statusLower = (data.status || "").toLowerCase();
       if (statusLower === "canceled" || statusLower === "cancelled") {
+        // ✅ Phase 1 - Quick Wins: Annuler le rappel local
+        cancelMissionReminder(data.id);
+
         Alert.alert(
           "Course annulée",
           "La course a été annulée et sera facturée comme booking annulé."
@@ -230,6 +251,9 @@ export default function MissionScreen() {
     };
 
     const onCancel = ({ id }: { id: number }) => {
+      // ✅ Phase 1 - Quick Wins: Annuler le rappel local
+      cancelMissionReminder(id);
+
       setMissions((prev) => {
         const next = prev.filter((m) => m.id !== id);
         AsyncStorage.setItem(MISSIONS_CACHE_KEY, JSON.stringify(next)).catch(
@@ -367,6 +391,9 @@ export default function MissionScreen() {
 
       await updateTripStatus(mission.id, statusToSend);
 
+      // ✅ Phase 1 - Quick Wins: Annuler le rappel local pour cette mission
+      await cancelMissionReminder(mission.id);
+
       // Mettre à jour la liste des missions (retirer la mission terminée)
       setMissions((prev) =>
         prev
@@ -478,8 +505,14 @@ export default function MissionScreen() {
                       Linking.openURL(`tel:${mission.client?.contact_phone || mission.client_phone}`)
                     }
                     onNavigate={() => {
+                      // ✅ Normaliser le statut en majuscules pour correspondre au backend
+                      const normalizedStatus = mission.status?.toUpperCase();
+
+                      // Déterminer la destination selon le statut :
+                      // - IN_PROGRESS : client à bord → dropoff (Point B)
+                      // - ASSIGNED/EN_ROUTE : aller chercher client → pickup (Point A)
                       const dest =
-                        mission.status === "in_progress"
+                        normalizedStatus === "IN_PROGRESS"
                           ? mission.dropoff_location!
                           : mission.pickup_location!;
                       openNavigation(dest);

@@ -7,16 +7,112 @@ et garantir la cohérence entre Socket.IO (foreground) et Push notifications (ba
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Dict
 
 from ext import app_logger
 from schemas.socket_events import EVENT_VERSION, SocketEvent
+from services.events.night_mode import should_send_night_notification
 from services.notifications.push import send_push_message
 from services.realtime.socketio import (
     emit_company_event,
     emit_date_event,
     emit_driver_event,
 )
+
+# ✅ Phase 2 - Analytics: Import des métriques
+try:
+    from services.monitoring.notification_metrics import (
+        track_notification_sent,
+        track_notification_skipped_night,
+    )
+except ImportError:
+    # Fallback si prometheus_client pas installé
+    def track_notification_sent(*args, **kwargs):
+        pass
+
+    def track_notification_skipped_night(*args, **kwargs):
+        pass
+
+
+def _get_notification_channel(notification_type: str) -> str:
+    """Détermine le canal Android approprié selon le type.
+
+    Correspond aux canaux définis côté mobile:
+    - critical: Urgences, accidents
+    - missions: Missions, retards
+    - messages: Chat, communications
+    - info: Stats, informations générales
+    """
+    channel_mapping = {
+        "urgent_alert": "critical",
+        "accident": "critical",
+        "emergency": "critical",
+        "booking": "missions",
+        "booking_updated": "missions",
+        "booking_cancelled": "missions",
+        "delay": "missions",
+        "message": "messages",
+        "team_chat_message": "messages",
+        "dispatch_completed": "info",
+        "stats": "info",
+        "info": "info",
+    }
+
+    return channel_mapping.get(notification_type, "missions")
+
+
+def _get_notification_category(notification_type: str) -> str | None:
+    """Détermine la catégorie d'actions selon le type de notification.
+
+    Phase 2 - Permet les actions directes (Accept/Reject) depuis les notifications.
+
+    Categories disponibles côté mobile:
+    - mission_available: Accepter | Refuser | Voir
+    - mission_urgent: Appeler | Voir Détails
+    - message_received: Répondre | Marquer Lu
+    """
+    category_mapping = {
+        "booking": "mission_available",
+        "booking_assigned": "mission_available",
+        "urgent_alert": "mission_urgent",
+        "accident": "mission_urgent",
+        "emergency": "mission_urgent",
+        "message": "message_received",
+        "team_chat_message": "message_received",
+    }
+
+    return category_mapping.get(notification_type)
+
+
+def _get_notification_thread_id(notification_type: str) -> str | None:
+    """Détermine le threadId pour groupement intelligent.
+
+    Phase 2 - Groupement des notifications similaires pour éviter le spam.
+
+    Groupes disponibles:
+    - missions: Toutes les missions
+    - messages: Tous les messages
+    - alerts: Toutes les alertes
+    - infos: Toutes les informations
+    """
+    thread_mapping = {
+        "booking": "missions",
+        "booking_assigned": "missions",
+        "booking_updated": "missions",
+        "booking_cancelled": "missions",
+        "delay": "missions",
+        "urgent_alert": "alerts",
+        "accident": "alerts",
+        "emergency": "alerts",
+        "message": "messages",
+        "team_chat_message": "messages",
+        "dispatch_completed": "infos",
+        "stats": "infos",
+        "info": "infos",
+    }
+
+    return thread_mapping.get(notification_type)
 
 
 def _send_push_to_driver(
@@ -45,6 +141,34 @@ def _send_push_to_driver(
     try:
         # ✅ AMÉLIORATION: Vérifier la déduplication avant d'envoyer
         notification_type = data.get("type", "unknown") if data else "unknown"
+
+        # ✅ Phase 1 - Quick Wins: Ajouter le canal Android approprié
+        data["channelId"] = _get_notification_channel(notification_type)
+
+        # ✅ Phase 2 - Enrichissement: Ajouter la catégorie pour actions directes
+        category = _get_notification_category(notification_type)
+        if category:
+            data["categoryId"] = category
+
+        # ✅ Phase 2 - Enrichissement: Ajouter threadId pour groupement intelligent
+        thread_id = _get_notification_thread_id(notification_type)
+        if thread_id:
+            data["threadId"] = thread_id
+            data["group"] = thread_id
+
+        # ✅ Phase 1 - Quick Wins: Vérifier mode nuit
+        if not should_send_night_notification(notification_type, driver_id):
+            app_logger.info(
+                "[fanout] Notification skipped (night mode): driver=%s, type=%s",
+                driver_id,
+                notification_type,
+            )
+            # ✅ Phase 2 - Analytics: Tracker notification bloquée
+            reason = "night_mode" if not driver_id else "driver_off_duty"
+            track_notification_skipped_night(notification_type, reason)
+            # Retourner succès pour ne pas logger comme erreur
+            return True
+
         from services.notifications.push import _check_duplicate_notification
 
         if _check_duplicate_notification(driver_id, title, body, notification_type):
@@ -79,6 +203,10 @@ def _send_push_to_driver(
                 fallback_to_sms=True,  # Activer fallback SMS si push échoue
                 fallback_to_email=True,  # Activer fallback Email en dernier recours
             )
+
+            # ✅ Phase 2 - Analytics: Tracker notification envoyée
+            channel = data.get("channelId", "unknown")
+            track_notification_sent(notification_type, channel, "queued")
 
             # Considéré comme succès car la notification est en queue
             return True
@@ -596,3 +724,351 @@ def fanout_urgent_alert(
             body=message,
             data=push_data,
         )
+
+
+# ========================================
+# Phase 2.6 - Notifications Silencieuses
+# ========================================
+
+
+def send_silent_data_update(
+    driver_id: int,
+    sync_type: str,
+    payload: Dict[str, Any],
+    priority: str = "normal",  # noqa: ARG001
+) -> bool:
+    """Envoie une notification silencieuse pour sync données en arrière-plan.
+
+    Phase 2.6 - Notifications silencieuses pour préchargement et sync données.
+
+    Args:
+        driver_id: ID du chauffeur cible
+        sync_type: Type de sync ("missions", "profile", "maps", "config")
+        payload: Données à synchroniser
+        priority: "normal" ou "high" (réservé pour usage futur)
+
+    Returns:
+        True si envoyé avec succès
+    """
+    from models import Driver
+
+    # Import métriques silent notifications
+    try:
+        from services.monitoring.notification_metrics import (
+            track_silent_notification_sent,
+        )
+    except ImportError:
+
+        def track_silent_notification_sent(*args, **kwargs):
+            pass
+
+    try:
+        # Récupérer le chauffeur
+        driver = Driver.query.get(driver_id)
+        if not driver or not driver.expo_push_token:
+            app_logger.warning(
+                f"[silent_update] Driver {driver_id} sans token Expo, skip"
+            )
+            track_silent_notification_sent(sync_type, "failed")
+            return False
+
+        # ⚠️ IMPORTANT: Pas de title/body pour notification silencieuse
+        push_data: Dict[str, Any] = {
+            "type": "silent_update",
+            "sync_type": sync_type,
+            "payload": payload,
+            "timestamp": int(datetime.now().timestamp()),
+            "content-available": 1,  # iOS background fetch
+        }
+
+        # Envoyer via service push (avec title/body vides pour silent notif)
+        result = send_push_message(
+            token=driver.expo_push_token,
+            title="",  # Vide pour silent notification
+            body="",  # Vide pour silent notification
+            data=push_data,
+            timeout=5,
+            use_retry=False,  # Pas de retry pour silent notifications
+            driver_id=driver_id,
+            bypass_rate_limit=False,
+        )
+
+        success = result.get("ok", False)
+
+        if success:
+            app_logger.info(
+                f"[silent_update] Envoyé à driver {driver_id}: sync_type={sync_type}"
+            )
+            track_silent_notification_sent(sync_type, "success")
+        else:
+            app_logger.error(
+                f"[silent_update] Échec envoi à driver {driver_id}: sync_type={sync_type}"
+            )
+            track_silent_notification_sent(sync_type, "failed")
+
+        return success
+
+    except Exception as e:
+        app_logger.error(
+            f"[silent_update] Exception driver {driver_id}: {e}", exc_info=True
+        )
+        track_silent_notification_sent(sync_type, "failed")
+        return False
+
+
+def send_missions_preload(driver_id: int, missions: list[Dict[str, Any]]) -> bool:
+    """Précharge les missions à venir pour un chauffeur.
+
+    Args:
+        driver_id: ID du chauffeur
+        missions: Liste des missions à précharger
+
+    Returns:
+        True si succès
+    """
+    app_logger.info(
+        f"[missions_preload] Préchargement {len(missions)} missions pour driver {driver_id}"
+    )
+
+    return send_silent_data_update(
+        driver_id=driver_id,
+        sync_type="missions",
+        payload={"missions": missions},
+        priority="normal",
+    )
+
+
+def send_profile_sync(
+    driver_id: int, profile: Dict[str, Any], stats: Dict[str, Any] | None = None
+) -> bool:
+    """Synchronise le profil et stats du chauffeur.
+
+    Args:
+        driver_id: ID du chauffeur
+        profile: Données du profil
+        stats: Stats optionnelles
+
+    Returns:
+        True si succès
+    """
+    app_logger.info(f"[profile_sync] Sync profil pour driver {driver_id}")
+
+    payload = {"profile": profile}
+    if stats:
+        payload["stats"] = stats
+
+    return send_silent_data_update(
+        driver_id=driver_id,
+        sync_type="profile",
+        payload=payload,
+        priority="normal",
+    )
+
+
+def send_maps_precache(driver_id: int, routes: list[Dict[str, Any]]) -> bool:
+    """Précharge les cartes pour itinéraires à venir.
+
+    Args:
+        driver_id: ID du chauffeur
+        routes: Liste des itinéraires à cacher
+
+    Returns:
+        True si succès
+    """
+    app_logger.info(
+        f"[maps_precache] Préchargement {len(routes)} itinéraires pour driver {driver_id}"
+    )
+
+    return send_silent_data_update(
+        driver_id=driver_id,
+        sync_type="maps",
+        payload={"routes": routes},
+        priority="normal",
+    )
+
+
+def send_config_update(driver_id: int, config: Dict[str, Any]) -> bool:
+    """Met à jour la configuration de l'app.
+
+    Args:
+        driver_id: ID du chauffeur
+        config: Configuration à mettre à jour
+
+    Returns:
+        True si succès
+    """
+    app_logger.info(f"[config_update] Mise à jour config pour driver {driver_id}")
+
+    return send_silent_data_update(
+        driver_id=driver_id,
+        sync_type="config",
+        payload={"config": config},
+        priority="normal",
+    )
+
+
+# ========================================
+# Phase 3.8 - Critical Alerts iOS
+# ========================================
+
+
+def send_critical_alert_ios(
+    driver_id: int,
+    title: str,
+    message: str,
+    alert_type: str,
+    data: Dict[str, Any] | None = None,
+) -> bool:
+    """Envoie une Critical Alert pour iOS (et notification prioritaire Android).
+
+    Phase 3.8 - Critical Alerts pour urgences réelles.
+
+    ⚠️ Note: Sur iOS, utilise interruptionLevel "critical" (iOS 15+).
+    Pour vraies Critical Alerts (bypass DnD), nécessite entitlement Apple spécial.
+
+    Args:
+        driver_id: ID du chauffeur cible
+        title: Titre de l'alerte
+        message: Message de l'alerte
+        alert_type: Type d'alerte (accident, emergency, security)
+        data: Données additionnelles
+
+    Returns:
+        True si envoyé avec succès
+    """
+    from models import Driver
+
+    try:
+        # Récupérer le chauffeur
+        driver = Driver.query.get(driver_id)
+        if not driver or not driver.expo_push_token:
+            app_logger.warning(
+                f"[critical_alert] Driver {driver_id} sans token Expo, skip"
+            )
+            return False
+
+        # Construire le payload
+        push_data: Dict[str, Any] = {
+            "type": "critical_alert",
+            "alert_type": alert_type,
+            "timestamp": int(datetime.now().timestamp()),
+            "deepLink": f"atmr://alerts/{alert_type}",
+        }
+
+        # Ajouter données custom
+        if data:
+            push_data.update(data)
+
+        # ✅ Configuration spécifique iOS Critical Alert
+        # Note: Pour vraies Critical Alerts (bypass DnD), nécessite entitlement
+        # Actuellement: utilise interruptionLevel "critical" (iOS 15+)
+        result = send_push_message(
+            token=driver.expo_push_token,
+            title=f"🚨 {title}",
+            body=message,
+            data={
+                **push_data,
+                # iOS 15+ : Interruption Level
+                "interruptionLevel": "critical",
+                # Android : Canal critical (déjà configuré)
+                "channelId": "critical",
+                # iOS : Son critique (si entitlement approuvé)
+                "sound": {
+                    "critical": True,
+                    "name": "default",  # ou "emergency_alert.wav" si custom
+                    "volume": 1.0,
+                },
+            },
+            timeout=10,  # Timeout plus long pour urgences
+            use_retry=True,
+            driver_id=driver_id,
+            bypass_rate_limit=True,  # Pas de rate limit pour urgences
+        )
+
+        success = result.get("ok", False)
+
+        if success:
+            app_logger.info(
+                f"[critical_alert] Critical alert envoyée à driver {driver_id}: {alert_type}"
+            )
+            # Tracker métrique
+            track_notification_sent("critical_alert", "critical", "success")
+        else:
+            app_logger.error(
+                f"[critical_alert] Échec envoi à driver {driver_id}: {alert_type}"
+            )
+            track_notification_sent("critical_alert", "critical", "failed")
+
+        return success
+
+    except Exception as e:
+        app_logger.error(
+            f"[critical_alert] Exception driver {driver_id}: {e}", exc_info=True
+        )
+        track_notification_sent("critical_alert", "critical", "failed")
+        return False
+
+
+def send_accident_alert(driver_id: int, accident_details: Dict[str, Any]) -> bool:
+    """Alerte urgente : Accident chauffeur détecté.
+
+    Args:
+        driver_id: ID du chauffeur
+        accident_details: Détails de l'accident
+
+    Returns:
+        True si succès
+    """
+    app_logger.warning(f"[accident_alert] 🚨 ACCIDENT détecté driver {driver_id}")
+
+    return send_critical_alert_ios(
+        driver_id=driver_id,
+        title="ACCIDENT DÉTECTÉ",
+        message="Un accident a été détecté. Êtes-vous en sécurité ?",
+        alert_type="accident",
+        data=accident_details,
+    )
+
+
+def send_medical_emergency_alert(
+    driver_id: int, emergency_details: Dict[str, Any]
+) -> bool:
+    """Alerte urgente : Urgence médicale passager.
+
+    Args:
+        driver_id: ID du chauffeur
+        emergency_details: Détails de l'urgence
+
+    Returns:
+        True si succès
+    """
+    app_logger.warning(f"[medical_emergency] 🚨 URGENCE MÉDICALE driver {driver_id}")
+
+    return send_critical_alert_ios(
+        driver_id=driver_id,
+        title="URGENCE MÉDICALE",
+        message="Un passager nécessite une assistance médicale immédiate.",
+        alert_type="medical_emergency",
+        data=emergency_details,
+    )
+
+
+def send_security_zone_alert(driver_id: int, zone_details: Dict[str, Any]) -> bool:
+    """Alerte urgente : Zone dangereuse.
+
+    Args:
+        driver_id: ID du chauffeur
+        zone_details: Détails de la zone
+
+    Returns:
+        True si succès
+    """
+    app_logger.warning(f"[security_alert] 🚨 ZONE DANGEREUSE driver {driver_id}")
+
+    return send_critical_alert_ios(
+        driver_id=driver_id,
+        title="ALERTE SÉCURITÉ",
+        message=f"Vous entrez dans une zone à risque : {zone_details.get('zone_name', 'Non spécifiée')}",
+        alert_type="security_zone",
+        data=zone_details,
+    )

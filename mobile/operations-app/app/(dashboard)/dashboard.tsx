@@ -199,9 +199,20 @@ export default function DashboardScreen() {
               // ✅ P1-4 Phase 3.1: Utiliser client.contact_phone au lieu de client_phone
               Linking.openURL(`tel:${currentMission.client?.contact_phone || currentMission.client_phone || ''}`)
             }
-            onNavigate={() =>
-              openNavigation(currentMission.pickup_location)
-            }
+            onNavigate={() => {
+              // ✅ Normaliser le statut en majuscules pour correspondre au backend
+              const normalizedStatus = currentMission.status?.toUpperCase();
+
+              // Déterminer la destination selon le statut :
+              // - IN_PROGRESS : client à bord → dropoff (Point B)
+              // - ASSIGNED/EN_ROUTE : aller chercher client → pickup (Point A)
+              const dest =
+                normalizedStatus === "IN_PROGRESS"
+                  ? currentMission.dropoff_location
+                  : currentMission.pickup_location;
+
+              openNavigation(dest);
+            }}
             onComplete={handleCompleteMission}
           />
         </View>
@@ -215,7 +226,15 @@ export default function DashboardScreen() {
           <MissionCard
             key={trip.id}
             mission={trip}
-            onNavigate={() => openNavigation(trip.pickup_location)}
+            onNavigate={() => {
+              // ✅ Même logique pour les prochaines missions
+              const normalizedStatus = trip.status?.toUpperCase();
+              const dest =
+                normalizedStatus === "IN_PROGRESS"
+                  ? trip.dropoff_location
+                  : trip.pickup_location;
+              openNavigation(dest);
+            }}
             onPressDetails={() =>
               router.push(`/(dashboard)/trip-details?id=${trip.id}`)
             }
