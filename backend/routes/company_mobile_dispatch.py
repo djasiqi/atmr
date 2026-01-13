@@ -2062,10 +2062,32 @@ class MobileRideUrgent(Resource):
             raise AssertionError("Booking not found") from None
 
         booking.is_urgent = True
-        if booking.scheduled_time:
-            booking.scheduled_time = booking.scheduled_time + timedelta(
-                minutes=extra_delay_minutes
+        
+        # ✅ Calculer la nouvelle heure planifiée
+        from datetime import UTC, datetime
+        now = datetime.now(UTC)
+        
+        # Si scheduled_time est None, à minuit (00:00), ou dans le passé,
+        # utiliser l'heure actuelle + délai
+        if not booking.scheduled_time:
+            booking.scheduled_time = now + timedelta(minutes=extra_delay_minutes)
+        else:
+            # Vérifier si l'heure est à minuit (00:00)
+            is_midnight = (
+                booking.scheduled_time.hour == 0 
+                and booking.scheduled_time.minute == 0
             )
+            # Vérifier si l'heure est dans le passé
+            is_past = booking.scheduled_time < now
+            
+            if is_midnight or is_past:
+                # Utiliser l'heure actuelle + délai
+                booking.scheduled_time = now + timedelta(minutes=extra_delay_minutes)
+            else:
+                # Ajouter le délai à l'heure existante
+                booking.scheduled_time = booking.scheduled_time + timedelta(
+                    minutes=extra_delay_minutes
+                )
 
         db.session.add(booking)
         db.session.commit()
