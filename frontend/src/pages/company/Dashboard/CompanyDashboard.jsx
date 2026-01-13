@@ -579,8 +579,8 @@ const CompanyDashboard = () => {
       <Toaster position="top-right" richColors />
       <CompanyHeader />
 
-      {/* 🆕 Badge d'alerte pour les retards détectés */}
-      {hasDelays && (
+      {/* 🆕 Badge d'alerte pour les retards détectés - DÉSACTIVÉ */}
+      {/* {hasDelays && (
         <div className={styles.delayAlert}>
           <div className={styles.delayAlertContent}>
             <span className={styles.delayAlertIcon}>{hasCriticalDelays ? '🚨' : '⚠️'}</span>
@@ -603,7 +603,7 @@ const CompanyDashboard = () => {
             )}
           </div>
         </div>
-      )}
+      )} */}
 
       <div className={styles.dashboard}>
         <CompanySidebar />
