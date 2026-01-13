@@ -412,48 +412,56 @@ def _extract_token(auth) -> str | None:
 
 def init_chat_socket(socketio: SocketIO):
     logger.info("🔧 [INIT] Initialisation des handlers Socket.IO chat")
-    # #region agent log
-    debug_log_path = Path(".cursor/debug.log")
-    debug_log_path.parent.mkdir(parents=True, exist_ok=True)
-    with debug_log_path.open("a") as f:
-        import json
+    # #region agent log - DÉSACTIVÉ EN PRODUCTION
+    if os.getenv("FLASK_ENV") == "development":
+        try:
+            debug_log_path = Path(".cursor/debug.log")
+            debug_log_path.parent.mkdir(parents=True, exist_ok=True)
+            with debug_log_path.open("a") as f:
+                import json
 
-        f.write(
-            json.dumps(
-                {
-                    "location": "chat.py:init_chat_socket",
-                    "message": "init_chat_socket CALLED",
-                    "timestamp": datetime.now(UTC).isoformat(),
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "H3",
-                }
-            )
-            + "\n"
-        )
+                f.write(
+                    json.dumps(
+                        {
+                            "location": "chat.py:init_chat_socket",
+                            "message": "init_chat_socket CALLED",
+                            "timestamp": datetime.now(UTC).isoformat(),
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "H3",
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass  # Ignore les erreurs de log en dev
     # #endregion
 
     @socketio.on("connect", namespace="/")
     def handle_connect(auth: dict[str, Any] | None) -> bool:  # noqa: PLR0911
-        # #region agent log
-        debug_log_path = Path(".cursor/debug.log")
-        with debug_log_path.open("a") as f:
-            import json
+        # #region agent log - DÉSACTIVÉ EN PRODUCTION
+        if os.getenv("FLASK_ENV") == "development":
+            try:
+                debug_log_path = Path(".cursor/debug.log")
+                with debug_log_path.open("a") as f:
+                    import json
 
-            f.write(
-                json.dumps(
-                    {
-                        "location": "chat.py:handle_connect:ENTRY",
-                        "message": "CONNECT HANDLER INVOKED",
-                        "data": {"auth": str(auth)[:200] if auth else None},
-                        "timestamp": datetime.now(UTC).isoformat(),
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "H3",
-                    }
-                )
-                + "\n"
-            )
+                    f.write(
+                        json.dumps(
+                            {
+                                "location": "chat.py:handle_connect:ENTRY",
+                                "message": "CONNECT HANDLER INVOKED",
+                                "data": {"auth": str(auth)[:200] if auth else None},
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "H3",
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass  # Ignore les erreurs de log en dev
         # #endregion
         # ✅ Try-except global pour capturer TOUTES les exceptions, y compris celles du rate limiting
         try:
@@ -470,35 +478,36 @@ def init_chat_socket(socketio: SocketIO):
             print(
                 f"🔌 [SOCKET.IO] handle_connect appelé - IP: {client_ip}, Origin: {origin}"
             )
-            # #region agent log
-            try:
-                sid = getattr(request, "sid", None) or request.environ.get(
-                    "socketio.sid", "unknown"
-                )
-                debug_log_path = os.getenv(
-                    "DEBUG_LOG_PATH", r"c:\Users\jasiq\atmr\.cursor\debug.log"
-                )
-                log_path = Path(debug_log_path)
-                log_path.parent.mkdir(parents=True, exist_ok=True)
-                with log_path.open("a", encoding="utf-8") as f:
-                    log_data = {
-                        "id": f"log_{int(datetime.now(UTC).timestamp() * 1000)}_connect",
-                        "timestamp": int(datetime.now(UTC).timestamp() * 1000),
-                        "location": "chat.py:handle_connect",
-                        "message": "Socket.IO connect event",
-                        "data": {
-                            "sid": str(sid),
-                            "worker_pid": os.getpid(),
-                            "client_ip": client_ip,
-                            "origin": origin or "none",
-                        },
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "B",
-                    }
-                    f.write(json.dumps(log_data) + "\n")
-            except Exception:
-                pass
+            # #region agent log - DÉSACTIVÉ EN PRODUCTION
+            if os.getenv("FLASK_ENV") == "development":
+                try:
+                    sid = getattr(request, "sid", None) or request.environ.get(
+                        "socketio.sid", "unknown"
+                    )
+                    debug_log_path = os.getenv(
+                        "DEBUG_LOG_PATH", r"c:\Users\jasiq\atmr\.cursor\debug.log"
+                    )
+                    log_path = Path(debug_log_path)
+                    log_path.parent.mkdir(parents=True, exist_ok=True)
+                    with log_path.open("a", encoding="utf-8") as f:
+                        log_data = {
+                            "id": f"log_{int(datetime.now(UTC).timestamp() * 1000)}_connect",
+                            "timestamp": int(datetime.now(UTC).timestamp() * 1000),
+                            "location": "chat.py:handle_connect",
+                            "message": "Socket.IO connect event",
+                            "data": {
+                                "sid": str(sid),
+                                "worker_pid": os.getpid(),
+                                "client_ip": client_ip,
+                                "origin": origin or "none",
+                            },
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "B",
+                        }
+                        f.write(json.dumps(log_data) + "\n")
+                except Exception:
+                    pass
             # #endregion
             logger.info(
                 "socket_connect_attempt",
