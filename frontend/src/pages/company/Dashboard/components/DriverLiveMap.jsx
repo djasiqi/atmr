@@ -264,7 +264,9 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
     return () => {
       // ⚠️ StrictMode va appeler le cleanup immédiatement en dev -> remets tout à zéro
       try {
-        map.remove();
+        if (mapRef.current) {
+          mapRef.current.remove();
+        }
       } catch {}
       mapRef.current = null;
       markersRef.current = {};
