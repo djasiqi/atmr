@@ -248,14 +248,22 @@ const CompanyClients = () => {
   // Sauvegarder les modifications
   const handleSaveClient = async (clientData) => {
     try {
+      console.log('💾 [handleSaveClient] Début sauvegarde client ID:', editingClient.id);
+      console.log('💾 [handleSaveClient] Données:', clientData);
+      
       // Utiliser l'API complète de mise à jour du client
-      await updateClient(editingClient.id, clientData);
+      const result = await updateClient(editingClient.id, clientData);
+      console.log('✅ [handleSaveClient] Réponse backend:', result);
 
       // Recharger la liste
+      console.log('🔄 [handleSaveClient] Rechargement de la liste...');
       await loadClients();
+      console.log('✅ [handleSaveClient] Liste rechargée');
+      
       handleCloseModal();
     } catch (err) {
-      console.error('Erreur lors de la sauvegarde:', err);
+      console.error('❌ [handleSaveClient] Erreur lors de la sauvegarde:', err);
+      console.error('❌ [handleSaveClient] Détails erreur:', err.response?.data || err.message);
       throw err;
     }
   };

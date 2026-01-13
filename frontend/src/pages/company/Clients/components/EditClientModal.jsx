@@ -126,8 +126,14 @@ const EditClientModal = ({ client, onClose, onSave }) => {
 
       console.log('📤 Payload envoyé:', payload);
 
-      await onSave(payload);
+      const result = await onSave(payload);
+      console.log('✅ Sauvegarde réussie:', result);
+      
+      // ✅ Fermer le modal après succès
+      setLoading(false);
+      onClose();
     } catch (err) {
+      console.error('❌ Erreur lors de la sauvegarde:', err);
       setError(err.response?.data?.error || err.message || 'Erreur lors de la sauvegarde');
       setLoading(false);
     }

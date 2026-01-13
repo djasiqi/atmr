@@ -3680,11 +3680,16 @@ class CompanyClientDetail(Resource):
             uc = UpdateCompanyClientUseCase()
             uc_result = uc.execute(client=client, data=data)
             if not uc_result.ok:
+                logger.error("❌ [CompanyClientDetail PUT] Use case échoué: %s", uc_result.error)
                 return uc_result.error or {
                     "error": "Bad request"
                 }, uc_result.status_code or 400
 
+            logger.info("💾 [CompanyClientDetail PUT] Commit de la session...")
             db.session.commit()
+            logger.info("✅ [CompanyClientDetail PUT] Client %s mis à jour avec succès", client_id)
+            logger.info("📊 [CompanyClientDetail PUT] Données client après mise à jour: domicile_address=%s, domicile_zip=%s, domicile_city=%s, preferential_rate=%s",
+                       client.domicile_address, client.domicile_zip, client.domicile_city, client.preferential_rate)
             return client.serialize, 200
 
         except ValueError as e:

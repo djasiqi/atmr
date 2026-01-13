@@ -45,11 +45,18 @@ class UpdateCompanyClientUseCase:
     def execute(
         self, *, client: _ClientLike, data: dict[str, Any]
     ) -> UpdateCompanyClientResult:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info("📝 [UpdateCompanyClientUseCase] Début mise à jour client ID=%s, données reçues: %s", 
+                   getattr(client, 'id', 'N/A'), data)
+        
         # Champs Client
         if "contact_email" in data:
-            client.contact_email = data["contact_email"]
+            client.contact_email = data["contact_email"] or None
+            logger.info("📝 [UpdateCompanyClientUseCase] contact_email mis à jour: %s", client.contact_email)
         if "contact_phone" in data:
-            client.contact_phone = data["contact_phone"]
+            client.contact_phone = data["contact_phone"] or None
+            logger.info("📝 [UpdateCompanyClientUseCase] contact_phone mis à jour: %s", client.contact_phone)
         if "billing_address" in data:
             client.billing_address = data["billing_address"]
         if "billing_lat" in data:
@@ -70,24 +77,38 @@ class UpdateCompanyClientUseCase:
             client.residence_facility = data["residence_facility"] or None
 
         if "domicile_address" in data:
+            old_value = client.domicile_address
             client.domicile_address = data["domicile_address"] or None
+            logger.info("📝 [UpdateCompanyClientUseCase] domicile_address: %s -> %s", old_value, client.domicile_address)
         if "domicile_zip" in data:
+            old_value = client.domicile_zip
             client.domicile_zip = data["domicile_zip"] or None
+            logger.info("📝 [UpdateCompanyClientUseCase] domicile_zip: %s -> %s", old_value, client.domicile_zip)
         if "domicile_city" in data:
+            old_value = client.domicile_city
             client.domicile_city = data["domicile_city"] or None
+            logger.info("📝 [UpdateCompanyClientUseCase] domicile_city: %s -> %s", old_value, client.domicile_city)
         if "domicile_lat" in data:
+            old_value = client.domicile_lat
             client.domicile_lat = data["domicile_lat"]
+            logger.info("📝 [UpdateCompanyClientUseCase] domicile_lat: %s -> %s", old_value, client.domicile_lat)
         if "domicile_lon" in data:
+            old_value = client.domicile_lon
             client.domicile_lon = data["domicile_lon"]
+            logger.info("📝 [UpdateCompanyClientUseCase] domicile_lon: %s -> %s", old_value, client.domicile_lon)
 
         if "preferential_rate" in data:
             rate_value = data["preferential_rate"]
+            old_value = client.preferential_rate
             if rate_value == "" or rate_value is None:
                 client.preferential_rate = None
+                logger.info("📝 [UpdateCompanyClientUseCase] preferential_rate: %s -> None (vide)", old_value)
             else:
                 try:
                     client.preferential_rate = Decimal(str(rate_value))
-                except (ValueError, TypeError):
+                    logger.info("📝 [UpdateCompanyClientUseCase] preferential_rate: %s -> %s", old_value, client.preferential_rate)
+                except (ValueError, TypeError) as e:
+                    logger.error("❌ [UpdateCompanyClientUseCase] Erreur tarif préférentiel: %s", e)
                     return UpdateCompanyClientResult(
                         ok=False,
                         error={"error": "Tarif préférentiel invalide"},
@@ -127,6 +148,8 @@ class UpdateCompanyClientUseCase:
             user = client.user
             assert user is not None
             gender_value = data["gender"]
+            old_gender = user.gender
+            logger.info("📝 [UpdateCompanyClientUseCase] gender reçu: %s (ancien: %s)", gender_value, old_gender)
             if gender_value:
                 # Convertir en GenderEnum
                 from models.enums import GenderEnum
@@ -140,10 +163,13 @@ class UpdateCompanyClientUseCase:
                         # Mapping: anglais → français
                         if gender_str == "male" or gender_str == "homme":
                             user.gender = GenderEnum.HOMME
+                            logger.info("📝 [UpdateCompanyClientUseCase] gender: %s -> HOMME", old_gender)
                         elif gender_str == "female" or gender_str == "femme":
                             user.gender = GenderEnum.FEMME
+                            logger.info("📝 [UpdateCompanyClientUseCase] gender: %s -> FEMME", old_gender)
                         elif gender_str == "autre" or gender_str == "other":
                             user.gender = GenderEnum.AUTRE
+                            logger.info("📝 [UpdateCompanyClientUseCase] gender: %s -> AUTRE", old_gender)
                         else:
                             # Essayer directement avec la valeur (si déjà au bon format)
                             try:
@@ -170,5 +196,8 @@ class UpdateCompanyClientUseCase:
                     )
             else:
                 user.gender = None
+                logger.info("📝 [UpdateCompanyClientUseCase] gender: %s -> None (vide)", old_gender)
 
+        logger.info("✅ [UpdateCompanyClientUseCase] Mise à jour client ID=%s terminée avec succès", 
+                   getattr(client, 'id', 'N/A'))
         return UpdateCompanyClientResult(ok=True)
