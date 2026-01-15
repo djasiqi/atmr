@@ -130,6 +130,12 @@ class Driver(db.Model):
         passive_deletes=True,
     )
     bookings = relationship("Booking", back_populates="driver", passive_deletes=True)
+    device_tokens = relationship(
+        "DeviceToken",
+        back_populates="driver",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     @property
     def serialize(self):

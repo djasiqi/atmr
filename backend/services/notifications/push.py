@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import time
+import uuid
 from typing import Any, Dict, cast
 
 import requests
@@ -18,10 +19,20 @@ from ext import app_logger, redis_client
 
 # Import conditionnel pour métriques Prometheus
 try:
-    from services.monitoring.prometheus import track_push_notification
+    from services.monitoring.prometheus import (
+        track_push_notification,
+        track_push_rate_limit_hit,
+        track_push_token_invalidated,
+    )
 except ImportError:
     # Si prometheus_metrics non disponible, fonction no-op
     def track_push_notification(*args, **kwargs):
+        """No-op si Prometheus non disponible."""
+
+    def track_push_rate_limit_hit(*args, **kwargs):
+        """No-op si Prometheus non disponible."""
+
+    def track_push_token_invalidated(*args, **kwargs):
         """No-op si Prometheus non disponible."""
 
 
@@ -43,11 +54,14 @@ CIRCUIT_BREAKER_WINDOW = 300  # Fenêtre de 5 minutes
 CIRCUIT_BREAKER_COOLDOWN = 60  # Cooldown de 60 secondes avant de réessayer
 
 # Configuration déduplication
-DEDUP_WINDOW = 60  # Fenêtre de déduplication de 60 secondes
+DEDUP_WINDOW = 300  # ✅ CORRECTIF: Fenêtre de déduplication de 5 minutes (300s) pour couvrir retries Celery
 
 
 def _check_circuit_breaker() -> tuple[bool, str | None]:
     """Vérifie si le circuit breaker est ouvert (trop d'échecs Expo Push).
+
+    ✅ CORRECTIF #5: Sépare les erreurs réseau des tokens invalides.
+    Les tokens invalides ne doivent pas bloquer tous les envois.
 
     Returns:
         Tuple (is_open, reason):
@@ -60,6 +74,7 @@ def _check_circuit_breaker() -> tuple[bool, str | None]:
     try:
         circuit_key = "push:circuit_breaker:expo"
         failure_count_key = "push:circuit_breaker:failures"
+        token_invalid_count_key = "push:circuit_breaker:token_invalid"
 
         # Vérifier si le circuit est ouvert
         is_open = redis_client.get(circuit_key)
@@ -67,19 +82,25 @@ def _check_circuit_breaker() -> tuple[bool, str | None]:
             ttl = redis_client.ttl(circuit_key)
             return True, f"Circuit breaker ouvert (réessai dans {ttl}s)"
 
-        # Vérifier le nombre d'échecs récents
-        failure_count = redis_client.get(failure_count_key)
-        if failure_count:
-            count = int(failure_count)
-            if count >= CIRCUIT_BREAKER_THRESHOLD:
-                # Ouvrir le circuit
-                redis_client.setex(circuit_key, CIRCUIT_BREAKER_COOLDOWN, "1")
-                app_logger.error(
-                    "[push] Circuit breaker OUVERT : %d échecs en %ds",
-                    count,
-                    CIRCUIT_BREAKER_WINDOW,
-                )
-                return True, f"Circuit breaker ouvert après {count} échecs"
+        # ✅ CORRECTIF #5: Séparer erreurs réseau des tokens invalides
+        failure_count = redis_client.get(failure_count_key) or 0
+        token_invalid_count = redis_client.get(token_invalid_count_key) or 0
+
+        # Ne compter que les erreurs réseau pour le circuit breaker
+        # Les tokens invalides ne doivent pas bloquer tous les envois
+        network_failures = int(failure_count) - int(token_invalid_count)
+
+        if network_failures >= CIRCUIT_BREAKER_THRESHOLD:
+            redis_client.setex(circuit_key, CIRCUIT_BREAKER_COOLDOWN, "1")
+            app_logger.error(
+                "[push] Circuit breaker OUVERT : %d erreurs réseau en %ds",
+                network_failures,
+                CIRCUIT_BREAKER_WINDOW,
+            )
+            return (
+                True,
+                f"Circuit breaker ouvert après {network_failures} erreurs réseau",
+            )
 
         return False, None
     except Exception as e:
@@ -90,17 +111,30 @@ def _check_circuit_breaker() -> tuple[bool, str | None]:
         return False, None  # Fail-open en cas d'erreur
 
 
-def _record_push_failure() -> None:
-    """Enregistre un échec de push pour le circuit breaker."""
+def _record_push_failure(token_invalid: bool = False) -> None:
+    """Enregistre un échec de push pour le circuit breaker.
+
+    Args:
+        token_invalid: Si True, enregistre comme token invalide (ne compte pas pour circuit breaker)
+    """
     if not redis_client:
         return
 
     try:
         failure_count_key = "push:circuit_breaker:failures"
+        token_invalid_count_key = "push:circuit_breaker:token_invalid"
+
+        # Toujours incrémenter le compteur total (pour statistiques)
         count = redis_client.incr(failure_count_key)
         if count == 1:
             # Première erreur de la fenêtre : définir expiration
             redis_client.expire(failure_count_key, CIRCUIT_BREAKER_WINDOW)
+
+        # ✅ CORRECTIF #5: Séparer les tokens invalides des erreurs réseau
+        if token_invalid:
+            token_invalid_count = redis_client.incr(token_invalid_count_key)
+            if token_invalid_count == 1:
+                redis_client.expire(token_invalid_count_key, CIRCUIT_BREAKER_WINDOW)
     except Exception:
         pass  # Silent fail pour ne pas bloquer l'envoi
 
@@ -112,10 +146,12 @@ def _record_push_success() -> None:
 
     try:
         failure_count_key = "push:circuit_breaker:failures"
+        token_invalid_count_key = "push:circuit_breaker:token_invalid"
         circuit_key = "push:circuit_breaker:expo"
 
-        # Réinitialiser le compteur d'échecs après un succès
+        # Réinitialiser les compteurs d'échecs après un succès
         redis_client.delete(failure_count_key)
+        redis_client.delete(token_invalid_count_key)
 
         # Si le circuit était ouvert, le fermer
         if redis_client.get(circuit_key):
@@ -125,13 +161,16 @@ def _record_push_success() -> None:
         pass  # Silent fail
 
 
-def __check_duplicate_notification(  # pyright: ignore[reportUnusedFunction]
+def _check_duplicate_notification(  # ✅ CORRECTIF: Simple underscore = publique dans le module  # pyright: ignore[reportUnusedFunction]
     driver_id: int,
     title: str,
     body: str,
     notification_type: str,
 ) -> bool:
     """Vérifie si une notification identique a déjà été envoyée récemment.
+
+    Note: Cette fonction est utilisée par fanout.py via import dynamique,
+    donc elle peut apparaître comme non utilisée dans l'analyse statique.
 
     Args:
         driver_id: ID du driver
@@ -161,7 +200,7 @@ def __check_duplicate_notification(  # pyright: ignore[reportUnusedFunction]
             )
             return True  # C'est un doublon
 
-        # Marquer cette notification comme envoyée
+        # ✅ CORRECTIF: Utiliser DEDUP_WINDOW (maintenant 300s) pour couvrir retries Celery
         redis_client.setex(dedup_key, DEDUP_WINDOW, "1")
         return False
     except Exception as e:
@@ -221,6 +260,7 @@ def send_push_message(
     use_retry: bool = True,
     driver_id: int | None = None,
     bypass_rate_limit: bool = False,
+    correlation_id: str | None = None,
 ) -> Dict[str, Any]:
     """Envoie une notification push via Expo Push Notification Service.
 
@@ -238,10 +278,38 @@ def send_push_message(
         Dict avec "ok" (bool) et "error" (str) ou "data" selon le résultat.
         Si use_retry=True, contient aussi "attempts" (int) et "final_error" (str) en cas d'échec.
     """
+    # ✅ INSTRUMENTATION: Correlation ID pour traçabilité
+    if correlation_id is None:
+        correlation_id = str(uuid.uuid4())
+    notification_type = data.get("type") if data else None
+
+    # ✅ INSTRUMENTATION: Token hash pour anonymisation
+    token_hash = hashlib.sha256(token.encode()).hexdigest()[:16]
+    token_preview = (
+        token[:TOKEN_DISPLAY_LENGTH] + "..."
+        if len(token) > TOKEN_DISPLAY_LENGTH
+        else token
+    )
+
+    app_logger.info(
+        "[push] Sending push notification",
+        extra={
+            "correlation_id": correlation_id,
+            "driver_id": driver_id,
+            "token_preview": token_preview,
+            "token_hash": token_hash,
+            "notification_type": notification_type,
+        },
+    )
+
     # ✅ AMÉLIORATION: Circuit breaker pour éviter les storms
     is_open, reason = _check_circuit_breaker()
     if is_open:
-        app_logger.warning("[push] Push skipped: %s", reason)
+        app_logger.warning(
+            "[push] Push skipped: %s",
+            reason,
+            extra={"correlation_id": correlation_id},
+        )
         return {"ok": False, "error": reason, "circuit_breaker_open": True}
 
     # Utiliser retry par défaut pour améliorer la robustesse
@@ -254,10 +322,10 @@ def send_push_message(
             timeout=timeout,
             driver_id=driver_id,
             bypass_rate_limit=bypass_rate_limit,
+            correlation_id=correlation_id,
         )
 
     # ✅ AMÉLIORATION: Déterminer la priorité selon le type de notification
-    notification_type = data.get("type") if data else None
     priority = (
         "high"
         if notification_type in ["urgent_alert", "booking", "booking_cancelled"]
@@ -289,11 +357,32 @@ def send_push_message(
             if all_ok:
                 result = {"ok": True, "data": response_data.get("data")}
                 _record_push_success()  # ✅ Enregistrer succès pour circuit breaker
+
+                # ✅ INSTRUMENTATION: Provider Response ID (Expo ticket IDs)
+                for ticket in response_data["data"]:
+                    app_logger.info(
+                        "[push] Expo Push ticket",
+                        extra={
+                            "correlation_id": correlation_id,
+                            "expo_ticket_id": ticket.get("id"),
+                            "status": ticket.get("status"),
+                        },
+                    )
             else:
                 # Au moins un ticket a échoué
                 errors = []
                 token_is_invalid = False
                 for ticket in response_data["data"]:
+                    # ✅ INSTRUMENTATION: Provider Response ID même en cas d'erreur
+                    app_logger.info(
+                        "[push] Expo Push ticket",
+                        extra={
+                            "correlation_id": correlation_id,
+                            "expo_ticket_id": ticket.get("id"),
+                            "status": ticket.get("status"),
+                        },
+                    )
+
                     if ticket.get("status") != "ok":
                         error_msg = ticket.get("message", "Unknown error")
                         error_type = ticket.get("details", {}).get("error")
@@ -314,6 +403,17 @@ def send_push_message(
                                 if len(token) > TOKEN_DISPLAY_LENGTH
                                 else token,
                                 error_type,
+                                extra={"correlation_id": correlation_id},
+                            )
+                            # ✅ INSTRUMENTATION: Métrique Prometheus pour token invalide
+                            reason_map = {
+                                "DeviceNotRegistered": "device_not_registered",
+                                "InvalidCredentials": "invalid_credentials",
+                                "MessageTooBig": "message_too_big",
+                                "MessageRateExceeded": "rate_exceeded",
+                            }
+                            track_push_token_invalidated(
+                                reason=reason_map.get(error_type, "unknown")
                             )
 
                 result = {
@@ -321,7 +421,8 @@ def send_push_message(
                     "error": "; ".join(errors),
                     "token_invalid": token_is_invalid,  # Flag pour invalidation
                 }
-                _record_push_failure()  # ✅ Enregistrer échec pour circuit breaker
+                # ✅ CORRECTIF #5: Enregistrer séparément selon le type d'erreur
+                _record_push_failure(token_invalid=token_is_invalid)
         else:
             # Format inattendu mais pas d'erreur HTTP
             result = {"ok": True, "data": response_data}
@@ -331,21 +432,37 @@ def send_push_message(
             "[push] Expo push failed (network error: %s): %s",
             type(e).__name__,
             e,
+            extra={"correlation_id": correlation_id},
         )
         result = {"ok": False, "error": str(e)}
-        _record_push_failure()  # ✅ Enregistrer échec pour circuit breaker
+        # ✅ CORRECTIF #5: Erreur réseau (pas token invalide)
+        _record_push_failure(token_invalid=False)
     except (ValueError, TypeError, KeyError) as e:
         # Erreurs de validation attendues : JSON invalide
         app_logger.warning(
             "[push] Expo push failed (validation error: %s): %s",
             type(e).__name__,
             e,
+            extra={"correlation_id": correlation_id},
         )
         result = {"ok": False, "error": str(e)}
     except Exception:
         # Erreur inattendue : logger avec trace complète
-        app_logger.exception("[push] Expo push failed")
+        app_logger.exception(
+            "[push] Expo push failed", extra={"correlation_id": correlation_id}
+        )
         result = {"ok": False, "error": "Internal error"}
+
+    # ✅ INSTRUMENTATION: Log résultat avec correlation_id
+    app_logger.info(
+        "[push] Push notification result",
+        extra={
+            "correlation_id": correlation_id,
+            "ok": result.get("ok"),
+            "error": result.get("error"),
+            "token_invalid": result.get("token_invalid"),
+        },
+    )
 
     return result
 
@@ -374,6 +491,7 @@ def send_push_message_with_retry(
     retry_on_network_error: bool = True,
     driver_id: int | None = None,
     bypass_rate_limit: bool = False,
+    correlation_id: str | None = None,
 ) -> Dict[str, Any]:
     """Envoie une notification push avec retry automatique.
 
@@ -408,6 +526,8 @@ def send_push_message_with_retry(
                     count,
                     PUSH_RATE_LIMIT_WINDOW,
                 )
+                # ✅ INSTRUMENTATION: Métrique Prometheus pour rate limit hit
+                track_push_rate_limit_hit(driver_id)
                 return {
                     "ok": False,
                     "error": "Rate limit exceeded",
@@ -419,6 +539,10 @@ def send_push_message_with_retry(
                 "[push] Rate limit check failed (Redis error): %s. Continuing without rate limit.",
                 e,
             )
+
+    # ✅ INSTRUMENTATION: Générer correlation_id une seule fois pour tous les retries
+    if correlation_id is None:
+        correlation_id = str(uuid.uuid4())
 
     start_time = time.time()
     event_type = data.get("type", "unknown") if data else "unknown"
@@ -432,6 +556,7 @@ def send_push_message_with_retry(
             body=body,
             data=data,
             timeout=timeout,
+            correlation_id=correlation_id,
         )
 
         if result.get("ok"):

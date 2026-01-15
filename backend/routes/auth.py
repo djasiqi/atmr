@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import cast
 
 import sentry_sdk  # pyright: ignore[reportMissingImports]
-from flask import (  # pyright: ignore[reportMissingImports]
+from flask import (
     current_app,
     make_response,
     request,
@@ -27,7 +27,7 @@ from flask_restx import (  # pyright: ignore[reportMissingImports]
     Resource,
     fields,
 )
-from itsdangerous import URLSafeTimedSerializer  # pyright: ignore[reportMissingImports]
+from itsdangerous import URLSafeTimedSerializer
 from marshmallow import (  # pyright: ignore[reportMissingImports]
     Schema,
     ValidationError,
@@ -406,7 +406,7 @@ class Login(Resource):
             except Exception as json_error:
                 # Gérer spécifiquement les erreurs de parsing JSON (BadRequest 400)
                 # pour éviter qu'elles soient transformées en 500 par le gestionnaire global
-                from werkzeug.exceptions import (  # pyright: ignore[reportMissingImports]
+                from werkzeug.exceptions import (
                     BadRequest,
                 )
 
@@ -1150,7 +1150,10 @@ class LoginTest(Resource):
         import os
 
         from flask import abort, current_app, request
-        from flask_jwt_extended import create_access_token, create_refresh_token
+        from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
+            create_access_token,
+            create_refresh_token,
+        )
 
         from models.user import User
 
@@ -1663,6 +1666,50 @@ class Logout(Resource):
                     str(revoke_error),
                 )
 
+            # ✅ CORRECTIF #4: Invalider tous les tokens push du driver au logout
+            try:
+                if user and user.role == UserRole.driver:
+                    from repositories.driver_repository import DriverRepository
+
+                    driver_repo = DriverRepository()
+                    driver = driver_repo.find_model_by_user_id(user.id)
+                    if driver:
+                        from models import DeviceToken
+
+                        # Invalider tous les tokens actifs du driver
+                        tokens_invalidated = DeviceToken.query.filter_by(
+                            driver_id=driver.id, is_active=True
+                        ).update({"is_active": False})
+                        db.session.commit()
+
+                        if tokens_invalidated > 0:
+                            logger.info(
+                                "[logout] %d token(s) push invalidé(s) pour driver %s",
+                                tokens_invalidated,
+                                driver.id,
+                            )
+                            # ✅ INSTRUMENTATION: Métrique Prometheus pour tokens invalidés au logout
+                            try:
+                                from services.monitoring.prometheus import (
+                                    track_push_token_invalidated,
+                                )
+
+                                for _ in range(tokens_invalidated):
+                                    track_push_token_invalidated(reason="logout")
+                            except ImportError:
+                                pass  # Prometheus non disponible
+                        else:
+                            logger.debug(
+                                "[logout] Aucun token push actif à invalider pour driver %s",
+                                driver.id,
+                            )
+            except Exception as device_token_error:
+                # Ne pas bloquer le logout si l'invalidation des tokens push échoue
+                logger.warning(
+                    "Échec invalidation tokens push lors logout (ignoré): %s",
+                    str(device_token_error),
+                )
+
             # ✅ PHASE 3: Révoquer l'access token actuel (optionnel mais recommandé)
             try:
                 from datetime import UTC, datetime
@@ -1911,7 +1958,7 @@ class Register(Resource):
         except Exception as e:
             # Flask-RESTX abort() lève une HTTPException (ex: 400/409).
             # Ne pas transformer ces erreurs attendues en 500.
-            from werkzeug.exceptions import (  # pyright: ignore[reportMissingImports]
+            from werkzeug.exceptions import (
                 HTTPException,
             )
 

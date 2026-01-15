@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Dict, cast
 
 from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.orm import joinedload
@@ -476,42 +476,69 @@ def emit_delay_detected(
     emit_driver_event(driver_id, "driver_delay_detected", payload, namespace=namespace)
 
     # ✅ P0: Push notification pour delay.detected (fan-out hybride)
-    # Import depuis push_service pour éviter les cycles d'import
-    if driver and hasattr(driver, "push_token") and driver.push_token:
+    # ✅ CORRECTIF #3: Utiliser DeviceToken pour support multi-device
+    if driver:
         try:
+            from ext import db
+            from models import DeviceToken
             from services.notifications.push import send_push_message
 
-            delay_text = (
-                f"{int(delay_minutes)} min" if delay_minutes >= 1 else "< 1 min"
-            )
-            result = send_push_message(
-                token=driver.push_token,
-                title="Retard détecté",
-                body=f"Retard de {delay_text} sur la mission #{booking_id}",
-                data={
-                    "type": "delay",
-                    "booking_id": booking_id,
-                    "assignment_id": assignment_id,
-                    "delay_minutes": float(delay_minutes),
-                    "deepLink": f"atmr://booking/{booking_id}?alert=delay",
-                },
-                timeout=5,
-                driver_id=driver_id,
-                bypass_rate_limit=False,  # Les delays ne sont pas critiques, respecter le rate limit
-            )
+            device_tokens = DeviceToken.query.filter_by(
+                driver_id=driver.id,
+                is_active=True,
+            ).all()
 
-            if result.get("ok"):
-                app_logger.info(
-                    "[socketio] Push sent to driver %s for delay on booking %s",
-                    driver_id,
-                    booking_id,
+            if device_tokens:
+                delay_text = (
+                    f"{int(delay_minutes)} min" if delay_minutes >= 1 else "< 1 min"
                 )
-            else:
-                app_logger.warning(
-                    "[socketio] Push failed for driver %s: %s",
-                    driver_id,
-                    result.get("error", "Unknown error"),
-                )
+                # Envoyer à tous les devices actifs
+                success_count = 0
+                last_result: Dict[str, Any] | None = None
+                for device_token in device_tokens:
+                    result = send_push_message(
+                        token=device_token.token,
+                        title="Retard détecté",
+                        body=f"Retard de {delay_text} sur la mission #{booking_id}",
+                        data={
+                            "type": "delay",
+                            "booking_id": booking_id,
+                            "assignment_id": assignment_id,
+                            "delay_minutes": float(delay_minutes),
+                            "deepLink": f"atmr://booking/{booking_id}?alert=delay",
+                        },
+                        timeout=5,
+                        driver_id=driver.id,
+                        bypass_rate_limit=False,  # Les delays ne sont pas critiques, respecter le rate limit
+                    )
+                    last_result = result  # Garder le dernier résultat pour logging
+
+                    if result.get("ok"):
+                        success_count += 1
+                    elif result.get("token_invalid"):
+                        # Invalider ce token spécifique
+                        device_token.is_active = False
+                        db.session.commit()
+
+                if success_count > 0:
+                    app_logger.info(
+                        "[socketio] Push sent to driver %s for delay on booking %s (%d/%d devices)",
+                        driver.id,
+                        booking_id,
+                        success_count,
+                        len(device_tokens),
+                    )
+                else:
+                    error_msg = (
+                        last_result.get("error", "Unknown error")
+                        if last_result
+                        else "All devices failed"
+                    )
+                    app_logger.warning(
+                        "[socketio] Push failed for all devices of driver %s: %s",
+                        driver.id,
+                        error_msg,
+                    )
         except (ValueError, TypeError, AttributeError) as e:
             app_logger.error(
                 "[socketio] Push notification failed (validation error: %s): %s",

@@ -104,7 +104,7 @@ else:
 
 socketio = SocketIO(
     async_mode=ASYNC_MODE,
-    message_queue=None,  # ❌ TEST: Désactiver Redis complètement
+    message_queue=_socketio_message_queue,  # ✅ FIX: Utiliser Redis si REDIS_URL défini (au lieu de None hardcodé)
     # ✅ Configuration des timeouts pour éviter "Bad file descriptor"
     ping_timeout=60,  # Timeout avant de considérer le client déconnecté (secondes)
     ping_interval=25,  # Intervalle entre les pings (secondes)

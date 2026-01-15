@@ -212,44 +212,77 @@ def _send_push_to_driver(
             return True
 
         # Mode legacy: envoi direct (sans fallback ni queue persistante)
-        from models import Driver
+        # ✅ CORRECTIF #3: Utiliser DeviceToken pour support multi-device
+        from ext import db
+        from models import DeviceToken
 
-        driver = Driver.query.get(driver_id)
-        if not driver:
+        device_tokens = DeviceToken.query.filter_by(
+            driver_id=driver_id,
+            is_active=True,
+        ).all()
+
+        if not device_tokens:
             app_logger.debug(
-                "[event_fanout] Driver %s not found, push skipped", driver_id
-            )
-        elif not driver.push_token:
-            app_logger.debug(
-                "[event_fanout] Driver %s has no push_token, push skipped", driver_id
+                "[event_fanout] Driver %s has no active push tokens, push skipped",
+                driver_id,
             )
         else:
-            result = send_push_message(
-                token=driver.push_token,
-                title=title,
-                body=body,
-                data=data,
-                timeout=timeout,
-                driver_id=driver_id,
-                bypass_rate_limit=bypass_rate_limit,
-            )
-
-            if result.get("ok"):
-                app_logger.info("[event_fanout] Push sent to driver %s", driver_id)
-                success = True
-            else:
-                error_msg = result.get("error", "Unknown error")
-                app_logger.warning(
-                    "[event_fanout] Push failed for driver %s: %s",
-                    driver_id,
-                    error_msg,
+            # Envoyer à tous les devices actifs
+            success_count = 0
+            for device_token in device_tokens:
+                result = send_push_message(
+                    token=device_token.token,
+                    title=title,
+                    body=body,
+                    data=data,
+                    timeout=timeout,
+                    driver_id=driver_id,
+                    bypass_rate_limit=bypass_rate_limit,
                 )
 
-                # ✅ AMÉLIORATION: Invalider automatiquement les tokens invalides
-                if result.get("token_invalid"):
-                    from services.notifications.push import _invalidate_push_token
+                if result.get("ok"):
+                    success_count += 1
+                    app_logger.debug(
+                        "[event_fanout] Push sent to driver %s (device %s)",
+                        driver_id,
+                        device_token.id,
+                    )
+                else:
+                    error_msg = result.get("error", "Unknown error")
+                    app_logger.warning(
+                        "[event_fanout] Push failed for driver %s (device %s): %s",
+                        driver_id,
+                        device_token.id,
+                        error_msg,
+                    )
 
-                    _invalidate_push_token(driver_id)
+                    # ✅ CORRECTIF #3: Invalider ce token spécifique (pas tous les tokens du driver)
+                    if result.get("token_invalid"):
+                        device_token.is_active = False
+                        db.session.commit()
+                        app_logger.info(
+                            "[event_fanout] Token invalidé pour driver %s (device %s)",
+                            driver_id,
+                            device_token.id,
+                        )
+                        # ✅ INSTRUMENTATION: Métrique Prometheus pour token invalide
+                        try:
+                            from services.monitoring.prometheus import (
+                                track_push_token_invalidated,
+                            )
+
+                            track_push_token_invalidated(reason="device_not_registered")
+                        except ImportError:
+                            pass  # Prometheus non disponible
+
+            success = success_count > 0
+            if success:
+                app_logger.info(
+                    "[event_fanout] Push sent to driver %s (%d/%d devices)",
+                    driver_id,
+                    success_count,
+                    len(device_tokens),
+                )
     except (ValueError, TypeError, AttributeError) as e:
         app_logger.error(
             "[event_fanout] Push failed (validation error: %s): %s",
@@ -750,8 +783,6 @@ def send_silent_data_update(
     Returns:
         True si envoyé avec succès
     """
-    from models import Driver
-
     # Import métriques silent notifications
     try:
         from services.monitoring.notification_metrics import (
@@ -763,11 +794,17 @@ def send_silent_data_update(
             pass
 
     try:
-        # Récupérer le chauffeur
-        driver = Driver.query.get(driver_id)
-        if not driver or not driver.expo_push_token:
+        # ✅ CORRECTIF #3: Utiliser DeviceToken pour support multi-device
+        from models import DeviceToken
+
+        device_tokens = DeviceToken.query.filter_by(
+            driver_id=driver_id,
+            is_active=True,
+        ).all()
+
+        if not device_tokens:
             app_logger.warning(
-                f"[silent_update] Driver {driver_id} sans token Expo, skip"
+                f"[silent_update] Driver {driver_id} sans tokens actifs, skip"
             )
             track_silent_notification_sent(sync_type, "failed")
             return False
@@ -781,23 +818,34 @@ def send_silent_data_update(
             "content-available": 1,  # iOS background fetch
         }
 
-        # Envoyer via service push (avec title/body vides pour silent notif)
-        result = send_push_message(
-            token=driver.expo_push_token,
-            title="",  # Vide pour silent notification
-            body="",  # Vide pour silent notification
-            data=push_data,
-            timeout=5,
-            use_retry=False,  # Pas de retry pour silent notifications
-            driver_id=driver_id,
-            bypass_rate_limit=False,
-        )
+        # Envoyer à tous les devices actifs
+        success_count = 0
+        for device_token in device_tokens:
+            result = send_push_message(
+                token=device_token.token,
+                title="",  # Vide pour silent notification
+                body="",  # Vide pour silent notification
+                data=push_data,
+                timeout=5,
+                use_retry=False,  # Pas de retry pour silent notifications
+                driver_id=driver_id,
+                bypass_rate_limit=False,
+            )
 
-        success = result.get("ok", False)
+            if result.get("ok"):
+                success_count += 1
+            elif result.get("token_invalid"):
+                # Invalider ce token spécifique
+                from ext import db
+
+                device_token.is_active = False
+                db.session.commit()
+
+        success = success_count > 0
 
         if success:
             app_logger.info(
-                f"[silent_update] Envoyé à driver {driver_id}: sync_type={sync_type}"
+                f"[silent_update] Envoyé à driver {driver_id}: sync_type={sync_type} ({success_count}/{len(device_tokens)} devices)"
             )
             track_silent_notification_sent(sync_type, "success")
         else:
@@ -936,14 +984,19 @@ def send_critical_alert_ios(
     Returns:
         True si envoyé avec succès
     """
-    from models import Driver
-
     try:
-        # Récupérer le chauffeur
-        driver = Driver.query.get(driver_id)
-        if not driver or not driver.expo_push_token:
+        # ✅ CORRECTIF #3: Utiliser DeviceToken pour support multi-device
+        from ext import db
+        from models import DeviceToken
+
+        device_tokens = DeviceToken.query.filter_by(
+            driver_id=driver_id,
+            is_active=True,
+        ).all()
+
+        if not device_tokens:
             app_logger.warning(
-                f"[critical_alert] Driver {driver_id} sans token Expo, skip"
+                f"[critical_alert] Driver {driver_id} sans tokens actifs, skip"
             )
             return False
 
@@ -959,37 +1012,47 @@ def send_critical_alert_ios(
         if data:
             push_data.update(data)
 
-        # ✅ Configuration spécifique iOS Critical Alert
-        # Note: Pour vraies Critical Alerts (bypass DnD), nécessite entitlement
-        # Actuellement: utilise interruptionLevel "critical" (iOS 15+)
-        result = send_push_message(
-            token=driver.expo_push_token,
-            title=f"🚨 {title}",
-            body=message,
-            data={
-                **push_data,
-                # iOS 15+ : Interruption Level
-                "interruptionLevel": "critical",
-                # Android : Canal critical (déjà configuré)
-                "channelId": "critical",
-                # iOS : Son critique (si entitlement approuvé)
-                "sound": {
-                    "critical": True,
-                    "name": "default",  # ou "emergency_alert.wav" si custom
-                    "volume": 1.0,
+        # Envoyer à tous les devices actifs
+        success_count = 0
+        for device_token in device_tokens:
+            # ✅ Configuration spécifique iOS Critical Alert
+            # Note: Pour vraies Critical Alerts (bypass DnD), nécessite entitlement
+            # Actuellement: utilise interruptionLevel "critical" (iOS 15+)
+            result = send_push_message(
+                token=device_token.token,
+                title=f"🚨 {title}",
+                body=message,
+                data={
+                    **push_data,
+                    # iOS 15+ : Interruption Level
+                    "interruptionLevel": "critical",
+                    # Android : Canal critical (déjà configuré)
+                    "channelId": "critical",
+                    # iOS : Son critique (si entitlement approuvé)
+                    "sound": {
+                        "critical": True,
+                        "name": "default",  # ou "emergency_alert.wav" si custom
+                        "volume": 1.0,
+                    },
                 },
-            },
-            timeout=10,  # Timeout plus long pour urgences
-            use_retry=True,
-            driver_id=driver_id,
-            bypass_rate_limit=True,  # Pas de rate limit pour urgences
-        )
+                timeout=10,  # Timeout plus long pour urgences
+                use_retry=True,
+                driver_id=driver_id,
+                bypass_rate_limit=True,  # Pas de rate limit pour urgences
+            )
 
-        success = result.get("ok", False)
+            if result.get("ok"):
+                success_count += 1
+            elif result.get("token_invalid"):
+                # Invalider ce token spécifique
+                device_token.is_active = False
+                db.session.commit()
+
+        success = success_count > 0
 
         if success:
             app_logger.info(
-                f"[critical_alert] Critical alert envoyée à driver {driver_id}: {alert_type}"
+                f"[critical_alert] Critical alert envoyée à driver {driver_id}: {alert_type} ({success_count}/{len(device_tokens)} devices)"
             )
             # Tracker métrique
             track_notification_sent("critical_alert", "critical", "success")

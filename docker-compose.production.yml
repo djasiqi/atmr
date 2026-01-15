@@ -8,8 +8,8 @@ services:
     container_name: atmr-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-atmr_db}
-      POSTGRES_USER: ${POSTGRES_USER:-atmr_user}
+      POSTGRES_DB: ${POSTGRES_DB:-atmr} # ✅ Aligné sur valeur réelle (atmr, pas atmr_db)
+      POSTGRES_USER: ${POSTGRES_USER:-atmr} # ✅ Aligné sur valeur réelle (atmr, pas atmr_user)
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-atmr_password}
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     volumes:
@@ -30,11 +30,7 @@ services:
     networks:
       - atmr-network
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${POSTGRES_USER:-atmr_user}",
-        ]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-atmr}"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -63,7 +59,7 @@ services:
         redis-server \
           --requirepass "${REDIS_PASSWORD}" \
           --appendonly yes \
-          --maxmemory 256mb \
+          --maxmemory 512mb \
           --maxmemory-policy allkeys-lru \
           --bind 0.0.0.0 \
           --protected-mode yes
@@ -90,10 +86,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 1G # ✅ AUDIT 100 USERS: Augmenté de 512M à 1G (marge pour 512mb maxmemory)
           cpus: "0.5"
         reservations:
-          memory: 256M
+          memory: 512M # ✅ AUDIT 100 USERS: Augmenté de 256M à 512M
           cpus: "0.25"
 
   # Backend API (Production)
@@ -112,11 +108,11 @@ services:
       FLASK_APP: app.py
 
       # Base de données (variables individuelles pour échappement URL automatique)
-      POSTGRES_USER: ${POSTGRES_USER:-atmr_user}
+      POSTGRES_USER: ${POSTGRES_USER:-atmr} # ✅ Aligné sur valeur réelle (atmr, pas atmr_user)
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-atmr_password}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
-      POSTGRES_DB: ${POSTGRES_DB:-atmr_db}
+      POSTGRES_DB: ${POSTGRES_DB:-atmr} # ✅ Aligné sur valeur réelle (atmr, pas atmr_db)
       # ⚠️ IMPORTANT: DATABASE_URL doit être construit avec échappement du mot de passe
       # Pour générer l'URL correctement échappée, utilisez:
       # python3 -c "from urllib.parse import quote_plus; print(f'postgresql+psycopg2://{user}:{quote_plus(password)}@{host}:{port}/{db}')"
@@ -183,6 +179,9 @@ services:
       # URL du worker RL pour les requêtes d'optimisation Optuna
       RL_WORKER_URL: ${RL_WORKER_URL:-http://atmr-rl-worker:5000}
 
+      # ✅ AUDIT 100 USERS: Configuration Gunicorn pour 100 utilisateurs simultanés
+      GUNICORN_WORKERS: 6 # Augmenté de 4 à 6 pour supporter 100 utilisateurs (laisser 2 CPU pour système/overhead)
+
     volumes:
       - backend_logs:/app/logs
       - backend_data:/app/data
@@ -242,11 +241,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2G
-          cpus: "2.0"
+          memory: 3G # ✅ AUDIT 100 USERS: Augmenté de 2G à 3G (6 workers × ~500 MB chacun)
+          cpus: "6.0" # ✅ AUDIT 100 USERS: Augmenté de 2.0 à 6.0 (6 workers, laisser 2 CPU pour système/overhead)
         reservations:
-          memory: 1G
-          cpus: "1.0"
+          memory: 2G # ✅ AUDIT 100 USERS: Augmenté de 1G à 2G
+          cpus: "5.0" # ✅ AUDIT 100 USERS: Augmenté de 1.0 à 5.0
 
   # Worker Celery
   celery-worker:
@@ -256,7 +255,7 @@ services:
     # Charger les variables depuis .env.production (créé par le workflow GitHub Actions)
     env_file:
       - .env.production
-    command: celery -A celery_app.celery worker --loglevel=info --concurrency=2
+    command: celery -A celery_app.celery worker --loglevel=info --concurrency=4 # ✅ AUDIT 100 USERS: Augmenté de 2 à 4
     healthcheck:
       test: ["CMD", "celery", "-A", "celery_app.celery", "inspect", "ping"]
       interval: 30s
@@ -268,11 +267,11 @@ services:
       FLASK_ENV: production
       FLASK_CONFIG: production # ⚠️ IMPORTANT: Nécessaire pour charger ProductionConfig
       # Base de données (variables individuelles pour échappement URL automatique)
-      POSTGRES_USER: ${POSTGRES_USER:-atmr_user}
+      POSTGRES_USER: ${POSTGRES_USER:-atmr} # ✅ Aligné sur valeur réelle (atmr, pas atmr_user)
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-atmr_password}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
-      POSTGRES_DB: ${POSTGRES_DB:-atmr_db}
+      POSTGRES_DB: ${POSTGRES_DB:-atmr} # ✅ Aligné sur valeur réelle (atmr, pas atmr_db)
       # SQLALCHEMY_DATABASE_URI explicite pour les migrations Flask
       SQLALCHEMY_DATABASE_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       # DATABASE_URL sera construit par config.py avec échappement URL automatique
@@ -358,11 +357,11 @@ services:
       FLASK_ENV: production
       FLASK_CONFIG: production # ⚠️ IMPORTANT: Nécessaire pour charger ProductionConfig
       # Base de données (variables individuelles pour échappement URL automatique)
-      POSTGRES_USER: ${POSTGRES_USER:-atmr_user}
+      POSTGRES_USER: ${POSTGRES_USER:-atmr} # ✅ Aligné sur valeur réelle (atmr, pas atmr_user)
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-atmr_password}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
-      POSTGRES_DB: ${POSTGRES_DB:-atmr_db}
+      POSTGRES_DB: ${POSTGRES_DB:-atmr} # ✅ Aligné sur valeur réelle (atmr, pas atmr_db)
       # SQLALCHEMY_DATABASE_URI explicite pour les migrations Flask
       SQLALCHEMY_DATABASE_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       # DATABASE_URL sera construit par config.py avec échappement URL automatique

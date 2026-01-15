@@ -266,6 +266,21 @@ function RootNav() {
           return;
         }
 
+        // ✅ INSTRUMENTATION: Device ID
+        let deviceId = "unknown";
+        try {
+          const Device = await import("expo-device");
+          // expo-device exporte modelId directement
+          deviceId = Device.modelId || Device.deviceName || "unknown";
+        } catch (error) {
+          console.warn("⚠️ Impossible de récupérer Device ID:", error);
+        }
+
+        // ✅ INSTRUMENTATION: Logs avec Device ID et User ID
+        console.log("🔔 Device ID:", deviceId);
+        console.log("🔔 Token enregistré:", tokenToUse.substring(0, 20) + "...");
+        console.log("🔔 Enregistrement token pour driver:", currentUserId);
+
         // Empêcher les re-posts si inchangé (mémo par utilisateur si dispo)
         const key = currentUserId
           ? `push_token_${currentUserId}`

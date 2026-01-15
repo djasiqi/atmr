@@ -439,7 +439,8 @@ start_application() {
         # ✅ FIX Socket.IO multi-workers: Pour diagnostiquer "Invalid session" errors,
         # définir GUNICORN_WORKERS=1 pour forcer un seul worker (évite le problème de SID
         # partagé entre workers). En production avec Redis message_queue, utiliser 4+ workers.
-        WORKERS="${GUNICORN_WORKERS:-4}"
+        # ✅ AUDIT 100 USERS: Défaut augmenté de 4 à 6 pour supporter 100 utilisateurs simultanés (laisser 2 CPU pour système/overhead)
+        WORKERS="${GUNICORN_WORKERS:-6}"
         echo "  Workers configurés: $WORKERS"
         if [ "$WORKERS" = "1" ]; then
             echo "  ⚠️  Mode single-worker (diagnostic Socket.IO multi-workers)"

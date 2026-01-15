@@ -128,11 +128,12 @@ def _build_database_url_safe() -> str:
         return db_url
 
     # Construire depuis variables individuelles
-    user = os.getenv("POSTGRES_USER", "atmr_user")
+    # ✅ CORRECTION: Valeurs par défaut alignées sur PostgreSQL réel (atmr/atmr)
+    user = os.getenv("POSTGRES_USER", "atmr")
     password = os.getenv("POSTGRES_PASSWORD", "atmr_password")
     host = os.getenv("POSTGRES_HOST", "postgres")
     port = os.getenv("POSTGRES_PORT", "5432")
-    db = os.getenv("POSTGRES_DB", "atmr_db")
+    db = os.getenv("POSTGRES_DB", "atmr")
 
     # Échapper le mot de passe pour URL (caractères spéciaux comme !, @, #, etc.)
     password_escaped = quote_plus(password)
@@ -544,8 +545,8 @@ class ProductionConfig(Config):
 
     SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool | dict[str, str]]] = {
         **Config.SQLALCHEMY_ENGINE_OPTIONS,
-        "pool_size": 10,  # ✅ PERF: Connection pooling (PostgreSQL uniquement)
-        "max_overflow": 20,  # ✅ PERF: Max connections overflow (PostgreSQL uniquement)
+        "pool_size": 5,  # ✅ VERDICT FINAL: Réduit de 15 à 5 pour "safe 100 users" (6 workers x 10 max = 60 connexions, évite saturation PostgreSQL)
+        "max_overflow": 5,  # ✅ VERDICT FINAL: Réduit de 25 à 5 (max 10 par worker, total 60 connexions API + 4-16 Celery = 64-76 total)
         "connect_args": {
             "client_encoding": "utf8",
             # ✅ SECURITY: SSL désactivé pour Docker interne,

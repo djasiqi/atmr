@@ -1,0 +1,22 @@
+# Règles pour les agents Cursor - Projet ATMR
+
+## 📝 Documentation
+- **TOUS les fichiers Markdown (.md) doivent être créés UNIQUEMENT dans le dossier `docs/`**
+- Ne jamais créer de fichiers .md à la racine du projet
+- Ne jamais créer un dossier `doc/` (utiliser `docs/` qui existe déjà)
+- Les fichiers de documentation doivent respecter cette convention
+
+## 🌐 Langue
+- Toujours répondre en français
+- Tous les commentaires, messages d'erreur, et documentation doivent être en français
+
+## 📁 Structure du projet
+- Backend : `backend/`
+- Frontend web : `frontend/`
+- Mobile : `mobile/operations-app/`
+- Documentation : `docs/`
+
+## 🔧 Conventions de code
+- Respecter les conventions de nommage existantes
+- Documenter les changements importants dans `docs/`
+- Suivre les patterns et architectures existantes (DDD, etc.)

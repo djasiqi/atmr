@@ -232,3 +232,70 @@ groups:
           summary: "Latence traitement position élevée (p95 > 1s)"
           description: "Latence p95: {{ $value }}s"
 
+  # ==================== Push Notifications Alerts ====================
+  - name: push_notifications
+    interval: 30s
+    rules:
+      # ✅ INSTRUMENTATION: Taux de succès < 95%
+      - alert: PushNotificationLowSuccessRate
+        expr: |
+          (
+            sum(rate(push_notifications_total{status="success"}[5m]))
+            /
+            sum(rate(push_notifications_total[5m]))
+          ) < 0.95
+        for: 5m
+        labels:
+          severity: warning
+          component: push_notifications
+        annotations:
+          summary: "Taux de succès push notifications < 95%"
+          description: "Taux de succès actuel: {{ $value | humanizePercentage }} (attendu: >= 95%)"
+          action: "Vérifier les logs push pour identifier les causes d'échec (tokens invalides, erreurs réseau, etc.)"
+
+      # ✅ INSTRUMENTATION: Latence P95 > 5s
+      - alert: PushNotificationHighLatency
+        expr: |
+          histogram_quantile(0.95, rate(push_notification_latency_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: push_notifications
+        annotations:
+          summary: "Latence P95 push notifications > 5s"
+          description: "Latence P95 actuelle: {{ $value }}s (seuil: 5s)"
+          action: "Vérifier la connectivité avec Expo Push API et les timeouts réseau"
+
+      # ✅ INSTRUMENTATION: Circuit Breaker Ouvert
+      # Note: Cette alerte nécessite un exporter Redis ou une métrique custom
+      # Pour l'instant, on utilise une métrique indirecte via le taux d'échec
+      - alert: PushNotificationCircuitBreakerOpen
+        expr: |
+          (
+            sum(rate(push_notifications_total{status="failed"}[1m]))
+            /
+            sum(rate(push_notifications_total[1m]))
+          ) > 0.50
+          AND
+          sum(rate(push_notifications_total[1m])) > 10
+        for: 1m
+        labels:
+          severity: critical
+          component: push_notifications
+        annotations:
+          summary: "Circuit breaker push notifications probablement ouvert"
+          description: "Taux d'échec > 50% sur 1 minute avec {{ $value | humanizePercentage }} d'échecs. Le circuit breaker peut être ouvert."
+          action: "Vérifier Redis key 'push:circuit_breaker:expo' et les logs push pour confirmer"
+
+      # ✅ INSTRUMENTATION: Tokens Invalidés > 10/h
+      - alert: PushNotificationHighTokenInvalidation
+        expr: |
+          sum(rate(push_tokens_invalidated_total[1h])) > 10
+        for: 10m
+        labels:
+          severity: warning
+          component: push_notifications
+        annotations:
+          summary: "Plus de 10 tokens invalidés par heure"
+          description: "{{ $value }} tokens invalidés/heure (seuil: 10/h)"
+          action: "Vérifier les raisons d'invalidation (reason label) et la santé des devices mobiles"

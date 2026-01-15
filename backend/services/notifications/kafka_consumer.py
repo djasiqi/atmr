@@ -176,36 +176,63 @@ class KafkaConsumer:
             )
             return
 
-        if not driver.push_token:
+        # ✅ CORRECTIF #3: Utiliser DeviceToken pour support multi-device
+        from models import DeviceToken
+
+        device_tokens = DeviceToken.query.filter_by(
+            driver_id=driver_id,
+            is_active=True,
+        ).all()
+
+        if not device_tokens:
             logger.debug(
-                "[kafka_consumer] Driver %s has no push token, skipping",
+                "[kafka_consumer] Driver %s has no active push tokens, skipping",
                 driver_id,
             )
             return
 
-        # Envoyer la notification
-        result = send_push_message(
-            token=driver.push_token,
-            title=title,
-            body=body,
-            data=data,
-            driver_id=driver_id,
-            bypass_rate_limit=message.get("bypass_rate_limit", False),
-        )
-
-        if result.get("ok"):
-            logger.info(
-                "[kafka_consumer] Push sent successfully to driver %s",
-                driver_id,
+        # Envoyer à tous les devices actifs
+        success_count = 0
+        last_result: Dict[str, Any] | None = None
+        for device_token in device_tokens:
+            result = send_push_message(
+                token=device_token.token,
+                title=title,
+                body=body,
+                data=data,
+                driver_id=driver_id,
+                bypass_rate_limit=message.get("bypass_rate_limit", False),
             )
-        else:
-            logger.error(
-                "[kafka_consumer] Push failed for driver %s: %s",
+            last_result = result  # Garder le dernier résultat pour logging
+
+            if result.get("ok"):
+                success_count += 1
+            elif result.get("token_invalid"):
+                # Invalider ce token spécifique
+                from ext import db
+
+                device_token.is_active = False
+                db.session.commit()
+
+        if success_count == 0:
+            logger.warning(
+                "[kafka_consumer] Push failed for all devices of driver %s",
                 driver_id,
-                result.get("error"),
             )
             # L'exception sera catchée par le caller et envoyée en DLQ
-            raise Exception(result.get("error"))
+            error_msg = (
+                last_result.get("error", "Unknown error")
+                if last_result
+                else "No active tokens"
+            )
+            raise Exception(error_msg)
+
+        logger.info(
+            "[kafka_consumer] Push sent successfully to driver %s (%d/%d devices)",
+            driver_id,
+            success_count,
+            len(device_tokens),
+        )
 
     def _process_sms_notification(self, message: Dict[str, Any]) -> None:
         """Traite une notification SMS.

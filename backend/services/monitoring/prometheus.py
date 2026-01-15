@@ -56,8 +56,7 @@ def _get_or_create_metric(metric_class, name, *args, **kwargs):
         # La métrique existante sera utilisée depuis le registre global
         if "Duplicated timeseries" in str(e) or "already registered" in str(e):
             logger.debug(
-                "[PrometheusMetrics] Métrique %s déjà enregistrée (ignorée, "
-                "utilisation de l'existante)",
+                "[PrometheusMetrics] Métrique %s déjà enregistrée (ignorée, utilisation de l'existante)",
                 name,
             )
             return None
@@ -260,11 +259,29 @@ if PROMETHEUS_AVAILABLE and Counter and Histogram and Gauge:
         "Taux de succès push notifications (0-1)",
         ["event_type"],
     )
+
+    # ✅ INSTRUMENTATION: Tokens invalidés
+    PUSH_TOKENS_INVALIDATED = Counter(
+        "push_tokens_invalidated_total",
+        "Total tokens invalidés",
+        [
+            "reason"
+        ],  # "expired", "device_not_registered", "invalid_credentials", "logout"
+    )
+
+    # ✅ INSTRUMENTATION: Rate limit hits
+    PUSH_RATE_LIMIT_HITS = Counter(
+        "push_rate_limit_hits_total",
+        "Total notifications bloquées par rate limit",
+        ["driver_id"],
+    )
 else:
     PUSH_NOTIFICATIONS_TOTAL = None
     PUSH_NOTIFICATION_LATENCY_SECONDS = None
     PUSH_NOTIFICATION_RETRIES_TOTAL = None
     PUSH_NOTIFICATION_SUCCESS_RATE = None
+    PUSH_TOKENS_INVALIDATED = None
+    PUSH_RATE_LIMIT_HITS = None
 
 # ==================== Resync Metrics ====================
 
@@ -578,6 +595,42 @@ def track_push_notification(
                 ).inc()
     except Exception as e:
         logger.debug("[PrometheusMetrics] Error tracking push notification: %s", e)
+
+
+def track_push_token_invalidated(reason: str) -> None:
+    """Enregistre l'invalidation d'un token push.
+
+    Args:
+        reason: Raison de l'invalidation ("expired", "device_not_registered",
+            "invalid_credentials", "logout", etc.)
+    """
+    if not PROMETHEUS_AVAILABLE:
+        return
+
+    try:
+        if PUSH_TOKENS_INVALIDATED:
+            PUSH_TOKENS_INVALIDATED.labels(reason=reason).inc()
+    except Exception as e:
+        logger.debug(
+            "[PrometheusMetrics] Error tracking push token invalidation: %s", e
+        )
+
+
+def track_push_rate_limit_hit(driver_id: int | None) -> None:
+    """Enregistre un hit de rate limit pour push notifications.
+
+    Args:
+        driver_id: ID du driver (ou None si non disponible)
+    """
+    if not PROMETHEUS_AVAILABLE:
+        return
+
+    try:
+        if PUSH_RATE_LIMIT_HITS:
+            driver_id_str = str(driver_id) if driver_id is not None else "unknown"
+            PUSH_RATE_LIMIT_HITS.labels(driver_id=driver_id_str).inc()
+    except Exception as e:
+        logger.debug("[PrometheusMetrics] Error tracking push rate limit hit: %s", e)
 
 
 def update_push_notification_success_rate(event_type: str, rate: float) -> None:

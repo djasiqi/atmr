@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Protocol
+
+from ext import app_logger
 
 MIN_TOKEN_LENGTH = 10
 
@@ -66,6 +69,7 @@ class SaveDriverPushTokenUseCase:
                     status_code = 400
 
         # 2) fallback JWT (user -> driver)
+        jwt_driver_id: int | None = None
         if response is None and driver_id is None:
             if not jwt_identity:
                 response = {"error": "Token JWT invalide ou expiré."}
@@ -83,9 +87,36 @@ class SaveDriverPushTokenUseCase:
                         }
                         status_code = 404
                     else:
-                        driver_id = int(drv.id)
+                        jwt_driver_id = int(drv.id)
+                        driver_id = jwt_driver_id
+        elif response is None and driver_id is not None:
+            # ✅ CORRECTIF: Vérifier que le JWT correspond au driverId fourni
+            if not jwt_identity:
+                response = {"error": "Token JWT requis pour enregistrer un token push."}
+                status_code = 401
+            else:
+                user = self._user_repo.find_by_public_id(public_id=jwt_identity)
+                if not user:
+                    response = {"error": "Utilisateur non trouvé pour le JWT."}
+                    status_code = 404
+                else:
+                    drv = self._driver_repo.find_model_by_user_id(user_id=int(user.id))
+                    if not drv:
+                        response = {
+                            "error": "Chauffeur introuvable pour cet utilisateur."
+                        }
+                        status_code = 404
+                    else:
+                        jwt_driver_id = int(drv.id)
+                        # ✅ Vérifier que le driverId du payload correspond au JWT
+                        if jwt_driver_id != driver_id:
+                            response = {
+                                "error": "Vous ne pouvez enregistrer un token que pour votre propre compte."
+                            }
+                            status_code = 403
+                            driver_id = None  # Empêcher l'enregistrement
 
-        # 3) charger driver + setter token
+        # 3) charger driver + enregistrer token dans DeviceToken (multi-device)
         if response is None:
             if driver_id is None:
                 response = {"error": "driver_id manquant"}
@@ -97,7 +128,53 @@ class SaveDriverPushTokenUseCase:
                 status_code = 404
             else:
                 assert token is not None
+                # ✅ CORRECTIF #3: Enregistrer dans DeviceToken (support multi-device)
+                from ext import db
+                from models import DeviceToken
+
+                # Extraire device_id et platform du payload si disponibles
+                device_id = payload.get("device_id") or payload.get("deviceId")
+                platform = payload.get("platform")  # "ios" | "android"
+
+                # Chercher si ce token existe déjà pour ce driver
+                existing_token = DeviceToken.query.filter_by(
+                    driver_id=driver_id,
+                    token=token,
+                    is_active=True,
+                ).first()
+
+                if existing_token:
+                    # Token existe déjà, mettre à jour updated_at
+                    existing_token.updated_at = datetime.utcnow()
+                    if device_id:
+                        existing_token.device_id = device_id
+                    if platform:
+                        existing_token.platform = platform
+                    app_logger.info(
+                        "[push-token] Token existant mis à jour pour driver %s",
+                        driver_id,
+                    )
+                else:
+                    # Nouveau token, créer un DeviceToken
+                    device_token = DeviceToken(
+                        driver_id=driver_id,
+                        token=token,
+                        device_id=device_id,
+                        platform=platform,
+                        is_active=True,
+                    )
+                    db.session.add(device_token)
+                    app_logger.info(
+                        "[push-token] Nouveau token enregistré pour driver %s (device: %s, platform: %s)",
+                        driver_id,
+                        device_id,
+                        platform,
+                    )
+
+                # ✅ CONSERVER driver.push_token pour rétrocompatibilité (legacy)
+                # Les anciens codes qui utilisent driver.push_token continueront de fonctionner
                 driver.push_token = token
+
                 response = {
                     "message": "✅ Push token enregistré avec succès.",
                     "driver_id": driver_id,

@@ -29,6 +29,7 @@ from .booking_transfer import BookingTransfer
 from .client import Client
 from .company import Company
 from .delay_event import DelayEvent
+from .device_token import DeviceToken
 from .dispatch import (
     Assignment,
     DailyStats,
@@ -120,6 +121,7 @@ __all__ = [
     "CompanyPlanningSettings",
     "DailyStats",
     "DelayEvent",  # ✅ 3.5.1: Historique événements retards
+    "DeviceToken",  # ✅ Support multi-device pour push notifications
     "DispatchMetrics",
     "DispatchMode",
     "DispatchRun",

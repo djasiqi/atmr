@@ -8,7 +8,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Tuple, cast
 
-import requests  # pyright: ignore[reportMissingModuleSource]
+import requests
 from cachetools import LRUCache  # pyright: ignore[reportMissingModuleSource]
 
 from ext import app_logger
