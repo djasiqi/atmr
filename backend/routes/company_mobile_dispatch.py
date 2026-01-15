@@ -666,12 +666,15 @@ def _build_ride_conflicts(booking: Booking) -> List[Dict[str, Any]]:
     booking_driver_id = getattr(booking, "driver_id", None)
     if booking_driver_id is None or not booking.scheduled_time:
         return []
-    has_conflict, message, conflicting_booking = check_existing_assignment_conflict(
+    # ✅ Unpacking robuste : compatible si la fonction renvoie 2, 3 ou plus de valeurs
+    result = check_existing_assignment_conflict(
         driver_id=int(booking_driver_id),
         scheduled_time=booking.scheduled_time,
         booking_id=int(booking.id),
         tolerance_minutes=30,
     )
+    has_conflict = result[0] if result else False
+    message = result[1] if len(result) > 1 else None
     if not has_conflict:
         return []
     return [
