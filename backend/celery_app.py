@@ -89,6 +89,7 @@ celery: Celery = Celery(
         "tasks.dlq_cleanup_task",  # ✅ DLQ: Cleanup automatique DLQ
         "tasks.archive_tasks",  # ✅ 3.5.2: Archivage positions automatique
         "tasks.notification_tasks",  # ✅ Notifications push avec fallback SMS/Email
+        "tasks.event_tasks",  # ✅ CRITIQUE: Gestion des événements domain (DriverNewBookingEvent, etc.)
     ],
 )
 
