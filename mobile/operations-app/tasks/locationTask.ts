@@ -56,7 +56,9 @@ async function initSocket() {
     const { baseURL } = require("../services/api");
     
     // Flask-SocketIO vit à la racine (/socket.io). On enlève le suffixe /api ou /api/vX.
-    const SOCKET_ORIGIN = baseURL.replace(/\/api(?:\/v\d+)?$/, "");
+    // ✅ Normaliser : supprimer slash final pour éviter //socket.io
+    let SOCKET_ORIGIN = baseURL.replace(/\/api(?:\/v\d+)?$/, "");
+    SOCKET_ORIGIN = SOCKET_ORIGIN.replace(/\/+$/, "");
     const IS_SECURE = SOCKET_ORIGIN.startsWith("https://");
     const IS_DEV = __DEV__;
 

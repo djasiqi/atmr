@@ -97,14 +97,16 @@ const getSocketOrigin = (): string => {
       );
       throw new Error("EXPO_PUBLIC_SOCKET_URL invalide en production");
     }
-    return socketUrl;
+    // ✅ Normaliser : supprimer slash final pour éviter //socket.io
+    return socketUrl.replace(/\/+$/, "");
   }
 
   // PRIORITÉ 2: Depuis app.config.js extra.socketUrl
   const expoExtra = Constants.expoConfig?.extra || {};
   const configSocketUrl = expoExtra.socketUrl;
   if (configSocketUrl) {
-    return configSocketUrl;
+    // ✅ Normaliser : supprimer slash final pour éviter //socket.io
+    return configSocketUrl.replace(/\/+$/, "");
   }
 
   // PRIORITÉ 3: Fallback vers baseURL (plus robuste avec URL API)
@@ -116,11 +118,14 @@ const getSocketOrigin = (): string => {
     if (__DEV__) {
       console.log(`[Socket] SOCKET_ORIGIN=${socketOrigin} (from baseURL=${baseURL})`);
     }
-    return socketOrigin;
+    // ✅ Normaliser : supprimer slash final (déjà normalisé mais on s'assure)
+    return socketOrigin.replace(/\/+$/, "");
   } catch (e) {
     // Fallback: regex si URL malformée
     console.warn(`[Socket] Erreur parsing baseURL=${baseURL}, fallback regex:`, e);
-    const socketOrigin = baseURL.replace(/\/api(?:\/v\d+)?$/, "");
+    let socketOrigin = baseURL.replace(/\/api(?:\/v\d+)?$/, "");
+    // ✅ Normaliser : supprimer slash final pour éviter //socket.io
+    socketOrigin = socketOrigin.replace(/\/+$/, "");
     if (__DEV__) {
       console.log(`[Socket] SOCKET_ORIGIN=${socketOrigin} (from baseURL=${baseURL}, regex fallback)`);
     }
@@ -147,13 +152,17 @@ const getSocketOrigin = (): string => {
   // Utiliser baseURL comme dernier recours au lieu de throw
   try {
     const apiUrl = new URL(baseURL);
-    return `${apiUrl.protocol}//${apiUrl.host}`;
+    const socketOrigin = `${apiUrl.protocol}//${apiUrl.host}`;
+    // ✅ Normaliser : supprimer slash final pour éviter //socket.io
+    return socketOrigin.replace(/\/+$/, "");
   } catch {
     throw new Error("EXPO_PUBLIC_SOCKET_URL est requis en production");
   }
 };
 
 let SOCKET_ORIGIN = getSocketOrigin();
+// ✅ Normalisation finale : s'assurer qu'il n'y a pas de slash final
+SOCKET_ORIGIN = SOCKET_ORIGIN.replace(/\/+$/, "");
 
 // ✅ Détection Android emulator
 const isAndroidEmulator = Platform.OS === "android" && 
