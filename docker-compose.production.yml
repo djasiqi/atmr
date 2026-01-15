@@ -92,6 +92,29 @@ services:
           memory: 512M # ✅ AUDIT 100 USERS: Augmenté de 256M à 512M
           cpus: "0.25"
 
+  # Service OSRM pour le routage
+  osrm:
+    image: osrm/osrm-backend:latest
+    container_name: atmr-osrm
+    restart: unless-stopped
+    volumes:
+      - ./osrm/data:/data
+    # Note: Pas de healthcheck natif (image minimale sans wget/curl)
+    # OSRM est testé via fallback haversine côté backend si indisponible
+    command: osrm-routed --algorithm mld /data/switzerland-latest.osrm
+    expose:
+      - "5000"
+    networks:
+      - atmr-network
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 1G
+
   # Backend API (Production)
   backend:
     image: ${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}
@@ -226,6 +249,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      osrm:
+        condition: service_started
     healthcheck:
       test:
         [

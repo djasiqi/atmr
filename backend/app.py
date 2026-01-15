@@ -546,11 +546,25 @@ def create_app(config_name: str | None = None):
     else:
         cors_origins_str = os.getenv("SOCKETIO_CORS_ORIGINS", default="")
         if cors_origins_str:
-            cors_origins = [
-                origin.strip()
-                for origin in cors_origins_str.split(",")
-                if origin.strip()
-            ]
+            cors_origins = []
+            for origin_raw in cors_origins_str.split(","):
+                origin_normalized = origin_raw.strip()
+                if origin_normalized:
+                    # ✅ Normaliser les origines HTTPS : supprimer :443 si présent
+                    # Car HTTPS n'affiche normalement pas le port
+                    if (
+                        origin_normalized.startswith("https://")
+                        and ":443" in origin_normalized
+                    ):
+                        origin_normalized = origin_normalized.replace(":443", "")
+                    cors_origins.append(origin_normalized)
+                    # ✅ Ajouter aussi la variante avec :443 pour accepter les deux formats
+                    # Certains clients envoient explicitement le port 443
+                    if (
+                        origin_normalized.startswith("https://")
+                        and ":443" not in origin_normalized
+                    ):
+                        cors_origins.append(origin_normalized + ":443")
             # ✅ Logger les origines autorisées pour debug
             app.logger.info(
                 "[Socket.IO] CORS configuré avec %d origine(s): %s",

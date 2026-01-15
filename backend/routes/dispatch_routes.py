@@ -2079,7 +2079,7 @@ def _get_driver_previous_booking(
     Returns:
         Tuple (Booking, Assignment) de la course précédente, ou (None, None) si aucune
     """
-    from shared.time_utils import _booking_time_expr
+    from routes.dispatch.dispatch_helpers import _booking_time_expr
 
     try:
         current_scheduled_time = getattr(current_booking, "scheduled_time", None)
