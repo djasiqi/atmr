@@ -807,9 +807,15 @@ def init_chat_socket(socketio: SocketIO):
                 )
                 emit(
                     "unauthorized",
-                    {"error": "Token expiré. Veuillez vous reconnecter."},
+                    {
+                        "error": "Token expiré. Veuillez vous reconnecter.",
+                        "reason": "token_expired",
+                        "hint": "Utilisez refresh-token pour obtenir un nouveau token avant de reconnecter.",
+                    },
                 )
                 ws_metrics.on_error("token_expired")
+                # ✅ Retourner False pour refuser la connexion proprement
+                # Note: L'upgrade WebSocket a déjà eu lieu, mais Flask-SocketIO fermera la connexion
                 return False
             except jwt_exceptions.InvalidAudienceError:
                 logger.info(

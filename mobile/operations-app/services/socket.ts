@@ -781,12 +781,93 @@ export async function connectSocket(
         reject(err);
       });
 
-      socket.on("unauthorized", (data: any) => {
+      socket.on("unauthorized", async (data: any) => {
+        const errorMsg = data?.error || String(data);
+        const isTokenExpired = errorMsg.includes("Token expiré") || 
+                              errorMsg.includes("expiré") ||
+                              errorMsg.includes("expired");
+        
         console.error(JSON.stringify({
           event: "socket_unauthorized",
-          error: data?.error || String(data),
+          error: errorMsg,
+          is_token_expired: isTokenExpired,
           timestamp: new Date().toISOString()
         }));
+        
+        // ✅ Si token expiré, arrêter reconnexion auto et déclencher refresh
+        if (isTokenExpired && socket && socket.io) {
+          console.warn(JSON.stringify({
+            event: "socket_token_expired_detected",
+            action: "disabling_auto_reconnect_and_refreshing_token",
+            timestamp: new Date().toISOString()
+          }));
+          
+          // Désactiver reconnexion automatique pour éviter boucle
+          (socket.io.opts as any).reconnection = false;
+          
+          // Déconnecter proprement
+          try {
+            socket.disconnect();
+          } catch (e) {
+            // Ignorer erreurs de déconnexion
+          }
+          
+          // Essayer de rafraîchir le token
+          try {
+            const { refreshAccessToken } = await import("./api");
+            const { secureStorage } = await import("./storage");
+            
+            const refreshToken = await secureStorage.getRefreshToken();
+            if (refreshToken) {
+              console.log(JSON.stringify({
+                event: "socket_refreshing_token",
+                timestamp: new Date().toISOString()
+              }));
+              
+              const refreshResponse = await refreshAccessToken(refreshToken);
+              
+              if (refreshResponse.access_token) {
+                // Sauvegarder le nouveau token
+                await secureStorage.setAccessToken(refreshResponse.access_token);
+                if (refreshResponse.refresh_token) {
+                  await secureStorage.setRefreshToken(refreshResponse.refresh_token);
+                }
+                
+                console.log(JSON.stringify({
+                  event: "socket_token_refreshed_successfully",
+                  action: "will_reconnect_manually",
+                  timestamp: new Date().toISOString()
+                }));
+                
+                // Réactiver reconnexion et reconnecter manuellement après un court délai
+                setTimeout(() => {
+                  if (socket && socket.io) {
+                    (socket.io.opts as any).reconnection = true;
+                    socket.connect();
+                  }
+                }, 1000);
+              } else {
+                console.error(JSON.stringify({
+                  event: "socket_token_refresh_failed_no_token",
+                  timestamp: new Date().toISOString()
+                }));
+              }
+            } else {
+              console.error(JSON.stringify({
+                event: "socket_token_refresh_failed_no_refresh_token",
+                timestamp: new Date().toISOString()
+              }));
+            }
+          } catch (refreshError: any) {
+            console.error(JSON.stringify({
+              event: "socket_token_refresh_error",
+              error: refreshError?.message || String(refreshError),
+              timestamp: new Date().toISOString()
+            }));
+            // En cas d'erreur de refresh, ne pas reconnecter automatiquement
+            // L'utilisateur devra se reconnecter manuellement
+          }
+        }
       });
 
       socket.on("error", (e: any) => {
