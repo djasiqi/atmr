@@ -17,9 +17,9 @@ logger = logging.getLogger(__name__)
 # Limites par event (event_name -> (limit, window_seconds))
 RATE_LIMITS = {
     "connect": (
-        20,
+        50,
         60,
-    ),  # ✅ 20 req/min par IP (augmenté de 5 à 20 pour supporter NAT/multi-drivers)
+    ),  # ✅ 50 req/min par IP (augmenté de 20 à 50 pour supporter reconnexions multiples lors de problèmes réseau)
     "driver_location": (1, 1),  # 1 req/s par driver
     "driver_location_batch": (1, 5),  # 1 req/5s par driver
     "team_chat_message": (10, 60),  # 10 req/min par user

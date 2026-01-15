@@ -745,11 +745,38 @@ export async function connectSocket(
       });
 
       socket.on("connect_error", (err: any) => {
+        const errorMsg = err?.message || String(err);
+        const isRateLimit = errorMsg.includes("rate limit") || 
+                           errorMsg.includes("Trop de tentatives") ||
+                           errorMsg.includes("retry_after");
+        
         console.error(JSON.stringify({
           event: "socket_connect_error",
-          error: err?.message || String(err),
+          error: errorMsg,
+          is_rate_limit: isRateLimit,
           timestamp: new Date().toISOString()
         }));
+        
+        // ✅ Si rate limit, désactiver reconnexion automatique pour éviter boucle
+        if (isRateLimit && socket && socket.io) {
+          console.warn(JSON.stringify({
+            event: "socket_rate_limit_detected",
+            action: "disabling_auto_reconnect",
+            timestamp: new Date().toISOString()
+          }));
+          (socket.io.opts as any).reconnection = false;
+          // Réactiver après 30 secondes (le retry_after du serveur)
+          setTimeout(() => {
+            if (socket && socket.io) {
+              (socket.io.opts as any).reconnection = true;
+              console.log(JSON.stringify({
+                event: "socket_reconnect_reenabled",
+                timestamp: new Date().toISOString()
+              }));
+            }
+          }, 30000);
+        }
+        
         connectPromise = null;
         reject(err);
       });
@@ -763,11 +790,43 @@ export async function connectSocket(
       });
 
       socket.on("error", (e: any) => {
+        const errorMsg = e?.message || String(e);
+        const errorData = e?.data || {};
+        const isRateLimit = errorMsg.includes("rate limit") || 
+                           errorMsg.includes("Trop de tentatives") ||
+                           errorData?.error?.includes("Trop de tentatives") ||
+                           errorData?.retry_after !== undefined;
+        
         console.error(JSON.stringify({
           event: "socket_error",
-          error: e?.message || String(e),
+          error: errorMsg,
+          error_data: errorData,
+          is_rate_limit: isRateLimit,
+          retry_after: errorData?.retry_after,
           timestamp: new Date().toISOString()
         }));
+        
+        // ✅ Si rate limit, désactiver reconnexion automatique temporairement
+        if (isRateLimit && socket && socket.io) {
+          const retryAfter = errorData?.retry_after || 30;
+          console.warn(JSON.stringify({
+            event: "socket_rate_limit_error_detected",
+            action: "disabling_auto_reconnect",
+            retry_after: retryAfter,
+            timestamp: new Date().toISOString()
+          }));
+          (socket.io.opts as any).reconnection = false;
+          // Réactiver après retry_after + marge de sécurité
+          setTimeout(() => {
+            if (socket && socket.io) {
+              (socket.io.opts as any).reconnection = true;
+              console.log(JSON.stringify({
+                event: "socket_reconnect_reenabled_after_rate_limit",
+                timestamp: new Date().toISOString()
+              }));
+            }
+          }, (retryAfter + 5) * 1000); // +5s marge de sécurité
+        }
       });
 
       socket.on("connected", (data: any) => {
