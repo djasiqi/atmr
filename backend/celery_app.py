@@ -90,6 +90,9 @@ celery: Celery = Celery(
         "tasks.archive_tasks",  # ✅ 3.5.2: Archivage positions automatique
         "tasks.notification_tasks",  # ✅ Notifications push avec fallback SMS/Email
         "tasks.event_tasks",  # ✅ CRITIQUE: Gestion des événements domain (DriverNewBookingEvent, etc.)
+        "tasks.geocoding_tasks",  # ✅ P1: Géocodage asynchrone des adresses de bookings
+        "tasks.analytics_tasks",  # ✅ Analytics et rapports automatiques
+        "tasks.osrm_precompute_tasks",  # ✅ P1: Pré-calcul matrices OSRM pour zones fréquentes
     ],
 )
 
