@@ -299,11 +299,17 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
       // Construire l'adresse de facturation (même que domicile pour l'instant)
       const billingAddressComplete = addressComplete;
 
+      // ✅ Validation explicite de gender avant envoi
+      if (!gender || (gender !== 'male' && gender !== 'female')) {
+        setError("La civilité (Madame/Monsieur) est obligatoire");
+        return;
+      }
+
       const payload: CreateClientPayload = {
         client_type: "PRIVATE",
         first_name: firstName.trim(),
         last_name: lastName.trim(),
-        // ✅ Civilité obligatoire
+        // ✅ Civilité obligatoire - validation stricte
         gender: gender as 'male' | 'female',
         phone: phone.trim() || undefined,
         // ✅ Numéro AVS optionnel
@@ -331,7 +337,9 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
         billing_lon: domicileSuggestion?.lon || null,
       };
 
-      console.log("[ClientCreateModal] Payload avant envoi:", JSON.stringify(payload, null, 2));
+      // ✅ Log détaillé pour diagnostic (toujours activé)
+      console.log("[ClientCreateModal] CREATE CLIENT PAYLOAD", JSON.stringify(payload, null, 2));
+      console.log("[ClientCreateModal] Gender value:", gender, "Type:", typeof gender);
       console.log("[ClientCreateModal] Adresse parsée:", {
         fullAddress,
         domicileStreet,

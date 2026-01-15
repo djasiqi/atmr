@@ -716,8 +716,17 @@ export const createClient = async (
     }
   }
 
-  console.log("[createClient] Payload envoyé:", JSON.stringify(fullPayload, null, 2));
+  // ✅ Log détaillé pour diagnostic (toujours activé)
+  console.log("[createClient] CREATE CLIENT PAYLOAD", JSON.stringify(fullPayload, null, 2));
+  console.log("[createClient] Gender dans payload:", fullPayload.gender, "Type:", typeof fullPayload.gender);
   console.log("[createClient] URL:", `${standardApiURL}/companies/me/clients`);
+  
+  // ✅ Validation finale avant envoi (défense en profondeur)
+  if (!fullPayload.gender || (fullPayload.gender !== 'male' && fullPayload.gender !== 'female')) {
+    const errorMsg = `Gender invalide: ${fullPayload.gender}. Attendu: 'male' ou 'female'`;
+    console.error("[createClient] ❌", errorMsg);
+    throw new Error(errorMsg);
+  }
 
   // 🔄 Retry avec backoff pour résilience réseau (prudent : maxRetries=1 pour éviter doublons)
   return retryWithBackoff(

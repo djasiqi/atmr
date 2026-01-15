@@ -3522,6 +3522,14 @@ class CompanyClients(Resource):
 
         data = request.get_json() or {}
 
+        # ✅ Log pour diagnostic (sans données sensibles)
+        logger.info(
+            "[CreateClient] payload keys=%s gender=%r civility=%r",
+            list(data.keys()),
+            data.get("gender"),
+            data.get("civility"),
+        )
+
         # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
         from marshmallow import (  # pyright: ignore[reportMissingImports]
             ValidationError,
@@ -3533,6 +3541,13 @@ class CompanyClients(Resource):
         try:
             validated_data = validate_request(ClientCreateSchema(), data, strict=False)
         except ValidationError as e:
+            # ✅ Log détaillé des erreurs de validation
+            logger.warning(
+                "[CreateClient] Validation error: %s, payload keys=%s, gender=%r",
+                str(e.messages),
+                list(data.keys()),
+                data.get("gender"),
+            )
             return handle_validation_error(e)
 
         from application.companies.clients.create_company_client import (
