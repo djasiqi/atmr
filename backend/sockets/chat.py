@@ -9,7 +9,7 @@ et appelées par le framework.
 """
 
 # ruff: noqa: I001
-import json  # pyright: ignore[reportUnusedImport]
+import json
 import logging
 import os
 import traceback

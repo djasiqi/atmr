@@ -666,7 +666,7 @@ def _build_ride_conflicts(booking: Booking) -> List[Dict[str, Any]]:
     booking_driver_id = getattr(booking, "driver_id", None)
     if booking_driver_id is None or not booking.scheduled_time:
         return []
-    has_conflict, message = check_existing_assignment_conflict(
+    has_conflict, message, conflicting_booking = check_existing_assignment_conflict(
         driver_id=int(booking_driver_id),
         scheduled_time=booking.scheduled_time,
         booking_id=int(booking.id),
