@@ -9,7 +9,7 @@ et appelées par le framework.
 """
 
 # ruff: noqa: I001
-import json
+import json  # pyright: ignore[reportUnusedImport]
 import logging
 import os
 import traceback
@@ -418,8 +418,7 @@ def init_chat_socket(socketio: SocketIO):
             debug_log_path = Path(".cursor/debug.log")
             debug_log_path.parent.mkdir(parents=True, exist_ok=True)
             with debug_log_path.open("a") as f:
-                import json
-
+                # json est déjà importé en haut du fichier
                 f.write(
                     json.dumps(
                         {
@@ -444,8 +443,7 @@ def init_chat_socket(socketio: SocketIO):
             try:
                 debug_log_path = Path(".cursor/debug.log")
                 with debug_log_path.open("a") as f:
-                    import json
-
+                    # json est déjà importé en haut du fichier
                     f.write(
                         json.dumps(
                             {
