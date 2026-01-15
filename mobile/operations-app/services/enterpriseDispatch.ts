@@ -642,6 +642,8 @@ export const createClient = async (
     email,
     first_name: payload.first_name,
     last_name: payload.last_name,
+    // ✅ Gender obligatoire - toujours inclus même si validation frontend a échoué
+    gender: payload.gender,
     phone: payload.phone || undefined,
     birth_date: payload.birth_date || undefined,
     is_institution: payload.is_institution || false,
@@ -657,6 +659,10 @@ export const createClient = async (
     contact_email: payload.contact_email || undefined,
     contact_phone: payload.contact_phone || undefined,
     preferential_rate: payload.preferential_rate || undefined,
+    // ✅ Numéro AVS optionnel
+    avs_number: payload.avs_number || undefined,
+    // ✅ Établissement de résidence
+    residence_facility: payload.residence_facility || undefined,
   };
 
   // Ajouter les coordonnées GPS seulement si elles sont définies (pas null)
@@ -674,7 +680,12 @@ export const createClient = async (
   }
 
   // Nettoyer le payload : supprimer les valeurs null/undefined/vides
+  // ✅ EXCEPTION: Ne jamais supprimer gender (obligatoire)
   Object.keys(fullPayload).forEach((key) => {
+    if (key === "gender") {
+      // ✅ Gender obligatoire - ne jamais supprimer
+      return;
+    }
     if (
       fullPayload[key] === null ||
       fullPayload[key] === undefined ||
