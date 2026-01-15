@@ -5,7 +5,7 @@ Usage:
     python scripts/generate_database_url.py USER PASSWORD HOST PORT DB
 
 Exemple:
-    python scripts/generate_database_url.py atmr "Palidhje@37_46!!" postgres 5432 atmr
+    python scripts/generate_database_url.py atmr "VOTRE_MOT_DE_PASSE" postgres 5432 atmr
 """
 
 import sys
