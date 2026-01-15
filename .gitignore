@@ -128,6 +128,7 @@ patches/
 *.swp
 *~
 .tmp/
+tmp/
 backend/docs/openapi.baseline.json
 
 # ===== Tests - Artifacts uniquement (garder les fichiers de tests) =====
