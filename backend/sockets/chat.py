@@ -808,8 +808,13 @@ def init_chat_socket(socketio: SocketIO):
                 if len(_TOKEN_EXPIRED_TRACKING) > _TOKEN_EXPIRED_TRACKING_MAX_SIZE:
                     # Nettoyer les entrées plus anciennes que 5 minutes
                     cutoff_time = now - timedelta(minutes=5)
-                    _TOKEN_EXPIRED_TRACKING.clear()
-                    # Note: On nettoie tout si trop d'entrées pour éviter fuite mémoire
+                    ips_to_remove = [
+                        ip
+                        for ip, (last_time, _) in _TOKEN_EXPIRED_TRACKING.items()
+                        if last_time is not None and last_time < cutoff_time
+                    ]
+                    for ip in ips_to_remove:
+                        _TOKEN_EXPIRED_TRACKING.pop(ip, None)
 
                 # #region agent log (uniquement si should_log)
                 if should_log:
