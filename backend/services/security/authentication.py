@@ -122,34 +122,67 @@ class RefreshTokenService:
 
         Returns:
             True si le token est valide, False sinon
+            
+        Note:
+            Si Redis est indisponible, cette fonction retourne True par défaut
+            pour permettre la validation JWT standard (fallback gracieux).
+            Cela évite de déconnecter tous les utilisateurs lors de problèmes Redis.
         """
         token_hash = self._hash_token(token)
 
-        # 1. Vérifier si le token est révoqué
-        if self.redis_client.exists(f"{self.revoked_tokens_prefix}{token_hash}"):
-            logger.warning("Token révoqué utilisé: user_id=%s", user_id)
-            return False
+        try:
+            # 1. Vérifier si le token est révoqué
+            if self.redis_client.exists(f"{self.revoked_tokens_prefix}{token_hash}"):
+                logger.warning("Token révoqué utilisé: user_id=%s", user_id)
+                return False
 
-        # 2. Vérifier si le token est dans les tokens actifs
-        stored_user_id = self.redis_client.get(
-            f"{self.active_tokens_prefix}{token_hash}"
-        )
+            # 2. Vérifier si le token est dans les tokens actifs
+            stored_user_id = self.redis_client.get(
+                f"{self.active_tokens_prefix}{token_hash}"
+            )
 
-        # Si le token n'est pas dans les actifs, il n'est pas valide
-        if not stored_user_id:
-            return False
+            # ✅ FALLBACK: Si Redis est indisponible ou données perdues,
+            # permettre la validation JWT standard (ne pas bloquer l'utilisateur)
+            if not stored_user_id:
+                # Si Redis est disponible mais le token n'est pas dans les actifs,
+                # vérifier si c'est une erreur Redis ou si le token n'existe vraiment pas
+                try:
+                    # Tester la connexion Redis avec un ping
+                    self.redis_client.ping()
+                    # Redis est disponible mais token pas dans actifs → invalide
+                    logger.debug(
+                        "Token non trouvé dans Redis actifs (Redis disponible): user_id=%s",
+                        user_id,
+                    )
+                    return False
+                except Exception:
+                    # Redis indisponible → fallback gracieux
+                    logger.warning(
+                        "Redis indisponible lors validation token. Fallback gracieux activé (validation JWT uniquement): user_id=%s",
+                        user_id,
+                    )
+                    return True  # Permettre validation JWT standard
 
-        # 3. Si user_id fourni, vérifier si le token appartient à l'utilisateur
-        if user_id is not None and int(stored_user_id) != user_id:
+            # 3. Si user_id fourni, vérifier si le token appartient à l'utilisateur
+            if user_id is not None and int(stored_user_id) != user_id:
+                logger.warning(
+                    "Token utilisé par mauvais utilisateur: token_user_id=%s, "
+                    "requested_user_id=%s",
+                    stored_user_id,
+                    user_id,
+                )
+                return False
+
+            return True
+        except Exception as redis_error:
+            # ✅ FALLBACK GRACIEUX: Si Redis échoue, permettre validation JWT standard
+            # Cela évite de déconnecter tous les utilisateurs lors de problèmes Redis
             logger.warning(
-                "Token utilisé par mauvais utilisateur: token_user_id=%s, "
-                "requested_user_id=%s",
-                stored_user_id,
+                "Erreur Redis lors validation token. Fallback gracieux activé (validation JWT uniquement): %s, user_id=%s",
+                str(redis_error),
                 user_id,
             )
-            return False
-
-        return True
+            return True  # Permettre validation JWT standard
 
     def revoke_token(self, token: str) -> None:
         """Révoque un token (le marque comme invalide).
