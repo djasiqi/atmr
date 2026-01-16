@@ -166,8 +166,10 @@ class RefreshTokenService:
             # 3. Si user_id fourni, vérifier si le token appartient à l'utilisateur
             if user_id is not None and int(stored_user_id) != user_id:
                 logger.warning(
-                    "Token utilisé par mauvais utilisateur: token_user_id=%s, "
-                    "requested_user_id=%s",
+                    (
+                        "Token utilisé par mauvais utilisateur: token_user_id=%s, "
+                        "requested_user_id=%s"
+                    ),
                     stored_user_id,
                     user_id,
                 )
