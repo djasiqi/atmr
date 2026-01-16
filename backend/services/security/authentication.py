@@ -38,7 +38,7 @@ import hashlib
 import logging
 
 import redis  # pyright: ignore[reportMissingImports]
-from flask import current_app  # pyright: ignore[reportMissingImports]
+from flask import current_app
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +54,7 @@ class AccessTokenService:
 
     def __init__(self) -> None:
         """Initialise le service avec une connexion Redis."""
+        super().__init__()
         redis_url = current_app.config.get("REDIS_URL", "redis://127.0.0.1:6379/0")
         self.redis_client = redis.from_url(redis_url, decode_responses=True)
         self.blacklist_prefix = "blacklisted_access_token:"
@@ -108,6 +109,7 @@ class RefreshTokenService:
 
     def __init__(self) -> None:
         """Initialise le service avec une connexion Redis."""
+        super().__init__()
         redis_url = current_app.config.get("REDIS_URL", "redis://127.0.0.1:6379/0")
         self.redis_client = redis.from_url(redis_url, decode_responses=True)
         self.revoked_tokens_prefix = "revoked_refresh_token:"
