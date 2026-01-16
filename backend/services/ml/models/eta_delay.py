@@ -263,10 +263,10 @@ class ETADelayModel:
                     # ✅ Utilisation du repository pour découpler de SQLAlchemy
                     booking_repo = BookingRepository()
                     booking_dtos = booking_repo.find_recent_completed_by_driver(
-                    driver_id, cutoff_date, limit=50
-                )
-                # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs pour
-                # la compatibilité
+                        driver_id, cutoff_date, limit=50
+                    )
+                    # Récupérer les modèles SQLAlchemy depuis les IDs des DTOs pour
+                    # la compatibilité
                     booking_ids = [dto.id for dto in booking_dtos]
                     recent_bookings = (
                         Booking.query.filter(Booking.id.in_(booking_ids))
@@ -601,7 +601,7 @@ class ETADelayModel:
         if not XGBOOST_AVAILABLE and not LIGHTGBM_AVAILABLE:
             raise ImportError(
                 "XGBoost ou LightGBM requis. "
-                "Installer avec: pip install xgboost lightgbm"
+                + "Installer avec: pip install xgboost lightgbm"
             )
 
         if not training_data:
@@ -772,7 +772,16 @@ class ETADelayModel:
             raise FileNotFoundError(f"Modèle introuvable: {self.model_path}")
 
         try:
-            with Path(self.model_path).open("rb") as f:
+            # ✅ Supprimer temporairement les warnings sklearn version lors du chargement
+            with (
+                Path(self.model_path).open("rb") as f,
+                warnings.catch_warnings(),
+            ):
+                warnings.filterwarnings(
+                    "ignore",
+                    message=".*Trying to unpickle estimator.*",
+                    category=UserWarning,
+                )
                 # Utilisation de joblib (recommandé pour scikit-learn)
                 # au lieu de pickle direct
                 # joblib utilise pickle en interne mais avec des optimisations
@@ -780,14 +789,7 @@ class ETADelayModel:
                 # nosec B301: Modèles internes uniquement,
                 # provenant de sources de confiance
                 # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
-                # ✅ Supprimer temporairement les warnings sklearn version lors du chargement
-                with warnings.catch_warnings():
-                    warnings.filterwarnings(
-                        "ignore",
-                        message=".*Trying to unpickle estimator.*",
-                        category=UserWarning,
-                    )
-                    model_data = joblib.load(f)
+                model_data = joblib.load(f)
 
             self.regression_model = model_data["regression_model"]
             self.classification_model = model_data.get("classification_model", None)

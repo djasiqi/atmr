@@ -28,6 +28,7 @@ RATE_LIMITS = {
 }
 
 # Cache mémoire fallback (si Redis indisponible)
+# pyright: ignore[reportCallIssue] - defaultdict(list) est correct, basedpyright a un faux positif
 _memory_cache: dict[str, list[datetime]] = defaultdict(list)
 
 

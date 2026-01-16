@@ -614,7 +614,16 @@ class DelayMLPredictor:
             with contextlib.suppress(OSError, PermissionError):
                 model_path_obj.parent.chmod(0o755)
 
-            with model_path_obj.open("rb") as f:
+            # ✅ Supprimer temporairement les warnings sklearn version lors du chargement
+            with (
+                model_path_obj.open("rb") as f,
+                warnings.catch_warnings(),
+            ):
+                warnings.filterwarnings(
+                    "ignore",
+                    message=".*Trying to unpickle estimator.*",
+                    category=UserWarning,
+                )
                 # Utilisation de joblib (recommandé pour scikit-learn)
                 # au lieu de pickle direct
                 # joblib utilise pickle en interne mais avec des optimisations
@@ -622,14 +631,7 @@ class DelayMLPredictor:
                 # nosec B301: Modèles internes uniquement,
                 # provenant de sources de confiance
                 # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
-                # ✅ Supprimer temporairement les warnings sklearn version lors du chargement
-                with warnings.catch_warnings():
-                    warnings.filterwarnings(
-                        "ignore",
-                        message=".*Trying to unpickle estimator.*",
-                        category=UserWarning,
-                    )
-                    model_data = joblib.load(f)
+                model_data = joblib.load(f)
 
             self.model = model_data["model"]
             self.feature_names = model_data["feature_names"]
