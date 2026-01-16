@@ -53,8 +53,8 @@ logger = logging.getLogger("socketio")
 _SID_INDEX: Dict[str, Dict[str, Any]] = {}
 
 # ✅ Tracking des erreurs token_expired par IP pour réduire le bruit dans les logs
-# Format: {ip: (last_log_time, count)}
-_TOKEN_EXPIRED_TRACKING: Dict[str, tuple[datetime, int]] = {}
+# Format: {ip: (last_log_time | None, count)}
+_TOKEN_EXPIRED_TRACKING: Dict[str, tuple[datetime | None, int]] = {}
 _TOKEN_EXPIRED_LOG_INTERVAL = 60  # Logger au maximum toutes les 60 secondes par IP
 _TOKEN_EXPIRED_MAX_COUNT = 5  # Après 5 erreurs, logger seulement toutes les 60s
 _TOKEN_EXPIRED_TRACKING_MAX_SIZE = 1000  # Taille max du dictionnaire avant nettoyage
@@ -806,10 +806,10 @@ def init_chat_socket(socketio: SocketIO):
 
                 # Nettoyer les entrées anciennes (> 5 minutes) pour éviter fuite mémoire
                 if len(_TOKEN_EXPIRED_TRACKING) > _TOKEN_EXPIRED_TRACKING_MAX_SIZE:
-                    cutoff_time = now - timedelta(minutes=5)
                     # Nettoyer les entrées plus anciennes que 5 minutes
+                    cutoff_time = now - timedelta(minutes=5)
                     _TOKEN_EXPIRED_TRACKING.clear()
-                    # Note: On nettoie tout si trop d'entrées, sinon on garde les récentes
+                    # Note: On nettoie tout si trop d'entrées pour éviter fuite mémoire
 
                 # #region agent log (uniquement si should_log)
                 if should_log:
