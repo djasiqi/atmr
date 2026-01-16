@@ -101,7 +101,7 @@ services:
       - ./osrm/data:/data
     # Note: Pas de healthcheck natif (image minimale sans wget/curl)
     # OSRM est testé via fallback haversine côté backend si indisponible
-    command: osrm-routed --algorithm mld /data/switzerland-latest.osrm
+    command: osrm-routed --algorithm mld /data/map.osrm
     expose:
       - "5000"
     networks:
