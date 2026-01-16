@@ -781,7 +781,6 @@ class ETADelayModel:
                 # provenant de sources de confiance
                 # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
                 # ✅ Supprimer temporairement les warnings sklearn version lors du chargement
-                import warnings
                 with warnings.catch_warnings():
                     warnings.filterwarnings(
                         "ignore",
