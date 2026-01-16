@@ -439,17 +439,36 @@ api.interceptors.response.use(
     // ✅ Gérer 401 (token expiré) et 403 (compte désactivé/refusé) sur refresh token
     const isAuthError = error.response?.status === 401 || error.response?.status === 403;
     if (isAuthError && !originalRequest._retry) {
-      // Si c'est la requête de refresh elle-même qui a échoué (401 ou 403) → déconnecter
+      // Si c'est la requête de refresh elle-même qui a échoué
       if (originalRequest.url?.includes("/auth/refresh-token")) {
-        console.error(
-          `[API Interceptor] ❌ Refresh token échoué (${error.response?.status}):`,
-          error.response?.data || error.message
-        );
-        await secureStorage.clearAll();
-        await asyncStorage.clearAuth();
-        // ⚡ OPTIMISATION : Invalider le cache de l'intercepteur lors du logout/échec
-        invalidateInterceptorCache();
-        return Promise.reject(error);
+        const refreshStatus = error.response?.status;
+        const isNetworkError = !error.response;
+        
+        // ✅ Ne déconnecter que si c'est vraiment un problème d'authentification
+        // (401 = refresh token expiré, 403 = compte désactivé)
+        // Ne pas déconnecter pour erreurs réseau temporaires
+        if (refreshStatus === 401 || refreshStatus === 403) {
+          console.error(
+            `[API Interceptor] ❌ Refresh token échoué (${refreshStatus}):`,
+            error.response?.data || error.message
+          );
+          await secureStorage.clearAll();
+          await asyncStorage.clearAuth();
+          invalidateInterceptorCache();
+          return Promise.reject(error);
+        } else if (isNetworkError) {
+          // Erreur réseau → ne pas déconnecter, juste rejeter
+          console.warn(
+            "[API Interceptor] ⚠️ Erreur réseau lors du refresh token. Utilisateur reste connecté."
+          );
+          return Promise.reject(error);
+        } else {
+          // Autres erreurs → ne pas déconnecter non plus
+          console.warn(
+            `[API Interceptor] ⚠️ Erreur serveur lors du refresh token (status: ${refreshStatus}). Utilisateur reste connecté.`
+          );
+          return Promise.reject(error);
+        }
       }
 
       // Si déjà en train de refresh, mettre en queue
@@ -504,25 +523,52 @@ api.interceptors.response.use(
         // ✅ Log détaillé pour diagnostic
         const refreshStatus = refreshError?.response?.status;
         const refreshData = refreshError?.response?.data;
+        const isNetworkError = !refreshError?.response; // Pas de réponse = erreur réseau
+        
         console.error(
-          `[API Interceptor] ❌ Refresh token échoué (status: ${refreshStatus}):`,
+          `[API Interceptor] ❌ Refresh token échoué (status: ${refreshStatus || "network"}):`,
           refreshData || refreshError?.message || refreshError
         );
         
-        // ✅ Si 403 (compte désactivé), forcer déconnexion immédiate
-        if (refreshStatus === 403) {
-          console.error(
-            "[API Interceptor] 🚫 Compte désactivé ou non autorisé (403). Déconnexion forcée."
-          );
-        }
+        // ✅ Distinguer les types d'erreurs :
+        // - 401 = refresh token expiré → déconnecter
+        // - 403 = compte désactivé → déconnecter
+        // - Erreur réseau = ne pas déconnecter, laisser l'utilisateur connecté
+        // - Autres erreurs (500, etc.) = ne pas déconnecter non plus
         
-        // Refresh échoué → déconnecter
-        processQueue(refreshError, null);
-        await secureStorage.clearAll();
-        await asyncStorage.clearAuth();
-        // ⚡ OPTIMISATION : Invalider le cache de l'intercepteur lors de l'échec
-        invalidateInterceptorCache();
-        return Promise.reject(refreshError);
+        if (refreshStatus === 401 || refreshStatus === 403) {
+          // Token expiré ou compte désactivé → déconnecter
+          if (refreshStatus === 403) {
+            console.error(
+              "[API Interceptor] 🚫 Compte désactivé ou non autorisé (403). Déconnexion forcée."
+            );
+          } else {
+            console.error(
+              "[API Interceptor] 🚫 Refresh token expiré (401). Déconnexion forcée."
+            );
+          }
+          
+          processQueue(refreshError, null);
+          await secureStorage.clearAll();
+          await asyncStorage.clearAuth();
+          invalidateInterceptorCache();
+          return Promise.reject(refreshError);
+        } else if (isNetworkError) {
+          // Erreur réseau temporaire → ne pas déconnecter, juste rejeter l'erreur
+          // L'utilisateur reste connecté et pourra réessayer plus tard
+          console.warn(
+            "[API Interceptor] ⚠️ Erreur réseau lors du refresh token. Utilisateur reste connecté. La requête originale échouera mais l'utilisateur ne sera pas déconnecté."
+          );
+          processQueue(refreshError, null);
+          return Promise.reject(refreshError);
+        } else {
+          // Autres erreurs (500, etc.) → ne pas déconnecter non plus
+          console.warn(
+            `[API Interceptor] ⚠️ Erreur serveur lors du refresh token (status: ${refreshStatus}). Utilisateur reste connecté.`
+          );
+          processQueue(refreshError, null);
+          return Promise.reject(refreshError);
+        }
       } finally {
         isRefreshing = false;
       }

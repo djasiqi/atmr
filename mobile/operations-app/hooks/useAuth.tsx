@@ -815,9 +815,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setDriver(profile);
       await asyncStorage.setDriverId(profile.id);
       console.log("[useAuth] Profil chauffeur rafraîchi et stocké:", profile.id);
-    } catch (error) {
-      console.warn("Erreur rafraîchissement profil chauffeur :", error);
-      await logout();
+    } catch (error: any) {
+      const status = error?.response?.status;
+      const isNetworkError = !error?.response; // Pas de réponse = erreur réseau
+      
+      // ✅ Ne déconnecter que si c'est vraiment un problème d'authentification
+      // (401 = token invalide, 403 = compte désactivé)
+      // Ne pas déconnecter pour erreurs réseau temporaires (timeout, pas de connexion)
+      if (status === 401 || status === 403) {
+        console.error(
+          "[useAuth] ❌ Erreur authentification lors du refresh profil (status: %s). Déconnexion.",
+          status
+        );
+        await logout();
+      } else if (isNetworkError) {
+        // Erreur réseau temporaire → ne pas déconnecter, juste logger
+        console.warn(
+          "[useAuth] ⚠️ Erreur réseau lors du refresh profil (pas de connexion). Profil non mis à jour mais utilisateur reste connecté.",
+          error?.message
+        );
+      } else {
+        // Autres erreurs (500, etc.) → ne pas déconnecter non plus
+        console.warn(
+          "[useAuth] ⚠️ Erreur serveur lors du refresh profil (status: %s). Profil non mis à jour mais utilisateur reste connecté.",
+          status || "unknown"
+        );
+      }
     } finally {
       setDriverLoading(false);
     }
