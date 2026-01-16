@@ -244,6 +244,18 @@ services:
       # Headers pour proxy
       - "traefik.http.middlewares.backend-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
       - "traefik.http.routers.backend-secure.middlewares=backend-headers"
+      # ✅ WebSocket: Route spécifique pour /socket.io avec sticky sessions
+      # Les timeouts WebSocket sont gérés au niveau de l'entrypoint Traefik (voir traefik.yml)
+      - "traefik.http.routers.backend-secure-ws.rule=Host(`www.lirie.ch`) || Host(`lirie.ch`) || Host(`api.lirie.ch`) && PathPrefix(`/socket.io`)"
+      - "traefik.http.routers.backend-secure-ws.entrypoints=websecure"
+      - "traefik.http.routers.backend-secure-ws.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.backend-secure-ws.service=backend"
+      - "traefik.http.routers.backend-secure-ws.middlewares=backend-headers"
+      # ✅ Healthcheck pour le service backend (évite 502 si backend down)
+      - "traefik.http.services.backend.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.backend.loadbalancer.healthcheck.interval=30s"
+      - "traefik.http.services.backend.loadbalancer.healthcheck.timeout=10s"
+      - "traefik.http.services.backend.loadbalancer.healthcheck.scheme=http"
     depends_on:
       postgres:
         condition: service_healthy

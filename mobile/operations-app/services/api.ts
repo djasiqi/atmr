@@ -436,10 +436,15 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // Si erreur 401 et pas déjà en train de refresh
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      // Si c'est la requête de refresh elle-même qui a échoué → déconnecter
+    // ✅ Gérer 401 (token expiré) et 403 (compte désactivé/refusé) sur refresh token
+    const isAuthError = error.response?.status === 401 || error.response?.status === 403;
+    if (isAuthError && !originalRequest._retry) {
+      // Si c'est la requête de refresh elle-même qui a échoué (401 ou 403) → déconnecter
       if (originalRequest.url?.includes("/auth/refresh-token")) {
+        console.error(
+          `[API Interceptor] ❌ Refresh token échoué (${error.response?.status}):`,
+          error.response?.data || error.message
+        );
         await secureStorage.clearAll();
         await asyncStorage.clearAuth();
         // ⚡ OPTIMISATION : Invalider le cache de l'intercepteur lors du logout/échec
@@ -495,7 +500,22 @@ api.interceptors.response.use(
         // Rejouer la requête originale
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
         return api(originalRequest);
-      } catch (refreshError) {
+      } catch (refreshError: any) {
+        // ✅ Log détaillé pour diagnostic
+        const refreshStatus = refreshError?.response?.status;
+        const refreshData = refreshError?.response?.data;
+        console.error(
+          `[API Interceptor] ❌ Refresh token échoué (status: ${refreshStatus}):`,
+          refreshData || refreshError?.message || refreshError
+        );
+        
+        // ✅ Si 403 (compte désactivé), forcer déconnexion immédiate
+        if (refreshStatus === 403) {
+          console.error(
+            "[API Interceptor] 🚫 Compte désactivé ou non autorisé (403). Déconnexion forcée."
+          );
+        }
+        
         // Refresh échoué → déconnecter
         processQueue(refreshError, null);
         await secureStorage.clearAll();
@@ -506,6 +526,17 @@ api.interceptors.response.use(
       } finally {
         isRefreshing = false;
       }
+    }
+    
+    // ✅ Gérer aussi les 403 sur les autres endpoints (compte désactivé)
+    if (error.response?.status === 403 && !originalRequest._retry) {
+      console.error(
+        `[API Interceptor] ❌ Accès refusé (403) pour ${originalRequest.url}:`,
+        error.response?.data || error.message
+      );
+      // Si c'est un 403, ne pas retry automatiquement (compte désactivé)
+      // L'app devra gérer la déconnexion via useAuth
+      return Promise.reject(error);
     }
 
     // Autres erreurs → log et rejeter

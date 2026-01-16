@@ -479,24 +479,42 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           const refreshToken = await secureStorage.getRefreshToken();
           if (refreshToken) {
             const refreshResponse = await refreshAccessToken(refreshToken);
-            
+
             // Stocker le nouveau access_token
             await secureStorage.setAccessToken(refreshResponse.access_token);
             setDriverToken(refreshResponse.access_token);
-            
+
             // Mettre à jour refresh_token si rotation activée
             if (refreshResponse.refresh_token) {
               await secureStorage.setRefreshToken(refreshResponse.refresh_token);
             }
-            
+
             // Invalider le cache de l'intercepteur pour forcer l'utilisation du nouveau token
             invalidateInterceptorCache();
-            
+
             console.log("[useAuth] ✅ Refresh proactif réussi");
           }
-        } catch (error) {
+        } catch (error: any) {
+          const status = error?.response?.status;
+          const errorData = error?.response?.data;
+
+          // ✅ Si 403 (compte désactivé), forcer déconnexion immédiate
+          if (status === 403) {
+            console.error(
+              "[useAuth] 🚫 Compte désactivé (403) lors du refresh proactif. Déconnexion forcée.",
+              errorData
+            );
+            // Nettoyer le stockage et réinitialiser l'état
+            await secureStorage.clearAll();
+            await asyncStorage.clearAuth();
+            setDriverToken(null);
+            setDriver(null);
+            invalidateInterceptorCache();
+            return;
+          }
+
           console.warn("[useAuth] ⚠️ Refresh proactif échoué (fallback sur intercepteur 401):", error);
-          // Ne pas déconnecter l'utilisateur, l'intercepteur gérera le 401
+          // Ne pas déconnecter l'utilisateur pour les autres erreurs, l'intercepteur gérera le 401
         }
       }, timeUntilExpiry - refreshBeforeExpiry);
 
@@ -519,7 +537,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             invalidateInterceptorCache();
             console.log("[useAuth] ✅ Refresh immédiat réussi");
           }
-        } catch (error) {
+        } catch (error: any) {
+          const status = error?.response?.status;
+          const errorData = error?.response?.data;
+
+          // ✅ Si 403 (compte désactivé), forcer déconnexion immédiate
+          if (status === 403) {
+            console.error(
+              "[useAuth] 🚫 Compte désactivé (403) lors du refresh immédiat. Déconnexion forcée.",
+              errorData
+            );
+            // Nettoyer le stockage et réinitialiser l'état
+            await secureStorage.clearAll();
+            await asyncStorage.clearAuth();
+            setDriverToken(null);
+            setDriver(null);
+            invalidateInterceptorCache();
+            return;
+          }
+
           console.warn("[useAuth] ⚠️ Refresh immédiat échoué:", error);
         }
       })();

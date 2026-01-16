@@ -18,6 +18,13 @@ entryPoints:
 
   websecure:
     address: ":443"
+    # ✅ WebSocket: Timeouts longs pour Socket.IO (ping_interval=25s, ping_timeout=60s)
+    # idleTimeout doit être > ping_timeout * 3 pour éviter fermetures prématurées
+    transport:
+      respondingTimeouts:
+        readTimeout: 180s  # ✅ 3x ping_timeout Socket.IO (60s * 3)
+        writeTimeout: 180s  # ✅ 3x ping_timeout Socket.IO
+        idleTimeout: 300s  # ✅ 5x ping_timeout pour connexions WebSocket longues
     # ✅ 3.5: HTTPS/TLS (à configurer avec certificats)
     # http:
     #   tls:
