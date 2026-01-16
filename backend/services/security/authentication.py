@@ -122,7 +122,7 @@ class RefreshTokenService:
 
         Returns:
             True si le token est valide, False sinon
-            
+
         Note:
             Si Redis est indisponible, cette fonction retourne True par défaut
             pour permettre la validation JWT standard (fallback gracieux).
