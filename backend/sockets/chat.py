@@ -15,7 +15,7 @@ import os
 import traceback
 import urllib.request
 from contextlib import suppress
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, cast
 from typing import cast as tcast
@@ -51,6 +51,13 @@ logger = logging.getLogger("socketio")
 
 # Petit index en mémoire pour le debug/nettoyage : sid -> infos
 _SID_INDEX: Dict[str, Dict[str, Any]] = {}
+
+# ✅ Tracking des erreurs token_expired par IP pour réduire le bruit dans les logs
+# Format: {ip: (last_log_time, count)}
+_TOKEN_EXPIRED_TRACKING: Dict[str, tuple[datetime, int]] = {}
+_TOKEN_EXPIRED_LOG_INTERVAL = 60  # Logger au maximum toutes les 60 secondes par IP
+_TOKEN_EXPIRED_MAX_COUNT = 5  # Après 5 erreurs, logger seulement toutes les 60s
+_TOKEN_EXPIRED_TRACKING_MAX_SIZE = 1000  # Taille max du dictionnaire avant nettoyage
 
 
 def _log_socketio_exception(
@@ -769,46 +776,95 @@ def init_chat_socket(socketio: SocketIO):
                     pass
                 # #endregion
             except jwt_exceptions.ExpiredSignatureError:
-                # #region agent log
-                log_data_expired = {
-                    "location": "chat.py:handle_connect",
-                    "message": "Token expired",
-                    "data": {
-                        "reason": "token_expired",
-                        "ip": client_ip,
-                    },
-                    "timestamp": int(now.timestamp() * 1000),
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "B",
-                }
-                try:
-                    req = urllib.request.Request(
-                        "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
-                        data=json.dumps(log_data_expired).encode("utf-8"),
-                        headers={"Content-Type": "application/json"},
-                        method="POST",
-                    )
-                    urllib.request.urlopen(req, timeout=0.1)
-                except Exception:
-                    pass
-                # #endregion
-                logger.info(
-                    "socket_connect_error",
-                    extra={
-                        "event": "connect_error",
-                        "reason": "token_expired",
-                        "ip": client_ip,
-                        "timestamp": now.isoformat(),
-                        "request_trace_id": trace_id,
-                    },
+                # ✅ Réduire le bruit dans les logs : tracker les erreurs token_expired par IP
+                # Logger seulement si c'est la première erreur ou si ça fait plus de 60s depuis le dernier log
+                should_log = True
+                last_log_time, error_count = _TOKEN_EXPIRED_TRACKING.get(
+                    client_ip, (None, 0)
                 )
+
+                if last_log_time is not None:
+                    time_since_last_log = (now - last_log_time).total_seconds()
+                    if error_count < _TOKEN_EXPIRED_MAX_COUNT:
+                        # Les premières erreurs sont toujours loggées
+                        should_log = True
+                    elif time_since_last_log < _TOKEN_EXPIRED_LOG_INTERVAL:
+                        # Trop d'erreurs récentes, ne pas logger (réduire bruit)
+                        should_log = False
+                    else:
+                        # Assez de temps écoulé, logger à nouveau
+                        should_log = True
+
+                # Mettre à jour le tracking
+                if should_log:
+                    _TOKEN_EXPIRED_TRACKING[client_ip] = (now, error_count + 1)
+                else:
+                    _TOKEN_EXPIRED_TRACKING[client_ip] = (
+                        last_log_time,
+                        error_count + 1,
+                    )
+
+                # Nettoyer les entrées anciennes (> 5 minutes) pour éviter fuite mémoire
+                if len(_TOKEN_EXPIRED_TRACKING) > _TOKEN_EXPIRED_TRACKING_MAX_SIZE:
+                    cutoff_time = now - timedelta(minutes=5)
+                    # Nettoyer les entrées plus anciennes que 5 minutes
+                    _TOKEN_EXPIRED_TRACKING.clear()
+                    # Note: On nettoie tout si trop d'entrées, sinon on garde les récentes
+
+                # #region agent log (uniquement si should_log)
+                if should_log:
+                    log_data_expired = {
+                        "location": "chat.py:handle_connect",
+                        "message": "Token expired",
+                        "data": {
+                            "reason": "token_expired",
+                            "ip": client_ip,
+                            "error_count": error_count + 1,
+                        },
+                        "timestamp": int(now.timestamp() * 1000),
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "B",
+                    }
+                    try:
+                        req = urllib.request.Request(
+                            "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
+                            data=json.dumps(log_data_expired).encode("utf-8"),
+                            headers={"Content-Type": "application/json"},
+                            method="POST",
+                        )
+                        urllib.request.urlopen(req, timeout=0.1)
+                    except Exception:
+                        pass
+                # #endregion
+
+                # ✅ Logger seulement si should_log (réduire bruit)
+                if should_log:
+                    log_level = (
+                        logger.debug
+                        if error_count >= _TOKEN_EXPIRED_MAX_COUNT
+                        else logger.info
+                    )
+                    log_level(
+                        "socket_connect_error",
+                        extra={
+                            "event": "connect_error",
+                            "reason": "token_expired",
+                            "ip": client_ip,
+                            "error_count": error_count + 1,
+                            "timestamp": now.isoformat(),
+                            "request_trace_id": trace_id,
+                        },
+                    )
+
+                # ✅ Toujours émettre l'erreur au client (même si on ne log pas)
                 emit(
                     "unauthorized",
                     {
                         "error": "Token expiré. Veuillez vous reconnecter.",
                         "reason": "token_expired",
                         "hint": "Utilisez refresh-token pour obtenir un nouveau token avant de reconnecter.",
+                        "retry_after": 5,  # ✅ Indiquer au client d'attendre 5s avant de réessayer
                     },
                 )
                 ws_metrics.on_error("token_expired")
