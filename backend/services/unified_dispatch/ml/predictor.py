@@ -91,7 +91,7 @@ except ImportError:
         StandardScaler = Any
     logger.warning(
         "[MLPredictor] scikit-learn not available. "
-        "Install with: pip install scikit-learn"
+        + "Install with: pip install scikit-learn"
     )
 
 
