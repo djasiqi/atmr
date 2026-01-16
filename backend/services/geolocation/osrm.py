@@ -441,6 +441,20 @@ def _route(
     ⚠️ D3: Si chaos injector est activé, peut simuler panne OSRM ou injecter latence.
     Chaos ne doit JAMAIS être activé en production (vérifier CHAOS_ENABLED=false).
     """
+    # ✅ Validation : OSRM nécessite au moins 2 points (origin et destination)
+    if origin is None or destination is None:
+        raise ValueError(
+            "OSRM route requires both origin and destination coordinates. "
+            f"Got origin={origin}, destination={destination}"
+        )
+
+    # ✅ Validation : Vérifier que les coordonnées sont valides (non-None dans le tuple)
+    if None in origin or None in destination:
+        raise ValueError(
+            "OSRM route requires valid coordinates. "
+            f"Got origin={origin}, destination={destination}"
+        )
+
     if timeout is None:
         timeout = DEFAULT_TIMEOUT
 

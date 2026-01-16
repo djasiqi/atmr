@@ -62,6 +62,27 @@ def geocode_address(address: str):
 # Routing avec OSRM
 # -------------------------------------------------------------------
 def osrm_route(lat1, lon1, lat2, lon2):
+    """Calcule un itinéraire OSRM entre deux points.
+
+    Args:
+        lat1, lon1: Coordonnées du point d'origine
+        lat2, lon2: Coordonnées du point de destination
+
+    Returns:
+        Dict avec polyline, distance_m, duration_s ou None en cas d'erreur
+    """
+    # ✅ Validation : Vérifier que tous les paramètres sont valides
+    if None in (lat1, lon1, lat2, lon2):
+        logger.warning(
+            "OSRM route: coordonnées invalides (None détecté). "
+            "lat1=%s, lon1=%s, lat2=%s, lon2=%s",
+            lat1,
+            lon1,
+            lat2,
+            lon2,
+        )
+        return None
+
     try:
         url = f"{OSRM_BASE_URL}/route/v1/driving/{lon1},{lat1};{lon2},{lat2}"
         params = {
