@@ -89,10 +89,11 @@ except ImportError:
     if not TYPE_CHECKING:
         RandomForestRegressor = Any
         StandardScaler = Any
-    logger.warning(
+    warning_msg = (
         "[MLPredictor] scikit-learn not available. "
         + "Install with: pip install scikit-learn"
     )
+    logger.warning(warning_msg)
 
 
 @dataclass
