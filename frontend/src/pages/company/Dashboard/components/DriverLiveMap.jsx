@@ -591,7 +591,7 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
         delete map._driverCounterControl;
       }
     };
-  }, [drivers]);
+  }, [drivers, allDrivers.length]);
 
   // Ajouter le contrôle de recherche comme contrôle Leaflet (une seule fois)
   useEffect(() => {

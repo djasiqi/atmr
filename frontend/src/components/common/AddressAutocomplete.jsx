@@ -345,9 +345,7 @@ export default function AddressAutocomplete({
       abortRef.current?.abort();
       abortRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    // isCanceledError est inclus indirectement via fetchSuggestions qui est dans les dépendances
-  }, [query, minChars, debounceMs, BIAS.lat, BIAS.lon, PHOTON_BASE, maxResults, justSelected, debounce, deferredQuery, fetchSuggestions, userIsTyping]);
+  }, [query, minChars, debounceMs, BIAS.lat, BIAS.lon, PHOTON_BASE, maxResults, justSelected, debounce, deferredQuery, fetchSuggestions, userIsTyping, isCanceledError]);
 
   function handleInputChange(e) {
     const v = e.target.value;
