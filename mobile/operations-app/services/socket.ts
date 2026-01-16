@@ -162,7 +162,12 @@ const getSocketOrigin = (): string => {
 
 let SOCKET_ORIGIN = getSocketOrigin();
 // ✅ Normalisation finale : s'assurer qu'il n'y a pas de slash final
-SOCKET_ORIGIN = SOCKET_ORIGIN.replace(/\/+$/, "");
+// Utiliser une regex plus robuste pour supprimer tous les slashes finaux
+SOCKET_ORIGIN = SOCKET_ORIGIN.replace(/\/+$/, "").trim();
+// ✅ Double vérification : s'assurer qu'il n'y a pas de slash final après trim
+if (SOCKET_ORIGIN.endsWith("/")) {
+  SOCKET_ORIGIN = SOCKET_ORIGIN.slice(0, -1);
+}
 
 // ✅ Détection Android emulator
 const isAndroidEmulator = Platform.OS === "android" && 
@@ -369,9 +374,13 @@ export async function connectSocket(
   
   connectPromise = new Promise<Socket>((resolve, reject) => {
     try {
-      console.log(`[connectSocket] 📍 Appel io() avec options:`, buildOptions(token));
+      // ✅ Normalisation finale avant l'appel io() pour éviter //socket.io
+      const normalizedOrigin = SOCKET_ORIGIN.replace(/\/+$/, "").trim();
+      console.log(`[connectSocket] 📍 Appel io() avec SOCKET_ORIGIN=${normalizedOrigin}`);
+      console.log(`[connectSocket] 📍 Options:`, buildOptions(token));
       // ⚠️ Utiliser l'origine sans /api sinon 404 sur /api/socket.io
-      socket = io(SOCKET_ORIGIN, buildOptions(token));
+      // ✅ S'assurer que l'origine n'a pas de slash final pour éviter //socket.io
+      socket = io(normalizedOrigin, buildOptions(token));
       console.log(`[connectSocket] ✅ Socket créé:`, socket ? `id=${socket.id || 'pending'}` : 'NULL');
 
       socket.on("connect", async () => {
