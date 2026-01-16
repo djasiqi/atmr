@@ -11,6 +11,7 @@ Ce module implémente:
 from __future__ import annotations
 
 import logging
+import warnings
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -779,7 +780,15 @@ class ETADelayModel:
                 # nosec B301: Modèles internes uniquement,
                 # provenant de sources de confiance
                 # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
-                model_data = joblib.load(f)
+                # ✅ Supprimer temporairement les warnings sklearn version lors du chargement
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.filterwarnings(
+                        "ignore",
+                        message=".*Trying to unpickle estimator.*",
+                        category=UserWarning,
+                    )
+                    model_data = joblib.load(f)
 
             self.regression_model = model_data["regression_model"]
             self.classification_model = model_data.get("classification_model", None)

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import warnings
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -14,6 +15,15 @@ import numpy as np  # pyright: ignore[reportMissingImports]
 from sqlalchemy.exc import DBAPIError, OperationalError
 
 logger = logging.getLogger(__name__)
+
+# ✅ Supprimer les warnings sklearn InconsistentVersionWarning lors du chargement
+# des modèles entraînés avec une version différente (non bloquant)
+warnings.filterwarnings(
+    "ignore",
+    category=UserWarning,
+    message=".*Trying to unpickle estimator.*",
+    module="sklearn.*",
+)
 
 try:
     import joblib  # pyright: ignore[reportMissingImports]
@@ -612,7 +622,14 @@ class DelayMLPredictor:
                 # nosec B301: Modèles internes uniquement,
                 # provenant de sources de confiance
                 # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
-                model_data = joblib.load(f)
+                # ✅ Supprimer temporairement les warnings sklearn version lors du chargement
+                with warnings.catch_warnings():
+                    warnings.filterwarnings(
+                        "ignore",
+                        message=".*Trying to unpickle estimator.*",
+                        category=UserWarning,
+                    )
+                    model_data = joblib.load(f)
 
             self.model = model_data["model"]
             self.feature_names = model_data["feature_names"]
