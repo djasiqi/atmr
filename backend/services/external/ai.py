@@ -2,7 +2,7 @@
 import logging
 import os
 
-import requests  # pyright: ignore[reportMissingModuleSource]
+import requests
 from dotenv import load_dotenv  # pyright: ignore[reportMissingImports]
 from geopy.distance import geodesic  # pyright: ignore[reportMissingImports]
 
@@ -74,8 +74,10 @@ def osrm_route(lat1, lon1, lat2, lon2):
     # ✅ Validation : Vérifier que tous les paramètres sont valides
     if None in (lat1, lon1, lat2, lon2):
         logger.warning(
-            "OSRM route: coordonnées invalides (None détecté). "
-            "lat1=%s, lon1=%s, lat2=%s, lon2=%s",
+            (
+                "OSRM route: coordonnées invalides (None détecté). "
+                "lat1=%s, lon1=%s, lat2=%s, lon2=%s"
+            ),
             lat1,
             lon1,
             lat2,
