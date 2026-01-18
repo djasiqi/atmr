@@ -223,10 +223,7 @@ def notify_dispatcher_optimization_opportunity(
         }
 
         app_logger.info(
-            (
-                "[notify_dispatcher_optimization_opportunity] Emitting to company %s: "
-                "severity=%s delay=%d"
-            ),
+            "[notify_dispatcher_optimization_opportunity] Emitting to company %s: severity=%s delay=%d",
             company_id,
             payload.get("severity"),
             payload.get("current_delay"),
@@ -236,16 +233,14 @@ def notify_dispatcher_optimization_opportunity(
     except (ValueError, TypeError, AttributeError) as e:
         # Erreurs de validation attendues : conversion de types, attributs manquants
         app_logger.error(
-            "[notify_dispatcher_optimization_opportunity] emit failed "
-            "(validation error: %s): %s",
+            "[notify_dispatcher_optimization_opportunity] emit failed (validation error: %s): %s",
             type(e).__name__,
             e,
         )
     except (ConnectionError, OSError) as e:
         # Erreurs réseau attendues : Socket.IO indisponible
         app_logger.error(
-            "[notify_dispatcher_optimization_opportunity] emit failed "
-            "(network error: %s): %s",
+            "[notify_dispatcher_optimization_opportunity] emit failed (network error: %s): %s",
             type(e).__name__,
             e,
         )
