@@ -41,9 +41,17 @@ def handle_driver_new_booking(event: dict[str, Any]) -> None:
 
     Actions:
     - Notifie le driver via SocketIO (nouveau booking assigné)
+    - Envoie une push notification via fan-out
     """
     booking_id = event.get("booking_id")
     driver_id = event.get("driver_id")
+
+    logger.info(
+        "[EventBus] DriverNewBookingEvent received: booking_id=%s driver_id=%s event_keys=%s",
+        booking_id,
+        driver_id,
+        list(event.keys()),
+    )
 
     if not booking_id or not driver_id:
         logger.warning(
@@ -63,12 +71,19 @@ def handle_driver_new_booking(event: dict[str, Any]) -> None:
 
         booking = db.session.get(Booking, int(booking_id))
         if booking:
+            logger.info(
+                "[EventBus] Booking found: id=%s, calling notify_driver_new_booking for driver %s",
+                booking_id,
+                driver_id,
+            )
             notify_driver_new_booking(int(driver_id), booking)
-            logger.debug(
-                "[EventBus] Notified driver %s about new booking %s",
+            logger.info(
+                "[EventBus] Notified driver %s about new booking %s (push notification should be queued)",
                 driver_id,
                 booking_id,
             )
+        else:
+            logger.warning("[EventBus] Booking not found for booking_id=%s", booking_id)
     except (ValueError, TypeError) as e:
         # Erreurs de validation attendues : conversion de types
         logger.warning(

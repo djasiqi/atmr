@@ -46,11 +46,23 @@ def notify_driver_new_booking(driver_id: int, booking: Booking) -> None:
     except (ValueError, TypeError, AttributeError):
         booking_data = {"id": booking_id}
 
+    app_logger.info(
+        "[notify_driver_new_booking] Calling fanout_booking_assigned_to_driver: driver_id=%s booking_id=%s",
+        driver_id,
+        booking_id,
+    )
+
     # ✅ Utiliser le service centralisé de fan-out
     fanout_booking_assigned_to_driver(
         driver_id=driver_id,
         booking_id=booking_id or 0,
         booking_data=booking_data,
+    )
+    
+    app_logger.info(
+        "[notify_driver_new_booking] fanout_booking_assigned_to_driver completed for driver_id=%s booking_id=%s",
+        driver_id,
+        booking_id,
     )
 
 

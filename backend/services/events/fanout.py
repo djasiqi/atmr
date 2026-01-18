@@ -423,11 +423,21 @@ def fanout_booking_assigned_to_driver(
         booking_id: ID de la mission
         booking_data: Données de la mission (optionnel)
     """
+    app_logger.info(
+        "[event_fanout] fanout_booking_assigned_to_driver called: driver_id=%s booking_id=%s",
+        driver_id,
+        booking_id,
+    )
+
     # 1. Socket.IO (foreground)
     try:
         base_data: Dict[str, Any] = booking_data or {"id": booking_id}
         payload = _create_event_payload(base_data, "booking_assigned")
         emit_driver_event(driver_id, "new_booking", payload)
+        app_logger.info(
+            "[event_fanout] Socket.IO emitted for booking_assigned (driver %s)",
+            driver_id,
+        )
     except Exception:
         app_logger.exception(
             "[event_fanout] Socket.IO failed for booking_assigned (driver %s)",
@@ -440,7 +450,14 @@ def fanout_booking_assigned_to_driver(
         if booking_data
         else "Nouvelle mission"
     )
-    _send_push_to_driver(
+    app_logger.info(
+        "[event_fanout] Sending push notification to driver %s for booking %s (pickup: %s)",
+        driver_id,
+        booking_id,
+        pickup_address,
+    )
+    
+    result = _send_push_to_driver(
         driver_id=driver_id,
         title="Nouvelle mission assignée",
         body=f"Mission #{booking_id} - {pickup_address}",
@@ -449,6 +466,13 @@ def fanout_booking_assigned_to_driver(
             "booking_id": booking_id,
             "deepLink": f"atmr://booking/{booking_id}",
         },
+    )
+    
+    app_logger.info(
+        "[event_fanout] _send_push_to_driver returned: driver_id=%s booking_id=%s result=%s",
+        driver_id,
+        booking_id,
+        result,
     )
 
 
