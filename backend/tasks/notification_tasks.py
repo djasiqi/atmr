@@ -104,6 +104,11 @@ def send_push_notification_task(  # noqa: PLR0911
     from services.notifications.push import send_push_message
 
     try:
+        logger.warning(
+            "[notification_task] send_push_notification_task started: driver_id=%s notification_type=%s",
+            driver_id,
+            notification_type,
+        )
         # Récupérer le driver
         driver = db.session.get(Driver, driver_id)
         if not driver:
@@ -119,12 +124,12 @@ def send_push_notification_task(  # noqa: PLR0911
         ).all()
 
         if not device_tokens:
-            logger.info(
+            logger.warning(
                 "[notification_task] No active push tokens for driver %s, using fallback",
                 driver_id,
             )
         else:
-            logger.info(
+            logger.warning(
                 "[notification_task] Attempt %d/%d: Sending push to driver %s (%d devices)",
                 self.request.retries + 1,
                 MAX_PUSH_RETRIES,
@@ -172,7 +177,7 @@ def send_push_notification_task(  # noqa: PLR0911
                 for device_token in invalid_tokens:
                     device_token.is_active = False
                 db.session.commit()
-                logger.info(
+                logger.warning(
                     "[notification_task] %d tokens invalidés pour driver %s",
                     len(invalid_tokens),
                     driver_id,
@@ -180,7 +185,7 @@ def send_push_notification_task(  # noqa: PLR0911
 
             # Si au moins un envoi a réussi, considérer comme succès
             if success_count > 0:
-                logger.info(
+                logger.warning(
                     "[notification_task] Push sent successfully to driver %s (%d/%d devices)",
                     driver_id,
                     success_count,
@@ -243,7 +248,7 @@ def send_push_notification_task(  # noqa: PLR0911
             )
 
         # Pas de push token → passer directement au fallback
-        logger.info(
+        logger.warning(
             "[notification_task] No push token for driver %s, using fallback",
             driver_id,
         )
