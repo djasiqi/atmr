@@ -76,7 +76,21 @@ def handle_driver_new_booking(event: dict[str, Any]) -> None:
                 booking_id,
                 driver_id,
             )
-            notify_driver_new_booking(int(driver_id), booking)
+            try:
+                notify_driver_new_booking(int(driver_id), booking)
+                logger.info(
+                    "[EventBus] notify_driver_new_booking completed successfully for driver %s booking %s",
+                    driver_id,
+                    booking_id,
+                )
+            except Exception as notify_error:
+                logger.exception(
+                    "[EventBus] Exception during notify_driver_new_booking: driver_id=%s booking_id=%s error=%s",
+                    driver_id,
+                    booking_id,
+                    notify_error,
+                )
+                raise  # Re-raise pour que le handler global le gère
             logger.info(
                 "[EventBus] Notified driver %s about new booking %s (push notification should be queued)",
                 driver_id,

@@ -46,7 +46,7 @@ def notify_driver_new_booking(driver_id: int, booking: Booking) -> None:
     except (ValueError, TypeError, AttributeError):
         booking_data = {"id": booking_id}
 
-    app_logger.info(
+    app_logger.warning(
         "[notify_driver_new_booking] Calling fanout_booking_assigned_to_driver: driver_id=%s booking_id=%s",
         driver_id,
         booking_id,
@@ -58,8 +58,8 @@ def notify_driver_new_booking(driver_id: int, booking: Booking) -> None:
         booking_id=booking_id or 0,
         booking_data=booking_data,
     )
-    
-    app_logger.info(
+
+    app_logger.warning(
         "[notify_driver_new_booking] fanout_booking_assigned_to_driver completed for driver_id=%s booking_id=%s",
         driver_id,
         booking_id,
@@ -156,20 +156,14 @@ def notify_dispatch_run_completed(
                 d = dispatch_run_dto.day
                 date_str = d.isoformat() if hasattr(d, "isoformat") else str(d)
                 app_logger.info(
-                    (
-                        "[notify_dispatch_run_completed] Retrieved date_str=%s "
-                        "from dispatch_run_id=%s"
-                    ),
+                    "[notify_dispatch_run_completed] Retrieved date_str=%s from dispatch_run_id=%s",
                     date_str,
                     dispatch_run_id,
                 )
         except (ValueError, TypeError, AttributeError) as e:
             # Erreurs de validation attendues : conversion de types, attributs manquants
             app_logger.warning(
-                (
-                    "[notify_dispatch_run_completed] Failed to get day_str "
-                    "from DispatchRun (validation error: %s): %s"
-                ),
+                "[notify_dispatch_run_completed] Failed to get day_str from DispatchRun (validation error: %s): %s",
                 type(e).__name__,
                 e,
             )
