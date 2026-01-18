@@ -462,7 +462,7 @@ class Booking(db.Model):
 
     def _is_transferred(self) -> bool:
         """Détermine si la course a été transférée (ACCEPTED ou COMPLETED).
-        
+
         Après acceptation d'un transfert, company_id est mis à jour pour pointer
         vers l'entreprise receveuse. Pour garder la trace que la course a été
         transférée, on vérifie s'il existe un transfert ACCEPTED ou COMPLETED
