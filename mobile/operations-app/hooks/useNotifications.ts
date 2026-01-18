@@ -127,11 +127,32 @@ export const useNotifications = () => {
 
     // Étape 2 : Mettre en place les écouteurs d'événements
     const notificationListener = Notifications.addNotificationReceivedListener(
-      (notification) => {
+      async (notification) => {
+        const data = notification.request.content.data || {};
+        const notificationType = data.type || "";
+
         console.log(
           "📩 Notification reçue pendant que l'app est ouverte:",
-          notification
+          notificationType
         );
+
+        // ✅ Phase 2.6: Router les notifications silencieuses vers handleSilentNotification
+        if (notificationType === "silent_update" || data["content-available"] === 1) {
+          try {
+            const { handleSilentNotification } = await import(
+              "@/services/silentNotifications"
+            );
+            await handleSilentNotification(data);
+            console.log("✅ Notification silencieuse traitée:", data.sync_type);
+          } catch (error) {
+            console.error("❌ Erreur traitement notification silencieuse:", error);
+          }
+          // Ne pas afficher la notification si c'est silencieuse
+          return;
+        }
+
+        // Pour les autres notifications, afficher normalement
+        console.log("📩 Notification normale:", notificationType);
       }
     );
 

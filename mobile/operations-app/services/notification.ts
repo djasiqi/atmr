@@ -12,14 +12,31 @@ export type PushTokens = {
 
 // --- 1) Handler global: quoi faire en foreground ---
  Notifications.setNotificationHandler({
-   handleNotification: async () => ({
-     shouldShowAlert: true,
-     shouldPlaySound: false,
-     shouldSetBadge: false,
-     // iOS (SDK 5x) :
-     shouldShowBanner: true,
-     shouldShowList: true,
-   }),
+   handleNotification: async (notification) => {
+     const data = notification.request.content.data || {};
+     const notificationType = data.type || "";
+
+     // ✅ Phase 2.6: Ne pas afficher les notifications silencieuses
+     if (notificationType === "silent_update" || data["content-available"] === 1) {
+       return {
+         shouldShowAlert: false,
+         shouldPlaySound: false,
+         shouldSetBadge: false,
+         shouldShowBanner: false,
+         shouldShowList: false,
+       };
+     }
+
+     // Pour les autres notifications, afficher normalement
+     return {
+       shouldShowAlert: true,
+       shouldPlaySound: false,
+       shouldSetBadge: false,
+       // iOS (SDK 5x) :
+       shouldShowBanner: true,
+       shouldShowList: true,
+     };
+   },
  });
 
 /**

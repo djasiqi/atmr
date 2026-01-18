@@ -757,6 +757,29 @@ def _execute_assignment_action(
         db.session.add(booking)
         db.session.commit()
 
+        # ✅ NOTIFICATION: Envoyer notification au nouveau chauffeur (même logique que l'assignation initiale)
+        # Important : même si c'est une réassignation, le nouveau chauffeur doit être notifié
+        try:
+            from application.events.event_bus import publish_event
+            from domain.events.events import DriverNewBookingEvent
+
+            publish_event(
+                DriverNewBookingEvent(
+                    booking_id=booking.id,
+                    driver_id=driver_id,
+                    company_id=company_id,
+                )
+            )
+        except Exception as e:
+            # Fallback vers notification directe si événement échoue
+            logger.warning(
+                "[MobileDispatch] Event publish failed during assignment, using direct notification: %s",
+                e,
+            )
+            from shared.notifications import notify_driver_new_booking
+
+            notify_driver_new_booking(driver_id, booking)
+
     # ✅ NOUVEAU: Récupérer les informations de groupe depuis assign_result
     is_grouped = assign_result.get("grouped", False)
     group_id = assign_result.get("group_id")
@@ -2065,11 +2088,12 @@ class MobileRideUrgent(Resource):
             raise AssertionError("Booking not found") from None
 
         booking.is_urgent = True
-        
+
         # ✅ Calculer la nouvelle heure planifiée
         from datetime import UTC, datetime
+
         now = datetime.now(UTC)
-        
+
         # Si scheduled_time est None, à minuit (00:00), ou dans le passé,
         # utiliser l'heure actuelle + délai
         if not booking.scheduled_time:
@@ -2077,12 +2101,11 @@ class MobileRideUrgent(Resource):
         else:
             # Vérifier si l'heure est à minuit (00:00)
             is_midnight = (
-                booking.scheduled_time.hour == 0 
-                and booking.scheduled_time.minute == 0
+                booking.scheduled_time.hour == 0 and booking.scheduled_time.minute == 0
             )
             # Vérifier si l'heure est dans le passé
             is_past = booking.scheduled_time < now
-            
+
             if is_midnight or is_past:
                 # Utiliser l'heure actuelle + délai
                 booking.scheduled_time = now + timedelta(minutes=extra_delay_minutes)
@@ -2113,12 +2136,19 @@ class MobileRideUrgent(Resource):
             or ""
         )
 
+        scheduled_time_str: str | None = None
+        st = booking.scheduled_time
+        if st is not None:
+            # Type narrowing: st est garanti d'être datetime ici
+            from datetime import datetime as DateTime
+
+            assert isinstance(st, DateTime), "scheduled_time should be datetime"
+            scheduled_time_str = st.isoformat()
+
         return {
             "ride_id": str(booking_id),
             "is_urgent": True,
-            "scheduled_time": booking.scheduled_time.isoformat()
-            if booking.scheduled_time
-            else None,
+            "scheduled_time": scheduled_time_str,
             "audit_event_id": event_id,
         }, 200
 

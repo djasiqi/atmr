@@ -290,6 +290,98 @@ class DriverProfile(Resource):
                 else:
                     result = uc_res.response
                     status_code = uc_res.status_code
+
+                    # ✅ Implémentation : Synchroniser le profil via notification silencieuse
+                    # Permet de synchroniser le profil en arrière-plan pour optimisation
+                    try:
+                        from services.events.fanout import send_profile_sync
+
+                        # Extraire le profil et les stats si disponibles
+                        profile_data = result if result else {}
+                        stats_data = profile_data.get("stats")  # Stats optionnelles
+
+                        # Envoyer la notification silencieuse (pas de son/vibration)
+                        send_profile_sync(
+                            driver_id=driver.id,
+                            profile=profile_data,
+                            stats=stats_data,
+                        )
+                        logger.debug(
+                            "[Driver Profile] Profil synchronisé via notification silencieuse pour driver %s",
+                            driver.id,
+                        )
+                    except Exception as e:
+                        # Ne pas faire échouer l'endpoint si la sync échoue
+                        logger.debug(
+                            "[Driver Profile] Échec sync profil (non-critique): %s",
+                            e,
+                        )
+
+                    # ✅ Implémentation : Synchroniser la configuration via notification silencieuse
+                    # Permet de synchroniser la config de l'app en arrière-plan pour optimisation
+                    try:
+                        from services.events.fanout import send_config_update
+                        from services.events.night_mode import get_night_mode_status
+
+                        # Récupérer le statut du mode nuit
+                        night_mode_status = get_night_mode_status()
+
+                        # Construire la configuration de l'app
+                        app_config = {
+                            "night_mode": {
+                                "is_night": night_mode_status.get("is_night", False),
+                                "current_time": night_mode_status.get("current_time"),
+                                "night_start": night_mode_status.get(
+                                    "night_start", "22:00"
+                                ),
+                                "night_end": night_mode_status.get(
+                                    "night_end", "06:00"
+                                ),
+                            },
+                            "notifications": {
+                                "enabled": True,  # Les notifications sont toujours activées si l'app est utilisée
+                                "critical_alerts": True,  # Alertes critiques toujours activées
+                                "silent_updates": True,  # Mises à jour silencieuses activées
+                            },
+                            "app_preferences": {
+                                "language": "fr",  # Langue par défaut
+                                "units": "metric",  # Unités métriques
+                            },
+                        }
+
+                        # Ajouter la config de l'entreprise si disponible
+                        # Note: company_id est nullable=False selon le modèle Driver
+                        company_id_value = getattr(driver, "company_id", None)
+                        if company_id_value:
+                            try:
+                                from models.company import Company
+
+                                company = Company.query.get(company_id_value)
+                                if company:
+                                    # Ajouter des infos sur le mode dispatch si pertinent
+                                    dispatch_mode = getattr(
+                                        company, "dispatch_mode", None
+                                    )
+                                    if dispatch_mode:
+                                        app_config["dispatch"] = {
+                                            "mode": dispatch_mode,
+                                        }
+                            except Exception:
+                                # Ne pas bloquer si on ne peut pas récupérer la config entreprise
+                                pass
+
+                        # Envoyer la notification silencieuse (pas de son/vibration)
+                        send_config_update(driver_id=driver.id, config=app_config)
+                        logger.debug(
+                            "[Driver Profile] Configuration synchronisée via notification silencieuse pour driver %s",
+                            driver.id,
+                        )
+                    except Exception as e:
+                        # Ne pas faire échouer l'endpoint si la sync échoue
+                        logger.debug(
+                            "[Driver Profile] Échec sync configuration (non-critique): %s",
+                            e,
+                        )
         except (ValueError, TypeError, AttributeError) as e:
             logger.warning(
                 "❌ Erreur validation/récupération profil driver: %s - %s",
@@ -555,6 +647,117 @@ class DriverUpcomingBookings(Resource):
                 b.driver_id,
                 b.customer_name,
                 b.scheduled_time,
+            )
+
+        # ✅ Implémentation : Précharger les missions via notification silencieuse
+        # Permet de synchroniser les missions en arrière-plan pour optimisation
+        try:
+            from services.events.fanout import send_missions_preload
+
+            # Sérialiser les bookings pour la notification silencieuse
+            missions_data = [
+                b.serialize if hasattr(b, "serialize") else {"id": b.id}
+                for b in bookings
+            ]
+
+            # Envoyer la notification silencieuse (pas de son/vibration)
+            send_missions_preload(driver_id=driver.id, missions=missions_data)
+            logger.debug(
+                "[Driver Bookings] Missions préchargées via notification silencieuse pour driver %s",
+                driver.id,
+            )
+        except Exception as e:
+            # Ne pas faire échouer l'endpoint si le préchargement échoue
+            logger.debug(
+                "[Driver Bookings] Échec préchargement missions (non-critique): %s",
+                e,
+            )
+
+        # ✅ Implémentation : Précharger les cartes (routes) via notification silencieuse
+        # Permet de précharger les itinéraires pour optimisation navigation
+        try:
+            import os
+
+            from services.events.fanout import send_maps_precache
+            from services.geolocation.osrm import route_info
+
+            routes_data = []
+            osrm_base_url = os.getenv("UD_OSRM_BASE_URL", "http://osrm:5000")
+
+            # Calculer les routes pour chaque booking avec pickup et dropoff
+            for booking in bookings:
+                pickup_lat = getattr(booking, "pickup_lat", None)
+                pickup_lon = getattr(booking, "pickup_lon", None)
+                dropoff_lat = getattr(booking, "dropoff_lat", None)
+                dropoff_lon = getattr(booking, "dropoff_lon", None)
+
+                # Si les coordonnées sont disponibles, calculer la route
+                if all(
+                    [
+                        pickup_lat is not None,
+                        pickup_lon is not None,
+                        dropoff_lat is not None,
+                        dropoff_lon is not None,
+                    ]
+                ):
+                    try:
+                        # Convertir en float une seule fois avec vérification explicite
+                        pickup_lat_float = float(pickup_lat)  # type: ignore[arg-type]
+                        pickup_lon_float = float(pickup_lon)  # type: ignore[arg-type]
+                        dropoff_lat_float = float(dropoff_lat)  # type: ignore[arg-type]
+                        dropoff_lon_float = float(dropoff_lon)  # type: ignore[arg-type]
+
+                        # Calculer la route (avec timeout court pour ne pas ralentir l'endpoint)
+                        route_result = route_info(
+                            origin=(pickup_lat_float, pickup_lon_float),
+                            destination=(dropoff_lat_float, dropoff_lon_float),
+                            base_url=osrm_base_url,
+                            profile="driving",
+                            timeout=2,  # Timeout court pour ne pas bloquer
+                            overview="simplified",  # Geometry simplifiée pour préchargement
+                            geometries="geojson",
+                        )
+
+                        # Extraire les données essentielles de la route
+                        routes_data.append(
+                            {
+                                "booking_id": booking.id,
+                                "pickup": {
+                                    "lat": pickup_lat_float,
+                                    "lon": pickup_lon_float,
+                                },
+                                "dropoff": {
+                                    "lat": dropoff_lat_float,
+                                    "lon": dropoff_lon_float,
+                                },
+                                "duration_seconds": route_result.get("duration", 0),
+                                "distance_meters": route_result.get("distance", 0),
+                                "geometry": route_result.get(
+                                    "geometry"
+                                ),  # GeoJSON geometry
+                            }
+                        )
+                    except Exception as route_error:
+                        # Ne pas bloquer si une route échoue
+                        logger.debug(
+                            "[Driver Bookings] Échec calcul route pour booking %s (non-critique): %s",
+                            booking.id,
+                            route_error,
+                        )
+
+            # Envoyer la notification silencieuse si on a des routes
+            if routes_data:
+                send_maps_precache(driver_id=driver.id, routes=routes_data)
+                logger.debug(
+                    "[Driver Bookings] Cartes préchargées via notification silencieuse pour driver %s (%s routes)",
+                    driver.id,
+                    len(routes_data),
+                )
+        except Exception as e:
+            # Ne pas faire échouer l'endpoint si le préchargement échoue
+            logger.debug(
+                "[Driver Bookings] Échec préchargement cartes (non-critique): %s",
+                e,
             )
 
         return [b.serialize for b in bookings], 200
@@ -881,6 +1084,208 @@ class DriverLocation(Resource):
             status_code = 500
 
         return result, status_code
+
+
+@driver_ns.route("/me/accident")
+class ReportAccident(Resource):
+    @jwt_required()
+    @role_required(UserRole.driver)
+    def post(self):
+        """Signale un accident pour le chauffeur connecté.
+
+        Le chauffeur peut signaler manuellement un accident depuis l'application mobile.
+        Cela déclenche une alerte critique à l'entreprise et une notification push.
+        """
+        driver, error_response, status_code = get_driver_from_token()
+        if error_response:
+            return error_response, status_code
+        driver = cast("Driver", driver)
+
+        try:
+            p = request.get_json(force=True) or {}
+
+            # Données optionnelles sur l'accident
+            accident_details = {
+                "driver_id": driver.id,
+                "company_id": driver.company_id,
+                "latitude": p.get("latitude"),
+                "longitude": p.get("longitude"),
+                "timestamp": datetime.now(UTC).isoformat(),
+                "manual_report": True,  # Signalement manuel
+                "description": p.get("description"),
+                "severity": p.get("severity", "unknown"),
+            }
+
+            # ✅ Implémentation : Envoyer l'alerte d'accident
+            from services.events.fanout import send_accident_alert
+
+            success = send_accident_alert(
+                driver_id=driver.id,
+                accident_details=accident_details,
+            )
+
+            if success:
+                logger.warning(
+                    "[ReportAccident] 🚨 Accident signalé par driver %s (company %s)",
+                    driver.id,
+                    driver.company_id,
+                )
+                return {"message": "Accident signalé avec succès", "ok": True}, 200
+
+            logger.error(
+                "[ReportAccident] Échec envoi alerte accident pour driver %s",
+                driver.id,
+            )
+            return {
+                "error": "Erreur lors de l'envoi de l'alerte",
+                "ok": False,
+            }, 500
+
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.exception("❌ Erreur lors du signalement d'accident: %s", e)
+            return {"error": f"Erreur interne: {e!s}", "ok": False}, 500
+
+
+@driver_ns.route("/me/medical-emergency")
+class ReportMedicalEmergency(Resource):
+    @jwt_required()
+    @role_required(UserRole.driver)
+    def post(self):
+        """Signale une urgence médicale pour le chauffeur connecté.
+
+        Le chauffeur peut signaler manuellement une urgence médicale (passager ou lui-même)
+        depuis l'application mobile. Cela déclenche une alerte critique à l'entreprise
+        et une notification push.
+        """
+        driver, error_response, status_code = get_driver_from_token()
+        if error_response:
+            return error_response, status_code
+        driver = cast("Driver", driver)
+
+        try:
+            p = request.get_json(force=True) or {}
+
+            # Données optionnelles sur l'urgence médicale
+            emergency_details = {
+                "driver_id": driver.id,
+                "company_id": driver.company_id,
+                "latitude": p.get("latitude"),
+                "longitude": p.get("longitude"),
+                "timestamp": datetime.now(UTC).isoformat(),
+                "manual_report": True,  # Signalement manuel
+                "description": p.get("description"),
+                "severity": p.get("severity", "high"),
+                "affected_person": p.get(
+                    "affected_person", "passenger"
+                ),  # "driver" ou "passenger"
+                "symptoms": p.get("symptoms"),  # Liste de symptômes
+            }
+
+            # ✅ Implémentation : Envoyer l'alerte d'urgence médicale
+            from services.events.fanout import send_medical_emergency_alert
+
+            success = send_medical_emergency_alert(
+                driver_id=driver.id,
+                emergency_details=emergency_details,
+            )
+
+            if success:
+                logger.warning(
+                    "[ReportMedicalEmergency] 🚨 Urgence médicale signalée par driver %s (company %s)",
+                    driver.id,
+                    driver.company_id,
+                )
+                return {
+                    "message": "Urgence médicale signalée avec succès",
+                    "ok": True,
+                }, 200
+
+            logger.error(
+                "[ReportMedicalEmergency] Échec envoi alerte urgence médicale pour driver %s",
+                driver.id,
+            )
+            return {
+                "error": "Erreur lors de l'envoi de l'alerte",
+                "ok": False,
+            }, 500
+
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.exception("❌ Erreur lors du signalement d'urgence médicale: %s", e)
+            return {"error": f"Erreur interne: {e!s}", "ok": False}, 500
+
+
+@driver_ns.route("/me/security-zone")
+class ReportSecurityZone(Resource):
+    @jwt_required()
+    @role_required(UserRole.driver)
+    def post(self):
+        """Signale une entrée dans une zone dangereuse pour le chauffeur connecté.
+
+        Le chauffeur peut signaler manuellement qu'il entre dans une zone à risque
+        depuis l'application mobile. Cela déclenche une alerte critique à l'entreprise
+        et une notification push.
+        """
+        driver, error_response, status_code = get_driver_from_token()
+        if error_response:
+            return error_response, status_code
+        driver = cast("Driver", driver)
+
+        try:
+            p = request.get_json(force=True) or {}
+
+            # Données optionnelles sur la zone dangereuse
+            zone_details = {
+                "driver_id": driver.id,
+                "company_id": driver.company_id,
+                "latitude": p.get("latitude"),
+                "longitude": p.get("longitude"),
+                "timestamp": datetime.now(UTC).isoformat(),
+                "manual_report": True,  # Signalement manuel
+                "zone_name": p.get("zone_name", "Zone dangereuse"),
+                "zone_type": p.get(
+                    "zone_type", "unknown"
+                ),  # "high_crime", "no_service", etc.
+                "risk_level": p.get(
+                    "risk_level", "high"
+                ),  # "low", "medium", "high", "critical"
+                "description": p.get("description"),
+            }
+
+            # ✅ Implémentation : Envoyer l'alerte zone dangereuse
+            from services.events.fanout import send_security_zone_alert
+
+            success = send_security_zone_alert(
+                driver_id=driver.id,
+                zone_details=zone_details,
+            )
+
+            if success:
+                logger.warning(
+                    "[ReportSecurityZone] 🚨 Zone dangereuse signalée par driver %s (company %s) - zone: %s",
+                    driver.id,
+                    driver.company_id,
+                    zone_details.get("zone_name"),
+                )
+                return {
+                    "message": "Alerte zone dangereuse signalée avec succès",
+                    "ok": True,
+                }, 200
+
+            logger.error(
+                "[ReportSecurityZone] Échec envoi alerte zone dangereuse pour driver %s",
+                driver.id,
+            )
+            return {
+                "error": "Erreur lors de l'envoi de l'alerte",
+                "ok": False,
+            }, 500
+
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.exception("❌ Erreur lors du signalement de zone dangereuse: %s", e)
+            return {"error": f"Erreur interne: {e!s}", "ok": False}, 500
 
 
 @driver_ns.route("/me/bookings/<int:booking_id>")

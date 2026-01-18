@@ -120,6 +120,8 @@ export function getChannelForNotificationType(
     case "urgent_alert":
     case "accident":
     case "emergency":
+    case "security_zone":
+    case "medical_emergency":
       return NotificationChannel.CRITICAL;
 
     case "booking":

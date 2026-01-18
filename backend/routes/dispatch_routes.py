@@ -1652,6 +1652,29 @@ class ReassignResource(Resource):
                 },
             )
 
+            # ✅ NOTIFICATION: Envoyer notification au nouveau chauffeur (même logique que l'assignation initiale)
+            if booking:
+                try:
+                    from application.events.event_bus import publish_event
+                    from domain.events.events import DriverNewBookingEvent
+
+                    publish_event(
+                        DriverNewBookingEvent(
+                            booking_id=booking.id,
+                            driver_id=new_driver_id,
+                            company_id=company.id,
+                        )
+                    )
+                except Exception as e:
+                    # Fallback vers notification directe si événement échoue
+                    logger.warning(
+                        "[Dispatch] Event publish failed during reassignment, using direct notification: %s",
+                        e,
+                    )
+                    from shared.notifications import notify_driver_new_booking
+
+                    notify_driver_new_booking(new_driver_id, booking)
+
             # ✅ MÉTRIQUES : Marquer suggestion comme appliquée
             try:
                 from repositories.rl_suggestion_metric_repository import (
