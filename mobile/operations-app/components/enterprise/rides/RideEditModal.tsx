@@ -160,17 +160,19 @@ export const RideEditModal: React.FC<RideEditModalProps> = ({
                             <ActivityIndicator color={palette.modalButton} size="large" />
                             <Text style={styles.loadingText}>Chargement des détails...</Text>
                         </View>
-                    ) : !rideDetail?.summary && ride ? (
-                        // ✅ Afficher un avertissement si les détails n'ont pas pu être chargés
-                        // mais permettre quand même l'édition avec les données de base
-                        <View style={styles.warningContainer}>
-                            <Ionicons name="warning-outline" size={20} color="#F59E0B" />
-                            <Text style={styles.warningText}>
-                                Les détails complets n'ont pas pu être chargés. Vous pouvez quand même modifier la course avec les informations disponibles.
-                            </Text>
-                        </View>
-                    ) : null}
-                    {!loadingDetail && (rideDetail?.summary || ride) && (
+                    ) : (
+                        <>
+                            {!rideDetail?.summary && ride && (
+                                // ✅ Afficher un avertissement si les détails n'ont pas pu être chargés
+                                // mais permettre quand même l'édition avec les données de base
+                                <View style={styles.warningContainer}>
+                                    <Ionicons name="warning-outline" size={20} color="#F59E0B" />
+                                    <Text style={styles.warningText}>
+                                        Les détails complets n'ont pas pu être chargés. Vous pouvez quand même modifier la course avec les informations disponibles.
+                                    </Text>
+                                </View>
+                            )}
+                            {ride && (
                         <ScrollView
                             style={styles.modalScroll}
                             contentContainerStyle={styles.modalContent}
@@ -248,6 +250,8 @@ export const RideEditModal: React.FC<RideEditModalProps> = ({
                                 </View>
                             </View>
                         </ScrollView>
+                            )}
+                        </>
                     )}
 
                     <View style={styles.modalActions}>
