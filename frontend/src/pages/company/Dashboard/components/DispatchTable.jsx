@@ -181,10 +181,12 @@ const DispatchTable = ({
                     
                     if (isSender) {
                       direction = 'à';
-                      partnerName = r.executing_company_name || 'partenaire';
+                      // Utiliser active_transfer pour obtenir le nom de l'entreprise receveuse
+                      partnerName = r.active_transfer.executing_company_name || r.executing_company_name || 'partenaire';
                     } else if (isReceiver) {
                       direction = 'de';
-                      partnerName = r.company_name || 'partenaire';
+                      // Utiliser active_transfer pour obtenir le nom de l'entreprise émettrice (pas company_name qui devient B après acceptation)
+                      partnerName = r.active_transfer.owner_company_name || 'partenaire';
                     } else {
                       // Fallback si currentCompanyId n'est pas fourni
                       direction = 'vers';
