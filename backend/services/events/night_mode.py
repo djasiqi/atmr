@@ -4,8 +4,13 @@
 Règles:
 - 22h-6h = Nuit
 - Urgences: toujours envoyées
-- Missions: seulement si chauffeur en service
+- Missions: seulement si chauffeur disponible (is_available=True)
 - Messages/Infos: jamais la nuit
+
+Note importante:
+- Le mode nuit affecte uniquement les notifications PUSH
+- L'API reste toujours accessible (les chauffeurs peuvent voir leurs missions
+  même la nuit s'ils ouvrent l'application)
 """
 
 from datetime import datetime, time
@@ -50,16 +55,22 @@ def should_send_night_notification(
 
     Règles:
     1. Urgences (urgent_alert, accident, emergency): TOUJOURS
-    2. Missions (booking, booking_updated, delay): SI chauffeur en service
+    2. Missions (booking, booking_updated, delay): SI chauffeur disponible (is_available=True)
+       - Protection du sommeil : si le chauffeur n'est pas disponible, la notification est bloquée
+       - Exception : les chauffeurs disponibles (en service) reçoivent les notifications même la nuit
     3. Messages (message, team_chat_message): JAMAIS
     4. Infos (dispatch_completed, stats): JAMAIS
 
+    Note importante:
+    - Cette fonction affecte uniquement les notifications PUSH
+    - L'API reste toujours accessible (GET /api/driver/me/bookings retourne toujours les missions)
+
     Args:
         notification_type: Type de notification (ex: "booking", "urgent_alert")
-        driver_id: ID du chauffeur (requis pour vérifier statut en service)
+        driver_id: ID du chauffeur (requis pour vérifier statut de disponibilité)
 
     Returns:
-        True si la notification peut être envoyée
+        True si la notification peut être envoyée, False sinon
     """
     # Si ce n'est pas la nuit, toujours OK
     if not is_night_time():
@@ -76,13 +87,17 @@ def should_send_night_notification(
         )
         return True
 
-    # 2. Missions : vérifier si chauffeur en service
+    # 2. Missions : bloquer la nuit (protection du sommeil)
+    # Les chauffeurs peuvent toujours voir leurs missions via l'API même la nuit
+    # mais les notifications push sont bloquées pour préserver le sommeil
     mission_types = ["booking", "booking_updated", "booking_cancelled", "delay"]
     if notification_type in mission_types:
-        # Vérifier driver_id et statut en service
+        # ✅ Protection du sommeil : bloquer toutes les notifications de missions la nuit
+        # Exception : si le chauffeur est disponible (is_available), cela signifie qu'il
+        # est probablement en service et souhaite recevoir les notifications
         if driver_id is None:
-            app_logger.warning(
-                "[night_mode] driver_id manquant pour notification type=%s, refusée",
+            app_logger.info(
+                "[night_mode] Notification de mission bloquée la nuit (driver_id manquant, type=%s)",
                 notification_type,
             )
             return False
@@ -90,16 +105,21 @@ def should_send_night_notification(
         from models import Driver
 
         driver = Driver.query.get(driver_id)
-        is_on_duty = driver and getattr(driver, "is_on_duty", False)
+        # ✅ Utiliser is_available au lieu de is_on_duty (qui n'existe pas dans le modèle)
+        # is_available indique si le chauffeur est disponible pour recevoir des missions
+        is_available = driver and getattr(driver, "is_available", False)
 
-        log_msg = "[night_mode] Mission {} la nuit (chauffeur {} {})"
-        if is_on_duty:
-            app_logger.info(log_msg.format("autorisée", driver_id, "en service"))
+        log_msg = "[night_mode] Notification de mission {} la nuit (chauffeur {} {})"
+        if is_available:
+            app_logger.info(log_msg.format("autorisée", driver_id, "disponible"))
         else:
-            reason = "introuvable" if not driver else "hors service"
-            app_logger.info(log_msg.format("refusée", driver_id, reason))
+            reason = "introuvable" if not driver else "indisponible"
+            app_logger.info(
+                log_msg.format("bloquée", driver_id, reason)
+                + " - Protection du sommeil"
+            )
 
-        return bool(is_on_duty)
+        return bool(is_available)
 
     # 3. Messages et infos : jamais la nuit (refus par défaut)
     blocked_types = [
