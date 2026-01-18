@@ -11,7 +11,7 @@ import time
 from datetime import datetime
 from typing import Any, Dict
 
-from flask import current_app  # pyright: ignore[reportMissingImports]
+from flask import current_app
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import joinedload
 
@@ -228,7 +228,7 @@ class AgentTools:
         try:
             import os
 
-            import requests  # pyright: ignore[reportMissingModuleSource]
+            import requests
 
             from services.geolocation.osrm import _osrm_circuit_breaker
 
@@ -552,6 +552,17 @@ class AgentTools:
         company_repo = CompanyRepository()
         company_dto = company_repo.find_by_id(self.company_id)
         company = Company.query.get(company_dto.id) if company_dto else None
+
+        # ✅ MODE MANUEL : Désactiver la validation de conflits temporels pour permettre
+        # les assignations manuelles même si le chauffeur a une course dans 1h
+        # Cela garantit la cohérence avec le frontend qui n'a pas cette validation
+        if company:
+            dispatch_mode_value = getattr(company.dispatch_mode, "value", None)
+            if dispatch_mode_value == "manual":
+                # En mode manuel, pas de validation de conflit (comme le frontend)
+                # L'utilisateur peut assigner manuellement même avec des conflits temporels
+                return None
+
         if company:
             dispatch_settings = ud_settings.for_company(company)
             pickup_service_min = dispatch_settings.service_times.pickup_service_min

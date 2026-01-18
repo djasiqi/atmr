@@ -1704,6 +1704,9 @@ def create_app(config_name: str | None = None):
         )
 
     app.logger.setLevel(app_log_level)
+    # ✅ FIX: Configurer aussi app_logger (utilisé dans fanout.py, core.py, etc.)
+    from ext import app_logger
+    app_logger.setLevel(app_log_level)
     logging.getLogger("werkzeug").setLevel(werkzeug_log_level)
 
     # ✅ Ajout filtre PII si activé

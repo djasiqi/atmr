@@ -123,28 +123,46 @@ type AxiosConfig = InternalAxiosRequestConfig<any> & {
 // ✅ Fonction helper pour valider le token
 export const hasValidToken = async (): Promise<boolean> => {
   try {
-    const token = await AsyncStorage.getItem(ENTERPRISE_TOKEN_KEY);
+    let token = await AsyncStorage.getItem(ENTERPRISE_TOKEN_KEY);
+    
+    // ✅ Si le token manque, vérifier si un refresh token existe (mais ne pas refresh ici)
+    // Le refresh sera géré par l'intercepteur si nécessaire
     if (!token) {
-      // ✅ Capturer l'absence de token pour monitoring
-      if (!__DEV__) {
-        Sentry.captureMessage("Guard Pattern: Token manquant", {
-          level: "warning",
-          tags: {
-            type: "token_validation",
-            reason: "missing_token",
-          },
-          contexts: {
-            tokenInfo: {
-              hasToken: false,
-              timestamp: new Date().toISOString(),
+      const refreshToken = await AsyncStorage.getItem(ENTERPRISE_REFRESH_KEY);
+      // ✅ Si un refresh token existe, considérer comme "valide" pour permettre l'intercepteur de faire le refresh
+      // Cela évite de bloquer les requêtes inutilement
+      if (refreshToken) {
+        // Refresh token disponible → l'intercepteur gérera le refresh si nécessaire
+        // Ne pas retourner false immédiatement, permettre à l'intercepteur de tenter le refresh
+        console.log("[ENT] ℹ️ Token manquant mais refresh token disponible, l'intercepteur gérera le refresh si nécessaire");
+        return true; // Permettre à la requête de partir, l'intercepteur gérera le refresh
+      } else {
+        // Pas de refresh token non plus
+        if (!__DEV__) {
+          Sentry.captureMessage("Guard Pattern: Token manquant", {
+            level: "warning",
+            tags: {
+              type: "token_validation",
+              reason: "missing_token",
             },
-          },
-        });
+            contexts: {
+              tokenInfo: {
+                hasToken: false,
+                hasRefreshToken: false,
+                timestamp: new Date().toISOString(),
+              },
+            },
+          });
+        }
+        return false;
       }
-      return false;
     }
     
     // Vérifier que le token a un format JWT valide (3 parties séparées par .)
+    if (!token) {
+      return false; // Fallback de sécurité
+    }
+    
     const parts = token.split(".");
     if (parts.length !== 3) {
       console.warn("[ENT] Token invalide (format incorrect)");
@@ -467,11 +485,37 @@ enterpriseApi.interceptors.request.use(
               console.debug("[ENT] Token ajouté à la requête:", config.url);
             }
           } else {
-            // ⚠️ Log WARNING uniquement si ce n'est pas une requête publique
-            const isPublicEndpoint = config.url?.includes("/auth/") || 
+            // ✅ MODE MANUEL : Vérifier si c'est une requête publique (auth/public)
+            const isPublicEndpoint = config.url?.includes("/auth/login") || 
+                                      config.url?.includes("/auth/register") ||
                                       config.url?.includes("/public");
+            
+            // Si ce n'est pas une requête publique, tenter un refresh avant de rejeter
             if (!isPublicEndpoint) {
               console.warn("[ENT] ⚠️ Aucun token disponible pour:", config.url);
+              
+              // ✅ Tenter un refresh token automatique si refresh token disponible
+              const refreshToken = await AsyncStorage.getItem(ENTERPRISE_REFRESH_KEY);
+              if (refreshToken) {
+                console.log("[ENT] 🔄 Token manquant, tentative de refresh automatique...");
+                try {
+                  const newToken = await refreshAccessToken();
+                  if (newToken) {
+                    headers.set("Authorization", `Bearer ${newToken}`);
+                    console.log("[ENT] ✅ Token refreshé automatiquement, requête peut continuer");
+                  } else {
+                    console.error("[ENT] ❌ Impossible de refresh le token, rejet de la requête");
+                    // Ne pas throw dans l'intercepteur, laisser la requête partir et le 401 sera géré par l'intercepteur response
+                  }
+                } catch (refreshError: any) {
+                  // Si le refresh échoue, laisser la requête partir sans token
+                  // L'intercepteur response gérera le 401/403 résultant
+                  console.error("[ENT] ❌ Erreur lors du refresh automatique:", refreshError);
+                }
+              } else {
+                console.error("[ENT] ❌ Pas de refresh token disponible pour:", config.url);
+                // Laisser la requête partir sans token, le 401 sera géré par l'intercepteur response
+              }
             }
           }
         } else {

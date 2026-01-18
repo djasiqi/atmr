@@ -186,7 +186,7 @@ def _send_push_to_driver(
         if use_celery:
             from tasks.notification_tasks import send_push_notification_task
 
-            app_logger.info(
+            app_logger.warning(
                 "[event_fanout] Queueing notification to driver %s via Celery (type: %s)",
                 driver_id,
                 notification_type,
@@ -423,7 +423,7 @@ def fanout_booking_assigned_to_driver(
         booking_id: ID de la mission
         booking_data: Données de la mission (optionnel)
     """
-    app_logger.info(
+    app_logger.warning(
         "[event_fanout] fanout_booking_assigned_to_driver called: driver_id=%s booking_id=%s",
         driver_id,
         booking_id,
@@ -434,7 +434,7 @@ def fanout_booking_assigned_to_driver(
         base_data: Dict[str, Any] = booking_data or {"id": booking_id}
         payload = _create_event_payload(base_data, "booking_assigned")
         emit_driver_event(driver_id, "new_booking", payload)
-        app_logger.info(
+        app_logger.warning(
             "[event_fanout] Socket.IO emitted for booking_assigned (driver %s)",
             driver_id,
         )
@@ -450,13 +450,13 @@ def fanout_booking_assigned_to_driver(
         if booking_data
         else "Nouvelle mission"
     )
-    app_logger.info(
+    app_logger.warning(
         "[event_fanout] Sending push notification to driver %s for booking %s (pickup: %s)",
         driver_id,
         booking_id,
         pickup_address,
     )
-    
+
     result = _send_push_to_driver(
         driver_id=driver_id,
         title="Nouvelle mission assignée",
@@ -467,8 +467,8 @@ def fanout_booking_assigned_to_driver(
             "deepLink": f"atmr://booking/{booking_id}",
         },
     )
-    
-    app_logger.info(
+
+    app_logger.warning(
         "[event_fanout] _send_push_to_driver returned: driver_id=%s booking_id=%s result=%s",
         driver_id,
         booking_id,
