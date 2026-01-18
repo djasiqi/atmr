@@ -818,7 +818,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (error: any) {
       const status = error?.response?.status;
       const isNetworkError = !error?.response; // Pas de réponse = erreur réseau
-      
+
       // ✅ Ne déconnecter que si c'est vraiment un problème d'authentification
       // (401 = token invalide, 403 = compte désactivé)
       // Ne pas déconnecter pour erreurs réseau temporaires (timeout, pas de connexion)

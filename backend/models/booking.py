@@ -383,7 +383,10 @@ class Booking(db.Model):
             "executing_company_name": (
                 self.executing_company.name if self.executing_company else None
             ),
-            "is_transferred": self.executing_company_id is not None,
+            # ✅ FIX: is_transferred doit être True s'il y a un transfert ACCEPTED/COMPLETED
+            # car après acceptation, company_id est mis à jour mais on doit garder la trace
+            # que la course a été transférée (owner_company_id != company_id dans le transfert)
+            "is_transferred": self._is_transferred(),
             "driver": {
                 "id": self.driver.id,
                 "username": self.driver.user.username if self.driver.user else None,
@@ -456,6 +459,47 @@ class Booking(db.Model):
             # ✅ Informations du transfert actif (si existe)
             "active_transfer": self._get_active_transfer_info(),
         }
+
+    def _is_transferred(self) -> bool:
+        """Détermine si la course a été transférée (ACCEPTED ou COMPLETED).
+        
+        Après acceptation d'un transfert, company_id est mis à jour pour pointer
+        vers l'entreprise receveuse. Pour garder la trace que la course a été
+        transférée, on vérifie s'il existe un transfert ACCEPTED ou COMPLETED
+        où owner_company_id != company_id actuel.
+        """
+        try:
+            from models.booking_transfer import BookingTransfer
+            from models.enums import TransferStatus
+
+            # Chercher un transfert ACCEPTED ou COMPLETED
+            # (PENDING ne compte pas car pas encore accepté)
+            active_transfer = (
+                BookingTransfer.query.filter_by(booking_id=self.id)
+                .filter(
+                    BookingTransfer.status.in_(
+                        [
+                            TransferStatus.ACCEPTED,
+                            TransferStatus.COMPLETED,
+                        ]
+                    )
+                )
+                .first()
+            )
+
+            if active_transfer:
+                # Si un transfert ACCEPTED/COMPLETED existe, la course a été transférée
+                # On vérifie aussi que owner_company_id != company_id actuel pour s'assurer
+                # que la course a bien été transférée (et non créée par l'entreprise actuelle)
+                return active_transfer.owner_company_id != self.company_id
+
+            return False
+        except Exception:
+            # En cas d'erreur, fallback sur l'ancienne logique
+            return (
+                self.executing_company_id is not None
+                and self.executing_company_id != self.company_id
+            )
 
     def _get_active_transfer_info(self):
         """Récupère les informations du transfert actif pour cette réservation."""
