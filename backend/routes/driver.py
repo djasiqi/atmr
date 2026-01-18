@@ -848,12 +848,21 @@ class DriverBookingsSince(Resource):
             )
             bookings = uc.execute(driver_id=driver.id).bookings
 
-            logger.info(
+            logger.warning(
                 "📱 [Driver Bookings Since] Driver %s (ID: %s) - No 'since' param, returning all upcoming bookings (%s)",
                 driver.id,
                 driver.id,
                 len(bookings),
             )
+            # 🔍 LOG DÉTAILLÉ : Afficher chaque booking trouvé
+            for b in bookings:
+                logger.warning(
+                    "   - Booking #%s: driver_id=%s, status=%s, scheduled_time=%s",
+                    b.id,
+                    b.driver_id,
+                    b.status,
+                    b.scheduled_time,
+                )
 
         return [b.serialize for b in bookings], 200
 
