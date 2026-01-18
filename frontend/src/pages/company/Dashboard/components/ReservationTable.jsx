@@ -56,8 +56,10 @@ const ReservationTable = ({
             const hasActions = !noActionStatuses.includes(status);
 
             // ✅ Déterminer si l'entreprise actuelle peut gérer cette réservation transférée
-            const isTransferredSender = currentCompanyId && r.is_transferred && r.company_id === currentCompanyId;
-            const _isTransferredReceiver = currentCompanyId && r.is_transferred && r.executing_company_id === currentCompanyId;
+            // Après acceptation, company_id est mis à jour pour être l'entreprise receveuse
+            // Donc on utilise active_transfer.owner_company_id pour déterminer l'émettrice
+            const isTransferredSender = currentCompanyId && r.is_transferred && r.active_transfer && r.active_transfer.owner_company_id === currentCompanyId;
+            const _isTransferredReceiver = currentCompanyId && r.is_transferred && r.active_transfer && r.active_transfer.executing_company_id === currentCompanyId;
             
             // L'entreprise émettrice (A) ne peut PAS assigner/modifier une course transférée acceptée
             // Seule l'entreprise receveuse (B) peut la gérer
@@ -90,8 +92,9 @@ const ReservationTable = ({
                   {/* ✅ Badge transfert partenaire avec direction */}
                   {r.is_transferred && r.active_transfer && (() => {
                     // Déterminer si je suis l'émetteur (A) ou le receveur (B)
-                    const isSender = currentCompanyId && r.company_id === currentCompanyId;
-                    const isReceiver = currentCompanyId && r.executing_company_id === currentCompanyId;
+                    // Après acceptation, company_id est mis à jour, donc on utilise active_transfer
+                    const isSender = currentCompanyId && r.active_transfer.owner_company_id === currentCompanyId;
+                    const isReceiver = currentCompanyId && r.active_transfer.executing_company_id === currentCompanyId;
                     
                     let direction = '';
                     let partnerName = '';
