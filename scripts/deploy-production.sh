@@ -190,19 +190,27 @@ mkdir -p data/rl/shadow_mode data/ml data/rl data/ml/models && chmod -R 755 data
 
 # ✅ CORRECTION : Démarrer le monitoring AVANT la production pour éviter les problèmes de dépendances
 echo "📊 Démarrage du monitoring..."
-if [ -f "docker-compose.monitoring.yml" ]; then
-  if [ -d "monitoring" ]; then
-    [ -f "monitoring/alertmanager/docker-entrypoint.sh" ] && chmod +x monitoring/alertmanager/docker-entrypoint.sh || true
-    [ -f "monitoring/alertmanager/Dockerfile" ] && docker compose -f docker-compose.monitoring.yml build alertmanager || true
+if [ ! -f "docker-compose.monitoring.yml" ]; then
+  echo "⚠️  docker-compose.monitoring.yml non trouvé, monitoring ignoré"
+elif [ ! -d "monitoring" ]; then
+  echo "⚠️  Dossier monitoring/ non trouvé, monitoring ignoré"
+else
+  # Préparer les fichiers nécessaires
+  [ -f "monitoring/alertmanager/docker-entrypoint.sh" ] && chmod +x monitoring/alertmanager/docker-entrypoint.sh || true
+  if [ -f "monitoring/alertmanager/Dockerfile" ]; then
+    echo "🔨 Construction de l'image Alertmanager si nécessaire..."
+    docker compose -f docker-compose.monitoring.yml build alertmanager || echo "⚠️  Build Alertmanager échoué (peut être ignoré si l'image existe déjà)"
   fi
   
   echo "🔄 Démarrage des services de monitoring (Grafana, Prometheus, Alertmanager)..."
-  docker compose -f docker-compose.monitoring.yml up -d --remove-orphans || {
+  if ! docker compose -f docker-compose.monitoring.yml up -d --remove-orphans; then
     echo "❌ Échec du démarrage du monitoring"
     echo "📋 Logs du monitoring:"
     docker compose -f docker-compose.monitoring.yml logs --tail=50 || true
     echo "⚠️  Poursuite du déploiement malgré l'échec du monitoring..."
-  }
+  else
+    echo "✅ Commandes de démarrage du monitoring exécutées"
+  fi
   
   # ✅ Vérifier que les services de monitoring sont bien démarrés
   echo "⏳ Vérification du démarrage du monitoring (10 secondes)..."
@@ -227,8 +235,6 @@ if [ -f "docker-compose.monitoring.yml" ]; then
   else
     echo "✅ Tous les services de monitoring sont démarrés"
   fi
-else
-  echo "⚠️  docker-compose.monitoring.yml non trouvé, monitoring ignoré"
 fi
 
 # Démarrer les services de production
