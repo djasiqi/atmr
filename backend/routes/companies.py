@@ -4466,11 +4466,13 @@ class SingleReservation(Resource):
 
                 # Supprimer les enregistrements d'Assignment (dispatch) qui référencent ce booking
                 # (même avec CASCADE, supprimer explicitement pour éviter les problèmes)
+                # ✅ FIX: Utiliser synchronize_session=False pour éviter que SQLAlchemy charge
+                # les objets en mémoire et déclenche les validations @validates
                 from models.dispatch import Assignment
 
                 assignment_dispatch_count = Assignment.query.filter_by(
                     booking_id=reservation_id
-                ).delete()
+                ).delete(synchronize_session=False)
                 if assignment_dispatch_count > 0:
                     logger.info(
                         "✅ Supprimé %s enregistrement(s) assignment (dispatch) pour booking %s",
@@ -4495,13 +4497,14 @@ class SingleReservation(Resource):
                 if hasattr(booking, "return_trip") and booking.return_trip:
                     return_booking = booking.return_trip
                     # Supprimer aussi les assignments du retour
+                    # ✅ FIX: Supprimer directement avec synchronize_session=False
+                    # pour éviter les validations lors de la suppression
                     if uc_result.should_delete_assignments and return_booking.id:
-                        # ruff: noqa: I001
-                        from repositories.assignment_repository import (
-                            AssignmentRepository,
-                        )
+                        from models.dispatch import Assignment
 
-                        AssignmentRepository().delete_by_booking_id(return_booking.id)
+                        Assignment.query.filter_by(booking_id=return_booking.id).delete(
+                            synchronize_session=False
+                        )
                     # Supprimer les enregistrements liés au retour
                     from models.trip_tracking import TripTracking
                     from models.autonomous_action import AutonomousAction

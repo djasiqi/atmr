@@ -157,7 +157,11 @@ class AssignmentRepository:
         Returns:
             Nombre d'assignments supprimés
         """
-        return Assignment.query.filter_by(booking_id=booking_id).delete()
+        # ✅ FIX: Utiliser synchronize_session=False pour éviter que SQLAlchemy charge
+        # les objets en mémoire et déclenche les validations @validates lors de la suppression
+        return Assignment.query.filter_by(booking_id=booking_id).delete(
+            synchronize_session=False
+        )
 
     def find_model_by_id_with_company_check(
         self, assignment_id: int, company_id: int
