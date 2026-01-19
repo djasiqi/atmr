@@ -550,6 +550,9 @@ def send_push_message_with_retry(
     last_result: Dict[str, Any] | None = None
 
     for attempt in range(1, max_retries + 1):
+        # ✅ FIX CRITIQUE: Passer use_retry=False pour éviter la récursion infinie
+        # send_push_message_with_retry gère déjà les retries, donc on ne doit pas
+        # appeler send_push_message avec use_retry=True
         result = send_push_message(
             token=token,
             title=title,
@@ -557,6 +560,7 @@ def send_push_message_with_retry(
             data=data,
             timeout=timeout,
             correlation_id=correlation_id,
+            use_retry=False,  # ✅ Éviter la récursion infinie
         )
 
         if result.get("ok"):
