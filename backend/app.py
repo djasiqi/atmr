@@ -722,22 +722,35 @@ def create_app(config_name: str | None = None):
     # ✅ 2.9: Injection trace_id dans logs pour corrélation
     # (une seule fois au démarrage)
     try:
+        import threading
+
         from shared.otel_setup import inject_trace_id_to_logs
 
         old_factory = logging.getLogRecordFactory()
 
+        # ✅ Protection contre récursion infinie
+        _factory_lock = threading.local()
+
         def record_factory_with_trace(*args, **kwargs):
             """Factory enrichissant les LogRecord avec trace_id/span_id."""
-            record = old_factory(*args, **kwargs)
+            # Protection contre récursion : si on est déjà dans la factory, utiliser l'ancienne
+            if hasattr(_factory_lock, "in_factory"):
+                return old_factory(*args, **kwargs)
+
+            _factory_lock.in_factory = True
             try:
-                trace_data = inject_trace_id_to_logs()
-                record.trace_id = trace_data.get("trace_id", "")
-                record.span_id = trace_data.get("span_id", "")
-            except Exception:
-                # Si injection échoue, continuer sans trace_id
-                record.trace_id = ""
-                record.span_id = ""
-            return record
+                record = old_factory(*args, **kwargs)
+                try:
+                    trace_data = inject_trace_id_to_logs()
+                    record.trace_id = trace_data.get("trace_id", "")
+                    record.span_id = trace_data.get("span_id", "")
+                except Exception:
+                    # Si injection échoue, continuer sans trace_id
+                    record.trace_id = ""
+                    record.span_id = ""
+                return record
+            finally:
+                _factory_lock.in_factory = False
 
         logging.setLogRecordFactory(record_factory_with_trace)
         app.logger.info("[2.9] Logging enrichi avec trace_id/span_id")
