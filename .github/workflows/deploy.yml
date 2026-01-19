@@ -21,11 +21,13 @@ on:
   #     - "backend/**"
   #     - "docker-compose.yml"
   #     - "docker-compose.production.yml"
+  #     - "docker-compose.monitoring.yml"
+  #     - "monitoring/**"
   #     - "pyrightconfig.json"
   #     - "package.json"
   #     - "package-lock.json"
-  #     - "prometheus/**"
   #     - "vault/**"
+  #     - "scripts/deploy-production.sh"
   #     - ".github/workflows/deploy.yml"
 
 permissions:

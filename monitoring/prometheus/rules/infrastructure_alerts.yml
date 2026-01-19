@@ -207,12 +207,24 @@ groups:
 
       - alert: ContainerRestartLoop
         expr: |
-          rate(container_start_time_seconds[5m]) > 0.1
+          rate(container_start_time_seconds{
+            # ✅ Filtrer les cgroups système (user.slice, app.slice, etc.)
+            id !~ "/user\\.slice.*",
+            id !~ "/system\\.slice.*",
+            id !~ "/init\\.scope",
+            id !~ "/.*\\.socket",
+            id !~ "/.*\\.service$",
+            # ✅ Ne garder que les conteneurs Docker réels (commencent par /docker/)
+            id =~ "/docker/.*",
+            # ✅ Exclure les conteneurs système Docker (pause, etc.)
+            name !~ ".*pause.*",
+            name != ""
+          }[5m]) > 0.1
         for: 5m
         labels:
           severity: critical
           component: containers
         annotations:
           summary: "Container {{ $labels.name }} en boucle de redémarrage"
-          description: "{{ $value }} redémarrages/seconde"
+          description: "{{ $value }} redémarrages/seconde (container ID: {{ $labels.id }})"
 

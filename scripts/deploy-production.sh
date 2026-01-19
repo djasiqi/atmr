@@ -198,9 +198,35 @@ if [ -f "docker-compose.monitoring.yml" ]; then
   
   echo "🔄 Démarrage des services de monitoring (Grafana, Prometheus, Alertmanager)..."
   docker compose -f docker-compose.monitoring.yml up -d --remove-orphans || {
-    echo "⚠️  Échec du démarrage du monitoring, poursuite du déploiement..."
+    echo "❌ Échec du démarrage du monitoring"
+    echo "📋 Logs du monitoring:"
+    docker compose -f docker-compose.monitoring.yml logs --tail=50 || true
+    echo "⚠️  Poursuite du déploiement malgré l'échec du monitoring..."
   }
-  sleep 5
+  
+  # ✅ Vérifier que les services de monitoring sont bien démarrés
+  echo "⏳ Vérification du démarrage du monitoring (10 secondes)..."
+  sleep 10
+  
+  MONITORING_OK=true
+  for service in prometheus grafana alertmanager; do
+    SERVICE_STATUS=$(docker compose -f docker-compose.monitoring.yml ps "$service" --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
+    if [ "$SERVICE_STATUS" != "running" ]; then
+      echo "⚠️  Service $service n'est pas en cours d'exécution (status: $SERVICE_STATUS)"
+      MONITORING_OK=false
+    else
+      echo "✅ Service $service démarré"
+    fi
+  done
+  
+  if [ "$MONITORING_OK" = "false" ]; then
+    echo "⚠️  Certains services de monitoring n'ont pas démarré correctement"
+    echo "📋 État des services de monitoring:"
+    docker compose -f docker-compose.monitoring.yml ps || true
+    echo "⚠️  Poursuite du déploiement malgré les problèmes de monitoring..."
+  else
+    echo "✅ Tous les services de monitoring sont démarrés"
+  fi
 else
   echo "⚠️  docker-compose.monitoring.yml non trouvé, monitoring ignoré"
 fi

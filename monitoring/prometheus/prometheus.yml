@@ -32,13 +32,13 @@ scrape_configs:
     metrics_path: "/api/v1/prometheus/metrics"
     static_configs:
       - targets:
-          - "backend:5000"
+          - "atmr-backend:5000"
         labels:
           service: "atmr-backend"
           component: "api"
           environment: "production"
-    scrape_interval: 5s  # Haute fréquence pour WebSocket
-    scrape_timeout: 3s  # ✅ Timeout < intervalle pour éviter chevauchements
+    scrape_interval: 15s  # Intervalle standard
+    scrape_timeout: 10s  # ✅ Timeout < intervalle
     honor_labels: true
     metric_relabel_configs:
       - source_labels: [__name__]

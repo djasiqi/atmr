@@ -1667,6 +1667,9 @@ class Logout(Resource):
                 )
 
             # ✅ CORRECTIF #4: Invalider tous les tokens push du driver au logout
+            # C'est correct : quand le driver se déconnecte explicitement, on invalide les tokens
+            # Les notifications push doivent fonctionner uniquement si le driver est connecté
+            # (app ouverte, en arrière-plan, ou fermée - mais pas déconnecté)
             try:
                 if user and user.role == UserRole.driver:
                     from repositories.driver_repository import DriverRepository
