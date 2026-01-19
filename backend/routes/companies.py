@@ -4328,6 +4328,18 @@ class SingleReservation(Resource):
                 )
 
             if uc_result.action == "delete":
+                # ✅ FIX CRITIQUE: Expunger tous les objets Assignment de la session AVANT
+                # de faire les suppressions pour éviter que SQLAlchemy déclenche les validations
+                # lors de la synchronisation de la session
+                from models.dispatch import Assignment
+
+                for obj in list(db.session):
+                    if (
+                        isinstance(obj, Assignment)
+                        and getattr(obj, "booking_id", None) == reservation_id
+                    ):
+                        db.session.expunge(obj)
+
                 if uc_result.should_delete_assignments:
                     # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
                     from repositories.assignment_repository import AssignmentRepository
@@ -4338,9 +4350,11 @@ class SingleReservation(Resource):
                 # (car pas de CASCADE sur cette foreign key)
                 from models.trip_tracking import TripTracking
 
+                # ✅ FIX: Utiliser synchronize_session=False pour TOUTES les suppressions
+                # pour éviter que SQLAlchemy charge les objets en mémoire et déclenche les validations
                 trip_tracking_count = TripTracking.query.filter_by(
                     booking_id=reservation_id
-                ).delete()
+                ).delete(synchronize_session=False)
                 if trip_tracking_count > 0:
                     logger.info(
                         "✅ Supprimé %s enregistrement(s) trip_tracking pour booking %s",
@@ -4354,7 +4368,7 @@ class SingleReservation(Resource):
 
                 autonomous_action_count = AutonomousAction.query.filter_by(
                     booking_id=reservation_id
-                ).delete()
+                ).delete(synchronize_session=False)
                 if autonomous_action_count > 0:
                     logger.info(
                         "✅ Supprimé %s enregistrement(s) autonomous_action pour booking %s",
@@ -4367,7 +4381,7 @@ class SingleReservation(Resource):
 
                 delay_event_count = DelayEvent.query.filter_by(
                     booking_id=reservation_id
-                ).delete()
+                ).delete(synchronize_session=False)
                 if delay_event_count > 0:
                     logger.info(
                         "✅ Supprimé %s enregistrement(s) delay_event pour booking %s",
@@ -4379,7 +4393,7 @@ class SingleReservation(Resource):
 
                 trip_tracking_archive_count = TripTrackingArchive.query.filter_by(
                     booking_id=reservation_id
-                ).delete()
+                ).delete(synchronize_session=False)
                 if trip_tracking_archive_count > 0:
                     logger.info(
                         "✅ Supprimé %s enregistrement(s) trip_tracking_archive pour booking %s",
@@ -4391,7 +4405,7 @@ class SingleReservation(Resource):
 
                 ml_prediction_count = MLPrediction.query.filter_by(
                     booking_id=reservation_id
-                ).delete()
+                ).delete(synchronize_session=False)
                 if ml_prediction_count > 0:
                     logger.info(
                         "✅ Supprimé %s enregistrement(s) ml_prediction pour booking %s",
@@ -4403,7 +4417,7 @@ class SingleReservation(Resource):
 
                 eta_accuracy_log_count = EtaAccuracyLog.query.filter_by(
                     booking_id=reservation_id
-                ).delete()
+                ).delete(synchronize_session=False)
                 if eta_accuracy_log_count > 0:
                     logger.info(
                         "✅ Supprimé %s enregistrement(s) eta_accuracy_log pour booking %s",
@@ -4415,7 +4429,7 @@ class SingleReservation(Resource):
 
                 rl_suggestion_count = RLSuggestion.query.filter_by(
                     booking_id=reservation_id
-                ).delete()
+                ).delete(synchronize_session=False)
                 if rl_suggestion_count > 0:
                     logger.info(
                         "✅ Supprimé %s enregistrement(s) rl_suggestion pour booking %s",
@@ -4443,7 +4457,7 @@ class SingleReservation(Resource):
 
                 ab_test_result_count = ABTestResult.query.filter_by(
                     booking_id=reservation_id
-                ).delete()
+                ).delete(synchronize_session=False)
                 if ab_test_result_count > 0:
                     logger.info(
                         "✅ Supprimé %s enregistrement(s) ab_test_result pour booking %s",
@@ -4456,7 +4470,7 @@ class SingleReservation(Resource):
 
                 booking_transfer_count = BookingTransfer.query.filter_by(
                     booking_id=reservation_id
-                ).delete()
+                ).delete(synchronize_session=False)
                 if booking_transfer_count > 0:
                     logger.info(
                         "✅ Supprimé %s enregistrement(s) booking_transfer pour booking %s",
@@ -4486,7 +4500,7 @@ class SingleReservation(Resource):
 
                 payment_count = Payment.query.filter_by(
                     booking_id=reservation_id
-                ).delete()
+                ).delete(synchronize_session=False)
                 if payment_count > 0:
                     logger.info(
                         "✅ Supprimé %s enregistrement(s) payment pour booking %s",
@@ -4517,19 +4531,28 @@ class SingleReservation(Resource):
                     from models.ab_test_result import ABTestResult
                     from models.booking_transfer import BookingTransfer
 
-                    TripTracking.query.filter_by(booking_id=return_booking.id).delete()
+                    # ✅ FIX: Utiliser synchronize_session=False pour toutes les suppressions
+                    TripTracking.query.filter_by(booking_id=return_booking.id).delete(
+                        synchronize_session=False
+                    )
                     AutonomousAction.query.filter_by(
                         booking_id=return_booking.id
-                    ).delete()
-                    DelayEvent.query.filter_by(booking_id=return_booking.id).delete()
+                    ).delete(synchronize_session=False)
+                    DelayEvent.query.filter_by(booking_id=return_booking.id).delete(
+                        synchronize_session=False
+                    )
                     TripTrackingArchive.query.filter_by(
                         booking_id=return_booking.id
-                    ).delete()
-                    MLPrediction.query.filter_by(booking_id=return_booking.id).delete()
-                    EtaAccuracyLog.query.filter_by(
-                        booking_id=return_booking.id
-                    ).delete()
-                    RLSuggestion.query.filter_by(booking_id=return_booking.id).delete()
+                    ).delete(synchronize_session=False)
+                    MLPrediction.query.filter_by(booking_id=return_booking.id).delete(
+                        synchronize_session=False
+                    )
+                    EtaAccuracyLog.query.filter_by(booking_id=return_booking.id).delete(
+                        synchronize_session=False
+                    )
+                    RLSuggestion.query.filter_by(booking_id=return_booking.id).delete(
+                        synchronize_session=False
+                    )
                     # Mettre à NULL reservation_id dans InvoiceLines (pas de suppression pour préserver la facture)
                     InvoiceLine.query.filter_by(
                         reservation_id=return_booking.id
@@ -4537,17 +4560,112 @@ class SingleReservation(Resource):
                         {InvoiceLine.reservation_id: None}, synchronize_session=False
                     )
                     # Supprimer les enregistrements d'ab_test_result
-                    ABTestResult.query.filter_by(booking_id=return_booking.id).delete()
+                    ABTestResult.query.filter_by(booking_id=return_booking.id).delete(
+                        synchronize_session=False
+                    )
                     # Supprimer les BookingTransfer explicitement
                     BookingTransfer.query.filter_by(
                         booking_id=return_booking.id
-                    ).delete()
-                    db.session.delete(return_booking)
+                    ).delete(synchronize_session=False)
+                    # Expunger le return_booking de la session avant suppression SQL
+                    db.session.expunge(return_booking)
+                    # ✅ FIX: Utiliser une requête SQL directe pour supprimer le return_booking
+                    # pour éviter les validations ORM
+                    from sqlalchemy import text
 
-                db.session.delete(booking)
-                # Flush pour détecter les erreurs avant le commit
+                    return_delete_count = db.session.execute(
+                        text("DELETE FROM booking WHERE id = :booking_id"),
+                        {"booking_id": return_booking.id},
+                    ).rowcount
+                    if return_delete_count > 0:
+                        logger.info(
+                            "✅ Return booking %s supprimé directement via SQL",
+                            return_booking.id,
+                        )
+
+                # ✅ FIX CRITIQUE: Expunger le booking et nettoyer la session avant suppression SQL
+                # pour éviter que SQLAlchemy déclenche des validations sur les objets liés
+                # qui pourraient encore être dans la session
+                db.session.expunge(booking)
+                # Nettoyer tous les objets Assignment qui pourraient être dans la session
+                # (chargés via des relations ou des requêtes précédentes)
+                from models.dispatch import Assignment
+
+                for obj in list(db.session):
+                    if (
+                        isinstance(obj, Assignment)
+                        and getattr(obj, "booking_id", None) == reservation_id
+                    ):
+                        db.session.expunge(obj)
+
+                # Utiliser une requête SQL directe pour supprimer le booking
+                # afin d'éviter que SQLAlchemy charge les relations et déclenche les validations
+                # @validates. Cela contourne complètement les validations ORM.
+                # Toutes les suppressions des enregistrements liés ont déjà été faites ci-dessus.
+                from sqlalchemy import text
+
+                delete_count = db.session.execute(
+                    text("DELETE FROM booking WHERE id = :booking_id"),
+                    {"booking_id": reservation_id},
+                ).rowcount
+                if delete_count == 0:
+                    logger.warning(
+                        "⚠️ Aucun booking supprimé pour reservation_id=%s",
+                        reservation_id,
+                    )
+                else:
+                    logger.info(
+                        "✅ Booking %s supprimé directement via SQL (contourne validations ORM)",
+                        reservation_id,
+                    )
+                # Flush pour s'assurer que la suppression SQL est bien appliquée
+                # Avec une requête SQL directe et le booking expungé, le flush ne devrait pas
+                # déclencher de validations ORM. Si une ValueError se produit, c'est qu'un objet
+                # Assignment est encore dans la session et déclenche sa validation.
                 try:
                     db.session.flush()
+                except ValueError as validation_error:
+                    # ✅ FIX: Capturer spécifiquement les ValueError (validations @validates)
+                    # qui peuvent encore se déclencher si des objets Assignment sont dans la session
+                    # Dans ce cas, on nettoie la session et on réessaie
+                    error_msg = str(validation_error)
+                    if "booking_id" in error_msg.lower():
+                        # C'est probablement une validation Assignment qui se déclenche
+                        # Nettoyer tous les objets Assignment de la session et réessayer
+                        logger.warning(
+                            "⚠️ ValidationError détectée (probablement Assignment): %s. Nettoyage de la session...",
+                            error_msg,
+                        )
+                        # Expunger tous les objets Assignment de la session
+                        for obj in list(db.session):
+                            if isinstance(obj, Assignment):
+                                db.session.expunge(obj)
+                        # Réessayer le flush
+                        try:
+                            db.session.flush()
+                            logger.info("✅ Flush réussi après nettoyage de la session")
+                        except Exception as retry_error:
+                            db.session.rollback()
+                            logger.error(
+                                "❌ Erreur après nettoyage de la session pour reservation %s: %s",
+                                reservation_id,
+                                str(retry_error),
+                            )
+                            return APIErrorHandler.handle_validation_error(
+                                str(retry_error), logger_instance=logger
+                            )
+                    else:
+                        # Autre type de ValueError
+                        db.session.rollback()
+                        logger.error(
+                            "❌ ValidationError during flush for reservation %s: %s (type: %s)",
+                            reservation_id,
+                            error_msg,
+                            type(validation_error).__name__,
+                        )
+                        return APIErrorHandler.handle_validation_error(
+                            error_msg, logger_instance=logger
+                        )
                 except Exception as flush_error:
                     db.session.rollback()
                     from sqlalchemy.exc import IntegrityError
