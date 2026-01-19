@@ -49,7 +49,7 @@
     "stream-browserify": "^3.0.0",
     "swissqrbill": "^4.1.1",
     "util": "^0.12.5",
-    "web-vitals": "^4.2.4"
+    "web-vitals": "^5.1.0"
   },
   "scripts": {
     "start": "react-app-rewired start",
