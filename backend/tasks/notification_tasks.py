@@ -99,130 +99,149 @@ def send_push_notification_task(  # noqa: PLR0911
     Returns:
         Dict avec status de l'envoi
     """
+    from celery_app import get_flask_app
     from ext import db
     from models import Driver
     from services.notifications.push import send_push_message
 
-    try:
-        logger.warning(
-            "[notification_task] send_push_notification_task started: driver_id=%s notification_type=%s",
-            driver_id,
-            notification_type,
-        )
-        # Récupérer le driver
-        driver = db.session.get(Driver, driver_id)
-        if not driver:
-            logger.error("[notification_task] Driver %s not found", driver_id)
-            return {"ok": False, "error": "Driver not found", "channel": "none"}
-
-        # ✅ CORRECTIF #3: Utiliser DeviceToken pour support multi-device
-        from models import DeviceToken
-
-        device_tokens = DeviceToken.query.filter_by(
-            driver_id=driver_id,
-            is_active=True,
-        ).all()
-
-        if not device_tokens:
+    # ✅ CRITIQUE: Créer un contexte d'application Flask pour utiliser SQLAlchemy
+    app = get_flask_app()
+    with app.app_context():
+        try:
             logger.warning(
-                "[notification_task] No active push tokens for driver %s, using fallback",
+                "[notification_task] send_push_notification_task started: driver_id=%s notification_type=%s",
                 driver_id,
+                notification_type,
             )
-        else:
-            logger.warning(
-                "[notification_task] Attempt %d/%d: Sending push to driver %s (%d devices)",
-                self.request.retries + 1,
-                MAX_PUSH_RETRIES,
-                driver_id,
-                len(device_tokens),
-            )
+            # Récupérer le driver
+            driver = db.session.get(Driver, driver_id)
+            if not driver:
+                logger.error("[notification_task] Driver %s not found", driver_id)
+                return {"ok": False, "error": "Driver not found", "channel": "none"}
 
-            # Envoyer à tous les devices actifs
-            success_count = 0
-            invalid_tokens = []
-            last_result: Dict[str, Any] | None = None
-            for device_token in device_tokens:
-                result = send_push_message(
-                    token=device_token.token,
-                    title=title,
-                    body=body,
-                    data=data,
-                    driver_id=driver_id,
-                    bypass_rate_limit=bypass_rate_limit,
-                )
-                last_result = result  # Garder le dernier résultat pour logging/retry
+            # ✅ CORRECTIF #3: Utiliser DeviceToken pour support multi-device
+            from models import DeviceToken
 
-                if result.get("ok"):
-                    success_count += 1
-                    logger.debug(
-                        "[notification_task] Push sent to driver %s (device %s)",
-                        driver_id,
-                        device_token.id,
-                    )
-                else:
-                    error = result.get("error", "Unknown error")
-                    logger.warning(
-                        "[notification_task] Push failed for driver %s (device %s): %s",
-                        driver_id,
-                        device_token.id,
-                        error,
-                    )
+            device_tokens = DeviceToken.query.filter_by(
+                driver_id=driver_id,
+                is_active=True,
+            ).all()
 
-                    # Si token invalide, marquer pour invalidation
-                    if result.get("token_invalid"):
-                        invalid_tokens.append(device_token)
-
-            # Invalider les tokens invalides
-            if invalid_tokens:
-                for device_token in invalid_tokens:
-                    device_token.is_active = False
-                db.session.commit()
+            if not device_tokens:
                 logger.warning(
-                    "[notification_task] %d tokens invalidés pour driver %s",
-                    len(invalid_tokens),
+                    "[notification_task] No active push tokens for driver %s, using fallback",
                     driver_id,
                 )
-
-            # Si au moins un envoi a réussi, considérer comme succès
-            if success_count > 0:
+            else:
                 logger.warning(
-                    "[notification_task] Push sent successfully to driver %s (%d/%d devices)",
+                    "[notification_task] Attempt %d/%d: Sending push to driver %s (%d devices)",
+                    self.request.retries + 1,
+                    MAX_PUSH_RETRIES,
                     driver_id,
-                    success_count,
                     len(device_tokens),
                 )
-                return {
-                    "ok": True,
-                    "channel": "push",
-                    "attempts": self.request.retries + 1,
-                    "devices_sent": success_count,
-                    "devices_total": len(device_tokens),
-                }
 
-            # Tous les envois ont échoué
-            # Si tous les tokens sont invalides, passer directement au fallback
-            if len(invalid_tokens) == len(device_tokens):
-                logger.warning(
-                    "[notification_task] Tous les tokens invalides pour driver %s, skip retry",
-                    driver_id,
-                )
-                # Passer directement au fallback sans retry
-                raise self.retry(countdown=0, max_retries=0)
-
-            # Au moins un token valide mais échec réseau → retry
-            # Utiliser le dernier résultat pour déterminer le type d'erreur
-            # Note: last_result est toujours défini car device_tokens n'est pas vide et la boucle s'est exécutée
-            if last_result:
-                error = last_result.get("error", "Unknown error")
-
-                # Si circuit breaker ouvert, attendre plus longtemps avant retry
-                if last_result.get("circuit_breaker_open"):
-                    logger.warning(
-                        "[notification_task] Circuit breaker open, retry in 2 minutes"
+                # Envoyer à tous les devices actifs
+                success_count = 0
+                invalid_tokens = []
+                last_result: Dict[str, Any] | None = None
+                for device_token in device_tokens:
+                    result = send_push_message(
+                        token=device_token.token,
+                        title=title,
+                        body=body,
+                        data=data,
+                        driver_id=driver_id,
+                        bypass_rate_limit=bypass_rate_limit,
                     )
-                    raise self.retry(countdown=120, exc=ConnectionError(error))
+                    last_result = (
+                        result  # Garder le dernier résultat pour logging/retry
+                    )
 
-                # Retry avec backoff exponentiel
+                    if result.get("ok"):
+                        success_count += 1
+                        logger.debug(
+                            "[notification_task] Push sent to driver %s (device %s)",
+                            driver_id,
+                            device_token.id,
+                        )
+                    else:
+                        error = result.get("error", "Unknown error")
+                        logger.warning(
+                            "[notification_task] Push failed for driver %s (device %s): %s",
+                            driver_id,
+                            device_token.id,
+                            error,
+                        )
+
+                        # Si token invalide, marquer pour invalidation
+                        if result.get("token_invalid"):
+                            invalid_tokens.append(device_token)
+
+                # Invalider les tokens invalides
+                if invalid_tokens:
+                    for device_token in invalid_tokens:
+                        device_token.is_active = False
+                    db.session.commit()
+                    logger.warning(
+                        "[notification_task] %d tokens invalidés pour driver %s",
+                        len(invalid_tokens),
+                        driver_id,
+                    )
+
+                # Si au moins un envoi a réussi, considérer comme succès
+                if success_count > 0:
+                    logger.warning(
+                        "[notification_task] Push sent successfully to driver %s (%d/%d devices)",
+                        driver_id,
+                        success_count,
+                        len(device_tokens),
+                    )
+                    return {
+                        "ok": True,
+                        "channel": "push",
+                        "attempts": self.request.retries + 1,
+                        "devices_sent": success_count,
+                        "devices_total": len(device_tokens),
+                    }
+
+                # Tous les envois ont échoué
+                # Si tous les tokens sont invalides, passer directement au fallback
+                if len(invalid_tokens) == len(device_tokens):
+                    logger.warning(
+                        "[notification_task] Tous les tokens invalides pour driver %s, skip retry",
+                        driver_id,
+                    )
+                    # Passer directement au fallback sans retry
+                    raise self.retry(countdown=0, max_retries=0)
+
+                # Au moins un token valide mais échec réseau → retry
+                # Utiliser le dernier résultat pour déterminer le type d'erreur
+                # Note: last_result est toujours défini car device_tokens n'est pas vide et la boucle s'est exécutée
+                if last_result:
+                    error = last_result.get("error", "Unknown error")
+
+                    # Si circuit breaker ouvert, attendre plus longtemps avant retry
+                    if last_result.get("circuit_breaker_open"):
+                        logger.warning(
+                            "[notification_task] Circuit breaker open, retry in 2 minutes"
+                        )
+                        raise self.retry(countdown=120, exc=ConnectionError(error))
+
+                    # Retry avec backoff exponentiel
+                    logger.warning(
+                        "[notification_task] Push failed for driver %s: %s (retry in %ds)",
+                        driver_id,
+                        error,
+                        RETRY_BACKOFF_BASE * (2**self.request.retries),
+                    )
+                    raise self.retry(
+                        exc=ConnectionError(error),
+                        countdown=RETRY_BACKOFF_BASE * (2**self.request.retries),
+                    )
+
+                # Cas de secours (ne devrait jamais arriver)
+                error = "Push failed for all devices"
                 logger.warning(
                     "[notification_task] Push failed for driver %s: %s (retry in %ds)",
                     driver_id,
@@ -234,66 +253,68 @@ def send_push_notification_task(  # noqa: PLR0911
                     countdown=RETRY_BACKOFF_BASE * (2**self.request.retries),
                 )
 
-            # Cas de secours (ne devrait jamais arriver)
-            error = "Push failed for all devices"
+            # Pas de push token → passer directement au fallback
             logger.warning(
-                "[notification_task] Push failed for driver %s: %s (retry in %ds)",
+                "[notification_task] No push token for driver %s, using fallback",
                 driver_id,
-                error,
-                RETRY_BACKOFF_BASE * (2**self.request.retries),
             )
-            raise self.retry(
-                exc=ConnectionError(error),
-                countdown=RETRY_BACKOFF_BASE * (2**self.request.retries),
+            if fallback_to_sms:
+                return _send_sms_fallback(driver, title, body, notification_type)
+
+            if fallback_to_email:
+                return _send_email_fallback(driver, title, body, notification_type)
+
+            return {
+                "ok": False,
+                "error": "No push token and fallback disabled",
+                "channel": "none",
+            }
+
+        except self.MaxRetriesExceededError:
+            # Tous les retries push épuisés → Fallback SMS/Email
+            logger.warning(
+                "[notification_task] Max push retries exceeded for driver %s, using fallback",
+                driver_id,
             )
 
-        # Pas de push token → passer directement au fallback
-        logger.warning(
-            "[notification_task] No push token for driver %s, using fallback",
-            driver_id,
-        )
-        if fallback_to_sms:
-            return _send_sms_fallback(driver, title, body, notification_type)
+            if fallback_to_sms:
+                try:
+                    driver = db.session.get(Driver, driver_id)
+                    if driver:
+                        return _send_sms_fallback(
+                            driver, title, body, notification_type
+                        )
+                except Exception as e:
+                    logger.exception("[notification_task] SMS fallback failed: %s", e)
 
-        if fallback_to_email:
-            return _send_email_fallback(driver, title, body, notification_type)
+            if fallback_to_email:
+                try:
+                    driver = db.session.get(Driver, driver_id)
+                    if driver:
+                        return _send_email_fallback(
+                            driver, title, body, notification_type
+                        )
+                except Exception as e:
+                    logger.exception("[notification_task] Email fallback failed: %s", e)
 
-        return {
-            "ok": False,
-            "error": "No push token and fallback disabled",
-            "channel": "none",
-        }
-
-    except self.MaxRetriesExceededError:
-        # Tous les retries push épuisés → Fallback SMS/Email
-        logger.warning(
-            "[notification_task] Max push retries exceeded for driver %s, using fallback",
-            driver_id,
-        )
-
-        if fallback_to_sms:
-            try:
-                driver = db.session.get(Driver, driver_id)
-                if driver:
-                    return _send_sms_fallback(driver, title, body, notification_type)
-            except Exception as e:
-                logger.exception("[notification_task] SMS fallback failed: %s", e)
-
-        if fallback_to_email:
-            try:
-                driver = db.session.get(Driver, driver_id)
-                if driver:
-                    return _send_email_fallback(driver, title, body, notification_type)
-            except Exception as e:
-                logger.exception("[notification_task] Email fallback failed: %s", e)
-
-        # Tous les fallbacks ont échoué
-        return {
-            "ok": False,
-            "error": "All notification channels failed",
-            "channel": "none",
-            "attempts": self.request.retries + 1,
-        }
+            # Tous les fallbacks ont échoué
+            return {
+                "ok": False,
+                "error": "All notification channels failed",
+                "channel": "none",
+                "attempts": self.request.retries + 1,
+            }
+        except Exception as e:
+            # Erreur inattendue
+            logger.exception(
+                "[notification_task] Unexpected error in send_push_notification_task: %s",
+                e,
+            )
+            return {
+                "ok": False,
+                "error": str(e),
+                "channel": "none",
+            }
 
 
 def _send_sms_fallback(
