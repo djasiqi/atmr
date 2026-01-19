@@ -8,6 +8,8 @@ import {
     ActivityIndicator,
     StyleSheet,
     Alert,
+    KeyboardAvoidingView,
+    Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import dayjs from "dayjs";
@@ -143,7 +145,10 @@ export const RideEditModal: React.FC<RideEditModalProps> = ({
             animationType="fade"
             onRequestClose={onClose}
         >
-            <View style={styles.modalOverlay}>
+            <KeyboardAvoidingView
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                style={styles.modalOverlay}
+            >
                 <View style={styles.modalCard}>
                     <View style={styles.modalHeader}>
                         <View>
@@ -161,7 +166,7 @@ export const RideEditModal: React.FC<RideEditModalProps> = ({
                             <Text style={styles.loadingText}>Chargement des détails...</Text>
                         </View>
                     ) : (
-                        <>
+                        <View style={styles.modalBody}>
                             {!rideDetail?.summary && ride && (
                                 // ✅ Afficher un avertissement si les détails n'ont pas pu être chargés
                                 // mais permettre quand même l'édition avec les données de base
@@ -173,85 +178,86 @@ export const RideEditModal: React.FC<RideEditModalProps> = ({
                                 </View>
                             )}
                             {ride && (
-                        <ScrollView
-                            style={styles.modalScroll}
-                            contentContainerStyle={styles.modalContent}
-                            showsVerticalScrollIndicator={false}
-                        >
-                            {/* Section Adresses */}
-                            <View style={styles.section}>
-                                <View style={styles.sectionHeader}>
-                                    <Ionicons name="location" size={18} color={palette.modalButton} />
-                                    <Text style={styles.sectionTitle}>ADRESSES</Text>
-                                </View>
-                                <AddressSelector
-                                    label="Adresse de départ"
-                                    value={pickupAddress}
-                                    onChange={(address) => setPickupAddress(address)}
-                                    icon="location-outline"
-                                />
-                                <AddressSelector
-                                    label="Adresse d'arrivée"
-                                    value={dropoffAddress}
-                                    onChange={(address) => setDropoffAddress(address)}
-                                    icon="flag-outline"
-                                />
-                            </View>
-
-                            {/* Section Horaires */}
-                            <View style={styles.section}>
-                                <View style={styles.sectionHeader}>
-                                    <Ionicons name="time-outline" size={18} color={palette.modalButton} />
-                                    <Text style={styles.sectionTitle}>HORAIRES</Text>
-                                </View>
-                                <TimeDatePicker
-                                    label="Prise en charge"
-                                    value={scheduledTime}
-                                    onChange={setScheduledTime}
-                                    mode="datetime"
-                                />
-                            </View>
-
-                            {/* Section Informations */}
-                            <View style={styles.section}>
-                                <View style={styles.sectionHeader}>
-                                    <Ionicons name="information-circle-outline" size={18} color={palette.modalButton} />
-                                    <Text style={styles.sectionTitle}>INFORMATIONS</Text>
-                                </View>
-                                <NotesEditor
-                                    label="Notes internes"
-                                    value={notes}
-                                    onChange={setNotes}
-                                    placeholder="Ajouter des notes..."
-                                />
-                                <View style={styles.priorityContainer}>
-                                    <Text style={styles.priorityLabel}>Priorité</Text>
-                                    <View style={styles.priorityButtons}>
-                                        {(["LOW", "NORMAL", "HIGH"] as const).map((p) => (
-                                            <TouchableOpacity
-                                                key={p}
-                                                style={[
-                                                    styles.priorityButton,
-                                                    priority === p && styles.priorityButtonActive,
-                                                ]}
-                                                onPress={() => setPriority(p)}
-                                            >
-                                                <Text
-                                                    style={[
-                                                        styles.priorityButtonText,
-                                                        priority === p && styles.priorityButtonTextActive,
-                                                    ]}
-                                                >
-                                                    {p === "LOW" ? "Basse" : p === "NORMAL" ? "Normale" : "Haute"}
-                                                </Text>
-                                            </TouchableOpacity>
-                                        ))}
+                                <ScrollView
+                                    style={styles.modalScroll}
+                                    contentContainerStyle={styles.modalContent}
+                                    showsVerticalScrollIndicator={false}
+                                    keyboardShouldPersistTaps="handled"
+                                >
+                                    {/* Section Adresses */}
+                                    <View style={styles.section}>
+                                        <View style={styles.sectionHeader}>
+                                            <Ionicons name="location" size={18} color={palette.modalButton} />
+                                            <Text style={styles.sectionTitle}>ADRESSES</Text>
+                                        </View>
+                                        <AddressSelector
+                                            label="Adresse de départ"
+                                            value={pickupAddress}
+                                            onChange={(address) => setPickupAddress(address)}
+                                            icon="location-outline"
+                                        />
+                                        <AddressSelector
+                                            label="Adresse d'arrivée"
+                                            value={dropoffAddress}
+                                            onChange={(address) => setDropoffAddress(address)}
+                                            icon="flag-outline"
+                                        />
                                     </View>
-                                </View>
-                            </View>
-                        </ScrollView>
+
+                                    {/* Section Horaires */}
+                                    <View style={styles.section}>
+                                        <View style={styles.sectionHeader}>
+                                            <Ionicons name="time-outline" size={18} color={palette.modalButton} />
+                                            <Text style={styles.sectionTitle}>HORAIRES</Text>
+                                        </View>
+                                        <TimeDatePicker
+                                            label="Prise en charge"
+                                            value={scheduledTime}
+                                            onChange={setScheduledTime}
+                                            mode="datetime"
+                                        />
+                                    </View>
+
+                                    {/* Section Informations */}
+                                    <View style={styles.section}>
+                                        <View style={styles.sectionHeader}>
+                                            <Ionicons name="information-circle-outline" size={18} color={palette.modalButton} />
+                                            <Text style={styles.sectionTitle}>INFORMATIONS</Text>
+                                        </View>
+                                        <NotesEditor
+                                            label="Notes internes"
+                                            value={notes}
+                                            onChange={setNotes}
+                                            placeholder="Ajouter des notes..."
+                                        />
+                                        <View style={styles.priorityContainer}>
+                                            <Text style={styles.priorityLabel}>Priorité</Text>
+                                            <View style={styles.priorityButtons}>
+                                                {(["LOW", "NORMAL", "HIGH"] as const).map((p) => (
+                                                    <TouchableOpacity
+                                                        key={p}
+                                                        style={[
+                                                            styles.priorityButton,
+                                                            priority === p && styles.priorityButtonActive,
+                                                        ]}
+                                                        onPress={() => setPriority(p)}
+                                                    >
+                                                        <Text
+                                                            style={[
+                                                                styles.priorityButtonText,
+                                                                priority === p && styles.priorityButtonTextActive,
+                                                            ]}
+                                                        >
+                                                            {p === "LOW" ? "Basse" : p === "NORMAL" ? "Normale" : "Haute"}
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </View>
+                                        </View>
+                                    </View>
+                                </ScrollView>
                             )}
-                        </>
+                        </View>
                     )}
 
                     <View style={styles.modalActions}>
@@ -278,7 +284,7 @@ export const RideEditModal: React.FC<RideEditModalProps> = ({
                         </TouchableOpacity>
                     </View>
                 </View>
-            </View>
+            </KeyboardAvoidingView>
         </Modal>
     );
 };
@@ -299,6 +305,7 @@ const styles = StyleSheet.create({
         borderRadius: 24,
         borderWidth: 1,
         borderColor: palette.modalBorder,
+        flexDirection: "column",
         ...shadowPresets.large,
     },
     modalHeader: {
@@ -348,6 +355,10 @@ const styles = StyleSheet.create({
         color: "#92400E",
         fontSize: 13,
         lineHeight: 18,
+    },
+    modalBody: {
+        flex: 1,
+        minHeight: 200,
     },
     modalScroll: {
         flex: 1,

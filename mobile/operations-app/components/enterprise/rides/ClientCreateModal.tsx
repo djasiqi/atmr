@@ -9,10 +9,14 @@ import {
   ActivityIndicator,
   StyleSheet,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import dayjs from "dayjs";
 import { createClient, CreateClientPayload } from "@/services/enterpriseDispatch";
 import { AddressSelector } from "./AddressSelector";
+import { TimeDatePicker } from "./TimeDatePicker";
 import { AddressSuggestion } from "@/types/enterpriseDispatch";
 import { shadowPresets } from "@/styles/shadowStyles";
 
@@ -55,6 +59,7 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
   const [gender, setGender] = useState<'male' | 'female' | ''>(''); // ✅ Civilité obligatoire
   const [avsNumber, setAvsNumber] = useState(''); // ✅ Numéro AVS optionnel
   const [phone, setPhone] = useState("");
+  const [birthDate, setBirthDate] = useState<Date | null>(null); // ✅ Date de naissance
   const [isInstitution, setIsInstitution] = useState(false);
   const [institutionName, setInstitutionName] = useState("");
 
@@ -67,6 +72,11 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
   const [domicileAddress, setDomicileAddress] = useState("");
   const [domicileSuggestion, setDomicileSuggestion] = useState<AddressSuggestion | undefined>();
   const [residenceFacility, setResidenceFacility] = useState(""); // Établissement de résidence
+
+  // ✅ Adresse de facturation séparée
+  const [showBillingInfo, setShowBillingInfo] = useState(false);
+  const [billingAddress, setBillingAddress] = useState("");
+  const [billingSuggestion, setBillingSuggestion] = useState<AddressSuggestion | undefined>();
 
   // Fonction utilitaire pour nettoyer les adresses avec doublons
   const cleanAddressString = (address: string): string => {
@@ -144,6 +154,7 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
       setGender(''); // ✅ Reset civilité
       setAvsNumber(''); // ✅ Reset numéro AVS
       setPhone("");
+      setBirthDate(null); // ✅ Reset date de naissance
       setIsInstitution(false);
       setInstitutionName("");
       // ✅ Priority 2: Reset nouveaux champs
@@ -153,6 +164,10 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
       setDomicileAddress("");
       setDomicileSuggestion(undefined);
       setResidenceFacility("");
+      // ✅ Reset facturation séparée
+      setShowBillingInfo(false);
+      setBillingAddress("");
+      setBillingSuggestion(undefined);
       setError(null);
     }
   }, [visible]);
@@ -296,8 +311,51 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
         ? `${domicileStreet}, ${domicileZip}, ${domicileCity}`.trim()
         : fullAddress;
 
-      // Construire l'adresse de facturation (même que domicile pour l'instant)
-      const billingAddressComplete = addressComplete;
+      // ✅ Construire l'adresse de facturation (séparée si checkbox activée)
+      let billingAddressComplete = addressComplete;
+      let billingLat = domicileSuggestion?.lat || null;
+      let billingLon = domicileSuggestion?.lon || null;
+
+      if (showBillingInfo && billingAddress.trim()) {
+        // Parser l'adresse de facturation séparée
+        let billingStreet = billingAddress;
+        let billingZip = "";
+        let billingCity = "";
+
+        const billingParts = billingAddress.split(',').map((p) => p.trim()).filter((p) => p.length > 0);
+
+        if (billingParts.length >= 3) {
+          billingStreet = billingParts[0];
+          if (/^\d{4}$/.test(billingParts[1])) {
+            billingZip = billingParts[1];
+            billingCity = billingParts[2].replace(/\s*(Suisse|Switzerland|France|Deutschland|Germany|Italy|Italia)\s*$/i, '').trim();
+          } else {
+            billingCity = billingParts[1].replace(/\s*(Suisse|Switzerland|France|Deutschland|Germany|Italy|Italia)\s*$/i, '').trim();
+            const zipMatch = billingParts[0].match(/\b(\d{4})\b/);
+            if (zipMatch) {
+              billingZip = zipMatch[1];
+              billingStreet = billingParts[0].replace(/\b\d{4}\b/, '').trim();
+            }
+          }
+        } else if (billingParts.length === 2) {
+          billingStreet = billingParts[0];
+          const zipCityMatch = billingParts[1].match(/^(\d{4})\s+(.+?)(?:\s*,\s*(?:Suisse|Switzerland|France|Deutschland|Germany|Italy|Italia))?$/i);
+          if (zipCityMatch) {
+            billingZip = zipCityMatch[1];
+            billingCity = zipCityMatch[2].trim();
+          } else {
+            billingCity = billingParts[1].replace(/\s*(Suisse|Switzerland|France|Deutschland|Germany|Italy|Italia)\s*$/i, '').trim();
+          }
+        }
+
+        billingAddressComplete = billingZip && billingCity
+          ? `${billingStreet}, ${billingZip}, ${billingCity}`.trim()
+          : billingAddress;
+
+        // Utiliser les coordonnées GPS de la suggestion de facturation
+        billingLat = billingSuggestion?.lat || null;
+        billingLon = billingSuggestion?.lon || null;
+      }
 
       // ✅ Validation explicite de gender avant envoi
       if (!gender || (gender !== 'male' && gender !== 'female')) {
@@ -314,6 +372,8 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
         phone: phone.trim() || undefined,
         // ✅ Numéro AVS optionnel
         avs_number: avsNumber.trim() || undefined,
+        // ✅ Date de naissance (format YYYY-MM-DD)
+        birth_date: birthDate ? dayjs(birthDate).format("YYYY-MM-DD") : undefined,
         is_institution: isInstitution,
         institution_name: isInstitution ? institutionName.trim() : undefined,
         // ✅ Établissement de résidence si détecté
@@ -331,10 +391,10 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
         // Coordonnées GPS du domicile
         domicile_lat: domicileSuggestion?.lat || null,
         domicile_lon: domicileSuggestion?.lon || null,
-        // Adresse de facturation (même que domicile pour l'instant)
+        // ✅ Adresse de facturation (séparée si checkbox activée)
         billing_address: billingAddressComplete,
-        billing_lat: domicileSuggestion?.lat || null,
-        billing_lon: domicileSuggestion?.lon || null,
+        billing_lat: billingLat,
+        billing_lon: billingLon,
       };
 
       // ✅ Log détaillé pour diagnostic (toujours activé)
@@ -412,7 +472,10 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <View style={styles.modalOverlay}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.modalOverlay}
+      >
         <View style={styles.modalCard}>
           <View style={styles.modalHeader}>
             <View>
@@ -586,6 +649,20 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
                     />
                   </View>
                 </View>
+
+                {/* ✅ Date de naissance (si pas institution) */}
+                {!isInstitution && (
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Date de naissance</Text>
+                    <TimeDatePicker
+                      label="Date de naissance"
+                      value={birthDate}
+                      onChange={setBirthDate}
+                      mode="date"
+                      maximumDate={new Date()}
+                    />
+                  </View>
+                )}
               </View>
 
               {/* ✅ Priority 2: Coordonnées de facturation (optionnelles) */}
@@ -642,6 +719,49 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
                     </View>
                     <Text style={styles.inputHint}>
                       Prix d'un trajet simple. Laisser vide pour le tarif standard.
+                    </Text>
+                  </View>
+                )}
+
+                {/* ✅ Checkbox pour adresse de facturation séparée */}
+                <TouchableOpacity
+                  style={styles.checkboxRow}
+                  onPress={() => setShowBillingInfo(!showBillingInfo)}
+                >
+                  <View style={styles.checkbox}>
+                    {showBillingInfo && (
+                      <Ionicons name="checkmark" size={16} color={palette.modalButton} />
+                    )}
+                  </View>
+                  <Text style={styles.checkboxLabel}>
+                    <Text style={{ fontWeight: "700" }}>Adresse de facturation différente</Text>
+                    <Text style={{ fontSize: 13, color: palette.modalText }}>
+                      {"\n"}Si différente de l'adresse de domicile
+                    </Text>
+                  </Text>
+                </TouchableOpacity>
+
+                {/* ✅ Section adresse de facturation (si checkbox activée) */}
+                {showBillingInfo && (
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Adresse de facturation</Text>
+                    <AddressSelector
+                      label="Adresse de facturation"
+                      value={billingAddress}
+                      onChange={(address, suggestion) => {
+                        let cleanedAddress = address;
+                        if (suggestion?.label) {
+                          cleanedAddress = cleanAddressString(suggestion.label);
+                        } else if (address) {
+                          cleanedAddress = cleanAddressString(address);
+                        }
+                        setBillingAddress(cleanedAddress);
+                        setBillingSuggestion(suggestion);
+                      }}
+                      icon="receipt-outline"
+                    />
+                    <Text style={styles.inputHint}>
+                      💡 Si différente de l'adresse de domicile
                     </Text>
                   </View>
                 )}
@@ -702,7 +822,7 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };

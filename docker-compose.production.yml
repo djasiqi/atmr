@@ -292,7 +292,7 @@ services:
     # Charger les variables depuis .env.production (créé par le workflow GitHub Actions)
     env_file:
       - .env.production
-    command: celery -A celery_app.celery worker --loglevel=info --concurrency=4 # ✅ AUDIT 100 USERS: Augmenté de 2 à 4
+    command: celery -A celery_app.celery worker --loglevel=info --concurrency=4 -Q default,notifications,realtime,dlq # ✅ AUDIT 100 USERS: Augmenté de 2 à 4 + écoute toutes les queues
     healthcheck:
       test: ["CMD", "celery", "-A", "celery_app.celery", "inspect", "ping"]
       interval: 30s

@@ -8,6 +8,8 @@ import {
     ActivityIndicator,
     StyleSheet,
     TextInput,
+    KeyboardAvoidingView,
+    Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import dayjs from "dayjs";
@@ -632,7 +634,10 @@ export const RideCreateModal: React.FC<RideCreateModalProps> = ({
             animationType="fade"
             onRequestClose={onClose}
         >
-            <View style={styles.modalOverlay}>
+            <KeyboardAvoidingView
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                style={styles.modalOverlay}
+            >
                 <View style={styles.modalCard}>
                     <View style={styles.modalHeader}>
                         <View>
@@ -701,7 +706,7 @@ export const RideCreateModal: React.FC<RideCreateModalProps> = ({
                         )}
                     </View>
                 </View>
-            </View>
+            </KeyboardAvoidingView>
         </Modal>
     );
 };
