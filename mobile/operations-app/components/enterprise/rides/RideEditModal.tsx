@@ -177,86 +177,84 @@ export const RideEditModal: React.FC<RideEditModalProps> = ({
                                     </Text>
                                 </View>
                             )}
-                            {ride && (
-                                <ScrollView
-                                    style={styles.modalScroll}
-                                    contentContainerStyle={styles.modalContent}
-                                    showsVerticalScrollIndicator={false}
-                                    keyboardShouldPersistTaps="handled"
-                                >
-                                    {/* Section Adresses */}
-                                    <View style={styles.section}>
-                                        <View style={styles.sectionHeader}>
-                                            <Ionicons name="location" size={18} color={palette.modalButton} />
-                                            <Text style={styles.sectionTitle}>ADRESSES</Text>
-                                        </View>
-                                        <AddressSelector
-                                            label="Adresse de départ"
-                                            value={pickupAddress}
-                                            onChange={(address) => setPickupAddress(address)}
-                                            icon="location-outline"
-                                        />
-                                        <AddressSelector
-                                            label="Adresse d'arrivée"
-                                            value={dropoffAddress}
-                                            onChange={(address) => setDropoffAddress(address)}
-                                            icon="flag-outline"
-                                        />
+                            <ScrollView
+                                style={styles.modalScroll}
+                                contentContainerStyle={styles.modalContent}
+                                showsVerticalScrollIndicator={false}
+                                keyboardShouldPersistTaps="handled"
+                            >
+                                {/* Section Adresses */}
+                                <View style={styles.section}>
+                                    <View style={styles.sectionHeader}>
+                                        <Ionicons name="location" size={18} color={palette.modalButton} />
+                                        <Text style={styles.sectionTitle}>ADRESSES</Text>
                                     </View>
+                                    <AddressSelector
+                                        label="Adresse de départ"
+                                        value={pickupAddress}
+                                        onChange={(address) => setPickupAddress(address)}
+                                        icon="location-outline"
+                                    />
+                                    <AddressSelector
+                                        label="Adresse d'arrivée"
+                                        value={dropoffAddress}
+                                        onChange={(address) => setDropoffAddress(address)}
+                                        icon="flag-outline"
+                                    />
+                                </View>
 
-                                    {/* Section Horaires */}
-                                    <View style={styles.section}>
-                                        <View style={styles.sectionHeader}>
-                                            <Ionicons name="time-outline" size={18} color={palette.modalButton} />
-                                            <Text style={styles.sectionTitle}>HORAIRES</Text>
-                                        </View>
-                                        <TimeDatePicker
-                                            label="Prise en charge"
-                                            value={scheduledTime}
-                                            onChange={setScheduledTime}
-                                            mode="datetime"
-                                        />
+                                {/* Section Horaires */}
+                                <View style={styles.section}>
+                                    <View style={styles.sectionHeader}>
+                                        <Ionicons name="time-outline" size={18} color={palette.modalButton} />
+                                        <Text style={styles.sectionTitle}>HORAIRES</Text>
                                     </View>
+                                    <TimeDatePicker
+                                        label="Prise en charge"
+                                        value={scheduledTime}
+                                        onChange={setScheduledTime}
+                                        mode="datetime"
+                                    />
+                                </View>
 
-                                    {/* Section Informations */}
-                                    <View style={styles.section}>
-                                        <View style={styles.sectionHeader}>
-                                            <Ionicons name="information-circle-outline" size={18} color={palette.modalButton} />
-                                            <Text style={styles.sectionTitle}>INFORMATIONS</Text>
-                                        </View>
-                                        <NotesEditor
-                                            label="Notes internes"
-                                            value={notes}
-                                            onChange={setNotes}
-                                            placeholder="Ajouter des notes..."
-                                        />
-                                        <View style={styles.priorityContainer}>
-                                            <Text style={styles.priorityLabel}>Priorité</Text>
-                                            <View style={styles.priorityButtons}>
-                                                {(["LOW", "NORMAL", "HIGH"] as const).map((p) => (
-                                                    <TouchableOpacity
-                                                        key={p}
+                                {/* Section Informations */}
+                                <View style={styles.section}>
+                                    <View style={styles.sectionHeader}>
+                                        <Ionicons name="information-circle-outline" size={18} color={palette.modalButton} />
+                                        <Text style={styles.sectionTitle}>INFORMATIONS</Text>
+                                    </View>
+                                    <NotesEditor
+                                        label="Notes internes"
+                                        value={notes}
+                                        onChange={setNotes}
+                                        placeholder="Ajouter des notes..."
+                                    />
+                                    <View style={styles.priorityContainer}>
+                                        <Text style={styles.priorityLabel}>Priorité</Text>
+                                        <View style={styles.priorityButtons}>
+                                            {(["LOW", "NORMAL", "HIGH"] as const).map((p) => (
+                                                <TouchableOpacity
+                                                    key={p}
+                                                    style={[
+                                                        styles.priorityButton,
+                                                        priority === p && styles.priorityButtonActive,
+                                                    ]}
+                                                    onPress={() => setPriority(p)}
+                                                >
+                                                    <Text
                                                         style={[
-                                                            styles.priorityButton,
-                                                            priority === p && styles.priorityButtonActive,
+                                                            styles.priorityButtonText,
+                                                            priority === p && styles.priorityButtonTextActive,
                                                         ]}
-                                                        onPress={() => setPriority(p)}
                                                     >
-                                                        <Text
-                                                            style={[
-                                                                styles.priorityButtonText,
-                                                                priority === p && styles.priorityButtonTextActive,
-                                                            ]}
-                                                        >
-                                                            {p === "LOW" ? "Basse" : p === "NORMAL" ? "Normale" : "Haute"}
-                                                        </Text>
-                                                    </TouchableOpacity>
-                                                ))}
-                                            </View>
+                                                        {p === "LOW" ? "Basse" : p === "NORMAL" ? "Normale" : "Haute"}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            ))}
                                         </View>
                                     </View>
-                                </ScrollView>
-                            )}
+                                </View>
+                            </ScrollView>
                         </View>
                     )}
 
@@ -365,7 +363,9 @@ const styles = StyleSheet.create({
     },
     modalContent: {
         padding: 24,
+        paddingBottom: 32,
         gap: 20,
+        flexGrow: 1,
     },
     section: {
         backgroundColor: palette.sectionBg,

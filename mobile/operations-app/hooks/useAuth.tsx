@@ -7,6 +7,7 @@ import React, {
   useMemo,
   useState,
 } from "react";
+import { AppState, AppStateStatus } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Crypto from "expo-crypto";
 
@@ -20,6 +21,7 @@ import {
   invalidateInterceptorCache,
 } from "@/services/api";
 import { secureStorage, asyncStorage } from "@/services/storage";
+// ✅ CORRECTION : Les tokens Enterprise sont maintenant dans SecureStore
 import {
   ENTERPRISE_REFRESH_KEY,
   ENTERPRISE_SESSION_KEY,
@@ -32,7 +34,29 @@ import {
   loginEnterprise,
   refreshEnterpriseToken,
   verifyEnterpriseMfa,
+  invalidateEnterpriseInterceptorCache,
 } from "@/services/enterpriseAuth";
+import { notifyAuthReady, notifyAuthNotReady } from "@/services/authSync";
+// ✅ PHASE 2 : Import de l'authentification biométrique
+import { autoLoginWithBiometric } from "@/services/biometricAuth";
+
+// ✅ Helper pour les logs de debug (dev uniquement)
+// Évite les warnings de connexion en production
+const debugLog = (data: any) => {
+  if (__DEV__) {
+    try {
+      fetch("http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }).catch(() => {
+        // Ignorer silencieusement les erreurs de connexion au service de debug
+      });
+    } catch (e) {
+      // ignore
+    }
+  }
+};
 
 const MODE_KEY = "auth.mode";
 const ENTERPRISE_DEVICE_KEY = "enterprise.device_id";
@@ -84,7 +108,7 @@ interface AuthContextType {
   token: string | null;
   isDriverAuthenticated: boolean;
   driverLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 
@@ -173,11 +197,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const clearEnterpriseStorage = useCallback(async () => {
-    await AsyncStorage.multiRemove([
-      ENTERPRISE_TOKEN_KEY,
-      ENTERPRISE_REFRESH_KEY,
-      ENTERPRISE_SESSION_KEY,
-    ]);
+    // ✅ CORRECTION : Utiliser SecureStore pour les tokens
+    await secureStorage.clearEnterpriseTokens();
+    // Garder AsyncStorage uniquement pour la session complète (données non sensibles)
+    await AsyncStorage.removeItem(ENTERPRISE_SESSION_KEY);
   }, []);
 
   const handleDriverLoginSuccess = useCallback(
@@ -214,25 +237,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         throw new Error("Token manquant dans la réponse de login");
       }
 
-      // Stocker le token et la session de manière synchrone pour éviter les problèmes de timing
+      // ✅ CORRECTION : Utiliser SecureStore pour les tokens (sécurisé + cache)
+      await secureStorage.setEnterpriseToken(session.token);
+      if (session.refreshToken) {
+        await secureStorage.setEnterpriseRefreshToken(session.refreshToken);
+      } else {
+        await secureStorage.removeEnterpriseRefreshToken();
+      }
+
+      // Garder AsyncStorage uniquement pour la session complète (données non sensibles)
       await AsyncStorage.multiSet([
-        [ENTERPRISE_TOKEN_KEY, session.token],
         [ENTERPRISE_SESSION_KEY, JSON.stringify(session)],
         // Marquer que la session vient d'être créée pour éviter la vérification immédiate
         ["enterprise_session_just_created", "true"],
       ]);
-      if (session.refreshToken) {
-        await AsyncStorage.setItem(
-          ENTERPRISE_REFRESH_KEY,
-          session.refreshToken
-        );
-      } else {
-        await AsyncStorage.removeItem(ENTERPRISE_REFRESH_KEY);
-      }
       await storeMode("enterprise");
 
       // Vérifier que le token a bien été stocké
-      const storedToken = await AsyncStorage.getItem(ENTERPRISE_TOKEN_KEY);
+      const storedToken = await secureStorage.getEnterpriseToken();
       if (storedToken !== session.token) {
         // eslint-disable-next-line no-console
         console.error("[ENT] ERREUR: Token stocké ne correspond pas au token reçu");
@@ -260,14 +282,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     (async () => {
       try {
         // ⚡ OPTIMISATION Phase 2 : Lecture parallèle des tokens et données de stockage
-        // Réduit le temps de démarrage de ~20-30ms à ~10-15ms
-        const [storedMode, storedDevice, refreshToken, accessToken] =
-          await Promise.all([
-            AsyncStorage.getItem(MODE_KEY),
-            AsyncStorage.getItem(ENTERPRISE_DEVICE_KEY),
-            secureStorage.getRefreshToken(),
-            secureStorage.getAccessToken(),
-          ]);
+        // ✅ CORRECTION : Lire aussi les tokens Enterprise en parallèle pour éviter les race conditions
+        // Réduit le temps de démarrage et évite les "missing token" au cold start
+        const [
+          storedMode,
+          storedDevice,
+          driverRefreshToken,
+          driverAccessToken,
+          enterpriseToken,
+          enterpriseRefreshToken,
+          enterpriseSessionRaw,
+        ] = await Promise.all([
+          AsyncStorage.getItem(MODE_KEY),
+          AsyncStorage.getItem(ENTERPRISE_DEVICE_KEY),
+          secureStorage.getRefreshToken(), // Driver refresh token
+          secureStorage.getAccessToken(), // Driver access token
+          secureStorage.getEnterpriseToken(), // Enterprise access token
+          secureStorage.getEnterpriseRefreshToken(), // Enterprise refresh token
+          AsyncStorage.getItem(ENTERPRISE_SESSION_KEY), // Enterprise session (données non sensibles)
+        ]);
 
         // Traiter le mode stocké
         if (storedMode === "driver" || storedMode === "enterprise") {
@@ -291,10 +324,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
           try {
             // 1. Essayer d'abord avec l'access token (priorité après un switch)
-            // ⚡ OPTIMISATION : accessToken déjà lu en parallèle ci-dessus
-            if (accessToken) {
+            // ⚡ OPTIMISATION : driverAccessToken déjà lu en parallèle ci-dessus
+            if (driverAccessToken) {
               try {
-                setDriverToken(accessToken);
+                setDriverToken(driverAccessToken);
                 const profile = await fetchDriverProfile();
                 if (isMounted) {
                   setDriver(profile);
@@ -310,9 +343,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
 
             // 2. Si l'access token n'a pas fonctionné, essayer le refresh token
-            if (!profileLoaded && refreshToken) {
+            if (!profileLoaded && driverRefreshToken) {
               try {
-                const refreshResponse = await refreshAccessToken(refreshToken);
+                const refreshResponse = await refreshAccessToken(driverRefreshToken);
 
                 // Stocker le nouveau access_token dans SecureStore
                 if (refreshResponse.access_token) {
@@ -340,24 +373,96 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                   "Auto-login échoué (refresh token invalide) :",
                   refreshError
                 );
-                // Nettoyer seulement si on n'a pas réussi à charger le profil
+
+                // ✅ PHASE 2 : Si le refresh token échoue, essayer auto-login avec authentification biométrique
                 if (!profileLoaded) {
-                  await secureStorage.clearAll();
-                  await asyncStorage.clearAuth();
-                  if (isMounted) {
-                    setDriver(null);
-                    setDriverToken(null);
+                  try {
+                    // Tenter l'auto-login avec authentification biométrique
+                    const biometricSuccess = await autoLoginWithBiometric({
+                      promptMessage: "Authentifiez-vous pour vous reconnecter",
+                      cancelLabel: "Annuler",
+                      disableDeviceFallback: false, // Permet code PIN si biométrie échoue
+                      fallbackLabel: "Utiliser le code PIN",
+                    });
+
+                    if (biometricSuccess) {
+                      // Si l'auto-login biométrique réussit, charger le profil
+                      const profile = await fetchDriverProfile();
+                      if (isMounted) {
+                        setDriver(profile);
+                        await asyncStorage.setDriverId(profile.id);
+                        await storeMode("driver");
+                        profileLoaded = true;
+                        console.log("[useAuth] ✅ Auto-login réussi avec authentification biométrique");
+                      }
+                    } else {
+                      // Si l'authentification biométrique échoue ou est annulée, ne pas nettoyer
+                      // L'utilisateur pourra se reconnecter manuellement
+                      if (__DEV__) {
+                        console.log("[useAuth] ⚠️ Auto-login biométrique annulé ou échoué");
+                      }
+                    }
+                  } catch (autoLoginError) {
+                    console.warn("[useAuth] ⚠️ Auto-login avec authentification biométrique échoué:", autoLoginError);
+                    // Si l'auto-login échoue aussi, nettoyer
+                    await secureStorage.clearAll();
+                    await asyncStorage.clearAuth();
+                    if (isMounted) {
+                      setDriver(null);
+                      setDriverToken(null);
+                    }
+                  }
+
+                  // Si toujours pas de profil chargé, nettoyer
+                  if (!profileLoaded) {
+                    await secureStorage.clearAll();
+                    await asyncStorage.clearAuth();
+                    if (isMounted) {
+                      setDriver(null);
+                      setDriverToken(null);
+                    }
                   }
                 }
               }
             }
 
-            // 3. Si aucun token n'a fonctionné, nettoyer
-            if (!profileLoaded && !accessToken && !refreshToken) {
-              await clearDriverStorage();
-              if (isMounted) {
-                setDriver(null);
-                setDriverToken(null);
+            // 3. Si aucun token n'a fonctionné, essayer auto-login avec authentification biométrique
+            if (!profileLoaded && !driverAccessToken && !driverRefreshToken) {
+              try {
+                // Tenter l'auto-login avec authentification biométrique
+                const biometricSuccess = await autoLoginWithBiometric({
+                  promptMessage: "Authentifiez-vous pour vous reconnecter",
+                  cancelLabel: "Annuler",
+                  disableDeviceFallback: false, // Permet code PIN si biométrie échoue
+                  fallbackLabel: "Utiliser le code PIN",
+                });
+
+                if (biometricSuccess) {
+                  // Si l'auto-login biométrique réussit, charger le profil
+                  const profile = await fetchDriverProfile();
+                  if (isMounted) {
+                    setDriver(profile);
+                    await asyncStorage.setDriverId(profile.id);
+                    await storeMode("driver");
+                    profileLoaded = true;
+                    console.log("[useAuth] ✅ Auto-login réussi avec authentification biométrique");
+                  }
+                } else {
+                  // Si l'authentification biométrique échoue ou est annulée, nettoyer
+                  await clearDriverStorage();
+                  if (isMounted) {
+                    setDriver(null);
+                    setDriverToken(null);
+                  }
+                }
+              } catch (autoLoginError) {
+                console.warn("[useAuth] ⚠️ Auto-login avec authentification biométrique échoué:", autoLoginError);
+                // Si l'auto-login échoue, nettoyer
+                await clearDriverStorage();
+                if (isMounted) {
+                  setDriver(null);
+                  setDriverToken(null);
+                }
               }
             }
           } finally {
@@ -368,17 +473,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         }
 
-        const [enterpriseToken, enterpriseSessionRaw, justCreated] = await Promise.all([
-          AsyncStorage.getItem(ENTERPRISE_TOKEN_KEY),
-          AsyncStorage.getItem(ENTERPRISE_SESSION_KEY),
-          AsyncStorage.getItem("enterprise_session_just_created"),
-        ]);
+        // ✅ CORRECTION : Utiliser les tokens Enterprise déjà lus en parallèle au début
+        // Évite une deuxième lecture et réduit les race conditions
+        const justCreated = await AsyncStorage.getItem("enterprise_session_just_created");
+
         if (enterpriseToken && enterpriseSessionRaw) {
           try {
             const parsed: EnterpriseSessionState =
               JSON.parse(enterpriseSessionRaw);
             // Restaurer la session depuis le stockage
-            setEnterpriseSession({ ...parsed, token: enterpriseToken });
+            // ✅ CORRECTION : Utiliser enterpriseToken déjà lu (depuis SecureStore)
+            setEnterpriseSession({
+              ...parsed,
+              token: enterpriseToken,
+              refreshToken: enterpriseRefreshToken ?? parsed.refreshToken ?? null,
+            });
 
             // Si la session vient d'être créée (juste après un login), ne pas la vérifier immédiatement
             // Supprimer le flag pour les prochaines fois
@@ -394,7 +503,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             (async () => {
               try {
                 const latest = await fetchEnterpriseSession(enterpriseToken);
-                const refreshToken = await AsyncStorage.getItem(ENTERPRISE_REFRESH_KEY) ?? parsed.refreshToken ?? null;
+                // ✅ CORRECTION : Utiliser SecureStore pour le refresh token
+                const refreshToken = await secureStorage.getEnterpriseRefreshToken() ?? parsed.refreshToken ?? null;
                 const updated: EnterpriseSessionState = {
                   token: enterpriseToken,
                   refreshToken,
@@ -417,7 +527,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               } catch (sessionError: any) {
                 // Si la vérification échoue avec un 401, essayer de rafraîchir le token
                 if (sessionError?.response?.status === 401) {
-                  const refreshToken = await AsyncStorage.getItem(ENTERPRISE_REFRESH_KEY) ?? parsed.refreshToken;
+                  // ✅ CORRECTION : Utiliser SecureStore pour le refresh token
+                  const refreshToken = await secureStorage.getEnterpriseRefreshToken() ?? parsed.refreshToken;
                   if (refreshToken) {
                     try {
                       const refreshResponse = await refreshEnterpriseToken(refreshToken);
@@ -448,7 +559,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         }
       } finally {
-        if (isMounted) setInitialLoading(false);
+        if (isMounted) {
+          setInitialLoading(false);
+          // ✅ CORRECTION #1 : Notifier que l'auth est prête
+          // Permet aux intercepteurs de savoir que les tokens sont chargés
+          notifyAuthReady();
+        }
       }
     })();
     return () => {
@@ -456,8 +572,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [clearDriverStorage, clearEnterpriseStorage, storeMode, handleEnterpriseSuccess]);
 
-  // ✅ REFRESH PROACTIF : Rafraîchir le token driver 5 minutes avant expiration
+  // ✅ PHASE 3 : REFRESH PROACTIF amélioré : Rafraîchir le token driver 10 minutes avant expiration
   // Évite les erreurs 401 et améliore l'expérience utilisateur (comme WhatsApp)
+  // Timing augmenté de 5 à 10 minutes pour plus de marge
   useEffect(() => {
     if (!driverToken || mode !== "driver") return;
 
@@ -469,15 +586,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const now = Date.now();
     const timeUntilExpiry = expiresAt - now;
-    const refreshBeforeExpiry = 5 * 60 * 1000; // 5 minutes
+    const refreshBeforeExpiry = 10 * 60 * 1000; // ✅ PHASE 3 : 10 minutes (au lieu de 5)
 
-    // Si le token expire dans plus de 5 minutes, planifier le refresh
+    // ✅ PHASE 3 : Si le token expire dans plus de 10 minutes, planifier le refresh
     if (timeUntilExpiry > refreshBeforeExpiry) {
       const timeoutId = setTimeout(async () => {
-        console.log("[useAuth] 🔄 Refresh proactif du token driver (5min avant expiration)");
-        try {
-          const refreshToken = await secureStorage.getRefreshToken();
-          if (refreshToken) {
+        console.log("[useAuth] 🔄 Refresh proactif du token driver (10min avant expiration)");
+
+        // ✅ PHASE 3 : Système de retry avec backoff exponentiel
+        const MAX_RETRIES = 3;
+        let retryCount = 0;
+        let lastError: any = null;
+
+        while (retryCount < MAX_RETRIES) {
+          try {
+            const refreshToken = await secureStorage.getRefreshToken();
+            if (!refreshToken) {
+              throw new Error("Pas de refresh token disponible");
+            }
+
             const refreshResponse = await refreshAccessToken(refreshToken);
 
             // Stocker le nouveau access_token
@@ -492,11 +619,43 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             // Invalider le cache de l'intercepteur pour forcer l'utilisation du nouveau token
             invalidateInterceptorCache();
 
-            console.log("[useAuth] ✅ Refresh proactif réussi");
+            console.log(`[useAuth] ✅ Refresh proactif réussi${retryCount > 0 ? ` (après ${retryCount} tentative(s))` : ""}`);
+            return; // Succès, sortir de la boucle
+          } catch (error: any) {
+            lastError = error;
+            const status = error?.response?.status;
+            const isNetworkError = !error?.response; // Pas de réponse = erreur réseau
+
+            // ✅ PHASE 3 : Ne pas retry pour les erreurs critiques (401, 403)
+            if (status === 401 || status === 403) {
+              console.error(`[useAuth] ❌ Refresh proactif échoué (${status}):`, error?.response?.data || error?.message);
+              break; // Sortir de la boucle, ne pas retry
+            }
+
+            // ✅ PHASE 3 : Retry uniquement pour erreurs réseau ou serveur (500, etc.)
+            if (isNetworkError || (status && status >= 500)) {
+              retryCount++;
+              if (retryCount < MAX_RETRIES) {
+                const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 10000); // Backoff exponentiel (max 10s)
+                console.warn(`[useAuth] ⚠️ Refresh proactif échoué (tentative ${retryCount}/${MAX_RETRIES}), retry dans ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                continue; // Retry
+              } else {
+                console.error(`[useAuth] ❌ Refresh proactif échoué après ${MAX_RETRIES} tentatives`);
+                break; // Toutes les tentatives ont échoué
+              }
+            } else {
+              // Autres erreurs (400, etc.) → ne pas retry
+              console.warn(`[useAuth] ⚠️ Refresh proactif échoué (status: ${status}), pas de retry`);
+              break;
+            }
           }
-        } catch (error: any) {
-          const status = error?.response?.status;
-          const errorData = error?.response?.data;
+        }
+
+        // ✅ PHASE 3 : Si toutes les tentatives ont échoué, vérifier si c'est critique
+        if (lastError) {
+          const status = lastError?.response?.status;
+          const errorData = lastError?.response?.data;
 
           // ✅ Si 403 (compte désactivé), forcer déconnexion immédiate
           if (status === 403) {
@@ -513,7 +672,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             return;
           }
 
-          console.warn("[useAuth] ⚠️ Refresh proactif échoué (fallback sur intercepteur 401):", error);
+          console.warn("[useAuth] ⚠️ Refresh proactif échoué (fallback sur intercepteur 401):", lastError);
           // Ne pas déconnecter l'utilisateur pour les autres erreurs, l'intercepteur gérera le 401
         }
       }, timeUntilExpiry - refreshBeforeExpiry);
@@ -522,12 +681,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       return () => clearTimeout(timeoutId);
     } else if (timeUntilExpiry > 0 && timeUntilExpiry <= refreshBeforeExpiry) {
-      // Token expire bientôt (< 5min), rafraîchir immédiatement
-      console.log("[useAuth] ⚡ Token expire dans moins de 5min, refresh immédiat");
+      // ✅ PHASE 3 : Token expire bientôt (< 10min), rafraîchir immédiatement avec retry
+      console.log("[useAuth] ⚡ Token expire dans moins de 10min, refresh immédiat");
       (async () => {
-        try {
-          const refreshToken = await secureStorage.getRefreshToken();
-          if (refreshToken) {
+        const MAX_RETRIES = 3;
+        let retryCount = 0;
+        let lastError: any = null;
+
+        while (retryCount < MAX_RETRIES) {
+          try {
+            const refreshToken = await secureStorage.getRefreshToken();
+            if (!refreshToken) {
+              throw new Error("Pas de refresh token disponible");
+            }
+
             const refreshResponse = await refreshAccessToken(refreshToken);
             await secureStorage.setAccessToken(refreshResponse.access_token);
             setDriverToken(refreshResponse.access_token);
@@ -535,19 +702,41 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               await secureStorage.setRefreshToken(refreshResponse.refresh_token);
             }
             invalidateInterceptorCache();
-            console.log("[useAuth] ✅ Refresh immédiat réussi");
-          }
-        } catch (error: any) {
-          const status = error?.response?.status;
-          const errorData = error?.response?.data;
+            console.log(`[useAuth] ✅ Refresh immédiat réussi${retryCount > 0 ? ` (après ${retryCount} tentative(s))` : ""}`);
+            return; // Succès
+          } catch (error: any) {
+            lastError = error;
+            const status = error?.response?.status;
+            const isNetworkError = !error?.response;
 
-          // ✅ Si 403 (compte désactivé), forcer déconnexion immédiate
+            // Ne pas retry pour erreurs critiques
+            if (status === 401 || status === 403) {
+              console.error(`[useAuth] ❌ Refresh immédiat échoué (${status})`);
+              break;
+            }
+
+            // Retry pour erreurs réseau ou serveur
+            if (isNetworkError || (status && status >= 500)) {
+              retryCount++;
+              if (retryCount < MAX_RETRIES) {
+                const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 10000);
+                console.warn(`[useAuth] ⚠️ Refresh immédiat échoué (tentative ${retryCount}/${MAX_RETRIES}), retry dans ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                continue;
+              }
+            } else {
+              break;
+            }
+          }
+        }
+
+        // Gérer les erreurs finales
+        if (lastError) {
+          const status = lastError?.response?.status;
+          const errorData = lastError?.response?.data;
+
           if (status === 403) {
-            console.error(
-              "[useAuth] 🚫 Compte désactivé (403) lors du refresh immédiat. Déconnexion forcée.",
-              errorData
-            );
-            // Nettoyer le stockage et réinitialiser l'état
+            console.error("[useAuth] 🚫 Compte désactivé (403) lors du refresh immédiat. Déconnexion forcée.", errorData);
             await secureStorage.clearAll();
             await asyncStorage.clearAuth();
             setDriverToken(null);
@@ -556,10 +745,58 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             return;
           }
 
-          console.warn("[useAuth] ⚠️ Refresh immédiat échoué:", error);
+          console.warn("[useAuth] ⚠️ Refresh immédiat échoué:", lastError);
+          // Ne pas déconnecter l'utilisateur pour les autres erreurs, l'intercepteur gérera le 401
         }
       })();
     }
+  }, [driverToken, mode]);
+
+  // ✅ PHASE 3 : Refresh automatique au retour au premier plan
+  useEffect(() => {
+    if (!driverToken || mode !== "driver") return;
+
+    const handleAppStateChange = async (nextAppState: AppStateStatus) => {
+      if (nextAppState === "active") {
+        // Vérifier si le token est proche de l'expiration
+        const expiresAt = getTokenExpiration(driverToken);
+        if (!expiresAt) return;
+
+        const now = Date.now();
+        const timeUntilExpiry = expiresAt - now;
+        const refreshThreshold = 15 * 60 * 1000; // 15 minutes
+
+        // Si le token expire dans moins de 15 minutes, rafraîchir
+        if (timeUntilExpiry > 0 && timeUntilExpiry < refreshThreshold) {
+          console.log("[useAuth] 🔄 App revenue au premier plan, refresh du token si nécessaire...");
+          try {
+            const refreshToken = await secureStorage.getRefreshToken();
+            if (refreshToken) {
+              const refreshResponse = await refreshAccessToken(refreshToken);
+              await secureStorage.setAccessToken(refreshResponse.access_token);
+              setDriverToken(refreshResponse.access_token);
+              if (refreshResponse.refresh_token) {
+                await secureStorage.setRefreshToken(refreshResponse.refresh_token);
+              }
+              invalidateInterceptorCache();
+              console.log("[useAuth] ✅ Refresh au retour au premier plan réussi");
+            }
+          } catch (error: any) {
+            const status = error?.response?.status;
+            // Ne pas logger les erreurs réseau temporaires comme des erreurs critiques
+            if (status === 401 || status === 403) {
+              console.error("[useAuth] ❌ Refresh au retour au premier plan échoué (critique):", status);
+            } else {
+              console.warn("[useAuth] ⚠️ Refresh au retour au premier plan échoué (non critique):", error?.message);
+            }
+            // Ne pas déconnecter, l'intercepteur gérera si nécessaire
+          }
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener("change", handleAppStateChange);
+    return () => subscription.remove();
   }, [driverToken, mode]);
 
   // ✅ REFRESH PROACTIF : Rafraîchir le token entreprise 5 minutes avant expiration
@@ -580,14 +817,57 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const timeoutId = setTimeout(async () => {
         console.log("[useAuth] 🔄 Refresh proactif du token entreprise (5min avant expiration)");
         try {
-          const refreshToken = enterpriseSession.refreshToken || await AsyncStorage.getItem(ENTERPRISE_REFRESH_KEY);
-          if (refreshToken) {
-            const refreshResponse = await refreshEnterpriseToken(refreshToken);
-            await handleEnterpriseSuccess(refreshResponse);
-            console.log("[useAuth] ✅ Refresh proactif entreprise réussi");
+          // ✅ CORRECTION : Utiliser SecureStore pour le refresh token
+          const refreshToken = enterpriseSession.refreshToken || await secureStorage.getEnterpriseRefreshToken();
+          if (!refreshToken) {
+            console.warn("[useAuth] ⚠️ Aucun refresh token disponible pour le refresh proactif entreprise");
+            return;
           }
-        } catch (error) {
-          console.warn("[useAuth] ⚠️ Refresh proactif entreprise échoué:", error);
+
+          if (__DEV__) {
+            console.log("[useAuth] 🔄 Refresh proactif entreprise: token disponible (longueur:", refreshToken.length, ")");
+          }
+
+          const refreshResponse = await refreshEnterpriseToken(refreshToken);
+          await handleEnterpriseSuccess(refreshResponse);
+
+          // ⚡ CORRECTION : Invalider le cache interceptor pour forcer l'utilisation du nouveau token
+          invalidateEnterpriseInterceptorCache();
+
+          console.log("[useAuth] ✅ Refresh proactif entreprise réussi");
+        } catch (error: any) {
+          const status = error?.response?.status;
+          const errorData = error?.response?.data;
+          const errorMessage = errorData?.error || error?.message;
+
+          // ✅ Si 401 (refresh token invalide/expiré), ne pas déconnecter immédiatement
+          // L'intercepteur gérera la déconnexion lors de la prochaine requête
+          if (status === 401) {
+            console.error(
+              `[useAuth] ❌ Refresh token invalide (401) lors du refresh proactif entreprise: ${errorMessage}`
+            );
+            // Ne pas déconnecter ici, l'intercepteur gérera lors de la prochaine requête réelle
+            return;
+          }
+
+          // ✅ Si 403 (compte désactivé), forcer déconnexion immédiate
+          if (status === 403) {
+            console.error(
+              "[useAuth] 🚫 Compte désactivé (403) lors du refresh proactif entreprise. Déconnexion forcée.",
+              errorData
+            );
+            // Nettoyer le stockage et réinitialiser l'état
+            await clearEnterpriseStorage();
+            setEnterpriseSession(null);
+            invalidateEnterpriseInterceptorCache();
+            return;
+          }
+
+          // Autres erreurs (réseau, serveur, etc.) → ne pas déconnecter
+          console.warn(
+            `[useAuth] ⚠️ Refresh proactif entreprise échoué (status: ${status || "network"}): ${errorMessage}`
+          );
+          // Ne pas déconnecter l'utilisateur pour les autres erreurs, l'intercepteur gérera le 401
         }
       }, timeUntilExpiry - refreshBeforeExpiry);
 
@@ -599,13 +879,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.log("[useAuth] ⚡ Token entreprise expire dans moins de 5min, refresh immédiat");
       (async () => {
         try {
-          const refreshToken = enterpriseSession.refreshToken || await AsyncStorage.getItem(ENTERPRISE_REFRESH_KEY);
+          // ✅ CORRECTION : Utiliser SecureStore pour le refresh token
+          const refreshToken = enterpriseSession.refreshToken || await secureStorage.getEnterpriseRefreshToken();
           if (refreshToken) {
             const refreshResponse = await refreshEnterpriseToken(refreshToken);
             await handleEnterpriseSuccess(refreshResponse);
+
+            // ⚡ CORRECTION : Invalider le cache interceptor pour forcer l'utilisation du nouveau token
+            invalidateEnterpriseInterceptorCache();
+
             console.log("[useAuth] ✅ Refresh immédiat entreprise réussi");
           }
-        } catch (error) {
+        } catch (error: any) {
+          const status = error?.response?.status;
+          const errorData = error?.response?.data;
+
+          // ✅ Si 403 (compte désactivé), forcer déconnexion immédiate
+          if (status === 403) {
+            console.error(
+              "[useAuth] 🚫 Compte désactivé (403) lors du refresh immédiat entreprise. Déconnexion forcée.",
+              errorData
+            );
+            // Nettoyer le stockage et réinitialiser l'état
+            await clearEnterpriseStorage();
+            setEnterpriseSession(null);
+            invalidateEnterpriseInterceptorCache();
+            return;
+          }
+
           console.warn("[useAuth] ⚠️ Refresh immédiat entreprise échoué:", error);
         }
       })();
@@ -616,13 +917,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Ce useEffect se déclenche quand le mode change vers "enterprise" et qu'il n'y a pas encore de session chargée
   useEffect(() => {
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useAuth.tsx:useEffect:switchMode', message: 'useEffect switchMode entry', data: { mode, hasEnterpriseSession: !!enterpriseSession, initialLoading }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'G' }) }).catch(() => { });
+    debugLog({ location: 'useAuth.tsx:useEffect:switchMode', message: 'useEffect switchMode entry', data: { mode, hasEnterpriseSession: !!enterpriseSession, initialLoading }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'G' });
     // #endregion
 
     if (mode !== "enterprise" || enterpriseSession || initialLoading) {
       // #region agent log
       if (mode === "enterprise") {
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useAuth.tsx:useEffect:switchMode', message: 'useEffect switchMode skipped', data: { reason: enterpriseSession ? 'hasSession' : initialLoading ? 'loading' : 'notEnterprise' }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'G' }) }).catch(() => { });
+        debugLog({ location: 'useAuth.tsx:useEffect:switchMode', message: 'useEffect switchMode skipped', data: { reason: enterpriseSession ? 'hasSession' : initialLoading ? 'loading' : 'notEnterprise' }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'G' });
       }
       // #endregion
       return;
@@ -632,17 +933,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     (async () => {
       try {
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useAuth.tsx:useEffect:switchMode', message: 'useEffect switchMode loading session', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'G' }) }).catch(() => { });
+        debugLog({ location: 'useAuth.tsx:useEffect:switchMode', message: 'useEffect switchMode loading session', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'G' });
         // #endregion
 
+        // ✅ CORRECTION : Utiliser SecureStore pour le token
         const [enterpriseToken, enterpriseSessionRaw, justCreated] = await Promise.all([
-          AsyncStorage.getItem(ENTERPRISE_TOKEN_KEY),
+          secureStorage.getEnterpriseToken(),
           AsyncStorage.getItem(ENTERPRISE_SESSION_KEY),
           AsyncStorage.getItem("enterprise_session_just_created"),
         ]);
 
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useAuth.tsx:useEffect:switchMode', message: 'useEffect switchMode session loaded', data: { hasToken: !!enterpriseToken, hasSession: !!enterpriseSessionRaw, justCreated }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'G' }) }).catch(() => { });
+        debugLog({ location: 'useAuth.tsx:useEffect:switchMode', message: 'useEffect switchMode session loaded', data: { hasToken: !!enterpriseToken, hasSession: !!enterpriseSessionRaw, justCreated }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'G' });
         // #endregion
 
         if (enterpriseToken && enterpriseSessionRaw && isMounted) {
@@ -652,7 +954,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setEnterpriseSession({ ...parsed, token: enterpriseToken });
 
             // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useAuth.tsx:useEffect:switchMode', message: 'useEffect switchMode session set', data: { hasToken: !!enterpriseToken, companyId: parsed.company?.id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'G' }) }).catch(() => { });
+            debugLog({ location: 'useAuth.tsx:useEffect:switchMode', message: 'useEffect switchMode session set', data: { hasToken: !!enterpriseToken, companyId: parsed.company?.id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'G' });
             // #endregion
 
             // Si la session vient d'être créée (juste après un switch), ne pas la vérifier immédiatement
@@ -665,7 +967,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             // eslint-disable-next-line no-console
             console.warn("[ENT] Erreur lors du chargement de la session après switchMode:", error);
             // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useAuth.tsx:useEffect:switchMode', message: 'useEffect switchMode error', data: { error: String(error) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'G' }) }).catch(() => { });
+            debugLog({ location: 'useAuth.tsx:useEffect:switchMode', message: 'useEffect switchMode error', data: { error: String(error) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'G' });
             // #endregion
           }
         }
@@ -673,7 +975,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // eslint-disable-next-line no-console
         console.warn("[ENT] Erreur lors de la lecture AsyncStorage après switchMode:", error);
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useAuth.tsx:useEffect:switchMode', message: 'useEffect switchMode AsyncStorage error', data: { error: String(error) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'G' }) }).catch(() => { });
+        debugLog({ location: 'useAuth.tsx:useEffect:switchMode', message: 'useEffect switchMode AsyncStorage error', data: { error: String(error) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'G' });
         // #endregion
       }
     })();
@@ -684,11 +986,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [mode, enterpriseSession, initialLoading]);
 
   const login = useCallback(
-    async (email: string, password: string) => {
+    async (email: string, password: string, rememberMe: boolean = false) => {
       setDriverLoading(true);
       try {
         const response = await loginDriver(email, password);
         await handleDriverLoginSuccess(response);
+
+        // ✅ PHASE 1 : Sauvegarder les identifiants si l'utilisateur a coché "Se souvenir de moi"
+        if (rememberMe) {
+          try {
+            await secureStorage.saveCredentials(email, password);
+            if (__DEV__) {
+              console.log("[useAuth] ✅ Identifiants sauvegardés pour auto-login");
+            }
+          } catch (error) {
+            console.warn("[useAuth] ⚠️ Erreur lors de la sauvegarde des identifiants:", error);
+            // Ne pas bloquer le login si la sauvegarde échoue
+          }
+        } else {
+          // Si l'utilisateur ne veut pas se souvenir, supprimer les identifiants existants
+          await secureStorage.clearSavedCredentials();
+        }
       } finally {
         setDriverLoading(false);
       }
@@ -698,6 +1016,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = useCallback(async () => {
     setDriverLoading(true);
+    // ✅ CORRECTION #1 : Notifier que l'auth n'est plus prête
+    notifyAuthNotReady();
     try {
       // Appeler /auth/logout pour invalider server-side
       const accessToken = await secureStorage.getAccessToken();
@@ -721,6 +1041,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Nettoyer tout le stockage
       await secureStorage.clearAll();
       await asyncStorage.clearAuth();
+
+      // ✅ PHASE 1 : Supprimer les identifiants sauvegardés lors du logout
+      await secureStorage.clearSavedCredentials();
 
       // ⚡ OPTIMISATION : Invalider le cache de l'intercepteur lors du logout
       invalidateInterceptorCache();
@@ -762,7 +1085,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           await asyncStorage.setDriverId(profile.id);
 
           // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useAuth.tsx:loadDriverSession', message: 'loadDriverSession set', data: { hasToken: !!accessToken, driverId: profile.id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'K' }) }).catch(() => { });
+          debugLog({ location: 'useAuth.tsx:loadDriverSession', message: 'loadDriverSession set', data: { hasToken: !!accessToken, driverId: profile.id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'K' });
           // #endregion
 
           console.log("[useAuth] Driver session loaded from SecureStorage:", {
@@ -773,7 +1096,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         } catch (profileError) {
           console.warn("[useAuth] Error loading driver profile:", profileError);
           // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useAuth.tsx:loadDriverSession', message: 'loadDriverSession profile error', data: { error: String(profileError) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'K' }) }).catch(() => { });
+          debugLog({ location: 'useAuth.tsx:loadDriverSession', message: 'loadDriverSession profile error', data: { error: String(profileError) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'K' });
           // #endregion
           // Ne pas nettoyer la session ici, le token est valide mais le profil ne peut pas être chargé
         }
@@ -921,8 +1244,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     setEnterpriseLoading(true);
     try {
+      // ✅ CORRECTION : Utiliser SecureStore pour le token
       const [enterpriseToken, enterpriseSessionRaw] = await Promise.all([
-        AsyncStorage.getItem(ENTERPRISE_TOKEN_KEY),
+        secureStorage.getEnterpriseToken(),
         AsyncStorage.getItem(ENTERPRISE_SESSION_KEY),
       ]);
 
@@ -935,7 +1259,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setEnterpriseSession({ ...parsed, token: enterpriseToken });
 
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useAuth.tsx:loadEnterpriseSession', message: 'loadEnterpriseSession set', data: { hasToken: !!enterpriseToken, companyId: parsed.company?.id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H' }) }).catch(() => { });
+        debugLog({ location: 'useAuth.tsx:loadEnterpriseSession', message: 'loadEnterpriseSession set', data: { hasToken: !!enterpriseToken, companyId: parsed.company?.id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H' });
         // #endregion
 
         console.log("[useAuth] Enterprise session loaded from AsyncStorage:", {
@@ -959,7 +1283,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const refreshEnterprise = useCallback(async () => {
-    const refreshToken = await AsyncStorage.getItem(ENTERPRISE_REFRESH_KEY);
+    // ✅ CORRECTION : Utiliser SecureStore pour le refresh token
+    const refreshToken = await secureStorage.getEnterpriseRefreshToken();
     if (!refreshToken) return;
     try {
       const response = await refreshEnterpriseToken(refreshToken);
@@ -972,6 +1297,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [clearEnterpriseStorage, handleEnterpriseSuccess]);
 
   const logoutEnterprise = useCallback(async () => {
+    // ✅ CORRECTION #1 : Notifier que l'auth n'est plus prête
+    notifyAuthNotReady();
     await clearEnterpriseStorage();
     setEnterpriseSession(null);
     setPendingEnterpriseMfa(null);

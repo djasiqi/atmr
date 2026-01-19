@@ -38,6 +38,21 @@ import {
 import { RideSummary } from "@/types/enterpriseDispatch";
 import { useRideActions } from "@/hooks/useRideActions";
 import { router } from "expo-router";
+import { secureStorage } from "@/services/storage";
+
+/**
+ * Décoder un JWT et extraire le timestamp d'expiration (exp)
+ * @returns timestamp d'expiration en millisecondes, ou null si décodage échoue
+ */
+const getTokenExpiration = (token: string): number | null => {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return payload.exp ? payload.exp * 1000 : null; // Convertir en ms
+  } catch (error) {
+    console.warn("[getTokenExpiration] Erreur décodage JWT:", error);
+    return null;
+  }
+};
 
 dayjs.locale("fr");
 
@@ -76,7 +91,7 @@ const palette = {
 };
 
 export default function EnterpriseRidesScreen() {
-  const { enterpriseSession } = useAuth();
+  const { enterpriseSession, refreshEnterprise } = useAuth();
   const { selectedDate } = useEnterpriseContext();
   const tabBarHeight = useBottomTabBarHeight();
 
@@ -219,11 +234,30 @@ export default function EnterpriseRidesScreen() {
     }
 
     // Écouter les changements d'état de l'application
-    const subscription = AppState.addEventListener("change", (nextAppState) => {
+    const subscription = AppState.addEventListener("change", async (nextAppState) => {
       if (
         appStateRef.current.match(/inactive|background/) &&
         nextAppState === "active"
       ) {
+        // ✅ CORRECTION #3 : Vérifier la validité du token au retour foreground
+        // Évite les erreurs 401 dues à un token expiré pendant que l'app était en background
+        console.log("[rides.tsx] Application revenue au premier plan : vérification du token");
+        try {
+          // ✅ CORRECTION : Utiliser SecureStore au lieu d'AsyncStorage
+          const token = await secureStorage.getEnterpriseToken();
+          if (token) {
+            const expiresAt = getTokenExpiration(token);
+            const now = Date.now();
+            // Si le token expire dans moins de 5 minutes, le rafraîchir
+            if (expiresAt && expiresAt - now < 5 * 60 * 1000) {
+              console.log("[rides.tsx] 🔄 Token proche de l'expiration, rafraîchissement...");
+              await refreshEnterprise();
+            }
+          }
+        } catch (error) {
+          console.warn("[rides.tsx] ⚠️ Erreur lors de la vérification du token:", error);
+        }
+
         // L'app revient au premier plan : recharger immédiatement et redémarrer le polling
         console.log("[rides.tsx] Application revenue au premier plan : rechargement des courses");
         throttledLoadRides();
@@ -520,8 +554,9 @@ export default function EnterpriseRidesScreen() {
                       delayMinutes: delayMinutes,
                       badges: priorityBadge ? [priorityBadge] : undefined,
                       onPress: () => handleOpenDetails(ride.id),
-                      onQuickAction: isCompleted ? undefined : () => handleUrgent(ride),
-                      onPrimaryAction: isCompleted ? undefined : () => rideActions.handleOpenAssignModal(ride),
+                      // ✅ Suppression des actions : dispatch urgent +15min et assignement chauffeur
+                      onQuickAction: undefined,
+                      onPrimaryAction: undefined,
                       footerActions: (
                         <View style={styles.footerActionsContainer}>
                           {isCompleted ? (

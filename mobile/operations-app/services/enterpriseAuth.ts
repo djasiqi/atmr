@@ -7,6 +7,26 @@ import axios, {
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import * as Sentry from "@sentry/react-native";
+import { waitForAuthReady } from "@/services/authSync";
+import { secureStorage } from "@/services/storage";
+
+// ✅ Helper pour les logs de debug (dev uniquement)
+// Évite les warnings de connexion en production
+const debugLog = (data: any) => {
+  if (__DEV__) {
+    try {
+      fetch("http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }).catch(() => {
+        // Ignorer silencieusement les erreurs de connexion au service de debug
+      });
+    } catch (e) {
+      // ignore
+    }
+  }
+};
 
 const expoExtra = Constants.expoConfig?.extra || {};
 const ENV_API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -123,12 +143,13 @@ type AxiosConfig = InternalAxiosRequestConfig<any> & {
 // ✅ Fonction helper pour valider le token
 export const hasValidToken = async (): Promise<boolean> => {
   try {
-    let token = await AsyncStorage.getItem(ENTERPRISE_TOKEN_KEY);
+    // ✅ CORRECTION : Utiliser SecureStore au lieu d'AsyncStorage
+    let token = await secureStorage.getEnterpriseToken();
     
     // ✅ Si le token manque, vérifier si un refresh token existe (mais ne pas refresh ici)
     // Le refresh sera géré par l'intercepteur si nécessaire
     if (!token) {
-      const refreshToken = await AsyncStorage.getItem(ENTERPRISE_REFRESH_KEY);
+      const refreshToken = await secureStorage.getEnterpriseRefreshToken();
       // ✅ Si un refresh token existe, considérer comme "valide" pour permettre l'intercepteur de faire le refresh
       // Cela évite de bloquer les requêtes inutilement
       if (refreshToken) {
@@ -214,7 +235,8 @@ export const waitForToken = async (
   const startTime = Date.now();
   
   while (Date.now() - startTime < timeoutMs) {
-    const token = await AsyncStorage.getItem(ENTERPRISE_TOKEN_KEY);
+    // ✅ CORRECTION : Utiliser SecureStore au lieu d'AsyncStorage
+    const token = await secureStorage.getEnterpriseToken();
     if (token) {
       return token;
     }
@@ -346,12 +368,38 @@ export const enterpriseApi = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+// ⚡ CORRECTION : Cache interceptor pour Enterprise API (similaire à Driver API)
+// Réduit les lectures SecureStore répétées lors de requêtes simultanées
+let enterpriseInterceptorTokenCache: string | null = null;
+let enterpriseInterceptorTokenCacheTime = 0;
+const ENTERPRISE_INTERCEPTOR_CACHE_TTL = 30000; // 30 secondes
+
+// ⚡ Métriques de performance pour l'intercepteur Enterprise (dev uniquement)
+let enterpriseInterceptorCacheHitCount = 0;
+let enterpriseInterceptorCacheMissCount = 0;
+let enterpriseInterceptorRequestCount = 0;
+const ENTERPRISE_INTERCEPTOR_METRICS_LOG_INTERVAL = 100; // Log toutes les 100 requêtes
+
+/**
+ * Invalide le cache de l'intercepteur Enterprise (utile lors du logout ou changement de token)
+ */
+export const invalidateEnterpriseInterceptorCache = () => {
+  enterpriseInterceptorTokenCache = null;
+  enterpriseInterceptorTokenCacheTime = 0;
+  if (__DEV__) {
+    enterpriseInterceptorCacheHitCount = 0;
+    enterpriseInterceptorCacheMissCount = 0;
+    enterpriseInterceptorRequestCount = 0;
+  }
+};
+
 const clearEnterpriseStorage = async () => {
-  await AsyncStorage.multiRemove([
-    ENTERPRISE_TOKEN_KEY,
-    ENTERPRISE_REFRESH_KEY,
-    ENTERPRISE_SESSION_KEY,
-  ]);
+  // ✅ CORRECTION : Utiliser SecureStore pour les tokens
+  await secureStorage.clearEnterpriseTokens();
+  // Garder AsyncStorage uniquement pour la session complète (données non sensibles)
+  await AsyncStorage.removeItem(ENTERPRISE_SESSION_KEY);
+  // ⚡ CORRECTION : Invalider le cache interceptor
+  invalidateEnterpriseInterceptorCache();
 };
 
 const persistEnterpriseSession = async (
@@ -371,23 +419,50 @@ const persistEnterpriseSession = async (
     sessionId: payload.session_id,
   };
 
-  await AsyncStorage.setItem(ENTERPRISE_TOKEN_KEY, session.token);
-  await AsyncStorage.setItem(
-    ENTERPRISE_SESSION_KEY,
-    JSON.stringify(session)
-  );
+  // ✅ CORRECTION : Utiliser SecureStore pour les tokens (sécurisé + cache)
+  try {
+    await secureStorage.setEnterpriseToken(session.token);
+  } catch (error) {
+    // ✅ CORRECTION : Gérer les erreurs de stockage (ex: Keychain/Keystore inaccessible)
+    console.error("[ENT] ❌ Erreur lors de la sauvegarde du token Enterprise:", error);
+    throw new Error("Échec de la sauvegarde du token Enterprise");
+  }
+  
+  // Garder AsyncStorage uniquement pour la session complète (données non sensibles)
+  try {
+    await AsyncStorage.setItem(
+      ENTERPRISE_SESSION_KEY,
+      JSON.stringify(session)
+    );
+  } catch (error) {
+    // ✅ CORRECTION : Gérer les erreurs de stockage AsyncStorage
+    console.error("[ENT] ❌ Erreur lors de la sauvegarde de la session Enterprise:", error);
+    // Ne pas throw ici car le token est déjà sauvegardé dans SecureStore
+    // La session AsyncStorage est moins critique
+  }
 
   if (session.refreshToken) {
-    await AsyncStorage.setItem(
-      ENTERPRISE_REFRESH_KEY,
-      session.refreshToken
-    );
+    try {
+      await secureStorage.setEnterpriseRefreshToken(session.refreshToken);
+    } catch (error) {
+      // ✅ CORRECTION : Gérer les erreurs de stockage du refresh token
+      console.error("[ENT] ❌ Erreur lors de la sauvegarde du refresh token Enterprise:", error);
+      // Ne pas throw ici car le token principal est déjà sauvegardé
+      // Le refresh token pourra être récupéré lors du prochain login
+    }
   } else {
-    await AsyncStorage.removeItem(ENTERPRISE_REFRESH_KEY);
+    await secureStorage.removeEnterpriseRefreshToken();
   }
 
   // ✅ Vérifier que le token a bien été sauvegardé
-  const savedToken = await AsyncStorage.getItem(ENTERPRISE_TOKEN_KEY);
+  const savedToken = await secureStorage.getEnterpriseToken();
+  
+  // ⚡ CORRECTION : Mettre à jour le cache interceptor avec le nouveau token
+  if (savedToken) {
+    enterpriseInterceptorTokenCache = savedToken;
+    enterpriseInterceptorTokenCacheTime = Date.now();
+  }
+  
   if (!savedToken || savedToken !== session.token) {
     console.error("[ENT] ❌ ERREUR CRITIQUE : Token non sauvegardé correctement !");
     
@@ -418,17 +493,67 @@ const persistEnterpriseSession = async (
   }
 };
 
+// ✅ CORRECTION #2 : Queue de refresh similaire à Driver API
+// Évite les refresh multiples simultanés qui causent des "missing token"
+let isRefreshing = false;
 let tokenRefreshPromise:
   | Promise<string | null | undefined>
   | null = null;
+let failedQueue: Array<{
+  resolve: (token: string | null | undefined) => void;
+  reject: (error: any) => void;
+}> = [];
+
+const processQueue = (
+  error: any,
+  token: string | null | undefined = null
+): void => {
+  // ✅ CORRECTION : Traiter toutes les requêtes en queue (comme Driver API)
+  // Une fois le refresh terminé, toutes les requêtes en queue reçoivent le nouveau token
+  while (failedQueue.length > 0) {
+    const { resolve, reject } = failedQueue.shift()!;
+    if (error) {
+      reject(error);
+    } else if (token) {
+      resolve(token);
+    } else {
+      // Token manquant après refresh → rejeter avec erreur
+      reject(new Error("Token manquant après refresh"));
+    }
+  }
+};
 
 const refreshAccessToken = async (): Promise<string | null | undefined> => {
-  if (!tokenRefreshPromise) {
-    tokenRefreshPromise = (async () => {
-      const refreshToken = await AsyncStorage.getItem(ENTERPRISE_REFRESH_KEY);
+  // ✅ CORRECTION : Vérifier d'abord si un refresh est déjà en cours
+  // Cette vérification doit être atomique pour éviter les race conditions
+  if (isRefreshing && tokenRefreshPromise) {
+    // Mettre en queue ✅ (comme Driver API)
+    return new Promise<string | null | undefined>((resolve, reject) => {
+      failedQueue.push({ resolve, reject });
+    });
+  }
+
+  // ✅ CORRECTION : Double vérification pour éviter les race conditions
+  // Si tokenRefreshPromise existe maintenant (créé entre les deux vérifications), l'utiliser
+  if (tokenRefreshPromise) {
+    return tokenRefreshPromise;
+  }
+
+  // Démarrer un nouveau refresh (lock atomique)
+  isRefreshing = true;
+  tokenRefreshPromise = (async () => {
+      // ✅ CORRECTION : Utiliser SecureStore au lieu d'AsyncStorage
+      const refreshToken = await secureStorage.getEnterpriseRefreshToken();
       if (!refreshToken) {
+        console.error("[ENT Refresh] ❌ Aucun refresh token disponible dans le stockage");
         await clearEnterpriseStorage();
+        processQueue(null, null);
         return null;
+      }
+
+      // ✅ DEBUG : Logger la longueur du token (sans exposer le contenu)
+      if (__DEV__) {
+        console.log(`[ENT Refresh] 🔄 Tentative de refresh avec token (longueur: ${refreshToken.length})`);
       }
 
       try {
@@ -443,15 +568,66 @@ const refreshAccessToken = async (): Promise<string | null | undefined> => {
 
         const payload = response.data;
         await persistEnterpriseSession(payload);
-        return payload.token;
-      } catch (error) {
-        await clearEnterpriseStorage();
-        throw error;
+        const newToken = payload.token;
+        
+        // ⚡ CORRECTION : Mettre à jour le cache interceptor avec le nouveau token
+        enterpriseInterceptorTokenCache = newToken;
+        enterpriseInterceptorTokenCacheTime = Date.now();
+        
+        if (__DEV__) {
+          console.log("[ENT Refresh] ✅ Refresh réussi, nouveau token obtenu");
+        }
+        
+        processQueue(null, newToken);
+        return newToken;
+      } catch (error: any) {
+        // ✅ CORRECTION : Distinguer les types d'erreurs pour ne pas supprimer les tokens inutilement
+        const refreshStatus = error?.response?.status;
+        const errorData = error?.response?.data;
+        const isNetworkError = !error?.response; // Pas de réponse = erreur réseau
+        
+        // ✅ DEBUG : Logger les détails de l'erreur
+        if (__DEV__) {
+          console.error(`[ENT Refresh] ❌ Erreur refresh (status: ${refreshStatus}):`, {
+            status: refreshStatus,
+            error: errorData?.error || error?.message,
+            isNetworkError,
+            hasResponse: !!error?.response,
+          });
+        }
+        
+        // Ne supprimer les tokens que si c'est vraiment un problème d'authentification
+        // (401 = refresh token expiré/invalide, 403 = compte désactivé)
+        // Ne pas supprimer pour erreurs réseau temporaires ou erreurs serveur
+        if (refreshStatus === 401 || refreshStatus === 403) {
+          // Token expiré ou compte désactivé → supprimer les tokens
+          const errorMessage = errorData?.error || `Refresh token invalide (${refreshStatus})`;
+          console.error(
+            `[ENT Refresh] ❌ Refresh token échoué (${refreshStatus}): ${errorMessage}. Suppression des tokens.`
+          );
+          await clearEnterpriseStorage();
+          processQueue(error, null);
+          throw error;
+        } else if (isNetworkError) {
+          // Erreur réseau temporaire → ne pas supprimer les tokens
+          console.warn(
+            "[ENT Refresh] ⚠️ Erreur réseau lors du refresh. Tokens conservés, utilisateur reste connecté."
+          );
+          processQueue(error, null);
+          throw error;
+        } else {
+          // Autres erreurs (500, etc.) → ne pas supprimer les tokens
+          console.warn(
+            `[ENT Refresh] ⚠️ Erreur serveur lors du refresh (status: ${refreshStatus}). Tokens conservés, utilisateur reste connecté.`
+          );
+          processQueue(error, null);
+          throw error;
+        }
       } finally {
         tokenRefreshPromise = null;
+        isRefreshing = false;
       }
     })();
-  }
 
   return tokenRefreshPromise;
 };
@@ -461,8 +637,20 @@ enterpriseApi.interceptors.request.use(
     try {
       // #region agent log
       const isLoginRequest = config.url?.includes("/auth/login");
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'enterpriseAuth.ts:268',message:'interceptor request entry',data:{url:config.url,method:config.method,isLoginRequest,baseURL:config.baseURL},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      debugLog({location:'enterpriseAuth.ts:268',message:'interceptor request entry',data:{url:config.url,method:config.method,isLoginRequest,baseURL:config.baseURL},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'});
       // #endregion
+      
+      // ✅ CORRECTION #1 : Guard d'initialisation
+      // Attendre que l'auth soit prête avant de permettre les requêtes (sauf login)
+      if (!isLoginRequest) {
+        try {
+          await waitForAuthReady(5000);
+        } catch (error) {
+          // Si timeout, continuer quand même (évite de bloquer indéfiniment)
+          console.warn("[ENT] ⚠️ Timeout attente auth ready, continuation de la requête");
+        }
+      }
+      
       const headers =
         config.headers instanceof AxiosHeaders
           ? config.headers
@@ -472,11 +660,42 @@ enterpriseApi.interceptors.request.use(
       // Les autres endpoints /auth/ (comme /auth/me/driver-account, /auth/refresh, etc.) nécessitent un token
       if (!isLoginRequest) {
         // Si un token est déjà présent dans les headers (passé explicitement), l'utiliser
-        // Sinon, essayer de le récupérer depuis AsyncStorage
+        // Sinon, essayer de le récupérer depuis SecureStore avec cache interceptor
         if (!headers.has("Authorization")) {
-          const token = await AsyncStorage.getItem(ENTERPRISE_TOKEN_KEY);
+          // ⚡ CORRECTION : Cache interceptor (30s TTL) pour réduire les lectures SecureStore
+          // Similaire à Driver API pour cohérence et performance
+          const now = Date.now();
+          let token = enterpriseInterceptorTokenCache;
+          
+          if (!token || now - enterpriseInterceptorTokenCacheTime >= ENTERPRISE_INTERCEPTOR_CACHE_TTL) {
+            // Cache invalide ou expiré → lire depuis SecureStore (qui utilise son propre cache 1min)
+            token = await secureStorage.getEnterpriseToken();
+            enterpriseInterceptorTokenCache = token;
+            enterpriseInterceptorTokenCacheTime = now;
+            if (__DEV__) {
+              enterpriseInterceptorCacheMissCount++;
+            }
+          } else {
+            if (__DEV__) {
+              enterpriseInterceptorCacheHitCount++;
+            }
+          }
+          
+          // ⚡ Métriques de performance (dev uniquement)
+          if (__DEV__) {
+            enterpriseInterceptorRequestCount++;
+            if (enterpriseInterceptorRequestCount % ENTERPRISE_INTERCEPTOR_METRICS_LOG_INTERVAL === 0) {
+              const totalRequests = enterpriseInterceptorCacheHitCount + enterpriseInterceptorCacheMissCount;
+              const cacheHitRate = totalRequests > 0
+                ? (enterpriseInterceptorCacheHitCount / totalRequests) * 100
+                : 0;
+              console.log(
+                `[ENT Interceptor] Performance: cache=${cacheHitRate.toFixed(1)}%, hits=${enterpriseInterceptorCacheHitCount}, misses=${enterpriseInterceptorCacheMissCount}, total=${enterpriseInterceptorRequestCount}`
+              );
+            }
+          }
           // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'enterpriseAuth.ts:278',message:'token check',data:{url:config.url,hasToken:!!token,isLoginRequest},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+          debugLog({location:'enterpriseAuth.ts:278',message:'token check',data:{url:config.url,hasToken:!!token,isLoginRequest},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'});
           // #endregion
           if (token) {
             headers.set("Authorization", `Bearer ${token}`);
@@ -494,8 +713,10 @@ enterpriseApi.interceptors.request.use(
             if (!isPublicEndpoint) {
               console.warn("[ENT] ⚠️ Aucun token disponible pour:", config.url);
               
-              // ✅ Tenter un refresh token automatique si refresh token disponible
-              const refreshToken = await AsyncStorage.getItem(ENTERPRISE_REFRESH_KEY);
+              // ✅ CORRECTION #2 : Tenter un refresh token automatique avec queue
+              // La queue évite les refresh multiples simultanés
+              // ✅ CORRECTION : Utiliser SecureStore au lieu d'AsyncStorage
+              const refreshToken = await secureStorage.getEnterpriseRefreshToken();
               if (refreshToken) {
                 console.log("[ENT] 🔄 Token manquant, tentative de refresh automatique...");
                 try {
@@ -530,7 +751,7 @@ enterpriseApi.interceptors.request.use(
       if (!isLoginRequest) {
         const sessionRaw = await AsyncStorage.getItem(ENTERPRISE_SESSION_KEY);
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'enterpriseAuth.ts:301',message:'session check',data:{url:config.url,hasSession:!!sessionRaw,isLoginRequest},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        debugLog({location:'enterpriseAuth.ts:301',message:'session check',data:{url:config.url,hasSession:!!sessionRaw,isLoginRequest},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'});
         // #endregion
         if (sessionRaw) {
           try {
@@ -570,7 +791,7 @@ enterpriseApi.interceptors.request.use(
           finalHeaders[key] = String(value);
         }
       });
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'enterpriseAuth.ts:333',message:'interceptor request exit',data:{url:config.url,headers:finalHeaders,isLoginRequest},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      debugLog({location:'enterpriseAuth.ts:333',message:'interceptor request exit',data:{url:config.url,headers:finalHeaders,isLoginRequest},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'});
       // #endregion
       config.headers = headers;
     } catch {
@@ -587,14 +808,62 @@ enterpriseApi.interceptors.response.use(
     const { response, config } = error;
     const originalConfig = config as AxiosConfig | undefined;
 
+    // ✅ CORRECTION : Gérer 401 (token expiré) et 403 (compte désactivé) comme Driver API
+    const isAuthError = response?.status === 401 || response?.status === 403;
+    
     if (
-      response?.status === 401 &&
+      isAuthError &&
       originalConfig &&
       !originalConfig.__isRetryRequest
     ) {
+      // Si c'est la requête de refresh elle-même qui a échoué
+      if (originalConfig.url?.includes("/auth/refresh")) {
+        const refreshStatus = response?.status;
+        const errorData = response?.data as { error?: string } | undefined;
+        
+        // ✅ 401 = refresh token expiré, 403 = compte désactivé → déconnecter
+        if (refreshStatus === 401 || refreshStatus === 403) {
+          const errorMessage = errorData?.error || `Refresh token invalide (${refreshStatus})`;
+          console.error(
+            `[ENT Interceptor] ❌ Refresh token échoué (${refreshStatus}): ${errorMessage}`
+          );
+          
+          // ✅ DEBUG : Logger plus de détails en développement
+          if (__DEV__) {
+            console.error("[ENT Interceptor] Détails de l'erreur:", {
+              status: refreshStatus,
+              error: errorMessage,
+              url: originalConfig.url,
+              hasRefreshToken: !!(await secureStorage.getEnterpriseRefreshToken()),
+            });
+          }
+          
+          await clearEnterpriseStorage();
+          return Promise.reject(error);
+        }
+        // Autres erreurs (réseau, etc.) → ne pas déconnecter
+        return Promise.reject(error);
+      }
+
+      // Si déjà en train de refresh, mettre en queue (via refreshAccessToken)
+      // La queue est gérée dans refreshAccessToken() qui utilise failedQueue
+      
       try {
         const newToken = await refreshAccessToken();
         if (!newToken) {
+          // Si refresh échoue, vérifier si c'est une erreur critique
+          // Note: refreshAccessToken() gère déjà la déconnexion pour 401/403
+          // On ne doit pas déconnecter à nouveau ici pour éviter les doubles déconnexions
+          const refreshError = error;
+          const refreshStatus = (refreshError as any)?.response?.status;
+          
+          if (__DEV__) {
+            console.warn(
+              `[ENT Interceptor] ⚠️ Refresh échoué (status: ${refreshStatus}), nouveau token non obtenu`
+            );
+          }
+          
+          // refreshAccessToken() a déjà géré la déconnexion si nécessaire
           return Promise.reject(error);
         }
 
@@ -608,9 +877,43 @@ enterpriseApi.interceptors.response.use(
         originalConfig.__isRetryRequest = true;
 
         return enterpriseApi(originalConfig);
-      } catch (refreshError) {
-        return Promise.reject(refreshError);
+      } catch (refreshError: any) {
+        const refreshStatus = refreshError?.response?.status;
+        const isNetworkError = !refreshError?.response;
+        
+        // ✅ Distinguer les types d'erreurs (comme Driver API)
+        if (refreshStatus === 401 || refreshStatus === 403) {
+          // Token expiré ou compte désactivé → déconnecter
+          console.error(
+            `[ENT Interceptor] ❌ Refresh échoué (${refreshStatus}). Déconnexion forcée.`
+          );
+          await clearEnterpriseStorage();
+          return Promise.reject(refreshError);
+        } else if (isNetworkError) {
+          // Erreur réseau temporaire → ne pas déconnecter
+          console.warn(
+            "[ENT Interceptor] ⚠️ Erreur réseau lors du refresh. Utilisateur reste connecté."
+          );
+          return Promise.reject(refreshError);
+        } else {
+          // Autres erreurs → ne pas déconnecter
+          console.warn(
+            `[ENT Interceptor] ⚠️ Erreur serveur lors du refresh (status: ${refreshStatus}). Utilisateur reste connecté.`
+          );
+          return Promise.reject(refreshError);
+        }
       }
+    }
+    
+    // ✅ Gérer aussi les 403 sur les autres endpoints (compte désactivé)
+    if (response?.status === 403 && originalConfig && !originalConfig.__isRetryRequest) {
+      console.error(
+        `[ENT Interceptor] ❌ Accès refusé (403) pour ${originalConfig.url}:`,
+        response?.data || error.message
+      );
+      // Si c'est un 403, ne pas retry automatiquement (compte désactivé)
+      // L'app devra gérer la déconnexion via useAuth
+      return Promise.reject(error);
     }
 
     return Promise.reject(error);
@@ -642,7 +945,7 @@ export const loginEnterprise = async (
       hypothesisId:'D'
     };
     console.log('[DEBUG] loginEnterprise entry:', JSON.stringify(logData, null, 2));
-    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch((e)=>console.warn('[DEBUG] Log fetch failed:', e));
+    debugLog(logData);
     // #endregion
     // Log léger pour debug (sans secrets)
     // eslint-disable-next-line no-console
@@ -655,7 +958,7 @@ export const loginEnterprise = async (
     // #region agent log
     const successLogData = {location:'enterpriseAuth.ts:422',message:'loginEnterprise success',data:{status:response.status,hasToken:!!(response.data as any)?.token,hasMfa:!!(response.data as any)?.mfa_required},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'};
     console.log('[DEBUG]', JSON.stringify(successLogData));
-    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(successLogData)}).catch((e)=>console.warn('[DEBUG] Log fetch failed:', e));
+    debugLog(successLogData);
     // #endregion
     // eslint-disable-next-line no-console
     console.log("[ENT] login response reçue", {
@@ -677,7 +980,7 @@ export const loginEnterprise = async (
     }
     const errorLogData = {location:'enterpriseAuth.ts:432',message:'loginEnterprise error',data:errorData,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'};
     console.error('[DEBUG]', JSON.stringify(errorLogData));
-    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(errorLogData)}).catch((e)=>console.warn('[DEBUG] Log fetch failed:', e));
+    debugLog(errorLogData);
     // #endregion
     const isNetErr =
       (axios.isAxiosError(err) && (err as any)?.code === "ERR_NETWORK") ||

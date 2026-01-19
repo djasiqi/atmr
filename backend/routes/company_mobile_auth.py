@@ -23,7 +23,7 @@ from typing import (
 
 import jwt  # pyright: ignore[reportMissingImports]
 import sentry_sdk  # pyright: ignore[reportMissingImports]
-from flask import current_app, request  # pyright: ignore[reportMissingImports]
+from flask import current_app, request
 from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
     create_access_token,
     create_refresh_token,
@@ -1334,7 +1334,7 @@ class SwitchToDriver(Resource):
         logger.info("[SwitchToDriver] Endpoint appelé")
         from datetime import datetime, timedelta
 
-        from flask import current_app  # pyright: ignore[reportMissingImports]
+        from flask import current_app
         from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
             create_access_token,
             create_refresh_token,
@@ -1676,15 +1676,17 @@ class SwitchToDriver(Resource):
                 "aud": "atmr-api",
                 "role": "driver",
             },
+            # ✅ PHASE 4 : Augmentation de la durée du refresh token à 90 jours
             expires_delta=current_app.config.get(
-                "JWT_REFRESH_TOKEN_EXPIRES", timedelta(days=30)
+                "JWT_REFRESH_TOKEN_EXPIRES", timedelta(days=90)
             ),
         )
 
         # Stocker le refresh token dans la DB (comme pour le login normal)
         try:
+            # ✅ PHASE 4 : Augmentation de la durée du refresh token à 90 jours
             refresh_expires_delta = current_app.config.get(
-                "JWT_REFRESH_TOKEN_EXPIRES", timedelta(days=30)
+                "JWT_REFRESH_TOKEN_EXPIRES", timedelta(days=90)
             )
             refresh_expires_at = datetime.now(UTC) + refresh_expires_delta
             store_refresh_token(

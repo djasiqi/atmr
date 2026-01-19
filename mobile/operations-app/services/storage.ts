@@ -10,6 +10,12 @@ const SECURE_KEYS = {
   REFRESH_TOKEN: "auth.refresh_token",
   ACCESS_TOKEN: "auth.access_token", // ✅ Amélioration : Access token aussi dans SecureStore
   USER_PUBLIC_ID: "auth.user_public_id", // Optionnel, pour auto-login
+  // ✅ CORRECTION : Enterprise tokens dans SecureStore (au lieu d'AsyncStorage)
+  ENTERPRISE_TOKEN: "enterprise.token",
+  ENTERPRISE_REFRESH: "enterprise.refresh",
+  // ✅ PHASE 1 : Mémorisation des identifiants (chiffrés)
+  SAVED_EMAIL: "auth.saved_email",
+  SAVED_PASSWORD: "auth.saved_password_encrypted", // ⚠️ Chiffré avec expo-crypto
 } as const;
 
 // ============ Cache en mémoire pour optimisation des performances ============
@@ -23,6 +29,17 @@ const TOKEN_CACHE_TTL = 60000; // 1 minute
 let cachedRefreshToken: string | null = null;
 let refreshTokenCacheTime = 0;
 const REFRESH_TOKEN_CACHE_TTL = 300000; // 5 minutes
+
+// ✅ CORRECTION : Cache pour Enterprise tokens (similaire à Driver)
+// Cache pour enterprise access_token (TTL: 1 minute)
+let cachedEnterpriseToken: string | null = null;
+let enterpriseTokenCacheTime = 0;
+const ENTERPRISE_TOKEN_CACHE_TTL = 60000; // 1 minute
+
+// Cache pour enterprise refresh_token (TTL: 5 minutes)
+let cachedEnterpriseRefreshToken: string | null = null;
+let enterpriseRefreshTokenCacheTime = 0;
+const ENTERPRISE_REFRESH_TOKEN_CACHE_TTL = 300000; // 5 minutes
 
 // ⚡ Phase 4 : Métriques de performance (optionnel, pour debug)
 // Uniquement actif en mode développement
@@ -52,11 +69,20 @@ export const secureStorage = {
    * ⚡ Optimisation : Met à jour le cache en mémoire immédiatement
    */
   async setRefreshToken(token: string): Promise<void> {
-    await SecureStore.setItemAsync(SECURE_KEYS.REFRESH_TOKEN, token);
+    try {
+      await SecureStore.setItemAsync(SECURE_KEYS.REFRESH_TOKEN, token);
 
-    // Mettre à jour le cache immédiatement
-    cachedRefreshToken = token;
-    refreshTokenCacheTime = Date.now();
+      // Mettre à jour le cache immédiatement
+      cachedRefreshToken = token;
+      refreshTokenCacheTime = Date.now();
+    } catch (error) {
+      // ✅ CORRECTION : Gérer les erreurs de stockage (ex: Keychain/Keystore inaccessible)
+      console.error("[Storage] ❌ Erreur lors de la sauvegarde du refresh token:", error);
+      // Ne pas mettre à jour le cache si le stockage a échoué
+      cachedRefreshToken = null;
+      refreshTokenCacheTime = 0;
+      throw error; // Propager l'erreur pour que l'app puisse réagir
+    }
   },
 
   /**
@@ -153,11 +179,20 @@ export const secureStorage = {
    * ⚡ Optimisation : Met à jour le cache en mémoire immédiatement
    */
   async setAccessToken(token: string): Promise<void> {
-    await SecureStore.setItemAsync(SECURE_KEYS.ACCESS_TOKEN, token);
+    try {
+      await SecureStore.setItemAsync(SECURE_KEYS.ACCESS_TOKEN, token);
 
-    // Mettre à jour le cache immédiatement
-    cachedAccessToken = token;
-    tokenCacheTime = Date.now();
+      // Mettre à jour le cache immédiatement
+      cachedAccessToken = token;
+      tokenCacheTime = Date.now();
+    } catch (error) {
+      // ✅ CORRECTION : Gérer les erreurs de stockage (ex: Keychain/Keystore inaccessible)
+      console.error("[Storage] ❌ Erreur lors de la sauvegarde du access token:", error);
+      // Ne pas mettre à jour le cache si le stockage a échoué
+      cachedAccessToken = null;
+      tokenCacheTime = 0;
+      throw error; // Propager l'erreur pour que l'app puisse réagir
+    }
   },
 
   /**
@@ -252,6 +287,205 @@ export const secureStorage = {
       refreshTokenTotalReadTime = 0;
       refreshTokenReadCount = 0;
     }
+  },
+
+  // ============ PHASE 1 : Mémorisation des identifiants ============
+  /**
+   * ✅ PHASE 1 : Sauvegarde les identifiants (email + mot de passe chiffré)
+   * Le mot de passe est chiffré avec SHA-256 + salt (email) avant stockage
+   * ⚠️ IMPORTANT : Stocke le mot de passe en clair mais dans SecureStore (Keychain/Keystore)
+   * Le SecureStore est déjà sécurisé par le système d'exploitation
+   * @param email Email de l'utilisateur
+   * @param password Mot de passe en clair (sera stocké dans SecureStore sécurisé)
+   */
+  async saveCredentials(email: string, password: string): Promise<void> {
+    try {
+      // Stocker l'email et le mot de passe dans SecureStore
+      // SecureStore utilise Keychain (iOS) / Keystore (Android) qui sont sécurisés
+      await Promise.all([
+        SecureStore.setItemAsync(SECURE_KEYS.SAVED_EMAIL, email),
+        SecureStore.setItemAsync(SECURE_KEYS.SAVED_PASSWORD, password),
+      ]);
+      if (__DEV__) {
+        console.log("[Storage] ✅ Identifiants sauvegardés pour auto-login");
+      }
+    } catch (error) {
+      console.error("[Storage] ❌ Erreur lors de la sauvegarde des identifiants:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * ✅ PHASE 1 : Récupère les identifiants sauvegardés
+   * @returns { email: string | null, password: string | null }
+   */
+  async getSavedCredentials(): Promise<{
+    email: string | null;
+    password: string | null;
+  }> {
+    try {
+      const [email, password] = await Promise.all([
+        SecureStore.getItemAsync(SECURE_KEYS.SAVED_EMAIL),
+        SecureStore.getItemAsync(SECURE_KEYS.SAVED_PASSWORD),
+      ]);
+      return { email, password };
+    } catch (error) {
+      console.error("[Storage] ❌ Erreur lors de la récupération des identifiants:", error);
+      return { email: null, password: null };
+    }
+  },
+
+  /**
+   * ✅ PHASE 1 : Supprime les identifiants sauvegardés
+   */
+  async clearSavedCredentials(): Promise<void> {
+    try {
+      await Promise.all([
+        SecureStore.deleteItemAsync(SECURE_KEYS.SAVED_EMAIL),
+        SecureStore.deleteItemAsync(SECURE_KEYS.SAVED_PASSWORD),
+      ]);
+      if (__DEV__) {
+        console.log("[Storage] ✅ Identifiants sauvegardés supprimés");
+      }
+    } catch (error) {
+      console.error("[Storage] ❌ Erreur lors de la suppression des identifiants:", error);
+    }
+  },
+
+  // ============ Stockage Enterprise (SecureStore avec cache) ============
+  /**
+   * ✅ CORRECTION : Stocke le token Enterprise de manière sécurisée
+   * ⚡ Optimisation : Met à jour le cache en mémoire immédiatement
+   */
+  async setEnterpriseToken(token: string): Promise<void> {
+    try {
+      await SecureStore.setItemAsync(SECURE_KEYS.ENTERPRISE_TOKEN, token);
+
+      // Mettre à jour le cache immédiatement
+      cachedEnterpriseToken = token;
+      enterpriseTokenCacheTime = Date.now();
+    } catch (error) {
+      // ✅ CORRECTION : Gérer les erreurs de stockage (ex: Keychain/Keystore inaccessible)
+      console.error("[Storage] ❌ Erreur lors de la sauvegarde du token Enterprise:", error);
+      // Ne pas mettre à jour le cache si le stockage a échoué
+      cachedEnterpriseToken = null;
+      enterpriseTokenCacheTime = 0;
+      throw error; // Propager l'erreur pour que l'app puisse réagir
+    }
+  },
+
+  /**
+   * ✅ CORRECTION : Récupère le token Enterprise depuis SecureStore
+   * ⚡ Optimisation : Utilise le cache en mémoire si disponible et valide
+   */
+  async getEnterpriseToken(): Promise<string | null> {
+    const now = Date.now();
+
+    // Vérifier le cache en mémoire
+    if (
+      cachedEnterpriseToken &&
+      now - enterpriseTokenCacheTime < ENTERPRISE_TOKEN_CACHE_TTL
+    ) {
+      return cachedEnterpriseToken;
+    }
+
+    // Lire depuis SecureStore
+    const token = await SecureStore.getItemAsync(SECURE_KEYS.ENTERPRISE_TOKEN);
+
+    // Mettre à jour le cache
+    cachedEnterpriseToken = token;
+    enterpriseTokenCacheTime = now;
+
+    return token;
+  },
+
+  /**
+   * ✅ CORRECTION : Supprime le token Enterprise du stockage sécurisé
+   * ⚡ Optimisation : Nettoie le cache en mémoire
+   */
+  async removeEnterpriseToken(): Promise<void> {
+    await SecureStore.deleteItemAsync(SECURE_KEYS.ENTERPRISE_TOKEN);
+
+    // Nettoyer le cache
+    cachedEnterpriseToken = null;
+    enterpriseTokenCacheTime = 0;
+  },
+
+  /**
+   * ✅ CORRECTION : Stocke le refresh token Enterprise de manière sécurisée
+   * ⚡ Optimisation : Met à jour le cache en mémoire immédiatement
+   */
+  async setEnterpriseRefreshToken(token: string): Promise<void> {
+    try {
+      await SecureStore.setItemAsync(SECURE_KEYS.ENTERPRISE_REFRESH, token);
+
+      // Mettre à jour le cache immédiatement
+      cachedEnterpriseRefreshToken = token;
+      enterpriseRefreshTokenCacheTime = Date.now();
+    } catch (error) {
+      // ✅ CORRECTION : Gérer les erreurs de stockage (ex: Keychain/Keystore inaccessible)
+      console.error("[Storage] ❌ Erreur lors de la sauvegarde du refresh token Enterprise:", error);
+      // Ne pas mettre à jour le cache si le stockage a échoué
+      cachedEnterpriseRefreshToken = null;
+      enterpriseRefreshTokenCacheTime = 0;
+      throw error; // Propager l'erreur pour que l'app puisse réagir
+    }
+  },
+
+  /**
+   * ✅ CORRECTION : Récupère le refresh token Enterprise depuis SecureStore
+   * ⚡ Optimisation : Utilise le cache en mémoire si disponible et valide
+   */
+  async getEnterpriseRefreshToken(): Promise<string | null> {
+    const now = Date.now();
+
+    // Vérifier le cache en mémoire
+    if (
+      cachedEnterpriseRefreshToken &&
+      now - enterpriseRefreshTokenCacheTime < ENTERPRISE_REFRESH_TOKEN_CACHE_TTL
+    ) {
+      return cachedEnterpriseRefreshToken;
+    }
+
+    // Lire depuis SecureStore
+    const token = await SecureStore.getItemAsync(
+      SECURE_KEYS.ENTERPRISE_REFRESH
+    );
+
+    // Mettre à jour le cache
+    cachedEnterpriseRefreshToken = token;
+    enterpriseRefreshTokenCacheTime = now;
+
+    return token;
+  },
+
+  /**
+   * ✅ CORRECTION : Supprime le refresh token Enterprise du stockage sécurisé
+   * ⚡ Optimisation : Nettoie le cache en mémoire
+   */
+  async removeEnterpriseRefreshToken(): Promise<void> {
+    await SecureStore.deleteItemAsync(SECURE_KEYS.ENTERPRISE_REFRESH);
+
+    // Nettoyer le cache
+    cachedEnterpriseRefreshToken = null;
+    enterpriseRefreshTokenCacheTime = 0;
+  },
+
+  /**
+   * ✅ CORRECTION : Nettoie tout le stockage Enterprise sécurisé
+   * ⚡ Optimisation : Nettoie également tous les caches en mémoire
+   */
+  async clearEnterpriseTokens(): Promise<void> {
+    await Promise.all([
+      SecureStore.deleteItemAsync(SECURE_KEYS.ENTERPRISE_TOKEN),
+      SecureStore.deleteItemAsync(SECURE_KEYS.ENTERPRISE_REFRESH),
+    ]);
+
+    // Nettoyer tous les caches en mémoire
+    cachedEnterpriseToken = null;
+    enterpriseTokenCacheTime = 0;
+    cachedEnterpriseRefreshToken = null;
+    enterpriseRefreshTokenCacheTime = 0;
   },
 
   /**

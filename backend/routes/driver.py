@@ -2236,8 +2236,9 @@ class SwitchToEnterprise(Resource):
                 access_delta = current_app.config.get(
                     "JWT_ACCESS_TOKEN_EXPIRES", timedelta(hours=1)
                 )
+                # ✅ PHASE 4 : Augmentation de la durée du refresh token à 90 jours
                 refresh_delta = current_app.config.get(
-                    "JWT_REFRESH_TOKEN_EXPIRES", timedelta(days=30)
+                    "JWT_REFRESH_TOKEN_EXPIRES", timedelta(days=90)
                 )
 
                 # #region agent log

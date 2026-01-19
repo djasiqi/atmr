@@ -184,8 +184,11 @@ class Config:
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(
         seconds=int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES_SECONDS", str(60 * 60)))
     )
+    # ✅ PHASE 4 : Augmentation de la durée du refresh token de 30 à 90 jours
+    # Améliore l'expérience utilisateur en réduisant les déconnexions
+    # ⚠️ SÉCURITÉ : Les refresh tokens sont stockés dans Redis avec rotation et révocation
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(
-        seconds=int(os.getenv("JWT_REFRESH_TOKEN_EXPIRES_SECONDS", str(30 * 24 * 3600)))
+        seconds=int(os.getenv("JWT_REFRESH_TOKEN_EXPIRES_SECONDS", str(90 * 24 * 3600)))
     )
     # Validation de l'audience JWT (prévention token replay)
     # Désactivé pour permettre plusieurs audiences :

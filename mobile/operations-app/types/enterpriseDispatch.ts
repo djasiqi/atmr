@@ -51,6 +51,16 @@ export interface RideSummary {
     birth_date?: string;
     phone?: string;
     home_address?: string;
+    // ✅ Champs supplémentaires pour informations client complètes
+    gender?: "HOMME" | "FEMME" | "AUTRE" | "male" | "female"; // Backend utilise HOMME/FEMME/AUTRE
+    avs_number?: string;
+    contact_email?: string;
+    contact_phone?: string;
+    billing_address?: string;
+    residence_facility?: string;
+    is_institution?: boolean;
+    institution_name?: string;
+    preferential_rate?: number;
   };
   route: {
     pickup_address: string;

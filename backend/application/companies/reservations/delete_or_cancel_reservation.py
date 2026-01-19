@@ -73,9 +73,13 @@ class DeleteOrCancelCompanyReservationUseCase:
                     trigger_reason="cancel",
                 )
             # sinon: cancel + libérer driver
-            set_status(booking, "status", "CANCELED")
+            # ✅ CORRECTION : Libérer le driver AVANT de changer le statut
+            # pour éviter l'erreur de validation "driver_id ne peut pas être NULL si status=ASSIGNED"
+            # (même si on change vers CANCELED, la validation peut se déclencher entre les deux opérations)
             if getattr(booking, "driver_id", None):
                 booking.driver_id = None
+            # Maintenant on peut changer le statut en toute sécurité
+            set_status(booking, "status", "CANCELED")
             return DeleteOrCancelCompanyReservationResult(
                 ok=True,
                 action="cancel",

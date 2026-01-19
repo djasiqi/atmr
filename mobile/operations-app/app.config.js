@@ -82,6 +82,7 @@ module.exports = withAndroidR8Enabled(
     "expo-font",
     "expo-web-browser",
     "expo-secure-store",
+    "expo-local-authentication", // ✅ PHASE 2 : Authentification biométrique
     "sentry-expo",
     "expo-task-manager", // ✅ Nécessaire pour le tracking en arrière-plan
     [

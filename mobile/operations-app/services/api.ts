@@ -5,6 +5,24 @@ import axios, { isAxiosError } from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { secureStorage, asyncStorage } from "./storage";
 
+// ✅ Helper pour les logs de debug (dev uniquement)
+// Évite les warnings de connexion en production
+const debugLog = (data: any) => {
+  if (__DEV__) {
+    try {
+      fetch("http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }).catch(() => {
+        // Ignorer silencieusement les erreurs de connexion au service de debug
+      });
+    } catch (e) {
+      // ignore
+    }
+  }
+};
+
 // --- Config base URL (inclut /api pour matcher le backend) ---
 const expoExtra = Constants.expoConfig?.extra || {};
 const ENV_API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -216,33 +234,27 @@ export const api = axios.create({
 });
 
 // #region agent log
-// Log de la configuration des headers au démarrage
-try {
+// Log de la configuration des headers au démarrage (dev uniquement)
+if (__DEV__) {
   const hasXRequestedWith = Platform.OS !== "web";
   console.log("[DEBUG] API instance created:", {
     platform: Platform.OS,
     hasXRequestedWith,
     baseURL,
   });
-  fetch("http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      location: "api.ts:axios.create",
-      message: "API instance created",
-      data: {
-        platform: Platform.OS,
-        hasXRequestedWith,
-        baseURL,
-      },
-      timestamp: Date.now(),
-      sessionId: "debug-session",
-      runId: "run1",
-      hypothesisId: "A",
-    }),
-  }).catch((e) => console.warn("[DEBUG] Log fetch failed:", e));
-} catch (e) {
-  // ignore
+  debugLog({
+    location: "api.ts:axios.create",
+    message: "API instance created",
+    data: {
+      platform: Platform.OS,
+      hasXRequestedWith,
+      baseURL,
+    },
+    timestamp: Date.now(),
+    sessionId: "debug-session",
+    runId: "run1",
+    hypothesisId: "A",
+  });
 }
 // #endregion
 
@@ -274,6 +286,19 @@ export const invalidateInterceptorCache = () => {
 // --- Authorization bearer + Device ID ---
 api.interceptors.request.use(
   async (config) => {
+    // ✅ CORRECTION #1 : Guard d'initialisation
+    // Attendre que l'auth soit prête avant de permettre les requêtes (sauf login)
+    const isLoginRequest = config.url === "/auth/login" || config.url?.endsWith("/auth/login");
+    if (!isLoginRequest) {
+      try {
+        const { waitForAuthReady } = await import("@/services/authSync");
+        await waitForAuthReady(5000);
+      } catch (error) {
+        // Si timeout, continuer quand même (évite de bloquer indéfiniment)
+        console.warn("[API] ⚠️ Timeout attente auth ready, continuation de la requête");
+      }
+    }
+    
     // ✅ P2-2: Ajouter le token CSRF pour les requêtes mutantes
     const isMutatingMethod = ["POST", "PUT", "DELETE", "PATCH"].includes(
       config.method?.toUpperCase() || ""
@@ -326,7 +351,6 @@ api.interceptors.request.use(
     }
 
     // #region agent log
-    const isLoginRequest = config.url === "/auth/login" || config.url?.endsWith("/auth/login");
     // #endregion
     const now = Date.now();
 
@@ -386,11 +410,7 @@ api.interceptors.request.use(
       hypothesisId: "A",
     };
     console.log("[DEBUG] Driver API interceptor:", JSON.stringify(logData, null, 2));
-    fetch("http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(logData),
-    }).catch((e) => console.warn("[DEBUG] Log fetch failed:", e));
+    debugLog(logData);
     // #endregion
 
     // ✅ Ne pas ajouter le token pour les requêtes de login/refresh
@@ -692,11 +712,7 @@ export const loginDriver = async (
       hypothesisId: "D",
     };
     console.log("[DEBUG] loginDriver entry:", JSON.stringify(logData, null, 2));
-    fetch("http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(logData),
-    }).catch((e) => console.warn("[DEBUG] Log fetch failed:", e));
+    debugLog(logData);
     // #endregion
     // #region agent log
     const requestHeaders = {
@@ -719,11 +735,7 @@ export const loginDriver = async (
       hypothesisId: "A",
     };
     console.log("[DEBUG] loginDriver before request:", JSON.stringify(preRequestLog, null, 2));
-    fetch("http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(preRequestLog),
-    }).catch((e) => console.warn("[DEBUG] Log fetch failed:", e));
+    debugLog(preRequestLog);
     // #endregion
     // Appel principal via Axios
     const response = await api.post<AuthResponse>("/auth/login", {
@@ -758,11 +770,7 @@ export const loginDriver = async (
       hypothesisId: "B",
     };
     console.log("[DEBUG] loginDriver success:", JSON.stringify(successLogData, null, 2));
-    fetch("http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(successLogData),
-    }).catch((e) => console.warn("[DEBUG] Log fetch failed:", e));
+    debugLog(successLogData);
     // #endregion
     const data = response.data;
     
@@ -784,11 +792,7 @@ export const loginDriver = async (
       hypothesisId: "C",
     };
     console.log("[DEBUG] loginDriver storing tokens:", JSON.stringify(storageLog, null, 2));
-    fetch("http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(storageLog),
-    }).catch((e) => console.warn("[DEBUG] Log fetch failed:", e));
+    debugLog(storageLog);
     // #endregion
     
     // ✅ Stocker le token d'accès dans AsyncStorage
@@ -803,11 +807,7 @@ export const loginDriver = async (
         runId: "run1",
         hypothesisId: "D",
       };
-      fetch("http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(beforeStoreLog),
-      }).catch(() => {});
+      debugLog(beforeStoreLog);
       // #endregion
       await secureStorage.setAccessToken(data.token);
       // #region agent log
@@ -820,11 +820,7 @@ export const loginDriver = async (
         runId: "run1",
         hypothesisId: "D",
       };
-      fetch("http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(afterStoreLog),
-      }).catch(() => {});
+      debugLog(afterStoreLog);
       // #endregion
     }
     
@@ -998,11 +994,7 @@ export const switchToEnterpriseToken = async (): Promise<SwitchToEnterpriseRespo
     hypothesisId: "A",
   };
   console.log("[DEBUG] switchToEnterpriseToken entry:", JSON.stringify(logData, null, 2));
-  fetch("http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(logData),
-  }).catch((e) => console.warn("[DEBUG] Log fetch failed:", e));
+  debugLog(logData);
   // #endregion
   try {
     const response = await api.post<SwitchToEnterpriseResponse>(
@@ -1024,11 +1016,7 @@ export const switchToEnterpriseToken = async (): Promise<SwitchToEnterpriseRespo
       hypothesisId: "B",
     };
     console.log("[DEBUG] switchToEnterpriseToken success:", JSON.stringify(successLogData, null, 2));
-    fetch("http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(successLogData),
-    }).catch((e) => console.warn("[DEBUG] Log fetch failed:", e));
+    debugLog(successLogData);
     // #endregion
     return response.data;
   } catch (error: any) {
@@ -1050,11 +1038,7 @@ export const switchToEnterpriseToken = async (): Promise<SwitchToEnterpriseRespo
       hypothesisId: "E",
     };
     console.error("[DEBUG] switchToEnterpriseToken error:", JSON.stringify(errorLogData, null, 2));
-    fetch("http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(errorLogData),
-    }).catch((e) => console.warn("[DEBUG] Log fetch failed:", e));
+    debugLog(errorLogData);
     // #endregion
     throw error;
   }

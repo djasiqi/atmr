@@ -76,6 +76,7 @@ backup_*.sql
 AMELIORATION*.md
 amelioration*.md
 ANALYSE*.md
+!docs/Mobile/analyse-authentification-tokens.md
 ARCHITECTURE*.md
 !docs/Audit/ARCHITECTURE_EVENEMENTIELLE_MANQUANT.md
 PLAN_MIGRATION*.md

@@ -3695,16 +3695,26 @@ class CompanyClientDetail(Resource):
             uc = UpdateCompanyClientUseCase()
             uc_result = uc.execute(client=client, data=data)
             if not uc_result.ok:
-                logger.error("❌ [CompanyClientDetail PUT] Use case échoué: %s", uc_result.error)
+                logger.error(
+                    "❌ [CompanyClientDetail PUT] Use case échoué: %s", uc_result.error
+                )
                 return uc_result.error or {
                     "error": "Bad request"
                 }, uc_result.status_code or 400
 
             logger.info("💾 [CompanyClientDetail PUT] Commit de la session...")
             db.session.commit()
-            logger.info("✅ [CompanyClientDetail PUT] Client %s mis à jour avec succès", client_id)
-            logger.info("📊 [CompanyClientDetail PUT] Données client après mise à jour: domicile_address=%s, domicile_zip=%s, domicile_city=%s, preferential_rate=%s",
-                       client.domicile_address, client.domicile_zip, client.domicile_city, client.preferential_rate)
+            logger.info(
+                "✅ [CompanyClientDetail PUT] Client %s mis à jour avec succès",
+                client_id,
+            )
+            logger.info(
+                "📊 [CompanyClientDetail PUT] Données client après mise à jour: domicile_address=%s, domicile_zip=%s, domicile_city=%s, preferential_rate=%s",
+                client.domicile_address,
+                client.domicile_zip,
+                client.domicile_city,
+                client.preferential_rate,
+            )
             return client.serialize, 200
 
         except ValueError as e:
@@ -4453,6 +4463,34 @@ class SingleReservation(Resource):
                         booking_transfer_count,
                         reservation_id,
                     )
+
+                # Supprimer les enregistrements d'Assignment (dispatch) qui référencent ce booking
+                # (même avec CASCADE, supprimer explicitement pour éviter les problèmes)
+                from models.dispatch import Assignment
+
+                assignment_dispatch_count = Assignment.query.filter_by(
+                    booking_id=reservation_id
+                ).delete()
+                if assignment_dispatch_count > 0:
+                    logger.info(
+                        "✅ Supprimé %s enregistrement(s) assignment (dispatch) pour booking %s",
+                        assignment_dispatch_count,
+                        reservation_id,
+                    )
+
+                # Supprimer les enregistrements de payment qui référencent ce booking
+                # (même avec CASCADE, supprimer explicitement pour éviter les problèmes)
+                from models.payment import Payment
+
+                payment_count = Payment.query.filter_by(
+                    booking_id=reservation_id
+                ).delete()
+                if payment_count > 0:
+                    logger.info(
+                        "✅ Supprimé %s enregistrement(s) payment pour booking %s",
+                        payment_count,
+                        reservation_id,
+                    )
                 # Vérifier si le booking a un retour et le supprimer aussi si nécessaire
                 if hasattr(booking, "return_trip") and booking.return_trip:
                     return_booking = booking.return_trip
@@ -4512,29 +4550,46 @@ class SingleReservation(Resource):
                     from sqlalchemy.exc import IntegrityError
 
                     if isinstance(flush_error, IntegrityError):
-                        # Logger l'erreur d'intégrité avec détails
+                        # Logger l'erreur d'intégrité avec détails complets
                         error_detail_str = None
+                        error_message_primary = None
                         pgcode = None
                         if hasattr(flush_error, "orig") and flush_error.orig:
                             if (
                                 hasattr(flush_error.orig, "diag")
                                 and flush_error.orig.diag
                             ):
+                                diag = flush_error.orig.diag
                                 error_detail_str = (
-                                    str(flush_error.orig.diag.message_detail)
-                                    if hasattr(flush_error.orig.diag, "message_detail")
-                                    else str(flush_error.orig.diag)
+                                    str(diag.message_detail)
+                                    if hasattr(diag, "message_detail")
+                                    and diag.message_detail
+                                    else None
+                                )
+                                error_message_primary = (
+                                    str(diag.message_primary)
+                                    if hasattr(diag, "message_primary")
+                                    and diag.message_primary
+                                    else None
                                 )
                             pgcode = getattr(flush_error.orig, "pgcode", None)
                         logger.error(
-                            "❌ IntegrityError during flush for reservation %s: %s (pgcode: %s, detail: %s)",
+                            "❌ IntegrityError during flush for reservation %s: %s (pgcode: %s, detail: %s, primary: %s)",
                             reservation_id,
                             str(flush_error),
                             pgcode,
                             error_detail_str,
+                            error_message_primary,
                         )
                         result, status_code = format_integrity_error(flush_error)
                         return result, status_code
+                    # Logger les autres erreurs aussi
+                    logger.error(
+                        "❌ Erreur non-IntegrityError during flush for reservation %s: %s (type: %s)",
+                        reservation_id,
+                        str(flush_error),
+                        type(flush_error).__name__,
+                    )
                     raise
                 try:
                     db.session.commit()

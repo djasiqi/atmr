@@ -5,9 +5,9 @@ import os
 import re
 from typing import Any, Dict, List, Tuple, cast
 
-import requests  # pyright: ignore[reportMissingModuleSource]
-from flask import current_app, request  # pyright: ignore[reportMissingImports]
-from flask_restx import Namespace, Resource  # pyright: ignore[reportMissingImports]
+import requests
+from flask import current_app, request
+from flask_restx import Namespace, Resource  # type: ignore[reportMissingImports]
 
 from services.geolocation.google_places import (
     GooglePlacesError,
@@ -16,6 +16,10 @@ from services.geolocation.google_places import (
     get_place_details,
 )
 from shared.error_handlers import APIErrorHandler
+
+# ✅ Constantes pour les codes HTTP
+HTTP_FORBIDDEN = 403
+HTTP_TOO_MANY_REQUESTS = 429
 
 geocode_ns = Namespace(
     "geocode", description="Autocomplete & géocodage avec Google Places API"
@@ -91,7 +95,11 @@ def photon_query(
     }
     if hospital_hint:
         params["osm_tag"] = "amenity:hospital"
-    r = requests.get(f"{PHOTON}/api", params=params, timeout=6)
+    # ✅ CORRECTION : Ajouter User-Agent pour éviter le blocage 403
+    headers = {
+        "User-Agent": "ATMR-Geocoding/1.0 (https://www.lirie.ch; contact@lirie.ch)"
+    }
+    r = requests.get(f"{PHOTON}/api", params=params, headers=headers, timeout=6)
     r.raise_for_status()
     return cast("Dict[str, Any]", r.json())
 
@@ -656,8 +664,34 @@ class GeocodeAutocomplete(Resource):
                                 q,
                             )
                         results.extend(photon_results)
+                    except requests.HTTPError as e2:
+                        # ✅ CORRECTION : Gérer spécifiquement les erreurs HTTP (403, 429, etc.)
+                        if e2.response and e2.response.status_code == HTTP_FORBIDDEN:
+                            # 403 Forbidden : Photon bloque probablement notre serveur
+                            current_app.logger.warning(
+                                "⚠️ Photon API bloque les requêtes (403 Forbidden) pour '%s'. Ignoré (fallback uniquement).",
+                                q,
+                            )
+                        elif (
+                            e2.response
+                            and e2.response.status_code == HTTP_TOO_MANY_REQUESTS
+                        ):
+                            # 429 Too Many Requests : Rate limiting
+                            current_app.logger.warning(
+                                "⚠️ Photon API rate limit atteint (429) pour '%s'. Ignoré (fallback uniquement).",
+                                q,
+                            )
+                        else:
+                            current_app.logger.warning(
+                                "⚠️ Photon autocomplete error (HTTP %s): %s",
+                                e2.response.status_code if e2.response else "unknown",
+                                e2,
+                            )
                     except Exception as e2:
-                        current_app.logger.error("❌ Photon autocomplete error: %s", e2)
+                        # Autres erreurs (timeout, réseau, etc.)
+                        current_app.logger.warning(
+                            "⚠️ Photon autocomplete error (non-HTTP): %s", e2
+                        )
             except GooglePlacesError as e:
                 current_app.logger.warning(
                     "⚠️ Google Places API error, falling back to Photon: %s", e
@@ -679,8 +713,34 @@ class GeocodeAutocomplete(Resource):
                             q,
                         )
                     results.extend(photon_results)
+                except requests.HTTPError as e2:
+                    # ✅ CORRECTION : Gérer spécifiquement les erreurs HTTP (403, 429, etc.)
+                    if e2.response and e2.response.status_code == HTTP_FORBIDDEN:
+                        # 403 Forbidden : Photon bloque probablement notre serveur
+                        current_app.logger.warning(
+                            "⚠️ Photon API bloque les requêtes (403 Forbidden) pour '%s'. Ignoré (fallback uniquement).",
+                            q,
+                        )
+                    elif (
+                        e2.response
+                        and e2.response.status_code == HTTP_TOO_MANY_REQUESTS
+                    ):
+                        # 429 Too Many Requests : Rate limiting
+                        current_app.logger.warning(
+                            "⚠️ Photon API rate limit atteint (429) pour '%s'. Ignoré (fallback uniquement).",
+                            q,
+                        )
+                    else:
+                        current_app.logger.warning(
+                            "⚠️ Photon autocomplete error (HTTP %s): %s",
+                            e2.response.status_code if e2.response else "unknown",
+                            e2,
+                        )
                 except Exception as e2:
-                    current_app.logger.error("❌ Photon autocomplete error: %s", e2)
+                    # Autres erreurs (timeout, réseau, etc.)
+                    current_app.logger.warning(
+                        "⚠️ Photon autocomplete error (non-HTTP): %s", e2
+                    )
         else:
             # 3) Photon (biais Genève + hint hôpital) - mode fallback
             try:
@@ -699,8 +759,31 @@ class GeocodeAutocomplete(Resource):
                         q,
                     )
                 results.extend(photon_results)
+            except requests.HTTPError as e:
+                # ✅ CORRECTION : Gérer spécifiquement les erreurs HTTP (403, 429, etc.)
+                if e.response and e.response.status_code == HTTP_FORBIDDEN:
+                    # 403 Forbidden : Photon bloque probablement notre serveur
+                    current_app.logger.warning(
+                        "⚠️ Photon API bloque les requêtes (403 Forbidden) pour '%s'. Ignoré (fallback uniquement).",
+                        q,
+                    )
+                elif e.response and e.response.status_code == HTTP_TOO_MANY_REQUESTS:
+                    # 429 Too Many Requests : Rate limiting
+                    current_app.logger.warning(
+                        "⚠️ Photon API rate limit atteint (429) pour '%s'. Ignoré (fallback uniquement).",
+                        q,
+                    )
+                else:
+                    current_app.logger.warning(
+                        "⚠️ Photon autocomplete error (HTTP %s): %s",
+                        e.response.status_code if e.response else "unknown",
+                        e,
+                    )
             except Exception as e:
-                current_app.logger.error("❌ Photon autocomplete error: %s", e)
+                # Autres erreurs (timeout, réseau, etc.)
+                current_app.logger.warning(
+                    "⚠️ Photon autocomplete error (non-HTTP): %s", e
+                )
 
         # 4) Dédup (adresse + coords arrondies)
         seen: set[Tuple[str, float, float]] = set()

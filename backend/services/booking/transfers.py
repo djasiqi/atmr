@@ -230,10 +230,14 @@ class BookingTransferService:
 
         # Révoquer le chauffeur et réinitialiser le statut lors du transfert
         # La course passe à PENDING sans chauffeur assigné
+        # ✅ CORRECTION : Changer le statut AVANT de mettre driver_id à None
+        # pour éviter l'erreur de validation "driver_id ne peut pas être NULL si status=ASSIGNED"
         original_driver_id = booking.driver_id
         original_status = booking.status
-        booking.driver_id = None
+        # Changer le statut d'abord (pour éviter la validation qui vérifie driver_id si status=ASSIGNED)
         booking.status = BookingStatus.PENDING
+        # Ensuite mettre driver_id à None (maintenant que le statut n'est plus ASSIGNED)
+        booking.driver_id = None
 
         # #region agent log
         try:
@@ -302,8 +306,8 @@ class BookingTransferService:
         # puisse voir la course dans son dashboard (même si le transfert n'est pas encore accepté)
         # Le statut reste PENDING jusqu'à acceptation du transfert
         booking.executing_company_id = transfer_executing_company_id
-        # S'assurer que le chauffeur est bien None (révoqué lors du transfert)
-        booking.driver_id = None
+        # ✅ Le driver_id a déjà été mis à None plus haut (ligne 236) après le changement de statut
+        # Pas besoin de le refaire ici pour éviter les problèmes de validation
 
         logger.info(
             (

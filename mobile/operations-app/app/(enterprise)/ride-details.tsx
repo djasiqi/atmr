@@ -445,13 +445,31 @@ export default function RideDetailsScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Informations client</Text>
         {(() => {
+          // ✅ Formatage de la civilité (backend utilise "HOMME", "FEMME", "AUTRE")
+          const formatGender = (gender?: string) => {
+            if (!gender) return null;
+            const normalized = String(gender).toUpperCase();
+            if (normalized === "HOMME" || normalized === "MALE") return "Monsieur";
+            if (normalized === "FEMME" || normalized === "FEMALE") return "Madame";
+            if (normalized === "AUTRE" || normalized === "OTHER") return "Autre";
+            return null;
+          };
+
           const clientFields = [
             { label: "Nom complet", value: summary.client.name, show: true },
+            { label: "Civilité", value: formatGender(summary.client.gender), show: !!summary.client.gender },
             { label: "Prénom", value: summary.client.first_name, show: !!summary.client.first_name },
             { label: "Nom", value: summary.client.last_name, show: !!summary.client.last_name },
             { label: "Date de naissance", value: summary.client.birth_date ? dayjs(summary.client.birth_date).format("DD MMMM YYYY") : null, show: !!summary.client.birth_date },
+            { label: "Numéro AVS", value: summary.client.avs_number, show: !!summary.client.avs_number },
             { label: "Téléphone", value: summary.client.phone, show: !!summary.client.phone },
+            { label: "Téléphone de contact", value: summary.client.contact_phone, show: !!summary.client.contact_phone && summary.client.contact_phone !== summary.client.phone },
+            { label: "Email de contact", value: summary.client.contact_email, show: !!summary.client.contact_email },
             { label: "Adresse de domicile", value: summary.client.home_address, show: !!summary.client.home_address },
+            { label: "Établissement de résidence", value: summary.client.residence_facility, show: !!summary.client.residence_facility },
+            { label: "Adresse de facturation", value: summary.client.billing_address, show: !!summary.client.billing_address && summary.client.billing_address !== summary.client.home_address },
+            { label: "Institution", value: summary.client.institution_name, show: !!summary.client.is_institution && !!summary.client.institution_name },
+            { label: "Tarif préférentiel", value: summary.client.preferential_rate ? `${summary.client.preferential_rate.toFixed(2)} CHF` : null, show: !!summary.client.preferential_rate },
           ].filter(f => f.show);
 
           return clientFields.map((field, index) => (
@@ -579,7 +597,7 @@ export default function RideDetailsScreen() {
                 </Text>
               ) : event.details ? (
                 <Text style={styles.historyDetailsFormatted}>
-                  {formatEventDetails(event.details)}
+                  {formatEventDetails(event.details, summary)}
                 </Text>
               ) : null}
             </View>
@@ -600,36 +618,14 @@ export default function RideDetailsScreen() {
 
       {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
 
-      <View style={styles.actionsRow}>
-        <TouchableOpacity
-          style={[styles.secondaryButton, styles.flexButton]}
-          onPress={loadDetail}
-          disabled={actionLoading}
-        >
-          <Text style={styles.secondaryButtonText}>Rafraîchir</Text>
-        </TouchableOpacity>
-        {isAssigned && !isActionDisabled && (
-          <TouchableOpacity
-            style={[styles.secondaryButton, styles.flexButton]}
-            onPress={handleCancel}
-            disabled={actionLoading}
-          >
-            <Text style={styles.secondaryButtonText}>Annuler la course</Text>
-          </TouchableOpacity>
-        )}
-        {!isActionDisabled && (
-          <TouchableOpacity
-            style={[styles.secondaryButton, styles.flexButton]}
-            onPress={() => setTransferModalVisible(true)}
-            disabled={actionLoading}
-          >
-            <Text style={styles.secondaryButtonText}>Transférer</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      <TouchableOpacity style={styles.linkButton} onPress={() => router.back()}>
-        <Text style={styles.linkButtonText}>Retour aux courses</Text>
+      {/* ✅ Bouton retour amélioré */}
+      <TouchableOpacity
+        style={styles.backButton}
+        onPress={() => router.back()}
+        activeOpacity={0.85}
+      >
+        <Ionicons name="arrow-back" size={20} color={palette.primaryText} style={{ marginRight: 8 }} />
+        <Text style={styles.backButtonText}>Retour aux courses</Text>
       </TouchableOpacity>
 
       {actionLoading && (
@@ -845,7 +841,7 @@ const formatActor = (actor: string): string => {
   return actorMap[actor] || actor;
 };
 
-const formatEventDetails = (details: any): string => {
+const formatEventDetails = (details: any, summary?: RideDetail["summary"]): string => {
   if (typeof details === "string") {
     try {
       details = JSON.parse(details);
@@ -873,8 +869,11 @@ const formatEventDetails = (details: any): string => {
     parts.push(`Statut: ${statusMap[details.status] || details.status}`);
   }
 
+  // ✅ Afficher le nom du chauffeur au lieu de l'ID
   if (details.driver_id) {
-    parts.push(`Chauffeur: #${details.driver_id}`);
+    // Essayer de récupérer le nom depuis summary.driver si disponible
+    const driverName = summary?.driver?.name || `#${details.driver_id}`;
+    parts.push(`Chauffeur: ${driverName}`);
   }
 
   // Ajouter les autres champs
@@ -1144,16 +1143,28 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontSize: 14,
   },
-  linkButton: {
+  // ✅ Bouton retour amélioré (remplace linkButton)
+  backButton: {
+    flexDirection: "row",
     alignItems: "center",
-    marginTop: 20,
+    justifyContent: "center",
+    backgroundColor: palette.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    marginTop: 24,
     marginBottom: 20,
+    marginHorizontal: 16,
+    shadowColor: "rgba(10,127,89,0.2)",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  linkButtonText: {
-    color: palette.primary,
-    fontSize: 15,
-    textDecorationLine: "underline",
-    fontWeight: "500",
+  backButtonText: {
+    color: palette.primaryText,
+    fontSize: 16,
+    fontWeight: "600",
   },
   errorText: {
     color: palette.error,

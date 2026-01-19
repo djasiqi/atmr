@@ -344,9 +344,14 @@ def _build_ride_summary(
         if client.user and client.user.birth_date:
             client_info["birth_date"] = client.user.birth_date.isoformat()
 
-        # Téléphone (priorité: contact_phone du client, sinon phone de l'user)
-        if client.contact_phone:
-            client_info["phone"] = client.contact_phone
+        # ✅ Téléphone (priorité: contact_phone_secure du client, sinon phone de l'user)
+        # Utiliser la propriété sécurisée pour gérer le déchiffrement automatique
+        contact_phone_value = getattr(client, "contact_phone_secure", None) or getattr(
+            client, "contact_phone", None
+        )
+        if contact_phone_value:
+            client_info["phone"] = contact_phone_value
+            client_info["contact_phone"] = contact_phone_value
         elif client.user and client.user.phone:
             client_info["phone"] = client.user.phone
 
@@ -362,12 +367,48 @@ def _build_ride_summary(
         if domicile_parts:
             client_info["home_address"] = ", ".join(domicile_parts)
 
+        # ✅ Adresse de facturation (utiliser la propriété sécurisée si disponible)
+        billing_address_value = getattr(
+            client, "billing_address_secure", None
+        ) or getattr(client, "billing_address", None)
+        if billing_address_value:
+            client_info["billing_address"] = billing_address_value
+
         # Prénom et nom séparés (depuis User)
         if client.user:
             if client.user.first_name:
                 client_info["first_name"] = client.user.first_name
             if client.user.last_name:
                 client_info["last_name"] = client.user.last_name
+            # ✅ Civilité (gender) depuis User
+            if client.user.gender:
+                client_info["gender"] = (
+                    client.user.gender.value
+                    if hasattr(client.user.gender, "value")
+                    else str(client.user.gender)
+                )
+
+        # ✅ Numéro AVS
+        if client.avs_number:
+            client_info["avs_number"] = client.avs_number
+
+        # ✅ Email de contact
+        if client.contact_email:
+            client_info["contact_email"] = client.contact_email
+
+        # ✅ Établissement de résidence
+        if client.residence_facility:
+            client_info["residence_facility"] = client.residence_facility
+
+        # ✅ Institution
+        if client.is_institution:
+            client_info["is_institution"] = True
+            if client.institution_name:
+                client_info["institution_name"] = client.institution_name
+
+        # ✅ Tarif préférentiel
+        if client.preferential_rate is not None:
+            client_info["preferential_rate"] = float(client.preferential_rate)
 
     # ✅ Récupérer les informations de transfert
     transfer_info: Dict[str, Any] | None = None
@@ -644,6 +685,21 @@ def _build_ride_history(
             assignment, "created_at", None
         )
         assigned_status = getattr(assignment.status, "value", str(assignment.status))
+        # ✅ Utiliser la même fonction que _build_ride_summary pour récupérer le nom du chauffeur
+        driver_name = "Chauffeur inconnu"
+
+        # Essayer d'abord depuis assignment.driver
+        if assignment.driver:
+            driver_name = _driver_display_name(assignment.driver)
+        # ✅ Fallback : Essayer depuis booking.driver si assignment.driver n'est pas disponible
+        elif booking.driver:
+            driver_name = _driver_display_name(booking.driver)
+        # ✅ Dernier fallback : Utiliser l'ID si aucun driver n'est disponible
+        else:
+            driver_id_value = getattr(assignment, "driver_id", None)
+            if driver_id_value:
+                driver_name = f"Chauffeur #{driver_id_value}"
+
         history.append(
             {
                 "ts": assigned_at.isoformat()
@@ -655,7 +711,7 @@ def _build_ride_history(
                     "driver_id": assignment.driver_id,
                     "status": assigned_status,
                 },
-                "details_formatted": f"Chauffeur assigné: #{assignment.driver_id}\nStatut: {status_map.get(assigned_status, assigned_status)}",
+                "details_formatted": f"Chauffeur assigné: {driver_name}\nStatut: {status_map.get(assigned_status, assigned_status)}",
             }
         )
 
@@ -2902,7 +2958,8 @@ class MobileRealtimeDashboard(Resource):
                 from repositories.assignment_repository import AssignmentRepository
 
                 assignment_repo = AssignmentRepository()
-                assigns = assignment_repo.find_models_by_company_with_time_range_and_excluded_statuses(
+                # ✅ CORRECTION N+1 : Utiliser eager loading pour charger les bookings en une seule requête
+                assigns = assignment_repo.find_models_by_company_with_time_range_and_excluded_statuses_eager_loading(
                     company_id=company_id,
                     start_datetime=d0,
                     end_datetime=d1,
@@ -2914,13 +2971,9 @@ class MobileRealtimeDashboard(Resource):
                 )
 
                 current_delays = []
-                from repositories.booking_repository import BookingRepository
-
-                booking_repo = BookingRepository()
                 for a in assigns:
-                    b = booking_repo.find_model_by_id(
-                        booking_id=cast(int, a.booking_id)
-                    )
+                    # ✅ CORRECTION N+1 : Accéder directement à a.booking (déjà chargé via joinedload)
+                    b = a.booking
                     if not b or not b.scheduled_time:
                         continue
 
@@ -2997,24 +3050,36 @@ class MobileRealtimeDashboard(Resource):
                     if bool(a.driver_id):
                         driver_load[a.driver_id] = driver_load.get(a.driver_id, 0) + 1
 
+                # ✅ CORRECTION N+1 : Charger tous les drivers en une seule requête avec eager loading
                 # Enrichir avec infos chauffeur
                 driver_load_details = []
-                from repositories.driver_repository import DriverRepository
+                if driver_load:
+                    driver_ids_list = list(driver_load.keys())
+                    from repositories.driver_repository import DriverRepository
 
-                driver_repo = DriverRepository()
-                for driver_id, count in driver_load.items():
-                    driver = driver_repo.find_model_by_id(driver_id=driver_id)
-                    if driver and driver.user:
-                        driver_load_details.append(
-                            {
-                                "driver_id": driver_id,
-                                "name": (
-                                    f"{driver.user.first_name} {driver.user.last_name}"
-                                ),
-                                "bookings_count": count,
-                                "is_emergency": getattr(driver, "is_emergency", False),
-                            }
+                    driver_repo = DriverRepository()
+                    # ✅ Charger tous les drivers avec leurs users en une seule requête
+                    drivers_list = (
+                        driver_repo.find_models_by_ids_with_user_eager_loading(
+                            driver_ids_list
                         )
+                    )
+                    drivers_map = {d.id: d for d in drivers_list}
+                    for driver_id, count in driver_load.items():
+                        driver = drivers_map.get(driver_id)
+                        if driver and driver.user:
+                            driver_load_details.append(
+                                {
+                                    "driver_id": driver_id,
+                                    "name": (
+                                        f"{driver.user.first_name} {driver.user.last_name}"
+                                    ),
+                                    "bookings_count": count,
+                                    "is_emergency": getattr(
+                                        driver, "is_emergency", False
+                                    ),
+                                }
+                            )
 
                 # Trier par charge décroissante
                 driver_load_details.sort(key=lambda x: -x["bookings_count"])

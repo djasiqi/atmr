@@ -22,6 +22,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const { styles, palette } = useMemo(() => getLoginStyles("driver"), []);
 
   const handleLogin = async () => {
@@ -33,7 +34,7 @@ export default function LoginScreen() {
       return;
     }
     try {
-      await login(email, password);
+      await login(email, password, rememberMe);
       router.replace("/(tabs)/mission");
     } catch {
       Alert.alert("Connexion échouée", "Email ou mot de passe incorrect.");
@@ -92,6 +93,20 @@ export default function LoginScreen() {
                 </TouchableOpacity>
               </View>
             </View>
+
+            {/* ✅ PHASE 1 : Checkbox "Se souvenir de moi" */}
+            <TouchableOpacity
+              style={styles.rememberMeContainer}
+              onPress={() => setRememberMe(!rememberMe)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+                {rememberMe && (
+                  <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                )}
+              </View>
+              <Text style={styles.checkboxLabel}>Se souvenir de moi</Text>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.helperLink}

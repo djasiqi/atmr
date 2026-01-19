@@ -180,6 +180,31 @@ export const getLoginStyles = (mode: LoginMode) => {
       fontSize: 14,
       textAlign: "center",
     },
+    // ✅ PHASE 1 : Styles pour le checkbox "Se souvenir de moi"
+    rememberMeContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 20,
+    },
+    checkbox: {
+      width: 20,
+      height: 20,
+      borderRadius: 4,
+      borderWidth: 2,
+      borderColor: palette.accent,
+      marginRight: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "transparent",
+    },
+    checkboxChecked: {
+      backgroundColor: palette.accent,
+    },
+    checkboxLabel: {
+      color: palette.secondary,
+      fontSize: 14,
+      flex: 1,
+    },
   });
 
   return { styles, palette };

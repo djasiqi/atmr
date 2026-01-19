@@ -134,8 +134,9 @@ fi
 # ✅ Nettoyage SÉCURISÉ : Arrêt des conteneurs SANS supprimer les volumes de données
 echo "🧹 Arrêt des conteneurs existants (conservation des données)..."
 # ⚠️ IMPORTANT: Ne JAMAIS utiliser --volumes en production pour préserver les données
-docker compose -f docker-compose.production.yml down --remove-orphans || true
+# ✅ CORRECTION : Arrêter le monitoring AVANT la production pour éviter les dépendances
 docker compose -f docker-compose.monitoring.yml down --remove-orphans || true
+docker compose -f docker-compose.production.yml down --remove-orphans || true
 
 # Supprimer les conteneurs orphelins manuellement (mais PAS les volumes)
 docker ps -a --filter "name=atmr-" --format "{{.ID}}" | xargs -r docker rm -f || true
@@ -186,6 +187,26 @@ echo "✅ Conteneurs arrêtés (volumes de données préservés)"
 cp .env.production .env && chmod 600 .env
 
 mkdir -p data/rl/shadow_mode data/ml data/rl data/ml/models && chmod -R 755 data && chown -R 999:999 data 2>/dev/null || true
+
+# ✅ CORRECTION : Démarrer le monitoring AVANT la production pour éviter les problèmes de dépendances
+echo "📊 Démarrage du monitoring..."
+if [ -f "docker-compose.monitoring.yml" ]; then
+  if [ -d "monitoring" ]; then
+    [ -f "monitoring/alertmanager/docker-entrypoint.sh" ] && chmod +x monitoring/alertmanager/docker-entrypoint.sh || true
+    [ -f "monitoring/alertmanager/Dockerfile" ] && docker compose -f docker-compose.monitoring.yml build alertmanager || true
+  fi
+  
+  echo "🔄 Démarrage des services de monitoring (Grafana, Prometheus, Alertmanager)..."
+  docker compose -f docker-compose.monitoring.yml up -d --remove-orphans || {
+    echo "⚠️  Échec du démarrage du monitoring, poursuite du déploiement..."
+  }
+  sleep 5
+else
+  echo "⚠️  docker-compose.monitoring.yml non trouvé, monitoring ignoré"
+fi
+
+# Démarrer les services de production
+echo "🚀 Démarrage des services de production..."
 docker compose -f docker-compose.production.yml up -d --remove-orphans
 
 # Laisser le temps aux conteneurs de se stabiliser
@@ -221,47 +242,6 @@ for i in $(seq 1 60); do
   sleep 2
 done
 [ "$POSTGRES_READY" = "false" ] && { docker compose -f docker-compose.production.yml logs postgres | tail -100; exit 1; }
-
-# Démarrer le monitoring
-echo "📊 Démarrage du monitoring..."
-if [ -f "docker-compose.monitoring.yml" ]; then
-  if [ -d "monitoring" ]; then
-    [ -f "monitoring/alertmanager/docker-entrypoint.sh" ] && chmod +x monitoring/alertmanager/docker-entrypoint.sh || true
-    [ -f "monitoring/alertmanager/Dockerfile" ] && docker compose -f docker-compose.monitoring.yml build alertmanager || true
-  fi
-  
-  docker compose -f docker-compose.monitoring.yml up -d --remove-orphans || true
-  sleep 10
-  
-  # Redémarrer les services production après monitoring
-  echo "🔄 Redémarrage des services production..."
-  docker compose -f docker-compose.production.yml up -d --remove-orphans || exit 1
-  
-  # Laisser le temps aux conteneurs de se stabiliser
-  echo "⏳ Stabilisation des conteneurs (5 secondes)..."
-  sleep 5
-  
-  for i in $(seq 1 30); do
-    BACKEND_STATUS=$(docker compose -f docker-compose.production.yml ps backend --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
-    [ "$BACKEND_STATUS" = "running" ] && echo "✅ Backend redémarré" && break
-    sleep 1
-  done
-  
-  POSTGRES_READY=false
-  for i in $(seq 1 60); do
-    POSTGRES_STATUS=$(docker compose -f docker-compose.production.yml ps postgres --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
-    if [ "$POSTGRES_STATUS" = "running" ]; then
-      HEALTH=$(docker inspect --format='{{.State.Health.Status}}' atmr-postgres 2>/dev/null || echo "none")
-      if [ "$HEALTH" = "healthy" ] && docker compose -f docker-compose.production.yml exec -T postgres pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" > /dev/null 2>&1; then
-        echo "✅ PostgreSQL prêt après redémarrage"
-        POSTGRES_READY=true
-        break
-      fi
-    fi
-    sleep 1
-  done
-  [ "$POSTGRES_READY" = "false" ] && exit 1
-fi
 
 # Migrations Alembic
 echo "🔄 Migrations Alembic..."
