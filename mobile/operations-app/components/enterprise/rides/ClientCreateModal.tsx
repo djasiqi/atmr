@@ -659,7 +659,8 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
                       value={birthDate}
                       onChange={setBirthDate}
                       mode="date"
-                      maximumDate={new Date()}
+                      maximumDate={new Date()} // ✅ Limite à aujourd'hui (pas de dates futures)
+                      minimumDate={new Date(1900, 0, 1)} // ✅ Permet les dates à partir de 1900
                     />
                   </View>
                 )}

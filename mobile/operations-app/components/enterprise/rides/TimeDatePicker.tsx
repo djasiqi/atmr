@@ -141,12 +141,27 @@ export const TimeDatePicker: React.FC<TimeDatePickerProps> = ({
             // Valider le mois (01-12)
             const validMonth = Math.min(month, 12).toString().padStart(2, "0");
 
-            // Valider l'année (année en cours à +3 ans max)
+            // Valider l'année
             const currentYear = dayjs().year();
             const currentMonth = dayjs().month() + 1; // 1-12
-            // À partir de novembre (11), on peut proposer l'année suivante
-            const minYear = currentYear;
-            const maxYear = currentMonth >= 11 ? currentYear + 3 : currentYear + 2;
+            
+            // Déterminer l'année minimale et maximale
+            // Si minimumDate/maximumDate sont fournis, les utiliser
+            // Sinon, utiliser les valeurs par défaut (année en cours à +2/+3 ans)
+            let minYear = currentYear; // Par défaut : année en cours (pour les rendez-vous)
+            let maxYear = currentMonth >= 11 ? currentYear + 3 : currentYear + 2; // Par défaut : +2 ou +3 ans
+            
+            // ✅ Si minimumDate est fourni, utiliser son année (peut être dans le passé pour les dates de naissance)
+            if (minimumDate) {
+                const minYearFromDate = dayjs(minimumDate).year();
+                minYear = minYearFromDate;
+            }
+            
+            // ✅ Si maximumDate est fourni, utiliser son année (peut être aujourd'hui pour les dates de naissance)
+            if (maximumDate) {
+                const maxYearFromDate = dayjs(maximumDate).year();
+                maxYear = maxYearFromDate;
+            }
 
             if (limited.length === 5) {
                 // Si on a 5 chiffres, on a juste le premier chiffre de l'année
