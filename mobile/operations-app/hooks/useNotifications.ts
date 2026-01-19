@@ -34,35 +34,67 @@ export const useNotifications = () => {
   useEffect(() => {
     // Ne rien faire tant que l'utilisateur n'est pas chargé et identifié
     // Et ne rien faire sur web (expo-notifications non supporté)
-    if (Platform.OS === "web" || loading || !driver) {
+    if (Platform.OS === "web") {
+      console.warn("🔔 [useNotifications] Platform.OS === 'web' - notifications push désactivées sur web");
+      return;
+    }
+    if (loading || !driver) {
+      console.log(`🔔 [useNotifications] Attente: loading=${loading}, driver=${!!driver}`);
       return;
     }
 
-    // Désactiver proprement les notifications en dev/local (évite FIS_AUTH_ERROR)
-    // Dev Client/Bare en local sans config Firebase ne peut pas obtenir de token fiable
+    // ✅ LOGGING AMÉLIORÉ: Log des conditions d'environnement
     const isDevEnv = __DEV__ === true;
     const isBare = Constants.executionEnvironment === "bare";
     const forceDevPush =
       String(process.env.EXPO_PUBLIC_ENABLE_PUSH_DEV || "").trim() === "1";
+    const appOwnership = Constants.appOwnership;
+    
+    console.log("🔔 [useNotifications] Conditions d'environnement:", {
+      Platform: Platform.OS,
+      isDevEnv,
+      isBare,
+      forceDevPush,
+      appOwnership,
+      executionEnvironment: Constants.executionEnvironment,
+    });
+
+    // Désactiver proprement les notifications en dev/local (évite FIS_AUTH_ERROR)
+    // Dev Client/Bare en local sans config Firebase ne peut pas obtenir de token fiable
     if ((isDevEnv || isBare) && !forceDevPush) {
-      console.log("🔔 Notifications désactivées en développement/local - skip registration");
+      console.warn("🔔 [useNotifications] Notifications désactivées en développement/local - skip registration");
       return;
     }
 
     const setupAndRegister = async () => {
       try {
+        console.log("🔔 [useNotifications] Début enregistrement token push...");
+        
         // Étape 1 : Obtenir le token de l'appareil
         const token = await registerForPushNotificationsAsync(); // (Cette fonction doit exister ailleurs dans votre code)
 
         // Cast fort en entier pour correspondre au backend (évite "ID du chauffeur invalide ou manquant.")
         const driverId = Number((driver as any)?.id);
+        
+        console.log("🔔 [useNotifications] Résultat obtention token:", {
+          hasToken: !!token,
+          tokenLength: token?.length || 0,
+          driverId,
+          isInteger: Number.isInteger(driverId),
+          driverIdType: typeof driverId,
+        });
+        
         if (!token || !Number.isInteger(driverId)) {
           // En dev/local sans Firebase, c'est normal de ne pas avoir de token
           const isDevLocal = __DEV__ === true || Constants.executionEnvironment === "bare";
           if (isDevLocal && !token) {
-            console.log("ℹ️ Pas de token push en dev/local - normal sans Firebase");
+            console.log("ℹ️ [useNotifications] Pas de token push en dev/local - normal sans Firebase");
           } else {
-            console.warn("⛔ Token ou ID de chauffeur invalide, enregistrement annulé.");
+            console.error("⛔ [useNotifications] Token ou ID de chauffeur invalide, enregistrement annulé.", {
+              hasToken: !!token,
+              driverId,
+              isInteger: Number.isInteger(driverId),
+            });
           }
           return;
         }
@@ -91,42 +123,75 @@ export const useNotifications = () => {
           );
 
           try {
+            console.log("🔔 [useNotifications] Envoi token au backend...", {
+              driverId: Number(driverId),
+              tokenPreview: token.substring(0, 30) + "...",
+            });
+            
             // ✅ FIX: S'assurer que driverId est bien un nombre
-            await api.post("/driver/save-push-token", {
+            const response = await api.post("/driver/save-push-token", {
               driverId: Number(driverId),
               token,
             });
-            console.log("✅ Token push enregistré avec succès sur le serveur");
+            
+            console.log("✅ [useNotifications] Token push enregistré avec succès sur le serveur", {
+              response: response.data,
+            });
+            
             await AsyncStorage.setItem(storageKey, token);
             console.log(
-              "✅ Token enregistré sur le serveur et sauvegardé localement."
+              "✅ [useNotifications] Token enregistré sur le serveur et sauvegardé localement."
             );
           } catch (e: any) {
             // Log détaillé côté client pour diagnostiquer un 400 éventuel
-            console.error("❌ Envoi push token échoué:", {
+            console.error("❌ [useNotifications] Envoi push token échoué:", {
               driverId,
               status: e?.response?.status,
+              statusText: e?.response?.statusText,
               data: e?.response?.data,
               message: e?.message,
+              code: e?.code,
+              stack: e?.stack,
             });
+            
+            // ✅ ENVOI AU BACKEND: Logger l'erreur pour diagnostic
+            try {
+              await fetch("http://127.0.0.1:7242/ingest/push-token-error", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  driverId,
+                  error: e?.message || "Unknown error",
+                  status: e?.response?.status,
+                  data: e?.response?.data,
+                  platform: Platform.OS,
+                  timestamp: new Date().toISOString(),
+                }),
+              }).catch(() => {}); // Ignorer les erreurs de connexion
+            } catch {}
+            
             throw e;
           }
         } else {
           // Token identique, mais on enregistre quand même pour réactiver si nécessaire
           // (le backend réactivera automatiquement les tokens inactifs)
           console.log(
-            "🔔 Token identique, mais enregistrement pour réactivation si nécessaire..."
+            "🔔 [useNotifications] Token identique, mais enregistrement pour réactivation si nécessaire..."
           );
           try {
-            await api.post("/driver/save-push-token", {
+            const response = await api.post("/driver/save-push-token", {
               driverId: Number(driverId),
               token,
             });
-            console.log("✅ Token push réactivé/mis à jour sur le serveur");
+            console.log("✅ [useNotifications] Token push réactivé/mis à jour sur le serveur", {
+              response: response.data,
+            });
           } catch (e: any) {
-            console.warn("⚠️ Réactivation token échouée (non critique):", {
+            console.warn("⚠️ [useNotifications] Réactivation token échouée (non critique):", {
               driverId,
               status: e?.response?.status,
+              statusText: e?.response?.statusText,
+              data: e?.response?.data,
               message: e?.message,
             });
             // Ne pas throw, c'est non-critique si le token est déjà actif
@@ -135,9 +200,17 @@ export const useNotifications = () => {
       } catch (error: unknown) {
         const errorMessage = getErrorMessage(error);
         
+        console.error("❌ [useNotifications] Erreur durant la configuration des notifications:", {
+          error: errorMessage,
+          errorType: error instanceof Error ? error.constructor.name : typeof error,
+          driverId: (driver as any)?.id,
+          platform: Platform.OS,
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+        
         // Ne pas logger comme erreur si c'est FIS_AUTH_ERROR (normal en dev/local)
         if (errorMessage.includes("FIS_AUTH_ERROR")) {
-          console.warn("⚠️ Firebase Error lors de la configuration des notifications - normal en dev/local");
+          console.warn("⚠️ [useNotifications] Firebase Error lors de la configuration des notifications - normal en dev/local");
         } else {
           logError("Erreur durant la configuration des notifications", error);
         }
@@ -223,26 +296,41 @@ export const useNotifications = () => {
 
 async function registerForPushNotificationsAsync(): Promise<string | null> {
   try {
+    console.log("🔔 [registerForPushNotificationsAsync] Début obtention token...");
+    
     if (!Device.isDevice) {
-      console.warn("⚠️ Emulator detected - notifications may be limited");
+      console.warn("⚠️ [registerForPushNotificationsAsync] Emulator detected - notifications may be limited");
     }
     if (Platform.OS === "web") {
       // Pas de notifications push sur web via expo-notifications
+      console.warn("⚠️ [registerForPushNotificationsAsync] Platform.OS === 'web' - retour null");
       return null;
     }
+    
+    console.log("🔔 [registerForPushNotificationsAsync] Vérification permissions...");
     const { status: existingStatus } =
       await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
+    
+    console.log("🔔 [registerForPushNotificationsAsync] Permission existante:", existingStatus);
 
     if (existingStatus !== "granted") {
+      console.log("🔔 [registerForPushNotificationsAsync] Demande de permission...");
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
+      console.log("🔔 [registerForPushNotificationsAsync] Permission après demande:", status);
     }
 
     if (finalStatus !== "granted") {
-      console.warn("⚠️ Notification permissions denied");
+      console.error("❌ [registerForPushNotificationsAsync] Notification permissions denied ou refusées:", {
+        existingStatus,
+        finalStatus,
+        platform: Platform.OS,
+      });
       return null;
     }
+    
+    console.log("✅ [registerForPushNotificationsAsync] Permissions accordées");
 
     // ✅ **IMPROVEMENT 2: Set up Android channel before getting token**
     if (Platform.OS === "android") {
@@ -259,15 +347,30 @@ async function registerForPushNotificationsAsync(): Promise<string | null> {
     const projectId =
       (Constants as any)?.expoConfig?.extra?.eas?.projectId ||
       (Constants as any)?.easConfig?.projectId;
+    console.log("🔔 [registerForPushNotificationsAsync] Obtention token Expo...", {
+      hasProjectId: !!projectId,
+      projectId: projectId ? projectId.substring(0, 20) + "..." : null,
+    });
+    
     const token = await Notifications.getExpoPushTokenAsync(
       projectId ? { projectId } : undefined
     );
 
-    console.log("📱 Expo push token:", token.data.substring(0, 50) + "...");
+    console.log("✅ [registerForPushNotificationsAsync] Expo push token obtenu:", {
+      tokenPreview: token.data.substring(0, 50) + "...",
+      tokenLength: token.data.length,
+    });
 
     return token.data;
   } catch (error: unknown) {
     const errorMessage = getErrorMessage(error);
+    
+    console.error("❌ [registerForPushNotificationsAsync] Erreur lors de l'obtention du token:", {
+      error: errorMessage,
+      errorType: error instanceof Error ? error.constructor.name : typeof error,
+      platform: Platform.OS,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     
     // Ne pas logger comme erreur si c'est une erreur Firebase (normal en dev/local)
     // Détecter plusieurs variantes d'erreurs Firebase

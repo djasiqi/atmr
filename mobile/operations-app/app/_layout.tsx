@@ -230,7 +230,12 @@ function RootNav() {
 
     (async () => {
       try {
-        console.log("🔔 Initialisation des notifications…");
+        console.log("🔔 [_layout] Initialisation des notifications…", {
+          driverId: currentUserId,
+          platform: Platform.OS,
+          appOwnership: Constants.appOwnership,
+          executionEnvironment: Constants.executionEnvironment,
+        });
         await configureNotifications();
 
         // ✅ Configurer les canaux Android (Phase 1 - Quick Wins)
@@ -258,10 +263,17 @@ function RootNav() {
         if (!tokenToUse) {
           // En dev/local, c'est normal de ne pas avoir de token
           const isDevLocal = __DEV__ === true || Constants.executionEnvironment === "bare";
+          console.error("❌ [_layout] Aucun token push disponible", {
+            driverId: currentUserId,
+            platform: Platform.OS,
+            isDevLocal,
+            hasDevice: !!device,
+            hasExpo: !!expo,
+          });
           if (isDevLocal) {
-            console.log("ℹ️ Pas de token push en dev/local - normal sans Firebase");
+            console.log("ℹ️ [_layout] Pas de token push en dev/local - normal sans Firebase");
           } else {
-            console.warn("⚠️ Aucun token push disponible (APK sans Firebase ?)");
+            console.warn("⚠️ [_layout] Aucun token push disponible (APK sans Firebase ?)");
           }
           return;
         }
@@ -305,20 +317,38 @@ function RootNav() {
           // Token identique, mais on enregistre quand même pour réactiver si nécessaire
           console.log("🔔 Token identique, réactivation si nécessaire...");
           try {
-            await registerPushToken({
+            console.log("🔔 [_layout] Réactivation token...", {
+              driverId: currentUserId,
+              tokenPreview: tokenToUse.substring(0, 30) + "...",
+            });
+            const response = await registerPushToken({
               token: tokenToUse,
               driverId: currentUserId,
             });
-            console.log("✅ Push token réactivé/mis à jour côté backend");
+            console.log("✅ [_layout] Push token réactivé/mis à jour côté backend", {
+              response,
+            });
           } catch (e: any) {
-            console.warn("⚠️ Réactivation token échouée (non critique):", e?.message);
+            console.error("⚠️ [_layout] Réactivation token échouée (non critique):", {
+              driverId: currentUserId,
+              status: e?.response?.status,
+              statusText: e?.response?.statusText,
+              data: e?.response?.data,
+              message: e?.message,
+            });
             // Ne pas throw, c'est non-critique si le token est déjà actif
           }
         }
       } catch (e: any) {
-        console.warn(
-          "❌ Enregistrement des notifications:",
-          e?.message || String(e)
+        console.error(
+          "❌ [_layout] Enregistrement des notifications échoué:",
+          {
+            driverId: currentUserId,
+            error: e?.message || String(e),
+            status: e?.response?.status,
+            data: e?.response?.data,
+            platform: Platform.OS,
+          }
         );
       } finally {
         registeringRef.current = false;
