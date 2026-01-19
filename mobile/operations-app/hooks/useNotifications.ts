@@ -78,14 +78,16 @@ export const useNotifications = () => {
         const storageKey = `push_token_driver_${driverId}`;
         const lastSentToken = await AsyncStorage.getItem(storageKey);
 
-        if (lastSentToken === token) {
+        // ✅ CORRECTIF: Toujours enregistrer le token lors de la connexion
+        // même s'il n'a pas changé, pour réactiver les tokens inactifs
+        // (les tokens peuvent être invalidés lors du logout et doivent être réactivés)
+        const shouldRegister = lastSentToken !== token || !lastSentToken;
+
+        if (shouldRegister) {
           console.log(
-            "✅ Token de notification inchangé, pas de nouvel enregistrement."
-          );
-        } else {
-          console.log(
-            "🔔 Nouveau token détecté, enregistrement sur le serveur pour le chauffeur:",
-            driverId
+            "🔔 Token de notification à enregistrer pour le chauffeur:",
+            driverId,
+            lastSentToken ? "(token changé)" : "(première connexion)"
           );
 
           try {
@@ -95,6 +97,10 @@ export const useNotifications = () => {
               token,
             });
             console.log("✅ Token push enregistré avec succès sur le serveur");
+            await AsyncStorage.setItem(storageKey, token);
+            console.log(
+              "✅ Token enregistré sur le serveur et sauvegardé localement."
+            );
           } catch (e: any) {
             // Log détaillé côté client pour diagnostiquer un 400 éventuel
             console.error("❌ Envoi push token échoué:", {
@@ -105,11 +111,26 @@ export const useNotifications = () => {
             });
             throw e;
           }
-
-          await AsyncStorage.setItem(storageKey, token);
+        } else {
+          // Token identique, mais on enregistre quand même pour réactiver si nécessaire
+          // (le backend réactivera automatiquement les tokens inactifs)
           console.log(
-            "✅ Token enregistré sur le serveur et sauvegardé localement."
+            "🔔 Token identique, mais enregistrement pour réactivation si nécessaire..."
           );
+          try {
+            await api.post("/driver/save-push-token", {
+              driverId: Number(driverId),
+              token,
+            });
+            console.log("✅ Token push réactivé/mis à jour sur le serveur");
+          } catch (e: any) {
+            console.warn("⚠️ Réactivation token échouée (non critique):", {
+              driverId,
+              status: e?.response?.status,
+              message: e?.message,
+            });
+            // Ne pas throw, c'est non-critique si le token est déjà actif
+          }
         }
       } catch (error: unknown) {
         const errorMessage = getErrorMessage(error);

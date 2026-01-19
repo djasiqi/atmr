@@ -281,22 +281,40 @@ function RootNav() {
         console.log("🔔 Token enregistré:", tokenToUse.substring(0, 20) + "...");
         console.log("🔔 Enregistrement token pour driver:", currentUserId);
 
-        // Empêcher les re-posts si inchangé (mémo par utilisateur si dispo)
+        // ✅ CORRECTIF: Toujours enregistrer le token lors de la connexion
+        // même s'il n'a pas changé, pour réactiver les tokens inactifs
+        // (les tokens peuvent être invalidés lors du logout et doivent être réactivés)
         const key = currentUserId
           ? `push_token_${currentUserId}`
           : "push_token_default";
         const last = await AsyncStorage.getItem(key);
-        if (last === tokenToUse) {
-          console.log("🔔 Token inchangé, on ne ré-enregistre pas.");
-          return;
-        }
+        const shouldRegister = last !== tokenToUse || !last;
 
-        await registerPushToken({
-          token: tokenToUse,
-          driverId: currentUserId,
-        });
-        await AsyncStorage.setItem(key, tokenToUse);
-        console.log("✅ Push token enregistré côté backend");
+        if (shouldRegister) {
+          console.log(
+            "🔔 Token à enregistrer:",
+            last ? "(token changé)" : "(première connexion)"
+          );
+          await registerPushToken({
+            token: tokenToUse,
+            driverId: currentUserId,
+          });
+          await AsyncStorage.setItem(key, tokenToUse);
+          console.log("✅ Push token enregistré côté backend");
+        } else {
+          // Token identique, mais on enregistre quand même pour réactiver si nécessaire
+          console.log("🔔 Token identique, réactivation si nécessaire...");
+          try {
+            await registerPushToken({
+              token: tokenToUse,
+              driverId: currentUserId,
+            });
+            console.log("✅ Push token réactivé/mis à jour côté backend");
+          } catch (e: any) {
+            console.warn("⚠️ Réactivation token échouée (non critique):", e?.message);
+            // Ne pas throw, c'est non-critique si le token est déjà actif
+          }
+        }
       } catch (e: any) {
         console.warn(
           "❌ Enregistrement des notifications:",
