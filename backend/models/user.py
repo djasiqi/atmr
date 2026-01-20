@@ -68,6 +68,12 @@ class User(db.Model):
     )
     profile_image: Mapped[str] = mapped_column(String(255), nullable=True)
 
+    # 🔔 Token push (Expo/FCM/APNs via Expo) pour les comptes entreprise (dispatch)
+    # Utilisé par backend/services/events/fanout.py (_send_push_to_company)
+    push_token: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, index=True
+    )
+
     password: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[UserRole] = mapped_column(
         SAEnum(UserRole, name="user_role"),

@@ -18,20 +18,20 @@ import {
   fetchDriverProfile,
   loginDriver,
   refreshAccessToken,
+  refreshDriverTokenSingleflight,
   invalidateInterceptorCache,
 } from "@/services/api";
 import { secureStorage, asyncStorage } from "@/services/storage";
 // ✅ CORRECTION : Les tokens Enterprise sont maintenant dans SecureStore
 import {
-  ENTERPRISE_REFRESH_KEY,
   ENTERPRISE_SESSION_KEY,
-  ENTERPRISE_TOKEN_KEY,
   EnterpriseLoginParams,
   EnterpriseLoginResponse,
   EnterpriseLoginMfaPayload,
   EnterpriseTokenPayload,
   fetchEnterpriseSession,
   loginEnterprise,
+  refreshEnterpriseTokenSingleflight,
   refreshEnterpriseToken,
   verifyEnterpriseMfa,
   invalidateEnterpriseInterceptorCache,
@@ -531,7 +531,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                   const refreshToken = await secureStorage.getEnterpriseRefreshToken() ?? parsed.refreshToken;
                   if (refreshToken) {
                     try {
-                      const refreshResponse = await refreshEnterpriseToken(refreshToken);
+                      const refreshResponse =
+                        await refreshEnterpriseTokenSingleflight(refreshToken);
                       await handleEnterpriseSuccess(refreshResponse);
                     } catch (refreshError) {
                       // eslint-disable-next-line no-console
@@ -605,16 +606,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               throw new Error("Pas de refresh token disponible");
             }
 
-            const refreshResponse = await refreshAccessToken(refreshToken);
-
-            // Stocker le nouveau access_token
-            await secureStorage.setAccessToken(refreshResponse.access_token);
-            setDriverToken(refreshResponse.access_token);
-
-            // Mettre à jour refresh_token si rotation activée
-            if (refreshResponse.refresh_token) {
-              await secureStorage.setRefreshToken(refreshResponse.refresh_token);
-            }
+            const newAccessToken = await refreshDriverTokenSingleflight();
+            setDriverToken(newAccessToken);
 
             // Invalider le cache de l'intercepteur pour forcer l'utilisation du nouveau token
             invalidateInterceptorCache();
@@ -753,44 +746,93 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [driverToken, mode]);
 
   // ✅ PHASE 3 : Refresh automatique au retour au premier plan
+  // ✅ CORRECTION CRITIQUE : Toujours tenter un refresh si le token est expiré ou proche de l'expiration
+  // Cela évite les déconnexions après un long séjour en arrière-plan
   useEffect(() => {
     if (!driverToken || mode !== "driver") return;
 
     const handleAppStateChange = async (nextAppState: AppStateStatus) => {
       if (nextAppState === "active") {
-        // Vérifier si le token est proche de l'expiration
+        // ✅ CORRECTION : Toujours vérifier le token au retour au premier plan
+        // Même si l'app était en arrière-plan pendant longtemps
         const expiresAt = getTokenExpiration(driverToken);
-        if (!expiresAt) return;
+        if (!expiresAt) {
+          console.warn("[useAuth] ⚠️ Impossible de décoder l'expiration du token, tentative de refresh préventif");
+          // Si on ne peut pas décoder, tenter quand même un refresh si refresh token disponible
+          try {
+            const refreshToken = await secureStorage.getRefreshToken();
+            if (refreshToken) {
+              console.log("[useAuth] 🔄 Token non décodable, refresh préventif au retour au premier plan...");
+              const newAccessToken = await refreshDriverTokenSingleflight();
+              setDriverToken(newAccessToken);
+              invalidateInterceptorCache();
+              console.log("[useAuth] ✅ Refresh préventif réussi");
+            }
+          } catch (error: any) {
+            console.warn("[useAuth] ⚠️ Refresh préventif échoué:", error?.message);
+            // Ne pas déconnecter, l'intercepteur gérera si nécessaire
+          }
+          return;
+        }
 
         const now = Date.now();
         const timeUntilExpiry = expiresAt - now;
         const refreshThreshold = 15 * 60 * 1000; // 15 minutes
 
-        // Si le token expire dans moins de 15 minutes, rafraîchir
-        if (timeUntilExpiry > 0 && timeUntilExpiry < refreshThreshold) {
-          console.log("[useAuth] 🔄 App revenue au premier plan, refresh du token si nécessaire...");
+        // ✅ CORRECTION CRITIQUE : Rafraîchir si :
+        // 1. Token déjà expiré (timeUntilExpiry <= 0)
+        // 2. Token expire dans moins de 15 minutes (timeUntilExpiry < refreshThreshold)
+        // Cela garantit qu'un refresh est toujours tenté après un long séjour en arrière-plan
+        if (timeUntilExpiry <= 0 || (timeUntilExpiry > 0 && timeUntilExpiry < refreshThreshold)) {
+          const isExpired = timeUntilExpiry <= 0;
+          console.log(
+            `[useAuth] 🔄 App revenue au premier plan, token ${isExpired ? "EXPIRÉ" : "proche expiration"} (${Math.round(Math.abs(timeUntilExpiry) / 1000 / 60)}min), refresh nécessaire...`
+          );
           try {
             const refreshToken = await secureStorage.getRefreshToken();
-            if (refreshToken) {
-              const refreshResponse = await refreshAccessToken(refreshToken);
-              await secureStorage.setAccessToken(refreshResponse.access_token);
-              setDriverToken(refreshResponse.access_token);
-              if (refreshResponse.refresh_token) {
-                await secureStorage.setRefreshToken(refreshResponse.refresh_token);
-              }
-              invalidateInterceptorCache();
-              console.log("[useAuth] ✅ Refresh au retour au premier plan réussi");
+            if (!refreshToken) {
+              console.error("[useAuth] ❌ Aucun refresh token disponible au retour au premier plan");
+              // Ne pas déconnecter immédiatement, l'intercepteur gérera lors de la prochaine requête
+              return;
             }
+
+            const newAccessToken = await refreshDriverTokenSingleflight();
+            setDriverToken(newAccessToken);
+            invalidateInterceptorCache();
+            console.log(
+              `[useAuth] ✅ Refresh au retour au premier plan réussi (token ${isExpired ? "était expiré" : "était proche expiration"})`
+            );
           } catch (error: any) {
             const status = error?.response?.status;
-            // Ne pas logger les erreurs réseau temporaires comme des erreurs critiques
+            const isNetworkError = !error?.response;
+
+            // ✅ Distinguer les types d'erreurs
             if (status === 401 || status === 403) {
-              console.error("[useAuth] ❌ Refresh au retour au premier plan échoué (critique):", status);
+              console.error(
+                `[useAuth] ❌ Refresh au retour au premier plan échoué (${status}):`,
+                error?.response?.data || error?.message
+              );
+              // Ne pas déconnecter ici, l'intercepteur gérera lors de la prochaine requête
+              // Cela évite une déconnexion prématurée si c'est juste une erreur réseau temporaire
+            } else if (isNetworkError) {
+              console.warn(
+                "[useAuth] ⚠️ Erreur réseau lors du refresh au retour au premier plan. L'intercepteur gérera lors de la prochaine requête."
+              );
+              // Ne pas déconnecter pour erreur réseau, l'utilisateur reste connecté
             } else {
-              console.warn("[useAuth] ⚠️ Refresh au retour au premier plan échoué (non critique):", error?.message);
+              console.warn(
+                `[useAuth] ⚠️ Refresh au retour au premier plan échoué (status: ${status}):`,
+                error?.message
+              );
+              // Ne pas déconnecter pour autres erreurs, l'intercepteur gérera
             }
-            // Ne pas déconnecter, l'intercepteur gérera si nécessaire
+            // Ne pas déconnecter, l'intercepteur gérera lors de la prochaine requête réelle
           }
+        } else {
+          // Token valide et pas proche de l'expiration
+          console.log(
+            `[useAuth] ✅ Token valide au retour au premier plan (expire dans ${Math.round(timeUntilExpiry / 1000 / 60)}min)`
+          );
         }
       }
     };
@@ -828,7 +870,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             console.log("[useAuth] 🔄 Refresh proactif entreprise: token disponible (longueur:", refreshToken.length, ")");
           }
 
-          const refreshResponse = await refreshEnterpriseToken(refreshToken);
+          const refreshResponse =
+            await refreshEnterpriseTokenSingleflight(refreshToken);
           await handleEnterpriseSuccess(refreshResponse);
 
           // ⚡ CORRECTION : Invalider le cache interceptor pour forcer l'utilisation du nouveau token
@@ -882,7 +925,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           // ✅ CORRECTION : Utiliser SecureStore pour le refresh token
           const refreshToken = enterpriseSession.refreshToken || await secureStorage.getEnterpriseRefreshToken();
           if (refreshToken) {
-            const refreshResponse = await refreshEnterpriseToken(refreshToken);
+            const refreshResponse =
+              await refreshEnterpriseTokenSingleflight(refreshToken);
             await handleEnterpriseSuccess(refreshResponse);
 
             // ⚡ CORRECTION : Invalider le cache interceptor pour forcer l'utilisation du nouveau token
@@ -1287,7 +1331,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const refreshToken = await secureStorage.getEnterpriseRefreshToken();
     if (!refreshToken) return;
     try {
-      const response = await refreshEnterpriseToken(refreshToken);
+      const response = await refreshEnterpriseTokenSingleflight(refreshToken);
       await handleEnterpriseSuccess(response);
     } catch (error) {
       console.warn("Refresh token entreprise invalide :", error);

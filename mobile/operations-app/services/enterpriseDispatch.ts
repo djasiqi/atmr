@@ -1,8 +1,10 @@
 import { enterpriseApi, hasValidToken, retryWithBackoff } from "./enterpriseAuth";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ENTERPRISE_TOKEN_KEY, ENTERPRISE_SESSION_KEY } from "./enterpriseAuth";
+import { ENTERPRISE_SESSION_KEY } from "./enterpriseAuth";
 import * as Sentry from "@sentry/react-native";
+import { secureStorage } from "@/services/storage";
+import { enterpriseStandardApi } from "@/services/enterpriseStandardApi";
 import {
   DispatchRunResponse,
   DispatchStatus,
@@ -701,8 +703,8 @@ export const createClient = async (
   // Remplacer /api/v1/company_mobile par /api/v1 pour accéder à l'API standard
   const standardApiURL = baseURL.replace("/api/v1/company_mobile", "/api/v1");
   
-  // Récupérer le token et les headers depuis AsyncStorage
-  const token = await AsyncStorage.getItem(ENTERPRISE_TOKEN_KEY);
+  // Récupérer le token depuis SecureStore (source of truth)
+  const token = await secureStorage.getEnterpriseToken();
   const sessionRaw = await AsyncStorage.getItem(ENTERPRISE_SESSION_KEY);
   
   const headers: Record<string, string> = {
@@ -743,8 +745,8 @@ export const createClient = async (
   return retryWithBackoff(
     async () => {
       try {
-        const response = await axios.post<{ data: ClientOption }>(
-          `${standardApiURL}/companies/me/clients`,
+        const response = await enterpriseStandardApi.post<{ data: ClientOption }>(
+          "/companies/me/clients",
           fullPayload,
           { headers }
         );

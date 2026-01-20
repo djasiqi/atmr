@@ -81,6 +81,125 @@ permission_error_model = create_permission_error_model(companies_ns)
 MAX_LOGO_MB = 2  # taille max
 MAX_LOGO_BYTES = MAX_LOGO_MB * 1024 * 1024
 
+# Longueur minimale attendue d'un token push Expo
+MIN_PUSH_TOKEN_LENGTH = 10
+
+
+# =========================
+# Push token entreprise
+# =========================
+
+save_company_push_token_model = companies_ns.model(
+    "SaveCompanyPushToken",
+    {
+        "token": fields.String(required=True, description="Expo push token"),
+        "companyId": fields.Integer(
+            required=False,
+            description=(
+                "Optionnel. Si fourni, doit correspondre à l'entreprise du compte "
+                "(ou requis si ADMIN)."
+            ),
+        ),
+    },
+)
+
+
+@companies_ns.route("/save-push-token")
+class SaveCompanyPushToken(Resource):
+    """Enregistre le push token pour le compte entreprise (dispatch)."""
+
+    @companies_ns.expect(save_company_push_token_model, validate=True)
+    @jwt_required()
+    @role_required(UserRole.company, UserRole.admin)
+    def post(self):  # noqa: PLR0911
+        from flask_jwt_extended import get_jwt  # pyright: ignore[reportMissingImports]
+
+        from models import Company, User
+
+        payload = request.get_json(force=True) or {}
+        token = (payload.get("token") or payload.get("push_token") or "").strip()
+        if not token or len(token) < MIN_PUSH_TOKEN_LENGTH:
+            return APIErrorHandler.handle_validation_error(
+                "Token push invalide ou manquant.",
+                field="token",
+                logger_instance=logger,
+            )
+
+        user_public_id = get_jwt_identity()
+        user = User.query.filter_by(public_id=user_public_id).first()
+        if not user:
+            return APIErrorHandler.handle_not_found(
+                "Utilisateur",
+                user_public_id,
+                logger,
+            )
+
+        claims = get_jwt() or {}
+        role_claim = str(claims.get("role") or "").upper()
+        company_id_payload = payload.get("companyId") or payload.get("company_id")
+
+        # COMPANY: utiliser user.company, et valider companyId si fourni
+        if role_claim == UserRole.COMPANY.value:
+            company = user.company
+            if not company:
+                return APIErrorHandler.handle_permission_error(
+                    "Entreprise introuvable pour ce compte.",
+                    logger_instance=logger,
+                )
+            if company_id_payload is not None:
+                try:
+                    requested_id = int(company_id_payload)
+                except (TypeError, ValueError):
+                    return APIErrorHandler.handle_validation_error(
+                        "Format companyId invalide.",
+                        field="companyId",
+                        logger_instance=logger,
+                    )
+                if int(company.id) != requested_id:
+                    return APIErrorHandler.handle_permission_error(
+                        "Accès refusé (companyId ne correspond pas).",
+                        logger_instance=logger,
+                    )
+        else:
+            # ADMIN: companyId requis
+            if company_id_payload is None:
+                return APIErrorHandler.handle_validation_error(
+                    "companyId requis pour un admin.",
+                    field="companyId",
+                    logger_instance=logger,
+                )
+            try:
+                requested_id = int(company_id_payload)
+            except (TypeError, ValueError):
+                return APIErrorHandler.handle_validation_error(
+                    "Format companyId invalide.",
+                    field="companyId",
+                    logger_instance=logger,
+                )
+            company = Company.query.get(requested_id)
+            if not company:
+                return APIErrorHandler.handle_not_found(
+                    "Entreprise",
+                    requested_id,
+                    logger,
+                )
+
+        # Stocker le token sur l'user de l'entreprise (fanout lit company.user.push_token)
+        company_user = User.query.get(company.user_id)
+        if not company_user:
+            return APIErrorHandler.handle_not_found(
+                "Utilisateur",
+                company.user_id,
+                logger,
+            )
+
+        company_user.push_token = token
+        db.session.commit()
+        return {
+            "message": "✅ Push token entreprise enregistré.",
+            "company_id": company.id,
+        }, 200
+
 
 # Dans routes/companies.py, en haut du fichier
 create_driver_model = companies_ns.model(

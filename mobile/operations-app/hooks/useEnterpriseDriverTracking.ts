@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Socket } from "socket.io-client";
-import axios from "axios";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { connectSocket } from "@/services/socket";
 import { useAuth } from "@/hooks/useAuth";
-import { enterpriseApi, ENTERPRISE_TOKEN_KEY } from "@/services/enterpriseAuth";
+import { enterpriseApi } from "@/services/enterpriseAuth";
+import { secureStorage } from "@/services/storage";
+import { enterpriseStandardApi } from "@/services/enterpriseStandardApi";
 
 type DriverMarker = {
   id: string;
@@ -51,19 +51,10 @@ export const useEnterpriseDriverTracking = () => {
     if (!companyId) return;
 
     try {
-      // ✅ Utiliser l'endpoint standard API (pas company_mobile)
-      // L'endpoint est /api/v1/driver/company/<company_id>/live-locations
-      // Construire l'URL complète en remplaçant le préfixe company_mobile
-      const baseURL = enterpriseApi.defaults.baseURL || "";
-      const standardApiURL = baseURL.replace("/api/v1/company_mobile", "/api/v1");
-      
-      // Récupérer le token pour l'authentification
-      const token = await AsyncStorage.getItem(ENTERPRISE_TOKEN_KEY);
-      
-      const url = `${standardApiURL}/driver/company/${companyId}/live-locations`;
-      console.log('[useEnterpriseDriverTracking] 🔍 Fetching from:', url);
-      
-      const response = await axios.get<{
+      const url = `/driver/company/${companyId}/live-locations`;
+      console.log("[useEnterpriseDriverTracking] 🔍 Fetching from:", url);
+
+      const response = await enterpriseStandardApi.get<{
         items: Array<{
           driver_id: number;
           first_name?: string | null;
@@ -76,11 +67,7 @@ export const useEnterpriseDriverTracking = () => {
           timestamp?: string | null;
           ts?: string | null;
         }>;
-      }>(url, {
-        headers: {
-          Authorization: token ? `Bearer ${token}` : undefined,
-        },
-      });
+      }>(url);
 
       console.log('[useEnterpriseDriverTracking] ✅ Response received:', response.status);
       const items = response.data?.items || [];
@@ -133,11 +120,7 @@ export const useEnterpriseDriverTracking = () => {
       });
     } catch (error) {
       console.error('[useEnterpriseDriverTracking] ❌ Erreur récupération positions HTTP:', error);
-      if (axios.isAxiosError(error)) {
-        console.error('[useEnterpriseDriverTracking] 📡 Status:', error.response?.status);
-        console.error('[useEnterpriseDriverTracking] 📡 Data:', error.response?.data);
-        console.error('[useEnterpriseDriverTracking] 📡 URL:', error.config?.url);
-      }
+      // On garde les logs génériques; la couche enterpriseStandardApi gère déjà auth strict.
     }
   }, [enterpriseSession?.company?.id]);
 

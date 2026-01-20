@@ -2,8 +2,8 @@
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 import axios, { isAxiosError } from "axios";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { secureStorage, asyncStorage } from "./storage";
+import { AuthNotReadyError, isPublicEndpoint } from "@/services/authGuards";
 
 // ✅ Helper pour les logs de debug (dev uniquement)
 // Évite les warnings de connexion en production
@@ -288,14 +288,26 @@ api.interceptors.request.use(
   async (config) => {
     // ✅ CORRECTION #1 : Guard d'initialisation
     // Attendre que l'auth soit prête avant de permettre les requêtes (sauf login)
-    const isLoginRequest = config.url === "/auth/login" || config.url?.endsWith("/auth/login");
-    if (!isLoginRequest) {
+    const isLoginRequest =
+      config.url === "/auth/login" || config.url?.endsWith("/auth/login");
+    const isPublic = isPublicEndpoint(config.url, "driver");
+    if (!isPublic) {
       try {
         const { waitForAuthReady } = await import("@/services/authSync");
         await waitForAuthReady(5000);
       } catch (error) {
-        // Si timeout, continuer quand même (évite de bloquer indéfiniment)
-        console.warn("[API] ⚠️ Timeout attente auth ready, continuation de la requête");
+        // ✅ P1 (strict): ne jamais envoyer une requête protégée sans auth prête
+        if (__DEV__) {
+          console.warn(
+            "[API] AUTH_NOT_READY (timeout) - requête rejetée:",
+            config.url
+          );
+        }
+        throw new AuthNotReadyError({
+          kind: "driver",
+          reason: "auth_ready_timeout",
+          url: config.url,
+        });
       }
     }
     
@@ -414,14 +426,41 @@ api.interceptors.request.use(
     // #endregion
 
     // ✅ Ne pas ajouter le token pour les requêtes de login/refresh
-    if (token && !isLoginRequest) {
+    // ✅ IMPORTANT: ne pas écraser un Authorization explicite (ex: appels enterprise via `api`)
+    const hasExplicitAuthHeader =
+      Boolean((config.headers as any)?.Authorization) ||
+      Boolean((config.headers as any)?.authorization);
+    if (token && !isLoginRequest && !hasExplicitAuthHeader) {
       config.headers.Authorization = `Bearer ${token}`;
     }
 
-    // ✅ Envoyer X-Device-ID pour tracking des sessions
-    const deviceId = await AsyncStorage.getItem("enterprise.device_id");
-    if (deviceId) {
-      config.headers["X-Device-ID"] = deviceId;
+    // ✅ P1 (strict): requête protégée => Authorization obligatoire
+    // Si un Authorization explicite a été fourni, on n'impose pas le token driver.
+    if (!isPublic && !hasExplicitAuthHeader && !token) {
+      if (__DEV__) {
+        console.warn(
+          "[API] AUTH_NOT_READY (missing access token) - requête rejetée:",
+          config.url
+        );
+      }
+      throw new AuthNotReadyError({
+        kind: "driver",
+        reason: "missing_access_token",
+        url: config.url,
+      });
+    }
+
+    // ✅ Envoyer X-Device-ID (stable) pour tracking des sessions / refresh tokens
+    // (ne doit pas dépendre de l'usage préalable du mode enterprise)
+    if (Platform.OS !== "web") {
+      try {
+        const deviceId = await asyncStorage.getOrCreateDeviceId();
+        config.headers["X-Device-ID"] = deviceId;
+      } catch (e) {
+        if (__DEV__) {
+          console.warn("[API Interceptor] ⚠️ Impossible de générer X-Device-ID:", e);
+        }
+      }
     }
 
     return config;
@@ -450,46 +489,100 @@ const processQueue = (error: any, token: string | null = null) => {
   failedQueue = [];
 };
 
+// ✅ Singleflight global : partage le refresh entre intercepteur et refresh proactif (useAuth)
+let driverRefreshPromise: Promise<string> | null = null;
+
+export async function refreshDriverTokenSingleflight(): Promise<string> {
+  if (driverRefreshPromise) {
+    return driverRefreshPromise;
+  }
+
+  driverRefreshPromise = (async () => {
+    const refreshToken = await secureStorage.getRefreshToken();
+    if (!refreshToken) {
+      throw new Error("Pas de refresh token disponible");
+    }
+
+    const refreshResponse = await refreshAccessToken(refreshToken);
+    const newAccessToken = refreshResponse.access_token;
+
+    // Stocker le nouveau token dans SecureStore
+    await secureStorage.setAccessToken(newAccessToken);
+
+    // Mettre à jour refresh_token si rotation
+    if (refreshResponse.refresh_token) {
+      try {
+        await secureStorage.setRefreshToken(refreshResponse.refresh_token);
+      } catch (storageError) {
+        console.error(
+          "[API] ⚠️ Échec sauvegarde refresh token (non bloquant):",
+          storageError
+        );
+      }
+    }
+
+    // Mettre à jour le cache de l'intercepteur pour cohérence immédiate
+    interceptorTokenCache = newAccessToken;
+    interceptorTokenCacheTime = Date.now();
+
+    return newAccessToken;
+  })();
+
+  // Débloquer les requêtes en attente même si le refresh a été déclenché hors intercepteur
+  driverRefreshPromise
+    .then((token) => processQueue(null, token))
+    .catch((err) => processQueue(err, null))
+    .finally(() => {
+      driverRefreshPromise = null;
+    });
+
+  return driverRefreshPromise;
+}
+
 // Interceptor response avec refresh automatique
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const originalRequest = error.config;
 
-    // ✅ Gérer 401 (token expiré) et 403 (compte désactivé/refusé) sur refresh token
-    const isAuthError = error.response?.status === 401 || error.response?.status === 403;
-    if (isAuthError && !originalRequest._retry) {
-      // Si c'est la requête de refresh elle-même qui a échoué
-      if (originalRequest.url?.includes("/auth/refresh-token")) {
-        const refreshStatus = error.response?.status;
-        const isNetworkError = !error.response;
-        
-        // ✅ Ne déconnecter que si c'est vraiment un problème d'authentification
-        // (401 = refresh token expiré, 403 = compte désactivé)
-        // Ne pas déconnecter pour erreurs réseau temporaires
-        if (refreshStatus === 401 || refreshStatus === 403) {
-          console.error(
-            `[API Interceptor] ❌ Refresh token échoué (${refreshStatus}):`,
-            error.response?.data || error.message
-          );
-          await secureStorage.clearAll();
-          await asyncStorage.clearAuth();
-          invalidateInterceptorCache();
-          return Promise.reject(error);
-        } else if (isNetworkError) {
-          // Erreur réseau → ne pas déconnecter, juste rejeter
-          console.warn(
-            "[API Interceptor] ⚠️ Erreur réseau lors du refresh token. Utilisateur reste connecté."
-          );
-          return Promise.reject(error);
-        } else {
-          // Autres erreurs → ne pas déconnecter non plus
-          console.warn(
-            `[API Interceptor] ⚠️ Erreur serveur lors du refresh token (status: ${refreshStatus}). Utilisateur reste connecté.`
-          );
-          return Promise.reject(error);
-        }
+    // ✅ CORRECTION (audit 34-38):
+    // - 403 est souvent un "forbidden" fonctionnel (rôle/droits) et ne doit pas déclencher un refresh.
+    // - On ne tente donc un refresh automatique que sur 401.
+    //
+    // Exception: si la requête de refresh elle-même échoue (401/403), on nettoie la session.
+    if (originalRequest?.url?.includes("/auth/refresh-token")) {
+      const refreshStatus = error.response?.status;
+      const isNetworkError = !error.response;
+
+      // ✅ Ne déconnecter que si c'est vraiment un problème d'authentification
+      // (401 = refresh token expiré/invalide, 403 = refus côté refresh)
+      // Ne pas déconnecter pour erreurs réseau temporaires
+      if (refreshStatus === 401 || refreshStatus === 403) {
+        console.error(
+          `[API Interceptor] ❌ Refresh token échoué (${refreshStatus}):`,
+          error.response?.data || error.message
+        );
+        await secureStorage.clearAll();
+        await asyncStorage.clearAuth();
+        invalidateInterceptorCache();
+        return Promise.reject(error);
+      } else if (isNetworkError) {
+        // Erreur réseau → ne pas déconnecter, juste rejeter
+        console.warn(
+          "[API Interceptor] ⚠️ Erreur réseau lors du refresh token. Utilisateur reste connecté."
+        );
+        return Promise.reject(error);
+      } else {
+        // Autres erreurs → ne pas déconnecter non plus
+        console.warn(
+          `[API Interceptor] ⚠️ Erreur serveur lors du refresh token (status: ${refreshStatus}). Utilisateur reste connecté.`
+        );
+        return Promise.reject(error);
       }
+    }
+
+    const isAuthError = error.response?.status === 401;
+    if (isAuthError && !originalRequest._retry) {
 
       // Si déjà en train de refresh, mettre en queue
       if (isRefreshing) {
@@ -508,25 +601,7 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const refreshToken = await secureStorage.getRefreshToken();
-        if (!refreshToken) {
-          throw new Error("Pas de refresh token disponible");
-        }
-
-        const refreshResponse = await refreshAccessToken(refreshToken);
-        const newAccessToken = refreshResponse.access_token;
-
-        // Stocker le nouveau token dans SecureStore
-        await secureStorage.setAccessToken(newAccessToken);
-
-        // Mettre à jour refresh_token si rotation
-        if (refreshResponse.refresh_token) {
-          await secureStorage.setRefreshToken(refreshResponse.refresh_token);
-        }
-
-        // ⚡ OPTIMISATION : Mettre à jour le cache de l'intercepteur avec le nouveau token
-        interceptorTokenCache = newAccessToken;
-        interceptorTokenCacheTime = Date.now();
+        const newAccessToken = await refreshDriverTokenSingleflight();
         if (__DEV__) {
           console.log(
             `[API Interceptor] Token refreshed, cache updated. New token cached.`
@@ -552,21 +627,14 @@ api.interceptors.response.use(
         
         // ✅ Distinguer les types d'erreurs :
         // - 401 = refresh token expiré → déconnecter
-        // - 403 = compte désactivé → déconnecter
         // - Erreur réseau = ne pas déconnecter, laisser l'utilisateur connecté
         // - Autres erreurs (500, etc.) = ne pas déconnecter non plus
         
-        if (refreshStatus === 401 || refreshStatus === 403) {
-          // Token expiré ou compte désactivé → déconnecter
-          if (refreshStatus === 403) {
-            console.error(
-              "[API Interceptor] 🚫 Compte désactivé ou non autorisé (403). Déconnexion forcée."
-            );
-          } else {
-            console.error(
-              "[API Interceptor] 🚫 Refresh token expiré (401). Déconnexion forcée."
-            );
-          }
+        if (refreshStatus === 401) {
+          // Refresh token expiré/invalide → déconnecter
+          console.error(
+            "[API Interceptor] 🚫 Refresh token expiré/invalide (401). Déconnexion forcée."
+          );
           
           processQueue(refreshError, null);
           await secureStorage.clearAll();
@@ -594,14 +662,13 @@ api.interceptors.response.use(
       }
     }
     
-    // ✅ Gérer aussi les 403 sur les autres endpoints (compte désactivé)
+    // ✅ 403 = forbidden fonctionnel → ne pas retry automatiquement (audit 34-38)
     if (error.response?.status === 403 && !originalRequest._retry) {
       console.error(
         `[API Interceptor] ❌ Accès refusé (403) pour ${originalRequest.url}:`,
         error.response?.data || error.message
       );
-      // Si c'est un 403, ne pas retry automatiquement (compte désactivé)
-      // L'app devra gérer la déconnexion via useAuth
+      // Si c'est un 403, ne pas retry automatiquement.
       return Promise.reject(error);
     }
 
@@ -667,8 +734,24 @@ export type Driver = {
 export const registerPushToken = async (payload: {
   token: string;
   driverId: number;
+  device_id?: string;
+  deviceId?: string;
+  platform?: "ios" | "android";
 }) => {
-  const res = await api.post("/driver/save-push-token", payload);
+  const device_id =
+    payload.device_id ||
+    payload.deviceId ||
+    (Platform.OS !== "web" ? await asyncStorage.getOrCreateDeviceId() : undefined);
+  const platform =
+    payload.platform ||
+    (Platform.OS === "ios" || Platform.OS === "android" ? Platform.OS : undefined);
+
+  const res = await api.post("/driver/save-push-token", {
+    token: payload.token,
+    driverId: payload.driverId,
+    device_id,
+    platform,
+  });
   return res.data;
 };
 
@@ -902,7 +985,7 @@ export const fetchUserInfo = async (): Promise<{
 // ========== Refresh Token ==========
 export type RefreshTokenResponse = {
   access_token: string;
-  refresh_token?: string; // Optionnel (rotation)
+  refresh_token: string; // ✅ Toujours présent pour mobile (backend garantit via X-Requested-With: Expo)
   user: {
     public_id: string;
     role: string;

@@ -1242,12 +1242,14 @@ class RefreshToken(Resource):
             # 1. Récupérer le refresh_token depuis cookie (priorité), body ou header
             refresh_token = None
             is_mobile_request = request.headers.get("X-Requested-With") == "Expo"
+            refresh_token_from_cookie = False
 
             # Priorité 1 : Cookie (pour web)
             if not is_mobile_request:
                 refresh_token = request.cookies.get(
                     current_app.config["COOKIE_REFRESH_TOKEN_NAME"]
                 )
+                refresh_token_from_cookie = bool(refresh_token)
 
             # Priorité 2 : Body JSON (pour mobile ou fallback)
             if not refresh_token:
@@ -1448,8 +1450,12 @@ class RefreshToken(Resource):
                 "trace_id": trace_id,
             }
 
-            # ✅ Compatibilité mobile : retourner tokens en JSON si header X-Requested-With: Expo
-            if is_mobile_request:
+            # ✅ Compatibilité mobile (robuste):
+            # - Sur mobile, on renvoie toujours les tokens en JSON.
+            # - Même si `X-Requested-With: Expo` manque, un refresh token fourni par body/header
+            #   implique un client "type mobile/API" → renvoyer les tokens.
+            # - En revanche, si on est en mode cookie (web), on évite d'exposer les tokens en JSON.
+            if is_mobile_request or not refresh_token_from_cookie:
                 response_data["access_token"] = new_access_token
                 response_data["refresh_token"] = new_refresh_token
 

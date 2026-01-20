@@ -20,11 +20,10 @@ import {
 } from "@/services/api";
 import { secureStorage, asyncStorage } from "@/services/storage";
 import {
-  ENTERPRISE_TOKEN_KEY,
-  ENTERPRISE_REFRESH_KEY,
   ENTERPRISE_SESSION_KEY,
   fetchEnterpriseSession,
   EnterpriseTokenPayload,
+  invalidateEnterpriseInterceptorCache,
 } from "@/services/enterpriseAuth";
 import { InputField } from "@/components/ui/InputField";
 import { Loader } from "@/components/ui/Loader";
@@ -181,17 +180,17 @@ export default function ProfileScreen() {
         userPublicId: enterpriseTokenResponse.user.public_id,
       });
 
-      // 2. Stocker les tokens dans AsyncStorage (comme le fait handleEnterpriseSuccess)
-      await AsyncStorage.multiSet([
-        [ENTERPRISE_TOKEN_KEY, enterpriseTokenResponse.token],
-      ]);
+      // 2. ✅ CORRECTION: Stocker les tokens Enterprise dans SecureStore (source of truth)
+      // (enterpriseApi lit SecureStore, pas AsyncStorage)
+      await secureStorage.setEnterpriseToken(enterpriseTokenResponse.token);
       if (enterpriseTokenResponse.refresh_token) {
-        await AsyncStorage.setItem(
-          ENTERPRISE_REFRESH_KEY,
-          enterpriseTokenResponse.refresh_token
-        );
+        await secureStorage.setEnterpriseRefreshToken(enterpriseTokenResponse.refresh_token);
+      } else {
+        await secureStorage.removeEnterpriseRefreshToken();
       }
-      console.log("[Profile] Tokens entreprise stockés dans AsyncStorage");
+      // Invalider le cache de l'intercepteur Enterprise pour forcer l'utilisation du nouveau token
+      invalidateEnterpriseInterceptorCache();
+      console.log("[Profile] Tokens entreprise stockés dans SecureStore + cache Enterprise invalidé");
 
       // 3. Récupérer la session complète depuis le backend
       // Cela nous donne toutes les informations (user.id, dispatch_mode, etc.)
@@ -269,7 +268,8 @@ export default function ProfileScreen() {
       fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'profile.tsx:handleSwitchToEnterprise', message: 'Après switchMode', data: { mode: 'enterprise' }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'E' }) }).catch(() => { });
       // #endregion
 
-      // 6. Invalider le cache de l'intercepteur pour forcer l'utilisation des nouveaux tokens
+      // 6. Invalider le cache de l'intercepteur driver (par sécurité/cohérence)
+      // Note: l'intercepteur Enterprise a déjà été invalidé après écriture SecureStore ci-dessus.
       invalidateInterceptorCache();
       console.log("[Profile] Cache intercepteur invalidé");
 

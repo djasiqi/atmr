@@ -2,8 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { connectSocket, getSocket } from "@/services/socket";
 import type { Socket } from "socket.io-client";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ENTERPRISE_TOKEN_KEY } from "@/services/enterpriseAuth";
+import { secureStorage } from "@/services/storage";
 
 export const useEnterpriseSocket = (
   onTeamMessage?: (msg: any) => void
@@ -85,7 +84,7 @@ export const useEnterpriseSocket = (
         reconnectTimerRef.current = null;
         if (!isMountedRef.current) return;
 
-        const token = await AsyncStorage.getItem(ENTERPRISE_TOKEN_KEY);
+        const token = await secureStorage.getEnterpriseToken();
         if (!token) {
           console.warn("🔒 Aucun token entreprise — arrêt des tentatives socket.");
           return;
@@ -108,7 +107,7 @@ export const useEnterpriseSocket = (
 
     // Initialisation
     (async () => {
-      const token = await AsyncStorage.getItem(ENTERPRISE_TOKEN_KEY);
+      const token = await secureStorage.getEnterpriseToken();
       if (!token) {
         console.warn("🔒 Aucun token entreprise — socket non initialisé.");
         return;

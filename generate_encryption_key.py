@@ -82,7 +82,7 @@ def add_key_to_env(env_path: Path, key: str, force: bool = False) -> None:
             f.write("# Configuration ATMR - Backend\n")
             f.write("# Généré automatiquement\n\n")
             f.write(f"APP_ENCRYPTION_KEY_B64={key}\n")
-        print(f"✅ Fichier {env_path} créé avec la clé d'encryption")
+        print(f"[OK] Fichier {env_path} cree avec la cle d'encryption")
         return
 
     # Lire le contenu existant
@@ -97,7 +97,7 @@ def add_key_to_env(env_path: Path, key: str, force: bool = False) -> None:
         if line.strip().startswith("APP_ENCRYPTION_KEY_B64="):
             if force:
                 new_lines.append(f"APP_ENCRYPTION_KEY_B64={key}\n")
-                print("⚠️  Clé d'encryption existante remplacée (--force)")
+                print("[WARN] Cle d'encryption existante remplacee (--force)")
             else:
                 new_lines.append(line)
             key_found = True
@@ -126,7 +126,7 @@ def add_key_to_env(env_path: Path, key: str, force: bool = False) -> None:
     with open(env_path, "w", encoding="utf-8") as f:
         f.writelines(new_lines)
 
-    print(f"✅ Clé d'encryption ajoutée à {env_path}")
+    print(f"[OK] Cle d'encryption ajoutee a {env_path}")
 
 
 def main() -> int:
@@ -137,7 +137,8 @@ def main() -> int:
     """
     force = "--force" in sys.argv or "-f" in sys.argv
 
-    print("🔐 Générateur de Clé d'Encryption ATMR")
+    # NOTE: éviter les emojis pour compatibilité Windows (cp1252)
+    print("Generateur de Cle d'Encryption ATMR")
     print("=" * 50)
 
     # Trouver le répertoire backend
@@ -147,20 +148,20 @@ def main() -> int:
     )
     env_path = backend_dir / ".env"
 
-    print(f"📂 Répertoire backend: {backend_dir}")
-    print(f"📄 Fichier .env: {env_path}")
+    print(f"Repertoire backend: {backend_dir}")
+    print(f"Fichier .env: {env_path}")
     print()
 
     # Vérifier si la clé existe déjà
     if not force and check_key_in_env(env_path):
-        print("✅ APP_ENCRYPTION_KEY_B64 existe déjà dans .env")
-        print("ℹ️  Utilisez --force pour générer une nouvelle clé")
+        print("[OK] APP_ENCRYPTION_KEY_B64 existe deja dans .env")
+        print("[INFO] Utilisez --force pour generer une nouvelle cle")
         return 0
 
     # Générer une nouvelle clé
-    print("🔑 Génération d'une nouvelle clé AES-256...")
+    print("Generation d'une nouvelle cle AES-256...")
     key = generate_encryption_key()
-    print(f"✅ Clé générée: {key[:16]}...{key[-16:]}")
+    print(f"[OK] Cle generee: {key[:16]}...{key[-16:]}")
     print()
 
     # Ajouter la clé au fichier .env
@@ -168,19 +169,19 @@ def main() -> int:
         add_key_to_env(env_path, key, force=force)
         print()
         print("=" * 50)
-        print("✅ Configuration terminée avec succès!")
+        print("[OK] Configuration terminee avec succes!")
         print()
-        print("⚠️  IMPORTANT:")
-        print("   1. Ne partagez JAMAIS cette clé")
-        print("   2. Sauvegardez-la dans un gestionnaire de secrets")
-        print("   3. En production, utilisez Vault ou AWS Secrets Manager")
+        print("[IMPORTANT]")
+        print("  1. Ne partagez JAMAIS cette cle")
+        print("  2. Sauvegardez-la dans un gestionnaire de secrets")
+        print("  3. En production, utilisez Vault ou AWS Secrets Manager")
         print()
-        print("🚀 Vous pouvez maintenant démarrer les services:")
+        print("Vous pouvez maintenant demarrer les services:")
         print("   docker-compose up -d")
         print()
         return 0
     except Exception as e:
-        print(f"❌ Erreur: {e}")
+        print(f"[ERREUR] {e}")
         return 1
 
 

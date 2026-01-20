@@ -9,6 +9,7 @@ import Constants from "expo-constants";
 import { useAuth } from "@/hooks/useAuth";
 import { useEnterpriseSocket } from "@/hooks/useEnterpriseSocket";
 import api from "@/services/api";
+import { secureStorage } from "@/services/storage";
 import { getErrorMessage, logError } from "@/utils/errorHandler";
 
 // 🔔 Configuration du comportement des notifications en mode foreground
@@ -83,10 +84,18 @@ export const useEnterpriseNotifications = () => {
           console.log("🔔 Nouveau token détecté, enregistrement sur le serveur pour l'entreprise:", companyId);
 
           try {
-            await api.post("/company/save-push-token", {
-              companyId: Number(companyId),
-              token,
-            });
+            // ✅ Envoyer avec Authorization Enterprise (sinon l'intercepteur driver ne met pas le bon token)
+            const enterpriseJwt = await secureStorage.getEnterpriseToken();
+            await api.post(
+              "/companies/save-push-token",
+              {
+                companyId: Number(companyId),
+                token,
+              },
+              {
+                headers: enterpriseJwt ? { Authorization: `Bearer ${enterpriseJwt}` } : {},
+              }
+            );
             console.log("✅ Token push enregistré avec succès sur le serveur");
           } catch (e: any) {
             console.error("❌ Envoi push token échoué:", {

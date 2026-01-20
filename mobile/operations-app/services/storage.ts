@@ -3,6 +3,7 @@
 
 import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Crypto from "expo-crypto";
 import type { DriverAccountInfo } from "@/services/enterpriseDispatch";
 
 // ============ Clés de stockage sécurisé (SecureStore) ============
@@ -59,6 +60,9 @@ const METRICS_LOG_INTERVAL = 100; // Log toutes les 100 lectures
 const ASYNC_KEYS = {
   DRIVER_ID: "driver_id",
   DRIVER_ACCOUNT_INFO: "enterprise.driver_account_info", // Info du compte chauffeur associé
+  // ✅ Device correlation (stable): utilisé pour X-Device-ID + push token multi-device
+  // Note: clé historique, utilisée aussi côté enterprise
+  DEVICE_ID: "enterprise.device_id",
   // Note : ACCESS_TOKEN a été déplacé vers SecureStore pour sécurité renforcée
 } as const;
 
@@ -537,6 +541,37 @@ export const secureStorage = {
 
 // ============ Stockage non-sécurisé (AsyncStorage) ============
 export const asyncStorage = {
+  /**
+   * Récupère l'identifiant stable de l'appareil (si présent)
+   */
+  async getDeviceId(): Promise<string | null> {
+    return await AsyncStorage.getItem(ASYNC_KEYS.DEVICE_ID);
+  },
+
+  /**
+   * Génère (si besoin) et retourne un identifiant stable d'appareil.
+   * Utilisé pour corréler refresh tokens / sessions / push tokens multi-device.
+   */
+  async getOrCreateDeviceId(): Promise<string> {
+    let stored = await AsyncStorage.getItem(ASYNC_KEYS.DEVICE_ID);
+    if (!stored) {
+      if (typeof Crypto.randomUUID === "function") {
+        stored = Crypto.randomUUID();
+      } else {
+        const bytes = await Crypto.getRandomBytesAsync(16);
+        const bytesArray = Array.from(bytes as Uint8Array);
+        stored = bytesArray
+          .map((byte) => byte.toString(16).padStart(2, "0"))
+          .join("");
+      }
+      await AsyncStorage.setItem(ASYNC_KEYS.DEVICE_ID, stored);
+    }
+    if (!stored) {
+      throw new Error("Impossible de générer un identifiant appareil");
+    }
+    return stored;
+  },
+
   /**
    * Stocke l'ID du chauffeur (pour navigation rapide)
    * Note : L'access_token a été déplacé vers SecureStore pour plus de sécurité
