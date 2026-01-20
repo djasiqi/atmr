@@ -1725,6 +1725,8 @@ class MobileDispatchRides(Resource):
 
                     return_booking = Booking()
                     return_booking.customer_name = display_name
+                    # ✅ CORRECTIF: Définir is_return AVANT scheduled_time pour que la validation fonctionne
+                    return_booking.is_return = True
                     if client:
                         return_booking.client_id = client.id
                         # ✅ Utiliser l'utilisateur du client (harmonisation avec route web)
@@ -1741,7 +1743,6 @@ class MobileDispatchRides(Resource):
                     return_booking.status = BookingStatus.ACCEPTED
                     return_booking.company_id = company_id
                     return_booking.booking_type = "manual"
-                    return_booking.is_return = True
                     return_booking.pickup_lat = payload.get("dropoff_lat")
                     return_booking.pickup_lon = payload.get("dropoff_lon")
                     return_booking.dropoff_lat = payload.get("pickup_lat")
