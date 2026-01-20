@@ -59,9 +59,11 @@ export const useNotifications = () => {
       executionEnvironment: Constants.executionEnvironment,
     });
 
-    // Désactiver proprement les notifications en dev/local (évite FIS_AUTH_ERROR)
-    // Dev Client/Bare en local sans config Firebase ne peut pas obtenir de token fiable
-    if ((isDevEnv || isBare) && !forceDevPush) {
+    // ✅ CORRECTIF: Ne pas désactiver en production, même si détecté comme dev
+    // Seulement désactiver si vraiment en dev ET forceDevPush n'est pas activé
+    // En production (appOwnership === "standalone" ou "production"), toujours activer
+    const isProduction = appOwnership === "standalone" || appOwnership === "production";
+    if (!isProduction && (isDevEnv || isBare) && !forceDevPush) {
       console.warn("🔔 [useNotifications] Notifications désactivées en développement/local - skip registration");
       return;
     }
@@ -71,7 +73,7 @@ export const useNotifications = () => {
         console.log("🔔 [useNotifications] Début enregistrement token push...");
         
         // Étape 1 : Obtenir le token de l'appareil
-        const token = await registerForPushNotificationsAsync(); // (Cette fonction doit exister ailleurs dans votre code)
+        const token = await registerForPushNotificationsAsync();
 
         // Cast fort en entier pour correspondre au backend (évite "ID du chauffeur invalide ou manquant.")
         const driverId = Number((driver as any)?.id);
@@ -82,21 +84,36 @@ export const useNotifications = () => {
           driverId,
           isInteger: Number.isInteger(driverId),
           driverIdType: typeof driverId,
+          isProduction,
         });
         
-        if (!token || !Number.isInteger(driverId)) {
+        // ✅ CORRECTIF: En production, forcer l'enregistrement même si token est null
+        // (le backend peut réactiver un token existant)
+        if (!Number.isInteger(driverId)) {
+          console.error("⛔ [useNotifications] ID de chauffeur invalide, enregistrement annulé.", {
+            driverId,
+            isInteger: Number.isInteger(driverId),
+          });
+          return;
+        }
+        
+        if (!token) {
           // En dev/local sans Firebase, c'est normal de ne pas avoir de token
           const isDevLocal = __DEV__ === true || Constants.executionEnvironment === "bare";
-          if (isDevLocal && !token) {
+          if (isDevLocal && !isProduction) {
             console.log("ℹ️ [useNotifications] Pas de token push en dev/local - normal sans Firebase");
+            return;
+          } else if (isProduction) {
+            // En production, essayer de réactiver le token existant même sans nouveau token
+            console.warn("⚠️ [useNotifications] Pas de token push obtenu en production - tentative réactivation token existant");
+            // On continue quand même pour voir si on peut réactiver un token existant
           } else {
-            console.error("⛔ [useNotifications] Token ou ID de chauffeur invalide, enregistrement annulé.", {
+            console.error("⛔ [useNotifications] Token invalide, enregistrement annulé.", {
               hasToken: !!token,
               driverId,
-              isInteger: Number.isInteger(driverId),
             });
+            return;
           }
-          return;
         }
         // ✅ FIX: Sauvegarder driver_id dans AsyncStorage pour Socket.IO
         try {
@@ -106,20 +123,19 @@ export const useNotifications = () => {
           console.warn("⚠️ Impossible de sauvegarder driver_id:", e);
         }
 
-        // ✅ **OPTIMISATION : Ne contacter le serveur que si le token est nouveau**
-        const storageKey = `push_token_driver_${driverId}`;
-        const lastSentToken = await AsyncStorage.getItem(storageKey);
-
         // ✅ CORRECTIF: Toujours enregistrer le token lors de la connexion
         // même s'il n'a pas changé, pour réactiver les tokens inactifs
         // (les tokens peuvent être invalidés lors du logout et doivent être réactivés)
-        const shouldRegister = lastSentToken !== token || !lastSentToken;
-
-        if (shouldRegister) {
+        const storageKey = `push_token_driver_${driverId}`;
+        const lastSentToken = await AsyncStorage.getItem(storageKey);
+        
+        // ✅ FORCER l'enregistrement à chaque connexion pour réactiver les tokens inactifs
+        // Ne pas vérifier si le token a changé, toujours enregistrer
+        if (token) {
           console.log(
-            "🔔 Token de notification à enregistrer pour le chauffeur:",
+            "🔔 [useNotifications] Enregistrement token pour réactivation (connexion):",
             driverId,
-            lastSentToken ? "(token changé)" : "(première connexion)"
+            lastSentToken === token ? "(token identique - réactivation)" : "(token changé)"
           );
 
           try {
@@ -134,7 +150,7 @@ export const useNotifications = () => {
               token,
             });
             
-            console.log("✅ [useNotifications] Token push enregistré avec succès sur le serveur", {
+            console.log("✅ [useNotifications] Token push enregistré/réactivé avec succès sur le serveur", {
               response: response.data,
             });
             
@@ -173,29 +189,7 @@ export const useNotifications = () => {
             throw e;
           }
         } else {
-          // Token identique, mais on enregistre quand même pour réactiver si nécessaire
-          // (le backend réactivera automatiquement les tokens inactifs)
-          console.log(
-            "🔔 [useNotifications] Token identique, mais enregistrement pour réactivation si nécessaire..."
-          );
-          try {
-            const response = await api.post("/driver/save-push-token", {
-              driverId: Number(driverId),
-              token,
-            });
-            console.log("✅ [useNotifications] Token push réactivé/mis à jour sur le serveur", {
-              response: response.data,
-            });
-          } catch (e: any) {
-            console.warn("⚠️ [useNotifications] Réactivation token échouée (non critique):", {
-              driverId,
-              status: e?.response?.status,
-              statusText: e?.response?.statusText,
-              data: e?.response?.data,
-              message: e?.message,
-            });
-            // Ne pas throw, c'est non-critique si le token est déjà actif
-          }
+          console.warn("⚠️ [useNotifications] Pas de token push disponible - impossible d'enregistrer/réactiver");
         }
       } catch (error: unknown) {
         const errorMessage = getErrorMessage(error);
