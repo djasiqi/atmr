@@ -189,18 +189,20 @@ export const RideEditModal: React.FC<RideEditModalProps> = ({
                                         <Ionicons name="location" size={18} color={palette.modalButton} />
                                         <Text style={styles.sectionTitle}>ADRESSES</Text>
                                     </View>
-                                    <AddressSelector
-                                        label="Adresse de départ"
-                                        value={pickupAddress}
-                                        onChange={(address) => setPickupAddress(address)}
-                                        icon="location-outline"
-                                    />
-                                    <AddressSelector
-                                        label="Adresse d'arrivée"
-                                        value={dropoffAddress}
-                                        onChange={(address) => setDropoffAddress(address)}
-                                        icon="flag-outline"
-                                    />
+                                    <View style={styles.addressFieldsContainer}>
+                                        <AddressSelector
+                                            label="Adresse de départ"
+                                            value={pickupAddress}
+                                            onChange={(address) => setPickupAddress(address)}
+                                            icon="location-outline"
+                                        />
+                                        <AddressSelector
+                                            label="Adresse d'arrivée"
+                                            value={dropoffAddress}
+                                            onChange={(address) => setDropoffAddress(address)}
+                                            icon="flag-outline"
+                                        />
+                                    </View>
                                 </View>
 
                                 {/* Section Horaires */}
@@ -364,29 +366,34 @@ const styles = StyleSheet.create({
     modalContent: {
         padding: 24,
         paddingBottom: 32,
-        gap: 20,
+        gap: 24,
         flexGrow: 1,
     },
     section: {
         backgroundColor: palette.sectionBg,
         borderRadius: 18,
-        padding: 18,
+        padding: 20,
         borderWidth: 1.5,
         borderColor: palette.sectionBorder,
-        gap: 16,
     },
     sectionHeader: {
         flexDirection: "row",
         alignItems: "center",
-        gap: 8,
-        marginBottom: 4,
+        gap: 10,
+        marginBottom: 2,
+        paddingBottom: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: palette.sectionBorder,
     },
     sectionTitle: {
         color: palette.modalTitle,
         fontSize: 13,
         fontWeight: "700",
         textTransform: "uppercase",
-        letterSpacing: 0.5,
+        letterSpacing: 0.8,
+    },
+    addressFieldsContainer: {
+        gap: 20,
     },
     priorityContainer: {
         gap: 8,
@@ -424,16 +431,23 @@ const styles = StyleSheet.create({
     },
     modalActions: {
         flexDirection: "row",
-        justifyContent: "flex-end",
+        justifyContent: "space-between",
         gap: 12,
-        padding: 24,
+        padding: 20,
         paddingTop: 16,
         borderTopWidth: 1,
         borderTopColor: palette.divider,
+        backgroundColor: palette.modalBackground,
     },
     modalCancel: {
-        paddingHorizontal: 18,
-        paddingVertical: 12,
+        flex: 1,
+        paddingHorizontal: 20,
+        paddingVertical: 14,
+        borderRadius: 14,
+        borderWidth: 1.5,
+        borderColor: palette.modalBorder,
+        backgroundColor: palette.modalBackground,
+        alignItems: "center",
     },
     modalCancelText: {
         color: palette.modalCancelText,
@@ -441,12 +455,13 @@ const styles = StyleSheet.create({
         fontWeight: "600",
     },
     modalSave: {
+        flex: 1,
         backgroundColor: palette.modalButton,
-        paddingHorizontal: 24,
-        paddingVertical: 12,
+        paddingHorizontal: 20,
+        paddingVertical: 14,
         borderRadius: 14,
-        minWidth: 120,
         alignItems: "center",
+        ...shadowPresets.medium,
     },
     modalSaveDisabled: {
         backgroundColor: "rgba(10,127,89,0.4)",

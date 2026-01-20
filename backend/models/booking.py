@@ -568,8 +568,14 @@ class Booking(db.Model):
     @validates("scheduled_time")
     def validate_scheduled_time(self, _key, scheduled_time):
         # ✅ scheduled_time est obligatoire pour le dispatch
-        # Le dispatch nécessite cette valeur pour fonctionner correctement
+        # SAUF pour les courses retour (is_return=True) qui peuvent avoir scheduled_time=None
+        # Le dispatch gère déjà ce cas (voir get_bookings_for_dispatch dans booking_repository)
+        is_return = getattr(self, "is_return", False)
         if scheduled_time is None:
+            if is_return:
+                # ✅ Permettre scheduled_time=None pour les courses retour
+                # L'heure pourra être définie plus tard via l'endpoint /schedule
+                return None
             msg = "scheduled_time est obligatoire. Le dispatch nécessite cette valeur."
             raise ValueError(msg)
         st = parse_local_naive(scheduled_time)

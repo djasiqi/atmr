@@ -1717,8 +1717,9 @@ class MobileDispatchRides(Resource):
                 try:
                     return_time_str = payload["return_time"]
                     # Si c'est seulement une date (YYYY-MM-DD), pas d'heure
+                    # scheduled_time peut être None pour les courses retour (géré par la validation du modèle)
                     if len(return_time_str) == DATE_ONLY_LENGTH:
-                        return_scheduled = None  # À confirmer plus tard
+                        return_scheduled = None  # À confirmer plus tard via /schedule
                     else:
                         return_scheduled = parse_local_naive(return_time_str)
 

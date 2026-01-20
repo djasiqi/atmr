@@ -137,13 +137,13 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({
 
 const styles = StyleSheet.create({
     container: {
-        marginBottom: 16,
+        marginBottom: 0,
     },
     label: {
         color: palette.text,
         fontSize: 14,
         fontWeight: "600",
-        marginBottom: 8,
+        marginBottom: 10,
     },
     inputContainer: {
         flexDirection: "row",
