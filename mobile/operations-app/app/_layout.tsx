@@ -300,44 +300,37 @@ function RootNav() {
           ? `push_token_${currentUserId}`
           : "push_token_default";
         const last = await AsyncStorage.getItem(key);
-        const shouldRegister = last !== tokenToUse || !last;
 
-        if (shouldRegister) {
-          console.log(
-            "🔔 Token à enregistrer:",
-            last ? "(token changé)" : "(première connexion)"
-          );
-          await registerPushToken({
+        // ✅ FORCER l'enregistrement à chaque connexion pour réactiver les tokens inactifs
+        // Ne pas vérifier si le token a changé, toujours enregistrer
+        console.log(
+          "🔔 [_layout] Enregistrement token pour réactivation (connexion):",
+          currentUserId,
+          last === tokenToUse ? "(token identique - réactivation)" : "(token changé)"
+        );
+
+        try {
+          console.log("🔔 [_layout] Envoi token au backend...", {
+            driverId: currentUserId,
+            tokenPreview: tokenToUse.substring(0, 30) + "...",
+          });
+          const response = await registerPushToken({
             token: tokenToUse,
             driverId: currentUserId,
           });
           await AsyncStorage.setItem(key, tokenToUse);
-          console.log("✅ Push token enregistré côté backend");
-        } else {
-          // Token identique, mais on enregistre quand même pour réactiver si nécessaire
-          console.log("🔔 Token identique, réactivation si nécessaire...");
-          try {
-            console.log("🔔 [_layout] Réactivation token...", {
-              driverId: currentUserId,
-              tokenPreview: tokenToUse.substring(0, 30) + "...",
-            });
-            const response = await registerPushToken({
-              token: tokenToUse,
-              driverId: currentUserId,
-            });
-            console.log("✅ [_layout] Push token réactivé/mis à jour côté backend", {
-              response,
-            });
-          } catch (e: any) {
-            console.error("⚠️ [_layout] Réactivation token échouée (non critique):", {
-              driverId: currentUserId,
-              status: e?.response?.status,
-              statusText: e?.response?.statusText,
-              data: e?.response?.data,
-              message: e?.message,
-            });
-            // Ne pas throw, c'est non-critique si le token est déjà actif
-          }
+          console.log("✅ [_layout] Push token enregistré/réactivé côté backend", {
+            response,
+          });
+        } catch (e: any) {
+          console.error("❌ [_layout] Enregistrement token échoué:", {
+            driverId: currentUserId,
+            status: e?.response?.status,
+            statusText: e?.response?.statusText,
+            data: e?.response?.data,
+            message: e?.message,
+          });
+          // Ne pas throw pour ne pas bloquer l'app, mais logger l'erreur
         }
       } catch (e: any) {
         console.error(
