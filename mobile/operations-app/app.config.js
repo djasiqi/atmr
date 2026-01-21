@@ -41,8 +41,9 @@ module.exports = withAndroidR8Enabled(
       : "ch.liri.operations",
     buildNumber: process.env.IOS_BUILD_NUMBER || "1",
     version: pkg.version,
-    // Le fichier est généré au build via `eas-build-pre-install` depuis un secret EAS.
-    googleServicesFile: "./GoogleService-Info.plist",
+    // EAS injecte les variables `type=file` comme chemin vers un fichier sur le builder.
+    // Fallback local: fichier à la racine du projet.
+    googleServicesFile: process.env.GOOGLE_SERVICES_PLIST || "./GoogleService-Info.plist",
     // ✅ Background modes pour notifications silencieuses + background fetch
     // (nécessite un rebuild natif iOS)
     infoPlist: {
@@ -58,8 +59,9 @@ module.exports = withAndroidR8Enabled(
     package: isDevVariant ? "ch.liri.operations.dev" : "ch.liri.operations",
     versionCode: parseInt(process.env.ANDROID_VERSION_CODE || "1", 10),
     version: pkg.version,
-    // Le fichier est généré au build via `eas-build-pre-install` depuis un secret EAS.
-    googleServicesFile: "./google-services.json",
+    // EAS injecte les variables `type=file` comme chemin vers un fichier sur le builder.
+    // Fallback local: fichier à la racine du projet.
+    googleServicesFile: process.env.GOOGLE_SERVICES_JSON || "./google-services.json",
     adaptiveIcon: {
       foregroundImage: "./assets/images/adaptive-icon.png",
       backgroundColor: "#ffffff",

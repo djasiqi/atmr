@@ -27,41 +27,95 @@ function decodeBase64ToUtf8(b64) {
   return Buffer.from(String(b64), "base64").toString("utf8");
 }
 
+function readMaybeFilePath(value) {
+  const v = String(value || "").trim();
+  if (!v) return null;
+  try {
+    if (fs.existsSync(v) && fs.statSync(v).isFile()) {
+      return fs.readFileSync(v, "utf8");
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+function resolveAndroidJsonText() {
+  const rawAndroid = process.env.GOOGLE_SERVICES_JSON;
+  const b64Android = process.env.GOOGLE_SERVICES_JSON_B64;
+
+  // EAS env vars with `type=file` are injected as a FILE PATH on the builder.
+  // So GOOGLE_SERVICES_JSON is usually a path, not raw JSON/base64.
+  if (rawAndroid) {
+    const fromPath = readMaybeFilePath(rawAndroid);
+    if (fromPath) return fromPath;
+
+    const raw = String(rawAndroid);
+    if (looksLikeJson(raw)) return raw;
+
+    try {
+      const decoded = decodeBase64ToUtf8(raw);
+      if (looksLikeJson(decoded)) return decoded;
+    } catch {
+      // ignore
+    }
+  }
+
+  if (b64Android) {
+    try {
+      const decoded = decodeBase64ToUtf8(b64Android);
+      if (looksLikeJson(decoded)) return decoded;
+    } catch {
+      // ignore
+    }
+  }
+
+  return null;
+}
+
+function resolveIosPlistText() {
+  const rawPlist = process.env.GOOGLE_SERVICES_PLIST;
+
+  // EAS env vars with `type=file` are injected as a FILE PATH on the builder.
+  // So GOOGLE_SERVICES_PLIST is usually a path, not raw plist/base64.
+  if (rawPlist) {
+    const fromPath = readMaybeFilePath(rawPlist);
+    if (fromPath) return fromPath;
+
+    const raw = String(rawPlist);
+    if (looksLikePlist(raw)) return raw;
+
+    try {
+      const decoded = decodeBase64ToUtf8(raw);
+      if (looksLikePlist(decoded)) return decoded;
+    } catch {
+      // ignore
+    }
+  }
+
+  return null;
+}
+
 function main() {
   if (!fs.existsSync(OUT_ANDROID_JSON_PATH)) {
-    // Prefer raw JSON from EAS "secret" env var (masked in UI)
-    const rawAndroid = process.env.GOOGLE_SERVICES_JSON;
-    const b64Android = process.env.GOOGLE_SERVICES_JSON_B64;
-
-    if (rawAndroid || b64Android) {
-      // Note: EAS secrets of type "file" are injected as base64 (FILE_BASE64).
-      // So GOOGLE_SERVICES_JSON may actually be base64, not raw JSON.
-      let jsonText = null;
-      if (rawAndroid) {
-        const raw = String(rawAndroid);
-        jsonText = looksLikeJson(raw) ? raw : decodeBase64ToUtf8(raw);
-      } else {
-        jsonText = decodeBase64ToUtf8(b64Android);
-      }
-
-      // Validate it looks like JSON before writing.
-      try {
-        JSON.parse(jsonText);
-      } catch (e) {
-        throw new Error(
-          "[write-google-services] GOOGLE_SERVICES_JSON(_B64) is not valid JSON (raw or base64)."
-        );
-      }
-
-      fs.writeFileSync(OUT_ANDROID_JSON_PATH, jsonText, { encoding: "utf8" });
+    const jsonText = resolveAndroidJsonText();
+    if (!jsonText) {
       console.log(
-        "[write-google-services] Wrote google-services.json to:",
-        OUT_ANDROID_JSON_PATH
+        "[write-google-services] No usable GOOGLE_SERVICES_JSON(_B64); leaving google-services.json absent."
       );
     } else {
-      console.log(
-        "[write-google-services] GOOGLE_SERVICES_JSON(_B64) not set; leaving google-services.json absent."
-      );
+      try {
+        JSON.parse(jsonText);
+        fs.writeFileSync(OUT_ANDROID_JSON_PATH, jsonText, { encoding: "utf8" });
+        console.log(
+          "[write-google-services] Wrote google-services.json to:",
+          OUT_ANDROID_JSON_PATH
+        );
+      } catch (e) {
+        console.warn(
+          "[write-google-services] google-services.json content is not valid JSON; skipping write."
+        );
+      }
     }
   } else {
     console.log("[write-google-services] google-services.json already exists, skip.");
@@ -69,27 +123,20 @@ function main() {
 
   // iOS: GoogleService-Info.plist (Firebase config)
   if (!fs.existsSync(OUT_IOS_PLIST_PATH)) {
-    const rawPlist = process.env.GOOGLE_SERVICES_PLIST;
-    if (rawPlist) {
-      // Note: EAS secrets of type "file" are injected as base64 (FILE_BASE64).
-      // So GOOGLE_SERVICES_PLIST is usually base64, not raw plist.
-      const raw = String(rawPlist);
-      const plistText = looksLikePlist(raw) ? raw : decodeBase64ToUtf8(raw);
-
-      if (!looksLikePlist(plistText)) {
-        throw new Error(
-          "[write-google-services] GOOGLE_SERVICES_PLIST does not look like a plist (raw or base64)."
-        );
-      }
-
+    const plistText = resolveIosPlistText();
+    if (!plistText) {
+      console.log(
+        "[write-google-services] No usable GOOGLE_SERVICES_PLIST; leaving GoogleService-Info.plist absent."
+      );
+    } else if (!looksLikePlist(plistText)) {
+      console.warn(
+        "[write-google-services] GoogleService-Info.plist content does not look like plist; skipping write."
+      );
+    } else {
       fs.writeFileSync(OUT_IOS_PLIST_PATH, plistText, { encoding: "utf8" });
       console.log(
         "[write-google-services] Wrote GoogleService-Info.plist to:",
         OUT_IOS_PLIST_PATH
-      );
-    } else {
-      console.log(
-        "[write-google-services] GOOGLE_SERVICES_PLIST not set; leaving GoogleService-Info.plist absent."
       );
     }
   } else {
