@@ -42,6 +42,11 @@ module.exports = withAndroidR8Enabled(
     buildNumber: process.env.IOS_BUILD_NUMBER || "1",
     version: pkg.version,
     // googleServicesFile: process.env.GOOGLE_SERVICES_PLIST ?? "./GoogleService-Info.plist",
+    // ✅ Background modes pour notifications silencieuses + background fetch
+    // (nécessite un rebuild natif iOS)
+    infoPlist: {
+      UIBackgroundModes: ["fetch", "remote-notification"],
+    },
     config: {
       usesNonExemptEncryption: false, // À définir selon vos besoins de conformité
     },
@@ -52,8 +57,8 @@ module.exports = withAndroidR8Enabled(
     package: isDevVariant ? "ch.liri.operations.dev" : "ch.liri.operations",
     versionCode: parseInt(process.env.ANDROID_VERSION_CODE || "1", 10),
     version: pkg.version,
-    googleServicesFile:
-      process.env.GOOGLE_SERVICES_JSON ?? "./google-services.json",
+    // Le fichier est généré au build via `eas-build-pre-install` depuis un secret EAS.
+    googleServicesFile: "./google-services.json",
     adaptiveIcon: {
       foregroundImage: "./assets/images/adaptive-icon.png",
       backgroundColor: "#ffffff",

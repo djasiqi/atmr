@@ -50,3 +50,6 @@ app-example
 
 # 🔐 Firebase service account (ne jamais commit ce fichier)
 credentials/firebase-service-account.json
+
+# 🔐 Credentials (ne jamais commit de clés)
+credentials/
