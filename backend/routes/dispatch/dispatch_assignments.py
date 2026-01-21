@@ -315,10 +315,23 @@ class AssignmentResource(Resource):
             a = a_opt
 
             data = request.get_json() or {}
+            # ✅ Détecter réassignation pour notifier l'ancien chauffeur
+            old_driver_id: int | None = None
+            try:
+                old_driver_id = int(getattr(a, "driver_id", None) or 0) or None
+            except Exception:
+                old_driver_id = None
+
             # ✅ P1: Protéger accès dictionnaires pour éviter KeyError
             driver_id = data.get("driver_id")
             if driver_id is not None:
                 a.driver_id = driver_id
+                # Garder booking.driver_id cohérent si accessible
+                from contextlib import suppress
+
+                with suppress(Exception):
+                    if getattr(a, "booking", None) is not None:
+                        a.booking.driver_id = driver_id
             status = data.get("status")
             if status is not None:
                 a.status = status
@@ -327,6 +340,43 @@ class AssignmentResource(Resource):
 
             db.session.add(a)
             db.session.commit()
+
+            # ✅ Notifier ancien chauffeur + nouveau chauffeur si changement
+            try:
+                new_driver_id = int(getattr(a, "driver_id", None) or 0) or None
+                booking = getattr(a, "booking", None)
+                booking_id = int(getattr(booking, "id", 0) or 0) if booking else 0
+                if (
+                    old_driver_id
+                    and new_driver_id
+                    and old_driver_id != new_driver_id
+                    and booking_id
+                ):
+                    from application.events.event_bus import publish_event
+                    from domain.events.events import (
+                        DriverBookingReassignedEvent,
+                        DriverNewBookingEvent,
+                    )
+
+                    publish_event(
+                        DriverBookingReassignedEvent(
+                            booking_id=booking_id,
+                            old_driver_id=int(old_driver_id),
+                            new_driver_id=int(new_driver_id),
+                            company_id=company.id,
+                        )
+                    )
+                    publish_event(
+                        DriverNewBookingEvent(
+                            booking_id=booking_id,
+                            driver_id=int(new_driver_id),
+                            company_id=company.id,
+                        )
+                    )
+            except Exception:
+                logger.exception(
+                    "[Dispatch] Failed to publish reassignment events after PATCH"
+                )
             return a
 
         except Exception as e:
@@ -379,6 +429,11 @@ class ReassignResource(Resource):
             a = a_opt
             # ✅ P1: Utiliser la relation eager-loaded au lieu de requête séparée
             booking = a.booking
+            old_driver_id: int | None = None
+            try:
+                old_driver_id = int(getattr(a, "driver_id", None) or 0) or None
+            except Exception:
+                old_driver_id = None
 
             # ✅ SHADOW MODE: Prédiction DQN (NON-BLOQUANTE)
             shadow_prediction = None
@@ -447,6 +502,13 @@ class ReassignResource(Resource):
             cast("Any", a).driver_id = new_driver_id
             cast("Any", a).updated_at = datetime.now(UTC)
 
+            # ✅ Garder booking.driver_id cohérent
+            if booking is not None:
+                from contextlib import suppress
+
+                with suppress(Exception):
+                    booking.driver_id = int(new_driver_id)
+
             db.session.add(a)
             db.session.commit()
 
@@ -454,7 +516,26 @@ class ReassignResource(Resource):
             if booking:
                 try:
                     from application.events.event_bus import publish_event
-                    from domain.events.events import DriverNewBookingEvent
+                    from domain.events.events import (
+                        DriverBookingReassignedEvent,
+                        DriverNewBookingEvent,
+                    )
+
+                    # ✅ Notifier l'ancien chauffeur si réassignation
+                    try:
+                        if old_driver_id and old_driver_id != int(new_driver_id):
+                            publish_event(
+                                DriverBookingReassignedEvent(
+                                    booking_id=booking.id,
+                                    old_driver_id=int(old_driver_id),
+                                    new_driver_id=int(new_driver_id),
+                                    company_id=company.id,
+                                )
+                            )
+                    except Exception:
+                        logger.exception(
+                            "[Dispatch] Failed to publish DriverBookingReassignedEvent"
+                        )
 
                     publish_event(
                         DriverNewBookingEvent(

@@ -1631,6 +1631,14 @@ class ReassignResource(Resource):
                         f"❌ Impossible d'assigner ce chauffeur : {conflict_msg}",
                     )
 
+            # ✅ Détecter réassignation pour notifier l'ancien chauffeur
+            old_driver_id: int | None = None
+            try:
+                old_driver_id_raw = getattr(a, "driver_id", None)
+                old_driver_id = int(old_driver_id_raw) if old_driver_id_raw else None
+            except Exception:
+                old_driver_id = None
+
             cast("Any", a).driver_id = new_driver_id
             cast("Any", a).updated_at = datetime.now(UTC)
 
@@ -1656,7 +1664,26 @@ class ReassignResource(Resource):
             if booking:
                 try:
                     from application.events.event_bus import publish_event
-                    from domain.events.events import DriverNewBookingEvent
+                    from domain.events.events import (
+                        DriverBookingReassignedEvent,
+                        DriverNewBookingEvent,
+                    )
+
+                    # Notifier l'ancien chauffeur si réassignation
+                    try:
+                        if old_driver_id and old_driver_id != int(new_driver_id):
+                            publish_event(
+                                DriverBookingReassignedEvent(
+                                    booking_id=booking.id,
+                                    old_driver_id=int(old_driver_id),
+                                    new_driver_id=int(new_driver_id),
+                                    company_id=company.id,
+                                )
+                            )
+                    except Exception:
+                        logger.exception(
+                            "[Dispatch] Failed to publish reassignment event"
+                        )
 
                     publish_event(
                         DriverNewBookingEvent(

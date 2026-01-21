@@ -39,6 +39,12 @@ export function isPublicEndpoint(
     // Driver API v1
     if (u.endsWith("/auth/login") || u.includes("/auth/login?")) return true;
     if (u.endsWith("/auth/register") || u.includes("/auth/register?")) return true;
+    // CSRF token est requis avant refresh/login sur certains backends
+    if (u.endsWith("/auth/csrf-token") || u.includes("/auth/csrf-token?"))
+      return true;
+    // Version check est public (ne dépend pas de l'auth)
+    if (u.endsWith("/app/version-check") || u.includes("/app/version-check?"))
+      return true;
     // refresh-token ne nécessite pas Authorization (refresh est en body/header/cookie)
     if (u.endsWith("/auth/refresh-token") || u.includes("/auth/refresh-token?"))
       return true;
@@ -48,6 +54,8 @@ export function isPublicEndpoint(
   // Enterprise (company_mobile)
   if (u.endsWith("/auth/login") || u.includes("/auth/login?")) return true;
   if (u.endsWith("/auth/register") || u.includes("/auth/register?")) return true;
+  if (u.endsWith("/auth/csrf-token") || u.includes("/auth/csrf-token?"))
+    return true;
   // refresh enterprise ne nécessite pas Authorization (refresh en body)
   if (u.endsWith("/auth/refresh") || u.includes("/auth/refresh?")) return true;
   // MFA endpoints (challenge/verify) sont "publics" côté bearer (token MFA/otp dans body)

@@ -37,6 +37,7 @@ import {
   invalidateEnterpriseInterceptorCache,
 } from "@/services/enterpriseAuth";
 import { notifyAuthReady, notifyAuthNotReady } from "@/services/authSync";
+import { isAuthNotReadyError } from "@/services/authGuards";
 // ✅ PHASE 2 : Import de l'authentification biométrique
 import { autoLoginWithBiometric } from "@/services/biometricAuth";
 
@@ -208,13 +209,37 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // ✅ Les tokens sont déjà stockés dans loginDriver() (SecureStore + AsyncStorage)
       setDriverToken(response.token);
       await storeMode("driver");
+      // ✅ P1 strict: rendre l'auth "ready" avant tout appel protégé (ex: /driver/me/profile)
+      // Sinon l'intercepteur rejette avec AUTH_NOT_READY et on se retrouve avec un faux "login failed".
+      notifyAuthReady();
       try {
-        const profile = await fetchDriverProfile();
+        // Petit retry pour les devices lents / race condition de propagation (SecureStore/React state)
+        let profile: Driver | null = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            // eslint-disable-next-line no-await-in-loop
+            profile = await fetchDriverProfile();
+            break;
+          } catch (e) {
+            if (!isAuthNotReadyError(e)) {
+              throw e;
+            }
+            // eslint-disable-next-line no-await-in-loop
+            await new Promise((r) => setTimeout(r, 150 * (attempt + 1)));
+          }
+        }
+        if (!profile) {
+          throw new Error("Profil chauffeur indisponible (AUTH_NOT_READY)");
+        }
         setDriver(profile);
         // ✅ Stocker driver_id pour navigation rapide
         await asyncStorage.setDriverId(profile.id);
       } catch (error) {
         console.warn("Impossible de récupérer le profil chauffeur :", error);
+        // ✅ Important: AUTH_NOT_READY est transitoire → ne pas effacer les tokens / ne pas logout
+        if (isAuthNotReadyError(error)) {
+          return;
+        }
         await clearDriverStorage();
         setDriver(null);
         setDriverToken(null);
@@ -252,6 +277,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         ["enterprise_session_just_created", "true"],
       ]);
       await storeMode("enterprise");
+      // ✅ P1 strict: rendre l'auth "ready" avant que des requêtes enterprise partent
+      notifyAuthReady();
 
       // Vérifier que le token a bien été stocké
       const storedToken = await secureStorage.getEnterpriseToken();
@@ -328,6 +355,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (driverAccessToken) {
               try {
                 setDriverToken(driverAccessToken);
+                // ✅ Important: rendre l'auth prête avant d'appeler un endpoint protégé
+                notifyAuthReady();
                 const profile = await fetchDriverProfile();
                 if (isMounted) {
                   setDriver(profile);
@@ -345,18 +374,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             // 2. Si l'access token n'a pas fonctionné, essayer le refresh token
             if (!profileLoaded && driverRefreshToken) {
               try {
-                const refreshResponse = await refreshAccessToken(driverRefreshToken);
-
-                // Stocker le nouveau access_token dans SecureStore
-                if (refreshResponse.access_token) {
-                  await secureStorage.setAccessToken(refreshResponse.access_token);
-                  setDriverToken(refreshResponse.access_token);
-                }
-
-                // Mettre à jour refresh_token si rotation activée
-                if (refreshResponse.refresh_token) {
-                  await secureStorage.setRefreshToken(refreshResponse.refresh_token);
-                }
+                // ✅ Utiliser le singleflight driver (cohérence + évite races)
+                const newAccessToken = await refreshDriverTokenSingleflight();
+                setDriverToken(newAccessToken);
+                notifyAuthReady();
 
                 // S'assurer qu'on est en mode driver
                 await storeMode("driver");
@@ -386,6 +407,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     });
 
                     if (biometricSuccess) {
+                      // ✅ L'auto-login biométrique a écrit les tokens → marquer auth ready
+                      notifyAuthReady();
                       // Si l'auto-login biométrique réussit, charger le profil
                       const profile = await fetchDriverProfile();
                       if (isMounted) {
@@ -438,6 +461,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 });
 
                 if (biometricSuccess) {
+                  notifyAuthReady();
                   // Si l'auto-login biométrique réussit, charger le profil
                   const profile = await fetchDriverProfile();
                   if (isMounted) {

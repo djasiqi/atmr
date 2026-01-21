@@ -825,13 +825,31 @@ enterpriseApi.interceptors.request.use(
 
       // #region agent log
       const finalHeaders: Record<string, string> = {};
-      headers.forEach((value: unknown, key: string) => {
-        if (key.toLowerCase() === 'authorization') {
-          finalHeaders[key] = value ? `${String(value).substring(0, 20)}...` : '';
-        } else {
-          finalHeaders[key] = String(value);
+      // Axios v1: config.headers peut être AxiosHeaders, un objet simple, ou undefined.
+      // Sur certains chemins (ex: login), `headers` peut ne pas implémenter `forEach`.
+      try {
+        if (headers && typeof (headers as any).forEach === "function") {
+          (headers as any).forEach((value: unknown, key: string) => {
+            if (String(key).toLowerCase() === "authorization") {
+              finalHeaders[key] = value
+                ? `${String(value).substring(0, 20)}...`
+                : "";
+            } else {
+              finalHeaders[key] = String(value);
+            }
+          });
+        } else if (headers && typeof headers === "object") {
+          for (const [k, v] of Object.entries(headers as any)) {
+            if (String(k).toLowerCase() === "authorization") {
+              finalHeaders[k] = v ? `${String(v).substring(0, 20)}...` : "";
+            } else if (v !== undefined) {
+              finalHeaders[k] = String(v);
+            }
+          }
         }
-      });
+      } catch {
+        // ne jamais casser la requête juste pour le logging
+      }
       debugLog({location:'enterpriseAuth.ts:333',message:'interceptor request exit',data:{url:config.url,headers:finalHeaders,isLoginRequest},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'});
       // #endregion
       config.headers = headers;

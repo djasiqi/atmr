@@ -17,6 +17,7 @@ from services.events.handlers.dispatch_handlers import (
     handle_dispatch_run_completed,
 )
 from services.events.handlers.driver_handlers import (
+    handle_driver_booking_reassigned,
     handle_driver_location_updated,
     handle_driver_new_booking,
 )
@@ -98,6 +99,7 @@ register("DispatchRunCompletedEvent", handle_dispatch_run_completed)
 register("DispatchRequestedEvent", handle_dispatch_requested)
 register("DriverLocationUpdatedEvent", handle_driver_location_updated)
 register("DriverNewBookingEvent", handle_driver_new_booking)
+register("DriverBookingReassignedEvent", handle_driver_booking_reassigned)
 register("AssignmentCancelledEvent", handle_assignment_cancelled)
 
 # ✅ NOUVEAU : Enregistrer metrics_handler pour tous les événements
@@ -110,4 +112,5 @@ register("DispatchRunCompletedEvent", handle_event_metrics)
 register("DispatchRequestedEvent", handle_event_metrics)
 register("DriverLocationUpdatedEvent", handle_event_metrics)
 register("DriverNewBookingEvent", handle_event_metrics)
+register("DriverBookingReassignedEvent", handle_event_metrics)
 register("AssignmentCancelledEvent", handle_event_metrics)

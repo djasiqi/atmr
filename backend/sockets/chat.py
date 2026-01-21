@@ -746,9 +746,65 @@ def init_chat_socket(socketio: SocketIO):
             if not is_prod:
                 print("✅ [SOCKET.IO] Token extrait avec succès")
 
-            # Vérifie & décode (lève si invalide/expiré)
+            # Vérifie & décode (lève si invalide/expiré).
+            # ✅ Robustesse: si plusieurs sources de token existent (header + auth payload),
+            # essayer un fallback si la signature du premier token échoue.
             try:
-                decoded = decode_token(token)
+                auth_token: str | None = None
+                auth_access_token: str | None = None
+                if isinstance(auth, dict):
+                    with suppress(Exception):
+                        v = auth.get("token")
+                        auth_token = str(v).strip() if v else None
+                    with suppress(Exception):
+                        v = auth.get("accessToken")
+                        auth_access_token = str(v).strip() if v else None
+
+                candidate_tokens: list[str] = []
+                if token:
+                    candidate_tokens.append(token)
+                if auth_token and auth_token not in candidate_tokens:
+                    candidate_tokens.append(auth_token)
+                if auth_access_token and auth_access_token not in candidate_tokens:
+                    candidate_tokens.append(auth_access_token)
+
+                decoded: dict[str, Any] | None = None
+                last_decode_error: Exception | None = None
+                for idx, candidate in enumerate(candidate_tokens):
+                    try:
+                        decoded = decode_token(candidate)
+                        if idx > 0 and not is_prod:
+                            print(
+                                f"🔌 [SOCKET.IO] Token fallback utilisé (idx={idx}) après échec du premier token"
+                            )
+                        break
+                    except jwt_exceptions.InvalidSignatureError as e:
+                        last_decode_error = e
+                        # ✅ Support legacy keys JWT (rotation) si la signature échoue
+                        with suppress(Exception):
+                            from security.jwt_legacy_keys import (  # local import (évite cycles)
+                                try_decode_with_legacy_keys,
+                            )
+
+                            alg = current_app.config.get("JWT_ALGORITHM", "HS256")
+                            legacy_payload, _ = try_decode_with_legacy_keys(
+                                candidate, algorithms=[str(alg)]
+                            )
+                            if legacy_payload:
+                                decoded = legacy_payload
+                                if not is_prod:
+                                    print(
+                                        "🔌 [SOCKET.IO] Token accepté via legacy key (rotation)"
+                                    )
+                                break
+                        continue
+                    except Exception as e:
+                        last_decode_error = e
+                        break
+
+                if decoded is None:
+                    raise last_decode_error or Exception("Token decode error")
+
                 # #region agent log
                 log_data_decoded = {
                     "location": "chat.py:handle_connect",
@@ -891,6 +947,16 @@ def init_chat_socket(socketio: SocketIO):
                 ws_metrics.on_error("token_invalid_audience")
                 return False
             except Exception as e:
+                # ✅ Dev-only: afficher la cause exacte (sinon "Token invalide." est trop vague)
+                with suppress(Exception):
+                    try:
+                        is_prod = current_app.config.get("ENV") == "production"
+                    except RuntimeError:
+                        is_prod = False
+                    if not is_prod:
+                        print(
+                            f"🔌 [SOCKET.IO] Token decode error: {type(e).__name__}: {e}"
+                        )
                 # #region agent log
                 log_data_decode_error = {
                     "location": "chat.py:handle_connect",
@@ -929,7 +995,10 @@ def init_chat_socket(socketio: SocketIO):
                         "request_trace_id": trace_id,
                     },
                 )
-                emit("unauthorized", {"error": "Token invalide."})
+                emit(
+                    "unauthorized",
+                    {"error": "Token invalide.", "reason": "token_decode_error"},
+                )
                 ws_metrics.on_error("token_decode_error")
                 return False
 
@@ -1550,7 +1619,21 @@ def init_chat_socket(socketio: SocketIO):
                         driver = Driver.query.filter_by(user_id=receiver_id).first()
                         if driver:
                             # Préparer le preview du message
-                            sender_name = user.first_name or "Quelqu'un"
+                            # ✅ Notification pro: identifier clairement l'émetteur (Entreprise / Chauffeur)
+                            sender_label = "Entreprise" if user.role == UserRole.company else "Chauffeur"
+                            sender_display = sender_label
+                            try:
+                                # Entreprise: utiliser le nom de l'entreprise si dispo
+                                if user.role == UserRole.company and company_obj:
+                                    company_name = getattr(company_obj, "name", None)
+                                    if company_name:
+                                        sender_display = f"{sender_label} {company_name}"
+                                else:
+                                    first_name = getattr(user, "first_name", None) or None
+                                    if first_name:
+                                        sender_display = f"{sender_label} {first_name}"
+                            except Exception:
+                                sender_display = sender_label
                             message_preview = (
                                 content[:MESSAGE_PREVIEW_LENGTH]
                                 if content
@@ -1565,7 +1648,7 @@ def init_chat_socket(socketio: SocketIO):
                             fanout_message_new(
                                 driver_id=driver.id,
                                 message_id=message.id,
-                                sender_name=sender_name,
+                                sender_name=sender_display,
                                 message_preview=message_preview,
                                 company_id=company_id,
                             )

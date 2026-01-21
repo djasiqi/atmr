@@ -166,7 +166,9 @@ export const useEnterpriseNotifications = () => {
       console.log("📦 Nouvelle course reçue:", data);
       sendNotification(
         "Nouvelle course",
-        `Une nouvelle course a été créée${data.booking_id ? ` (#${data.booking_id})` : ""}`,
+        data.booking_id
+          ? `Course #${data.booking_id} — une nouvelle course est disponible.`
+          : "Une nouvelle course est disponible.",
         { type: "new_booking", bookingId: data.booking_id, ...data },
         true
       );
@@ -176,16 +178,75 @@ export const useEnterpriseNotifications = () => {
     const handleBookingUpdated = (data: any) => {
       console.log("🔄 Course mise à jour:", data);
       const statusMessages: Record<string, string> = {
-        assigned: "a été assignée",
-        in_progress: "est en cours",
-        completed: "est terminée",
-        cancelled: "a été annulée",
+        assigned: "assignée",
+        en_route: "en route",
+        in_progress: "à bord",
+        completed: "terminée",
+        cancelled: "annulée",
+        canceled: "annulée",
       };
-      const statusMessage = statusMessages[data.status] || "a été mise à jour";
+      const status = String(data.status || "").toLowerCase();
+      const statusMessage = statusMessages[status] || "mise à jour";
       
+      const changes = data?.changes;
+      const parts: string[] = [];
+      const add = (s?: string) => {
+        if (s) parts.push(s);
+      };
+      const fmtHHmm = (v: any): string | null => {
+        if (!v) return null;
+        const s = String(v);
+        if (s.includes("T") && s.length >= 16) {
+          const hhmm = s.replace("Z", "").slice(11, 16);
+          return hhmm.length === 5 ? hhmm : null;
+        }
+        return null;
+      };
+
+      const short = (v: any, maxLen = 32): string | null => {
+        if (v == null) return null;
+        const s = String(v).replace(/\s+/g, " ").trim();
+        if (!s) return null;
+        return s.length > maxLen ? `${s.slice(0, maxLen - 1)}…` : s;
+      };
+
+      const timeFrom = changes?.scheduled_time?.from;
+      const timeTo = changes?.scheduled_time?.to;
+      const hhmmFrom = fmtHHmm(timeFrom);
+      const hhmmTo = fmtHHmm(timeTo);
+      if (hhmmFrom && hhmmTo && hhmmFrom !== hhmmTo) {
+        add(`Horaire : ${hhmmFrom} → ${hhmmTo}`);
+      }
+
+      const pFrom = short(changes?.pickup_location?.from);
+      const pTo = short(changes?.pickup_location?.to);
+      if (pFrom && pTo && pFrom !== pTo) add(`Départ : ${pFrom} → ${pTo}`);
+      else if (pTo && !pFrom) add(`Départ : ${pTo}`);
+
+      const dFrom = short(changes?.dropoff_location?.from);
+      const dTo = short(changes?.dropoff_location?.to);
+      if (dFrom && dTo && dFrom !== dTo) add(`Destination : ${dFrom} → ${dTo}`);
+      else if (dTo && !dFrom) add(`Destination : ${dTo}`);
+
+      if (changes?.notes) add("Info : mise à jour");
+
+      // ✅ Pro: limiter à 2 changements + "+N autres modifications"
+      const maxItems = 2;
+      const head = parts.slice(0, maxItems);
+      const remaining = parts.length - head.length;
+      const summary =
+        head.join(" • ") +
+        (remaining > 0
+          ? remaining === 1
+            ? " • +1 autre modification"
+            : ` • +${remaining} autres modifications`
+          : "");
+
       sendNotification(
         "Course mise à jour",
-        `La course${data.booking_id ? ` #${data.booking_id}` : ""} ${statusMessage}`,
+        data.booking_id
+          ? `Course #${data.booking_id} — ${summary || statusMessage}.`
+          : `Une course a été ${summary || statusMessage}.`,
         { type: "booking_updated", bookingId: data.booking_id, status: data.status, ...data },
         true
       );
@@ -196,7 +257,7 @@ export const useEnterpriseNotifications = () => {
       console.log("❌ Course annulée:", data);
       sendNotification(
         "Course annulée",
-        `La course${data.booking_id ? ` #${data.booking_id}` : ""} a été annulée`,
+        data.booking_id ? `La course #${data.booking_id} a été annulée.` : "Une course a été annulée.",
         { type: "booking_cancelled", bookingId: data.booking_id, ...data },
         true
       );
@@ -210,13 +271,15 @@ export const useEnterpriseNotifications = () => {
       }
 
       console.log("💬 Nouveau message de chat:", message);
-      const senderName = message.sender_name || "Un membre de l'équipe";
+      const role = String(message.sender_role || "").toLowerCase();
+      const roleLabel = role === "company" ? "Entreprise" : role === "driver" ? "Chauffeur" : "Équipe";
+      const senderName = message.sender_name ? `${roleLabel} — ${message.sender_name}` : roleLabel;
       const messagePreview = message.content
         ? message.content.substring(0, 50) + (message.content.length > 50 ? "..." : "")
         : "Nouveau message";
 
       sendNotification(
-        senderName,
+        "Nouveau message",
         messagePreview,
         { type: "chat_message", messageId: message.id, ...message },
         true

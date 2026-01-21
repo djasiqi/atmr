@@ -115,3 +115,45 @@ def handle_driver_new_booking(event: dict[str, Any]) -> None:
     except Exception:
         # Handler "safe" : ne pas faire échouer le système si notification échoue
         logger.exception("[EventBus] Failed to notify driver about new booking")
+
+
+def handle_driver_booking_reassigned(event: dict[str, Any]) -> None:
+    """Handler pour DriverBookingReassignedEvent.
+
+    Actions:
+    - Notifie l'ancien chauffeur qu'une mission a été retirée (réassignée)
+      pour qu'il rafraîchisse ses courses.
+    """
+    booking_id = event.get("booking_id")
+    old_driver_id = event.get("old_driver_id")
+    new_driver_id = event.get("new_driver_id")
+
+    if not booking_id or not old_driver_id:
+        logger.warning(
+            "[EventBus] DriverBookingReassignedEvent missing booking_id or old_driver_id: %s",
+            event,
+        )
+        return
+
+    try:
+        from services.events.fanout import fanout_driver_booking_reassigned
+
+        fanout_driver_booking_reassigned(
+            old_driver_id=int(old_driver_id),
+            booking_id=int(booking_id),
+            new_driver_id=int(new_driver_id) if new_driver_id else None,
+        )
+    except (ValueError, TypeError) as e:
+        logger.warning(
+            "[EventBus] Failed to notify old driver about reassignment (validation error: %s): %s",
+            type(e).__name__,
+            e,
+        )
+    except (ConnectionError, OSError) as e:
+        logger.warning(
+            "[EventBus] Failed to notify old driver about reassignment (network error: %s): %s",
+            type(e).__name__,
+            e,
+        )
+    except Exception:
+        logger.exception("[EventBus] Failed to notify old driver about reassignment")

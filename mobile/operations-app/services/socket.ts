@@ -250,22 +250,26 @@ export async function connectSocket(
     connectPromise = null;
   }
 
+  // ✅ IMPORTANT: si une connexion est déjà en cours, ne pas "nettoyer" un socket
+  // simplement parce qu'il est encore `disconnected` (état normal pendant le handshake).
+  // Sinon on perd la référence globale et `getSocket()` retourne null (observé en logs).
+  if (connectPromise && socketRole === role) {
+    return connectPromise;
+  }
+
   // ✅ Vérifier que socket n'est pas déjà connecté
   if (socket && socket.connected && socketRole === role) {
     return socket;  // Réutiliser connexion existante
   }
 
   // ✅ Si socket existe mais déconnecté, nettoyer avant de créer nouveau
-  if (socket && socket.disconnected) {
+  // ⚠️ Ne faire ça que si aucune connexion n'est en cours (cf. connectPromise ci-dessus)
+  if (socket && socketRole === role && socket.disconnected) {
     try {
       socket.off();
       socket.disconnect();
     } catch {}
     socket = null;
-  }
-
-  if (connectPromise && socketRole === role) {
-    return connectPromise;
   }
   if (IS_DEV) enableSocketIODebug();
 
@@ -282,6 +286,7 @@ export async function connectSocket(
     s.off("new_booking");
     s.off("booking_updated");
     s.off("booking_cancelled");
+    s.off("booking_reassigned");
 
     // Listen to new_booking event
     s.on("new_booking", (data: Booking) => {
@@ -334,6 +339,26 @@ export async function connectSocket(
         timestamp: new Date().toISOString()
       }));
       bookingEmitter.emit("booking_cancelled", data);
+    });
+
+    // Listen to booking_reassigned event (mission retirée à ce chauffeur)
+    s.on("booking_reassigned", (data: any) => {
+      const eventId = (data as any)?.event_id;
+      if (!checkAndAddEventId(eventId, "booking_reassigned")) {
+        return;
+      }
+
+      const bookingId = (data as any)?.booking_id ?? (data as any)?.id ?? null;
+      console.log(
+        JSON.stringify({
+          event: "booking_reassigned_received",
+          booking_id: bookingId,
+          new_driver_id: (data as any)?.new_driver_id,
+          event_id: eventId,
+          timestamp: new Date().toISOString(),
+        })
+      );
+      bookingEmitter.emit("booking_reassigned", data);
     });
 
     console.log("✅ Booking event listeners setup complete");
@@ -1158,6 +1183,13 @@ export function onBookingCancelled(callback: (data: { id: number } | Booking) =>
   bookingEmitter.on("booking_cancelled", callback);
   return () => {
     bookingEmitter.off("booking_cancelled", callback);
+  };
+}
+
+export function onBookingReassigned(callback: (data: any) => void) {
+  bookingEmitter.on("booking_reassigned", callback);
+  return () => {
+    bookingEmitter.off("booking_reassigned", callback);
   };
 }
 

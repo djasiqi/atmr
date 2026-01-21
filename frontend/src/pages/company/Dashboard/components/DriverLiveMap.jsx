@@ -165,8 +165,9 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
   // petits helpers pour éviter d'appeler Leaflet sur une map détruite
   const getMap = () => {
     const m = mapRef.current;
-    // _mapPane est défini une fois la map initialisée
-    if (!m || !m._mapPane) return null;
+    // ✅ CORRECTION: Vérifier que la carte est complètement initialisée
+    // _mapPane est défini une fois la map initialisée et doit avoir un _leaflet_id
+    if (!m || !m._mapPane || m._mapPane._leaflet_id === undefined) return null;
     return m;
   };
   const safeSetView = (center, zoom, animate = true) => {
@@ -247,13 +248,25 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
 
       tileLayer.addTo(map);
 
-      // Forcer un redimensionnement après un court délai
-      setTimeout(() => {
-        if (map) {
-          map.invalidateSize();
-          console.log('[DriverLiveMap] 🔄 Carte redimensionnée');
+      // ✅ CORRECTION: S'assurer que la carte est complètement initialisée avant invalidateSize
+      // Vérifier que _mapPane existe avant d'appeler invalidateSize
+      const checkAndInvalidateSize = () => {
+        // Vérifier que la carte existe et est complètement initialisée
+        if (map && map._mapPane && map._mapPane._leaflet_id !== undefined) {
+          try {
+            map.invalidateSize();
+            console.log('[DriverLiveMap] 🔄 Carte redimensionnée');
+          } catch (error) {
+            console.warn('[DriverLiveMap] ⚠️ Erreur lors du redimensionnement:', error);
+          }
+        } else {
+          // Réessayer après un court délai si pas encore prêt
+          setTimeout(checkAndInvalidateSize, 50);
         }
-      }, 100);
+      };
+
+      // Forcer un redimensionnement après un court délai
+      setTimeout(checkAndInvalidateSize, 100);
 
       mapRef.current = map;
       console.log('[DriverLiveMap] ✅ Carte initialisée avec succès');

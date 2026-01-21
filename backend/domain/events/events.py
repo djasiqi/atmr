@@ -61,6 +61,19 @@ class BookingUpdatedEvent(DomainEvent):
     booking_id: int = 0
     driver_id: int | None = None
     company_id: int | None = None
+    # ✅ Permet d'éviter les "self-notifications" (ex: le chauffeur ne doit pas
+    # recevoir une notif pour un statut qu'il vient lui-même de changer).
+    actor_role: str | None = None  # "driver" | "company" | "system" | None
+    actor_id: int | None = None
+    # Diff partiel pour générer des notifications "pro" basées sur ce qui a changé.
+    # Exemple:
+    # {
+    #   "scheduled_time": {"from": "2026-01-20T14:20:00", "to": "2026-01-20T14:35:00"},
+    #   "pickup_location": {"from": "...", "to": "..."},
+    #   "dropoff_location": {"from": "...", "to": "..."},
+    #   "notes": {"from": "...", "to": "..."},
+    # }
+    changes: dict[str, dict[str, str | None]] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,6 +95,18 @@ class DriverNewBookingEvent(DomainEvent):
 
     booking_id: int = 0
     driver_id: int = 0
+    company_id: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DriverBookingReassignedEvent(DomainEvent):
+    """Événement déclenché quand une mission est retirée à un chauffeur (réassignée)."""
+
+    event_type = "DriverBookingReassignedEvent"
+
+    booking_id: int = 0
+    old_driver_id: int = 0
+    new_driver_id: int | None = None
     company_id: int | None = None
 
 

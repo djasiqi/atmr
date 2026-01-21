@@ -2,6 +2,11 @@
 # Cela résout le problème d'autolinking avec React Native 0.79 et Expo SDK 53
 android/
 ios/
+/# Même chose, mais en "root-anchored" (EAS/doctor recommande /android)
+/android
+/android/**
+/ios
+/ios/**
 
 # Dépendances (reinstallées sur EAS)
 node_modules/

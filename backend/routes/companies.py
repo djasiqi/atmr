@@ -1793,6 +1793,14 @@ class AssignDriver(Resource):
             assignment_repo=AssignmentRepository(),
         )
         uc = AssignDriverToReservationUseCase(assignment_writer=writer)
+        # ✅ Détecter réassignation pour notifier l'ancien chauffeur
+        old_driver_id: int | None = None
+        try:
+            old_driver_id_raw = getattr(booking, "driver_id", None)
+            old_driver_id = int(old_driver_id_raw) if old_driver_id_raw else None
+        except Exception:
+            old_driver_id = None
+
         uc_result = uc.execute(booking=booking, driver=driver, company_id=company_id)
         if not uc_result.ok:
             return APIErrorHandler.handle_validation_error(
@@ -1806,7 +1814,24 @@ class AssignDriver(Resource):
         # ✅ Clean Architecture: Publier événement au lieu d'appel direct
         try:
             from application.events.event_bus import publish_event
-            from domain.events.events import DriverNewBookingEvent
+            from domain.events.events import (
+                DriverBookingReassignedEvent,
+                DriverNewBookingEvent,
+            )
+
+            # Si l'ancien chauffeur était différent du nouveau, notifier l'ancien.
+            try:
+                if old_driver_id and old_driver_id != int(driver.id):
+                    publish_event(
+                        DriverBookingReassignedEvent(
+                            booking_id=booking.id,
+                            old_driver_id=int(old_driver_id),
+                            new_driver_id=int(driver.id),
+                            company_id=company_id,
+                        )
+                    )
+            except Exception:
+                logger.exception("[AssignDriver] Failed to publish reassignment event")
 
             publish_event(
                 DriverNewBookingEvent(
@@ -1903,6 +1928,8 @@ class CompleteReservation(Resource):
                             booking_id=booking.id,
                             driver_id=booking.driver_id,
                             company_id=cast(int, booking.company_id),
+                            actor_role="company",
+                            actor_id=company_id,
                         )
                     )
                 except Exception as e:

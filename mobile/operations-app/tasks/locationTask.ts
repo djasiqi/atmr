@@ -3,7 +3,7 @@
 
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { io, Socket } from "socket.io-client";
+import { enqueueLocation, type QueuedLocation } from "../services/locationQueue";
 
 // Vérifier si le module natif est disponible
 let TaskManager: any = null;
@@ -39,86 +39,10 @@ const BATCH_SIZE = 3;
 const BATCH_INTERVAL_MS = 15000; // 15 secondes
 let flushInterval: ReturnType<typeof setInterval> | null = null;
 
-// Socket.IO pour l'envoi des positions
-let socket: Socket | null = null;
-
-// Initialiser le socket depuis le storage (utilise la même config que services/socket.ts)
-async function initSocket() {
-  try {
-    const token = await AsyncStorage.getItem("token") || await AsyncStorage.getItem("authToken");
-    if (!token) {
-      console.log("[LocationTask] ⚠️ Pas de token, socket non initialisé");
-      return;
-    }
-
-    // Utiliser la même logique de configuration que services/socket.ts
-    const Constants = require("expo-constants");
-    const { baseURL } = require("../services/api");
-    
-    // Flask-SocketIO vit à la racine (/socket.io). On enlève le suffixe /api ou /api/vX.
-    // ✅ Normaliser : supprimer slash final pour éviter //socket.io
-    let SOCKET_ORIGIN = baseURL.replace(/\/api(?:\/v\d+)?$/, "");
-    SOCKET_ORIGIN = SOCKET_ORIGIN.replace(/\/+$/, "").trim();
-    // ✅ Double vérification : s'assurer qu'il n'y a pas de slash final
-    if (SOCKET_ORIGIN.endsWith("/")) {
-      SOCKET_ORIGIN = SOCKET_ORIGIN.slice(0, -1);
-    }
-    const IS_SECURE = SOCKET_ORIGIN.startsWith("https://");
-    const IS_DEV = __DEV__;
-
-    socket = io(SOCKET_ORIGIN, {
-      path: "/socket.io",
-      auth: { token },
-      extraHeaders: { Authorization: `Bearer ${token}` },
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 20000,
-      forceNew: true,
-      transports: IS_SECURE ? ["websocket"] : IS_DEV ? ["websocket", "polling"] : ["websocket"],
-      upgrade: true,
-      rememberUpgrade: true,
-      secure: IS_SECURE,
-    });
-
-    socket.on("connect", () => {
-      console.log("[LocationTask] ✅ Socket connecté");
-    });
-
-    socket.on("disconnect", (reason) => {
-      console.log(`[LocationTask] ⚠️ Socket déconnecté (raison: ${reason})`);
-    });
-
-    socket.on("reconnect", (attemptNumber) => {
-      console.log(`[LocationTask] 🔄 Socket reconnecté (tentative ${attemptNumber})`);
-    });
-
-    socket.on("connect_error", (error) => {
-      console.error("[LocationTask] ❌ Erreur connexion socket:", error);
-    });
-  } catch (error) {
-    console.error("[LocationTask] ❌ Erreur initialisation socket:", error);
-  }
-}
-
 // Envoyer le batch de positions
 async function flushPositionBatch() {
   if (positionBuffer.length === 0) {
     return;
-  }
-
-  // Initialiser le socket si nécessaire
-  if (!socket || !socket.connected) {
-    console.log("[LocationTask] 🔌 Socket non connecté, initialisation...");
-    await initSocket();
-    // Attendre un peu pour la connexion
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    if (!socket || !socket.connected) {
-      console.log("[LocationTask] ⚠️ Socket non disponible après initialisation, positions mises en attente");
-      console.log(`[LocationTask] 📊 État: socket=${!!socket}, connected=${socket?.connected}`);
-      return;
-    }
   }
 
   try {
@@ -126,6 +50,7 @@ async function flushPositionBatch() {
     const driverIdStr = await AsyncStorage.getItem("driver_id");
     if (!driverIdStr) {
       console.log("[LocationTask] ⚠️ Driver ID non trouvé");
+      positionBuffer = [];
       return;
     }
 
@@ -133,17 +58,27 @@ async function flushPositionBatch() {
     const batch = [...positionBuffer];
     positionBuffer = []; // Clear buffer
 
-    const payload = {
-      positions: batch,
+    const queued: QueuedLocation[] = batch.map((p) => ({
+      latitude: p.latitude,
+      longitude: p.longitude,
+      speed: p.speed,
+      heading: p.heading,
+      accuracy: p.accuracy,
+      timestamp: p.timestamp,
       driver_id: driverId,
-    };
+    }));
 
-    console.log(`[LocationTask] 📍 Envoi batch: ${batch.length} positions, driver_id=${driverId}`);
+    // ✅ Stabilisation: en background task, on PERSISTE uniquement.
+    // L'envoi Socket.IO est centralisé dans `syncLocationQueue()` (foreground), sinon rate-limit/storm.
+    for (const loc of queued) {
+      await enqueueLocation(loc);
+    }
 
-    socket.emit("driver_location_batch", payload);
-    console.log(`[LocationTask] ✅ Batch envoyé: ${batch.length} positions`);
+    console.log(
+      `[LocationTask] 📦 Positions ajoutées à la queue: ${queued.length}, driver_id=${driverId}`
+    );
   } catch (error) {
-    console.error("[LocationTask] ❌ Erreur envoi batch:", error);
+    console.error("[LocationTask] ❌ Erreur enqueue batch:", error);
   }
 }
 
@@ -178,11 +113,6 @@ if (TaskManager && !taskDefinitionAttempted) {
         console.log(`[LocationTask] ℹ️ driver_id récupéré:`, driverId);
       } catch (e) {
         console.log(`[LocationTask] ⚠️ Erreur récupération driver_id:`, e);
-      }
-
-      // Initialiser le socket au premier appel (pas de setInterval, mode event-driven)
-      if (!socket) {
-        await initSocket();
       }
 
       for (const location of locations) {

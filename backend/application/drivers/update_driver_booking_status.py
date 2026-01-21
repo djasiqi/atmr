@@ -378,6 +378,8 @@ class UpdateDriverBookingStatusUseCase:
                         booking_id=booking.id,
                         driver_id=cmd.driver_id,
                         company_id=booking.company_id,
+                        actor_role="driver",
+                        actor_id=cmd.driver_id,
                     )
                 )
             except Exception as e:
@@ -390,7 +392,19 @@ class UpdateDriverBookingStatusUseCase:
                     msg,
                     e,
                 )
-                self._notify_booking_update(cmd.driver_id, booking)
+                # ✅ Même en fallback : ne pas notifier le chauffeur pour une action
+                # qu'il vient d'effectuer (statut en_route / in_progress / completed).
+                try:
+                    # ✅ La callback est typée "Callable[[int, booking], None]" (legacy),
+                    # mais notre implémentation supporte `emit_to_driver=`.
+                    import typing
+
+                    typing.cast(typing.Any, self._notify_booking_update)(
+                        cmd.driver_id, booking, emit_to_driver=False
+                    )
+                except TypeError:
+                    # Backward compat si la signature n'a pas encore été mise à jour
+                    self._notify_booking_update(cmd.driver_id, booking)
             response = {
                 "message": (
                     f"Booking status updated to "

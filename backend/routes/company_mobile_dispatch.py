@@ -805,6 +805,14 @@ def _execute_assignment_action(
         company_mobile_dispatch_ns.abort(404, "Course introuvable après assignation")
         raise AssertionError("Booking should exist after assign") from None
 
+    # ✅ Détecter réassignation pour notifier l'ancien chauffeur
+    old_driver_id: int | None = None
+    try:
+        old_driver_id_raw = getattr(booking, "driver_id", None)
+        old_driver_id = int(old_driver_id_raw) if old_driver_id_raw else None
+    except Exception:
+        old_driver_id = None
+
     if booking.driver_id != driver_id:
         booking.driver_id = driver_id
         # ✅ Mettre à jour le statut de ACCEPTED à ASSIGNED lors de l'assignation
@@ -817,7 +825,26 @@ def _execute_assignment_action(
         # Important : même si c'est une réassignation, le nouveau chauffeur doit être notifié
         try:
             from application.events.event_bus import publish_event
-            from domain.events.events import DriverNewBookingEvent
+            from domain.events.events import (
+                DriverBookingReassignedEvent,
+                DriverNewBookingEvent,
+            )
+
+            # Notifier l'ancien chauffeur si réassignation
+            try:
+                if old_driver_id and old_driver_id != int(driver_id):
+                    publish_event(
+                        DriverBookingReassignedEvent(
+                            booking_id=booking.id,
+                            old_driver_id=int(old_driver_id),
+                            new_driver_id=int(driver_id),
+                            company_id=company_id,
+                        )
+                    )
+            except Exception:
+                logger.exception(
+                    "[MobileDispatch] Failed to publish reassignment event"
+                )
 
             publish_event(
                 DriverNewBookingEvent(
@@ -3487,6 +3514,12 @@ class MobileUpdateRide(Resource):
 
         payload = request.get_json(silent=True) or {}
 
+        # ✅ Capturer l'état avant modification pour notifications "diff"
+        old_pickup = getattr(booking, "pickup_location", None)
+        old_dropoff = getattr(booking, "dropoff_location", None)
+        old_notes = getattr(booking, "notes_medical", None)
+        old_scheduled = getattr(booking, "scheduled_time", None)
+
         # Mise à jour des adresses
         if "pickup_address" in payload:
             booking.pickup_location = payload["pickup_address"]
@@ -3567,6 +3600,51 @@ class MobileUpdateRide(Resource):
                 500, "Impossible de mettre à jour la course"
             )
             raise AssertionError("Update failed") from exc
+
+        # ✅ Publier BookingUpdatedEvent avec diff (pour push + messages pro)
+        try:
+            changes: dict[str, dict[str, str | None]] = {}
+
+            def _iso(dt: Any) -> str | None:
+                try:
+                    return dt.isoformat() if dt else None
+                except Exception:
+                    return str(dt) if dt is not None else None
+
+            new_pickup = getattr(booking, "pickup_location", None)
+            new_dropoff = getattr(booking, "dropoff_location", None)
+            new_notes = getattr(booking, "notes_medical", None)
+            new_scheduled = getattr(booking, "scheduled_time", None)
+
+            if "scheduled_time" in payload and _iso(old_scheduled) != _iso(new_scheduled):
+                changes["scheduled_time"] = {"from": _iso(old_scheduled), "to": _iso(new_scheduled)}
+            if "pickup_address" in payload and str(old_pickup or "") != str(new_pickup or ""):
+                changes["pickup_location"] = {"from": str(old_pickup or "") or None, "to": str(new_pickup or "") or None}
+            if "dropoff_address" in payload and str(old_dropoff or "") != str(new_dropoff or ""):
+                changes["dropoff_location"] = {"from": str(old_dropoff or "") or None, "to": str(new_dropoff or "") or None}
+            if "notes" in payload and str(old_notes or "") != str(new_notes or ""):
+                # éviter d'envoyer des notes trop longues en notification
+                changes["notes"] = {
+                    "from": (str(old_notes or "")[:200] or None),
+                    "to": (str(new_notes or "")[:200] or None),
+                }
+
+            if changes and booking.driver_id:
+                from application.events.event_bus import publish_event
+                from domain.events.events import BookingUpdatedEvent
+
+                publish_event(
+                    BookingUpdatedEvent(
+                        booking_id=int(booking.id),
+                        driver_id=int(booking.driver_id),
+                        company_id=company_id,
+                        actor_role="company",
+                        actor_id=company_id,
+                        changes=changes,
+                    )
+                )
+        except Exception:
+            logger.exception("[MobileUpdateRide] Failed to publish BookingUpdatedEvent changes")
 
         # Journaliser l'action
         tools = AgentTools(company_id)

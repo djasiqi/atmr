@@ -445,22 +445,43 @@ def fanout_booking_assigned_to_driver(
         )
 
     # 2. Push notification (background)
-    pickup_address = (
-        booking_data.get("pickup_address", "Nouvelle mission")
-        if booking_data
-        else "Nouvelle mission"
-    )
+    pickup_address = None
+    dropoff_address = None
+    try:
+        pickup_address = (
+            (booking_data or {}).get("pickup_address")
+            or (booking_data or {}).get("pickup_location")
+        )
+        dropoff_address = (
+            (booking_data or {}).get("dropoff_address")
+            or (booking_data or {}).get("dropoff_location")
+        )
+    except Exception:
+        pickup_address = None
+        dropoff_address = None
+
+    route = None
+    if pickup_address and dropoff_address:
+        route = f"{pickup_address} → {dropoff_address}"
+    elif pickup_address:
+        route = str(pickup_address)
+    elif dropoff_address:
+        route = f"Destination: {dropoff_address}"
+
     app_logger.warning(
         "[event_fanout] Sending push notification to driver %s for booking %s (pickup: %s)",
         driver_id,
         booking_id,
-        pickup_address,
+        pickup_address or "-",
     )
 
     result = _send_push_to_driver(
         driver_id=driver_id,
-        title="Nouvelle mission assignée",
-        body=f"Mission #{booking_id} - {pickup_address}",
+        title="Course assignée",
+        body=(
+            f"Vous êtes assigné à la course #{booking_id}."
+            + (f" {route}" if route else " Ouvrez l’application pour voir les détails.")
+        ),
         data={
             "type": "booking",
             "booking_id": booking_id,
@@ -505,8 +526,11 @@ def fanout_booking_assigned_to_company(
     # 2. Push notification (background)
     _send_push_to_company(
         company_id=company_id,
-        title="Mission assignée",
-        body=f"Mission #{booking_id} assignée au chauffeur",
+        title="Course assignée",
+        body=(
+            f"Course #{booking_id} assignée"
+            + (f" au chauffeur #{driver_id}." if driver_id else ".")
+        ),
         data={
             "type": "booking_assigned",
             "booking_id": booking_id,
@@ -544,16 +568,275 @@ def fanout_booking_updated(
 
     # 2. Push notification (background) - conditionnelle
     if send_push:
-        _send_push_to_driver(
-            driver_id=driver_id,
-            title="Mission mise à jour",
-            body=f"Mission #{booking_id} a été mise à jour",
-            data={
-                "type": "booking_updated",
-                "booking_id": booking_id,
-                "deepLink": f"atmr://booking/{booking_id}",
-            },
+        # ✅ Si on a un diff, construire un message "pro" basé sur ce qui a changé
+        changes = None
+        try:
+            changes = (booking_data or {}).get("changes")
+        except Exception:
+            changes = None
+
+        ISO_TS_LEN_FOR_TIME = 16
+        HHMM_LEN = 5
+        MAX_CHANGE_ITEMS = 2
+
+        def _fmt_time(v: object) -> str | None:
+            if v is None:
+                return None
+            try:
+                s = str(v)
+                # ✅ Format pro: HH:mm si ISO / date-time string
+                if "T" in s and len(s) >= ISO_TS_LEN_FOR_TIME:
+                    hhmm = s.replace("Z", "")[11:16]
+                    return hhmm if len(hhmm) == HHMM_LEN else None
+                return s
+            except Exception:
+                return None
+
+        def _change_line(field: str, label: str) -> str | None:
+            if not isinstance(changes, dict):
+                return None
+            item = changes.get(field)
+            if not isinstance(item, dict):
+                return None
+            old = item.get("from")
+            new = item.get("to")
+            line: str | None = None
+
+            if field == "scheduled_time":
+                old_s = _fmt_time(old)
+                new_s = _fmt_time(new)
+                if old_s and new_s and old_s != new_s:
+                    line = f"{label} : {old_s} → {new_s}"
+            else:
+                # texte
+                old_s = (str(old).strip() if old is not None else "")[:60]
+                new_s = (str(new).strip() if new is not None else "")[:60]
+                if old_s and new_s and old_s != new_s:
+                    line = f"{label} : {old_s} → {new_s}"
+                elif not old_s and new_s:
+                    line = f"{label} : {new_s}"
+
+            return line
+
+        lines: list[str] = []
+        for field, label in (
+            ("scheduled_time", "Horaire"),
+            ("pickup_location", "Départ"),
+            ("dropoff_location", "Destination"),
+            ("notes", "Info"),
+        ):
+            line = _change_line(field, label)
+            if line:
+                lines.append(line)
+
+        # ✅ Limiter à 2 changements max + suffixe "+N autres modifications"
+        suffix = ""
+        if len(lines) > MAX_CHANGE_ITEMS:
+            remaining = len(lines) - MAX_CHANGE_ITEMS
+            suffix = (
+                f" • +{remaining} autre modification"
+                if remaining == 1
+                else f" • +{remaining} autres modifications"
+            )
+            lines = lines[:MAX_CHANGE_ITEMS]
+
+        if lines:
+            _send_push_to_driver(
+                driver_id=driver_id,
+                title="Course mise à jour",
+                body=f"Course #{booking_id} — " + " • ".join(lines) + suffix,
+                data={
+                    "type": "booking_updated",
+                    "booking_id": booking_id,
+                    "deepLink": f"atmr://booking/{booking_id}",
+                    "changes": changes,
+                },
+            )
+        else:
+            status_raw = None
+            try:
+                status_val = (booking_data or {}).get("status")
+                status_raw = (
+                    str(getattr(status_val, "value", status_val)) if status_val else None
+                )
+            except Exception:
+                status_raw = None
+            status = status_raw.lower() if isinstance(status_raw, str) else None
+
+            status_label_map = {
+                "assigned": "Assignée",
+                "en_route": "En route",
+                "in_progress": "À bord",
+                "completed": "Terminée",
+                "return_completed": "Retour terminé",
+                "canceled": "Annulée",
+                "cancelled": "Annulée",
+            }
+            status_label = status_label_map.get(status) if status else None
+
+            _send_push_to_driver(
+                driver_id=driver_id,
+                title="Course mise à jour",
+                body=(
+                    f"Course #{booking_id} : "
+                    + (
+                        f"statut « {status_label} »."
+                        if status_label
+                        else "détails mis à jour."
+                    )
+                ),
+                data={
+                    "type": "booking_updated",
+                    "booking_id": booking_id,
+                    "deepLink": f"atmr://booking/{booking_id}",
+                    "status": status,
+                },
+            )
+
+
+def fanout_booking_updated_to_company(
+    company_id: int,
+    booking_id: int,
+    booking_data: Dict[str, Any] | None = None,
+    *,
+    send_push: bool = True,
+) -> None:
+    """Fan-out hybride pour une mise à jour de mission côté entreprise.
+
+    Objectif: permettre à l'app entreprise de recevoir les changements de statut
+    (ex: EN_ROUTE / IN_PROGRESS / COMPLETED) même quand le chauffeur est l'initiateur.
+    """
+    # 1. Socket.IO (foreground)
+    try:
+        base_data: Dict[str, Any] = booking_data or {"booking_id": booking_id}
+        payload = _create_event_payload(base_data, "booking_updated")
+        emit_company_event(company_id, "booking_updated", payload)
+    except Exception:
+        app_logger.exception(
+            "[event_fanout] Socket.IO failed for booking_updated (company %s)",
+            company_id,
         )
+
+    # 2. Push notification (background) - optionnelle
+    if send_push:
+        changes = None
+        try:
+            changes = (booking_data or {}).get("changes")
+        except Exception:
+            changes = None
+
+        ISO_TS_LEN_FOR_TIME = 16
+        HHMM_LEN = 5
+        MAX_CHANGE_ITEMS = 2
+
+        def _fmt_time(v: object) -> str | None:
+            if v is None:
+                return None
+            try:
+                s = str(v)
+                if "T" in s and len(s) >= ISO_TS_LEN_FOR_TIME:
+                    hhmm = s.replace("Z", "")[11:16]
+                    return hhmm if len(hhmm) == HHMM_LEN else None
+                return s
+            except Exception:
+                return None
+
+        def _change_line(field: str, label: str) -> str | None:
+            if not isinstance(changes, dict):
+                return None
+            item = changes.get(field)
+            if not isinstance(item, dict):
+                return None
+            old = item.get("from")
+            new = item.get("to")
+            line: str | None = None
+            if field == "scheduled_time":
+                old_s = _fmt_time(old)
+                new_s = _fmt_time(new)
+                if old_s and new_s and old_s != new_s:
+                    line = f"{label} : {old_s} → {new_s}"
+            else:
+                old_s = (str(old).strip() if old is not None else "")[:60]
+                new_s = (str(new).strip() if new is not None else "")[:60]
+                if old_s and new_s and old_s != new_s:
+                    line = f"{label} : {old_s} → {new_s}"
+                elif not old_s and new_s:
+                    line = f"{label} : {new_s}"
+            return line
+
+        lines: list[str] = []
+        for field, label in (
+            ("scheduled_time", "Horaire"),
+            ("pickup_location", "Départ"),
+            ("dropoff_location", "Destination"),
+            ("notes", "Info"),
+        ):
+            line = _change_line(field, label)
+            if line:
+                lines.append(line)
+
+        suffix = ""
+        if len(lines) > MAX_CHANGE_ITEMS:
+            remaining = len(lines) - MAX_CHANGE_ITEMS
+            suffix = (
+                f" • +{remaining} autre modification"
+                if remaining == 1
+                else f" • +{remaining} autres modifications"
+            )
+            lines = lines[:MAX_CHANGE_ITEMS]
+
+        if lines:
+            _send_push_to_company(
+                company_id=company_id,
+                title="Course mise à jour",
+                body=f"Course #{booking_id} — " + " • ".join(lines) + suffix,
+                data={
+                    "type": "booking_updated",
+                    "booking_id": booking_id,
+                    "deepLink": f"atmr://booking/{booking_id}",
+                    "changes": changes,
+                },
+            )
+        else:
+            status = None
+            try:
+                status_val = (booking_data or {}).get("status")
+                status = (
+                    str(getattr(status_val, "value", status_val)) if status_val else None
+                )
+            except Exception:
+                status = None
+
+            status_lower = status.lower() if isinstance(status, str) else None
+            status_label_map = {
+                "assigned": "Assignée",
+                "en_route": "En route",
+                "in_progress": "À bord",
+                "completed": "Terminée",
+                "return_completed": "Retour terminé",
+                "canceled": "Annulée",
+                "cancelled": "Annulée",
+            }
+            status_label = status_label_map.get(status_lower) if status_lower else None
+
+            _send_push_to_company(
+                company_id=company_id,
+                title="Course mise à jour",
+                body=(
+                    f"Course #{booking_id} : "
+                    + (
+                        f"statut « {status_label} »."
+                        if status_label
+                        else "détails mis à jour."
+                    )
+                ),
+                data={
+                    "type": "booking_updated",
+                    "booking_id": booking_id,
+                    "deepLink": f"atmr://booking/{booking_id}",
+                    "status": status_lower,
+                },
+            )
 
 
 def fanout_booking_cancelled(
@@ -580,8 +863,8 @@ def fanout_booking_cancelled(
     # 2. Push notification (background)
     _send_push_to_driver(
         driver_id=driver_id,
-        title="Mission annulée",
-        body=f"Mission #{booking_id} a été annulée",
+        title="Course annulée",
+        body=f"La course #{booking_id} a été annulée.",
         data={
             "type": "booking_cancelled",
             "booking_id": booking_id,
@@ -612,13 +895,59 @@ def fanout_message_new(
     # Push notification (background)
     _send_push_to_driver(
         driver_id=driver_id,
-        title=f"Nouveau message de {sender_name}",
+        title=f"Nouveau message — {sender_name}",
         body=message_preview,
         data={
             "type": "message",
             "message_id": message_id,
             "company_id": company_id,
             "deepLink": f"atmr://chat/message/{message_id}",
+        },
+    )
+
+
+def fanout_driver_booking_reassigned(
+    *,
+    old_driver_id: int,
+    booking_id: int,
+    new_driver_id: int | None = None,
+) -> None:
+    """Fan-out hybride quand une mission est retirée à un chauffeur (réassignée).
+
+    Objectif: informer l'ancien chauffeur en temps réel + notification, et l'inviter
+    à rafraîchir ses courses.
+    """
+    # 1) Socket.IO (foreground)
+    try:
+        payload = _create_event_payload(
+            {
+                "booking_id": booking_id,
+                "old_driver_id": old_driver_id,
+                "new_driver_id": new_driver_id,
+                "reason": "reassigned",
+            },
+            "booking_reassigned",
+        )
+        emit_driver_event(old_driver_id, "booking_reassigned", payload)
+    except Exception:
+        app_logger.exception(
+            "[event_fanout] Socket.IO failed for booking_reassigned (old_driver %s)",
+            old_driver_id,
+        )
+
+    # 2) Push notification (background)
+    _send_push_to_driver(
+        driver_id=old_driver_id,
+        title="Course réassignée",
+        body=(
+            f"La course #{booking_id} a été réassignée à un autre chauffeur. "
+            "Vos courses vont être mises à jour."
+        ),
+        data={
+            "type": "booking_reassigned",
+            "booking_id": booking_id,
+            "new_driver_id": new_driver_id,
+            "deepLink": "atmr://bookings",
         },
     )
 
@@ -644,8 +973,8 @@ def fanout_delay_detected(
     delay_text = f"{int(delay_minutes)} min" if delay_minutes >= 1 else "< 1 min"
     _send_push_to_driver(
         driver_id=driver_id,
-        title="Retard détecté",
-        body=f"Retard de {delay_text} sur la mission #{booking_id}",
+        title="Risque de retard",
+        body=f"Retard estimé : {delay_text} sur la course #{booking_id}.",
         data={
             "type": "delay",
             "booking_id": booking_id,

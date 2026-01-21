@@ -261,19 +261,23 @@ function RootNav() {
         const tokenToUse = device || expo;
 
         if (!tokenToUse) {
-          // En dev/local, c'est normal de ne pas avoir de token
-          const isDevLocal = __DEV__ === true || Constants.executionEnvironment === "bare";
+          // Expo Go: pas de push remote (SDK 53+). Dev build: doit avoir au moins un token.
+          const isExpoGo =
+            Constants.appOwnership === "expo" &&
+            Constants.executionEnvironment === "storeClient";
           console.error("❌ [_layout] Aucun token push disponible", {
             driverId: currentUserId,
             platform: Platform.OS,
-            isDevLocal,
+            isExpoGo,
             hasDevice: !!device,
             hasExpo: !!expo,
           });
-          if (isDevLocal) {
-            console.log("ℹ️ [_layout] Pas de token push en dev/local - normal sans Firebase");
+          if (isExpoGo) {
+            console.log("ℹ️ [_layout] Pas de token push en Expo Go - normal (push remote désactivé)");
           } else {
-            console.warn("⚠️ [_layout] Aucun token push disponible (APK sans Firebase ?)");
+            console.warn(
+              "⚠️ [_layout] Aucun token push disponible (dev build: vérifier Firebase/FCM + permissions)"
+            );
           }
           return;
         }

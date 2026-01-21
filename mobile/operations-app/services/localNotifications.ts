@@ -73,12 +73,20 @@ export async function scheduleMissionReminder(
     }
 
     // Créer la notification locale
+    const route =
+      booking.pickup_location && booking.dropoff_location
+        ? `${booking.pickup_location} → ${booking.dropoff_location}`
+        : booking.pickup_location;
+
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
-        title: `🚗 Mission dans ${minutesBefore} minutes`,
+        title:
+          minutesBefore <= 10
+            ? `Départ recommandé — course #${booking.id}`
+            : `Course #${booking.id} dans ${minutesBefore} min`,
         body: booking.passenger_name
-          ? `${booking.passenger_name} • ${booking.pickup_location}`
-          : booking.pickup_location,
+          ? `${booking.passenger_name} — ${route}`
+          : route,
         data: {
           type: "local_reminder",
           booking_id: booking.id,

@@ -269,6 +269,21 @@ export default function MissionScreen() {
       setLastUpdate(Date.now()); // Mettre à jour le timestamp
     };
 
+    // ✅ Mission réassignée à un autre chauffeur → rafraîchir la liste + notifier
+    const onReassigned = async (payload: any) => {
+      try {
+        const bookingId = payload?.booking_id ?? payload?.id ?? null;
+        console.log("📩 Booking reassigned in missions:", bookingId);
+        Alert.alert(
+          "🔄 Mission réassignée",
+          "Une mission a été réassignée. Vos courses vont être mises à jour."
+        );
+      } catch { }
+      // Refresh silencieux pour être sûr de ne plus voir la mission
+      loadMissions(true);
+      setLastUpdate(Date.now());
+    };
+
     // Gestion de la déconnexion WebSocket
     const onDisconnect = () => {
       console.log("⚠️ [Mission] Socket déconnecté, tentative de reconnexion...");
@@ -285,6 +300,7 @@ export default function MissionScreen() {
     socket.on("new_booking", onNew);
     socket.on("booking_updated", onUpdate);
     socket.on("booking_cancelled", onCancel);
+    socket.on("booking_reassigned", onReassigned);
     socket.on("disconnect", onDisconnect);
     socket.on("reconnect", onReconnect);
 
@@ -307,6 +323,7 @@ export default function MissionScreen() {
       socket.off("new_booking", onNew);
       socket.off("booking_updated", onUpdate);
       socket.off("booking_cancelled", onCancel);
+      socket.off("booking_reassigned", onReassigned);
       socket.off("disconnect", onDisconnect);
       socket.off("reconnect", onReconnect);
       unsubscribeResync();

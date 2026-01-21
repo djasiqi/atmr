@@ -21,6 +21,7 @@ import {
   onBookingNew,
   onBookingUpdated,
   onBookingCancelled,
+  onBookingReassigned,
 } from "@/services/socket";
 import { filterActiveMissions } from "@/utils/missionGrouping";
 
@@ -163,12 +164,19 @@ export default function TripsScreen() {
       setCompletedTrips((prev) => prev.filter((b) => b.id !== bookingId));
     });
 
+    // ✅ Mission retirée (réassignée à un autre chauffeur) → refresh
+    const unsubscribeReassigned = onBookingReassigned(() => {
+      console.log("📩 Booking reassigned in trips: refreshing trips list");
+      loadTrips();
+    });
+
     return () => {
       unsubscribeNew();
       unsubscribeUpdated();
       unsubscribeCancelled();
+      unsubscribeReassigned();
     };
-  }, [driver]);
+  }, [driver, loadTrips]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);

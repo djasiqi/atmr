@@ -11,7 +11,6 @@ import { useSocket } from "@/hooks/useSocket";
 import {
   enqueueLocation,
   getLocationQueue,
-  removeSentLocations,
   clearLocationQueue,
   type QueuedLocation,
 } from "@/services/locationQueue";
@@ -48,6 +47,8 @@ export const useLocation = () => {
   const positionBuffer = useRef<Location.LocationObject[]>([]);
   // ✅ Stocker la dernière position reçue pour forcer l'envoi périodique
   const lastReceivedLocation = useRef<Location.LocationObject | null>(null);
+  // ✅ Dédup: éviter de re-queue la même position (même timestamp) en boucle (flush/heartbeat)
+  const lastEnqueuedTimestampRef = useRef<number | null>(null);
   // ✅ Suivre si le tracking en arrière-plan a été démarré (local au hook)
   const backgroundTrackingStarted = useRef<boolean>(false);
 
@@ -240,10 +241,23 @@ export const useLocation = () => {
         await syncLocationQueue(socket);
         retryAttempts = 0;  // Reset on success
         console.log('[useLocation] ✅ Retry réussi, queue vidée');
-      } catch (error) {
+      } catch (error: any) {
         console.error(`[useLocation] ❌ Retry #${retryAttempts + 1} échoué:`, error);
-        // Exponential backoff: 2s, 4s, 8s, 16s, 32s
-        const delay = Math.min(2000 * Math.pow(2, retryAttempts), 32000);
+        // ✅ Rate limit: respecter retry_after si fourni, sinon backoff plus long
+        const retryAfterSeconds =
+          typeof error?.retry_after === "number" && Number.isFinite(error.retry_after)
+            ? error.retry_after
+            : undefined;
+
+        const isRateLimit =
+          String(error?.message || error).toLowerCase().includes("rate limit");
+
+        const delay = retryAfterSeconds
+          ? (retryAfterSeconds + 1) * 1000
+          : isRateLimit
+            ? Math.min(10000 * Math.pow(2, retryAttempts), 120000) // 10s, 20s, 40s, ... max 2m
+            : Math.min(2000 * Math.pow(2, retryAttempts), 32000); // 2s,4s,8s,... max 32s
+
         retryAttempts++;
         
         console.log(`[useLocation] ⏰ Prochain retry dans ${delay/1000}s`);
@@ -298,75 +312,32 @@ export const useLocation = () => {
       timestamp: loc.timestamp ?? Date.now(),
       driver_id: driver.id,
     }));
-    
-    // ✅ P2-1: Si socket connecté, envoyer immédiatement
+
+    // ✅ Stabilisation: UN seul émetteur de `driver_location_batch` (locationQueue)
+    // On persiste d'abord, puis on déclenche un resync (singleflight + throttle côté locationQueue).
+    for (const loc of queuedLocations) {
+      await enqueueLocation(loc);
+      lastEnqueuedTimestampRef.current = loc.timestamp;
+    }
+
+    // Vider le buffer après enqueue (évite inflation et doublons)
+    positionBuffer.current = [];
+
     if (socket && socket.connected) {
       try {
-        const payload = {
-          positions: queuedLocations.map(loc => ({
-            latitude: loc.latitude,
-            longitude: loc.longitude,
-            speed: loc.speed,
-            heading: loc.heading,
-            accuracy: loc.accuracy,
-            timestamp: loc.timestamp,
-          })),
-          driver_id: driver.id,
-        };
-        
-        console.log(`📍 [useLocation] Envoi batch: ${batch.length} positions, driver_id=${driver.id}, socket_connected=${socket.connected}`);
-        
-        // ✅ P0: Attendre ACK du serveur avant de vider buffer
-        await new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => {
-            reject(new Error('Timeout waiting for ACK'));
-          }, 5000);
-          
-          socket.emit("driver_location_batch", payload, (ack: any) => {
-            clearTimeout(timeout);
-            if (ack?.success) {
-              console.log(`✅ [useLocation] ACK reçu: ${ack.positions_count} positions confirmées`);
-              resolve();
-            } else {
-              reject(new Error(ack?.error || 'ACK failed'));
-            }
-          });
-        });
-        
-        // ✅ P0: VIDER LE BUFFER SEULEMENT APRÈS CONFIRMATION ACK
-        positionBuffer.current = positionBuffer.current.filter(
-          loc => !batch.includes(loc)
-        );
-        
-        console.log(`✅ [useLocation] Batch confirmé et supprimé du buffer: ${batch.length} positions`);
-        
-        // ✅ P2-1: Supprimer les positions envoyées de la queue
-        await removeSentLocations(queuedLocations);
-        
-        // Mettre à jour dernière position
+        const { syncLocationQueue } = await import("@/services/locationQueue");
+        await syncLocationQueue(socket);
+
+        // Mettre à jour dernière position "envoyée" (approx) pour la logique de distance
         const lastPos = batch[batch.length - 1];
         lastSentLocation.current = {
           latitude: lastPos.coords.latitude,
-          longitude: lastPos.coords.longitude
+          longitude: lastPos.coords.longitude,
         };
       } catch (error) {
-        console.error("❌ [useLocation] Erreur envoi batch localisation:", error);
-        // ✅ P0: En cas d'erreur, NE PAS vider le buffer (sera retenté)
-        // ✅ P2-1: Ajouter à la queue pour persistance
-        for (const loc of queuedLocations) {
-          await enqueueLocation(loc);
-        }
-        // ✅ P2: Bug #6 - Déclencher retry automatique
+        console.error("❌ [useLocation] Erreur resync queue GPS:", error);
         retryFailedBatch();
       }
-    } else {
-      // ✅ P2-1: Mode offline - Ajouter toutes les positions à la queue
-      console.log(`📦 [useLocation] Mode offline: ${queuedLocations.length} positions ajoutées à la queue`);
-      for (const loc of queuedLocations) {
-        await enqueueLocation(loc);
-      }
-      // ✅ Vider buffer après ajout à la queue (offline)
-      positionBuffer.current = [];
     }
   };
 
@@ -412,8 +383,13 @@ export const useLocation = () => {
       
       // Si buffer vide mais on a une position récente, l'ajouter au buffer
       if (positionBuffer.current.length === 0 && lastReceivedLocation.current) {
-        console.log(`📍 [useLocation] Buffer vide, ajout de la dernière position reçue pour flush périodique`);
-        positionBuffer.current.push(lastReceivedLocation.current);
+        const ts = lastReceivedLocation.current.timestamp ?? null;
+        if (ts && lastEnqueuedTimestampRef.current === ts) {
+          console.log("[useLocation] ℹ️ Dernière position déjà en queue → skip");
+        } else {
+          console.log(`📍 [useLocation] Buffer vide, ajout de la dernière position reçue pour flush périodique`);
+          positionBuffer.current.push(lastReceivedLocation.current);
+        }
       }
       
       flushPositionBatch();
@@ -426,6 +402,10 @@ export const useLocation = () => {
         console.log(`💓 [useLocation] Heartbeat GPS - forcer envoi dernière position`);
         // Ajouter la dernière position au buffer si elle n'y est pas déjà
         const lastPos = lastReceivedLocation.current;
+        const ts = lastPos.timestamp ?? null;
+        if (ts && lastEnqueuedTimestampRef.current === ts) {
+          return;
+        }
         const alreadyInBuffer = positionBuffer.current.some(
           (loc) =>
             loc.coords.latitude === lastPos.coords.latitude &&

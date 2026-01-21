@@ -84,10 +84,14 @@ def handle_booking_updated(event: dict[str, Any]) -> None:
     """Handler pour BookingUpdatedEvent.
 
     Actions:
-    - Notifie le driver via SocketIO (mise à jour de booking)
+    - Notifie le driver via SocketIO (mise à jour de booking) si l'update ne vient
+      pas de lui (éviter les "self-notifications")
+    - Notifie l'entreprise via SocketIO + Push quand l'update vient du chauffeur
     """
     booking_id = event.get("booking_id")
     driver_id = event.get("driver_id")
+    actor_role = event.get("actor_role")
+    actor_id = event.get("actor_id")
 
     if not booking_id or not driver_id:
         logger.warning(
@@ -99,7 +103,10 @@ def handle_booking_updated(event: dict[str, Any]) -> None:
     try:
         from ext import db
         from models import Booking
-        from services.notifications.core import notify_booking_update
+        from services.events.fanout import (
+            fanout_booking_updated,
+            fanout_booking_updated_to_company,
+        )
 
         # Récupérer le booking pour la notification
         with suppress(Exception):
@@ -107,11 +114,69 @@ def handle_booking_updated(event: dict[str, Any]) -> None:
 
         booking = db.session.get(Booking, int(booking_id))
         if booking:
-            notify_booking_update(int(driver_id), booking)
+            # Préparer un payload riche (utile côté app entreprise)
+            try:
+                booking_data = booking.to_dict() if hasattr(booking, "to_dict") else {}
+            except Exception:
+                booking_data = {}
+            booking_data.setdefault("id", int(getattr(booking, "id", booking_id)))
+            booking_data["booking_id"] = int(getattr(booking, "id", booking_id))
+            booking_data["driver_id"] = int(getattr(booking, "driver_id", driver_id) or driver_id)
+            booking_data["company_id"] = int(getattr(booking, "company_id", event.get("company_id") or 0) or 0)
+            status_raw = getattr(getattr(booking, "status", None), "value", getattr(booking, "status", None))
+            booking_data["status"] = (str(status_raw).lower() if status_raw is not None else None)
+            booking_data["actor_role"] = actor_role
+            booking_data["actor_id"] = actor_id
+            booking_data["changes"] = event.get("changes")
+
+            company_id = int(getattr(booking, "company_id", event.get("company_id") or 0) or 0)
+
+            # ✅ Si le chauffeur est l'initiateur, on notifie l'entreprise (et pas le chauffeur)
+            if actor_role == "driver" and actor_id == int(driver_id):
+                if company_id:
+                    fanout_booking_updated_to_company(
+                        company_id=company_id,
+                        booking_id=int(booking_id),
+                        booking_data=booking_data,
+                        send_push=True,
+                    )
+                logger.debug(
+                    "[EventBus] BookingUpdatedEvent from driver %s -> notified company %s (booking %s)",
+                    driver_id,
+                    company_id,
+                    booking_id,
+                )
+                return
+
+            # Sinon: on notifie le chauffeur (et on garde l'entreprise à jour via Socket.IO)
+            changes = event.get("changes") or {}
+            changes_keys = set(changes.keys()) if isinstance(changes, dict) else set()
+            should_send_push = bool(
+                changes_keys.intersection(
+                    {"scheduled_time", "pickup_location", "dropoff_location", "notes"}
+                )
+            ) or booking_data.get("status") in {"cancelled", "canceled"}
+
+            fanout_booking_updated(
+                driver_id=int(driver_id),
+                booking_id=int(booking_id),
+                booking_data=booking_data,
+                send_push=should_send_push,
+            )
+            if company_id:
+                fanout_booking_updated_to_company(
+                    company_id=company_id,
+                    booking_id=int(booking_id),
+                    booking_data=booking_data,
+                    # ✅ si on envoie une notif au chauffeur pour un changement important,
+                    # on envoie aussi une notif entreprise (multi-device).
+                    send_push=should_send_push,
+                )
             logger.debug(
-                "[EventBus] Notified driver %s about booking update %s",
+                "[EventBus] Notified driver %s about booking update %s (actor_role=%s)",
                 driver_id,
                 booking_id,
+                actor_role,
             )
     except (ValueError, TypeError) as e:
         # Erreurs de validation attendues : conversion de types

@@ -22,6 +22,7 @@ const mask = (val: string | undefined) =>
 const MissionMap: React.FC<Props> = ({ location, destination }) => {
   const mapRef = useRef<MapView | null>(null);
   const [destinationCoords, setDestinationCoords] = useState<LatLng | null>(null);
+  const lastGeocodeAlertAtRef = useRef<number>(0);
 
   useEffect(() => {
     if (!DIRECTIONS_KEY) {
@@ -52,8 +53,24 @@ const MissionMap: React.FC<Props> = ({ location, destination }) => {
           setDestinationCoords(null);
         }
       } catch (error) {
-        console.error('Erreur de géocodage :', error);
-        Alert.alert('Erreur', 'Le géocodage a échoué.');
+        // En arrière-plan / sans réseau, Android peut renvoyer une erreur transitoire (UNAVAILABLE).
+        // On évite de spammer des Alert, et on laisse l'app continuer sans coords.
+        const msg = error instanceof Error ? error.message : String(error);
+        const isTransient =
+          msg.includes('UNAVAILABLE') ||
+          msg.includes('java.io.IOException') ||
+          msg.toLowerCase().includes('rejected');
+
+        if (isTransient) {
+          console.warn('⚠️ Erreur de géocodage (transitoire) :', error);
+        } else {
+          console.error('Erreur de géocodage :', error);
+          const now = Date.now();
+          if (now - lastGeocodeAlertAtRef.current > 60_000) {
+            lastGeocodeAlertAtRef.current = now;
+            Alert.alert('Erreur', 'Le géocodage a échoué.');
+          }
+        }
         setDestinationCoords(null);
       }
     };

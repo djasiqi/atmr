@@ -6,6 +6,64 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const LOCATION_QUEUE_KEY = "@atmr:location_queue";
 const MAX_QUEUE_SIZE = 1000; // Limiter la taille de la queue pour éviter l'overflow
 
+// ✅ Client-side stabilisation (rate-limit + singleflight)
+const RESYNC_CHUNK_SIZE = 50; // éviter des payloads énormes
+const MIN_DELAY_BETWEEN_EMITS_MS = 5500; // serveur: ~1 event / 5s → on met une marge
+
+let resyncInFlight: Promise<void> | null = null;
+let nextAllowedEmitAt = 0; // timestamp (ms)
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function isRateLimitError(err: unknown): boolean {
+  const msg =
+    err instanceof Error ? err.message : typeof err === "string" ? err : "";
+  return msg.toLowerCase().includes("rate limit");
+}
+
+function getRetryAfterSeconds(err: unknown): number | null {
+  // on attache souvent retry_after sur l'Error (voir useLocation / ci-dessous)
+  const ra =
+    typeof err === "object" && err !== null ? (err as any).retry_after : null;
+  if (typeof ra === "number" && Number.isFinite(ra) && ra > 0) return ra;
+  return null;
+}
+
+async function emitBatchWithAck(socket: any, payload: any): Promise<void> {
+  // throttle global: éviter d'enchaîner plusieurs emits trop vite (rate limit server)
+  const now = Date.now();
+  if (now < nextAllowedEmitAt) {
+    const waitMs = nextAllowedEmitAt - now;
+    throw Object.assign(new Error("Rate limit exceeded"), {
+      retry_after: Math.ceil(waitMs / 1000),
+    });
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error("Timeout waiting for ACK"));
+    }, 7000);
+
+    socket.emit("driver_location_batch", payload, (ack: any) => {
+      clearTimeout(timeout);
+      if (ack?.success) {
+        resolve();
+      } else {
+        const e = new Error(ack?.error || "ACK failed");
+        if (typeof ack?.retry_after === "number") {
+          (e as any).retry_after = ack.retry_after;
+        }
+        reject(e);
+      }
+    });
+  });
+
+  // respecter un minimum d'espacement entre emits
+  nextAllowedEmitAt = Date.now() + MIN_DELAY_BETWEEN_EMITS_MS;
+}
+
 export interface QueuedLocation {
   latitude: number;
   longitude: number;
@@ -126,7 +184,12 @@ export async function getQueueSize(): Promise<number> {
  * @param socket Instance Socket.IO connectée
  */
 export async function syncLocationQueue(socket: any): Promise<void> {
-  try {
+  // ✅ Singleflight: si un resync est déjà en cours, réutiliser la promesse
+  if (resyncInFlight) {
+    return await resyncInFlight;
+  }
+
+  resyncInFlight = (async () => {
     const queue = await getLocationQueue();
     if (queue.length === 0) {
       console.log("📦 [locationQueue] Queue vide, pas de resync nécessaire");
@@ -135,10 +198,12 @@ export async function syncLocationQueue(socket: any): Promise<void> {
 
     if (!socket || !socket.connected) {
       console.warn("📦 [locationQueue] Socket non connecté, resync reporté");
-      return;
+      throw new Error("Socket not connected");
     }
 
-    console.log(`📦 [locationQueue] Resync: ${queue.length} positions en queue`);
+    // Important: `queue` est un snapshot. Pendant le resync, de nouvelles positions peuvent
+    // être ajoutées (ex: task background) → la queue peut rester non vide, c'est normal.
+    console.log(`📦 [locationQueue] Resync (snapshot): ${queue.length} positions en queue`);
 
     // Grouper par driver_id (au cas où)
     const byDriver = new Map<number, QueuedLocation[]>();
@@ -150,9 +215,11 @@ export async function syncLocationQueue(socket: any): Promise<void> {
 
     // Envoyer chaque groupe de positions
     for (const [driverId, locations] of byDriver.entries()) {
-      try {
+      // chunker pour limiter le payload et permettre un retry progressif
+      for (let i = 0; i < locations.length; i += RESYNC_CHUNK_SIZE) {
+        const chunk = locations.slice(i, i + RESYNC_CHUNK_SIZE);
         const payload = {
-          positions: locations.map((loc) => ({
+          positions: chunk.map((loc) => ({
             latitude: loc.latitude,
             longitude: loc.longitude,
             speed: loc.speed,
@@ -164,50 +231,54 @@ export async function syncLocationQueue(socket: any): Promise<void> {
         };
 
         console.log(
-          `📤 [locationQueue] Envoi batch resync: ${locations.length} positions pour driver ${driverId}`
+          `📤 [locationQueue] Envoi batch resync: ${chunk.length} positions (chunk ${Math.floor(i / RESYNC_CHUNK_SIZE) + 1}/${Math.ceil(locations.length / RESYNC_CHUNK_SIZE)}) pour driver ${driverId}`
         );
 
-        // ✅ P1: Attendre ACK du serveur avant de supprimer
-        await new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => {
-            reject(new Error('Timeout waiting for ACK'));
-          }, 5000);
-          
-          socket.emit("driver_location_batch", payload, (ack: any) => {
-            clearTimeout(timeout);
-            if (ack?.success) {
-              resolve();
-            } else {
-              reject(new Error(ack?.error || 'ACK failed'));
-            }
-          });
-        });
+        try {
+          // si on vient de faire un emit, attendre un peu (marge)
+          const now = Date.now();
+          if (now < nextAllowedEmitAt) {
+            await sleep(nextAllowedEmitAt - now);
+          }
 
-        // ✅ P1: Supprimer SEULEMENT après ACK de succès
-        await removeSentLocations(locations);
+          await emitBatchWithAck(socket, payload);
+          await removeSentLocations(chunk);
+        } catch (error) {
+          const retryAfter = getRetryAfterSeconds(error);
+          if (isRateLimitError(error) || retryAfter) {
+            const seconds = retryAfter || 5;
+            nextAllowedEmitAt = Math.max(
+              nextAllowedEmitAt,
+              Date.now() + (seconds + 1) * 1000
+            );
+          }
 
-        console.log(
-          `✅ [locationQueue] Resync réussi: ${locations.length} positions confirmées et supprimées`
-        );
-      } catch (error) {
-        console.error(
-          `❌ [locationQueue] Erreur resync pour driver ${driverId}:`,
-          error
-        );
-        // ✅ P1: Ne PAS supprimer, sera retenté plus tard
+          console.error(
+            `❌ [locationQueue] Erreur resync pour driver ${driverId}:`,
+            error
+          );
+          // ✅ IMPORTANT: propager l'erreur pour que le caller backoff correctement
+          throw error;
+        }
       }
     }
 
     const remaining = await getQueueSize();
     if (remaining > 0) {
       console.log(
-        `⚠️ [locationQueue] ${remaining} positions restantes en queue après resync`
+        `⚠️ [locationQueue] ${remaining} positions restantes en queue après resync (souvent normal si de nouvelles positions ont été ajoutées pendant le resync)`
       );
+      // Ne pas lever d'erreur: en background/offline/ratelimit, ou si la queue reçoit de
+      // nouvelles positions pendant l'envoi, elle peut légitimement ne pas être vide.
+      return;
     } else {
       console.log("✅ [locationQueue] Queue vidée avec succès");
     }
-  } catch (error) {
-    console.error("❌ [locationQueue] Erreur lors de la resync:", error);
-  }
+  })()
+    .finally(() => {
+      resyncInFlight = null;
+    });
+
+  return await resyncInFlight;
 }
 
