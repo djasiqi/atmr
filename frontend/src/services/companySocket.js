@@ -285,7 +285,12 @@ export function getCompanySocket() {
           connectPromise = null;
           
           // ✅ Ne pas reconnecter si serveur a déconnecté volontairement
-          if (reason === 'io server disconnect' || reason === 'unauthorized') {
+          // NOTE:
+          // - `unauthorized` arrive souvent quand un vieux `authToken` expiré traîne en localStorage.
+          //   Dans ce cas, on veut **pouvoir** se reconnecter (souvent via cookies httpOnly).
+          // - On stoppe donc la reconnexion uniquement si on a encore un token local à envoyer.
+          const hasLocalToken = !!getAccessToken();
+          if (reason === 'io server disconnect' || (reason === 'unauthorized' && hasLocalToken)) {
             console.log(JSON.stringify({
               event: 'socket_disconnect_stop_reconnect',
               reason: reason,
@@ -323,6 +328,21 @@ export function getCompanySocket() {
             error: err?.error || String(err),
             timestamp: new Date().toISOString()
           }));
+
+          // ✅ Auto-récupération: si token expiré, on le purge pour basculer sur cookies httpOnly
+          // et on autorise une reconnexion.
+          const reason = err?.reason || err?.data?.reason;
+          if (reason === 'token_expired') {
+            try {
+              localStorage.removeItem('authToken');
+              localStorage.removeItem('refreshToken');
+            } catch {}
+            try {
+              socket.io.reconnect = true;
+              // Relancer une connexion (Socket.IO gère le backoff)
+              socket.connect();
+            } catch {}
+          }
         });
       } catch (e) {
         console.error('❌ Socket init error:', e);

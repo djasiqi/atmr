@@ -18,6 +18,13 @@ const useAuthToken = () => {
         const currentTime = Date.now() / 1000;
         if (decoded.exp && decoded.exp < currentTime) {
           console.warn('🔐 Token expiré');
+          // IMPORTANT: éviter de garder un token expiré en localStorage.
+          // Sinon le frontend l'enverra au backend (Socket.IO) et sera rejeté,
+          // empêchant les features temps réel (ex: DriverLiveMap).
+          try {
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('refreshToken');
+          } catch {}
           setUser(null);
           return;
         }
@@ -34,6 +41,10 @@ const useAuthToken = () => {
         });
       } catch (error) {
         console.error('❌ Erreur lors du décodage du token:', error);
+        try {
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('refreshToken');
+        } catch {}
         setUser(null);
       }
     } else if (storedUser) {
@@ -60,9 +71,47 @@ export default useAuthToken;
 
 // ✅ Fonction d'accès directe au token brut
 export function getAccessToken() {
-  return localStorage.getItem('authToken');
+  const token = localStorage.getItem('authToken');
+  if (!token) return null;
+  try {
+    const decoded = jwtDecode(token);
+    const currentTime = Date.now() / 1000;
+    if (decoded?.exp && decoded.exp < currentTime) {
+      // Token expiré => l'effacer pour basculer sur le mode cookies httpOnly si présent.
+      try {
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('refreshToken');
+      } catch {}
+      return null;
+    }
+  } catch {
+    // Token illisible => éviter de le réutiliser.
+    try {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('refreshToken');
+    } catch {}
+    return null;
+  }
+  return token;
 }
 
 export function getRefreshToken() {
-  return localStorage.getItem('refreshToken');
+  const token = localStorage.getItem('refreshToken');
+  if (!token) return null;
+  try {
+    const decoded = jwtDecode(token);
+    const currentTime = Date.now() / 1000;
+    if (decoded?.exp && decoded.exp < currentTime) {
+      try {
+        localStorage.removeItem('refreshToken');
+      } catch {}
+      return null;
+    }
+  } catch {
+    try {
+      localStorage.removeItem('refreshToken');
+    } catch {}
+    return null;
+  }
+  return token;
 }
