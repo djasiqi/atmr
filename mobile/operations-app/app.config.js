@@ -41,7 +41,8 @@ module.exports = withAndroidR8Enabled(
       : "ch.liri.operations",
     buildNumber: process.env.IOS_BUILD_NUMBER || "1",
     version: pkg.version,
-    // googleServicesFile: process.env.GOOGLE_SERVICES_PLIST ?? "./GoogleService-Info.plist",
+    // Le fichier est généré au build via `eas-build-pre-install` depuis un secret EAS.
+    googleServicesFile: "./GoogleService-Info.plist",
     // ✅ Background modes pour notifications silencieuses + background fetch
     // (nécessite un rebuild natif iOS)
     infoPlist: {
