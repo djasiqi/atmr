@@ -23,6 +23,9 @@ class InMemoryEventBus(EventBus):
 
     @override
     def publish(self, event: DomainEvent) -> None:
-        from services.events.handlers_registry import dispatch_event
+        # Registry "canonique"
+        # (on garde `services.events.handlers_registry` en compat, mais ce bus
+        # ne doit pas en dépendre pour éviter un ModuleNotFoundError en prod).
+        from services.events.registry import dispatch_event
 
         dispatch_event(event.to_dict())
