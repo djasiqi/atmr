@@ -1,5 +1,6 @@
 // app.config.js
 require('dotenv-flow').config();
+const fs = require("fs");
 const pkg = require('./package.json');
 const withAndroidBackButtonMod = require('./prebuild-mods/withAndroidBackButtonMod');
 const withAndroidGoogleMapsKey = require('./prebuild-mods/withAndroidGoogleMapsKey');
@@ -9,6 +10,18 @@ const withAndroidR8Enabled = require('./prebuild-mods/withAndroidR8Enabled');
 const APP_VARIANT = process.env.APP_VARIANT || "prod";
 const isDevVariant = APP_VARIANT === "dev";
 const runtimeBase = pkg.version || "1.0.0";
+
+function envOrExistingFile(envValue, relativePath) {
+  // En local, `eas build` exécute `expo config` avant d'injecter les secrets EAS.
+  // Donc si le fichier n'existe pas localement, il faut éviter de le référencer,
+  // sinon `expo config --type introspect` échoue avec ENOENT.
+  if (envValue) return envValue;
+  try {
+    return fs.existsSync(relativePath) ? relativePath : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 module.exports = withAndroidR8Enabled(
   withAndroidImmersiveMode(
@@ -43,7 +56,7 @@ module.exports = withAndroidR8Enabled(
     version: pkg.version,
     // EAS injecte les variables `type=file` comme chemin vers un fichier sur le builder.
     // Fallback local: fichier à la racine du projet.
-    googleServicesFile: process.env.GOOGLE_SERVICES_PLIST || "./GoogleService-Info.plist",
+    googleServicesFile: envOrExistingFile(process.env.GOOGLE_SERVICES_PLIST, "./GoogleService-Info.plist"),
     // ✅ Background modes pour notifications silencieuses + background fetch
     // (nécessite un rebuild natif iOS)
     infoPlist: {
@@ -61,7 +74,7 @@ module.exports = withAndroidR8Enabled(
     version: pkg.version,
     // EAS injecte les variables `type=file` comme chemin vers un fichier sur le builder.
     // Fallback local: fichier à la racine du projet.
-    googleServicesFile: process.env.GOOGLE_SERVICES_JSON || "./google-services.json",
+    googleServicesFile: envOrExistingFile(process.env.GOOGLE_SERVICES_JSON, "./google-services.json"),
     adaptiveIcon: {
       foregroundImage: "./assets/images/adaptive-icon.png",
       backgroundColor: "#ffffff",
