@@ -2291,9 +2291,8 @@ class SendInvoice(Resource):
             invoice.sent_at = datetime.now(UTC)
             db.session.commit()
 
-            sent_at_iso = (
-                invoice.sent_at.isoformat() if invoice.sent_at else None
-            )
+            sent_at_val = invoice.sent_at
+            sent_at_iso = sent_at_val.isoformat() if sent_at_val is not None else None
             return success_response(
                 data={
                     "invoice_id": invoice_id,
