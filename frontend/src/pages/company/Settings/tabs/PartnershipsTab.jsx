@@ -1,5 +1,5 @@
 // frontend/src/pages/company/Settings/tabs/PartnershipsTab.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import styles from '../CompanySettings.module.css';
 import partnershipStyles from './PartnershipsTab.module.css';
 import apiClient from '../../../../utils/apiClient';
@@ -22,6 +22,8 @@ const PartnershipsTab = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
+  const [lastSearchQuery, setLastSearchQuery] = useState('');
+  const searchDebounceRef = useRef(null);
 
   // Formulaire de demande
   const [requestForm, setRequestForm] = useState({
@@ -44,6 +46,15 @@ const PartnershipsTab = () => {
     loadStats();
     loadPartnerships();
   }, []);
+
+  // Réinitialiser la recherche à l'ouverture du modal de demande
+  useEffect(() => {
+    if (showRequestModal) {
+      setSearchQuery('');
+      setSearchResults([]);
+      setLastSearchQuery('');
+    }
+  }, [showRequestModal]);
 
   const loadStats = async () => {
     try {
@@ -102,19 +113,25 @@ const PartnershipsTab = () => {
   };
 
   const searchCompanies = async (query) => {
-    if (!query || query.length < 2) {
+    const q = typeof query === 'string' ? query.trim() : '';
+    if (!q || q.length < 2) {
       setSearchResults([]);
+      setLastSearchQuery('');
       return;
     }
     try {
       setSearching(true);
-      const { data } = await apiClient.get(
-        `/companies/search?q=${encodeURIComponent(query)}`
-      );
-      setSearchResults(data || []);
+      const { data } = await apiClient.get('/companies/search', {
+        params: { q },
+      });
+      const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+      setSearchResults(list);
+      setLastSearchQuery(q);
     } catch (err) {
       console.error('Erreur recherche entreprises:', err);
       showError('Erreur lors de la recherche');
+      setSearchResults([]);
+      setLastSearchQuery(q);
     } finally {
       setSearching(false);
     }
@@ -822,13 +839,20 @@ const PartnershipsTab = () => {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  searchCompanies(e.target.value);
+                  const v = e.target.value;
+                  setSearchQuery(v);
+                  if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+                  searchDebounceRef.current = setTimeout(() => searchCompanies(v), 300);
                 }}
-                placeholder="Nom ou email de l'entreprise..."
+                placeholder="Nom, email ou domaine (ex: emmenez-moi.ch)..."
                 className={styles.input}
               />
               {searching && <p>Recherche en cours...</p>}
+              {!searching && lastSearchQuery && searchResults.length === 0 && (
+                <p style={{ marginTop: '0.25rem', color: 'var(--color-text-secondary, #666)', fontSize: '0.9rem' }}>
+                  Aucune entreprise trouvée pour « {lastSearchQuery} »
+                </p>
+              )}
               {searchResults.length > 0 && (
                 <div style={{ marginTop: '0.5rem' }}>
                   {searchResults.map((company) => (

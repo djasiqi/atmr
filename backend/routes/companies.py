@@ -21,6 +21,7 @@ from flask_restx import (
     inputs,
     reqparse,
 )
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from werkzeug.exceptions import HTTPException
 
@@ -724,10 +725,17 @@ class CompanySearch(Resource):
             if not query or len(query) < self.MIN_SEARCH_QUERY_LENGTH:
                 return {"data": []}, 200
 
-            # Recherche par nom (insensible à la casse) — Company n'a pas is_active, on filtre par is_approved
+            # Recherche par nom, email ou domaine (insensible à la casse) — filtre is_approved
+            pattern = f"%{query}%"
             companies = (
-                Company.query.filter(Company.name.ilike(f"%{query}%"))
-                .filter(Company.is_approved.is_(True))
+                Company.query.filter(Company.is_approved.is_(True))
+                .filter(
+                    or_(
+                        Company.name.ilike(pattern),
+                        Company.contact_email.ilike(pattern),
+                        Company.billing_email.ilike(pattern),
+                    )
+                )
                 .limit(20)
                 .all()
             )
