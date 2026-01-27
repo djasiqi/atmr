@@ -275,16 +275,33 @@ for i in $(seq 1 60); do
 done
 [ "$POSTGRES_READY" = "false" ] && { docker compose -f docker-compose.production.yml logs postgres | tail -100; exit 1; }
 
-# Migrations Alembic
-echo "🔄 Migrations Alembic..."
+# Migrations Alembic – cycle "safe prod" (current → heads → upgrade → current)
+echo "🔄 Migrations Alembic (cycle safe prod)..."
+echo "📋 État avant upgrade:"
+docker_exec flask db current || true
+docker_exec flask db heads || true
+echo "⬆️  Application des migrations..."
 docker_exec flask db upgrade heads || {
   echo "⚠️  Première tentative échouée, retry..."
   docker_exec flask db upgrade heads || {
     echo "❌ Migrations échouées"
     docker_exec flask db current || true
+    docker_exec flask db heads || true
     exit 1
   }
 }
+echo "📋 État après upgrade (validation current == head):"
+CURRENT_AFTER=$(docker_exec flask db current 2>&1) || true
+HEADS_AFTER=$(docker_exec flask db heads 2>&1) || true
+echo "  current: ${CURRENT_AFTER:- (vide)}"
+echo "  heads:   ${HEADS_AFTER:- (vide)}"
+if [ -z "$CURRENT_AFTER" ] || [ -z "$HEADS_AFTER" ]; then
+  echo "⚠️  Impossible de vérifier current/heads après upgrade"
+elif ! echo "$HEADS_AFTER" | grep -qF "$(echo "$CURRENT_AFTER" | head -1)"; then
+  echo "⚠️  current après upgrade ne correspond pas au head affiché (vérifier manuellement)"
+else
+  echo "✅ current cohérent avec head"
+fi
 echo "✅ Migrations appliquées"
 
 # Attendre que le backend soit vraiment prêt (healthcheck Docker)
