@@ -15,7 +15,7 @@ from sqlalchemy import inspect
 
 
 revision = "49ff432aafec"
-down_revision = '1ad728d75597'
+down_revision = "1ad728d75597"
 branch_labels = None
 depends_on = None
 
@@ -25,227 +25,227 @@ def upgrade():
     conn = op.get_bind()
     insp = inspect(conn)
     if not insp.has_table("password_history"):
-        op.create_table('password_history',
-            sa.Column('id', sa.Integer(), nullable=False),
-            sa.Column('user_id', sa.Integer(), nullable=False),
-            sa.Column('password_hash', sa.String(length=255), nullable=False),
-            sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
-            sa.ForeignKeyConstraint(['user_id'], ['user.id'], ondelete='CASCADE'),
-            sa.PrimaryKeyConstraint('id')
+        op.create_table("password_history",
+            sa.Column("id", sa.Integer(), nullable=False),
+            sa.Column("user_id", sa.Integer(), nullable=False),
+            sa.Column("password_hash", sa.String(length=255), nullable=False),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+            sa.ForeignKeyConstraint(["user_id"], ["user.id"], ondelete="CASCADE"),
+            sa.PrimaryKeyConstraint("id")
         )
-        with op.batch_alter_table('password_history', schema=None) as batch_op:
-            batch_op.create_index(batch_op.f('ix_password_history_created_at'), ['created_at'], unique=False)
-            batch_op.create_index('ix_password_history_user_created', ['user_id', 'created_at'], unique=False)
-            batch_op.create_index(batch_op.f('ix_password_history_user_id'), ['user_id'], unique=False)
+        with op.batch_alter_table("password_history", schema=None) as batch_op:
+            batch_op.create_index(batch_op.f("ix_password_history_created_at"), ["created_at"], unique=False)
+            batch_op.create_index("ix_password_history_user_created", ["user_id", "created_at"], unique=False)
+            batch_op.create_index(batch_op.f("ix_password_history_user_id"), ["user_id"], unique=False)
 
-    op.create_table('billing_audit_logs',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('company_id', sa.Integer(), nullable=False),
-    sa.Column('booking_id', sa.Integer(), nullable=False),
-    sa.Column('actor_user_id', sa.Integer(), nullable=True),
-    sa.Column('action', sa.Text(), nullable=False),
-    sa.Column('reason', sa.Text(), nullable=True),
-    sa.Column('before', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-    sa.Column('after', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-    sa.ForeignKeyConstraint(['actor_user_id'], ['user.id'], ondelete='SET NULL'),
-    sa.ForeignKeyConstraint(['booking_id'], ['booking.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['company_id'], ['company.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id')
+    op.create_table("billing_audit_logs",
+    sa.Column("id", sa.Integer(), nullable=False),
+    sa.Column("company_id", sa.Integer(), nullable=False),
+    sa.Column("booking_id", sa.Integer(), nullable=False),
+    sa.Column("actor_user_id", sa.Integer(), nullable=True),
+    sa.Column("action", sa.Text(), nullable=False),
+    sa.Column("reason", sa.Text(), nullable=True),
+    sa.Column("before", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+    sa.Column("after", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+    sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+    sa.ForeignKeyConstraint(["actor_user_id"], ["user.id"], ondelete="SET NULL"),
+    sa.ForeignKeyConstraint(["booking_id"], ["booking.id"], ondelete="CASCADE"),
+    sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
+    sa.PrimaryKeyConstraint("id")
     )
-    with op.batch_alter_table('billing_audit_logs', schema=None) as batch_op:
-        batch_op.create_index(batch_op.f('ix_billing_audit_logs_actor_user_id'), ['actor_user_id'], unique=False)
-        batch_op.create_index(batch_op.f('ix_billing_audit_logs_booking_id'), ['booking_id'], unique=False)
-        batch_op.create_index(batch_op.f('ix_billing_audit_logs_company_id'), ['company_id'], unique=False)
+    with op.batch_alter_table("billing_audit_logs", schema=None) as batch_op:
+        batch_op.create_index(batch_op.f("ix_billing_audit_logs_actor_user_id"), ["actor_user_id"], unique=False)
+        batch_op.create_index(batch_op.f("ix_billing_audit_logs_booking_id"), ["booking_id"], unique=False)
+        batch_op.create_index(batch_op.f("ix_billing_audit_logs_company_id"), ["company_id"], unique=False)
 
-    op.create_table('company_billing_profile',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('company_id', sa.Integer(), nullable=False),
-    sa.Column('legal_name', sa.String(length=200), nullable=False, comment="Nom légal de l'entreprise pour factures"),
-    sa.Column('brand_name', sa.String(length=200), nullable=True, comment='Nom commercial (si différent du nom légal)'),
-    sa.Column('uid_ide', sa.String(length=20), nullable=False, comment='Numéro IDE/UID suisse (format: CHE-XXX.XXX.XXX)'),
-    sa.Column('street_name', sa.String(length=70), nullable=False, comment='Nom de rue (sans numéro)'),
-    sa.Column('building_number', sa.String(length=16), nullable=False, comment='Numéro de bâtiment (peut contenir lettres: 12A)'),
-    sa.Column('postal_code', sa.String(length=16), nullable=False, comment='Code postal (4 chiffres pour Suisse)'),
-    sa.Column('city', sa.String(length=35), nullable=False, comment='Ville'),
-    sa.Column('country_code', sa.String(length=2), nullable=False, comment='Code pays ISO 3166-1 alpha-2'),
-    sa.Column('billing_email', sa.String(length=100), nullable=False, comment='Email pour envoi factures'),
-    sa.Column('billing_phone', sa.String(length=20), nullable=False, comment='Téléphone facturation (format international recommandé)'),
-    sa.Column('vat_registered', sa.Boolean(), nullable=False, comment='Entreprise assujettie à la TVA'),
-    sa.Column('vat_number', sa.String(length=50), nullable=True, comment='Numéro TVA (si assujetti)'),
-    sa.Column('vat_rate', sa.Numeric(precision=5, scale=2), nullable=True, comment='Taux TVA par défaut (ex: 7.7 pour 7.7%)'),
-    sa.Column('iban', sa.String(length=200), nullable=False, comment='IBAN chiffré (format CHxx xxxx xxxx xxxx xxxx x)'),
-    sa.Column('qr_iban', sa.String(length=200), nullable=True, comment='QR-IBAN chiffré (uniquement si références QRR)'),
-    sa.Column('payment_reference_mode', sa.String(length=10), nullable=False, comment='Mode référence paiement: NONE, SCOR (ISO 11649), QRR (ESR)'),
-    sa.Column('creditor_reference_base', sa.String(length=20), nullable=True, comment='Base pour générer références QRR (si mode=QRR)'),
-    sa.Column('payment_terms_days', sa.Integer(), nullable=False, comment='Délai de paiement en jours'),
-    sa.Column('overdue_fee', sa.Numeric(precision=10, scale=2), nullable=False, comment='Frais de retard (CHF)'),
-    sa.Column('legal_footer', sa.Text(), nullable=True, comment='Texte légal pied de page facture'),
-    sa.Column('is_address_validated', sa.Boolean(), nullable=False, comment='Adresse validée (structure + existence)'),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
-    sa.ForeignKeyConstraint(['company_id'], ['company.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id')
+    op.create_table("company_billing_profile",
+    sa.Column("id", sa.Integer(), nullable=False),
+    sa.Column("company_id", sa.Integer(), nullable=False),
+    sa.Column("legal_name", sa.String(length=200), nullable=False, comment="Nom légal de l'entreprise pour factures"),
+    sa.Column("brand_name", sa.String(length=200), nullable=True, comment="Nom commercial (si différent du nom légal)"),
+    sa.Column("uid_ide", sa.String(length=20), nullable=False, comment="Numéro IDE/UID suisse (format: CHE-XXX.XXX.XXX)"),
+    sa.Column("street_name", sa.String(length=70), nullable=False, comment="Nom de rue (sans numéro)"),
+    sa.Column("building_number", sa.String(length=16), nullable=False, comment="Numéro de bâtiment (peut contenir lettres: 12A)"),
+    sa.Column("postal_code", sa.String(length=16), nullable=False, comment="Code postal (4 chiffres pour Suisse)"),
+    sa.Column("city", sa.String(length=35), nullable=False, comment="Ville"),
+    sa.Column("country_code", sa.String(length=2), nullable=False, comment="Code pays ISO 3166-1 alpha-2"),
+    sa.Column("billing_email", sa.String(length=100), nullable=False, comment="Email pour envoi factures"),
+    sa.Column("billing_phone", sa.String(length=20), nullable=False, comment="Téléphone facturation (format international recommandé)"),
+    sa.Column("vat_registered", sa.Boolean(), nullable=False, comment="Entreprise assujettie à la TVA"),
+    sa.Column("vat_number", sa.String(length=50), nullable=True, comment="Numéro TVA (si assujetti)"),
+    sa.Column("vat_rate", sa.Numeric(precision=5, scale=2), nullable=True, comment="Taux TVA par défaut (ex: 7.7 pour 7.7%)"),
+    sa.Column("iban", sa.String(length=200), nullable=False, comment="IBAN chiffré (format CHxx xxxx xxxx xxxx xxxx x)"),
+    sa.Column("qr_iban", sa.String(length=200), nullable=True, comment="QR-IBAN chiffré (uniquement si références QRR)"),
+    sa.Column("payment_reference_mode", sa.String(length=10), nullable=False, comment="Mode référence paiement: NONE, SCOR (ISO 11649), QRR (ESR)"),
+    sa.Column("creditor_reference_base", sa.String(length=20), nullable=True, comment="Base pour générer références QRR (si mode=QRR)"),
+    sa.Column("payment_terms_days", sa.Integer(), nullable=False, comment="Délai de paiement en jours"),
+    sa.Column("overdue_fee", sa.Numeric(precision=10, scale=2), nullable=False, comment="Frais de retard (CHF)"),
+    sa.Column("legal_footer", sa.Text(), nullable=True, comment="Texte légal pied de page facture"),
+    sa.Column("is_address_validated", sa.Boolean(), nullable=False, comment="Adresse validée (structure + existence)"),
+    sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+    sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
+    sa.PrimaryKeyConstraint("id")
     )
-    with op.batch_alter_table('company_billing_profile', schema=None) as batch_op:
-        batch_op.create_index(batch_op.f('ix_company_billing_profile_company_id'), ['company_id'], unique=True)
-        batch_op.create_index(batch_op.f('ix_company_billing_profile_uid_ide'), ['uid_ide'], unique=False)
+    with op.batch_alter_table("company_billing_profile", schema=None) as batch_op:
+        batch_op.create_index(batch_op.f("ix_company_billing_profile_company_id"), ["company_id"], unique=True)
+        batch_op.create_index(batch_op.f("ix_company_billing_profile_uid_ide"), ["uid_ide"], unique=False)
 
-    op.create_table('device_tokens',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('driver_id', sa.Integer(), nullable=False),
-    sa.Column('token', sa.String(length=255), nullable=False),
-    sa.Column('device_id', sa.String(length=255), nullable=True),
-    sa.Column('platform', sa.String(length=20), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
-    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
-    sa.Column('is_active', sa.Boolean(), nullable=False),
-    sa.ForeignKeyConstraint(['driver_id'], ['driver.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id')
+    op.create_table("device_tokens",
+    sa.Column("id", sa.Integer(), nullable=False),
+    sa.Column("driver_id", sa.Integer(), nullable=False),
+    sa.Column("token", sa.String(length=255), nullable=False),
+    sa.Column("device_id", sa.String(length=255), nullable=True),
+    sa.Column("platform", sa.String(length=20), nullable=True),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("is_active", sa.Boolean(), nullable=False),
+    sa.ForeignKeyConstraint(["driver_id"], ["driver.id"], ondelete="CASCADE"),
+    sa.PrimaryKeyConstraint("id")
     )
-    with op.batch_alter_table('device_tokens', schema=None) as batch_op:
-        batch_op.create_index('ix_device_tokens_driver_active', ['driver_id', 'is_active'], unique=False)
-        batch_op.create_index('ix_device_tokens_driver_id', ['driver_id'], unique=False)
-        batch_op.create_index('ix_device_tokens_token', ['token'], unique=False)
+    with op.batch_alter_table("device_tokens", schema=None) as batch_op:
+        batch_op.create_index("ix_device_tokens_driver_active", ["driver_id", "is_active"], unique=False)
+        batch_op.create_index("ix_device_tokens_driver_id", ["driver_id"], unique=False)
+        batch_op.create_index("ix_device_tokens_token", ["token"], unique=False)
 
-    op.create_table('transport_vouchers',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('company_id', sa.Integer(), nullable=False),
-    sa.Column('client_id', sa.Integer(), nullable=False),
-    sa.Column('booking_id', sa.Integer(), nullable=True),
-    sa.Column('billing_party_id', sa.Integer(), nullable=True),
-    sa.Column('type', sa.String(length=50), server_default='clinic', nullable=False),
-    sa.Column('status', sa.String(length=50), server_default='draft', nullable=False),
-    sa.Column('valid_from', sa.DateTime(timezone=True), nullable=True),
-    sa.Column('valid_to', sa.DateTime(timezone=True), nullable=True),
-    sa.Column('external_ref', sa.String(length=255), nullable=True),
-    sa.Column('notes', sa.Text(), nullable=True),
-    sa.Column('validated_by_user_id', sa.Integer(), nullable=True),
-    sa.Column('validated_at', sa.DateTime(timezone=True), nullable=True),
-    sa.Column('created_by_user_id', sa.Integer(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-    sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-    sa.ForeignKeyConstraint(['billing_party_id'], ['billing_parties.id'], ondelete='SET NULL'),
-    sa.ForeignKeyConstraint(['booking_id'], ['booking.id'], ondelete='SET NULL'),
-    sa.ForeignKeyConstraint(['client_id'], ['client.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['company_id'], ['company.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['created_by_user_id'], ['user.id'], ondelete='SET NULL'),
-    sa.ForeignKeyConstraint(['validated_by_user_id'], ['user.id'], ondelete='SET NULL'),
-    sa.PrimaryKeyConstraint('id')
+    op.create_table("transport_vouchers",
+    sa.Column("id", sa.Integer(), nullable=False),
+    sa.Column("company_id", sa.Integer(), nullable=False),
+    sa.Column("client_id", sa.Integer(), nullable=False),
+    sa.Column("booking_id", sa.Integer(), nullable=True),
+    sa.Column("billing_party_id", sa.Integer(), nullable=True),
+    sa.Column("type", sa.String(length=50), server_default="clinic", nullable=False),
+    sa.Column("status", sa.String(length=50), server_default="draft", nullable=False),
+    sa.Column("valid_from", sa.DateTime(timezone=True), nullable=True),
+    sa.Column("valid_to", sa.DateTime(timezone=True), nullable=True),
+    sa.Column("external_ref", sa.String(length=255), nullable=True),
+    sa.Column("notes", sa.Text(), nullable=True),
+    sa.Column("validated_by_user_id", sa.Integer(), nullable=True),
+    sa.Column("validated_at", sa.DateTime(timezone=True), nullable=True),
+    sa.Column("created_by_user_id", sa.Integer(), nullable=True),
+    sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+    sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+    sa.ForeignKeyConstraint(["billing_party_id"], ["billing_parties.id"], ondelete="SET NULL"),
+    sa.ForeignKeyConstraint(["booking_id"], ["booking.id"], ondelete="SET NULL"),
+    sa.ForeignKeyConstraint(["client_id"], ["client.id"], ondelete="CASCADE"),
+    sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
+    sa.ForeignKeyConstraint(["created_by_user_id"], ["user.id"], ondelete="SET NULL"),
+    sa.ForeignKeyConstraint(["validated_by_user_id"], ["user.id"], ondelete="SET NULL"),
+    sa.PrimaryKeyConstraint("id")
     )
-    with op.batch_alter_table('transport_vouchers', schema=None) as batch_op:
-        batch_op.create_index(batch_op.f('ix_transport_vouchers_billing_party_id'), ['billing_party_id'], unique=False)
-        batch_op.create_index('ix_transport_vouchers_booking_id', ['booking_id'], unique=False)
-        batch_op.create_index(batch_op.f('ix_transport_vouchers_client_id'), ['client_id'], unique=False)
-        batch_op.create_index('ix_transport_vouchers_company_client_created', ['company_id', 'client_id', 'created_at'], unique=False)
-        batch_op.create_index(batch_op.f('ix_transport_vouchers_company_id'), ['company_id'], unique=False)
-        batch_op.create_index(batch_op.f('ix_transport_vouchers_created_by_user_id'), ['created_by_user_id'], unique=False)
-        batch_op.create_index(batch_op.f('ix_transport_vouchers_validated_by_user_id'), ['validated_by_user_id'], unique=False)
+    with op.batch_alter_table("transport_vouchers", schema=None) as batch_op:
+        batch_op.create_index(batch_op.f("ix_transport_vouchers_billing_party_id"), ["billing_party_id"], unique=False)
+        batch_op.create_index("ix_transport_vouchers_booking_id", ["booking_id"], unique=False)
+        batch_op.create_index(batch_op.f("ix_transport_vouchers_client_id"), ["client_id"], unique=False)
+        batch_op.create_index("ix_transport_vouchers_company_client_created", ["company_id", "client_id", "created_at"], unique=False)
+        batch_op.create_index(batch_op.f("ix_transport_vouchers_company_id"), ["company_id"], unique=False)
+        batch_op.create_index(batch_op.f("ix_transport_vouchers_created_by_user_id"), ["created_by_user_id"], unique=False)
+        batch_op.create_index(batch_op.f("ix_transport_vouchers_validated_by_user_id"), ["validated_by_user_id"], unique=False)
 
-    op.create_table('transport_voucher_files',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('voucher_id', sa.Integer(), nullable=False),
-    sa.Column('file_url', sa.String(length=500), nullable=False),
-    sa.Column('filename', sa.String(length=255), nullable=False),
-    sa.Column('mime_type', sa.String(length=100), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-    sa.ForeignKeyConstraint(['voucher_id'], ['transport_vouchers.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id')
+    op.create_table("transport_voucher_files",
+    sa.Column("id", sa.Integer(), nullable=False),
+    sa.Column("voucher_id", sa.Integer(), nullable=False),
+    sa.Column("file_url", sa.String(length=500), nullable=False),
+    sa.Column("filename", sa.String(length=255), nullable=False),
+    sa.Column("mime_type", sa.String(length=100), nullable=True),
+    sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+    sa.ForeignKeyConstraint(["voucher_id"], ["transport_vouchers.id"], ondelete="CASCADE"),
+    sa.PrimaryKeyConstraint("id")
     )
-    with op.batch_alter_table('transport_voucher_files', schema=None) as batch_op:
-        batch_op.create_index(batch_op.f('ix_transport_voucher_files_voucher_id'), ['voucher_id'], unique=False)
+    with op.batch_alter_table("transport_voucher_files", schema=None) as batch_op:
+        batch_op.create_index(batch_op.f("ix_transport_voucher_files_voucher_id"), ["voucher_id"], unique=False)
 
-    with op.batch_alter_table('assignment', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_assignment_created_at'))
+    with op.batch_alter_table("assignment", schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f("ix_assignment_created_at"))
 
-    with op.batch_alter_table('booking', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_booking_executing_company'))
-        batch_op.drop_index(batch_op.f('ix_booking_client_time'))
-        batch_op.create_index('ix_booking_client_time', ['client_id', 'scheduled_time'], unique=False)
-        batch_op.create_index('ix_booking_company_status_scheduled', ['company_id', 'status', 'scheduled_time'], unique=False)
-        batch_op.create_index(batch_op.f('ix_booking_executing_company_id'), ['executing_company_id'], unique=False)
-        batch_op.create_foreign_key(None, 'user', ['billing_locked_by_user_id'], ['id'], ondelete='SET NULL')
+    with op.batch_alter_table("booking", schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f("ix_booking_executing_company"))
+        batch_op.drop_index(batch_op.f("ix_booking_client_time"))
+        batch_op.create_index("ix_booking_client_time", ["client_id", "scheduled_time"], unique=False)
+        batch_op.create_index("ix_booking_company_status_scheduled", ["company_id", "status", "scheduled_time"], unique=False)
+        batch_op.create_index(batch_op.f("ix_booking_executing_company_id"), ["executing_company_id"], unique=False)
+        batch_op.create_foreign_key(None, "user", ["billing_locked_by_user_id"], ["id"], ondelete="SET NULL")
 
-    with op.batch_alter_table('driver', schema=None) as batch_op:
-        batch_op.alter_column('driver_photo',
+    with op.batch_alter_table("driver", schema=None) as batch_op:
+        batch_op.alter_column("driver_photo",
                existing_type=sa.VARCHAR(length=500),
                type_=sa.String(length=50000),
                existing_nullable=True)
 
-    with op.batch_alter_table('refresh_token', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_refresh_token_token_hash'))
-        batch_op.create_index('ix_refresh_token_token_hash', ['token_hash'], unique=False)
+    with op.batch_alter_table("refresh_token", schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f("ix_refresh_token_token_hash"))
+        batch_op.create_index("ix_refresh_token_token_hash", ["token_hash"], unique=False)
 
-    with op.batch_alter_table('user', schema=None) as batch_op:
-        batch_op.create_index(batch_op.f('ix_user_password_expires_at'), ['password_expires_at'], unique=False)
-        batch_op.create_index(batch_op.f('ix_user_push_token'), ['push_token'], unique=False)
+    with op.batch_alter_table("user", schema=None) as batch_op:
+        batch_op.create_index(batch_op.f("ix_user_password_expires_at"), ["password_expires_at"], unique=False)
+        batch_op.create_index(batch_op.f("ix_user_push_token"), ["push_token"], unique=False)
 
     # ### end Alembic commands ###
 
 
 def downgrade():
     # ### commands auto generated by Alembic - please adjust! ###
-    with op.batch_alter_table('user', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_user_push_token'))
-        batch_op.drop_index(batch_op.f('ix_user_password_expires_at'))
+    with op.batch_alter_table("user", schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f("ix_user_push_token"))
+        batch_op.drop_index(batch_op.f("ix_user_password_expires_at"))
 
-    with op.batch_alter_table('refresh_token', schema=None) as batch_op:
-        batch_op.drop_index('ix_refresh_token_token_hash')
-        batch_op.create_index(batch_op.f('ix_refresh_token_token_hash'), ['token_hash'], unique=True)
+    with op.batch_alter_table("refresh_token", schema=None) as batch_op:
+        batch_op.drop_index("ix_refresh_token_token_hash")
+        batch_op.create_index(batch_op.f("ix_refresh_token_token_hash"), ["token_hash"], unique=True)
 
-    with op.batch_alter_table('driver', schema=None) as batch_op:
-        batch_op.alter_column('driver_photo',
+    with op.batch_alter_table("driver", schema=None) as batch_op:
+        batch_op.alter_column("driver_photo",
                existing_type=sa.String(length=50000),
                type_=sa.VARCHAR(length=500),
                existing_nullable=True)
 
-    with op.batch_alter_table('booking', schema=None) as batch_op:
-        batch_op.drop_constraint(None, type_='foreignkey')
-        batch_op.drop_index(batch_op.f('ix_booking_executing_company_id'))
-        batch_op.drop_index('ix_booking_company_status_scheduled')
-        batch_op.drop_index('ix_booking_client_time')
-        batch_op.create_index(batch_op.f('ix_booking_client_time'), ['client_id', sa.literal_column('scheduled_time DESC')], unique=False)
-        batch_op.create_index(batch_op.f('ix_booking_executing_company'), ['executing_company_id'], unique=False)
+    with op.batch_alter_table("booking", schema=None) as batch_op:
+        batch_op.drop_constraint(None, type_="foreignkey")
+        batch_op.drop_index(batch_op.f("ix_booking_executing_company_id"))
+        batch_op.drop_index("ix_booking_company_status_scheduled")
+        batch_op.drop_index("ix_booking_client_time")
+        batch_op.create_index(batch_op.f("ix_booking_client_time"), ["client_id", sa.literal_column("scheduled_time DESC")], unique=False)
+        batch_op.create_index(batch_op.f("ix_booking_executing_company"), ["executing_company_id"], unique=False)
 
-    with op.batch_alter_table('assignment', schema=None) as batch_op:
-        batch_op.create_index(batch_op.f('ix_assignment_created_at'), [sa.literal_column('created_at DESC')], unique=False)
+    with op.batch_alter_table("assignment", schema=None) as batch_op:
+        batch_op.create_index(batch_op.f("ix_assignment_created_at"), [sa.literal_column("created_at DESC")], unique=False)
 
-    with op.batch_alter_table('transport_voucher_files', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_transport_voucher_files_voucher_id'))
+    with op.batch_alter_table("transport_voucher_files", schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f("ix_transport_voucher_files_voucher_id"))
 
-    op.drop_table('transport_voucher_files')
-    with op.batch_alter_table('transport_vouchers', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_transport_vouchers_validated_by_user_id'))
-        batch_op.drop_index(batch_op.f('ix_transport_vouchers_created_by_user_id'))
-        batch_op.drop_index(batch_op.f('ix_transport_vouchers_company_id'))
-        batch_op.drop_index('ix_transport_vouchers_company_client_created')
-        batch_op.drop_index(batch_op.f('ix_transport_vouchers_client_id'))
-        batch_op.drop_index('ix_transport_vouchers_booking_id')
-        batch_op.drop_index(batch_op.f('ix_transport_vouchers_billing_party_id'))
+    op.drop_table("transport_voucher_files")
+    with op.batch_alter_table("transport_vouchers", schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f("ix_transport_vouchers_validated_by_user_id"))
+        batch_op.drop_index(batch_op.f("ix_transport_vouchers_created_by_user_id"))
+        batch_op.drop_index(batch_op.f("ix_transport_vouchers_company_id"))
+        batch_op.drop_index("ix_transport_vouchers_company_client_created")
+        batch_op.drop_index(batch_op.f("ix_transport_vouchers_client_id"))
+        batch_op.drop_index("ix_transport_vouchers_booking_id")
+        batch_op.drop_index(batch_op.f("ix_transport_vouchers_billing_party_id"))
 
-    op.drop_table('transport_vouchers')
-    with op.batch_alter_table('device_tokens', schema=None) as batch_op:
-        batch_op.drop_index('ix_device_tokens_token')
-        batch_op.drop_index('ix_device_tokens_driver_id')
-        batch_op.drop_index('ix_device_tokens_driver_active')
+    op.drop_table("transport_vouchers")
+    with op.batch_alter_table("device_tokens", schema=None) as batch_op:
+        batch_op.drop_index("ix_device_tokens_token")
+        batch_op.drop_index("ix_device_tokens_driver_id")
+        batch_op.drop_index("ix_device_tokens_driver_active")
 
-    op.drop_table('device_tokens')
-    with op.batch_alter_table('company_billing_profile', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_company_billing_profile_uid_ide'))
-        batch_op.drop_index(batch_op.f('ix_company_billing_profile_company_id'))
+    op.drop_table("device_tokens")
+    with op.batch_alter_table("company_billing_profile", schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f("ix_company_billing_profile_uid_ide"))
+        batch_op.drop_index(batch_op.f("ix_company_billing_profile_company_id"))
 
-    op.drop_table('company_billing_profile')
-    with op.batch_alter_table('billing_audit_logs', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_billing_audit_logs_company_id'))
-        batch_op.drop_index(batch_op.f('ix_billing_audit_logs_booking_id'))
-        batch_op.drop_index(batch_op.f('ix_billing_audit_logs_actor_user_id'))
+    op.drop_table("company_billing_profile")
+    with op.batch_alter_table("billing_audit_logs", schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f("ix_billing_audit_logs_company_id"))
+        batch_op.drop_index(batch_op.f("ix_billing_audit_logs_booking_id"))
+        batch_op.drop_index(batch_op.f("ix_billing_audit_logs_actor_user_id"))
 
-    op.drop_table('billing_audit_logs')
-    with op.batch_alter_table('password_history', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_password_history_user_id'))
-        batch_op.drop_index('ix_password_history_user_created')
-        batch_op.drop_index(batch_op.f('ix_password_history_created_at'))
+    op.drop_table("billing_audit_logs")
+    with op.batch_alter_table("password_history", schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f("ix_password_history_user_id"))
+        batch_op.drop_index("ix_password_history_user_created")
+        batch_op.drop_index(batch_op.f("ix_password_history_created_at"))
 
-    op.drop_table('password_history')
+    op.drop_table("password_history")
     # ### end Alembic commands ###
 
