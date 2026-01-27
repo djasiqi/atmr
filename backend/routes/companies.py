@@ -1,18 +1,20 @@
+# pyright: reportArgumentType=false
 import logging
+from contextlib import suppress
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 
-import sentry_sdk  # pyright: ignore[reportMissingImports]
+import sentry_sdk
 from flask import (
     current_app,
     request,
 )
-from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
+from flask_jwt_extended import (
     get_jwt_identity,
     jwt_required,
 )
-from flask_restx import (  # pyright: ignore[reportMissingImports]
+from flask_restx import (
     Namespace,
     Resource,
     fields,
@@ -112,7 +114,7 @@ class SaveCompanyPushToken(Resource):
     @jwt_required()
     @role_required(UserRole.company, UserRole.admin)
     def post(self):  # noqa: PLR0911
-        from flask_jwt_extended import get_jwt  # pyright: ignore[reportMissingImports]
+        from flask_jwt_extended import get_jwt
 
         from models import Company, User
 
@@ -644,9 +646,7 @@ class CompanyMe(Resource):
             data = request.get_json(silent=True) or {}
 
             # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-            from marshmallow import (  # pyright: ignore[reportMissingImports]
-                ValidationError,
-            )
+            from marshmallow import ValidationError
 
             from schemas.company_schemas import CompanyUpdateSchema
             from schemas.validation_utils import (
@@ -721,10 +721,10 @@ class CompanySearch(Resource):
             if not query or len(query) < self.MIN_SEARCH_QUERY_LENGTH:
                 return {"data": []}, 200
 
-            # Recherche par nom (insensible à la casse)
+            # Recherche par nom (insensible à la casse) — Company n'a pas is_active, on filtre par is_approved
             companies = (
                 Company.query.filter(Company.name.ilike(f"%{query}%"))
-                .filter(Company.is_active == True)  # noqa: E712
+                .filter(Company.is_approved.is_(True))
                 .limit(20)
                 .all()
             )
@@ -794,6 +794,7 @@ class CompanyPartnerships(Resource):
                 if pair_key in partnerships_by_pair:
                     existing = partnerships_by_pair[pair_key]
                     # Priorité: ACCEPTED > PENDING > autres, puis le plus récent, puis ID le plus élevé
+                    # Partnership.created_at est toujours défini (non optional)
                     keep_new = (
                         (
                             p.status.value == "ACCEPTED"
@@ -801,21 +802,12 @@ class CompanyPartnerships(Resource):
                         )
                         or (
                             p.status.value == existing.status.value
-                            and p.created_at is not None
-                            and existing.created_at is not None
                             and p.created_at > existing.created_at
                         )
                         or (
                             p.status.value == existing.status.value
                             and (
-                                (
-                                    p.created_at is None
-                                    and existing.created_at is not None
-                                )
-                                or (
-                                    p.created_at == existing.created_at
-                                    and p.id > existing.id
-                                )
+                                (p.created_at == existing.created_at and p.id > existing.id)
                                 or (p.id > existing.id)
                             )
                         )
@@ -1319,7 +1311,7 @@ class CompanyPartnershipsStats(Resource):
 class CompanyReservations(Resource):
     @jwt_required()
     @role_required(UserRole.company)
-    def get(self):
+    def get(self):  # noqa: PLR0911
         # ✅ DDD: Utilise use-case au lieu de service directement
         company, error_response, status_code = _get_current_company_via_use_case()
         if error_response:
@@ -1340,6 +1332,12 @@ class CompanyReservations(Resource):
 
         flat = request.args.get("flat", "false").lower() == "true"
         day_str = (request.args.get("date") or "").strip()
+        start_date = (request.args.get("start_date") or "").strip()
+        end_date = (request.args.get("end_date") or "").strip()
+        search_term = (request.args.get("search") or request.args.get("q") or "").strip()
+        tab_filter = (request.args.get("tab") or "").strip().lower()
+        sort_order = (request.args.get("sort_order") or "desc").strip().lower()
+        exclude_canceled = request.args.get("exclude_canceled", "false").lower() == "true"
         max_days_range = 31  # Maximum 31 jours
 
         # Ajouter des paramètres de pagination
@@ -1371,23 +1369,283 @@ class CompanyReservations(Resource):
                     field="date",
                     logger_instance=logger,
                 )
+        elif start_date or end_date:
+            from shared.time_utils import day_local_bounds
+
+            try:
+                if start_date:
+                    start_local, _ = day_local_bounds(start_date)
+                else:
+                    start_local = None
+                if end_date:
+                    _, end_local = day_local_bounds(end_date)
+                else:
+                    end_local = None
+
+                if start_local and end_local:
+                    days_diff = (end_local - start_local).days
+                    if days_diff > max_days_range:
+                        return {
+                            "error": (
+                                f"Plage de dates trop large. "
+                                f"Maximum {max_days_range} jours autorisés"
+                            )
+                        }, 400
+            except ValueError:
+                return APIErrorHandler.handle_validation_error(
+                    "Format de date invalide. Utilisez YYYY-MM-DD",
+                    field="date",
+                    logger_instance=logger,
+                )
 
         # Utiliser le repository pour récupérer les bookings avec filtres, eager loading et pagination
         # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
         from repositories.booking_repository import BookingRepository
+        from sqlalchemy import case, cast, func, or_
+        from sqlalchemy.orm import aliased
+        from sqlalchemy.types import String
+        from models import Booking, Client, Driver, User
+        from models.enums import BookingStatus
 
         booking_repo = BookingRepository()
-        # Utiliser la méthode existante et ajouter la pagination manuellement
-        all_reservations = booking_repo.find_models_by_company_with_filters(
-            company_id,
-            day_str=day_str,
-            status=status_filter,
+        visibility_filter = booking_repo._company_visibility_filter(company_id)
+
+        base_query = Booking.query.filter(visibility_filter)
+
+        # Appliquer filtre date (jour unique avec retours liés) ou plage
+        if day_str:
+            from sqlalchemy import or_
+            from shared.time_utils import day_local_bounds
+
+            start_local, end_local = day_local_bounds(day_str)
+            outbound_ids = (
+                Booking.query.filter(
+                    visibility_filter,
+                    Booking.scheduled_time >= start_local,
+                    Booking.scheduled_time < end_local,
+                    ~Booking.is_return,
+                )
+                .with_entities(Booking.id)
+                .all()
+            )
+            outbound_ids = [b_id for (b_id,) in outbound_ids]
+            if outbound_ids:
+                base_query = base_query.filter(
+                    or_(
+                        (Booking.scheduled_time >= start_local)
+                        & (Booking.scheduled_time < end_local),
+                        Booking.is_return
+                        & or_(
+                            Booking.scheduled_time.is_(None),
+                            ~Booking.time_confirmed,
+                        )
+                        & (Booking.parent_booking_id.in_(outbound_ids)),
+                    )
+                )
+            else:
+                base_query = base_query.filter(
+                    (Booking.scheduled_time >= start_local)
+                    & (Booking.scheduled_time < end_local)
+                )
+        elif start_date or end_date:
+            from shared.time_utils import day_local_bounds
+
+            start_local = None
+            end_local = None
+            if start_date:
+                start_local, _ = day_local_bounds(start_date)
+            if end_date:
+                _, end_local = day_local_bounds(end_date)
+            if start_local is not None:
+                base_query = base_query.filter(Booking.scheduled_time >= start_local)
+            if end_local is not None:
+                base_query = base_query.filter(Booking.scheduled_time < end_local)
+
+        # Statistiques globales (sans recherche ni filtres status)
+        try:
+            stats_row = base_query.with_entities(
+                func.count(Booking.id),
+                func.sum(
+                    case((Booking.status == BookingStatus.PENDING, 1), else_=0)
+                ),
+                func.sum(
+                    case(
+                        (
+                            Booking.status.in_(
+                                [
+                                    BookingStatus.ACCEPTED,
+                                    BookingStatus.ASSIGNED,
+                                    BookingStatus.EN_ROUTE,
+                                    BookingStatus.IN_PROGRESS,
+                                ]
+                            ),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ),
+                func.sum(
+                    case(
+                        (
+                            Booking.status.in_(
+                                [
+                                    BookingStatus.COMPLETED,
+                                    BookingStatus.RETURN_COMPLETED,
+                                ]
+                            ),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ),
+                func.sum(
+                    case((Booking.status == BookingStatus.CANCELED, 1), else_=0)
+                ),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                Booking.status.in_(
+                                    [
+                                        BookingStatus.COMPLETED,
+                                        BookingStatus.RETURN_COMPLETED,
+                                    ]
+                                ),
+                                Booking.amount,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ),
+            ).first()
+            if stats_row is None:
+                stats = {
+                    "total": 0,
+                    "pending": 0,
+                    "inProgress": 0,
+                    "completed": 0,
+                    "canceled": 0,
+                    "revenue": 0.0,
+                }
+            else:
+                stats = {
+                    "total": stats_row[0] or 0,
+                    "pending": stats_row[1] or 0,
+                    "inProgress": stats_row[2] or 0,
+                    "completed": stats_row[3] or 0,
+                    "canceled": stats_row[4] or 0,
+                    "revenue": float(stats_row[5] or 0),
+                }
+        except Exception:
+            logger.exception("Erreur calcul stats reservations")
+            stats = {
+                "total": 0,
+                "pending": 0,
+                "inProgress": 0,
+                "completed": 0,
+                "canceled": 0,
+                "revenue": 0,
+            }
+
+        query = base_query
+
+        # Filtre par onglet
+        if tab_filter:
+            if tab_filter == "pending":
+                query = query.filter(Booking.status == BookingStatus.PENDING)
+            elif tab_filter == "in_progress":
+                query = query.filter(
+                    Booking.status.in_(
+                        [
+                            BookingStatus.ACCEPTED,
+                            BookingStatus.ASSIGNED,
+                            BookingStatus.EN_ROUTE,
+                            BookingStatus.IN_PROGRESS,
+                        ]
+                    )
+                )
+            elif tab_filter == "completed":
+                query = query.filter(
+                    Booking.status.in_(
+                        [
+                            BookingStatus.COMPLETED,
+                            BookingStatus.RETURN_COMPLETED,
+                        ]
+                    )
+                )
+            elif tab_filter == "canceled":
+                query = query.filter(Booking.status == BookingStatus.CANCELED)
+
+        # Filtre statut
+        if status_filter and status_filter != "all":
+            status_key = status_filter.strip().upper()
+            if status_key == "COMPLETED":
+                query = query.filter(
+                    Booking.status.in_(
+                        [
+                            BookingStatus.COMPLETED,
+                            BookingStatus.RETURN_COMPLETED,
+                        ]
+                    )
+                )
+            else:
+                with suppress(Exception):
+                    query = query.filter(Booking.status == BookingStatus(status_key))
+
+        if exclude_canceled:
+            query = query.filter(Booking.status != BookingStatus.CANCELED)
+
+        # Recherche globale
+        if search_term:
+            like_term = f"%{search_term}%"
+            client_user = aliased(User)
+            driver_user = aliased(User)
+            query = (
+                query.outerjoin(Client, Booking.client)
+                .outerjoin(client_user, Client.user)
+                .outerjoin(Driver, Booking.driver)
+                .outerjoin(driver_user, Driver.user)
+            ).filter(
+                or_(
+                    cast(Booking.id, String).ilike(like_term),
+                    Booking.customer_name.ilike(like_term),
+                    Booking.pickup_location.ilike(like_term),
+                    Booking.dropoff_location.ilike(like_term),
+                    Client.contact_email.ilike(like_term),
+                    Client.contact_phone.ilike(like_term),
+                    client_user.first_name.ilike(like_term),
+                    client_user.last_name.ilike(like_term),
+                    cast(client_user.email, String).ilike(like_term),
+                    client_user.phone.ilike(like_term),
+                    driver_user.first_name.ilike(like_term),
+                    driver_user.last_name.ilike(like_term),
+                    driver_user.username.ilike(like_term),
+                    cast(driver_user.email, String).ilike(like_term),
+                )
+            ).distinct()
+
+        # Tri
+        order_scheduled = (
+            Booking.scheduled_time.asc()
+            if sort_order == "asc"
+            else Booking.scheduled_time.desc()
         )
-        total = len(all_reservations)
-        # Pagination manuelle
-        start_idx = (page - 1) * per_page
-        end_idx = start_idx + per_page
-        reservations = all_reservations[start_idx:end_idx]
+        order_id = Booking.id.asc() if sort_order == "asc" else Booking.id.desc()
+
+        query = query.order_by(
+            case((Booking.scheduled_time.is_(None), 1), else_=0),
+            order_scheduled.nullslast(),
+            order_id,
+        )
+
+        total = (
+            query.order_by(None).with_entities(Booking.id).distinct().count()
+        )
+
+        reservations = (
+            query.offset((page - 1) * per_page).limit(per_page).all()
+        )
 
         # Retourner les données dans le format attendu par le frontend
         try:
@@ -1396,21 +1654,17 @@ class CompanyReservations(Resource):
                 serialized_reservations.append(b.serialize)
         except Exception:
             raise
-        if flat:
-            return {
-                "reservations": serialized_reservations,
-                "total": total,
-                "page": page,
-                "per_page": per_page,
-                "total_pages": (total + per_page - 1) // per_page,
-            }, 200
-        return {
+        response_data = {
             "reservations": serialized_reservations,
             "total": total,
             "page": page,
             "per_page": per_page,
-            "total_pages": (total + per_page - 1) // per_page,
-        }, 200
+            "total_pages": (total + per_page - 1) // per_page if total > 0 else 0,
+            "stats": stats,
+        }
+        if flat:
+            return response_data, 200
+        return response_data, 200
 
     @jwt_required()
     @role_required(UserRole.company)
@@ -1467,6 +1721,44 @@ class AcceptReservation(Resource):
             return APIErrorHandler.handle_validation_error(
                 "Reservation not found",
                 logger_instance=logger,
+            )
+
+        # ✅ Séjour actif: garantir le tarif clinique à la confirmation
+        # (évite que le montant bascule vers le tarif client)
+        try:
+            from services.billing.client_stay_resolver import (
+                find_active_stay_for_client,
+                get_clinic_address_for_stay,
+            )
+
+            client_id_obj = getattr(booking, "client_id", None)
+            try:
+                client_id = int(client_id_obj) if client_id_obj is not None else None
+            except Exception:
+                client_id = None
+            stay = (
+                find_active_stay_for_client(
+                    client_id=client_id,
+                    reference_date=booking.scheduled_time,
+                )
+                if client_id
+                else None
+            )
+            clinic_info = get_clinic_address_for_stay(stay) if stay else None
+            clinic_rate = clinic_info.get("preferential_rate") if clinic_info else None
+            if clinic_rate is not None:
+                current_amount = getattr(booking, "amount", None)
+                if current_amount is None or float(current_amount) != float(clinic_rate):
+                    booking.amount = float(clinic_rate)
+                    logger.info(
+                        "💰 Tarif clinique appliqué à la confirmation (reservation_id=%s, amount=%s)",
+                        reservation_id,
+                        clinic_rate,
+                    )
+        except Exception as e:
+            logger.warning(
+                "⚠️ Échec de l'application du tarif clinique à la confirmation: %s",
+                e,
             )
 
         # ✅ FIX: Vérifier s'il y a un transfert actif AVANT de vérifier le statut
@@ -2459,9 +2751,7 @@ class DriverVacationsResource(Resource):
         data = request.get_json(silent=True) or {}
 
         # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-        from marshmallow import (  # pyright: ignore[reportMissingImports]
-            ValidationError,
-        )
+        from marshmallow import ValidationError
 
         from schemas.company_schemas import DriverVacationCreateSchema
         from schemas.validation_utils import handle_validation_error, validate_request
@@ -2579,9 +2869,7 @@ class CreateManualReservation(Resource):
         data = request.get_json() or {}
 
         # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-        from marshmallow import (  # pyright: ignore[reportMissingImports]
-            ValidationError,
-        )
+        from marshmallow import ValidationError
 
         from schemas.company_schemas import ManualBookingCreateSchema
         from schemas.validation_utils import handle_validation_error, validate_request
@@ -2614,15 +2902,111 @@ class CreateManualReservation(Resource):
                 return x.strip()
             return default
 
-        _bt_raw = _norm_str(
-            validated_data.get("billed_to_type")
-            or getattr(client, "default_billed_to_type", "patient"),
-            "patient",
+        # 🔍 Vérifier si le client a un séjour actif (hospitalisé)
+        from services.billing.client_stay_resolver import (
+            find_active_stay_for_client,
+            get_clinic_address_for_stay,
         )
-        billed_to_type = (_bt_raw or "patient").lower()
-        billed_to_company_id = validated_data.get("billed_to_company_id") or getattr(
-            client, "default_billed_to_company_id", None
+
+        scheduled_dt_for_stay = None
+        from contextlib import suppress
+        with suppress(Exception):
+            scheduled_dt_for_stay = parse_local_naive(validated_data["scheduled_time"])
+
+        active_stay = None
+        if scheduled_dt_for_stay:
+            logger.info(
+                "🔍 [Facturation] Recherche séjour actif pour client_id=%s à la date %s",
+                client_id,
+                scheduled_dt_for_stay.isoformat() if scheduled_dt_for_stay else None,
+            )
+            active_stay = find_active_stay_for_client(
+                client_id=client_id, reference_date=scheduled_dt_for_stay
+            )
+            if active_stay:
+                logger.info(
+                    "✅ [Facturation] Séjour actif trouvé: stay_id=%s (start_date=%s, end_date=%s)",
+                    active_stay.id,
+                    active_stay.start_date.isoformat() if active_stay.start_date else None,
+                    active_stay.end_date.isoformat() if active_stay.end_date else None,
+                )
+            else:
+                logger.info("ℹ️ [Facturation] Aucun séjour actif trouvé pour cette date")
+
+        # 🔍 Traiter bill_to_patient (override depuis frontend)
+        bill_to_patient_override = validated_data.get("bill_to_patient", False)
+        logger.info(
+            "💳 [Facturation] bill_to_patient override: %s, active_stay: %s",
+            bill_to_patient_override,
+            active_stay is not None,
         )
+
+        # ✅ RÈGLE MÉTIER STRICTE (source de vérité unique) :
+        # 1) Si client a un séjour actif à la date/heure de la réservation :
+        #    - SI override "facturation patient" coché :
+        #        billed_to_type = 'patient'
+        #        billing_source = 'manual_override'
+        #    - SINON (pas d'override) :
+        #        billed_to_type = 'clinic'
+        #        billing_source = 'client_stay'
+        # 2) Si client n'est PAS hospitalisé :
+        #    - billed_to_type = 'patient'
+        #    - billing_source = 'default_client'
+
+        # Initialiser billed_to_company_id pour éviter "possibly unbound"
+        billed_to_company_id = None
+
+        # ✅ Appliquer strictement la règle métier (pas de fallback sur billed_to_type explicite)
+        if active_stay:
+            # Client hospitalisé → appliquer la règle stricte
+            if bill_to_patient_override:
+                # Override "facturer patient" activé → facturer au patient
+                billed_to_type = "patient"
+                billed_to_company_id = None
+                logger.info(
+                    "💳 [Facturation] Client hospitalisé AVEC override patient → billed_to_type = 'patient'"
+                )
+            else:
+                # Pas d'override → facturer à la clinique (règle stricte)
+                clinic_info = get_clinic_address_for_stay(active_stay)
+                if clinic_info and clinic_info.get("clinic_id"):
+                    billed_to_type = "clinic"
+                    billed_to_company_id = clinic_info.get("clinic_id")
+                    logger.info(
+                        "💳 [Facturation] Client hospitalisé SANS override → billed_to_type = 'clinic' (clinic_id=%s)",
+                        billed_to_company_id,
+                    )
+                else:
+                    # Pas de clinique trouvée → erreur logique (ne devrait pas arriver)
+                    logger.error(
+                        "❌ [Facturation] Client hospitalisé mais pas de clinique trouvée (stay_id=%s)",
+                        active_stay.id if active_stay else None,
+                    )
+                    # Fallback sécurisé : utiliser default client
+                    _bt_raw = _norm_str(
+                        getattr(client, "default_billed_to_type", "patient"), "patient"
+                    )
+                    billed_to_type = (_bt_raw or "patient").lower()
+                    logger.warning(
+                        "💳 [Facturation] Fallback default client: %s", billed_to_type
+                    )
+        else:
+            # Client non hospitalisé → facturer au patient (default)
+            _bt_raw = _norm_str(
+                getattr(client, "default_billed_to_type", "patient"), "patient"
+            )
+            billed_to_type = (_bt_raw or "patient")
+            billed_to_type = billed_to_type.lower()
+            logger.info(
+                "💳 [Facturation] Client non hospitalisé → billed_to_type = '%s' (default)",
+                billed_to_type,
+            )
+
+        # Résoudre billed_to_company_id si pas déjà défini
+        if not billed_to_company_id:
+            billed_to_company_id = validated_data.get("billed_to_company_id") or getattr(
+                client, "default_billed_to_company_id", None
+            )
         billed_to_contact = _norm_str(
             validated_data.get("billed_to_contact")
             or getattr(client, "default_billed_to_contact", None),
@@ -3097,11 +3481,17 @@ class CreateManualReservation(Resource):
             else:
                 display_name = full_name or (getattr(user, "username", "") or "Client")
 
-            # 💰 Utiliser le tarif préférentiel du client si disponible,
-            # sinon le montant fourni (utilise données validées)
-            amount_to_use = float(validated_data.get("amount") or 0)
+            # 💰 Utiliser le montant fourni si présent,
+            # sinon appliquer le tarif préférentiel du client
+            provided_amount = validated_data.get("amount")
+            has_provided_amount = (
+                provided_amount is not None
+                and float(provided_amount) > PREFERENTIAL_RATE_ZERO
+            )
+            amount_to_use = float(provided_amount or 0)
             if (
-                client.preferential_rate
+                not has_provided_amount
+                and client.preferential_rate
                 and client.preferential_rate > PREFERENTIAL_RATE_ZERO
             ):
                 amount_to_use = float(client.preferential_rate)
@@ -3189,6 +3579,34 @@ class CreateManualReservation(Resource):
                 outbound.billed_to_company_id = billed_to_company_id
                 outbound.billed_to_contact = billed_to_contact
 
+                # 🔍 Tracer l'origine de la décision de facturation (billing_source)
+                # ✅ Appliquer strictement la règle métier (cohérent avec billed_to_type ci-dessus)
+                from models.enums import BillingSource
+
+                if active_stay:
+                    # Client hospitalisé
+                    if bill_to_patient_override:
+                        # Override patient activé → manual_override
+                        outbound.billing_source = BillingSource.MANUAL_OVERRIDE
+                        outbound.billing_source_ref = "manual_booking_patient_override"
+                        logger.info(
+                            "💳 [Facturation] billing_source = MANUAL_OVERRIDE (patient override malgré hospitalisation)"
+                        )
+                    else:
+                        # Pas d'override → client_stay
+                        outbound.billing_source = BillingSource.CLIENT_STAY
+                        outbound.billing_source_ref = (
+                            f"stay#{active_stay.id}" if active_stay else None
+                        )
+                        logger.info(
+                            "💳 [Facturation] billing_source = CLIENT_STAY (hospitalisation automatique)"
+                        )
+                else:
+                    # Client non hospitalisé → default_client
+                    outbound.billing_source = BillingSource.DEFAULT_CLIENT
+                    outbound.billing_source_ref = None
+                    logger.info("💳 [Facturation] billing_source = DEFAULT_CLIENT (non hospitalisé)")
+
                 # 🏥 Informations médicales (utilise données validées)
                 outbound.medical_facility = validated_data.get("medical_facility")
                 outbound.doctor_name = validated_data.get("doctor_name")
@@ -3239,6 +3657,9 @@ class CreateManualReservation(Resource):
                     return_booking.billed_to_type = billed_to_type
                     return_booking.billed_to_company_id = billed_to_company_id
                     return_booking.billed_to_contact = billed_to_contact
+                    # 🔍 Même billing_source que l'aller
+                    return_booking.billing_source = outbound.billing_source
+                    return_booking.billing_source_ref = outbound.billing_source_ref
 
                     # 🏥 Informations médicales (mêmes que l'aller)
                     # - utilise données validées
@@ -3317,6 +3738,19 @@ class ClientReservations(Resource):
                 logger,
             )
 
+        include_invoices = (
+            (request.args.get("include_invoices") or "true").strip().lower() != "false"
+        )
+        limit = None
+        limit_raw = (request.args.get("limit") or "").strip()
+        if limit_raw:
+            try:
+                limit_value = int(limit_raw)
+                if limit_value > 0:
+                    limit = min(limit_value, 50)
+            except ValueError:
+                limit = None
+
         # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
         from application.companies.clients.aggregate_client_reservations_and_invoices import (
             AggregateClientReservationsAndInvoicesUseCase,
@@ -3330,7 +3764,12 @@ class ClientReservations(Resource):
             booking_repo=BookingRepository(),
             invoice_repo=InvoiceRepository(),
         )
-        result = uc.execute(company_id=cid, client_id=int(client_id))
+        result = uc.execute(
+            company_id=cid,
+            client_id=int(client_id),
+            limit=limit,
+            include_invoices=include_invoices,
+        )
         if not result.ok:
             return APIErrorHandler.handle_not_found(
                 "Client",
@@ -3677,9 +4116,7 @@ class CompanyClients(Resource):
         )
 
         # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-        from marshmallow import (  # pyright: ignore[reportMissingImports]
-            ValidationError,
-        )
+        from marshmallow import ValidationError
 
         from schemas.company_schemas import ClientCreateSchema
         from schemas.validation_utils import handle_validation_error, validate_request
@@ -4144,9 +4581,7 @@ class CreateDriver(Resource):
         data = request.get_json(silent=True) or {}
 
         # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-        from marshmallow import (  # pyright: ignore[reportMissingImports]
-            ValidationError,
-        )
+        from marshmallow import ValidationError
 
         from schemas.company_schemas import DriverCreateSchema
         from schemas.validation_utils import handle_validation_error, validate_request
@@ -4322,9 +4757,7 @@ class SingleReservation(Resource):
         data = request.get_json() or {}
 
         # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-        from marshmallow import (  # pyright: ignore[reportMissingImports]
-            ValidationError,
-        )
+        from marshmallow import ValidationError
 
         from schemas.booking_schemas import BookingUpdateSchema
         from schemas.validation_utils import handle_validation_error, validate_request
@@ -4932,9 +5365,7 @@ class UpdateReservation(Resource):
         data = request.get_json() or {}
 
         # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-        from marshmallow import (  # pyright: ignore[reportMissingImports]
-            ValidationError,
-        )
+        from marshmallow import ValidationError
 
         from schemas.booking_schemas import BookingUpdateSchema
         from schemas.validation_utils import handle_validation_error, validate_request
@@ -5467,9 +5898,7 @@ class MyVehicle(Resource):
         data = request.get_json(silent=True) or {}
 
         # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-        from marshmallow import (  # pyright: ignore[reportMissingImports]
-            ValidationError,
-        )
+        from marshmallow import ValidationError
 
         from schemas.company_schemas import VehicleUpdateSchema
         from schemas.validation_utils import handle_validation_error, validate_request
