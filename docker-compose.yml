@@ -45,29 +45,6 @@ services:
   #   networks:
   #     - default
 
-  migrations:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.production
-      target: development
-    command: alembic upgrade head
-    env_file:
-      - backend/.env
-    environment:
-      - PYTHONPATH=/app
-      - DATABASE_URL=postgresql+psycopg://atmr:atmr@postgres:5432/atmr
-      - FLASK_CONFIG=${FLASK_CONFIG:-development}
-      - FLASK_ENV=${FLASK_ENV:-development}
-      - FLASK_APP=app.py
-    volumes:
-      - ./backend:/app
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: "no"
-    profiles:
-      - migrations # Service optionnel, activer avec: docker-compose --profile migrations up migrations
-
   api:
     build:
       context: ./backend
@@ -103,6 +80,7 @@ services:
       - PYTHONPATH=/app
       - GUNICORN_WORKERS=2
       - DATABASE_URL=postgresql+psycopg://atmr:atmr@postgres:5432/atmr
+      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY:-AIzaSyBjQWCgiGpLJsrp_jmSDC1reBeqgerA7uE}
       - SOCKETIO_ASYNC_MODE=${SOCKETIO_ASYNC_MODE:-eventlet}
       - SIO_DISABLE_UPGRADES=false
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './InvoicesRegistry.module.css';
 import {
@@ -19,10 +19,14 @@ import PaymentModal from './components/PaymentModal';
 import ReminderModal from './components/ReminderModal';
 import NewInvoiceModal from './components/NewInvoiceModal';
 import SendEmailModal from './components/SendEmailModal';
+import ExportPaymentsModal from './components/ExportPaymentsModal';
+import useUrlSearchSync from '../../../../hooks/useUrlSearchSync';
 
 const InvoicesRegistry = () => {
   const { company } = useCompanyData();
   const navigate = useNavigate();
+  const searchInputRef = useRef(null);
+  const { initialSearch, shouldFocus, consumeFocus, initialized } = useUrlSearchSync();
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -50,11 +54,16 @@ const InvoicesRegistry = () => {
     invoice: null,
   });
   const [newInvoiceModal, setNewInvoiceModal] = useState({ open: false, invoiceDraft: null });
+  /** Incrémenté uniquement après annulation de facture; déclenche refetch eligible + S2 dans le modal. */
+  const [invoiceDataRefreshTrigger, setInvoiceDataRefreshTrigger] = useState(0);
   const [sendEmailModal, setSendEmailModal] = useState({
     open: false,
     invoice: null,
     isReminder: false,
     reminderId: null,
+  });
+  const [exportPaymentsModal, setExportPaymentsModal] = useState({
+    open: false,
   });
 
   // Charger les factures
@@ -82,6 +91,20 @@ const InvoicesRegistry = () => {
   useEffect(() => {
     loadInvoices();
   }, [loadInvoices]);
+
+  useEffect(() => {
+    if (!initialized) return;
+    if (initialSearch && initialSearch !== filters.q) {
+      setFilters((prev) => ({ ...prev, q: initialSearch, page: 1 }));
+    }
+    if (shouldFocus) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      requestAnimationFrame(() => {
+        searchInputRef.current?.focus();
+      });
+      consumeFocus();
+    }
+  }, [initialized, initialSearch, shouldFocus, consumeFocus, filters.q]);
 
   // Handlers
   const handleFilterChange = (newFilters) => {
@@ -196,6 +219,7 @@ const InvoicesRegistry = () => {
     try {
       await cancelInvoice(company.id, invoiceId);
       await loadInvoices();
+      setInvoiceDataRefreshTrigger((t) => t + 1);
     } catch (err) {
       setError(err.message || "Erreur lors de l'annulation de la facture");
     }
@@ -265,7 +289,32 @@ const InvoicesRegistry = () => {
     return <span className={`${styles.badge} ${config.className}`}>{config.label}</span>;
   };
 
-  const getReminderBadge = (level) => {
+  const getReminderBadge = (invoice) => {
+    // ✅ NOUVEAU : Utiliser les données du rappel consolidé si disponibles
+    if (invoice.reminders && invoice.reminders.length > 0) {
+      // Trouver le rappel le plus récent
+      const latestReminder = invoice.reminders
+        .sort((a, b) => new Date(b.generated_at || 0) - new Date(a.generated_at || 0))[0];
+      
+      if (latestReminder.status === 'PAID') {
+        return (
+          <span className={`${styles.reminderBadge} ${styles.reminderBadgePaid}`}>
+            Rappel payé
+          </span>
+        );
+      }
+      
+      if (latestReminder.status === 'OPEN' && latestReminder.reminder_fee_amount) {
+        return (
+          <span className={`${styles.reminderBadge} ${styles.reminderBadgeOpen}`}>
+            Rappel {parseFloat(latestReminder.reminder_fee_amount).toFixed(2)} CHF
+          </span>
+        );
+      }
+    }
+    
+    // ✅ Fallback : utiliser reminder_level pour rétrocompatibilité
+    const level = invoice.reminder_level || 0;
     if (level === 0) return null;
 
     const config = {
@@ -301,6 +350,12 @@ const InvoicesRegistry = () => {
               ⚙️ Paramètres
             </button>
             <button
+              className={styles.exportBtn}
+              onClick={() => setExportPaymentsModal({ open: true })}
+            >
+              ⬇️ Export compta (paiements)
+            </button>
+            <button
               className={styles.newInvoiceBtn}
               onClick={() => setNewInvoiceModal({ open: true, invoiceDraft: null })}
             >
@@ -310,7 +365,12 @@ const InvoicesRegistry = () => {
         </div>
 
         {/* Filtres dans le même conteneur */}
-        <Filters filters={filters} onFilterChange={handleFilterChange} companyId={company?.id} />
+        <Filters
+          filters={filters}
+          onFilterChange={handleFilterChange}
+          companyId={company?.id}
+          searchInputRef={searchInputRef}
+        />
       </section>
 
       {/* Statistiques KPI */}
@@ -379,10 +439,12 @@ const InvoicesRegistry = () => {
                 <tr key={invoice.id}>
                   <td>{invoice.invoice_number}</td>
                   <td>
-                    {/* Afficher l'institution si facturation tierce, sinon le client */}
-                    {invoice.bill_to_client_id &&
-                    invoice.bill_to_client_id !== invoice.client_id &&
-                    invoice.bill_to_client
+                    {/* ✅ S2: Afficher la clinique si billed_to_company_id est présent */}
+                    {invoice.billed_to_company_id && invoice.billed_to_company
+                      ? invoice.billed_to_company.name || 'Clinique'
+                      : invoice.bill_to_client_id &&
+                        invoice.bill_to_client_id !== invoice.client_id &&
+                        invoice.bill_to_client
                       ? invoice.bill_to_client.institution_name ||
                         `${invoice.bill_to_client.first_name || ''} ${
                           invoice.bill_to_client.last_name || ''
@@ -404,7 +466,7 @@ const InvoicesRegistry = () => {
                   <td>{invoice.amount_paid.toFixed(2)} CHF</td>
                   <td>{invoice.balance_due.toFixed(2)} CHF</td>
                   <td>{getStatusBadge(invoice.status)}</td>
-                  <td>{getReminderBadge(invoice.reminder_level)}</td>
+                  <td>{getReminderBadge(invoice)}</td>
                   <td>
                     <InvoiceRowActions
                       invoice={invoice}
@@ -468,6 +530,7 @@ const InvoicesRegistry = () => {
         onClose={() => setNewInvoiceModal({ open: false, invoiceDraft: null })}
         onInvoiceGenerated={handleNewInvoiceGenerated}
         companyId={company?.id}
+        refreshTrigger={invoiceDataRefreshTrigger}
       />
 
       {sendEmailModal.open && (
@@ -479,6 +542,15 @@ const InvoicesRegistry = () => {
           onSend={handleSendEmail}
         />
       )}
+
+      <ExportPaymentsModal
+        open={exportPaymentsModal.open}
+        onClose={() => setExportPaymentsModal({ open: false })}
+        companyId={company?.id}
+        companyName={company?.name}
+        initialYear={filters.year}
+        initialMonth={filters.month || null}
+      />
     </>
   );
 };

@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import styles from './ClientFormModal.module.css';
 import AddressAutocomplete from '../../../../components/common/AddressAutocomplete';
 import { parseAddressWithEstablishment } from '../../../../utils/addressParser';
+import ClientStaysSection from './ClientStaysSection';
+import ClientBillingPartiesSection from './ClientBillingPartiesSection';
 
 const EditClientModal = ({ client, onClose, onSave }) => {
   // ✅ CORRECTION: Les données viennent directement de client, pas de client.domicile
@@ -123,18 +125,45 @@ const EditClientModal = ({ client, onClose, onSave }) => {
       return;
     }
 
+    if (!formData.is_institution && !formData.gender) {
+      setError("Merci de sélectionner une civilité");
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
-      // Ajouter les coordonnées GPS au payload
+      // Construire le payload de base sans les champs utilisateur
       const payload = {
-        ...formData,
+        is_institution: formData.is_institution,
+        institution_name: formData.institution_name,
+        residence_facility: formData.residence_facility,
+        avs_number: formData.avs_number,
+        contact_email: formData.contact_email,
+        contact_phone: formData.contact_phone,
+        billing_address: formData.billing_address,
+        domicile_address: formData.domicile_address,
+        domicile_zip: formData.domicile_zip,
+        domicile_city: formData.domicile_city,
+        preferential_rate: formData.preferential_rate,
+        is_active: formData.is_active,
         domicile_lat: domicileCoords.lat,
         domicile_lon: domicileCoords.lon,
         billing_lat: billingCoords.lat,
         billing_lon: billingCoords.lon,
       };
+
+      // Ajouter les champs utilisateur uniquement si ce n'est pas une institution
+      if (!formData.is_institution) {
+        // Ne pas envoyer gender si vide ou undefined
+        if (formData.gender && formData.gender.trim()) {
+          payload.gender = formData.gender;
+        }
+        if (formData.birth_date && formData.birth_date.trim()) {
+          payload.birth_date = formData.birth_date;
+        }
+      }
 
       console.log('📤 Payload envoyé:', payload);
 
@@ -227,8 +256,9 @@ const EditClientModal = ({ client, onClose, onSave }) => {
                       onChange={handleChange}
                       className="form-input"
                       disabled={loading}
+                      required={!formData.is_institution}
                     >
-                      <option value="">-- Sélectionnez --</option>
+                      <option value="">Merci de sélectionner</option>
                       <option value="male">Monsieur</option>
                       <option value="female">Madame</option>
                     </select>
@@ -517,6 +547,18 @@ const EditClientModal = ({ client, onClose, onSave }) => {
             </button>
           </div>
         </form>
+
+        {/* 🏥 Séjours d'hospitalisation - Uniquement pour les clients (pas les institutions) */}
+        {/* Placé en dehors du formulaire principal pour éviter les formulaires imbriqués */}
+        {!formData.is_institution && (
+          <ClientStaysSection clientId={client.id} />
+        )}
+
+        {/* 💰 Tiers payeur / Curateur - Uniquement pour les clients (pas les institutions) */}
+        {/* Placé en dehors du formulaire principal pour éviter les formulaires imbriqués */}
+        {!formData.is_institution && (
+          <ClientBillingPartiesSection clientId={client.id} />
+        )}
       </div>
     </div>
   );

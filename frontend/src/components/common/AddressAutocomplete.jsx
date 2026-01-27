@@ -1,5 +1,6 @@
 // frontend/src/components/common/AddressAutocomplete.jsx
 import React, { useEffect, useMemo, useRef, useState, useDeferredValue, useTransition, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import apiClient from '../../utils/apiClient';
 // Using apiClient instead of fetch to properly handle HTTPS redirects
 
@@ -29,6 +30,8 @@ export default function AddressAutocomplete({
 
   const abortRef = useRef(null);
   const wrapRef = useRef(null);
+  const inputRef = useRef(null);
+  const dropdownRef = useRef(null);
 
   // Biais géographique (Genève par défaut)
   const BIAS = bias || { lat: 46.2044, lon: 6.1432 };
@@ -166,6 +169,13 @@ export default function AddressAutocomplete({
     // #endregion
     const q = (queryText || '').toString().trim();
 
+    // ✅ Ignorer les valeurs par défaut qui ne sont pas de vraies adresses
+    const DEFAULT_VALUES = ['non spécifié', 'non specifie', 'n/a', 'na', ''];
+    if (DEFAULT_VALUES.includes(q.toLowerCase())) {
+      console.log(`[AddressAutocomplete] ⚠️ Ignoré valeur par défaut: "${q}"`);
+      return [];
+    }
+
     // 1) Proxy backend — mélange alias/favoris + Photon si ton backend le fait
     try {
       // ✅ Utiliser apiClient qui gère automatiquement le baseURL
@@ -183,7 +193,11 @@ export default function AddressAutocomplete({
             console.log(`[AddressAutocomplete] ✅ Backend retourne ${data.length} résultats pour "${q}"`);
             return data;
           } else {
-            console.log(`[AddressAutocomplete] ⚠️ Backend retourne une liste vide pour "${q}"`);
+            // Ne pas logger d'avertissement pour les valeurs par défaut
+            const DEFAULT_VALUES = ['non spécifié', 'non specifie', 'n/a', 'na'];
+            if (!DEFAULT_VALUES.includes(q.toLowerCase())) {
+              console.log(`[AddressAutocomplete] ⚠️ Backend retourne une liste vide pour "${q}"`);
+            }
           }
       }
       } else {
@@ -353,6 +367,18 @@ export default function AddressAutocomplete({
     setJustSelected(false); // Réinitialiser le flag si l'utilisateur modifie
     setUserIsTyping(true); // L'utilisateur est en train de taper
     onChange?.({ target: { name, value: v } });
+    
+    // Recalculer la position du dropdown si ouvert (au cas où l'input change de taille)
+    if (open && inputRef.current) {
+      requestAnimationFrame(() => {
+        const rect = inputRef.current.getBoundingClientRect();
+        setDropdownPosition({
+          top: rect.bottom + 2,
+          left: rect.left,
+          width: rect.width,
+        });
+      });
+    }
   }
 
   // Groupes : alias/favoris en tête, puis Google Places, puis autres (Photon)
@@ -511,9 +537,92 @@ export default function AddressAutocomplete({
   const listboxId = `${name || 'address'}-ac-listbox`;
   const activeId = highlight >= 0 ? `${name || 'address'}-ac-option-${highlight}` : undefined;
 
+  // Calculer la position du dropdown en position fixed pour éviter d'être coupé par overflow
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
+
+  useEffect(() => {
+    if (open && inputRef.current) {
+      const updatePosition = () => {
+        if (!inputRef.current) return;
+        const rect = inputRef.current.getBoundingClientRect();
+        // Pour position: fixed, getBoundingClientRect() donne les coordonnées par rapport au viewport
+        // Ces coordonnées sont exactement ce dont nous avons besoin pour position: fixed
+        const newPosition = {
+          top: rect.bottom + 2, // Juste en dessous de l'input avec 2px d'espacement
+          left: rect.left, // Aligné à gauche de l'input
+          width: rect.width, // Exactement la même largeur que l'input
+        };
+        setDropdownPosition(newPosition);
+      };
+      
+      // Mettre à jour immédiatement
+      updatePosition();
+      
+      // Mettre à jour après le prochain frame pour s'assurer que le DOM est prêt
+      const rafId1 = requestAnimationFrame(() => {
+        updatePosition();
+        // Double RAF pour s'assurer que tout est bien rendu (surtout dans les accordéons)
+        requestAnimationFrame(() => {
+          updatePosition();
+        });
+      });
+      
+      // Petit délai supplémentaire pour les cas où le rendu prend plus de temps
+      const timeoutId = setTimeout(() => {
+        updatePosition();
+      }, 50);
+      
+      // Écouter les événements de scroll et resize
+      window.addEventListener('scroll', updatePosition, true);
+      window.addEventListener('resize', updatePosition);
+      
+      // ResizeObserver pour détecter les changements de taille de l'input (ex: accordion qui s'ouvre)
+      let resizeObserver = null;
+      if (window.ResizeObserver && inputRef.current) {
+        resizeObserver = new ResizeObserver(() => {
+          updatePosition();
+        });
+        resizeObserver.observe(inputRef.current);
+      }
+      
+      // Écouter aussi les scrolls dans les conteneurs parents (form, accordionContent, etc.)
+      const scrollContainers = [];
+      let parent = inputRef.current.parentElement;
+      while (parent && parent !== document.body) {
+        const style = window.getComputedStyle(parent);
+        if (parent.scrollHeight > parent.clientHeight || 
+            style.overflow === 'auto' || 
+            style.overflowY === 'auto' ||
+            style.overflow === 'scroll' ||
+            style.overflowY === 'scroll') {
+          parent.addEventListener('scroll', updatePosition, true);
+          scrollContainers.push(parent);
+        }
+        parent = parent.parentElement;
+      }
+      
+      return () => {
+        cancelAnimationFrame(rafId1);
+        clearTimeout(timeoutId);
+        window.removeEventListener('scroll', updatePosition, true);
+        window.removeEventListener('resize', updatePosition);
+        if (resizeObserver) {
+          resizeObserver.disconnect();
+        }
+        scrollContainers.forEach((container) => {
+          container.removeEventListener('scroll', updatePosition, true);
+        });
+      };
+    } else if (!open) {
+      // Réinitialiser quand fermé
+      setDropdownPosition({ top: 0, left: 0, width: 0 });
+    }
+  }, [open, items.length]); // Recalculer quand le dropdown s'ouvre ou que les résultats arrivent
+
   return (
-    <div ref={wrapRef} style={{ position: 'relative', width: '100%' }}>
+    <div ref={wrapRef} style={{ position: 'relative', width: '100%', zIndex: 1 }}>
       <input
+        ref={inputRef}
         type="text"
         name={name}
         value={query}
@@ -545,25 +654,44 @@ export default function AddressAutocomplete({
         }}
       />
 
-      {open && (
-        <div
-          id={listboxId}
-          role="listbox"
-          style={{
-            position: 'absolute',
-            top: '100%',
-            left: 0,
-            right: 0,
-            zIndex: 1000,
-            background: '#fff',
-            border: '1px solid #e6e6e6',
-            borderTop: 'none',
-            borderRadius: '0 0 8px 8px',
-            maxHeight: 280,
-            overflowY: 'auto',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
-          }}
-        >
+      {open &&
+        createPortal(
+          <div
+            ref={dropdownRef}
+            id={listboxId}
+            role="listbox"
+            style={(() => {
+              // Calculer la position avec fallback si nécessaire
+              let top = dropdownPosition.top;
+              let left = dropdownPosition.left;
+              let width = dropdownPosition.width;
+              
+              // Si la position n'est pas encore calculée ou invalide, la calculer directement
+              if ((top <= 0 || left < 0 || width <= 0) && inputRef.current) {
+                const rect = inputRef.current.getBoundingClientRect();
+                top = rect.bottom + 2;
+                left = rect.left;
+                width = rect.width;
+              }
+              
+              return {
+                position: 'fixed',
+                top: `${top}px`,
+                left: `${left}px`,
+                width: `${width}px`,
+                zIndex: 1060, /* Au-dessus du drawer (1050) et du modal backdrop (1040) */
+                background: '#fff',
+                border: '1px solid #e6e6e6',
+                borderTop: 'none',
+                borderRadius: '0 0 8px 8px',
+                maxHeight: 280,
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
+                marginTop: '2px', /* Petit espace pour éviter que la bordure ne touche l'input */
+              };
+            })()}
+          >
           {loading && <div style={{ padding: '10px 12px', color: '#6b7280' }}>Recherche…</div>}
 
           {!loading && visibleItems.length === 0 && (
@@ -749,8 +877,9 @@ export default function AddressAutocomplete({
               )}
             </>
           )}
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

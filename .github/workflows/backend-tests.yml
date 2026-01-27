@@ -313,6 +313,110 @@ jobs:
             backend/coverage_report.json
           retention-days: 7
 
+  integration-invoices:
+    name: Integration (factures S2 / exclusions)
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')) ||
+      (github.event_name == 'pull_request' && (github.base_ref == 'main' || github.base_ref == 'develop')) ||
+      github.event_name == 'workflow_dispatch'
+
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/atmr_test
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: test
+      PGPASSWORD: test
+      PGDATABASE: atmr_test
+      REDIS_URL: redis://localhost:6379/0
+      FLASK_CONFIG: testing
+      SECRET_KEY: test-secret-key
+      JWT_SECRET_KEY: test-jwt-secret
+      APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+      API_LEGACY_ENABLED: "false"
+      PYTHONPATH: ${{ github.workspace }}
+      SOCKETIO_ASYNC_MODE: threading
+      SKIP_SOCKETIO: "true"
+      SKIP_ROUTES_INIT: "true"
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: atmr_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d atmr_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcairo2-dev libffi-dev pkg-config postgresql-client redis-tools
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-timeout
+          pip install factory-boy freezegun psycopg2-binary flask-migrate
+          pip install sentry-sdk
+          if [ -f backend/requirements.txt ]; then
+            pip install -r backend/requirements.txt
+          fi
+          if [ -f backend/requirements-dev.txt ]; then
+            pip install -r backend/requirements-dev.txt
+          fi
+          if [ -f backend/requirements-otel.txt ]; then
+            pip install -r backend/requirements-otel.txt
+          fi
+
+      - name: Wait for PostgreSQL
+        run: |
+          for i in $(seq 1 30); do
+            PGPASSWORD=test psql -h localhost -U test -d atmr_test -c 'SELECT 1' > /dev/null 2>&1 && break
+            sleep 1
+          done
+          PGPASSWORD=test psql -h localhost -U test -d atmr_test -c 'SELECT 1' || exit 1
+
+      - name: Run migrations
+        env:
+          FLASK_APP: backend.wsgi
+        run: |
+          cd backend && flask db upgrade heads
+
+      - name: Run invoice integration tests
+        timeout-minutes: 10
+        run: |
+          pytest backend/tests/integration/test_invoices_integration.py -v \
+            -k "test_clinic_monthly_totals_exclusions or test_cancel_direct_client_invoice" \
+            --timeout=120 --timeout-method=thread
+
   e2e-tests:
     name: E2E Tests
     runs-on: ubuntu-latest

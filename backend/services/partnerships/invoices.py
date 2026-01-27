@@ -384,7 +384,7 @@ class PartnerInvoiceService:
                 )
             )
 
-        # Générer le PDF
+        # Générer le PDF (brouillon : la facture reste DRAFT jusqu'à action explicite "Envoyer")
         try:
             pdf_url = self._generate_invoice_pdf(partner_invoice, transfers)
             partner_invoice.pdf_url = pdf_url
@@ -395,8 +395,8 @@ class PartnerInvoiceService:
                 e,
             )
 
-        # Marquer comme envoyée
-        partner_invoice.status = PartnerInvoiceStatus.SENT
+        # Rester en DRAFT : workflow Brouillon → (action "Envoyer") → Envoyée (SENT)
+        # Ne pas appeler mark_as_sent ici.
 
         db.session.commit()
 
@@ -509,6 +509,42 @@ class PartnerInvoiceService:
                 "La génération PDF pour les factures partenaires n'est pas encore disponible. "
                 + "Le PDF sera généré lors de la création de la facture."
             ) from e
+
+    def mark_as_sent(
+        self, partner_invoice_id: int, company_id: int
+    ) -> PartnerInvoice:
+        """Marque une facture partenaire comme envoyée (workflow Brouillon → Envoyée).
+
+        Args:
+            partner_invoice_id: ID de la facture
+            company_id: ID de l'entreprise qui envoie (doit être executing_company_id)
+
+        Returns:
+            PartnerInvoice mise à jour
+
+        Raises:
+            ValueError: Si facture introuvable, company non autorisée ou statut != DRAFT
+        """
+        partner_invoice = PartnerInvoice.query.get(partner_invoice_id)
+        if not partner_invoice:
+            raise ValueError(f"Facture partenaire {partner_invoice_id} introuvable")
+        if partner_invoice.executing_company_id != company_id:
+            raise ValueError(
+                "Seule l'entreprise exécutante peut marquer cette facture comme envoyée"
+            )
+        if partner_invoice.status != PartnerInvoiceStatus.DRAFT:
+            raise ValueError(
+                f"Déjà envoyée ou statut invalide (statut actuel: {partner_invoice.status})"
+            )
+        partner_invoice.status = PartnerInvoiceStatus.SENT
+        partner_invoice.sent_at = datetime.now(UTC)
+        db.session.commit()
+        logger.info(
+            "Facture partenaire %s marquée comme envoyée (company_id=%s)",
+            partner_invoice_id,
+            company_id,
+        )
+        return partner_invoice
 
     def mark_as_paid(self, partner_invoice_id: int) -> PartnerInvoice:
         """Marque une facture partenaire comme payée.

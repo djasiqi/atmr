@@ -27,7 +27,10 @@ from .base import (
 from .booking import Booking
 from .booking_transfer import BookingTransfer
 from .client import Client
+from .client_stay import ClientStay
+from .clinic_billing_party_mapping import ClinicBillingPartyMapping
 from .company import Company
+from .transport_voucher import TransportVoucher, TransportVoucherFile
 from .delay_event import DelayEvent
 from .device_token import DeviceToken
 from .dispatch import (
@@ -53,12 +56,16 @@ from .enums import (
     AssignmentStatus,
     BookingStatus,
     BreakType,
+    BillingReviewStatus,
+    BillingPartyType,
+    BillingSource,
     ClientType,
     DispatchMode,
     DispatchStatus,
     DriverState,
     DriverType,
     GenderEnum,
+    InvoiceBillingStrategy,
     InvoiceLineType,
     InvoiceStatus,
     PartnershipStatus,
@@ -69,11 +76,15 @@ from .enums import (
     SenderRole,
     ShiftStatus,
     ShiftType,
+    TransportVoucherStatus,
+    TransportVoucherType,
     UnavailabilityReason,
     UserRole,
     VacationType,
 )
 from .billing_profile import CompanyBillingProfile
+from .billing_audit_log import BillingAuditLog
+from .billing_party import BillingParty, ClientBillingParty
 from .eta_accuracy_log import EtaAccuracyLog
 from .invoice import (
     CompanyBillingSettings,
@@ -113,7 +124,15 @@ __all__ = [
     "BookingStatus",
     "BookingTransfer",
     "BreakType",
+    "BillingParty",
+    "BillingPartyType",
+    "BillingAuditLog",
+    "BillingReviewStatus",
+    "BillingSource",
+    "ClientBillingParty",
     "Client",
+    "ClientStay",
+    "ClinicBillingPartyMapping",
     "ClientType",
     "Company",
     "CompanyBillingSettings",
@@ -141,6 +160,7 @@ __all__ = [
     "FavoritePlace",
     "GenderEnum",
     "Invoice",
+    "InvoiceBillingStrategy",
     "InvoiceLine",
     "InvoiceLineType",
     "InvoicePayment",
@@ -171,6 +191,10 @@ __all__ = [
     "ShiftStatus",
     "ShiftType",
     "TaskFailure",
+    "TransportVoucher",
+    "TransportVoucherFile",
+    "TransportVoucherStatus",
+    "TransportVoucherType",
     "TripTracking",  # ✅ 3.3.3: Historique trajets
     "TripTrackingArchive",  # ✅ 3.5.2: Archive positions (partitionnée)
     "UnavailabilityReason",

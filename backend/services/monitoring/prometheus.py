@@ -691,3 +691,99 @@ def track_resync(
             )
     except Exception as e:
         logger.debug("[PrometheusMetrics] Error tracking resync: %s", e)
+
+
+# ==================== Invoice PDF Metrics ====================
+
+if PROMETHEUS_AVAILABLE and Histogram and Counter:
+    # Durée de génération PDF (ms)
+    INVOICE_PDF_GENERATION_MS = _get_or_create_metric(
+        Histogram,
+        "invoice_pdf_generation_ms",
+        "Durée de génération PDF facture/rappel (millisecondes)",
+        ["pdf_kind", "billing_type", "template_version"],
+        buckets=[50, 100, 200, 400, 800, 1200, 1500, 2000, 3000, 5000, 8000],
+    )
+
+    # Nombre de lignes dans le PDF
+    INVOICE_PDF_ROWS = _get_or_create_metric(
+        Histogram,
+        "invoice_pdf_rows",
+        "Nombre de lignes dans le PDF (après regroupement aller/retour)",
+        ["pdf_kind", "billing_type", "template_version"],
+        buckets=[1, 5, 10, 20, 40, 60, 80, 120, 200],
+    )
+
+    # Warnings (seuils dépassés)
+    INVOICE_PDF_WARNING_TOTAL = _get_or_create_metric(
+        Counter,
+        "invoice_pdf_warning_total",
+        "Total warnings génération PDF (seuils dépassés)",
+        ["reason", "pdf_kind", "billing_type", "template_version"],
+    )
+else:
+    INVOICE_PDF_GENERATION_MS = None
+    INVOICE_PDF_ROWS = None
+    INVOICE_PDF_WARNING_TOTAL = None
+
+
+# ==================== Invoice PDF Helper Functions ====================
+
+
+def observe_invoice_pdf_perf(
+    pdf_kind: str,
+    billing_type: str,
+    template_version: str,
+    nb_rows: int | None,
+    duration_ms: int,
+    warning_threshold_rows: int = 40,
+    warning_threshold_ms: int = 1500,
+) -> None:
+    """Observe les métriques de performance pour la génération PDF.
+
+    Args:
+        pdf_kind: Type de PDF ("invoice" | "reminder")
+        billing_type: Type de facturation ("client" | "clinic" | "partner" | "unknown")
+        template_version: Version du template (ex: "unified_v1")
+        nb_rows: Nombre de lignes après regroupement (None si non applicable)
+        duration_ms: Durée de génération en millisecondes
+        warning_threshold_rows: Seuil de warning pour nb_rows (défaut: 40)
+        warning_threshold_ms: Seuil de warning pour duration_ms (défaut: 1500)
+    """
+    if not PROMETHEUS_AVAILABLE:
+        return
+
+    try:
+        # Toujours observer la durée
+        if INVOICE_PDF_GENERATION_MS:
+            INVOICE_PDF_GENERATION_MS.labels(
+                pdf_kind=pdf_kind,
+                billing_type=billing_type,
+                template_version=template_version,
+            ).observe(duration_ms)
+
+        # Observer le nombre de lignes si disponible
+        if nb_rows is not None and INVOICE_PDF_ROWS:
+            INVOICE_PDF_ROWS.labels(
+                pdf_kind=pdf_kind,
+                billing_type=billing_type,
+                template_version=template_version,
+            ).observe(nb_rows)
+
+        # Incrémenter le counter de warning si seuils dépassés
+        warnings = []
+        if nb_rows is not None and nb_rows > warning_threshold_rows:
+            warnings.append("rows")
+        if duration_ms > warning_threshold_ms:
+            warnings.append("time")
+
+        if warnings and INVOICE_PDF_WARNING_TOTAL:
+            reason = ",".join(warnings)
+            INVOICE_PDF_WARNING_TOTAL.labels(
+                reason=reason,
+                pdf_kind=pdf_kind,
+                billing_type=billing_type,
+                template_version=template_version,
+            ).inc()
+    except Exception as e:
+        logger.debug("[PrometheusMetrics] Error tracking invoice PDF perf: %s", e)

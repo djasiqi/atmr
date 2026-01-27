@@ -36,12 +36,17 @@ const ESTABLISHMENT_KEYWORDS = [
 ];
 
 /**
- * Détecte si une chaîne contient un mot-clé d'établissement
+ * Détecte si une chaîne contient un mot-clé d'établissement (mot entier uniquement).
+ * Ex. "ch" ne matche pas "Chemin" (évite rue "Chemin des Courbes" prise pour établissement).
  */
 function isEstablishment(text) {
   if (!text || typeof text !== 'string') return false;
   const lowerText = text.toLowerCase();
-  return ESTABLISHMENT_KEYWORDS.some((keyword) => lowerText.includes(keyword));
+  return ESTABLISHMENT_KEYWORDS.some((keyword) => {
+    const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp('\\b' + escaped + '\\b', 'i');
+    return re.test(lowerText);
+  });
 }
 
 /**

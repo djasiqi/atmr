@@ -7,11 +7,34 @@
 {% block content %}
 <h2>📄 Nouvelle facture</h2>
 
-<p>Bonjour {{ client_name }},</p>
+<p>Bonjour {{ recipient_name or client_name }},</p>
 
+{% if is_clinic_recipient %}
+<p>
+    Veuillez trouver ci-joint la facture pour les transports des patients pris en charge.
+</p>
+{% elif is_family_recipient %}
+<p>
+    Veuillez trouver ci-joint la facture pour
+    {% if relationship_label %}
+    votre {{ relationship_label }} <strong>{{ patient_name or client_name }}</strong>.
+    {% else %}
+    concernant <strong>{{ patient_name or client_name }}</strong>.
+    {% endif %}
+</p>
+{% elif is_curator_recipient %}
+<p>
+    Veuillez trouver ci-joint la facture pour la personne protégée <strong>{{ patient_name or client_name }}</strong>.
+</p>
+{% elif is_insurance_recipient %}
+<p>
+    Veuillez trouver ci-joint la facture pour l'assuré <strong>{{ patient_name or client_name }}</strong>.
+</p>
+{% else %}
 <p>
     Nous vous remercions pour votre confiance. Veuillez trouver ci-joint votre facture.
 </p>
+{% endif %}
 
 <div class="info-box">
     <p style="margin: 0;"><strong>Numéro de facture :</strong> {{ invoice_number }}</p>

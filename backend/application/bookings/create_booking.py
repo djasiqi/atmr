@@ -142,6 +142,53 @@ class CreateBookingUseCase:
             logger.error("Erreur de conversion scheduled_time: %s", date_error)
             raise ValueError("Invalid scheduled_time format") from date_error
 
+        client_dto = self.client_repo.find_by_id(cmd.client_id)
+        if not client_dto:
+            raise ValueError("Client non trouvé")
+        company_id = int(getattr(client_dto, "company_id", 0) or 0)
+        if company_id <= 0:
+            raise ValueError("Client invalide (company_id manquant)")
+
+        # ✅ Détecter si le client est hospitalisé et utiliser l'adresse de la clinique
+        from services.billing.client_stay_resolver import (
+            find_active_stay_for_client,
+            get_clinic_address_for_stay,
+        )
+
+        active_stay = find_active_stay_for_client(
+            client_id=cmd.client_id, reference_date=scheduled_time
+        )
+        if active_stay:
+            clinic_info = get_clinic_address_for_stay(active_stay)
+            if clinic_info and clinic_info.get("address"):
+                # Remplacer l'adresse de départ par celle de la clinique
+                validated_data["pickup_location"] = clinic_info["address"]
+                logger.info(
+                    "🏥 Client hospitalisé: utilisation adresse clinique %s (id=%s) pour départ",
+                    clinic_info.get("clinic_name"),
+                    clinic_info.get("clinic_id"),
+                )
+
+                # Appliquer le tarif préférentiel si disponible et si le montant n'est pas déjà défini explicitement
+                if (
+                    clinic_info.get("preferential_rate") is not None
+                    and "amount" not in cmd.data
+                ):
+                    validated_data["amount"] = clinic_info["preferential_rate"]
+                    logger.info(
+                        "💰 Tarif préférentiel appliqué: %.2f CHF",
+                        clinic_info["preferential_rate"],
+                    )
+
+        if cmd.data.get("bill_to_patient") and "amount" not in cmd.data:
+            patient_rate = getattr(client_dto, "preferential_rate", None)
+            if patient_rate is not None:
+                validated_data["amount"] = patient_rate
+                logger.info(
+                    "💰 Tarif patient appliqué (facturation patient): %.2f CHF",
+                    patient_rate,
+                )
+
         # Calcul distance/duration
         try:
             duration_seconds, distance_meters = self.distance_duration_fn(
@@ -199,13 +246,6 @@ class CreateBookingUseCase:
                 + "est temporairement indisponible. Veuillez réessayer dans "
                 + "quelques instants."
             ) from e
-
-        client_dto = self.client_repo.find_by_id(cmd.client_id)
-        if not client_dto:
-            raise ValueError("Client non trouvé")
-        company_id = int(getattr(client_dto, "company_id", 0) or 0)
-        if company_id <= 0:
-            raise ValueError("Client invalide (company_id manquant)")
 
         pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, geocode_miss = (
             self._geocode_booking_addresses(validated_data, company_id)

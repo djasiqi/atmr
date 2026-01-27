@@ -3,16 +3,24 @@
 import logging
 from http import HTTPStatus
 
-from flask import request  # pyright: ignore[reportMissingImports]
-from flask_jwt_extended import jwt_required  # pyright: ignore[reportMissingImports]
-from flask_restx import (  # pyright: ignore[reportMissingImports]
+from flask import request
+from flask_jwt_extended import jwt_required
+from flask_restx import (
     Namespace,
     Resource,
     fields,
 )
 
 from ext import db, role_required
-from models import CompanyBillingSettings, CompanyPlanningSettings, UserRole
+from models import (
+    BillingParty,
+    BillingPartyType,
+    ClinicBillingPartyMapping,
+    Company,
+    CompanyBillingSettings,
+    CompanyPlanningSettings,
+    UserRole,
+)
 from routes.companies import get_company_from_token
 from shared.error_handlers import APIErrorHandler
 
@@ -46,6 +54,24 @@ billing_settings_model = settings_ns.model(
         "reminder1_template": fields.String(description="Template 1er rappel"),
         "reminder2_template": fields.String(description="Template 2e rappel"),
         "reminder3_template": fields.String(description="Template 3e rappel"),
+        "email_signature_mode": fields.String(
+            description="Mode signature email: 'form', 'text' ou 'html'", default="form"
+        ),
+        "email_signature_text": fields.String(description="Signature email (mode texte)"),
+        "signature_name": fields.String(description="Nom complet (mode form)"),
+        "signature_title": fields.String(description="Titre (mode form, ex: 'Associé gérant')"),
+        "signature_company": fields.String(description="Société (mode form)"),
+        "signature_phone_main": fields.String(description="Téléphone principal (mode form)"),
+        "signature_phone_mobile": fields.String(description="Téléphone mobile (mode form)"),
+        "signature_email": fields.String(description="Email (mode form)"),
+        "signature_website": fields.String(description="Site web (mode form)"),
+        "signature_address_line": fields.String(description="Ligne adresse (mode form)"),
+        "signature_zip": fields.String(description="Code postal (mode form)"),
+        "signature_city": fields.String(description="Ville (mode form)"),
+        "signature_logo_url": fields.String(description="URL logo (mode form, optionnel)"),
+        "email_signature_html_template": fields.String(
+            description="Template HTML signature (mode HTML, variables: name, phone, email, address, logo_url)"
+        ),
         "legal_footer": fields.String(description="Pied de page légal"),
         "pdf_template_variant": fields.String(description="Variante template PDF"),
         # TVA
@@ -220,69 +246,28 @@ class BillingSettings(Resource):
 
         # ✅ Récupérer directement le modèle SQLAlchemy (pas via repository qui retourne un DTO)
         try:
-            # #region agent log
-            import json
-            import time
-            from pathlib import Path
+            import os
+            BILLING_DEBUG = os.getenv("BILLING_DEBUG", "0") == "1"
 
-            log_path = Path("/app/.cursor/debug.log")
-            log_data = {
-                "location": "company_settings.py:BillingSettings.get",
-                "message": "Fetching billing settings",
-                "data": {"company_id": company.id},
-                "timestamp": int(time.time() * 1000),
-                "sessionId": "debug-session",
-                "runId": "run1",
-                "hypothesisId": "A",
-            }
-            try:
-                log_path.parent.mkdir(parents=True, exist_ok=True)
-                with log_path.open("a", encoding="utf-8") as f:
-                    f.write(json.dumps(log_data) + "\n")
-            except Exception:
-                pass
-            # #endregion
             billing = CompanyBillingSettings.query.filter_by(
                 company_id=company.id
             ).first()
-            # #region agent log
-            log_data = {
-                "location": "company_settings.py:BillingSettings.get",
-                "message": "Billing settings query result",
-                "data": {
-                    "billing_found": billing is not None,
-                    "billing_id": billing.id if billing else None,
-                },
-                "timestamp": int(time.time() * 1000),
-                "sessionId": "debug-session",
-                "runId": "run1",
-                "hypothesisId": "A",
-            }
-            try:
-                with log_path.open("a", encoding="utf-8") as f:
-                    f.write(json.dumps(log_data) + "\n")
-            except Exception:
-                pass
-            # #endregion
+
+            if BILLING_DEBUG:
+                logger.info(
+                    "[BILLING_DEBUG] GET billing settings: company_id=%s, billing_found=%s, billing_id=%s",
+                    company.id,
+                    billing is not None,
+                    billing.id if billing else None,
+                )
 
             if not billing:
                 # Créer avec valeurs par défaut
-                # #region agent log
-                log_data = {
-                    "location": "company_settings.py:BillingSettings.get",
-                    "message": "Creating default billing settings",
-                    "data": {"company_id": company.id},
-                    "timestamp": int(time.time() * 1000),
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "B",
-                }
-                try:
-                    with log_path.open("a", encoding="utf-8") as f:
-                        f.write(json.dumps(log_data) + "\n")
-                except Exception:
-                    pass
-                # #endregion
+                if BILLING_DEBUG:
+                    logger.info(
+                        "[BILLING_DEBUG] GET creating default billing settings for company_id=%s",
+                        company.id,
+                    )
                 billing = CompanyBillingSettings()
                 billing.company_id = company.id
                 billing.payment_terms_days = 10
@@ -297,62 +282,48 @@ class BillingSettings(Resource):
                 billing.pdf_template_variant = "default"
                 db.session.add(billing)
                 db.session.commit()
-                # #region agent log
-                log_data = {
-                    "location": "company_settings.py:BillingSettings.get",
-                    "message": "Default billing settings created",
-                    "data": {"billing_id": billing.id},
-                    "timestamp": int(time.time() * 1000),
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "B",
-                }
-                try:
-                    with log_path.open("a", encoding="utf-8") as f:
-                        f.write(json.dumps(log_data) + "\n")
-                except Exception:
-                    pass
-                # #endregion
+                if BILLING_DEBUG:
+                    logger.info(
+                        "[BILLING_DEBUG] GET default billing settings created: billing_id=%s",
+                        billing.id,
+                    )
 
-            # #region agent log
-            log_data = {
-                "location": "company_settings.py:BillingSettings.get",
-                "message": "Calling to_dict on billing",
-                "data": {
-                    "billing_id": billing.id,
-                    "has_to_dict": hasattr(billing, "to_dict"),
-                },
-                "timestamp": int(time.time() * 1000),
-                "sessionId": "debug-session",
-                "runId": "run1",
-                "hypothesisId": "C",
-            }
-            try:
-                with log_path.open("a", encoding="utf-8") as f:
-                    f.write(json.dumps(log_data) + "\n")
-            except Exception:
-                pass
-            # #endregion
+            # Log des valeurs bancaires avant to_dict
+            if BILLING_DEBUG:
+                logger.info(
+                    (
+                        "[BILLING_DEBUG] GET before to_dict: company_id=%s, billing_id=%s, "
+                        "_iban_raw=%s, iban decrypted=%s, _qr_iban_raw=%s, qr_iban decrypted=%s, esr_ref_base=%s"
+                    ),
+                    company.id,
+                    billing.id,
+                    getattr(billing, "_iban_raw", None),
+                    billing.iban,
+                    getattr(billing, "_qr_iban_raw", None),
+                    billing.qr_iban,
+                    billing.esr_ref_base,
+                )
+
             result = billing.to_dict()
-            # #region agent log
-            log_data = {
-                "location": "company_settings.py:BillingSettings.get",
-                "message": "to_dict result",
-                "data": {
-                    "result_keys": list(result.keys()) if result else [],
-                    "result_type": type(result).__name__,
-                },
-                "timestamp": int(time.time() * 1000),
-                "sessionId": "debug-session",
-                "runId": "run1",
-                "hypothesisId": "C",
-            }
-            try:
-                with log_path.open("a", encoding="utf-8") as f:
-                    f.write(json.dumps(log_data) + "\n")
-            except Exception:
-                pass
-            # #endregion
+
+            # Log des valeurs dans le résultat
+            if BILLING_DEBUG:
+                logger.info(
+                    (
+                        "[BILLING_DEBUG] GET to_dict result: company_id=%s, "
+                        "iban in result=%s, iban value=%s, "
+                        "qr_iban in result=%s, qr_iban value=%s, "
+                        "esr_ref_base in result=%s, esr_ref_base value=%s"
+                    ),
+                    company.id,
+                    "iban" in result,
+                    result.get("iban"),
+                    "qr_iban" in result,
+                    result.get("qr_iban"),
+                    "esr_ref_base" in result,
+                    result.get("esr_ref_base"),
+                )
+
             return result, 200
         except Exception as e:
             # #region agent log
@@ -432,8 +403,85 @@ class BillingSettings(Resource):
                 billing = CompanyBillingSettings()
                 billing.company_id = company.id
                 db.session.add(billing)
+                # ✅ BLINDAGE: Gérer les doublons concurrents (contrainte unique sur company_id)
+                try:
+                    db.session.flush()  # Tester la contrainte unique avant commit
+                except Exception as e:
+                    db.session.rollback()
+                    # Recharger si un autre thread a créé entre temps
+                    billing = CompanyBillingSettings.query.filter_by(
+                        company_id=company.id
+                    ).first()
+                    if not billing:
+                        logger.error(
+                            "[Settings] Failed to create billing settings for company %s: %s",
+                            company.id,
+                            e,
+                        )
+                        raise
 
-            # Mise à jour des champs
+            # ✅ CORRECTION: Traiter iban/qr_iban/esr_ref_base séparément
+            # car ce sont des @hybrid_property et setattr peut ne pas fonctionner correctement
+            import os
+            BILLING_DEBUG = os.getenv("BILLING_DEBUG", "0") == "1"
+
+            # Gestion spéciale pour les champs bancaires (hybrid_property)
+            if "iban" in data:
+                value = data["iban"]
+                if BILLING_DEBUG:
+                    logger.info(
+                        "[BILLING_DEBUG] PUT iban: company_id=%s, value=%s, type=%s, is_none=%s, is_empty=%s",
+                        company.id,
+                        value,
+                        type(value).__name__,
+                        value is None,
+                        value == "",
+                    )
+                if value is None or value == "":
+                    billing.iban = None
+                else:
+                    billing.iban = value
+                if BILLING_DEBUG:
+                    logger.info(
+                        "[BILLING_DEBUG] PUT iban after set: _iban_raw=%s, iban decrypted=%s",
+                        getattr(billing, "_iban_raw", None),
+                        billing.iban,
+                    )
+
+            if "qr_iban" in data:
+                value = data["qr_iban"]
+                if BILLING_DEBUG:
+                    logger.info(
+                        "[BILLING_DEBUG] PUT qr_iban: company_id=%s, value=%s, type=%s, is_none=%s, is_empty=%s",
+                        company.id,
+                        value,
+                        type(value).__name__,
+                        value is None,
+                        value == "",
+                    )
+                if value is None or value == "":
+                    billing.qr_iban = None
+                else:
+                    billing.qr_iban = value
+                if BILLING_DEBUG:
+                    logger.info(
+                        "[BILLING_DEBUG] PUT qr_iban after set: _qr_iban_raw=%s, qr_iban decrypted=%s",
+                        getattr(billing, "_qr_iban_raw", None),
+                        billing.qr_iban,
+                    )
+
+            if "esr_ref_base" in data:
+                value = data["esr_ref_base"]
+                if BILLING_DEBUG:
+                    logger.info(
+                        "[BILLING_DEBUG] PUT esr_ref_base: company_id=%s, value=%s, type=%s",
+                        company.id,
+                        value,
+                        type(value).__name__,
+                    )
+                billing.esr_ref_base = value if (value and value != "") else None
+
+            # Mise à jour des autres champs
             updatable_fields = [
                 "payment_terms_days",
                 "overdue_fee",
@@ -445,13 +493,24 @@ class BillingSettings(Resource):
                 "email_sender",
                 "invoice_number_format",
                 "invoice_prefix",
-                "iban",
-                "qr_iban",
-                "esr_ref_base",
                 "invoice_message_template",
                 "reminder1_template",
                 "reminder2_template",
                 "reminder3_template",
+                "email_signature_mode",
+                "email_signature_text",
+                "signature_name",
+                "signature_title",
+                "signature_company",
+                "signature_phone_main",
+                "signature_phone_mobile",
+                "signature_email",
+                "signature_website",
+                "signature_address_line",
+                "signature_zip",
+                "signature_city",
+                "signature_logo_url",
+                "email_signature_html_template",
                 "legal_footer",
                 "pdf_template_variant",
             ]
@@ -459,47 +518,27 @@ class BillingSettings(Resource):
             for field in updatable_fields:
                 if field in data:
                     value = data[field]
-                    # #region agent log
-                    if field in ["iban", "qr_iban"]:
-                        import json
-                        import time
-                        from pathlib import Path
-
-                        log_path = Path("/app/.cursor/debug.log")
-                        log_data = {
-                            "location": "company_settings.py:BillingSettings.put:before_set",
-                            "message": f"Setting {field}",
-                            "data": {
-                                "field": field,
-                                "value": value,
-                                "value_type": type(value).__name__,
-                                "is_none": value is None,
-                                "is_empty": value == "",
-                                "value_length": len(value) if value else None,
-                            },
-                            "timestamp": int(time.time() * 1000),
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "E",
-                        }
-                        try:
-                            log_path.parent.mkdir(parents=True, exist_ok=True)
-                            with log_path.open("a", encoding="utf-8") as f:
-                                f.write(json.dumps(log_data) + "\n")
-                        except Exception:
-                            pass
-                    # #endregion
                     # Gérer les valeurs None/empty pour les champs optionnels
                     if value is None or value == "":
                         if field in [
                             "email_sender",
-                            "iban",
-                            "qr_iban",
-                            "esr_ref_base",
                             "invoice_message_template",
                             "reminder1_template",
                             "reminder2_template",
                             "reminder3_template",
+                            "email_signature_text",
+                            "signature_name",
+                            "signature_title",
+                            "signature_company",
+                            "signature_phone_main",
+                            "signature_phone_mobile",
+                            "signature_email",
+                            "signature_website",
+                            "signature_address_line",
+                            "signature_zip",
+                            "signature_city",
+                            "signature_logo_url",
+                            "email_signature_html_template",
                             "legal_footer",
                         ]:
                             setattr(billing, field, None)
@@ -513,32 +552,6 @@ class BillingSettings(Resource):
                         }
                         setattr(billing, field, normalized)
                     else:
-                        # #region agent log
-                        if field in ["iban", "qr_iban"]:
-                            import json
-                            import time
-                            from pathlib import Path
-
-                            log_path = Path("/app/.cursor/debug.log")
-                            log_data = {
-                                "location": "company_settings.py:BillingSettings.put:setting",
-                                "message": f"Setting {field} with value",
-                                "data": {
-                                    "field": field,
-                                    "value": value,
-                                    "value_type": type(value).__name__,
-                                },
-                                "timestamp": int(time.time() * 1000),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "F",
-                            }
-                            try:
-                                with log_path.open("a", encoding="utf-8") as f:
-                                    f.write(json.dumps(log_data) + "\n")
-                            except Exception:
-                                pass
-                        # #endregion
                         setattr(billing, field, value)
 
             # Gestion de la TVA
@@ -580,64 +593,80 @@ class BillingSettings(Resource):
             if "vat_number" in data:
                 billing.vat_number = data.get("vat_number") or None
 
+            # Log avant commit avec vérification de détection de changement SQLAlchemy
+            if BILLING_DEBUG:
+                from sqlalchemy.orm.attributes import flag_modified
+                is_modified = db.session.is_modified(billing, include_collections=False)
+                dirty = billing in db.session.dirty
+                logger.info(
+                    (
+                        "[BILLING_DEBUG] PUT before commit: company_id=%s, billing_id=%s, "
+                        "is_modified=%s, dirty=%s, "
+                        "_iban_raw=%s, iban decrypted=%s, _qr_iban_raw=%s, qr_iban decrypted=%s, esr_ref_base=%s"
+                    ),
+                    company.id,
+                    billing.id,
+                    is_modified,
+                    dirty,
+                    getattr(billing, "_iban_raw", None),
+                    billing.iban,
+                    getattr(billing, "_qr_iban_raw", None),
+                    billing.qr_iban,
+                    billing.esr_ref_base,
+                )
+                # Si is_modified=False mais qu'on a modifié, forcer le flag (sécurité)
+                if not is_modified and (
+                    "iban" in data or "qr_iban" in data or "esr_ref_base" in data
+                ):
+                    logger.warning(
+                        "[BILLING_DEBUG] WARNING: is_modified=False but banking fields were updated, forcing flag_modified"
+                    )
+                    flag_modified(billing, "_iban_raw")
+                    flag_modified(billing, "_qr_iban_raw")
+
             db.session.commit()
+
+            # Log après commit (recharger depuis DB pour vérifier persistance)
+            if BILLING_DEBUG:
+                # Recharger depuis DB pour vérifier que le commit a bien persisté
+                db.session.refresh(billing)
+                logger.info(
+                    (
+                        "[BILLING_DEBUG] PUT after commit (refreshed): company_id=%s, billing_id=%s, "
+                        "_iban_raw=%s, iban decrypted=%s, _qr_iban_raw=%s, qr_iban decrypted=%s, esr_ref_base=%s"
+                    ),
+                    company.id,
+                    billing.id,
+                    getattr(billing, "_iban_raw", None),
+                    billing.iban,
+                    getattr(billing, "_qr_iban_raw", None),
+                    billing.qr_iban,
+                    billing.esr_ref_base,
+                )
+
             logger.info(
                 "[Settings] Billing settings updated for company %s", company.id
             )
 
-            # #region agent log
-            import json
-            import time
-            from pathlib import Path
-
-            log_path = Path("/app/.cursor/debug.log")
-            log_data = {
-                "location": "company_settings.py:BillingSettings.put:after_commit",
-                "message": "After commit, preparing response",
-                "data": {
-                    "has_iban_raw": hasattr(billing, "_iban_raw"),
-                    "iban_raw_value": str(getattr(billing, "_iban_raw", None)),
-                    "iban_decrypted": billing.iban,
-                    "has_qr_iban_raw": hasattr(billing, "_qr_iban_raw"),
-                    "qr_iban_raw_value": str(getattr(billing, "_qr_iban_raw", None)),
-                    "qr_iban_decrypted": billing.qr_iban,
-                },
-                "timestamp": int(time.time() * 1000),
-                "sessionId": "debug-session",
-                "runId": "run1",
-                "hypothesisId": "G",
-            }
-            try:
-                log_path.parent.mkdir(parents=True, exist_ok=True)
-                with log_path.open("a", encoding="utf-8") as f:
-                    f.write(json.dumps(log_data) + "\n")
-            except Exception:
-                pass
-            # #endregion
-
             result_dict = billing.to_dict()
 
-            # #region agent log
-            log_data = {
-                "location": "company_settings.py:BillingSettings.put:to_dict_result",
-                "message": "to_dict result for response",
-                "data": {
-                    "has_iban_in_dict": "iban" in result_dict,
-                    "iban_in_dict": result_dict.get("iban"),
-                    "has_qr_iban_in_dict": "qr_iban" in result_dict,
-                    "qr_iban_in_dict": result_dict.get("qr_iban"),
-                },
-                "timestamp": int(time.time() * 1000),
-                "sessionId": "debug-session",
-                "runId": "run1",
-                "hypothesisId": "H",
-            }
-            try:
-                with log_path.open("a", encoding="utf-8") as f:
-                    f.write(json.dumps(log_data) + "\n")
-            except Exception:
-                pass
-            # #endregion
+            # Log du résultat final
+            if BILLING_DEBUG:
+                logger.info(
+                    (
+                        "[BILLING_DEBUG] PUT to_dict result: company_id=%s, "
+                        "iban in result=%s, iban value=%s, "
+                        "qr_iban in result=%s, qr_iban value=%s, "
+                        "esr_ref_base in result=%s, esr_ref_base value=%s"
+                    ),
+                    company.id,
+                    "iban" in result_dict,
+                    result_dict.get("iban"),
+                    "qr_iban" in result_dict,
+                    result_dict.get("qr_iban"),
+                    "esr_ref_base" in result_dict,
+                    result_dict.get("esr_ref_base"),
+                )
 
             return {
                 "success": True,
@@ -758,3 +787,327 @@ class PlanningSettings(Resource):
             db.session.rollback()
             logger.error("[Settings] Error updating planning settings: %s", e)
             return APIErrorHandler.handle_exception(e, logger)
+
+
+@settings_ns.route("/billing/clinic-mappings")
+class ClinicBillingMappings(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        """Lister les mappings clinique → billing_party pour l'entreprise courante."""
+        company, err, code = get_company_from_token()
+        if err:
+            error_msg = err.get("error", "Company not found")
+            error_response, status_code = (
+                APIErrorHandler.handle_not_found("Company", None, logger)
+                if code == HTTPStatus.NOT_FOUND
+                else APIErrorHandler.handle_validation_error(
+                    error_msg, logger_instance=logger
+                )
+            )
+            return {
+                "success": False,
+                "error": error_response.get("error", error_msg),
+            }, status_code
+
+        if not company:
+            return APIErrorHandler.handle_not_found("Company", None, logger)
+
+        mappings = (
+            ClinicBillingPartyMapping.query.filter_by(company_id=company.id)
+            .order_by(ClinicBillingPartyMapping.id.desc())
+            .all()
+        )
+        payload = []
+        for m in mappings:
+            clinic = Company.query.filter_by(id=m.clinic_company_id).first()
+            bp = BillingParty.query.filter_by(id=m.billing_party_id).first()
+            payload.append(
+                {
+                    "id": m.id,
+                    "clinic_company_id": m.clinic_company_id,
+                    "clinic_company_name": clinic.name if clinic else None,
+                    "billing_party_id": m.billing_party_id,
+                    "billing_party_name": bp.display_name if bp else None,
+                    "is_active": bool(m.is_active),
+                }
+            )
+        return {"success": True, "data": payload}, 200
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    def put(self):  # noqa: PLR0911
+        """Créer/mettre à jour un mapping clinique → billing_party (upsert)."""
+        company, err, code = get_company_from_token()
+        if err:
+            error_msg = err.get("error", "Company not found")
+            error_response, status_code = (
+                APIErrorHandler.handle_not_found("Company", None, logger)
+                if code == HTTPStatus.NOT_FOUND
+                else APIErrorHandler.handle_validation_error(
+                    error_msg, logger_instance=logger
+                )
+            )
+            return {
+                "success": False,
+                "error": error_response.get("error", error_msg),
+            }, status_code
+
+        if not company:
+            return APIErrorHandler.handle_not_found("Company", None, logger)
+
+        data = request.get_json() or {}
+        clinic_company_id_raw = data.get("clinic_company_id")
+        billing_party_id_raw = data.get("billing_party_id")
+        is_active = data.get("is_active", True)
+
+        if clinic_company_id_raw is None or billing_party_id_raw is None:
+            return APIErrorHandler.handle_validation_error(
+                "clinic_company_id et billing_party_id sont requis",
+                logger_instance=logger,
+            )
+
+        try:
+            clinic_company_id = int(clinic_company_id_raw)
+            billing_party_id = int(billing_party_id_raw)
+        except (TypeError, ValueError):
+            return APIErrorHandler.handle_validation_error(
+                "clinic_company_id et billing_party_id doivent être des entiers",
+                logger_instance=logger,
+            )
+
+        clinic = Company.query.filter_by(id=clinic_company_id).first()
+        if not clinic:
+            return APIErrorHandler.handle_validation_error(
+                "Clinique (company) introuvable", logger_instance=logger
+            )
+
+        bp = BillingParty.query.filter_by(id=billing_party_id, company_id=company.id).first()
+        if not bp:
+            return APIErrorHandler.handle_validation_error(
+                "BillingParty introuvable ou n'appartient pas à l'entreprise",
+                logger_instance=logger,
+            )
+
+        mapping = ClinicBillingPartyMapping.query.filter_by(
+            company_id=company.id, clinic_company_id=clinic_company_id
+        ).first()
+        if not mapping:
+            mapping = ClinicBillingPartyMapping()
+            mapping.company_id = company.id
+            mapping.clinic_company_id = clinic_company_id
+            db.session.add(mapping)
+
+        mapping.billing_party_id = billing_party_id
+        mapping.is_active = bool(is_active)
+        db.session.commit()
+
+        return {"success": True, "message": "Mapping mis à jour"}, 200
+
+
+@settings_ns.route("/billing/clinic-mappings/<int:clinic_company_id>")
+class ClinicBillingMappingByClinic(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self, clinic_company_id: int):
+        """Récupérer le mapping pour une clinique spécifique."""
+        company, err, code = get_company_from_token()
+        if err:
+            error_msg = err.get("error", "Company not found")
+            error_response, status_code = (
+                APIErrorHandler.handle_not_found("Company", None, logger)
+                if code == HTTPStatus.NOT_FOUND
+                else APIErrorHandler.handle_validation_error(
+                    error_msg, logger_instance=logger
+                )
+            )
+            return {
+                "success": False,
+                "error": error_response.get("error", error_msg),
+            }, status_code
+
+        if not company:
+            return APIErrorHandler.handle_not_found("Company", None, logger)
+
+        mapping = ClinicBillingPartyMapping.query.filter_by(
+            company_id=company.id, clinic_company_id=clinic_company_id
+        ).first()
+
+        if not mapping:
+            return {"success": True, "data": None}, 200
+
+        clinic = Company.query.filter_by(id=mapping.clinic_company_id).first()
+        bp = BillingParty.query.filter_by(id=mapping.billing_party_id).first()
+
+        payload = {
+            "id": mapping.id,
+            "clinic_company_id": mapping.clinic_company_id,
+            "clinic_company_name": clinic.name if clinic else None,
+            "billing_party_id": mapping.billing_party_id,
+            "billing_party_name": bp.display_name if bp else None,
+            "is_active": bool(mapping.is_active),
+        }
+
+        return {"success": True, "data": payload}, 200
+
+
+@settings_ns.route("/billing/parties")
+class BillingParties(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        """Lister les BillingParty de l'entreprise courante (pour sélection UI)."""
+        company, err, code = get_company_from_token()
+        if err:
+            error_msg = err.get("error", "Company not found")
+            error_response, status_code = (
+                APIErrorHandler.handle_not_found("Company", None, logger)
+                if code == HTTPStatus.NOT_FOUND
+                else APIErrorHandler.handle_validation_error(
+                    error_msg, logger_instance=logger
+                )
+            )
+            return {
+                "success": False,
+                "error": error_response.get("error", error_msg),
+            }, status_code
+
+        if not company:
+            return APIErrorHandler.handle_not_found("Company", None, logger)
+
+        only_active = request.args.get("active", "true").strip().lower() != "false"
+        q = BillingParty.query.filter_by(company_id=company.id)
+        if only_active:
+            q = q.filter(BillingParty.is_active.is_(True))
+        parties = q.order_by(BillingParty.display_name.asc()).all()
+        return {"success": True, "data": [p.to_dict() for p in parties]}, 200
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self):  # noqa: PLR0911
+        """Créer un BillingParty (V1) depuis le backoffice."""
+        company, err, code = get_company_from_token()
+        if err:
+            error_msg = err.get("error", "Company not found")
+            error_response, status_code = (
+                APIErrorHandler.handle_not_found("Company", None, logger)
+                if code == HTTPStatus.NOT_FOUND
+                else APIErrorHandler.handle_validation_error(
+                    error_msg, logger_instance=logger
+                )
+            )
+            return {
+                "success": False,
+                "error": error_response.get("error", error_msg),
+            }, status_code
+
+        if not company:
+            return APIErrorHandler.handle_not_found("Company", None, logger)
+
+        data = request.get_json() or {}
+        display_name = (data.get("display_name") or "").strip()
+        type_raw = (data.get("type") or "").strip().lower()
+        billing_address = data.get("billing_address")
+        contact_email = data.get("contact_email")
+        contact_phone = data.get("contact_phone")
+        external_ref = data.get("external_ref")
+        is_active = data.get("is_active", True)
+
+        if not display_name:
+            return APIErrorHandler.handle_validation_error(
+                "display_name est requis",
+                logger_instance=logger,
+            )
+
+        try:
+            bp_type = BillingPartyType(type_raw)
+        except Exception:
+            return APIErrorHandler.handle_validation_error(
+                "type invalide (ex: clinic, hospital, ems, opad, other, patient)",
+                logger_instance=logger,
+            )
+
+        try:
+            bp = BillingParty()
+            bp.company_id = company.id
+            bp.type = bp_type
+            bp.display_name = display_name
+            bp.billing_address = billing_address
+            bp.contact_email = contact_email
+            bp.contact_phone = contact_phone
+            bp.external_ref = external_ref
+            bp.is_active = bool(is_active)
+            db.session.add(bp)
+            db.session.commit()
+        except ValueError as e:
+            db.session.rollback()
+            return APIErrorHandler.handle_validation_error(str(e), logger_instance=logger)
+        except Exception as e:
+            db.session.rollback()
+            logger.error("[Settings] Error creating BillingParty: %s", e)
+            return APIErrorHandler.handle_exception(e, logger)
+
+        return {"success": True, "data": bp.to_dict()}, 201
+
+
+@settings_ns.route("/billing/parties/<int:billing_party_id>")
+class BillingPartyById(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def put(self, billing_party_id: int):
+        """Mettre à jour un BillingParty."""
+        company, err, code = get_company_from_token()
+        if err:
+            error_msg = err.get("error", "Company not found")
+            error_response, status_code = (
+                APIErrorHandler.handle_not_found("Company", None, logger)
+                if code == HTTPStatus.NOT_FOUND
+                else APIErrorHandler.handle_validation_error(
+                    error_msg, logger_instance=logger
+                )
+            )
+            return {
+                "success": False,
+                "error": error_response.get("error", error_msg),
+            }, status_code
+
+        if not company:
+            return APIErrorHandler.handle_not_found("Company", None, logger)
+
+        bp = BillingParty.query.filter_by(
+            id=billing_party_id, company_id=company.id
+        ).first()
+        if not bp:
+            return APIErrorHandler.handle_not_found(
+                "BillingParty", billing_party_id, logger
+            )
+
+        data = request.get_json() or {}
+        display_name = data.get("display_name")
+        billing_address = data.get("billing_address")
+        contact_email = data.get("contact_email")
+        contact_phone = data.get("contact_phone")
+        is_active = data.get("is_active")
+
+        try:
+            if display_name is not None:
+                bp.display_name = display_name.strip() if display_name else None
+            if billing_address is not None:
+                bp.billing_address = billing_address.strip() if billing_address else None
+            if contact_email is not None:
+                bp.contact_email = contact_email.strip() if contact_email else None
+            if contact_phone is not None:
+                bp.contact_phone = contact_phone.strip() if contact_phone else None
+            if is_active is not None:
+                bp.is_active = bool(is_active)
+
+            db.session.commit()
+        except ValueError as e:
+            db.session.rollback()
+            return APIErrorHandler.handle_validation_error(str(e), logger_instance=logger)
+        except Exception as e:
+            db.session.rollback()
+            logger.error("[Settings] Error updating BillingParty: %s", e)
+            return APIErrorHandler.handle_exception(e, logger)
+
+        return {"success": True, "data": bp.to_dict()}, 200

@@ -1,0 +1,122 @@
+.form {
+  padding: var(--spacing-lg);
+}
+
+.formGroup {
+  margin-bottom: var(--spacing-lg);
+}
+
+.label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: var(--font-weight-medium);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.required {
+  color: var(--error-color, #dc2626);
+}
+
+.select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-primary, #d1d5db);
+  border-radius: var(--radius-md, 8px);
+  background: white;
+  font-size: var(--font-size-base, 14px);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.select:focus {
+  outline: none;
+  border-color: var(--brand-primary, #3b82f6);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.radioGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.radioLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: var(--radius-sm, 6px);
+  transition: background-color 0.2s;
+}
+
+.radioLabel:hover {
+  background-color: var(--bg-hover, #f9fafb);
+}
+
+.radioLabel input[type='radio'] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.radioLabel span {
+  font-size: var(--font-size-sm, 14px);
+  color: var(--text-primary, #111827);
+}
+
+.checkboxLabel {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: var(--radius-sm, 6px);
+  transition: background-color 0.2s;
+}
+
+.checkboxLabel:hover {
+  background-color: var(--bg-hover, #f9fafb);
+}
+
+.checkboxLabel input[type='checkbox'] {
+  margin-top: 2px;
+  cursor: pointer;
+}
+
+.checkboxLabel span {
+  font-size: var(--font-size-sm, 14px);
+  color: var(--text-primary, #111827);
+  line-height: 1.5;
+}
+
+.hint {
+  margin-top: 6px;
+  font-size: var(--font-size-xs, 12px);
+  color: var(--text-tertiary, #6b7280);
+  font-style: italic;
+}
+
+.helperText {
+  margin-top: 6px;
+  font-size: var(--font-size-xs, 12px);
+  color: var(--text-tertiary, #6b7280);
+  font-style: italic;
+}
+
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

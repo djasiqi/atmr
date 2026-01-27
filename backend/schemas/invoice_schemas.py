@@ -78,14 +78,26 @@ class InvoiceGenerateSchema(Schema):
     """Schema pour génération de facture
     (POST /api/invoices/companies/<id>/invoices/generate)."""
 
-    client_id = fields.Int(validate=validate.Range(min=1))
+    # Mode de génération: "standard" (par défaut) ou "clinic_monthly" (S2)
+    mode = fields.Str(
+        validate=validate.OneOf(["standard", "clinic_monthly"]),
+        allow_none=True,
+        load_default="standard",
+    )
+    client_id = fields.Int(validate=validate.Range(min=1), allow_none=True)
     client_ids = fields.List(
         fields.Int(validate=validate.Range(min=1)),
         validate=validate.Length(
             min=1, error="client_ids doit contenir au moins un ID"
         ),
+        allow_none=True,
     )
+    # Destinataire de facturation unifié (nouveau modèle BillingParty).
+    billing_party_id = fields.Int(validate=validate.Range(min=1), allow_none=True)
     bill_to_client_id = fields.Int(validate=validate.Range(min=1), allow_none=True)
+    # Alternative "clinique payeur" (Company) : utilisé quand le payeur est une clinique
+    # référencée via Booking.billed_to_company_id (source).
+    clinic_company_id = fields.Int(validate=validate.Range(min=1), allow_none=True)
     period_year = fields.Int(
         required=True,
         validate=validate.Range(min=2000, max=2100, error="Année invalide (2000-2100)"),
@@ -97,6 +109,17 @@ class InvoiceGenerateSchema(Schema):
     # Sélection manuelle de réservations: { client_id: [reservation_ids] }
     client_reservations = fields.Dict(allow_none=True)
     reservation_ids = fields.List(fields.Int(), allow_none=True)
+    # ✅ S2: Exceptions pour facture clinique mensuelle
+    include_client_ids = fields.List(
+        fields.Int(validate=validate.Range(min=1)),
+        allow_none=True,
+        load_default=None,
+    )
+    exclude_client_ids = fields.List(
+        fields.Int(validate=validate.Range(min=1)),
+        allow_none=True,
+        load_default=None,
+    )
     overrides = fields.Dict(
         keys=fields.Str(),
         values=fields.Dict(keys=fields.Str(), values=fields.Raw()),

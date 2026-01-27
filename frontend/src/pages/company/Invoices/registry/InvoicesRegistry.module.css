@@ -68,6 +68,7 @@
 }
 
 .settingsBtn,
+.exportBtn,
 .newInvoiceBtn {
   display: inline-flex;
   align-items: center;
@@ -89,6 +90,19 @@
 }
 
 .settingsBtn:hover {
+  background: var(--bg-hover);
+  border-color: var(--brand-primary);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.exportBtn {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-primary);
+}
+
+.exportBtn:hover {
   background: var(--bg-hover);
   border-color: var(--brand-primary);
   transform: translateY(-1px);
@@ -415,6 +429,24 @@
   font-size: 0.7rem;
   font-weight: var(--font-weight-semibold);
   text-transform: uppercase;
+}
+
+/* ✅ NOUVEAU : Badge pour rappel consolidé OPEN */
+.reminderBadgeOpen {
+  background-color: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffc107;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* ✅ NOUVEAU : Badge pour rappel consolidé PAYÉ */
+.reminderBadgePaid {
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #28a745;
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .reminder1 {

@@ -153,6 +153,23 @@ class ClientCreateSchema(Schema):
     # Tarif préférentiel
     preferential_rate = fields.Decimal(places=2, allow_none=True)
 
+    # Accès logement
+    door_code = fields.Str(validate=validate.Length(max=50), allow_none=True)
+    floor = fields.Str(validate=validate.Length(max=20), allow_none=True)
+    access_notes = fields.Str(validate=validate.Length(max=1000), allow_none=True)
+
+    # Médecin traitant
+    gp_name = fields.Str(validate=validate.Length(max=120), allow_none=True)
+    gp_phone = fields.Str(validate=validate.Length(max=50), allow_none=True)
+
+    # Facturation par défaut
+    default_billed_to_type = fields.Str(
+        validate=validate.OneOf(["patient", "clinic", "insurance"]), allow_none=True
+    )
+    default_billed_to_contact = fields.Str(
+        validate=validate.Length(max=120), allow_none=True
+    )
+
     class Meta:
         unknown = "INCLUDE"  # Permettre champs additionnels
 

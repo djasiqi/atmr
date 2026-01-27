@@ -8,6 +8,9 @@ import {
   createManualBooking,
   searchClients,
   createClient,
+  fetchClientActiveStay,
+  createClientStay,
+  linkClientBillingParty,
 } from '../../../../services/companyService';
 import { Input } from './ui/Input';
 import { Label } from './ui/Label';
@@ -130,6 +133,10 @@ export default function ManualBookingForm({ onSuccess }) {
   // --- Client
   const [selectedClient, setSelectedClient] = useState(null);
   const [showClientModal, setShowClientModal] = useState(false);
+  const [activeStay, setActiveStay] = useState(null); // Séjour actif avec infos clinique
+  const [billToPatient, setBillToPatient] = useState(false); // Override: facturation patient
+  const [clientHomeAddress, setClientHomeAddress] = useState(''); // Adresse du client (pour override)
+  const [clientHomeGPS, setClientHomeGPS] = useState({ lat: null, lon: null }); // GPS du client
 
   // --- Date/heure de l'aller
   const [scheduledTime, setScheduledTime] = useState('');
@@ -164,6 +171,37 @@ export default function ManualBookingForm({ onSuccess }) {
     clientHasWheelchair: false,
     needWheelchair: false,
   });
+
+  const buildClinicAddress = (clinic) => {
+    if (!clinic) return '';
+    const parts = [];
+    const hasStructured =
+      clinic.domicile_address_line1 || clinic.domicile_zip || clinic.domicile_city;
+
+    if (hasStructured && clinic.domicile_address_line1) {
+      parts.push(clinic.domicile_address_line1);
+      if (clinic.domicile_address_line2) {
+        parts.push(clinic.domicile_address_line2);
+      }
+    } else if (clinic.address) {
+      parts.push(clinic.address);
+    }
+
+    const postalCity = [clinic.domicile_zip, clinic.domicile_city].filter(Boolean).join(' ');
+    const base = parts.join(', ');
+    if (postalCity && !base.includes(postalCity)) {
+      parts.push(postalCity);
+    } else {
+      if (clinic.domicile_zip && !base.includes(clinic.domicile_zip)) {
+        parts.push(clinic.domicile_zip);
+      }
+      if (clinic.domicile_city && !base.includes(clinic.domicile_city)) {
+        parts.push(clinic.domicile_city);
+      }
+    }
+
+    return parts.filter(Boolean).join(', ');
+  };
 
   // Calculer la durée estimée en temps réel avec OSRM (routes réelles)
   React.useEffect(() => {
@@ -350,24 +388,17 @@ export default function ManualBookingForm({ onSuccess }) {
           if (c.is_institution && c.institution_name) {
             label = `🏥 ${c.institution_name}`;
           } else {
-            // Pour les clients normaux, utiliser user_first_name et user_last_name
-            // (le backend retourne ces champs depuis ClientDTO.to_dict())
-            const firstName = c.user_first_name || '';
-            const lastName = c.user_last_name || '';
-            
-            // #region agent log
-            if (c.id === clients[0]?.id) {
-              console.log('🔍 [ManualBookingForm] loadDefaultClients - Valeurs extraites:', {
-                firstName,
-                lastName,
-                combined: `${firstName} ${lastName}`.trim(),
-                will_use_combined: !!(firstName || lastName),
-              });
-            }
-            // #endregion
-            
-            if (firstName || lastName) {
-              label = `${firstName} ${lastName}`.trim();
+            // Pour les clients normaux, utiliser full_name, first_name et last_name
+            // (le backend retourne ces champs depuis Client.serialize)
+            if (c.full_name && c.full_name !== 'Nom non renseigné') {
+              label = c.full_name;
+            } else {
+              const firstName = c.first_name || '';
+              const lastName = c.last_name || '';
+              
+              if (firstName || lastName) {
+                label = `${firstName} ${lastName}`.trim();
+              }
             }
           }
           
@@ -395,14 +426,78 @@ export default function ManualBookingForm({ onSuccess }) {
   }, []);
 
   // === Clients ===
-  const handleSelectClient = (clientObj) => {
+  const handleSelectClient = async (clientObj) => {
     console.log('👤 Client sélectionné:', clientObj);
     setSelectedClient(clientObj);
+    setActiveStay(null); // Réinitialiser le séjour actif
+    setBillToPatient(false); // Réinitialiser l'override
 
+    const client = clientObj?.raw;
+    const clientId = client?.id || clientObj?.value?.id;
+
+    if (!clientId) {
+      console.warn('⚠️ Pas d\'ID client disponible');
+      return;
+    }
+
+    // 🏥 Vérifier si le client a un séjour actif
+    try {
+      const stayResponse = await fetchClientActiveStay(clientId);
+      const stayData = stayResponse?.data;
+
+      if (stayData && stayData.clinic) {
+        // Client hospitalisé → utiliser l'adresse de la clinique
+        setActiveStay(stayData);
+        const clinic = stayData.clinic;
+
+        const clinicAddress = buildClinicAddress(clinic) || clinic.address;
+
+        if (clinicAddress) {
+          setPickupLocation(clinicAddress);
+          setPickupCoords({
+            lat: clinic.latitude || null,
+            lon: clinic.longitude || null,
+          });
+          console.log(`🏥 Client hospitalisé: utilisation adresse clinique ${clinic.name}`);
+          console.log(`📍 Adresse clinique: ${clinicAddress}`);
+        }
+
+        // 💰 Appliquer le tarif préférentiel de la clinique
+        if (clinic.preferential_rate && clinic.preferential_rate > 0) {
+          setAmount(clinic.preferential_rate.toString());
+          console.log(`💰 Tarif préférentiel clinique appliqué: ${clinic.preferential_rate} CHF`);
+        } else {
+          // Pas de tarif préférentiel clinique, utiliser celui du client si disponible
+          const clientPreferentialRate = client?.preferential_rate;
+          if (clientPreferentialRate && clientPreferentialRate > 0) {
+            setAmount(clientPreferentialRate.toString());
+            console.log(`💰 Tarif préférentiel client appliqué: ${clientPreferentialRate} CHF`);
+          } else {
+            setAmount('');
+          }
+        }
+        if (billToPatient) {
+          const clientPreferentialRate = client?.preferential_rate;
+          if (clientPreferentialRate && clientPreferentialRate > 0) {
+            setAmount(clientPreferentialRate.toString());
+            console.log(
+              `💰 Tarif patient appliqué (override facturation): ${clientPreferentialRate} CHF`
+            );
+          } else {
+            setAmount('');
+          }
+        }
+        return; // Sortir ici si séjour actif trouvé
+      }
+    } catch (error) {
+      console.warn('⚠️ Erreur lors de la récupération du séjour actif:', error);
+      // Continuer avec l'adresse du client en cas d'erreur
+    }
+
+    // Pas de séjour actif ou erreur → utiliser l'adresse du client
     // 📍 Récupérer l'adresse exacte du client avec priorités
     let homeAddress = '';
     let homeGPS = { lat: null, lon: null };
-    const client = clientObj?.raw;
 
     // Priorité 1: domicile (adresse structurée complète + GPS)
     if (client?.domicile?.address) {
@@ -443,21 +538,56 @@ export default function ManualBookingForm({ onSuccess }) {
       homeAddress = client.address;
     }
 
+    // Sauvegarder l'adresse du client pour l'override
+    setClientHomeAddress(homeAddress);
+    setClientHomeGPS(homeGPS);
+
     if (homeAddress) {
       setPickupLocation(homeAddress);
       setPickupCoords(homeGPS); // ✅ Charger les GPS du client
       console.log(`📍 Adresse du client: ${homeAddress}`);
     }
 
-    // 💰 Appliquer automatiquement le tarif préférentiel si disponible
+    // 💰 Appliquer automatiquement le tarif préférentiel du client si disponible
     const preferentialRate = client?.preferential_rate;
     if (preferentialRate && preferentialRate > 0) {
       setAmount(preferentialRate.toString());
-      console.log(`💰 Tarif préférentiel appliqué: ${preferentialRate} CHF`);
+      console.log(`💰 Tarif préférentiel client appliqué: ${preferentialRate} CHF`);
     } else {
       setAmount(''); // Pas de tarif préférentiel, laisser vide
     }
   };
+
+  // Gérer l'override "Facturation patient" : facturation uniquement (pas d'impact sur l'adresse de départ)
+  useEffect(() => {
+    if (billToPatient && activeStay) {
+      const client = selectedClient?.raw;
+      const clientPreferentialRate = client?.preferential_rate;
+      if (clientPreferentialRate && clientPreferentialRate > 0) {
+        setAmount(clientPreferentialRate.toString());
+      } else {
+        setAmount('');
+      }
+    } else if (!billToPatient && activeStay && activeStay.clinic) {
+      // Override désactivé : revenir à l'adresse de la clinique
+      const clinic = activeStay.clinic;
+      const clinicAddress = buildClinicAddress(clinic) || clinic.address;
+      
+      if (clinicAddress) {
+        setPickupLocation(clinicAddress);
+        setPickupCoords({
+          lat: clinic.latitude || null,
+          lon: clinic.longitude || null,
+        });
+        console.log('🔄 Retour adresse clinique (override désactivé)');
+      }
+      
+      // Réappliquer le tarif préférentiel de la clinique
+      if (clinic.preferential_rate && clinic.preferential_rate > 0) {
+        setAmount(clinic.preferential_rate.toString());
+      }
+    }
+  }, [billToPatient, activeStay, clientHomeAddress, clientHomeGPS, selectedClient]);
 
   const loadClientOptions = useCallback(async (q) => {
     try {
@@ -509,26 +639,17 @@ export default function ManualBookingForm({ onSuccess }) {
         if (c.is_institution && c.institution_name) {
           label = `🏥 ${c.institution_name}`;
         } else {
-          // Pour les clients normaux, utiliser user_first_name et user_last_name
-          // (le backend retourne ces champs depuis ClientDTO.to_dict())
-          const firstName = c.user_first_name || '';
-          const lastName = c.user_last_name || '';
-          
-          // #region agent log
-          if (c.id === clients[0]?.id) {
-            console.log('🔍 [ManualBookingForm] Valeurs extraites:', {
-              firstName,
-              lastName,
-              firstName_trimmed: firstName.trim(),
-              lastName_trimmed: lastName.trim(),
-              combined: `${firstName} ${lastName}`.trim(),
-              will_use_combined: !!(firstName || lastName),
-            });
-          }
-          // #endregion
-          
-          if (firstName || lastName) {
-            label = `${firstName} ${lastName}`.trim();
+          // Pour les clients normaux, utiliser full_name, first_name et last_name
+          // (le backend retourne ces champs depuis Client.serialize)
+          if (c.full_name && c.full_name !== 'Nom non renseigné') {
+            label = c.full_name;
+          } else {
+            const firstName = c.first_name || '';
+            const lastName = c.last_name || '';
+            
+            if (firstName || lastName) {
+              label = `${firstName} ${lastName}`.trim();
+            }
           }
         }
         
@@ -587,17 +708,48 @@ export default function ManualBookingForm({ onSuccess }) {
 
   // === Mutations API ===
   // Gestion de la création de client
-  const handleSaveNewClient = async (clientData) => {
+  const handleSaveNewClient = async (clientData, { existingClient } = {}) => {
+    let createdClient = existingClient || null;
     try {
-      const newClient = await createClient(clientData);
-      queryClient.invalidateQueries(['clients']);
-      setSelectedClient({
+      const { hospitalization, billing_party_link, ...clientPayload } = clientData || {};
+      const newClient = createdClient || (await createClient(clientPayload));
+      createdClient = newClient;
+
+      const createdClientId = newClient?.id || newClient?.data?.id || newClient?.client?.id;
+      if (!createdClientId) {
+        throw new Error('Client créé mais identifiant introuvable.');
+      }
+
+      if (hospitalization) {
+        await createClientStay(createdClientId, {
+          company_id: parseInt(hospitalization.company_id, 10),
+          start_date: hospitalization.start_date,
+          end_date: hospitalization.end_date || null,
+          notes: hospitalization.notes || null,
+        });
+      }
+
+      if (billing_party_link) {
+        await linkClientBillingParty(createdClientId, {
+          billing_party_id: billing_party_link.billing_party_id,
+          role: billing_party_link.role || null,
+          is_default: !!billing_party_link.is_default,
+          contact_name: billing_party_link.contact_name || null,
+          contact_email: billing_party_link.contact_email || null,
+          contact_phone: billing_party_link.contact_phone || null,
+        });
+      }
+
+      const clientOption = {
         value: newClient.id,
         label: `${newClient.user?.first_name ?? newClient.first_name ?? ''} ${
           newClient.user?.last_name ?? newClient.last_name ?? ''
         }`.trim(),
         raw: newClient,
-      });
+      };
+
+      await handleSelectClient(clientOption);
+      queryClient.invalidateQueries(['clients']);
       setShowClientModal(false);
       toast.success('Client créé !');
 
@@ -615,7 +767,14 @@ export default function ManualBookingForm({ onSuccess }) {
       }
     } catch (err) {
       console.error('API createClient error:', err?.response?.data || err);
-      toast.error(err?.response?.data?.error || 'Erreur création client');
+      const errorMessage = err?.response?.data?.error || err.message || 'Erreur création client';
+      if (createdClient || err?.createdClient) {
+        toast.error(`Client créé, mais erreur sur les informations complémentaires: ${errorMessage}`);
+        const wrappedError = new Error(errorMessage);
+        wrappedError.createdClient = createdClient || err?.createdClient;
+        throw wrappedError;
+      }
+      toast.error(errorMessage);
       throw err; // Pour que NewClientModal affiche l'erreur
     }
   };
@@ -624,6 +783,8 @@ export default function ManualBookingForm({ onSuccess }) {
     mutationFn: createManualBooking,
     onSuccess: (data) => {
       toast.success('Réservation créée !');
+      // ✅ Reset billToPatient après succès
+      setBillToPatient(false);
       onSuccess?.(data);
     },
     onError: (err) => {
@@ -765,6 +926,10 @@ export default function ManualBookingForm({ onSuccess }) {
       // Nouveaux champs structurés
       establishment_id: establishment?.id ?? undefined,
       medical_service_id: serviceObj?.id ?? undefined,
+      
+      // Override facturation patient (si client hospitalisé mais on veut facturer au patient)
+      // ✅ IMPORTANT: Envoyer UNIQUEMENT si billToPatient === true (pas undefined si false)
+      ...(billToPatient ? { bill_to_patient: true } : {}),
       // Si aller-retour : toujours envoyer return_date
       // return_time seulement si une heure est spécifiée (sinon = "heure à confirmer")
       // ⚡ return_time doit être au format ISO 8601 complet (YYYY-MM-DDTHH:mm:ss)
@@ -823,6 +988,10 @@ export default function ManualBookingForm({ onSuccess }) {
     console.log('📅 Type de récurrence:', recurrenceType);
     console.log('🗓️ Jours sélectionnés:', selectedDays);
     console.log("🔢 Nombre d'occurrences:", occurrences);
+    // 🔍 Trace pour debug facturation
+    console.log('💳 [Facturation] billToPatient:', billToPatient);
+    console.log('💳 [Facturation] activeStay:', activeStay);
+    console.log('💳 [Facturation] bill_to_patient dans payload:', payload.bill_to_patient);
 
     bookingMutation.mutate(payload);
   };
@@ -857,6 +1026,44 @@ export default function ManualBookingForm({ onSuccess }) {
               menuPosition="fixed"
               classNamePrefix="react-select"
             />
+            
+            {/* 🏥 Afficher info séjour actif et case override */}
+            {activeStay && activeStay.clinic && (
+              <div style={{ marginTop: '12px', padding: '12px', background: '#f0f9ff', border: '1px solid #0ea5e9', borderRadius: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '18px' }}>🏥</span>
+                  <div style={{ flex: 1 }}>
+                    <strong style={{ display: 'block', marginBottom: '4px' }}>
+                      Client hospitalisé à {activeStay.clinic.name}
+                    </strong>
+                    <small style={{ color: '#64748b', fontSize: '0.85rem' }}>
+                      Adresse de départ: {buildClinicAddress(activeStay.clinic) || activeStay.clinic.address || ''}
+                      {activeStay.clinic.preferential_rate && (
+                        <span style={{ display: 'block', marginTop: '4px', color: '#059669', fontWeight: '500' }}>
+                          💰 Tarif préférentiel: {activeStay.clinic.preferential_rate.toFixed(2)} CHF
+                        </span>
+                      )}
+                    </small>
+                  </div>
+                </div>
+                <div style={{ marginTop: '8px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem' }}>
+                    <input
+                      type="checkbox"
+                      checked={billToPatient}
+                      onChange={(e) => setBillToPatient(e.target.checked)}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    <span>Facturation patient (override)</span>
+                  </label>
+                  {billToPatient && (
+                    <small style={{ display: 'block', marginTop: '4px', color: '#dc2626', fontSize: '0.8rem' }}>
+                      ⚠️ La facturation sera adressée au client (le départ reste la clinique)
+                    </small>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Lieu de prise en charge */}

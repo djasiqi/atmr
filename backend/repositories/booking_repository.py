@@ -18,12 +18,13 @@ class BookingRepository:
 
     @staticmethod
     def _company_visibility_filter(company_id: int):
-        """Crée un filtre SQLAlchemy pour la visibilité des courses selon les règles de transfert.
+        """Crée un filtre SQLAlchemy pour la visibilité des courses (modèle Owner vs Executor).
 
         Règles de visibilité :
-        - L'entreprise voit ses propres courses (company_id == company_id)
-        - L'entreprise voit les courses transférées en PENDING où elle est l'exécutante
-        - L'entreprise voit les courses transférées acceptées/assignées où elle est l'exécutante
+        - Owner : l'entreprise voit ses propres courses (company_id == company_id)
+        - Owner via transfer : l'entreprise voit les courses où elle est owner_company_id
+          dans un BookingTransfer accepté/complété (robustesse si company_id a été changé par le passé)
+        - Executor : l'entreprise voit les courses où elle est exécutante (executing_company_id)
 
         Args:
             company_id: ID de l'entreprise
@@ -31,18 +32,32 @@ class BookingRepository:
         Returns:
             Filtre SQLAlchemy pour la visibilité
         """
-        from sqlalchemy import and_, or_
+        from sqlalchemy import and_, exists, or_
 
+        from models.booking_transfer import BookingTransfer
+        from models.enums import TransferStatus
+
+        # Seuls ACCEPTED/COMPLETED : exclut PENDING (pas encore accepté) et REJECTED (refusé/annulé)
+        owner_via_transfer = exists().where(
+            and_(
+                BookingTransfer.booking_id == Booking.id,
+                BookingTransfer.owner_company_id == company_id,
+                BookingTransfer.status.in_(
+                    [TransferStatus.ACCEPTED, TransferStatus.COMPLETED]
+                ),
+            )
+        )
         return or_(
-            # L'entreprise voit ses propres courses
+            # Owner : l'entreprise voit ses propres courses
             (Booking.company_id == company_id),
-            # Courses transférées en PENDING où l'entreprise est l'exécutante
+            # Owner via transfer (robustesse pour données où company_id avait été mis à l'exécutant)
+            owner_via_transfer,
+            # Executor : courses transférées en PENDING où l'entreprise est l'exécutante
             and_(
                 (Booking.executing_company_id == company_id),
                 (Booking.status == BookingStatus.PENDING),
             ),
-            # Courses transférées acceptées/en cours où l'entreprise est l'exécutante
-            # ✅ Inclure TOUS les statuts actifs : ACCEPTED, ASSIGNED, EN_ROUTE, IN_PROGRESS, COMPLETED, RETURN_COMPLETED
+            # Executor : courses transférées acceptées/en cours où l'entreprise est l'exécutante
             and_(
                 (Booking.executing_company_id == company_id),
                 (
@@ -469,7 +484,7 @@ class BookingRepository:
         return query.all()
 
     def find_models_by_client_and_company(
-        self, client_id: int, company_id: int
+        self, client_id: int, company_id: int, limit: int | None = None
     ) -> list[Booking]:
         """Trouve les bookings d'un client pour une entreprise (retourne les modèles SQLAlchemy).
 
@@ -480,11 +495,12 @@ class BookingRepository:
         Returns:
             Liste de Booking triées par scheduled_time décroissant
         """
-        return (
-            Booking.query.filter_by(client_id=client_id, company_id=company_id)
-            .order_by(Booking.scheduled_time.desc())
-            .all()
+        query = Booking.query.filter_by(client_id=client_id, company_id=company_id).order_by(
+            Booking.scheduled_time.desc()
         )
+        if limit:
+            query = query.limit(limit)
+        return query.all()
 
     def find_models_by_driver_and_company(
         self,
@@ -765,6 +781,71 @@ class BookingRepository:
             )
 
         return query.order_by(Booking.scheduled_time.asc()).all()
+
+    def find_unbilled_ids_by_company_and_client(
+        self,
+        company_id: int,
+        client_id: int,
+        period_year: int | None = None,
+        period_month: int | None = None,
+        billed_to_type: str | None = None,
+    ) -> list[int]:
+        """Trouve uniquement les IDs des bookings terminés non facturés pour un client et une entreprise.
+
+        Optimisation pour "select all" : retourne uniquement les IDs sans charger les objets complets.
+
+        Args:
+            company_id: ID de l'entreprise
+            client_id: ID du client
+            period_year: Année de la période (optionnel)
+            period_month: Mois de la période (optionnel)
+            billed_to_type: Type de facturation ("patient", "clinic", "insurance") (optionnel)
+
+        Returns:
+            Liste d'IDs de Booking triés par scheduled_time ascendant
+        """
+        from datetime import datetime
+
+        from sqlalchemy import or_
+
+        from models import BookingStatus, Invoice, InvoiceLine, InvoiceStatus, db
+
+        query = (
+            db.session.query(Booking.id)
+            .outerjoin(InvoiceLine, Booking.invoice_line_id == InvoiceLine.id)
+            .outerjoin(Invoice, InvoiceLine.invoice_id == Invoice.id)
+            .filter(
+                Booking.company_id == company_id,
+                Booking.client_id == client_id,
+                Booking.status.in_(
+                    [BookingStatus.COMPLETED, BookingStatus.RETURN_COMPLETED]
+                ),
+                or_(
+                    Booking.invoice_line_id.is_(None),
+                    Invoice.status == InvoiceStatus.CANCELLED,
+                ),
+            )
+        )
+
+        # Filtrer par période si fournie
+        if period_year and period_month:
+            PERIOD_MONTH_THRESHOLD = 12
+            start_date = datetime(period_year, period_month, 1)
+            if period_month == PERIOD_MONTH_THRESHOLD:
+                end_date = datetime(period_year + 1, 1, 1)
+            else:
+                end_date = datetime(period_year, period_month + 1, 1)
+
+            query = query.filter(
+                Booking.scheduled_time >= start_date,
+                Booking.scheduled_time < end_date,
+            )
+
+        # Filtrer par billed_to_type si fourni
+        if billed_to_type and billed_to_type in ["patient", "clinic", "insurance"]:
+            query = query.filter(Booking.billed_to_type == billed_to_type)
+
+        return [row[0] for row in query.order_by(Booking.scheduled_time.asc()).all()]
 
     def find_model_by_id_with_full_eager_loading(
         self, booking_id: int, company_id: int

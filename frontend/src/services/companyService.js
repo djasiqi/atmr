@@ -64,6 +64,67 @@ export const fetchCompanyReservations = async (date) => {
   }
 };
 
+/**
+ * Récupère les réservations avec pagination/filtrage côté serveur.
+ */
+export const fetchCompanyReservationsPaginated = async ({
+  date,
+  startDate,
+  endDate,
+  page = 1,
+  perPage = 25,
+  status,
+  tab,
+  search,
+  sortOrder = 'desc',
+  excludeCanceled = false,
+} = {}) => {
+  try {
+    const params = {
+      flat: true,
+      page,
+      per_page: perPage,
+      sort_order: sortOrder,
+    };
+    if (date) params.date = date;
+    if (startDate) params.start_date = startDate;
+    if (endDate) params.end_date = endDate;
+    if (status && status !== 'all') params.status = status;
+    if (tab && tab !== 'all') params.tab = tab;
+    if (search) params.search = search;
+    if (excludeCanceled) params.exclude_canceled = true;
+
+    const { data } = await apiClient.get('/companies/me/reservations', {
+      params,
+      headers: {
+        'Cache-Control': 'no-cache',
+        Pragma: 'no-cache',
+      },
+    });
+    return data || {};
+  } catch (e) {
+    if (e.response?.status === 401 || e.response?.status === 422) {
+      console.error("Erreur d'authentification JWT:", e.response.data);
+    }
+    console.error('fetchCompanyReservationsPaginated failed:', e?.response?.data || e);
+    return {
+      reservations: [],
+      total: 0,
+      page,
+      per_page: perPage,
+      total_pages: 0,
+      stats: {
+        total: 0,
+        pending: 0,
+        inProgress: 0,
+        completed: 0,
+        canceled: 0,
+        revenue: 0,
+      },
+    };
+  }
+};
+
 export const acceptReservation = async (reservationId) => {
   try {
     const { data } = await apiClient.post(`/companies/me/reservations/${reservationId}/accept`);
@@ -329,8 +390,62 @@ export const fetchCompanyClients = async () => {
 /**
  * (nécessaire pour ClientInvoices.jsx)
  */
-export const fetchClientReservations = async (clientId) => {
-  const { data } = await apiClient.get(`/companies/me/clients/${clientId}/reservations`);
+/**
+ * Récupère les détails complets d'un client (pour le drawer)
+ * Combine les informations du client avec ses séjours et tiers payeurs
+ */
+export const fetchClientDetails = async (clientId) => {
+  try {
+    // Récupérer le client depuis la liste (ou créer un endpoint dédié si nécessaire)
+    const clients = await fetchCompanyClients();
+    const client = clients.find((c) => c.id === clientId);
+    
+    if (!client) {
+      throw new Error('Client non trouvé');
+    }
+
+    // Charger les séjours et billing parties en parallèle
+    const [staysResponse, billingPartiesResponse] = await Promise.allSettled([
+      fetchClientStays(clientId),
+      fetchClientBillingParties(clientId),
+    ]);
+
+    const stays = staysResponse.status === 'fulfilled' ? staysResponse.value.data || [] : [];
+    const billingParties = billingPartiesResponse.status === 'fulfilled' 
+      ? billingPartiesResponse.value.data || [] 
+      : [];
+
+    // Détecter si le client a un séjour actif ou un tiers payeur
+    const hasActiveStay = stays.some((s) => s.status === 'active' && !s.end_date);
+    const hasBillingParty = billingParties.length > 0;
+
+    return {
+      ...client,
+      stays,
+      billingParties,
+      has_active_stay: hasActiveStay,
+      has_billing_party: hasBillingParty,
+    };
+  } catch (err) {
+    console.error('Erreur lors du chargement des détails client:', err);
+    throw err;
+  }
+};
+
+export const fetchClientReservations = async (
+  clientId,
+  { limit, includeInvoices = true } = {}
+) => {
+  const params = {};
+  if (typeof includeInvoices === 'boolean') {
+    params.include_invoices = includeInvoices;
+  }
+  if (limit) {
+    params.limit = limit;
+  }
+  const { data } = await apiClient.get(`/companies/me/clients/${clientId}/reservations`, {
+    params,
+  });
   return data;
 };
 
@@ -390,6 +505,139 @@ export const deleteClient = async (clientId, hardDelete = false) => {
   } catch (error) {
     throw error.response?.data || error;
   }
+};
+
+// ==================== SÉJOURS D'HOSPITALISATION ====================
+
+/**
+ * Récupère les séjours d'hospitalisation d'un client
+ * @param {number} clientId - ID du client
+ * @returns {Promise} Liste des séjours
+ */
+export const fetchClientStays = async (clientId) => {
+  const response = await apiClient.get(`/clients/${clientId}/stays`);
+  return response.data;
+};
+
+/**
+ * Récupère le séjour actif d'un client avec toutes les informations de la clinique
+ * @param {number} clientId - ID du client
+ * @returns {Promise} Séjour actif avec détails de la clinique (adresse, tarif préférentiel, etc.)
+ */
+export const fetchClientActiveStay = async (clientId) => {
+  try {
+    const response = await apiClient.get(`/clients/${clientId}/active-stay`);
+    return response.data;
+  } catch (error) {
+    // Si 404 ou pas de séjour actif, retourner null
+    if (error.response?.status === 404 || error.response?.status === 200) {
+      return { success: true, data: null };
+    }
+    throw error;
+  }
+};
+
+export const createCompanyForInstitutionClient = async (clientId) => {
+  try {
+    const { data } = await apiClient.post(`/clients/${clientId}/create-company`);
+    return data?.data || data;
+  } catch (error) {
+    console.error('Error creating company for institution client:', error);
+    throw error;
+  }
+};
+
+/**
+ * Crée un nouveau séjour d'hospitalisation
+ * @param {number} clientId - ID du client
+ * @param {Object} stayData - Données du séjour (company_id, start_date, end_date?, status?, notes?)
+ * @returns {Promise} Séjour créé
+ */
+export const createClientStay = async (clientId, stayData) => {
+  const response = await apiClient.post(`/clients/${clientId}/stays`, stayData);
+  return response.data;
+};
+
+/**
+ * Met à jour un séjour d'hospitalisation
+ * @param {number} stayId - ID du séjour
+ * @param {Object} stayData - Données à mettre à jour
+ * @returns {Promise} Séjour mis à jour
+ */
+export const updateClientStay = async (stayId, stayData) => {
+  const response = await apiClient.patch(`/clients/client-stays/${stayId}`, stayData);
+  return response.data;
+};
+
+/**
+ * Ferme un séjour d'hospitalisation (définit end_date)
+ * @param {number} stayId - ID du séjour
+ * @returns {Promise} Séjour fermé
+ */
+export const closeClientStay = async (stayId, endDate = null) => {
+  const payload = endDate ? { end_date: endDate } : {};
+  const response = await apiClient.post(`/clients/client-stays/${stayId}/close`, payload);
+  return response.data;
+};
+
+// ==================== TIERS PAYEURS / CURATEURS ====================
+
+/**
+ * Récupère les tiers payeurs liés à un client
+ * @param {number} clientId - ID du client
+ * @returns {Promise} Liste des liens ClientBillingParty
+ * @note Endpoint backend : GET /api/v1/clients/{client_id}/billing-parties
+ */
+export const fetchClientBillingParties = async (clientId) => {
+  // Endpoint: GET /api/v1/clients/{client_id}/billing-parties
+  // Retourne: { success: true, data: [ClientBillingParty avec billing_party] }
+  try {
+    const response = await apiClient.get(`/clients/${clientId}/billing-parties`);
+    return response.data;
+  } catch (err) {
+    // Si l'endpoint n'existe pas encore, retourner une liste vide
+    if (err.response?.status === 404) {
+      return { success: true, data: [] };
+    }
+    throw err;
+  }
+};
+
+/**
+ * Lie un tiers payeur à un client
+ * @param {number} clientId - ID du client
+ * @param {Object} linkData - Données du lien (billing_party_id, is_default?, role?)
+ * @returns {Promise} Lien créé
+ * @note Endpoint backend : POST /api/v1/clients/{client_id}/billing-parties
+ */
+export const linkClientBillingParty = async (clientId, linkData) => {
+  // Endpoint: POST /api/v1/clients/{client_id}/billing-parties
+  // Body: { billing_party_id, is_default?, role?, contact_name?, contact_email?, contact_phone? }
+  const response = await apiClient.post(`/clients/${clientId}/billing-parties`, linkData);
+  return response.data;
+};
+
+/**
+ * Met à jour un lien client-billing party
+ * @param {number} linkId - ID du lien
+ * @param {Object} linkData - Données à mettre à jour
+ * @returns {Promise} Lien mis à jour
+ * @note Endpoint backend : PATCH /api/v1/clients/billing-party-links/{link_id}
+ */
+export const updateClientBillingPartyLink = async (linkId, linkData) => {
+  const response = await apiClient.patch(`/clients/billing-party-links/${linkId}`, linkData);
+  return response.data;
+};
+
+/**
+ * Supprime un lien client-billing party
+ * @param {number} linkId - ID du lien
+ * @returns {Promise}
+ * @note Endpoint backend : DELETE /api/v1/clients/billing-party-links/{link_id}
+ */
+export const unlinkClientBillingParty = async (linkId) => {
+  const response = await apiClient.delete(`/clients/billing-party-links/${linkId}`);
+  return response.data;
 };
 
 export const searchEstablishments = async (q, limit = 8, signal) => {

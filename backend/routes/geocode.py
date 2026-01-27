@@ -502,6 +502,14 @@ class GeocodeAutocomplete(Resource):
         if len(q) < MIN_QUERY_LENGTH:
             return [], 200
 
+        # ✅ Ignorer les valeurs par défaut qui ne sont pas de vraies adresses
+        DEFAULT_VALUES = ["non spécifié", "non specifie", "n/a", "na"]
+        if q.lower() in DEFAULT_VALUES:
+            current_app.logger.debug(
+                "⚠️ Requête ignorée (valeur par défaut): '%s'", q
+            )
+            return [], 200
+
         # Biais (fallback Genève)
         try:
             lat = float(request.args.get("lat", GENEVA_CENTER[0]))

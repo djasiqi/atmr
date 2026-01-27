@@ -1,0 +1,43 @@
+# ✅ Configuration allowlist IP pour /metrics (à intégrer dans nginx.conf)
+# 
+# Usage: Ajouter cette section dans le bloc server {} de nginx.conf
+# 
+# IMPORTANT: Remplacer PROMETHEUS_IP_1, PROMETHEUS_IP_2, etc. par les IPs réelles
+# de votre instance Prometheus (ou réseau Docker si scraping interne)
+
+# ✅ Allowlist IP pour /api/v1/prometheus/metrics
+location /api/v1/prometheus/metrics {
+    # ✅ Autoriser uniquement les IPs Prometheus
+    # Format: allow IP; deny all;
+    # Exemple pour réseau Docker interne (172.x.x.x) ou IP publique Prometheus
+    
+    # Option 1: Réseau Docker interne (recommandé si Prometheus dans même stack)
+    allow 172.16.0.0/12;  # Réseau Docker par défaut
+    allow 10.0.0.0/8;     # Réseau privé alternatif
+    allow 192.168.0.0/16; # Réseau privé alternatif
+    
+    # Option 2: IP spécifique Prometheus (si scraping externe)
+    # allow PROMETHEUS_IP_1;
+    # allow PROMETHEUS_IP_2;
+    
+    deny all;
+    
+    # ✅ Retourner 404 au lieu de 403 (security by obscurity légère)
+    # Si vous préférez 403 explicite, utilisez: return 403;
+    return 404;
+    
+    # ✅ Proxy vers backend (décommenter si vous autorisez l'accès au lieu de return 404)
+    # proxy_pass http://backend_api;
+    # proxy_set_header Host $host;
+    # proxy_set_header X-Real-IP $remote_addr;
+    # proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    # proxy_set_header X-Forwarded-Proto $scheme;
+    # 
+    # # ✅ Timeouts
+    # proxy_connect_timeout 10s;
+    # proxy_send_timeout 30s;
+    # proxy_read_timeout 30s;
+    # 
+    # # ✅ Headers de sécurité (optionnel, déjà dans server block)
+    # add_header X-Content-Type-Options "nosniff" always;
+}

@@ -21,7 +21,7 @@ class _ClientRepo(Protocol):
 
 class _BookingRepo(Protocol):
     def find_models_by_client_and_company(
-        self, client_id: int, company_id: int
+        self, client_id: int, company_id: int, limit: int | None = None
     ) -> list[Any]: ...
 
 
@@ -56,7 +56,12 @@ class AggregateClientReservationsAndInvoicesUseCase:
         self._invoice_repo = invoice_repo
 
     def execute(
-        self, *, company_id: int, client_id: int
+        self,
+        *,
+        company_id: int,
+        client_id: int,
+        limit: int | None = None,
+        include_invoices: bool = True,
     ) -> AggregateClientReservationsAndInvoicesResult:
         client = self._client_repo.find_model_by_id_with_user(client_id, company_id)
         if not client:
@@ -82,9 +87,12 @@ class AggregateClientReservationsAndInvoicesUseCase:
         bookings = self._booking_repo.find_models_by_client_and_company(
             int(client.id),
             company_id,
+            limit=limit,
         )
-        invoices = self._invoice_repo.find_by_client_id_and_company(
-            client_id, company_id
+        invoices = (
+            self._invoice_repo.find_by_client_id_and_company(client_id, company_id)
+            if include_invoices
+            else []
         )
 
         invoice_list: list[dict[str, Any]] = []
@@ -104,14 +112,14 @@ class AggregateClientReservationsAndInvoicesUseCase:
                 else {"id": getattr(booking, "id", None)}
             )
 
-            invoice = getattr(booking, "invoice", None)
+            invoice = getattr(booking, "invoice", None) if include_invoices else None
             amount = getattr(booking, "amount", 0) or 0
             try:
                 amount_f = float(amount)
             except Exception:
                 amount_f = 0.0
 
-            if invoice:
+            if include_invoices and invoice:
                 inv_ser = getattr(invoice, "serialize", None)
                 booking_data["invoice"] = (
                     inv_ser

@@ -1,0 +1,49 @@
+/* frontend/src/pages/company/BillingReview/BillingReviewPage.module.css */
+.companyContainer {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: var(--bg-secondary);
+}
+
+.dashboard {
+  display: flex;
+  flex-grow: 1;
+}
+
+.content {
+  flex: 1;
+  padding: var(--spacing-lg);
+  margin: var(--spacing-lg);
+  margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-lg));
+  max-width: calc(100% - var(--sidebar-w, 72px) - calc(var(--spacing-lg) * 2));
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  overflow-x: auto;
+}
+
+.header {
+  margin-bottom: var(--spacing-xl);
+}
+
+.header h1 {
+  margin: 0 0 var(--spacing-xs) 0;
+  font-size: var(--font-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--brand-primary);
+}
+
+.subtitle {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+}
+
+.error {
+  padding: var(--spacing-md);
+  background: var(--error-bg);
+  color: var(--error-text);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-lg);
+}

@@ -66,14 +66,44 @@ const InvoiceRowActions = ({
     action();
   };
 
+  // ✅ Trouver le rappel le plus récent (OPEN ou PAID)
+  const latestReminder = invoice.reminders?.length > 0
+    ? invoice.reminders
+        .sort((a, b) => new Date(b.generated_at || 0) - new Date(a.generated_at || 0))[0]
+    : null;
+  const hasReminder = latestReminder && latestReminder.pdf_url;
+
+  // ✅ Helper pour supprimer les emojis des labels (protection contre double icône)
+  const stripEmojis = (text) => {
+    // Regex pour détecter les emojis (plages Unicode principales)
+    return text.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F900}-\u{1F9FF}]|[\u{1F1E0}-\u{1F1FF}]/gu, '').trim();
+  };
+
   const actions = [
+    // ✅ NOUVEAU : "Voir facture initiale" (toujours disponible si PDF existe)
+    // Même après un rappel, la facture initiale reste accessible
     {
-      key: 'view',
-      label: 'Voir PDF',
-      icon: '👁️',
+      key: 'viewInitial',
+      label: 'Voir facture initiale',
+      icon: '📄',
       onClick: onViewPdf,
       className: styles.actionBtnSecondary,
       show: !!invoice.pdf_url,
+    },
+    // ✅ NOUVEAU : "Voir rappel (PDF)" (si rappel existe avec PDF)
+    {
+      key: 'viewReminder',
+      label: hasReminder && latestReminder.status === 'PAID'
+        ? 'Voir rappel (PDF)'
+        : 'Voir rappel (PDF)',
+      icon: '🔔',
+      onClick: () => {
+        if (latestReminder?.pdf_url) {
+          window.open(latestReminder.pdf_url, '_blank');
+        }
+      },
+      className: styles.actionBtnSecondary,
+      show: hasReminder,
     },
     {
       key: 'sendEmail',
@@ -101,8 +131,8 @@ const InvoiceRowActions = ({
     },
     {
       key: 'reminder',
-      label: `Générer rappel ${getNextReminderLevel(invoice)}`,
-      icon: '⚠️',
+      label: `Générer rappel suivant ${getNextReminderLevel(invoice)}`,
+      icon: '⏰',
       onClick: onReminder,
       className: styles.actionBtnWarning,
       show: canGenerateReminder(invoice),
@@ -310,35 +340,40 @@ const InvoiceRowActions = ({
             role="menu"
             aria-orientation="vertical"
           >
-            {visibleActions.map((action) => (
-              <button
-                key={action.key}
-                className={`${styles.menuItem} ${action.className}`}
-                onClick={() => handleAction(action.onClick)}
-                role="menuitem"
-                tabIndex={showMenu ? 0 : -1}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    handleAction(action.onClick);
-                  } else if (e.key === 'Escape') {
-                    setShowMenu(false);
-                    buttonRef.current?.focus();
-                  } else if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    const nextButton = e.currentTarget.nextElementSibling;
-                    if (nextButton) nextButton.focus();
-                  } else if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    const prevButton = e.currentTarget.previousElementSibling;
-                    if (prevButton) prevButton.focus();
-                  }
-                }}
-              >
-                <span className={styles.actionIcon}>{action.icon}</span>
-                <span className={styles.actionLabel}>{action.label}</span>
-              </button>
-            ))}
+            {visibleActions.map((action) => {
+              // ✅ Protection: supprimer les emojis du label si présents (évite double icône)
+              const cleanLabel = stripEmojis(action.label);
+              
+              return (
+                <button
+                  key={action.key}
+                  className={`${styles.menuItem} ${action.className}`}
+                  onClick={() => handleAction(action.onClick)}
+                  role="menuitem"
+                  tabIndex={showMenu ? 0 : -1}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleAction(action.onClick);
+                    } else if (e.key === 'Escape') {
+                      setShowMenu(false);
+                      buttonRef.current?.focus();
+                    } else if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      const nextButton = e.currentTarget.nextElementSibling;
+                      if (nextButton) nextButton.focus();
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      const prevButton = e.currentTarget.previousElementSibling;
+                      if (prevButton) prevButton.focus();
+                    }
+                  }}
+                >
+                  <span className={styles.actionIcon}>{action.icon}</span>
+                  <span className={styles.actionLabel}>{cleanLabel}</span>
+                </button>
+              );
+            })}
           </div>
         </>
       )}

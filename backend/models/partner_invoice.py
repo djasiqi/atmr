@@ -100,6 +100,9 @@ class PartnerInvoice(db.Model):
     paid_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )  # Date d'envoi (workflow Brouillon → Envoyer → Envoyée)
 
     # Métadonnées
     pdf_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -138,6 +141,7 @@ class PartnerInvoice(db.Model):
             "issued_at": self.issued_at.isoformat() if self.issued_at else None,
             "due_date": self.due_date.isoformat() if self.due_date else None,
             "paid_at": self.paid_at.isoformat() if self.paid_at else None,
+            "sent_at": self.sent_at.isoformat() if self.sent_at else None,
             "pdf_url": self.pdf_url,
             "notes": self.notes,
             "partnership": self.partnership.to_dict() if self.partnership else None,

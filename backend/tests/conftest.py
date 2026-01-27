@@ -343,7 +343,7 @@ def auth_headers(client, sample_user):
         token = create_access_token(
             identity=str(sample_user.public_id), additional_claims=claims
         )
-    auth_headers._token_cache[cache_key] = token  # type: ignore[attr-defined]
+    auth_headers._token_cache[cache_key] = token
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -369,7 +369,7 @@ def admin_headers(client, sample_admin_user):
         token = create_access_token(
             identity=str(sample_admin_user.public_id), additional_claims=claims
         )
-    admin_headers._token_cache[cache_key] = token  # type: ignore[attr-defined]
+    admin_headers._token_cache[cache_key] = token
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -796,8 +796,8 @@ def mock_external_services(monkeypatch):
 
         return _fallback_eta_seconds(origin, dest)
 
-    # Patcher OSRM
-    from services import osrm_client
+    # Patcher OSRM (services.geolocation.osrm, ex-osrm_client)
+    from services.geolocation import osrm as osrm_client
 
     monkeypatch.setattr(
         osrm_client, "build_distance_matrix_osrm", mock_build_distance_matrix_osrm
@@ -948,7 +948,7 @@ def mock_osrm_client(monkeypatch):
 
         return _fallback_eta_seconds(origin, dest)
 
-    from services import osrm_client
+    from services.geolocation import osrm as osrm_client
 
     # ✅ FIX: Mock les fonctions réelles utilisées
     monkeypatch.setattr(
@@ -971,7 +971,9 @@ def mock_ml_predictor(monkeypatch):
             self.is_trained = True
 
         def predict_delay(self, booking, driver, current_time=None):
-            from services.unified_dispatch.ml_predictor import DelayPrediction
+            from services.unified_dispatch.ml_predictor import (  # pyright: ignore[reportMissingImports]
+                DelayPrediction,
+            )
 
             return DelayPrediction(
                 booking_id=booking.id,

@@ -1,7 +1,8 @@
 import React from 'react';
 import styles from './ClientsTable.module.css';
+import ClientTableRowActions from './ClientTableRowActions';
 
-const ClientsTable = ({ clients, onEdit, onDelete, onRefresh: _onRefresh }) => {
+const ClientsTable = ({ clients, onSelect, onEdit, onDelete, selectedClientId, onRefresh: _onRefresh }) => {
   if (!clients || clients.length === 0) {
     return (
       <div className={styles.empty}>
@@ -38,38 +39,70 @@ const ClientsTable = ({ clients, onEdit, onDelete, onRefresh: _onRefresh }) => {
         <tbody>
           {clients.map((client) => {
             // Déterminer le nom à afficher
-            // Le backend retourne user_first_name et user_last_name depuis ClientDTO.to_dict()
+            // Le backend retourne first_name, last_name et full_name depuis Client.serialize
             let displayName = `Client #${client.id}`;
             
             if (client.is_institution && client.institution_name) {
               displayName = client.institution_name;
             } else {
-              // Utiliser directement user_first_name et user_last_name du ClientDTO
-              const firstName = client.user_first_name || '';
-              const lastName = client.user_last_name || '';
-              
-              if (firstName || lastName) {
-                displayName = `${firstName} ${lastName}`.trim();
+              // Utiliser full_name si disponible, sinon construire depuis first_name et last_name
+              if (client.full_name && client.full_name !== 'Nom non renseigné') {
+                displayName = client.full_name;
+              } else {
+                const firstName = client.first_name || '';
+                const lastName = client.last_name || '';
+                
+                if (firstName || lastName) {
+                  displayName = `${firstName} ${lastName}`.trim();
+                }
               }
             }
             
+            const isSelected = selectedClientId === client.id;
+            const cityZip = client.domicile?.city
+              ? `${client.domicile.zip || ''} ${client.domicile.city}`.trim()
+              : client.domicile?.zip || '-';
+
             return (
-            <tr key={client.id} className={!client.is_active ? styles.inactive : ''}>
+            <tr
+              key={client.id}
+              className={`${!client.is_active ? styles.inactive : ''} ${isSelected ? styles.selected : ''}`}
+              onClick={() => onSelect && onSelect(client)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onSelect && onSelect(client);
+                }
+              }}
+              aria-label={`Voir les détails de ${displayName}`}
+            >
               <td>
                 <div className={styles.clientInfo}>
                   <div className={styles.clientName}>
                     {client.is_institution ? (
                       <>
-                        <span className={styles.institutionBadge}>🏥</span>
+                        <span className={styles.institutionBadge}>🏢</span>
                         <strong>{displayName}</strong>
                       </>
                     ) : (
-                      <strong>{displayName}</strong>
+                      <>
+                        <strong>{displayName}</strong>
+                        {/* Indicateurs contextuels */}
+                        {client.has_active_stay && (
+                          <span className={styles.contextBadge} title="Client hospitalisé">
+                            🏥
+                          </span>
+                        )}
+                        {client.has_billing_party && (
+                          <span className={styles.contextBadge} title="Tiers payeur configuré">
+                            💰
+                          </span>
+                        )}
+                      </>
                     )}
                   </div>
-                  {!client.is_institution && client.institution_name && (
-                    <div className={styles.clientSubInfo}>{client.institution_name}</div>
-                  )}
                 </div>
               </td>
               <td>
@@ -83,24 +116,24 @@ const ClientsTable = ({ clients, onEdit, onDelete, onRefresh: _onRefresh }) => {
               </td>
               <td>
                 <div className={styles.contactInfo}>
-                  {client.contact_email && (
-                    <div className={styles.email}>📧 {client.contact_email}</div>
-                  )}
-                  {client.contact_phone && (
-                    <div className={styles.phone}>📞 {client.contact_phone}</div>
-                  )}
-                  {!client.contact_email && !client.contact_phone && (
+                  {client.contact_email ? (
+                    <div className={styles.email} title={client.contact_email}>
+                      📧 {client.contact_email.length > 25
+                        ? `${client.contact_email.substring(0, 22)}...`
+                        : client.contact_email}
+                    </div>
+                  ) : client.contact_phone ? (
+                    <div className={styles.phone} title={client.contact_phone}>
+                      📞 {client.contact_phone}
+                    </div>
+                  ) : (
                     <span className={styles.noContact}>-</span>
                   )}
                 </div>
               </td>
               <td>
-                <div className={styles.address}>
-                  {client.domicile?.address
-                    ? `${client.domicile.address}${
-                        client.domicile.zip ? ', ' + client.domicile.zip : ''
-                      }${client.domicile.city ? ', ' + client.domicile.city : ''}`
-                    : client.billing_address || '-'}
+                <div className={styles.address} title={client.domicile?.address || client.billing_address || ''}>
+                  {cityZip}
                 </div>
               </td>
               <td>
@@ -113,23 +146,13 @@ const ClientsTable = ({ clients, onEdit, onDelete, onRefresh: _onRefresh }) => {
                 </span>
               </td>
               <td>{formatDate(client.created_at)}</td>
-              <td>
-                <div className={styles.actions}>
-                  <button
-                    onClick={() => onEdit(client)}
-                    className={`btn btn-sm btn-primary ${styles.editBtn}`}
-                    title="Éditer le client"
-                  >
-                    ✏️ Éditer
-                  </button>
-                  <button
-                    onClick={() => onDelete(client)}
-                    className={`btn btn-sm ${styles.deleteBtn}`}
-                    title="Supprimer le client"
-                  >
-                    🗑️
-                  </button>
-                </div>
+              <td onClick={(e) => e.stopPropagation()}>
+                <ClientTableRowActions
+                  client={client}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  onView={onSelect}
+                />
               </td>
             </tr>
             );

@@ -15,6 +15,7 @@ from models.booking_transfer import BookingTransfer
 from models.enums import PartnershipStatus, TransferStatus
 from models.partner_invoice import PartnerInvoice, PartnerInvoiceStatus
 from models.partnership import Partnership
+from services.partnerships.exceptions import StatsComputationError
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +154,31 @@ class PartnershipStatsService:
 
         Returns:
             Dictionnaire avec les statistiques du partenariat
+
+        Raises:
+            StatsComputationError: Si le calcul échoue (champ manquant, erreur SQL, etc.)
         """
+        try:
+            return PartnershipStatsService._get_partnership_stats_impl(
+                partnership, company_id, month, year
+            )
+        except Exception as exc:
+            logger.exception(
+                "Erreur lors du calcul des stats de partenariat",
+                extra={"partnership_id": partnership.id, "company_id": company_id},
+            )
+            raise StatsComputationError(
+                "Impossible de calculer les statistiques du partenariat"
+            ) from exc
+
+    @staticmethod
+    def _get_partnership_stats_impl(
+        partnership: Partnership,
+        company_id: int,
+        month: int | None,
+        year: int | None,
+    ) -> dict[str, Any]:
+        """Implémentation du calcul (séparée pour permettre le try/except au niveau public)."""
         now = datetime.now(UTC)
         if month is None:
             month = now.month
@@ -228,10 +253,11 @@ class PartnershipStatsService:
         ).scalar() or Decimal("0")
 
         # Si l'entreprise est owner (émetteur) et qu'aucune facture n'a été générée,
-        # calculer un montant estimé basé sur les transfer_price des transferts complétés
+        # calculer un montant estimé basé sur les partner_cost des transferts complétés
+        # (double coalesce : partner_cost nullable, SUM(NULL) peut rester NULL selon la DB)
         if is_owner and invoiced_to_pay == 0:
             estimated_to_pay = db.session.query(
-                func.coalesce(func.sum(BookingTransfer.transfer_price), 0)
+                func.coalesce(func.sum(func.coalesce(BookingTransfer.partner_cost, 0)), 0)
             ).filter(
                 BookingTransfer.partnership_id == partnership.id,
                 BookingTransfer.owner_company_id == company_id,
@@ -259,7 +285,7 @@ class PartnershipStatsService:
             )
 
         # À recevoir (factures émises non payées où l'entreprise est partenaire)
-        # OU montant estimé basé sur les transfer_price si aucune facture générée
+        # OU montant estimé basé sur les partner_cost si aucune facture générée
         invoiced_to_receive = db.session.query(
             func.coalesce(func.sum(PartnerInvoice.total_amount), 0)
         ).filter(
@@ -270,10 +296,11 @@ class PartnershipStatsService:
         ).scalar() or Decimal("0")
 
         # Si l'entreprise est partner (exécuteur) et qu'aucune facture n'a été générée,
-        # calculer un montant estimé basé sur les transfer_price des transferts complétés
+        # calculer un montant estimé basé sur les partner_cost des transferts complétés
+        # (double coalesce : partner_cost nullable, SUM(NULL) peut rester NULL selon la DB)
         if not is_owner and invoiced_to_receive == 0:
             estimated_to_receive = db.session.query(
-                func.coalesce(func.sum(BookingTransfer.transfer_price), 0)
+                func.coalesce(func.sum(func.coalesce(BookingTransfer.partner_cost, 0)), 0)
             ).filter(
                 BookingTransfer.partnership_id == partnership.id,
                 BookingTransfer.executing_company_id == company_id,

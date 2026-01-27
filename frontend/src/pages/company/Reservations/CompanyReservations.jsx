@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
 import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/CompanySidebar';
 import useCompanyData from '../../../hooks/useCompanyData';
+import useUrlSearchSync from '../../../hooks/useUrlSearchSync';
 import {
-  fetchCompanyReservations,
+  fetchCompanyReservationsPaginated,
   deleteReservation,
   acceptReservation,
   rejectReservation,
@@ -30,14 +31,15 @@ const CompanyReservations = () => {
   
   // États existants
   const [reservations, setReservations] = useState([]);
-  const [filteredReservations, setFilteredReservations] = useState([]);
   const [selectedDay, setSelectedDay] = useState('all'); // Par défaut : toutes les dates
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortOrder, setSortOrder] = useState('desc'); // Par défaut : ordre décroissant (plus récent d'abord)
   const [currentPage, setCurrentPage] = useState(1);
-  const [reservationsPerPage, setReservationsPerPage] = useState(10); // Nombre de réservations par page
+  const [reservationsPerPage, setReservationsPerPage] = useState(25); // Nombre de réservations par page
+  const [totalReservations, setTotalReservations] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const [selectedReservation, setSelectedReservation] = useState(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [reservationToDelete, setReservationToDelete] = useState(null);
@@ -45,6 +47,8 @@ const CompanyReservations = () => {
   const [scheduleModalReservation, setScheduleModalReservation] = useState(null);
   const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [transferModalReservation, setTransferModalReservation] = useState(null);
+  const searchInputRef = useRef(null);
+  const { initialSearch, shouldFocus, consumeFocus, initialized } = useUrlSearchSync();
 
   // Nouveaux états pour les améliorations
   const [activeTab, setActiveTab] = useState('all');
@@ -97,27 +101,35 @@ const CompanyReservations = () => {
       // Si "Toutes les dates" ou une plage de dates, charger toutes les réservations
       const isDateRange = selectedDay && selectedDay.includes(':');
       const apiParam = selectedDay === 'all' || isDateRange ? null : selectedDay;
+      const [startDate, endDate] = isDateRange ? selectedDay.split(':') : [null, null];
 
-      const data = await fetchCompanyReservations(apiParam);
-      let reservationsData = Array.isArray(data) ? data : data.reservations || [];
+      const data = await fetchCompanyReservationsPaginated({
+        date: apiParam,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        page: currentPage,
+        perPage: reservationsPerPage,
+        status: statusFilter !== 'all' ? statusFilter : undefined,
+        tab: activeTab !== 'all' ? activeTab : undefined,
+        search: searchTerm || undefined,
+        sortOrder,
+        excludeCanceled: activeTab === 'all' && statusFilter !== 'canceled',
+      });
 
-      // Filtrer côté client si c'est une plage de dates
-      if (isDateRange) {
-        const [startDate, endDate] = selectedDay.split(':');
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999); // Inclure toute la journée de fin
-
-        reservationsData = reservationsData.filter((r) => {
-          const reservationDate = new Date(r.scheduled_time || r.pickup_time);
-          return reservationDate >= start && reservationDate <= end;
-        });
-      }
+      const reservationsData = Array.isArray(data?.reservations)
+        ? data.reservations
+        : [];
 
       setReservations(reservationsData);
+      setTotalReservations(data?.total ?? reservationsData.length);
+      setTotalPages(data?.total_pages ?? 0);
 
       // Calculer les statistiques
-      calculateStats(reservationsData);
+      if (data?.stats) {
+        setStats(data.stats);
+      } else {
+        calculateStats(reservationsData);
+      }
 
       // Générer les alertes
       generateAlerts(reservationsData);
@@ -126,7 +138,16 @@ const CompanyReservations = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedDay, calculateStats]);
+  }, [
+    selectedDay,
+    calculateStats,
+    currentPage,
+    reservationsPerPage,
+    statusFilter,
+    searchTerm,
+    sortOrder,
+    activeTab,
+  ]);
 
   // Générer les alertes
   const generateAlerts = (reservationsData) => {
@@ -171,6 +192,24 @@ const CompanyReservations = () => {
   useEffect(() => {
     loadReservations();
   }, [loadReservations]);
+
+  useEffect(() => {
+    if (!initialized) return;
+    if (initialSearch && initialSearch !== searchTerm) {
+      setSearchTerm(initialSearch);
+    }
+    if (shouldFocus) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      requestAnimationFrame(() => {
+        searchInputRef.current?.focus();
+      });
+      consumeFocus();
+    }
+  }, [initialized, initialSearch, shouldFocus, consumeFocus, searchTerm]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedDay, searchTerm, statusFilter, sortOrder, activeTab, reservationsPerPage]);
 
   // Dans le composant CompanyReservations
 
@@ -317,112 +356,6 @@ const CompanyReservations = () => {
     }
   };
 
-  // Filtrer et trier les réservations avec onglets
-  useEffect(() => {
-    let filtered = [...reservations];
-
-    // Filtre par onglet
-    if (activeTab !== 'all') {
-      filtered = filtered.filter((r) => {
-        switch (activeTab) {
-          case 'pending':
-            return r.status === 'pending';
-          case 'in_progress':
-            return ['accepted', 'assigned', 'in_progress'].includes(r.status);
-          case 'completed':
-            return isCompletedStatus(r.status);
-          case 'canceled':
-            return r.status === 'canceled';
-          default:
-            return true;
-        }
-      });
-    } else {
-      // ✅ Onglet "Toutes" : Masquer automatiquement les courses annulées
-      filtered = filtered.filter((r) => r.status !== 'canceled' && r.status !== 'CANCELED');
-    }
-
-    // Filtres de recherche améliorés (ID, Client, Adresse, Email, Téléphone)
-    if (searchTerm) {
-      const q = searchTerm.toLowerCase().trim();
-      filtered = filtered.filter((r) => {
-        // Recherche par ID (exact ou partiel)
-        const id = String(r.id || '');
-        if (id.includes(q)) return true;
-
-        // Recherche par nom du client
-        const name = (
-          r.client_name ||
-          r.client?.full_name ||
-          r.client?.username ||
-          ''
-        ).toLowerCase();
-        if (name.includes(q)) return true;
-
-        // Recherche par email
-        const email = (r.client?.email || r.customer_email || '').toLowerCase();
-        if (email.includes(q)) return true;
-
-        // Recherche par téléphone
-        const phone = (r.client?.phone || r.customer_phone || '').replace(/\s/g, '');
-        const qPhone = q.replace(/\s/g, '');
-        if (phone.includes(qPhone)) return true;
-
-        // Recherche par adresse de départ
-        const pickup = (r.pickup_location || '').toLowerCase();
-        if (pickup.includes(q)) return true;
-
-        // Recherche par adresse d'arrivée
-        const dropoff = (r.dropoff_location || '').toLowerCase();
-        if (dropoff.includes(q)) return true;
-
-        // Recherche par chauffeur assigné
-        const driverName = (r.driver?.username || r.driver?.full_name || '').toLowerCase();
-        if (driverName.includes(q)) return true;
-
-        return false;
-      });
-    }
-
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter((r) => (r.status || '').toLowerCase() === statusFilter);
-    }
-
-    // ✅ Tri robuste : gérer les dates invalides/null
-    filtered.sort((a, b) => {
-      // Extraire les dates en gérant les cas null/undefined/invalides
-      const getDateValue = (reservation) => {
-        const timeStr = reservation.scheduled_time || reservation.pickup_time || reservation.created_at;
-        if (!timeStr) return 0; // Dates manquantes en dernier (ou premier si asc)
-        const date = new Date(timeStr);
-        return isNaN(date.getTime()) ? 0 : date.getTime();
-      };
-
-      const dateA = getDateValue(a);
-      const dateB = getDateValue(b);
-
-      // Gérer les dates invalides : les mettre à la fin (ou au début si asc)
-      if (dateA === 0 && dateB === 0) return 0; // Les deux invalides : ordre inchangé
-      if (dateA === 0) return 1; // A invalide : A après B
-      if (dateB === 0) return -1; // B invalide : B après A
-
-      // Tri normal selon l'ordre sélectionné
-      return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
-    });
-
-    setFilteredReservations(filtered);
-    setCurrentPage(1);
-  }, [reservations, searchTerm, statusFilter, sortOrder, activeTab, isCompletedStatus]);
-
-  // Pagination
-  const currentReservations = useMemo(() => {
-    const indexOfLast = currentPage * reservationsPerPage;
-    const indexOfFirst = indexOfLast - reservationsPerPage;
-    return filteredReservations.slice(indexOfFirst, indexOfLast);
-  }, [filteredReservations, currentPage, reservationsPerPage]);
-
-  const totalPages = Math.ceil(filteredReservations.length / reservationsPerPage);
-
   // Gestion des onglets
   const tabs = [
     { id: 'all', label: 'Toutes', count: stats.total },
@@ -472,7 +405,7 @@ const CompanyReservations = () => {
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
 
-      const filtered = filteredReservations.filter((r) => {
+      const filtered = reservations.filter((r) => {
         const reservationDate = new Date(r.scheduled_time || r.pickup_time);
         return reservationDate >= today && reservationDate < tomorrow;
       });
@@ -488,7 +421,7 @@ const CompanyReservations = () => {
       const end = new Date(start);
       end.setDate(end.getDate() + 1);
 
-      const filtered = filteredReservations.filter((r) => {
+      const filtered = reservations.filter((r) => {
         const reservationDate = new Date(r.scheduled_time || r.pickup_time);
         return reservationDate >= start && reservationDate < end;
       });
@@ -502,13 +435,13 @@ const CompanyReservations = () => {
     const nextDay = new Date(targetDate);
     nextDay.setDate(nextDay.getDate() + 1);
 
-    const filtered = filteredReservations.filter((r) => {
+    const filtered = reservations.filter((r) => {
       const reservationDate = new Date(r.scheduled_time || r.pickup_time);
       return reservationDate >= targetDate && reservationDate < nextDay;
     });
 
     return filtered;
-  }, [filteredReservations, selectedDay]);
+  }, [reservations, selectedDay]);
 
   return (
     <div className={styles.companyContainer}>
@@ -565,6 +498,7 @@ const CompanyReservations = () => {
               setStatusFilter={setStatusFilter}
               sortOrder={sortOrder}
               setSortOrder={setSortOrder}
+              searchInputRef={searchInputRef}
             />
           </section>
 
@@ -596,7 +530,7 @@ const CompanyReservations = () => {
               <div className={styles.spinner}></div>
               <p>Chargement des réservations...</p>
             </div>
-          ) : filteredReservations.length === 0 ? (
+          ) : totalReservations === 0 ? (
             <div className={styles.emptyState}>
               <div className={styles.emptyIcon}>📋</div>
               <h3>Aucune réservation trouvée</h3>
@@ -607,7 +541,7 @@ const CompanyReservations = () => {
               {viewMode === 'table' ? (
                 <>
                   <ReservationTable
-                    reservations={currentReservations}
+                    reservations={reservations}
                     onRowClick={(reservation) => setSelectedReservation(reservation)}
                     onDelete={handleDeleteRequest}
                     onAccept={handleAccept}
@@ -624,9 +558,9 @@ const CompanyReservations = () => {
                   <div className={styles.paginationContainer}>
                     <div className={styles.paginationInfo}>
                       <span className={styles.resultCount}>
-                        {filteredReservations.length} résultat
-                        {filteredReservations.length > 1 ? 's' : ''} trouvé
-                        {filteredReservations.length > 1 ? 's' : ''}
+                        {totalReservations} résultat
+                        {totalReservations > 1 ? 's' : ''} trouvé
+                        {totalReservations > 1 ? 's' : ''}
                       </span>
                       <div className={styles.perPageSelector}>
                         <label htmlFor="perPage">Afficher:</label>
@@ -643,9 +577,6 @@ const CompanyReservations = () => {
                           <option value={25}>25</option>
                           <option value={50}>50</option>
                           <option value={100}>100</option>
-                          <option value={filteredReservations.length}>
-                            Tous ({filteredReservations.length})
-                          </option>
                         </select>
                       </div>
                     </div>
@@ -660,7 +591,7 @@ const CompanyReservations = () => {
                           ← Précédent
                         </button>
                         <span className={styles.pageInfo}>
-                          Page {currentPage} sur {totalPages}
+                          Page {currentPage} sur {totalPages || 1}
                         </span>
                         <button
                           disabled={currentPage === totalPages}

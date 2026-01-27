@@ -5,13 +5,17 @@ Gère l'autocomplete d'adresses et le géocodage avec validation des résultats.
 
 import logging
 import os
+from pathlib import Path
 from typing import Any, Dict, List
 
 import requests
+from dotenv import load_dotenv  # pyright: ignore[reportMissingImports]
 
 app_logger = logging.getLogger("app")
 
 # Clé API Google (Geocoding + Places)
+# Charger depuis .env si disponible
+load_dotenv(Path(__file__).parent.parent.parent / ".env", override=False)
 GOOGLE_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
 
 # Configuration par défaut pour la Suisse/Genève

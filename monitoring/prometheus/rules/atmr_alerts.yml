@@ -299,3 +299,45 @@ groups:
           summary: "Plus de 10 tokens invalidés par heure"
           description: "{{ $value }} tokens invalidés/heure (seuil: 10/h)"
           action: "Vérifier les raisons d'invalidation (reason label) et la santé des devices mobiles"
+
+  # ==================== Invoice PDF Alerts ====================
+  - name: invoice_pdf
+    interval: 1m
+    rules:
+      # ✅ Alerte: Latence p95 trop élevée (> 1500ms)
+      - alert: PDFGenerationP95High
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(invoice_pdf_generation_ms_bucket[10m])) by (le, pdf_kind, billing_type)
+          ) > 1500
+        for: 10m
+        labels:
+          severity: warning
+          component: invoice_pdf
+        annotations:
+          summary: "Latence p95 génération PDF > 1500ms"
+          description: "Latence p95: {{ $value }}ms (pdf_kind={{ $labels.pdf_kind }}, billing_type={{ $labels.billing_type }})"
+          action: |
+            1. Vérifier les logs PDF pour identifier les factures lentes
+            2. Vérifier le nombre de lignes (nb_rows) dans les logs
+            3. Vérifier la charge serveur (CPU, mémoire)
+            4. Consulter les métriques invoice_pdf_rows pour détecter des factures volumineuses
+          runbook_url: "https://docs.atmr.ch/runbooks/pdf-slow-generation"
+
+      # ✅ Alerte: Taux de warnings élevé (> 0.2/min)
+      - alert: PDFWarningsRateHigh
+        expr: |
+          sum(rate(invoice_pdf_warning_total[10m])) by (pdf_kind, billing_type) > 0.0033
+        for: 10m
+        labels:
+          severity: warning
+          component: invoice_pdf
+        annotations:
+          summary: "Taux de warnings PDF > 0.2/min"
+          description: "{{ $value }} warnings/seconde (≈ {{ $value | multiply 60 }} warnings/min) pour pdf_kind={{ $labels.pdf_kind }}, billing_type={{ $labels.billing_type }}"
+          action: |
+            1. Vérifier les logs PDF pour identifier les factures problématiques
+            2. Analyser les raisons (rows/time) via la métrique invoice_pdf_warning_total{reason=...}
+            3. Vérifier si certaines factures dépassent systématiquement les seuils (40 lignes ou 1500ms)
+            4. Consulter les métriques invoice_pdf_rows et invoice_pdf_generation_ms pour diagnostiquer
+          runbook_url: "https://docs.atmr.ch/runbooks/pdf-warnings"

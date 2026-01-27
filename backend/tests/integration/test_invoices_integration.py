@@ -193,6 +193,382 @@ class TestInvoicesIntegration:
         db.session.refresh(test_completed_booking)
         assert test_completed_booking.invoice_line_id is None
 
+    def test_cancel_direct_client_invoice_preserves_billed_to_type_patient(
+        self, authenticated_client, test_company, test_invoice, test_completed_booking
+    ):
+        """Annulation facture client directe : billed_to_type reste 'patient'.
+
+        Cas : booking hospitalisé avec override « facturer client », facture
+        client directe annulée. Les bookings doivent rester en facturation
+        client (billed_to_type='patient'), pas rebasculer en 'clinic'.
+        """
+        if not all([test_company, test_invoice, test_completed_booking]):
+            pytest.skip("Required fixtures missing")
+
+        from models.enums import InvoiceBillingStrategy, InvoiceLineType
+
+        # Facture client directe : S1_PATIENT, pas de tierce/clinique
+        test_invoice.billing_strategy = InvoiceBillingStrategy.S1_PATIENT
+        test_invoice.billed_to_company_id = None
+        test_invoice.bill_to_client_id = None
+        test_invoice.status = InvoiceStatus.DRAFT
+
+        # Simuler un état fautif : booking en 'clinic' (comme après un bug)
+        test_completed_booking.billed_to_type = "clinic"
+        test_completed_booking.billed_to_company_id = test_company.id
+        test_completed_booking.billing_party_id = None
+
+        invoice_line = InvoiceLine()
+        invoice_line.invoice_id = test_invoice.id
+        invoice_line.reservation_id = test_completed_booking.id
+        invoice_line.type = InvoiceLineType.RIDE
+        invoice_line.description = "Test override facturer client"
+        invoice_line.qty = Decimal("1.00")
+        invoice_line.unit_price = Decimal("100.00")
+        invoice_line.line_total = Decimal("100.00")
+        invoice_line.vat_amount = Decimal("0.00")
+        invoice_line.total_with_vat = Decimal("100.00")
+        db.session.add(invoice_line)
+        db.session.flush()
+
+        test_completed_booking.invoice_line_id = invoice_line.id
+        db.session.commit()
+
+        url = f"/api/v1/invoices/companies/{test_company.id}/invoices/{test_invoice.id}/cancel"
+        response = authenticated_client.post(url)
+        assert_response_status(response, 200)
+
+        db.session.refresh(test_invoice)
+        assert test_invoice.status == InvoiceStatus.CANCELLED
+
+        db.session.refresh(test_completed_booking)
+        assert test_completed_booking.invoice_line_id is None
+        assert (test_completed_booking.billed_to_type or "").lower() == "patient"
+        assert test_completed_booking.billed_to_company_id is None
+        assert test_completed_booking.billing_party_id is None
+
+    def test_clinic_monthly_totals_exclusions_patient_only_not_in_excluded(
+        self,
+        authenticated_client,
+        test_company,
+        db,
+    ):
+        """Exclusions S2 : les clients avec uniquement des bookings patient n'apparaissent pas.
+
+        - Client A : stay + bookings patient uniquement (unbilled) -> pas dans exclusions.
+        - Client B : stay + au moins 1 booking clinique eligible -> eligible + exclusions
+          (ses bookings patient) OK.
+        """
+        if not test_company:
+            pytest.skip("test_company required")
+
+        import uuid
+
+        from ext import bcrypt
+        from models import Client, ClientStay, User
+        from models.enums import ClientType, UserRole
+
+        now = datetime.now(UTC)
+        year, month = now.year, now.month
+        start = datetime(year, month, 1, tzinfo=UTC)
+        mid = start + timedelta(days=15)
+
+        def make_user_client(prefix: str, company_id: int):
+            u = User(
+                public_id=str(uuid.uuid4()),
+                username=f"{prefix}_{uuid.uuid4().hex[:8]}",
+                email=f"{prefix}_{uuid.uuid4().hex[:8]}@test.ch",
+                role=UserRole.CLIENT,
+                first_name=prefix,
+                last_name="Test",
+            )
+            u.password = bcrypt.generate_password_hash("password123").decode("utf-8")
+            db.session.add(u)
+            db.session.flush()
+            c = Client()
+            c.user = u
+            c.company_id = company_id
+            c.first_name = prefix
+            c.last_name = "Test"
+            c.email = f"{prefix}@test.ch"
+            c.client_type = ClientType.PRIVATE
+            db.session.add(c)
+            db.session.flush()
+            return c
+
+        clinic_company_id = test_company.id
+        company_id = test_company.id
+
+        client_a = make_user_client("patient_only", company_id)
+        client_b = make_user_client("with_clinic", company_id)
+
+        for c in (client_a, client_b):
+            stay = ClientStay()
+            stay.client_id = c.id
+            stay.company_id = clinic_company_id
+            stay.start_date = start
+            stay.end_date = None
+            stay.status = "active"
+            db.session.add(stay)
+        db.session.flush()
+
+        def add_booking(client, billed_to_type: str, billed_to_company_id=None):
+            b = Booking()
+            b.user_id = client.user_id
+            b.company_id = company_id
+            b.client_id = client.id
+            b.customer_name = f"{client.first_name} {client.last_name}"
+            b.pickup_location = "A"
+            b.dropoff_location = "B"
+            b.scheduled_time = mid
+            b.completed_at = mid
+            b.status = BookingStatus.COMPLETED
+            b.amount = Decimal("50.00")
+            b.vat_rate = Decimal("0")
+            b.invoice_line_id = None
+            b.billed_to_type = billed_to_type
+            b.billed_to_company_id = billed_to_company_id
+            db.session.add(b)
+            db.session.flush()
+            return b
+
+        book_a = add_booking(client_a, "patient", None)
+        book_b_clinic = add_booking(client_b, "clinic", clinic_company_id)
+        book_b_patient = add_booking(client_b, "patient", None)
+        db.session.commit()
+
+        url = (
+            f"/api/v1/invoices/companies/{company_id}/clinic-monthly-totals"
+            f"?year={year}&month={month}&clinic_company_id={clinic_company_id}"
+        )
+        response = authenticated_client.get(url)
+        assert_response_status(response, 200)
+        data = assert_response_json(response)
+        assert "data" in data
+        d = data["data"]
+        assert "total_eligible" in d
+        assert "excluded_bookings" in d
+
+        assert d["total_eligible"] >= 1
+        excluded_ids = {x["id"] for x in d["excluded_bookings"]}
+        assert book_a.id not in excluded_ids, (
+            "Client patient-only doit ne pas apparaître dans exclusions S2"
+        )
+        assert book_b_clinic.id not in excluded_ids
+        assert book_b_patient.id in excluded_ids
+
+    def test_cancel_direct_client_invoice_no_leak_to_s2_exclusions(
+        self,
+        authenticated_client,
+        test_company,
+        test_client,
+        test_invoice,
+        test_completed_booking,
+    ):
+        """Non-régression : après annulation facture client directe, le booking reste côté client.
+
+        - Annuler la facture client directe.
+        - Eligible (billed_to_type=patient) doit contenir le client.
+        - Clinic-monthly-totals ne doit pas lister ce booking dans exclusions.
+        """
+        if not all([test_company, test_client, test_invoice, test_completed_booking]):
+            pytest.skip("Required fixtures missing")
+
+        from models.enums import InvoiceBillingStrategy, InvoiceLineType
+
+        now = datetime.now(UTC)
+        year, month = now.year, now.month
+
+        test_invoice.billing_strategy = InvoiceBillingStrategy.S1_PATIENT
+        test_invoice.billed_to_company_id = None
+        test_invoice.bill_to_client_id = None
+        test_invoice.status = InvoiceStatus.DRAFT
+
+        test_completed_booking.billed_to_type = "patient"
+        test_completed_booking.billed_to_company_id = None
+        test_completed_booking.billing_party_id = None
+        test_completed_booking.scheduled_time = datetime(year, month, 15, tzinfo=UTC)
+        test_completed_booking.completed_at = datetime(year, month, 15, 12, 0, tzinfo=UTC)
+        test_completed_booking.invoice_line_id = None
+
+        invoice_line = InvoiceLine()
+        invoice_line.invoice_id = test_invoice.id
+        invoice_line.reservation_id = test_completed_booking.id
+        invoice_line.type = InvoiceLineType.RIDE
+        invoice_line.description = "Test"
+        invoice_line.qty = Decimal("1.00")
+        invoice_line.unit_price = Decimal("100.00")
+        invoice_line.line_total = Decimal("100.00")
+        invoice_line.vat_amount = Decimal("0.00")
+        invoice_line.total_with_vat = Decimal("100.00")
+        db.session.add(invoice_line)
+        db.session.flush()
+        test_completed_booking.invoice_line_id = invoice_line.id
+        db.session.commit()
+
+        cancel_url = f"/api/v1/invoices/companies/{test_company.id}/invoices/{test_invoice.id}/cancel"
+        r = authenticated_client.post(cancel_url)
+        assert_response_status(r, 200)
+
+        db.session.refresh(test_completed_booking)
+        assert test_completed_booking.invoice_line_id is None
+        assert (test_completed_booking.billed_to_type or "").lower() == "patient"
+
+        eligible_url = (
+            f"/api/v1/invoices/companies/{test_company.id}/clients/eligible"
+            f"?billed_to_type=patient&year={year}&month={month}"
+        )
+        er = authenticated_client.get(eligible_url)
+        assert_response_status(er, 200)
+        ed = assert_response_json(er)
+        assert "data" in ed
+        assert "clients" in ed["data"]
+        client_ids = [c["id"] for c in ed["data"]["clients"]]
+        assert test_client.id in client_ids, (
+            "Le client doit apparaître dans eligible (facturation client) après annulation"
+        )
+
+        totals_url = (
+            f"/api/v1/invoices/companies/{test_company.id}/clinic-monthly-totals"
+            f"?year={year}&month={month}&clinic_company_id={test_company.id}"
+        )
+        tr = authenticated_client.get(totals_url)
+        assert_response_status(tr, 200)
+        td = assert_response_json(tr)
+        assert "data" in td
+        assert "excluded_bookings" in td["data"]
+        excluded_ids = [x["id"] for x in td["data"]["excluded_bookings"]]
+        assert test_completed_booking.id not in excluded_ids, (
+            "Le booking annulé (facture client) ne doit pas fuiter dans exclusions S2"
+        )
+
+    def test_eligible_clients_returns_unbilled_count_and_total_amount(
+        self, authenticated_client, test_company, test_client, db
+    ):
+        """Résumé eligible : count et unbilled_total_amount par client."""
+        if not all([test_company, test_client]):
+            pytest.skip("Required fixtures missing")
+
+        now = datetime.now(UTC)
+        year, month = now.year, now.month
+        mid = datetime(year, month, 15, tzinfo=UTC)
+
+        b1 = Booking()
+        b1.user_id = test_client.user_id
+        b1.company_id = test_company.id
+        b1.client_id = test_client.id
+        b1.customer_name = f"{test_client.first_name} {test_client.last_name}"
+        b1.pickup_location = "A"
+        b1.dropoff_location = "B"
+        b1.scheduled_time = mid
+        b1.completed_at = mid
+        b1.status = BookingStatus.COMPLETED
+        b1.amount = Decimal("50.00")
+        b1.vat_rate = Decimal("0")
+        b1.invoice_line_id = None
+        b1.billed_to_type = "patient"
+        db.session.add(b1)
+
+        b2 = Booking()
+        b2.user_id = test_client.user_id
+        b2.company_id = test_company.id
+        b2.client_id = test_client.id
+        b2.customer_name = f"{test_client.first_name} {test_client.last_name}"
+        b2.pickup_location = "B"
+        b2.dropoff_location = "A"
+        b2.scheduled_time = mid
+        b2.completed_at = mid
+        b2.status = BookingStatus.COMPLETED
+        b2.amount = Decimal("75.00")
+        b2.vat_rate = Decimal("0")
+        b2.invoice_line_id = None
+        b2.billed_to_type = "patient"
+        db.session.add(b2)
+        db.session.commit()
+
+        url = (
+            f"/api/v1/invoices/companies/{test_company.id}/clients/eligible"
+            f"?billed_to_type=patient&year={year}&month={month}"
+        )
+        r = authenticated_client.get(url)
+        assert_response_status(r, 200)
+        data = assert_response_json(r)
+        assert "data" in data
+        assert "clients" in data["data"]
+        clients = data["data"]["clients"]
+        match = next((c for c in clients if c["id"] == test_client.id), None)
+        assert match is not None, "Client should appear in eligible"
+        assert match["unbilled_count"] == 2
+        # Backend renvoie une string "125.00" (HT) pour éviter imprécisions float
+        assert match["unbilled_total_amount"] == "125.00"
+
+    def test_unbilled_reservation_ids_endpoint(
+        self, authenticated_client, test_company, test_client, db
+    ):
+        """Test endpoint IDs-only pour récupérer uniquement les IDs des réservations non facturées."""
+        if not all([test_company, test_client]):
+            pytest.skip("Required fixtures missing")
+
+        now = datetime.now(UTC)
+        year, month = now.year, now.month
+        mid = datetime(year, month, 15, tzinfo=UTC)
+
+        # Créer 2 réservations non facturées
+        b1 = Booking()
+        b1.user_id = test_client.user_id
+        b1.company_id = test_company.id
+        b1.client_id = test_client.id
+        b1.customer_name = f"{test_client.first_name} {test_client.last_name}"
+        b1.pickup_location = "A"
+        b1.dropoff_location = "B"
+        b1.scheduled_time = mid
+        b1.completed_at = mid
+        b1.status = BookingStatus.COMPLETED
+        b1.amount = Decimal("50.00")
+        b1.vat_rate = Decimal("0")
+        b1.invoice_line_id = None
+        b1.billed_to_type = "patient"
+        db.session.add(b1)
+
+        b2 = Booking()
+        b2.user_id = test_client.user_id
+        b2.company_id = test_company.id
+        b2.client_id = test_client.id
+        b2.customer_name = f"{test_client.first_name} {test_client.last_name}"
+        b2.pickup_location = "B"
+        b2.dropoff_location = "A"
+        b2.scheduled_time = mid + timedelta(hours=1)
+        b2.completed_at = mid + timedelta(hours=1)
+        b2.status = BookingStatus.COMPLETED
+        b2.amount = Decimal("75.00")
+        b2.vat_rate = Decimal("0")
+        b2.invoice_line_id = None
+        b2.billed_to_type = "patient"
+        db.session.add(b2)
+        db.session.commit()
+
+        # Tester l'endpoint IDs-only
+        url = (
+            f"/api/v1/invoices/companies/{test_company.id}/clients/{test_client.id}/unbilled-reservations/ids"
+            f"?year={year}&month={month}&billed_to_type=patient"
+        )
+        r = authenticated_client.get(url)
+        assert_response_status(r, 200)
+        data = assert_response_json(r)
+
+        # Vérifier la structure de la réponse
+        assert "reservation_ids" in data
+        assert isinstance(data["reservation_ids"], list)
+
+        # Vérifier que les IDs sont présents
+        ids = data["reservation_ids"]
+        assert len(ids) == 2
+        assert b1.id in ids
+        assert b2.id in ids
+
+        # Vérifier que les IDs sont triés (par scheduled_time asc)
+        assert ids == sorted(ids)
+
     def test_duplicate_invoice_creates_draft(
         self, authenticated_client, test_company, test_invoice, test_completed_booking
     ):

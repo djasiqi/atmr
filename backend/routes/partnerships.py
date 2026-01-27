@@ -6,19 +6,37 @@ from pathlib import Path
 from typing import Any
 
 from flask import request
-from flask_jwt_extended import jwt_required  # pyright: ignore[reportMissingImports]
-from flask_restx import Namespace, Resource  # pyright: ignore[reportMissingImports]
+from flask_jwt_extended import jwt_required
+from flask_restx import Namespace, Resource
 from sqlalchemy.orm import joinedload
 
 from ext import db, role_required
 from models.enums import PartnershipStatus, UserRole
 from models.partnership import Partnership
+from routes.api_error_utils import (
+    create_conflict_error,
+    create_error_response,
+)
 from routes.companies import _get_current_company_via_use_case
 from services.booking.transfers import BookingTransferService
 from shared.error_handlers import APIErrorHandler
 from shared.response_helpers import success_response
 
 logger = logging.getLogger(__name__)
+
+
+def _partnership_value_error_response(exc: ValueError) -> tuple[dict[str, Any], int]:
+    """Map ValueError du service partenariat vers (body, status_code) HTTP."""
+    msg = str(exc)
+    if "déjà en attente" in msg or "existe déjà" in msg:
+        logger.warning("POST /partnerships conflit (409): %s", msg)
+        return create_conflict_error(msg)
+    if "introuvable" in msg:
+        logger.warning("POST /partnerships not_found (404): %s", msg)
+        return create_error_response(msg, 404, error_code="not_found")
+    logger.warning("POST /partnerships validation (400): %s", msg)
+    return create_error_response(msg, 400, error_code="validation_error")
+
 
 # Créer le namespace pour les partenariats
 partnerships_ns = Namespace("partnerships", description="Partenariats")
@@ -41,6 +59,10 @@ class CreatePartnershipRequest(Resource):
             data = request.get_json(silent=True) or {}
             partner_company_id = data.get("partner_company_id")
             if not partner_company_id:
+                logger.warning(
+                    "POST /partnerships refusé: partner_company_id manquant current_company_id=%s",
+                    getattr(company, "id", None),
+                )
                 return APIErrorHandler.handle_validation_error(
                     "partner_company_id requis",
                     field="partner_company_id",
@@ -54,6 +76,12 @@ class CreatePartnershipRequest(Resource):
             payment_terms_days = data.get("payment_terms_days", 30)
             auto_accept_rules = bool(data.get("auto_accept_rules", False))
 
+            logger.info(
+                "POST /partnerships body_keys=%s current_company_id=%s partner_company_id=%s",
+                list(data.keys()),
+                company.id,
+                partner_company_id,
+            )
             partnership = PartnershipService.create_partnership(
                 owner_company_id=company.id,
                 partner_company_id=int(partner_company_id),
@@ -65,7 +93,7 @@ class CreatePartnershipRequest(Resource):
             )
             return success_response(data=partnership.to_dict(), status_code=201)
         except ValueError as e:
-            return {"error": str(e)}, 400
+            return _partnership_value_error_response(e)
         except Exception as e:
             logger.exception("Erreur création partenariat: %s", e)
             return APIErrorHandler.handle_exception(e, logger)

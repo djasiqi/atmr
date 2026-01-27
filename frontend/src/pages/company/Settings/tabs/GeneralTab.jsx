@@ -161,6 +161,12 @@ const GeneralTab = ({
             <ReadonlyField label="IDE / UID" value={company.uid_ide} />
             <ReadonlyField label="Email de facturation" value={company.billing_email} />
             <ReadonlyField label="Notes de facturation" value={company.billing_notes} />
+            {company.preferential_rate && (
+              <ReadonlyField
+                label="Tarif préférentiel"
+                value={`${company.preferential_rate.toFixed(2)} CHF / trajet`}
+              />
+            )}
           </section>
 
           <section className={styles.section}>
@@ -275,6 +281,28 @@ const GeneralTab = ({
                 onChange={handleChange}
                 rows={3}
               />
+            </div>
+
+            <div className={styles.formGroup}>
+              <label htmlFor="preferential_rate">
+                💰 Tarif préférentiel (CHF / trajet)
+                <small style={{ marginLeft: '8px', fontWeight: 'normal', opacity: 0.7 }}>
+                  Pour les cliniques uniquement
+                </small>
+              </label>
+              <input
+                type="number"
+                id="preferential_rate"
+                name="preferential_rate"
+                value={form.preferential_rate}
+                onChange={handleChange}
+                step="0.01"
+                min="0"
+                placeholder="40.00"
+              />
+              {fieldErrors.preferential_rate && (
+                <small className={styles.fieldError}>{fieldErrors.preferential_rate}</small>
+              )}
             </div>
 
             <h2 style={{ gridColumn: '1 / -1' }}>🏢 Adresse de domiciliation</h2>

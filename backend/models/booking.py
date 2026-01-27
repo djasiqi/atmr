@@ -37,7 +37,7 @@ from shared.time_utils import (
 )
 
 from .base import _as_bool, _as_dt, _as_float, _as_int, _as_str
-from .enums import BookingStatus
+from .enums import BillingReviewStatus, BillingSource, BookingStatus
 
 USER_ID_ZERO = 0
 AMOUNT_ZERO = 0
@@ -203,6 +203,43 @@ class Booking(db.Model):
     )
     billed_to_contact = Column(String(120))
 
+    # ✅ Workflow de contrôle facturation (V1)
+    billing_review_status: Mapped[BillingReviewStatus] = mapped_column(
+        SAEnum(
+            BillingReviewStatus,
+            name="billing_review_status",
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
+        nullable=False,
+        server_default=BillingReviewStatus.DRAFT.value,
+    )
+    billing_locked_at = Column(DateTime(timezone=True), nullable=True)
+    billing_locked_by_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    billing_override_reason = Column(Text, nullable=True)
+
+    # Nouveau lien vers un tiers payeur “unifié” (optionnel en V1).
+    billing_party_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("billing_parties.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    # ✅ Source de la décision de facturation (traçabilité)
+    billing_source: Mapped[BillingSource | None] = mapped_column(
+        SAEnum(
+            BillingSource,
+            name="billing_source",
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
+        nullable=True,
+    )
+    billing_source_ref: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )  # ex "voucher#12345", "stay#456", "import_clinic_csv_2026-01"
+
     invoice_line_id = Column(
         Integer,
         ForeignKey(
@@ -235,12 +272,22 @@ class Booking(db.Model):
         backref="billed_booking",
     )
 
+    billing_locked_by_user = relationship(
+        "User", foreign_keys=[billing_locked_by_user_id]
+    )
+    billing_party = relationship("BillingParty", foreign_keys=[billing_party_id])
+
     return_trip = relationship(
         "Booking",
         backref="original_booking",
         remote_side=[id],
         foreign_keys=[parent_booking_id],
         uselist=False,
+    )
+    transport_vouchers = relationship(
+        "TransportVoucher",
+        back_populates="booking",
+        passive_deletes=True,
     )
 
     # Propriétés
@@ -454,6 +501,11 @@ class Booking(db.Model):
                 else None,
                 "billed_to_contact": self.billed_to_contact,
             },
+            # ✅ Traçabilité de la décision de facturation
+            "billing_source": (
+                self.billing_source.value if self.billing_source else None
+            ),
+            "billing_source_ref": self.billing_source_ref,
             # ✅ P1-4 Phase 1.1: patient_name reste pour compatibilité (utilise customer_name de la DB)
             "patient_name": _as_str(self.customer_name),
             # ✅ Informations du transfert actif (si existe)

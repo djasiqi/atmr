@@ -10,6 +10,7 @@ import json
 import logging
 import re
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Dict, List
 
 from sqlalchemy import (
@@ -20,6 +21,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    Numeric,
     String,
     Text,
     func,
@@ -85,6 +87,11 @@ class Company(db.Model):
     uid_ide: Mapped[str] = mapped_column(String(20), nullable=True, index=True)
     billing_email: Mapped[str] = mapped_column(String(100), nullable=True)
     billing_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Tarif préférentiel pour les cliniques (ex: 40.00 CHF / trajet)
+    preferential_rate: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 2), nullable=True, comment="Tarif préférentiel en CHF pour les cliniques"
+    )
 
     user_id = Column(
         Integer,
@@ -178,6 +185,18 @@ class Company(db.Model):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    client_stays = relationship(
+        "ClientStay",
+        back_populates="company",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    transport_vouchers = relationship(
+        "TransportVoucher",
+        back_populates="company",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     @property
     def serialize(self):
@@ -201,6 +220,9 @@ class Company(db.Model):
             "uid_ide": self.uid_ide,
             "billing_email": self.billing_email,
             "billing_notes": self.billing_notes,
+            "preferential_rate": (
+                float(self.preferential_rate) if self.preferential_rate is not None else None
+            ),
             "logo_url": self.logo_url,
             "is_approved": _as_bool(self.is_approved),
             "is_partner": _as_bool(self.is_partner),

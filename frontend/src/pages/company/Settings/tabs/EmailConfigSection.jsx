@@ -16,7 +16,7 @@ import {
 } from '../../../../services/emailService';
 import styles from './EmailConfigSection.module.css';
 
-const EmailConfigSection = ({ companyId }) => {
+const EmailConfigSection = ({ companyId, showHeader = true, compact = false }) => {
   const [loading, setLoading] = useState(false);
   const [configuring, setConfiguring] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -200,8 +200,11 @@ const EmailConfigSection = ({ companyId }) => {
 
   if (loading) {
     return (
-      <div className={styles.emailConfigCard}>
-        <h2>📧 Configuration Email Transactionnel</h2>
+      <div
+        className={`${styles.emailConfigCard} ${compact ? styles.emailConfigCompact : ''}`}
+      >
+        {showHeader && <h2>📧 Configuration Email Transactionnel</h2>}
+        {!showHeader && <div className={styles.headerCompact}>{getStatusBadge()}</div>}
         <div className={styles.loading}>
           <div className={styles.spinner}></div>
           <p>Chargement...</p>
@@ -211,11 +214,15 @@ const EmailConfigSection = ({ companyId }) => {
   }
 
   return (
-    <div className={styles.emailConfigCard}>
-      <div className={styles.header}>
-        <h2>📧 Configuration Email Transactionnel</h2>
-        {getStatusBadge()}
-      </div>
+    <div className={`${styles.emailConfigCard} ${compact ? styles.emailConfigCompact : ''}`}>
+      {showHeader ? (
+        <div className={styles.header}>
+          <h2>📧 Configuration Email Transactionnel</h2>
+          {getStatusBadge()}
+        </div>
+      ) : (
+        <div className={styles.headerCompact}>{getStatusBadge()}</div>
+      )}
 
       {/* Messages */}
       {message && <div className={styles.successMessage}>{message}</div>}

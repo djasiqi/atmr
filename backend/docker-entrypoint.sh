@@ -378,7 +378,7 @@ try:
             print(f'❌ {dep} manquant: {e}')
             missing_critical.append(dep)
         except Exception as e:
-            print(f'⚠️  Erreur lors de l'\''import de {dep}: {e}')
+            print(f'⚠️  Erreur lors de l\'import de {dep}: {e}')
             missing_critical.append(dep)
 
     # Faire échouer si des dépendances critiques manquent
@@ -401,7 +401,7 @@ try:
                 print(f'❌ {dep} manquant (requis pour RL): {e}')
                 missing_ml.append(dep)
             except Exception as e:
-                print(f'⚠️  Erreur lors de l'\''import de {dep}: {e}')
+                print(f'⚠️  Erreur lors de l\'import de {dep}: {e}')
                 missing_ml.append(dep)
         
         # Faire échouer si RL activé mais dépendances manquantes

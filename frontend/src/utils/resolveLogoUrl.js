@@ -4,6 +4,8 @@ const RAW_API_BASE = (
   ''
 ).trim();
 
+const RAW_SOCKET_URL = (process.env.REACT_APP_SOCKET_URL || '').trim();
+
 const API_BASE = RAW_API_BASE.replace(/\/+$/, '');
 
 // Construire l'origine de l'API (sans /api/v1) de manière robuste
@@ -42,6 +44,26 @@ const getApiOrigin = () => {
 
 const API_ORIGIN = getApiOrigin();
 console.log('[resolveLogoUrl] API_ORIGIN final:', API_ORIGIN);
+
+const getSocketOrigin = () => {
+  if (!RAW_SOCKET_URL) {
+    return '';
+  }
+
+  if (RAW_SOCKET_URL.startsWith('http://') || RAW_SOCKET_URL.startsWith('https://')) {
+    try {
+      const url = new URL(RAW_SOCKET_URL);
+      return `${url.protocol}//${url.host}`;
+    } catch (e) {
+      console.warn('[resolveLogoUrl] Erreur URL(REACT_APP_SOCKET_URL):', e);
+    }
+  }
+
+  return '';
+};
+
+const SOCKET_ORIGIN = getSocketOrigin();
+console.log('[resolveLogoUrl] SOCKET_ORIGIN final:', SOCKET_ORIGIN);
 
 export const resolveLogoUrl = (value) => {
   if (!value) {
@@ -88,7 +110,12 @@ export const resolveLogoUrl = (value) => {
         }
       }
     }
-    // Priorité 3: window.location.origin (domaine actuel)
+    // Priorité 3: REACT_APP_SOCKET_URL si défini (utile en dev)
+    if (!base && SOCKET_ORIGIN && /^https?:\/\/[^/]+$/.test(SOCKET_ORIGIN)) {
+      base = SOCKET_ORIGIN;
+      console.log('[resolveLogoUrl] Utilisation SOCKET_ORIGIN:', base);
+    }
+    // Priorité 4: window.location.origin (domaine actuel)
     if (!base && typeof window !== 'undefined' && window.location?.origin) {
       base = window.location.origin;
       console.log('[resolveLogoUrl] Utilisation window.location.origin:', base);

@@ -1,12 +1,12 @@
-# ruff: noqa: G004
 import logging
+import re
 import tempfile
 from io import BytesIO
 from pathlib import Path
 
-from qrbill import QRBill  # pyright: ignore[reportMissingModuleSource]
-from reportlab.graphics import renderPDF  # pyright: ignore[reportMissingModuleSource]
-from svglib.svglib import svg2rlg  # pyright: ignore[reportMissingImports]
+from qrbill import QRBill
+from reportlab.graphics import renderPDF
+from svglib.svglib import svg2rlg
 
 from models import CompanyBillingSettings
 from services.billing import BillingProfileService, generate_scor_reference
@@ -16,6 +16,11 @@ MIN_ADDRESS_PARTS = 2
 MIN_ADDRESS_PARTS_POSTAL = 3
 MIN_ADDRESS_PARTS_CITY = 4
 QR_REFERENCE_LENGTH = 27
+QRR_BASE_LENGTH = 2  # Longueur de creditor_reference_base (ex: "21")
+QRR_INVOICE_NUM_LENGTH = 20  # Longueur max pour partie invoice_number
+QRR_INVOICE_ID_LENGTH = 4  # Longueur max pour invoice.id
+QRR_REF_BASE_LENGTH = 26  # Longueur base avant check digit
+QRR_MIN_IBAN_LENGTH = 5  # Longueur minimale IBAN pour validation
 
 app_logger = logging.getLogger("qrbill_service")
 
@@ -35,49 +40,84 @@ class QRBillService:
         Returns:
             str | None: Référence de paiement (SCOR/QRR) ou None
         """
+        result = None
         try:
-            # Récupérer le profil de facturation
-            profile = BillingProfileService.get_by_company_id(invoice.company_id)
-
-            if not profile:
-                app_logger.warning(
-                    "[QR-Bill] Pas de profil pour company_id=%s, pas de référence générée",
-                    invoice.company_id,
-                )
-                return None
-
-            # Vérifier le mode de référence
-            if profile.payment_reference_mode == "NONE":
-                app_logger.debug("[QR-Bill] Mode NONE : pas de référence")
-                return None
-
-            if profile.payment_reference_mode == "SCOR":
-                # Générer une référence SCOR (ISO 11649)
+            # ✅ Réutiliser si déjà généré (stabilité)
+            if invoice.qr_reference:
                 app_logger.debug(
-                    "[QR-Bill] Génération SCOR pour %s", invoice.invoice_number
+                    "[QR-Bill] Réutilisation qr_reference existante: %s",
+                    invoice.qr_reference,
                 )
-                return generate_scor_reference(
-                    invoice.invoice_number, company_id=invoice.company_id
-                )
+                result = invoice.qr_reference
+            else:
+                # Récupérer le profil de facturation
+                profile = BillingProfileService.get_by_company_id(invoice.company_id)
 
-            if profile.payment_reference_mode == "QRR":
-                # TODO: Implémenter QRR (nécessite QR-IBAN)
-                app_logger.warning(
-                    "[QR-Bill] Mode QRR non encore implémenté, fallback sur SCOR"
-                )
-                return generate_scor_reference(
-                    invoice.invoice_number, company_id=invoice.company_id
-                )
+                if not profile:
+                    app_logger.warning(
+                        "[QR-Bill] Pas de profil pour company_id=%s, pas de référence générée",
+                        invoice.company_id,
+                    )
+                    result = None
+                elif profile.payment_reference_mode == "NONE":
+                    app_logger.debug("[QR-Bill] Mode NONE : pas de référence")
+                    result = None
+                elif profile.payment_reference_mode == "SCOR":
+                    # Générer une référence SCOR (ISO 11649)
+                    app_logger.debug(
+                        "[QR-Bill] Génération SCOR pour %s", invoice.invoice_number
+                    )
+                    result = generate_scor_reference(
+                        invoice.invoice_number, company_id=invoice.company_id
+                    )
+                elif profile.payment_reference_mode == "QRR":
+                    # ✅ Valider QR-IBAN (CH..3…) - lever exception si invalide
+                    qr_iban = profile.qr_iban or profile.iban
+                    if not qr_iban:
+                        error_msg = (
+                            f"Mode QRR nécessite un QR-IBAN. "
+                            f"Company {invoice.company_id} n'a pas de qr_iban configuré. "
+                            f"Veuillez configurer un QR-IBAN valide (format CH..3…) dans les paramètres de facturation."
+                        )
+                        app_logger.error("[QR-Bill] %s", error_msg)
+                        raise ValueError(error_msg)
 
-            app_logger.error(
-                "[QR-Bill] Mode de référence inconnu : %s",
-                profile.payment_reference_mode,
-            )
-            return None
+                    # Vérifier format QR-IBAN (CH..3…)
+                    if not qr_iban.startswith("CH") or len(qr_iban) < QRR_MIN_IBAN_LENGTH:
+                        error_msg = (
+                            f"QR-IBAN invalide pour mode QRR: {qr_iban}. "
+                            f"Un QR-IBAN doit commencer par 'CH' et avoir au moins 5 caractères. "
+                            f"Veuillez configurer un QR-IBAN valide (format CH..3…)."
+                        )
+                        app_logger.error("[QR-Bill] %s", error_msg)
+                        raise ValueError(error_msg)
+
+                    if qr_iban[4:5] != "3":
+                        error_msg = (
+                            f"QR-IBAN invalide pour mode QRR: {qr_iban}. "
+                            f"Le 5ème caractère doit être '3' (QR-IBAN requis). "
+                            f"Veuillez configurer un QR-IBAN valide (format CH..3…)."
+                        )
+                        app_logger.error("[QR-Bill] %s", error_msg)
+                        raise ValueError(error_msg)
+
+                    # ✅ Générer référence QRR (27 chiffres numériques)
+                    app_logger.debug(
+                        "[QR-Bill] Génération QRR pour %s", invoice.invoice_number
+                    )
+                    result = self._generate_qrr_reference(invoice, profile)
+                else:
+                    app_logger.error(
+                        "[QR-Bill] Mode de référence inconnu : %s",
+                        profile.payment_reference_mode,
+                    )
+                    result = None
 
         except Exception as e:
-            app_logger.error(f"[QR-Bill] Erreur génération référence : {e}")
-            return None
+            app_logger.error("[QR-Bill] Erreur génération référence : %s", e)
+            result = None
+
+        return result
 
     def _get_creditor_info(self, company):
         """✅ Méthode helper pour obtenir toutes les infos du créancier (entreprise).
@@ -558,3 +598,117 @@ class QRBillService:
 
         remainder = total % 10
         return (10 - remainder) % 10
+
+    def _calculate_qrr_check_digit(self, reference_base: str) -> int:
+        """Calcule le check digit QRR avec l'algorithme modulo 10 récursif (ISO 7064).
+
+        Args:
+            reference_base: 26 chiffres numériques (sans check digit)
+
+        Returns:
+            int: Check digit (0-9)
+        """
+        # Algorithme modulo 10 récursif (ISO 7064 MOD 10, RECURSIVE)
+        # Accumulateur initial = 10
+        accumulator = 10
+
+        for digit_char in reference_base:
+            if not digit_char.isdigit():
+                raise ValueError(f"QRR reference doit être numérique: {reference_base}")
+            digit = int(digit_char)
+            accumulator = (accumulator + digit) % 10
+            if accumulator == 0:
+                accumulator = 10
+
+        # Check digit = (10 - accumulator) % 10
+        return (10 - accumulator) % 10
+
+    def _generate_qrr_reference(self, invoice, profile) -> str:
+        """Génère une référence QRR (ESR) de 27 chiffres numériques.
+
+        Format: Base (creditor_reference_base) + invoice_number + invoice.id + check digit
+        Exemple: 210000000000000000000123456
+
+        Args:
+            invoice: Facture pour laquelle générer la référence
+            profile: Profil de facturation (CompanyBillingProfile)
+
+        Returns:
+            str: Référence QRR de 27 chiffres (numérique uniquement)
+
+        Raises:
+            ValueError: Si la référence ne peut pas être générée correctement
+        """
+        # Utiliser creditor_reference_base si disponible (ex: "21")
+        # Sinon, utiliser "21" par défaut (code standard suisse)
+        base = profile.creditor_reference_base or "21"
+
+        # ✅ Normaliser invoice_number : extraire uniquement les chiffres
+        invoice_num_digits = re.sub(r"\D", "", invoice.invoice_number)
+
+        if not invoice_num_digits:
+            raise ValueError(
+                f"Impossible de générer QRR : invoice_number '{invoice.invoice_number}' "
+                + "ne contient aucun chiffre"
+            )
+
+        # ✅ Garantir unicité : ajouter invoice.id pour éviter collisions
+        # Format: base (2) + invoice_num (max 20) + invoice.id (max 4) = 26 chiffres
+        # On prend les 20 derniers chiffres de invoice_number pour laisser place à invoice.id
+        invoice_num_part = (
+            invoice_num_digits[-QRR_INVOICE_NUM_LENGTH:]
+            if len(invoice_num_digits) > QRR_INVOICE_NUM_LENGTH
+            else invoice_num_digits
+        )
+        invoice_id_str = str(invoice.id)
+
+        # Construire la base : base (2) + invoice_num (20) + invoice.id (4) = 26 chiffres
+        # Si invoice.id est trop long, on tronque
+        if len(invoice_id_str) > QRR_INVOICE_ID_LENGTH:
+            app_logger.warning(
+                "[QR-Bill] invoice.id trop long (%s > %s), troncature pour QRR",
+                len(invoice_id_str),
+                QRR_INVOICE_ID_LENGTH,
+            )
+            invoice_id_str = invoice_id_str[-QRR_INVOICE_ID_LENGTH:]
+
+        # Construire la base de référence (26 chiffres pour le check digit)
+        ref_base = (
+            base
+            + invoice_num_part.rjust(QRR_INVOICE_NUM_LENGTH, "0")
+            + invoice_id_str.zfill(QRR_INVOICE_ID_LENGTH)
+        )
+
+        # Vérifier la longueur (doit être exactement 26)
+        if len(ref_base) != QRR_REF_BASE_LENGTH:
+            # Ajuster si nécessaire
+            ref_base = (
+                ref_base[:QRR_REF_BASE_LENGTH]
+                if len(ref_base) > QRR_REF_BASE_LENGTH
+                else ref_base.ljust(QRR_REF_BASE_LENGTH, "0")
+            )
+
+        # Calculer le check digit (modulo 10 récursif) et construire la référence complète
+        qrr_reference = ref_base + str(self._calculate_qrr_check_digit(ref_base))
+
+        # Validation finale
+        if len(qrr_reference) != QR_REFERENCE_LENGTH:
+            raise ValueError(
+                "Erreur génération QRR : longueur incorrecte "
+                + f"({len(qrr_reference)} != {QR_REFERENCE_LENGTH})"
+            )
+
+        if not qrr_reference.isdigit():
+            raise ValueError(
+                f"Erreur génération QRR : référence contient des caractères non numériques: {qrr_reference}"
+            )
+
+        app_logger.debug(
+            "[QR-Bill] QRR générée: %s (base: %s, invoice: %s, id: %s)",
+            qrr_reference,
+            base,
+            invoice.invoice_number,
+            invoice.id,
+        )
+
+        return qrr_reference

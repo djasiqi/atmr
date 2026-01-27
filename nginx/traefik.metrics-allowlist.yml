@@ -1,0 +1,53 @@
+# ✅ Configuration Traefik allowlist IP pour /metrics
+# 
+# Usage: Ajouter cette configuration dans traefik.yml ou via labels Docker
+# 
+# IMPORTANT: Remplacer PROMETHEUS_IP par l'IP réelle de Prometheus
+
+# ✅ Option 1: Via labels Docker (recommandé) - IPAllowList uniquement sur router metrics
+# Ajouter dans docker-compose.yml pour le service api:
+#
+# labels:
+#   # Router dédié pour /metrics avec allowlist IP
+#   - "traefik.http.routers.api.metrics.rule=Host(`api.example.com`) && PathPrefix(`/api/v1/prometheus/metrics`)"
+#   - "traefik.http.routers.api.metrics.middlewares=metrics-ipallowlist"
+#   - "traefik.http.routers.api.metrics.entrypoints=web,websecure"
+#   # Middleware IPAllowList (plus fiable que ipwhitelist)
+#   - "traefik.http.middlewares.metrics-ipallowlist.ipallowlist.sourcerange=172.16.0.0/12,10.0.0.0/8,192.168.0.0/16"
+#   # Option: IP spécifique Prometheus (si scraping externe)
+#   # - "traefik.http.middlewares.metrics-ipallowlist.ipallowlist.sourcerange=PROMETHEUS_IP/32"
+
+# ✅ Option 2: Via configuration statique (traefik.yml)
+# Ajouter dans la section http.middlewares:
+
+http:
+  middlewares:
+    # ✅ IPAllowList pour /metrics (plus fiable que ipWhiteList)
+    metrics-ipallowlist:
+      ipAllowList:
+        # Option 1: Réseau Docker interne (recommandé si Prometheus dans même stack)
+        sourceRange:
+          - "172.16.0.0/12"  # Réseau Docker par défaut
+          - "10.0.0.0/8"     # Réseau privé alternatif
+          - "192.168.0.0/16" # Réseau privé alternatif
+        # Option 2: IP spécifique Prometheus (si scraping externe)
+        # sourceRange:
+        #   - "PROMETHEUS_IP/32"
+    
+    # ✅ Rate limiting additionnel (optionnel, déjà géré par Flask)
+    metrics-ratelimit:
+      rateLimit:
+        average: 100
+        period: 1m
+        burst: 20
+
+# ✅ Appliquer le middleware via router dédié (recommandé)
+# Dans docker-compose.yml, ajouter:
+#
+# labels:
+#   - "traefik.http.routers.api.metrics.rule=Host(`api.example.com`) && PathPrefix(`/api/v1/prometheus/metrics`)"
+#   - "traefik.http.routers.api.metrics.middlewares=metrics-ipallowlist,metrics-ratelimit"
+#   - "traefik.http.routers.api.metrics.entrypoints=web,websecure"
+#
+# Note: Le router metrics est séparé du router principal, donc l'allowlist
+# s'applique uniquement à /metrics, pas à toute l'API.

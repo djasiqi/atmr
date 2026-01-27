@@ -53,6 +53,7 @@ class InvoiceData:
     vat_number: str | None = None
     vat_rate: Decimal | None = None
     payment_reference: str | None = None
+    show_patient_column: bool = False
 
 
 class InvoiceTemplateBuilder:
@@ -97,10 +98,8 @@ class InvoiceTemplateBuilder:
             # Période de facturation
             period_str = f"{invoice.period_month:02d}.{invoice.period_year}"
 
-            # Client
-            client = invoice.client
-            client_name = self._format_client_name(client)
-            client_address = self._format_client_address(client)
+            # Destinataire ("Facturé à") - priorité: BillingParty, puis bill_to_client, sinon client
+            billed_to_name, billed_to_address = self._resolve_billed_to(invoice)
 
             # Lignes de facture
             lines = self._extract_invoice_lines(invoice)
@@ -123,6 +122,35 @@ class InvoiceTemplateBuilder:
             reminder_level = None
             if is_reminder:
                 reminder_level = len(invoice.reminders)
+
+            # ✅ Affichage colonne "Patient" (obligatoire pour S2 multi-patients)
+            strategy_value: str | None = None
+            try:
+                bs = getattr(invoice, "billing_strategy", None)
+                if bs is not None:
+                    strategy_value = bs.value if hasattr(bs, "value") else str(bs)
+            except Exception:
+                strategy_value = None
+
+            meta_strategy: str | None = None
+            try:
+                meta = getattr(invoice, "meta", None)
+                if isinstance(meta, dict):
+                    ms = meta.get("billing_strategy")
+                    meta_strategy = str(ms) if ms is not None else None
+            except Exception:
+                meta_strategy = None
+
+            is_s2 = (strategy_value == "s2_clinic_monthly") or (
+                meta_strategy == "s2_clinic_monthly"
+            )
+            is_third_party = bool(
+                getattr(invoice, "bill_to_client_id", None)
+                and getattr(invoice, "client_id", None)
+                and invoice.bill_to_client_id != invoice.client_id
+            )
+            has_billing_party = bool(getattr(invoice, "billing_party_id", None))
+            show_patient_column = bool(is_s2 or is_third_party or has_billing_party)
 
             return InvoiceData(
                 # Facture
@@ -148,13 +176,14 @@ class InvoiceTemplateBuilder:
                 vat_applicable=profile.vat_registered,
                 vat_number=profile.vat_number,
                 vat_rate=profile.vat_rate,
-                # Client
-                client_name=client_name,
-                client_address=client_address,
+                # Destinataire
+                client_name=billed_to_name,
+                client_address=billed_to_address,
                 # Lignes
                 lines=lines,
                 # Référence
                 payment_reference=payment_reference,
+                show_patient_column=show_patient_column,
             )
 
         except Exception as e:
@@ -186,11 +215,57 @@ class InvoiceTemplateBuilder:
         Returns:
             str: Adresse formatée (avec <br/> pour retours à la ligne)
         """
-        # Priorité 1: Adresse du domicile
+
+        def _to_multiline(value: str) -> str:
+            """Normalise une adresse texte en HTML multi-ligne."""
+            if not (value or "").strip():
+                return ""
+            # Supporter les adresses déjà multi-lignes + format "a, b, c"
+            return (
+                (value or "")
+                .strip()
+                .replace("\r\n", "\n")
+                .replace("\r", "\n")
+                .replace("\n", "<br/>")
+                .replace(", ", "<br/>")
+            )
+
+        # ✅ Priorité 1: Coordonnées de facturation du client (cas curatelle/institution)
+        # Ces champs existent dans le modèle Client: billing_address / contact_email / contact_phone.
+        billing_address = ""
+        try:
+            # Utiliser la version déchiffrée si disponible
+            billing_address = getattr(client, "billing_address_secure", None) or ""
+        except Exception:
+            billing_address = getattr(client, "billing_address", "") or ""
+
+        billing_address_html = _to_multiline(billing_address)
+
+        # Contact facturation (optionnel)
+        contact_email = getattr(client, "contact_email", None) or ""
+        contact_phone = ""
+        try:
+            contact_phone = getattr(client, "contact_phone_secure", None) or ""
+        except Exception:
+            contact_phone = getattr(client, "contact_phone", "") or ""
+
+        contact_lines: list[str] = []
+        if contact_email.strip():
+            contact_lines.append(f"Email facturation : {contact_email.strip()}")
+        if contact_phone.strip():
+            contact_lines.append(f"Téléphone : {contact_phone.strip()}")
+
+        # Si une adresse de facturation est renseignée, c'est elle qu'on affiche.
+        if billing_address_html:
+            if contact_lines:
+                return f"{billing_address_html}<br/>{'<br/>'.join(contact_lines)}"
+            return billing_address_html
+
+        # Priorité 2: Adresse du domicile (fallback)
         if hasattr(client, "domicile_address") and client.domicile_address:
-            address = client.domicile_address
-            postal_code = getattr(client, "domicile_zip", "")
-            city = getattr(client, "domicile_city", "")
+            address = _to_multiline(str(client.domicile_address))
+            postal_code = (getattr(client, "domicile_zip", "") or "").strip()
+            city = (getattr(client, "domicile_city", "") or "").strip()
 
             if postal_code and city:
                 return f"{address}<br/>{postal_code} {city}"
@@ -203,9 +278,87 @@ class InvoiceTemplateBuilder:
             and hasattr(client.user, "address")
             and client.user.address
         ):
-            return client.user.address.replace(", ", "<br/>")
+            return _to_multiline(str(client.user.address))
 
         return "Adresse non renseignée"
+
+    def _resolve_billed_to(self, invoice) -> tuple[str, str]:
+        """Résout le destinataire de facture (bloc 'Facturé à')."""
+        # 1) BillingParty (nouveau modèle unifié)
+        try:
+            bp = getattr(invoice, "billing_party", None)
+            if bp is not None:
+                name = (getattr(bp, "display_name", None) or "Payeur").strip()
+                addr = (getattr(bp, "billing_address", None) or "").strip()
+                if addr:
+                    addr_html = (
+                        addr.replace("\r\n", "\n")
+                        .replace("\r", "\n")
+                        .replace("\n", "<br/>")
+                        .replace(", ", "<br/>")
+                    )
+                else:
+                    addr_html = "Adresse non renseignée"
+                # Contact (optionnel)
+                contact_lines: list[str] = []
+                email = (getattr(bp, "contact_email", None) or "").strip()
+                phone = (getattr(bp, "contact_phone", None) or "").strip()
+                ext = (getattr(bp, "external_ref", None) or "").strip()
+                if email:
+                    contact_lines.append(f"Email facturation : {email}")
+                if phone:
+                    contact_lines.append(f"Téléphone : {phone}")
+                if ext:
+                    contact_lines.append(f"Référence : {ext}")
+                if contact_lines:
+                    return name, f"{addr_html}<br/>{'<br/>'.join(contact_lines)}"
+                return name, addr_html
+        except Exception:
+            pass
+
+        # Si un billing_party_id est défini mais qu'on n'a pas réussi à charger le BP,
+        # on log pour observabilité (fallback PDF).
+        try:
+            if getattr(invoice, "billing_party_id", None):
+                logger.warning(
+                    "[InvoiceTemplateBuilder] billing_party_id=%s défini mais BillingParty non résolu (invoice_id=%s). Fallback sur legacy/client.",
+                    getattr(invoice, "billing_party_id", None),
+                    getattr(invoice, "id", None),
+                )
+        except Exception:
+            pass
+
+        # 2) Legacy: bill_to_client_id (Client institution)
+        import contextlib
+
+        with contextlib.suppress(Exception):
+            bill_to = getattr(invoice, "bill_to_client", None)
+            if (
+                getattr(invoice, "bill_to_client_id", None)
+                and getattr(invoice, "client_id", None)
+                and invoice.bill_to_client_id != invoice.client_id
+                and bill_to is not None
+            ):
+                logger.info(
+                    "[InvoiceTemplateBuilder] Fallback legacy bill_to_client_id utilisé (invoice_id=%s, bill_to_client_id=%s).",
+                    getattr(invoice, "id", None),
+                    getattr(invoice, "bill_to_client_id", None),
+                )
+                return self._format_client_name(bill_to), self._format_client_address(
+                    bill_to
+                )
+
+        # 3) Fallback: client bénéficiaire
+        client = getattr(invoice, "client", None)
+        if client is None:
+            return "Client", "Adresse non renseignée"
+        with contextlib.suppress(Exception):
+            logger.info(
+                "[InvoiceTemplateBuilder] Fallback client bénéficiaire utilisé (invoice_id=%s, client_id=%s).",
+                getattr(invoice, "id", None),
+                getattr(invoice, "client_id", None),
+            )
+        return self._format_client_name(client), self._format_client_address(client)
 
     def _extract_invoice_lines(self, invoice) -> list[dict[str, Any]]:
         """Extrait les lignes de facture.
@@ -228,11 +381,47 @@ class InvoiceTemplateBuilder:
             if not booking:
                 continue
 
+            # ✅ Patient (utile pour S2 multi-patients / facturation tierce)
+            # Priorité: snapshot depuis line.meta (traçabilité juridique) > booking.client.user
+            patient_name = "N/A"
+            try:
+                # ✅ S2: Utiliser le snapshot patient_name depuis line.meta si disponible
+                if hasattr(line, "meta") and isinstance(line.meta, dict):
+                    patient_name = (
+                        line.meta.get("patient_name")
+                        or getattr(booking, "customer_name", None)
+                        or "N/A"
+                    )
+                else:
+                    # Fallback si meta n'existe pas (rétro-compatibilité)
+                    cli = getattr(booking, "client", None)
+                    if cli is not None:
+                        user = getattr(cli, "user", None)
+                        if user is not None:
+                            full = (
+                                f"{(getattr(user, 'first_name', '') or '').strip()} "
+                                f"{(getattr(user, 'last_name', '') or '').strip()}"
+                            ).strip()
+                            patient_name = full or (
+                                getattr(user, "username", None) or "N/A"
+                            )
+                        else:
+                            patient_name = getattr(cli, "institution_name", None) or "N/A"
+                    else:
+                        patient_name = (
+                            getattr(booking, "customer_full_name", None)
+                            or getattr(booking, "customer_name", None)
+                            or "N/A"
+                        )
+            except Exception:
+                patient_name = "N/A"
+
             lines.append(
                 {
                     "date": booking.pickup_datetime.strftime("%d/%m/%Y")
                     if booking.pickup_datetime
                     else "N/A",
+                    "patient": patient_name,
                     "departure": booking.pickup_address or "N/A",
                     "arrival": booking.dropoff_address or "N/A",
                     "amount": float(line.line_total),
@@ -335,11 +524,22 @@ class InvoiceTemplateBuilder:
         if not data.lines:
             return "<p style='color: #718096;'>Aucune course facturée</p>"
 
+        patient_header = (
+            '<th style="padding: 12px; text-align: left; border-bottom: 2px solid #e2e8f0; color: #2d3748;">Patient</th>'
+            if data.show_patient_column
+            else ""
+        )
         rows_html = ""
         for line in data.lines:
+            patient_cell = (
+                f'<td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">{line["patient"]}</td>'
+                if data.show_patient_column
+                else ""
+            )
             rows_html += f"""
             <tr>
                 <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">{line["date"]}</td>
+                {patient_cell}
                 <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">{line["departure"]}</td>
                 <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">{line["arrival"]}</td>
                 <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: bold;">{line["amount"]:.2f} CHF</td>
@@ -361,6 +561,7 @@ class InvoiceTemplateBuilder:
                 <thead>
                     <tr style="background-color: #f7fafc;">
                         <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e2e8f0; color: #2d3748;">Date</th>
+                        {patient_header}
                         <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e2e8f0; color: #2d3748;">Départ</th>
                         <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e2e8f0; color: #2d3748;">Arrivée</th>
                         <th style="padding: 12px; text-align: right; border-bottom: 2px solid #e2e8f0; color: #2d3748;">Montant</th>
@@ -424,14 +625,27 @@ class InvoiceTemplateBuilder:
         if not data.lines:
             return "<p style='color: #718096;'>Aucune course facturée pour cette période</p>"
 
+        patient_header = (
+            '<th style="padding: 14px; text-align: left; width: 180px;">Patient</th>'
+            if data.show_patient_column
+            else ""
+        )
+        colspan = "5" if data.show_patient_column else "4"
+
         rows_html = ""
         subtotal = 0.0
         for idx, line in enumerate(data.lines, 1):
             subtotal += line["amount"]
+            patient_cell = (
+                f'<td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">{line["patient"]}</td>'
+                if data.show_patient_column
+                else ""
+            )
             rows_html += f"""
             <tr style="{"background-color: #f7fafc;" if idx % 2 == 0 else ""}">
                 <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; text-align: center;">{idx}</td>
                 <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">{line["date"]}</td>
+                {patient_cell}
                 <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; font-size: 0.9em; color: #4a5568;">{line["departure"]}</td>
                 <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; font-size: 0.9em; color: #4a5568;">{line["arrival"]}</td>
                 <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: bold;">{line["amount"]:.2f} CHF</td>
@@ -450,6 +664,7 @@ class InvoiceTemplateBuilder:
                     <tr style="background-color: #2d3748; color: white;">
                         <th style="padding: 14px; text-align: center; width: 50px;">N°</th>
                         <th style="padding: 14px; text-align: left; width: 100px;">Date</th>
+                        {patient_header}
                         <th style="padding: 14px; text-align: left;">Départ</th>
                         <th style="padding: 14px; text-align: left;">Arrivée</th>
                         <th style="padding: 14px; text-align: right; width: 120px;">Montant</th>
@@ -460,12 +675,12 @@ class InvoiceTemplateBuilder:
                 </tbody>
                 <tfoot>
                     <tr>
-                        <td colspan="4" style="padding: 14px; text-align: right; border-top: 2px solid #2d3748; font-weight: bold;">Sous-total :</td>
+                        <td colspan="{colspan}" style="padding: 14px; text-align: right; border-top: 2px solid #2d3748; font-weight: bold;">Sous-total :</td>
                         <td style="padding: 14px; text-align: right; border-top: 2px solid #2d3748; font-weight: bold;">{subtotal:.2f} CHF</td>
                     </tr>
-                    {f'<tr><td colspan="4" style="padding: 10px; text-align: right;">TVA ({data.vat_rate}%) :</td><td style="padding: 10px; text-align: right;">{tva_amount:.2f} CHF</td></tr>' if data.vat_applicable else ""}
+                    {f'<tr><td colspan="{colspan}" style="padding: 10px; text-align: right;">TVA ({data.vat_rate}%) :</td><td style="padding: 10px; text-align: right;">{tva_amount:.2f} CHF</td></tr>' if data.vat_applicable else ""}
                     <tr style="background-color: #4299e1; color: white;">
-                        <td colspan="4" style="padding: 16px; text-align: right; font-size: 1.2em; font-weight: bold;">TOTAL À PAYER :</td>
+                        <td colspan="{colspan}" style="padding: 16px; text-align: right; font-size: 1.2em; font-weight: bold;">TOTAL À PAYER :</td>
                         <td style="padding: 16px; text-align: right; font-size: 1.2em; font-weight: bold;">{float(data.total_amount):.2f} CHF</td>
                     </tr>
                 </tfoot>

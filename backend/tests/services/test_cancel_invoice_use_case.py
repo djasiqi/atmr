@@ -202,3 +202,29 @@ def test_cancel_invoice_releases_bookings(db) -> None:
     assert result.success is True
     # Note: La libération des réservations se fait via db.session dans le code réel
     # Ici on vérifie juste que le use case s'exécute sans erreur
+
+
+def test_is_direct_client_invoice() -> None:
+    """Test _is_direct_client_invoice : détection facture client directe."""
+    from application.invoices.cancel_invoice import _is_direct_client_invoice
+
+    class _Inv:
+        billed_to_company_id = None
+        bill_to_client_id = None
+        billing_strategy = "s1_patient"
+
+    assert _is_direct_client_invoice(_Inv()) is True
+
+    class _InvClinic:
+        billed_to_company_id = 1
+        bill_to_client_id = None
+        billing_strategy = "s1_patient"
+
+    assert _is_direct_client_invoice(_InvClinic()) is False
+
+    class _InvTierce:
+        billed_to_company_id = None
+        bill_to_client_id = 2
+        billing_strategy = "s1_patient"
+
+    assert _is_direct_client_invoice(_InvTierce()) is False

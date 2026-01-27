@@ -81,6 +81,37 @@ class InvoiceLineType(str, PyEnum):
         return [e.value for e in cls]
 
 
+class BillingReviewStatus(str, PyEnum):
+    """Workflow de contrôle de la décision de facturation (pré-facturation).
+
+    Note: valeurs en snake_case car exposées côté API/UI.
+    """
+
+    DRAFT = "draft"
+    NEEDS_REVIEW = "needs_review"
+    READY = "ready"
+    LOCKED = "locked"
+
+    @classmethod
+    def choices(cls):
+        return [e.value for e in cls]
+
+
+class InvoiceBillingStrategy(str, PyEnum):
+    """Stratégie de facturation (niveau facture).
+
+    Objectif: rendre les factures requêtables/uniques sans dépendre de JSON `meta`.
+    Note: valeurs en snake_case car exposées côté API/UI.
+    """
+
+    S1_PATIENT = "s1_patient"
+    S2_CLINIC_MONTHLY = "s2_clinic_monthly"
+
+    @classmethod
+    def choices(cls):
+        return [e.value for e in cls]
+
+
 class PaymentMethod(str, PyEnum):
     BANK_TRANSFER = "bank_transfer"
     CASH = "cash"
@@ -239,6 +270,73 @@ class TransferStatus(str, PyEnum):
     REJECTED = "REJECTED"  # Refusé par le partenaire
     COMPLETED = "COMPLETED"  # Course terminée et validée
     CANCELLED = "CANCELLED"  # Annulé
+
+    @classmethod
+    def choices(cls):
+        return [e.value for e in cls]
+
+
+class BillingPartyType(str, PyEnum):
+    """Types de tiers payeur (données métier).
+
+    Note: on utilise des valeurs "snake_case" car elles sont exposées côté API/UI.
+    """
+
+    PATIENT = "patient"
+    CLINIC = "clinic"
+    EMS = "ems"
+    HOSPITAL = "hospital"
+    CURATORSHIP = "curatorship"
+    OPAD = "opad"
+    LAWYER = "lawyer"
+    FAMILY = "family"
+    INSURANCE = "insurance"
+    OTHER = "other"
+
+    @classmethod
+    def choices(cls):
+        return [e.value for e in cls]
+
+
+class BillingSource(str, PyEnum):
+    """Source de la décision de facturation (traçabilité).
+
+    Permet de justifier "pourquoi" une course est facturée à tel payeur.
+    Note: valeurs en snake_case car exposées côté API/UI.
+    """
+
+    DEFAULT_CLIENT = "default_client"  # Défaut du client (curatelle, etc.)
+    TRANSPORT_VOUCHER = "transport_voucher"  # Bon de transport validé
+    CLIENT_STAY = "client_stay"  # Séjour actif (hospitalisation)
+    MANUAL_OVERRIDE = "manual_override"  # Correction manuelle backoffice
+    IMPORT = "import"  # Import CSV/Excel
+    SYSTEM_RULE = "system_rule"  # Règle système automatique
+
+    @classmethod
+    def choices(cls):
+        return [e.value for e in cls]
+
+
+class TransportVoucherType(str, PyEnum):
+    """Type de bon de transport."""
+
+    CLINIC = "clinic"  # Bon émis par une clinique
+    INSURANCE = "insurance"  # Bon assurance
+    OTHER = "other"  # Autre type
+
+    @classmethod
+    def choices(cls):
+        return [e.value for e in cls]
+
+
+class TransportVoucherStatus(str, PyEnum):
+    """Statut de validation d'un bon de transport."""
+
+    DRAFT = "draft"  # Brouillon (création)
+    SUBMITTED = "submitted"  # Soumis (en attente de validation)
+    VALIDATED = "validated"  # Validé (peut être utilisé pour facturation)
+    REJECTED = "rejected"  # Rejeté (non valide)
+    EXPIRED = "expired"  # Expiré (hors période de validité)
 
     @classmethod
     def choices(cls):

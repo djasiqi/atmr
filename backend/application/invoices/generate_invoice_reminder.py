@@ -15,7 +15,7 @@ from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
 
 from ext import db
 from infrastructure.invoices.invoice_calculator import round_to_5_cents
-from models import Invoice, InvoiceLineType, InvoiceReminder
+from models import Invoice, InvoiceReminder
 from repositories.company_billing_settings_repository import (
     CompanyBillingSettingsRepository,
 )
@@ -139,63 +139,111 @@ class GenerateInvoiceReminderUseCase:
                     Decimal(str(billing_settings.reminder3_fee or 0))
                 )
 
-            # 5. Créer le rappel
+            # 5. Calculer les montants consolidés (SANS modifier la facture principale)
+            # Montant principal = solde dû de la facture initiale (sans frais de rappel)
+            principal_amount = invoice.balance_due
+
+            # Total à payer = principal + frais de rappel
+            total_due = round_to_5_cents(principal_amount + fee_amount)
+
+            # 6. Créer le rappel consolidé
             reminder = InvoiceReminder()
             reminder.invoice_id = input_data.invoice_id
             reminder.level = input_data.level
             reminder.added_fee = fee_amount
+            reminder.principal_amount = principal_amount
+            reminder.reminder_fee_amount = fee_amount
+            reminder.total_due = total_due
+            reminder.status = "OPEN"
             reminder.generated_at = datetime.now(UTC)
 
             db.session.add(reminder)
-            db.session.flush()  # Pour obtenir l'ID
+            db.session.flush()  # Pour obtenir l'ID (nécessaire pour le filename unique)
 
-            # 6. Ajouter les frais à la facture si nécessaire
-            if fee_amount > Decimal(str(FEE_AMOUNT_ZERO)):
-                # Créer une ligne de frais
-                fee_line_data = {
-                    "invoice_id": input_data.invoice_id,
-                    "type": InvoiceLineType.REMINDER_FEE,
-                    "description": f"Frais de rappel niveau {input_data.level}",
-                    "qty": Decimal("1"),
-                    "unit_price": fee_amount,
-                    "line_total": fee_amount,
-                    "vat_rate": None,
-                    "vat_amount": Decimal("0.00"),
-                    "total_with_vat": fee_amount,
-                }
-                self.invoice_line_repo.create(fee_line_data)
+            # 7. Générer la référence QR-bill pour le rappel consolidé
+            # On utilise le service QR-bill avec le montant total
+            try:
+                from services.billing import BillingProfileService
+                from services.documents.qrbill import QRBillService
 
-                # Mettre à jour les montants de la facture
-                invoice.reminder_fee_amount += fee_amount
-                # ✅ Arrondir le total à 5 centimes (règle suisse)
-                invoice.total_amount = round_to_5_cents(
-                    invoice.total_amount + fee_amount
-                )
-                invoice.balance_due = round_to_5_cents(invoice.balance_due + fee_amount)
+                qr_service = QRBillService()
+                profile = BillingProfileService.get_by_company_id(invoice.company_id)
 
-            # 7. Mettre à jour le niveau de rappel
+                if profile and profile.payment_reference_mode == "QRR":
+                    # Générer une référence QRR pour le rappel
+                    # On utilise un numéro de facture dérivé : {invoice_number}-R{level}
+                    # Créer une facture "virtuelle" pour la génération
+                    class VirtualInvoice:
+                        def __init__(self, invoice_number, invoice_id):  # pyright: ignore[reportMissingSuperCall]
+                            self.invoice_number = invoice_number
+                            self.id = invoice_id
+
+                    virtual_invoice = VirtualInvoice(
+                        invoice_number=f"{invoice.invoice_number}-R{input_data.level}",
+                        invoice_id=reminder.id,
+                    )
+                    reminder.qr_reference = qr_service._generate_qrr_reference(
+                        virtual_invoice, profile
+                    )
+                    logger.info(
+                        "QR-bill généré pour rappel consolidé: %s (montant: %s CHF)",
+                        reminder.qr_reference,
+                        float(total_due),
+                    )
+                else:
+                    logger.info("Mode de référence non-QRR ou profil non trouvé, pas de QR-bill pour le rappel")
+            except Exception as e:
+                logger.warning("Échec de la génération du QR-bill pour le rappel: %s", str(e))
+                # Ne pas bloquer si le QR-bill échoue (peut être généré plus tard)
+
+            # 8. Mettre à jour SEULEMENT le niveau de rappel (pas les montants)
             invoice.reminder_level = input_data.level
             invoice.last_reminder_at = datetime.now(UTC)
+            # ✅ IMPORTANT : On ne modifie PAS total_amount, balance_due, reminder_fee_amount
+            # La facture principale reste INTACTE
 
-            # 8. Générer le PDF du rappel
-            pdf_url = self.pdf_service.generate_reminder_pdf(invoice, input_data.level)
+            # 9. Générer le PDF du rappel consolidé (PDF séparé, distinct de invoice.pdf_url)
+            import os
+            REMINDER_DEBUG = os.getenv("REMINDER_DEBUG", "0") == "1"
+
+            if REMINDER_DEBUG:
+                logger.info(
+                    (
+                        "[REMINDER_DEBUG] Avant génération PDF rappel: invoice_id=%s, level=%s, "
+                        "invoice.pdf_url=%s, invoice.total=%s, invoice.due_date=%s"
+                    ),
+                    invoice.id,
+                    input_data.level,
+                    invoice.pdf_url,
+                    float(invoice.total_amount) if invoice.total_amount else 0,
+                    invoice.due_date.isoformat() if invoice.due_date else None,
+                )
+
+            pdf_url = self.pdf_service.generate_reminder_pdf(invoice, input_data.level, reminder)
             reminder.pdf_url = pdf_url
 
-            # ✅ 8bis. Régénérer le PDF de la facture avec la mention "RAPPEL N°X"
-            # Cela garantit que le PDF de la facture affiche clairement qu'un rappel a été émis
-            try:
-                invoice_pdf_url = self.pdf_service.generate_invoice_pdf(invoice)
-                invoice.pdf_url = invoice_pdf_url
-                logger.info(
-                    "PDF de facture régénéré avec mention RAPPEL N°%s: %s",
-                    input_data.level,
-                    invoice_pdf_url,
-                )
-            except Exception as e:
-                logger.warning("Échec de la régénération du PDF de facture: %s", str(e))
-                # Ne pas bloquer l'opération si la régénération échoue
+            # ✅ IMPORTANT : On ne régénère PAS le PDF de la facture principale
+            # La facture principale reste INTACTE (principe clé du rappel consolidé)
+            # - invoice.pdf_url reste inchangé
+            # - invoice.total_amount reste inchangé
+            # - invoice.lines reste inchangé
+            # - invoice.due_date reste inchangé
+            # Le PDF du rappel est stocké dans reminder.pdf_url (fichier reminder_*.pdf)
 
-            # 9. Commit de la transaction
+            if REMINDER_DEBUG:
+                logger.info(
+                    (
+                        "[REMINDER_DEBUG] Après génération PDF rappel: invoice_id=%s, level=%s, "
+                        "reminder.pdf_url=%s, invoice.pdf_url (INCHANGÉ)=%s, invoice.total (INCHANGÉ)=%s"
+                    ),
+                    invoice.id,
+                    input_data.level,
+                    reminder.pdf_url,
+                    invoice.pdf_url,
+                    float(invoice.total_amount) if invoice.total_amount else 0,
+                )
+
+            # 10. Commit de la transaction
             db.session.commit()
 
             logger.info(

@@ -1,17 +1,206 @@
 /* Styles spécifiques du formulaire complexe (structure modal migrée vers classes communes) */
 
-.form {
+/* Gabarit modal fixe : 1100×760 par défaut, même format pour les 3 types de facturation */
+.modalInvoice {
+  width: min(1100px, calc(100vw - 32px));
+  height: min(760px, calc(100vh - 32px));
+  min-height: min(760px, calc(100vh - 32px));
+  max-height: min(760px, calc(100vh - 32px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.modalInvoice :global(.modal-header) {
+  flex: 0 0 auto;
+}
+
+.modalInvoiceForm {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modalBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  min-width: 0;
   padding: 0 var(--spacing-lg) var(--spacing-lg) var(--spacing-lg);
+}
+
+.modalInvoiceForm .stickyFooter,
+.modalInvoiceForm :global(.modal-footer) {
+  flex: 0 0 auto;
+}
+
+.modalInvoiceForm .stickyFooter {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.form {
+  padding: 0;
+}
+
+.formWithStickyFooter {
+  padding-bottom: calc(var(--spacing-lg) + 100px); /* Legacy: footer hors scroll maintenant */
+}
+
+.modalInvoiceForm.formWithStickyFooter {
+  padding-bottom: 0;
 }
 
 .formGroup {
   margin-bottom: var(--spacing-lg);
+  min-width: 0;
+}
+
+.stickyBillingType {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg-primary);
+  padding-bottom: var(--spacing-xs);
+  margin-bottom: calc(var(--spacing-lg) - 4px);
+}
+
+.stickyBillingType .label {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  margin-bottom: var(--spacing-sm);
+}
+
+.stickyBillingType .radioGroup {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-sm);
+}
+
+.stickyBillingType .radioLabel {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  justify-content: center;
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s, color 0.2s;
+}
+
+.stickyBillingType .radioLabel:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-secondary);
+  color: var(--text-primary);
+}
+
+.stickyBillingType .radioLabel:has(input:checked) {
+  background: var(--brand-primary-lightest);
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 1px var(--brand-primary);
+  color: var(--brand-primary-dark);
+}
+
+.stickyBillingType .radioLabel:has(input:focus-visible) {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.stickyBillingType .radioLabel:has(input:checked):has(input:focus-visible) {
+  box-shadow: 0 0 0 1px var(--brand-primary), var(--focus-ring);
+}
+
+.stickyBillingType .radioLabel input[type='radio'] {
+  flex-shrink: 0;
+  accent-color: var(--brand-primary);
+}
+
+/* Header S2 : clinique, période, patients */
+.s2Header {
+  padding: var(--spacing-lg);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.s2HeaderRow {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+}
+
+.s2HeaderRow + .s2HeaderRow {
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--border-primary);
+}
+
+.s2HeaderLabel {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.s2HeaderClinique {
+  flex: 1;
+  min-width: 200px;
+  max-width: 400px;
+}
+
+.s2HeaderClinique .select {
+  font-weight: var(--font-weight-medium);
+  border-color: var(--border-secondary);
+}
+
+.s2HeaderMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+  font-size: var(--font-size-sm);
+  color: var(--text-tertiary);
+}
+
+.s2HeaderMetaSep {
+  color: var(--border-secondary);
+  font-weight: 400;
+}
+
+.s2HeaderPeriod {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+.s2HeaderPeriod .select {
+  width: auto;
+  min-width: 120px;
+  padding: 6px 10px;
+  font-size: var(--font-size-sm);
+}
+
+.s2HeaderPeriod .select:last-of-type {
+  min-width: 88px;
 }
 
 .formRow {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--spacing-md);
+  min-width: 0;
 }
 
 .label {
@@ -24,6 +213,7 @@
 
 .select {
   width: 100%;
+  max-width: 100%;
   padding: 10px 12px;
   border: 1px solid #d1d5db;
   border-radius: 8px;
@@ -78,6 +268,7 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-width: 0;
 }
 
 .radioLabel {
@@ -89,6 +280,8 @@
   border: 1px solid #d1d5db;
   border-radius: 8px;
   transition: all 0.2s;
+  white-space: normal;
+  min-width: 0;
 }
 
 .radioLabel:hover {
@@ -164,6 +357,7 @@
   border-radius: 8px;
   padding: 12px;
   background: #f9fafb;
+  min-width: 0;
 }
 
 .patientSection {
@@ -301,11 +495,243 @@
   font-weight: 600;
 }
 
-/* Responsive */
+/* Résumé toolbar compact (une seule ligne) */
+.summaryToolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: #f9fafb;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  margin-bottom: var(--spacing-lg);
+  flex-wrap: wrap;
+  font-size: 14px;
+  min-width: 0;
+}
+
+.summaryToolbarIcon {
+  font-size: 16px;
+}
+
+.summaryToolbarText {
+  color: #374151;
+  font-weight: 500;
+}
+
+.summaryToolbarSeparator {
+  color: #9ca3af;
+  margin: 0 2px;
+}
+
+.summaryToolbarTotal {
+  color: #0f766e;
+  font-weight: 700;
+  margin-left: auto;
+}
+
+/* Sélection patient inline (1 seul patient) */
+.singlePatientInline {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-sm) 0;
+}
+
+.singlePatientLabel {
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.singlePatientName {
+  font-size: 14px;
+  color: #111827;
+  font-weight: 600;
+}
+
+.singlePatientTransportCount {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.changeButton {
+  padding: 6px 12px;
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.changeButton:hover:not(:disabled) {
+  background: #e5e7eb;
+  border-color: #9ca3af;
+}
+
+.changeButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.clientReservationCount {
+  margin-left: auto;
+  padding: 2px 8px;
+  background: #dbeafe;
+  color: #1e40af;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.consolidatedReservations {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  min-width: 0;
+}
+
+.searchInput {
+  width: 100%;
+  max-width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: white;
+  font-size: 14px;
+  margin-bottom: var(--spacing-sm);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Footer sticky */
+.stickyFooter {
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: white;
+  border-top: 2px solid #e5e7eb;
+  padding: var(--spacing-md) var(--spacing-lg);
+  margin: var(--spacing-lg) calc(-1 * var(--spacing-lg)) 0;
+  box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+}
+
+.stickyFooterContent {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-lg);
+  flex-wrap: wrap;
+}
+
+.stickyFooterTotals {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 200px;
+}
+
+.stickyFooterLabel {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.stickyFooterTotal {
+  font-size: 16px;
+  color: #111827;
+}
+
+.stickyFooterTotal strong {
+  color: #0f766e;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.stickyFooterVat {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.stickyFooterEmpty {
+  font-size: 13px;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.stickyFooterEmptyWithAction {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.stickyFooterActionLink {
+  padding: 4px 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--brand-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color var(--transition-base);
+  font-style: normal;
+}
+
+.stickyFooterActionLink:hover:not(:disabled) {
+  color: var(--brand-primary-dark);
+  opacity: 0.9;
+}
+
+.stickyFooterActionLink:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.stickyFooterActions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+/* Responsive : petit écran → modal pleine hauteur/largeur utilisable */
+@media (max-width: 640px), (max-height: 820px) {
+  .modalInvoice {
+    width: calc(100vw - 16px);
+    height: calc(100vh - 16px);
+    min-height: calc(100vh - 16px);
+    max-height: calc(100vh - 16px);
+  }
+}
+
 @media (max-width: 640px) {
   .modal {
     width: 95%;
     margin: 20px;
+  }
+
+  .s2HeaderClinique {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .stickyBillingType .radioGroup {
+    grid-template-columns: 1fr;
   }
 
   .formRow {
@@ -319,5 +745,112 @@
   .cancelBtn,
   .submitBtn {
     width: 100%;
+  }
+
+  .summaryToolbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-xs);
+  }
+
+  .summaryToolbarTotal {
+    margin-left: 0;
+    margin-top: var(--spacing-xs);
+  }
+
+  .stickyFooterContent {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .stickyFooterActions {
+    width: 100%;
+  }
+
+  .stickyFooterActions .btn {
+    flex: 1;
+  }
+}
+
+/* ✅ Accordéons S2 - Hiérarchie visuelle */
+.accordion {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  border: 1px solid;
+  transition: background-color 0.2s, border-color 0.2s;
+  margin-bottom: 0;
+  min-width: 0;
+}
+
+.accordionInfo {
+  background: #f9fafb;
+  border-color: #bae6fd;
+  color: #0369a1;
+}
+
+.accordionInfo:hover {
+  background: #f0f9ff;
+}
+
+.accordionInfo.isOpen {
+  background: #f0f9ff;
+  margin-bottom: 12px;
+}
+
+.accordionWarning {
+  background: #fefce8;
+  border-color: #fbbf24;
+  color: #92400e;
+}
+
+.accordionWarning:hover {
+  background: #fef3c7;
+}
+
+.accordionWarning.isOpen {
+  background: #fef3c7;
+  margin-bottom: 12px;
+}
+
+.accordionContent {
+  padding: 16px;
+  border-radius: 8px;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.accordionContentInfo {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  color: #374151;
+}
+
+.accordionContentWarning {
+  background: #fefce8;
+  border: 1px solid #fde047;
+  color: #78350f;
+}
+
+/* Spinner pour "recalcul en cours" (S2 override confirmation) */
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #fbbf24;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spinnerRotate 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spinnerRotate {
+  to {
+    transform: rotate(360deg);
   }
 }

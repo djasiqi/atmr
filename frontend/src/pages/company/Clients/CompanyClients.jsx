@@ -1,9 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   fetchCompanyClients,
   createClient,
   updateClient,
   deleteClient,
+  fetchClientDetails,
+  createClientStay,
+  linkClientBillingParty,
 } from '../../../services/companyService';
 import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
 import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/CompanySidebar';
@@ -11,7 +15,9 @@ import ClientsTable from './components/ClientsTable';
 import EditClientModal from './components/EditClientModal';
 import NewClientModal from './components/NewClientModal';
 import DeleteConfirmModal from './components/DeleteConfirmModal';
+import ClientDrawer from './components/ClientDrawer';
 import styles from './CompanyClients.module.css';
+import useUrlSearchSync from '../../../hooks/useUrlSearchSync';
 
 const CompanyClients = () => {
   const [clients, setClients] = useState([]);
@@ -31,8 +37,26 @@ const CompanyClients = () => {
   const [sortBy, setSortBy] = useState('name'); // 'name', 'email', 'created'
   const [sortOrder, setSortOrder] = useState('asc'); // 'asc', 'desc'
 
+  // États pour le drawer Master-Detail
+  const [selectedClientId, setSelectedClientId] = useState(null);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [clientDetails, setClientDetails] = useState(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [pendingOpenClientId, setPendingOpenClientId] = useState(null);
+
+  // URL params pour deep linking
+  const [searchParams, setSearchParams] = useSearchParams();
+  const didInitOpenClientRef = useRef(false);
+  const searchInputRef = useRef(null);
+  const { initialSearch, shouldFocus, consumeFocus, initialized } = useUrlSearchSync();
+
+  // Cache pour les détails des clients
+  const clientCache = useMemo(() => new Map(), []);
+
   // Charger les clients
-  const loadClients = async () => {
+  const loadClients = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -54,11 +78,40 @@ const CompanyClients = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadClients();
-  }, []);
+  }, [loadClients]);
+
+  useEffect(() => {
+    if (!initialized) return;
+
+    if (initialSearch && initialSearch !== searchTerm) {
+      setSearchTerm(initialSearch);
+    }
+
+    if (shouldFocus) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      requestAnimationFrame(() => {
+        searchInputRef.current?.focus();
+      });
+      consumeFocus();
+    }
+  }, [initialized, initialSearch, shouldFocus, consumeFocus, searchTerm]);
+
+  useEffect(() => {
+    if (didInitOpenClientRef.current) return;
+    didInitOpenClientRef.current = true;
+
+    const openClientParam = searchParams.get('openClientId') || searchParams.get('clientId');
+    if (openClientParam) {
+      const parsedId = parseInt(openClientParam, 10);
+      if (!Number.isNaN(parsedId)) {
+        setPendingOpenClientId(parsedId);
+      }
+    }
+  }, [searchParams]);
 
   // Filtrer et trier les clients
   const filteredAndSortedClients = React.useMemo(() => {
@@ -195,11 +248,187 @@ const CompanyClients = () => {
     }
   };
 
-  // Ouvrir le modal d'édition
+  // Charger les détails d'un client (pour le drawer)
+  const loadClientDetails = useCallback(async (clientId, forceRefresh = false) => {
+    // Vérifier le cache (sauf si forceRefresh est true)
+    if (!forceRefresh && clientCache.has(clientId)) {
+      setClientDetails(clientCache.get(clientId));
+      return;
+    }
+
+    setLoadingDetails(true);
+    try {
+      const details = await fetchClientDetails(clientId);
+      clientCache.set(clientId, details);
+      setClientDetails(details);
+    } catch (err) {
+      console.error('Erreur lors du chargement des détails:', err);
+      setError('Erreur lors du chargement des détails du client');
+    } finally {
+      setLoadingDetails(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Ouvrir le drawer pour un client
+  const handleSelectClient = useCallback((client) => {
+    const clientId = client.id;
+    setSelectedClientId(clientId);
+    setIsDrawerOpen(true);
+    setIsEditMode(false);
+    setHasUnsavedChanges(false);
+    
+    // Mettre à jour l'URL
+    const newSearchParams = new URLSearchParams(searchParams);
+    newSearchParams.set('selected', clientId.toString());
+    setSearchParams(newSearchParams);
+    
+    // Charger les détails
+    loadClientDetails(clientId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadClientDetails]);
+
+  // Fermer le drawer
+  const handleCloseDrawer = useCallback(() => {
+    if (hasUnsavedChanges) {
+      const confirmed = window.confirm(
+        'Modifications non sauvegardées. Voulez-vous vraiment fermer ?'
+      );
+      if (!confirmed) return;
+    }
+    
+    setIsDrawerOpen(false);
+    setSelectedClientId(null);
+    setIsEditMode(false);
+    setHasUnsavedChanges(false);
+    setClientDetails(null);
+    
+    // Nettoyer l'URL
+    const newSearchParams = new URLSearchParams(searchParams);
+    newSearchParams.delete('selected');
+    setSearchParams(newSearchParams);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Basculer en mode édition
+  const handleEditInDrawer = useCallback(() => {
+    setIsEditMode(true);
+    setHasUnsavedChanges(false);
+  }, []);
+
+  // Annuler l'édition
+  const handleCancelEdit = useCallback(() => {
+    if (hasUnsavedChanges) {
+      const confirmed = window.confirm(
+        'Vous avez des modifications non sauvegardées. Voulez-vous vraiment annuler ?'
+      );
+      if (!confirmed) return;
+    }
+    
+    setIsEditMode(false);
+    setHasUnsavedChanges(false);
+    // Recharger les données originales
+    if (selectedClientId) {
+      clientCache.delete(selectedClientId);
+      loadClientDetails(selectedClientId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadClientDetails]);
+
+  // Sauvegarder les modifications (pour modal et drawer)
+  const handleSaveClient = useCallback(async (clientData, clientId = null) => {
+    const targetClientId = clientId || editingClient?.id;
+    if (!targetClientId) return;
+
+    try {
+      console.log('💾 [handleSaveClient] Début sauvegarde client ID:', targetClientId);
+      console.log('💾 [handleSaveClient] Données:', clientData);
+      
+      // Utiliser l'API complète de mise à jour du client
+      const result = await updateClient(targetClientId, clientData);
+      console.log('✅ [handleSaveClient] Réponse backend:', result);
+
+      // Recharger la liste
+      console.log('🔄 [handleSaveClient] Rechargement de la liste...');
+      await loadClients();
+      console.log('✅ [handleSaveClient] Liste rechargée');
+      
+      // Si c'était depuis le modal, fermer le modal
+      if (showEditModal) {
+        setShowEditModal(false);
+        setEditingClient(null);
+      }
+
+      // Invalider le cache pour ce client et recharger les détails
+      if (targetClientId) {
+        clientCache.delete(targetClientId);
+        // Recharger les détails si le drawer est ouvert pour ce client (forcer le refresh)
+        if (selectedClientId === targetClientId && isDrawerOpen) {
+          await loadClientDetails(targetClientId, true);
+        }
+      }
+    } catch (err) {
+      console.error('❌ [handleSaveClient] Erreur lors de la sauvegarde:', err);
+      console.error('❌ [handleSaveClient] Détails erreur:', err.response?.data || err.message);
+      throw err;
+    }
+  }, [editingClient, showEditModal, clientCache, selectedClientId, isDrawerOpen, loadClients, loadClientDetails]);
+
+  // Sauvegarder depuis le drawer
+  const handleSaveInDrawer = useCallback(async (clientData) => {
+    if (!selectedClientId) return;
+    
+    try {
+      await handleSaveClient(clientData, selectedClientId);
+      
+      // Retour en mode lecture
+      setIsEditMode(false);
+      setHasUnsavedChanges(false);
+    } catch (err) {
+      console.error('Erreur lors de la sauvegarde:', err);
+      throw err;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handleSaveClient]);
+
+  // Ouvrir le modal d'édition (pour compatibilité avec l'ancien comportement)
   const handleEditClient = (client) => {
-    setEditingClient(client);
-    setShowEditModal(true);
+    // Si le drawer est ouvert pour ce client, basculer en mode édition
+    if (selectedClientId === client.id && isDrawerOpen) {
+      handleEditInDrawer();
+    } else {
+      // Sinon, ouvrir le modal (ancien comportement)
+      setEditingClient(client);
+      setShowEditModal(true);
+    }
   };
+  
+  // Gérer l'ouverture du drawer depuis l'URL
+  useEffect(() => {
+    const selectedId = searchParams.get('selected');
+    if (selectedId) {
+      const clientId = parseInt(selectedId, 10);
+      if (!isNaN(clientId) && clientId !== selectedClientId) {
+        const client = clients.find((c) => c.id === clientId);
+        if (client) {
+          handleSelectClient(client);
+        }
+      }
+    }
+  }, [searchParams, clients, selectedClientId, handleSelectClient]);
+
+  useEffect(() => {
+    if (!pendingOpenClientId || clients.length === 0) return;
+    if (selectedClientId === pendingOpenClientId && isDrawerOpen) {
+      setPendingOpenClientId(null);
+      return;
+    }
+    const client = clients.find((c) => c.id === pendingOpenClientId);
+    if (client) {
+      handleSelectClient(client);
+      setPendingOpenClientId(null);
+    }
+  }, [pendingOpenClientId, clients, selectedClientId, isDrawerOpen, handleSelectClient]);
 
   // Ouvrir le modal de suppression
   const handleDeleteClick = (client) => {
@@ -245,43 +474,54 @@ const CompanyClients = () => {
     }
   };
 
-  // Sauvegarder les modifications
-  const handleSaveClient = async (clientData) => {
-    try {
-      console.log('💾 [handleSaveClient] Début sauvegarde client ID:', editingClient.id);
-      console.log('💾 [handleSaveClient] Données:', clientData);
-      
-      // Utiliser l'API complète de mise à jour du client
-      const result = await updateClient(editingClient.id, clientData);
-      console.log('✅ [handleSaveClient] Réponse backend:', result);
-
-      // Recharger la liste
-      console.log('🔄 [handleSaveClient] Rechargement de la liste...');
-      await loadClients();
-      console.log('✅ [handleSaveClient] Liste rechargée');
-      
-      handleCloseModal();
-    } catch (err) {
-      console.error('❌ [handleSaveClient] Erreur lors de la sauvegarde:', err);
-      console.error('❌ [handleSaveClient] Détails erreur:', err.response?.data || err.message);
-      throw err;
-    }
-  };
-
   // Créer un nouveau client
-  const handleCreateClient = async (clientData) => {
+  const handleCreateClient = async (clientData, { existingClient } = {}) => {
+    let createdClient = existingClient || null;
     try {
       console.log('Création client avec données:', clientData);
 
-      const newClient = await createClient(clientData);
+      const { hospitalization, billing_party_link, ...clientPayload } = clientData || {};
+      const newClient = createdClient || (await createClient(clientPayload));
+      createdClient = newClient;
       console.log('Client créé:', newClient);
+
+      const createdClientId = newClient?.id || newClient?.data?.id || newClient?.client?.id;
+      if (!createdClientId) {
+        throw new Error('Client créé mais identifiant introuvable.');
+      }
+
+      if (hospitalization) {
+        await createClientStay(createdClientId, {
+          company_id: parseInt(hospitalization.company_id, 10),
+          start_date: hospitalization.start_date,
+          end_date: hospitalization.end_date || null,
+          notes: hospitalization.notes || null,
+        });
+      }
+
+      if (billing_party_link) {
+        await linkClientBillingParty(createdClientId, {
+          billing_party_id: billing_party_link.billing_party_id,
+          role: billing_party_link.role || null,
+          is_default: !!billing_party_link.is_default,
+          contact_name: billing_party_link.contact_name || null,
+          contact_email: billing_party_link.contact_email || null,
+          contact_phone: billing_party_link.contact_phone || null,
+        });
+      }
 
       // Recharger la liste complète
       await loadClients();
-      setShowNewClientModal(false);
+      return newClient;
     } catch (err) {
       console.error('Erreur lors de la création du client:', err);
       console.error('Détails:', err.response?.data);
+      const errorMessage = err?.response?.data?.error || err.message || 'Erreur création client';
+      if (createdClient || err?.createdClient) {
+        const wrappedError = new Error(errorMessage);
+        wrappedError.createdClient = createdClient || err?.createdClient;
+        throw wrappedError;
+      }
       throw err;
     }
   };
@@ -325,6 +565,7 @@ const CompanyClients = () => {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className={styles.searchInput}
+                  ref={searchInputRef}
                 />
               </div>
 
@@ -447,8 +688,10 @@ const CompanyClients = () => {
               {/* Tableau des clients */}
               <ClientsTable
                 clients={paginatedClients}
+                onSelect={handleSelectClient}
                 onEdit={handleEditClient}
                 onDelete={handleDeleteClick}
+                selectedClientId={selectedClientId}
                 onRefresh={loadClients}
               />
 
@@ -504,6 +747,27 @@ const CompanyClients = () => {
               client={clientToDelete}
               onClose={handleCloseDeleteModal}
               onConfirm={handleConfirmDelete}
+            />
+          )}
+
+          {/* Side Drawer */}
+          {isDrawerOpen && clientDetails && (
+            <ClientDrawer
+              client={clientDetails}
+              isOpen={isDrawerOpen}
+              isEditMode={isEditMode}
+              onClose={handleCloseDrawer}
+              onEdit={handleEditInDrawer}
+              onSave={handleSaveInDrawer}
+              onCancelEdit={handleCancelEdit}
+              loading={loadingDetails}
+              hasUnsavedChanges={hasUnsavedChanges}
+              onReloadClient={() => {
+                if (selectedClientId) {
+                  clientCache.delete(selectedClientId);
+                  loadClientDetails(selectedClientId, true);
+                }
+              }}
             />
           )}
         </div>

@@ -5,7 +5,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { View, Text, StyleSheet, ViewStyle } from "react-native";
+import { Platform, Text, StyleSheet, View, ViewStyle } from "react-native";
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from "react-native-maps";
 import { createShadow } from "@/styles/shadowStyles";
 
@@ -129,9 +129,12 @@ export const EnterpriseDriversMap: React.FC<EnterpriseDriversMapProps> = ({
       <MapView
         ref={mapRef}
         style={StyleSheet.absoluteFill}
-        provider={PROVIDER_GOOGLE}
+        // iOS: utiliser Apple Maps (pas besoin de clé Google Maps).
+        // Android: garder Google Maps.
+        provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
         region={region ?? undefined}
-        customMapStyle={MAP_STYLE}
+        // customMapStyle est principalement supporté/fiable sur Google Maps (Android).
+        customMapStyle={Platform.OS === "android" ? MAP_STYLE : undefined}
       >
         {markers.map((marker) => (
           <Marker

@@ -10,14 +10,18 @@ et le marquage de la facture comme envoyée.
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from ext import db
 from models import Client, Company, CompanyBillingSettings, Invoice
 from services.documents.pdf import PDFService
 from services.email.brevo_provider import BrevoEmailProvider
+from services.email.recipient_utils import normalize_relationship_label
+from services.email.signature_utils import inject_signature_into_html
 
 logger = logging.getLogger(__name__)
 
@@ -278,6 +282,47 @@ class SendInvoiceByEmailUseCase:
                     or "Client"
                 )
 
+            # Déterminer le destinataire réel (clinique / tiers payeur / patient)
+            recipient_name = client_name
+            recipient_type = "patient"
+            billing_party = getattr(invoice, "billing_party", None)
+            billed_company = getattr(invoice, "billed_to_company", None)
+            bill_to_client = getattr(invoice, "bill_to_client", None)
+            relationship_label = None
+
+            if billing_party and invoice.client_id:
+                try:
+                    from models.billing_party import ClientBillingParty
+
+                    link = ClientBillingParty.query.filter_by(
+                        client_id=invoice.client_id,
+                        billing_party_id=billing_party.id,
+                    ).first()
+                    relationship_label = getattr(link, "role", None)
+                except Exception:
+                    relationship_label = None
+
+            if billing_party:
+                recipient_name = billing_party.display_name or client_name
+                recipient_type = getattr(billing_party.type, "value", billing_party.type)
+            elif billed_company:
+                recipient_name = billed_company.name or client_name
+                recipient_type = "clinic"
+            elif bill_to_client and getattr(bill_to_client, "is_institution", False):
+                institution_name = getattr(bill_to_client, "institution_name", None)
+                recipient_name = institution_name or client_name
+                recipient_type = "clinic"
+
+            is_clinic_recipient = str(recipient_type).lower() in {
+                "clinic",
+                "hospital",
+                "ems",
+            }
+            is_family_recipient = str(recipient_type).lower() == "family"
+            is_curator_recipient = str(recipient_type).lower() == "curatorship"
+            is_insurance_recipient = str(recipient_type).lower() == "insurance"
+            relationship_display = normalize_relationship_label(relationship_label)
+
             # Utiliser le template de message s'il existe, sinon message par défaut
             template = (
                 billing_settings.invoice_message_template
@@ -288,6 +333,17 @@ class SendInvoiceByEmailUseCase:
             if template:
                 # Remplacer les variables du template
                 html_content = template.replace("{client_name}", client_name)
+                html_content = html_content.replace("{recipient_name}", recipient_name)
+                html_content = html_content.replace("{payer_name}", recipient_name)
+                html_content = html_content.replace(
+                    "{recipient_type}",
+                    str(recipient_type),
+                )
+                html_content = html_content.replace("{patient_name}", client_name)
+                html_content = html_content.replace(
+                    "{relationship_label}",
+                    relationship_display or "",
+                )
                 html_content = html_content.replace(
                     "{invoice_number}", invoice.invoice_number or ""
                 )
@@ -305,13 +361,54 @@ class SendInvoiceByEmailUseCase:
                 html_content = html_content.replace("\n", "<br>")
             else:
                 # Message par défaut
+                if is_clinic_recipient:
+                    recipient_line = (
+                        "Veuillez trouver ci-joint la facture "
+                        f"<strong>{invoice.invoice_number}</strong> d'un montant de "
+                        f"<strong>{invoice.total_amount:.2f} CHF</strong> pour "
+                        "les transports des patients pris en charge."
+                    )
+                elif is_family_recipient:
+                    if relationship_display:
+                        recipient_line = (
+                            "Veuillez trouver ci-joint la facture "
+                            f"<strong>{invoice.invoice_number}</strong> d'un montant de "
+                            f"<strong>{invoice.total_amount:.2f} CHF</strong> "
+                            f"pour votre {relationship_display} <strong>{client_name}</strong>."
+                        )
+                    else:
+                        recipient_line = (
+                            "Veuillez trouver ci-joint la facture "
+                            f"<strong>{invoice.invoice_number}</strong> d'un montant de "
+                            f"<strong>{invoice.total_amount:.2f} CHF</strong> "
+                            f"concernant <strong>{client_name}</strong>."
+                        )
+                elif is_curator_recipient:
+                    recipient_line = (
+                        "Veuillez trouver ci-joint la facture "
+                        f"<strong>{invoice.invoice_number}</strong> d'un montant de "
+                        f"<strong>{invoice.total_amount:.2f} CHF</strong> "
+                        f"pour la personne protégée <strong>{client_name}</strong>."
+                    )
+                elif is_insurance_recipient:
+                    recipient_line = (
+                        "Veuillez trouver ci-joint la facture "
+                        f"<strong>{invoice.invoice_number}</strong> d'un montant de "
+                        f"<strong>{invoice.total_amount:.2f} CHF</strong> "
+                        f"pour l'assuré <strong>{client_name}</strong>."
+                    )
+                else:
+                    recipient_line = (
+                        "Veuillez trouver ci-joint la facture "
+                        f"<strong>{invoice.invoice_number}</strong> d'un montant de "
+                        f"<strong>{invoice.total_amount:.2f} CHF</strong>."
+                    )
 
                 html_content = f"""
                 <html>
                 <body style="font-family: Arial, sans-serif; line-height: 1.6;">
-                    <p>Bonjour {client_name},</p>
-                    <p>Veuillez trouver ci-joint la facture <strong>{invoice.invoice_number}</strong>
-                    d'un montant de <strong>{invoice.total_amount:.2f} CHF</strong>.</p>
+                    <p>Bonjour {recipient_name},</p>
+                    <p>{recipient_line}</p>
                     <p>Date d'échéance : <strong>{invoice.due_date.strftime("%d/%m/%Y") if invoice.due_date else "À définir"}</strong></p>
                     <p>Merci de procéder au paiement dans les délais.</p>
                     <br>
@@ -320,7 +417,33 @@ class SendInvoiceByEmailUseCase:
                 </html>
                 """
 
-            # 9. Préparer l'attachement PDF
+            # 8.5. Injecter la signature email si configurée
+            provider_mode = (
+                (os.getenv("EMAIL_PROVIDER_MODE", "brevo_api") or "brevo_api")
+                .strip()
+                .lower()
+            )
+            logo_mode = "url" if provider_mode == "brevo_api" else "cid"
+            cache_bust = str(invoice.id) if logo_mode == "url" else None
+
+            logo_info: dict[str, Any] | None = None
+            if billing_settings:
+                html_content, logo_info = inject_signature_into_html(
+                    html_content,
+                    company=company,
+                    billing_settings=billing_settings,
+                    logo_mode=logo_mode,
+                    cache_bust=cache_bust,
+                )
+
+            # 9. Préparer les attachements (PDF + logo inline si mode CID)
+            EMAIL_SIGNATURE_DEBUG = os.getenv("EMAIL_SIGNATURE_DEBUG", "0") == "1"
+            if EMAIL_SIGNATURE_DEBUG:
+                logger.info(
+                    "[EMAIL_SIGNATURE_DEBUG] send_invoice_by_email: provider_mode=%s, logo_mode=%s",
+                    provider_mode,
+                    logo_mode,
+                )
             attachments = []
             if pdf_bytes:
                 attachments.append(
@@ -329,6 +452,39 @@ class SendInvoiceByEmailUseCase:
                         "content": pdf_bytes,
                     }
                 )
+            # Logo inline pour signature (CID)
+            if logo_info:
+                # Vérifier que logo_info est valide avant d'ajouter
+                if not logo_info.get("bytes") or len(logo_info.get("bytes", b"")) == 0:
+                    logger.warning(
+                        "[INVOICE EMAIL] Logo bytes vides pour facture %s - logo inline ignoré",
+                        invoice.invoice_number,
+                    )
+                elif logo_info.get("cid") != "company_logo":
+                    logger.warning(
+                        "[INVOICE EMAIL] CID inattendu: %s (attendu: company_logo) - logo inline ignoré",
+                        logo_info.get("cid"),
+                    )
+                else:
+                    attachments.append(
+                        {
+                            "filename": logo_info["filename"],
+                            "content": logo_info["bytes"],
+                            "cid": logo_info["cid"],  # Doit être "company_logo"
+                            "mime_type": logo_info["mime_type"],
+                        }
+                    )
+                    if EMAIL_SIGNATURE_DEBUG:
+                        logger.info(
+                            (
+                                "[EMAIL_SIGNATURE_DEBUG] send_invoice_by_email: logo inline ajouté - "
+                                "cid=%s, filename=%s, mime_type=%s, bytes_len=%d"
+                            ),
+                            logo_info["cid"],
+                            logo_info["filename"],
+                            logo_info["mime_type"],
+                            len(logo_info["bytes"]),
+                        )
 
             # 10. Envoyer l'email via Brevo
             logger.info(
@@ -343,7 +499,7 @@ class SendInvoiceByEmailUseCase:
                 from_email=from_email,
                 from_name=from_name,
                 to_email=recipient_email,
-                to_name=client_name,
+                to_name=recipient_name,
                 subject=f"Facture {invoice.invoice_number} - {company.name}",
                 html_content=html_content,
                 attachments=attachments,

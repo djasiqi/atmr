@@ -1,11 +1,16 @@
+import contextlib
 import logging
+from collections import defaultdict
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
+from time import perf_counter
+from typing import Any
 
 from flask import current_app
 from sqlalchemy.orm import joinedload
 
+from infrastructure.invoices.invoice_calculator import round_to_5_cents
 from models import Client, CompanyBillingSettings, Invoice, InvoiceLineType
 from services.documents.invoice_template_builder import InvoiceTemplateBuilder
 from services.documents.qrbill import QRBillService
@@ -16,8 +21,580 @@ MAX_PATIENT_NAME_LENGTH = 18
 
 app_logger = logging.getLogger("pdf_service")
 
+# ✅ Monitoring performance PDF
+TEMPLATE_VERSION = "unified_v1"
+PERF_WARNING_ROWS_THRESHOLD = 40
+PERF_WARNING_MS_THRESHOLD = 1500
 
-def _format_address_for_display(address: str) -> str:  # noqa: PLR0911
+
+def _normalize_address_for_comparison(address: str) -> str:
+    """Normalise une adresse pour la comparaison (détection aller-retour).
+
+    Normalisation robuste :
+    - Minuscules
+    - Suppression accents (approximative)
+    - Suppression ponctuation
+    - Suppression espaces multiples
+    - Suppression virgules doubles
+    - Trim
+
+    Args:
+        address: Adresse brute
+
+    Returns:
+        Adresse normalisée pour comparaison
+    """
+    if not address:
+        return ""
+    import re
+    import unicodedata
+
+    # Minuscules
+    normalized = address.lower().strip()
+
+    # Supprimer accents (normalisation Unicode NFD puis suppression des diacritiques)
+    try:
+        normalized = unicodedata.normalize("NFD", normalized)
+        normalized = "".join(c for c in normalized if unicodedata.category(c) != "Mn")
+    except Exception:
+        # Fallback si unicodedata échoue
+        pass
+
+    # Supprimer ponctuation (garder seulement lettres, chiffres, espaces)
+    normalized = re.sub(r"[^\w\s]", "", normalized)
+
+    # Supprimer virgules doubles et espaces multiples
+    normalized = re.sub(r",+", "", normalized)  # Supprimer toutes les virgules
+    normalized = re.sub(r"\s+", " ", normalized)  # Espaces multiples -> 1 espace
+
+    return normalized.strip()
+
+
+def _short_label_for_transport(address: str, max_len: int = 25) -> str:
+    """Produit un libellé court pour 'A' ou 'B' dans 'A ↔ B' / 'A → B'.
+
+    - Prend la première partie avant virgule si présente, sinon tout.
+    - Tronque à max_len avec '...' si nécessaire.
+    """
+    if not address:
+        return ""
+    s = address.strip()
+    if "," in s:
+        s = s.split(",")[0].strip()
+    if len(s) <= max_len:
+        return s
+    return s[: max_len - 3] + "..."
+
+
+def _short_detail_label(address: str, max_len: int = 15) -> str:
+    """Libellé très court pour la ligne détail A/R (ex. 'Courbes', 'HUG').
+
+    - Avant virgule si présent.
+    - Si " des ", " de ", " du " : prend la partie après (ex. "Chemin des Courbes" → "Courbes").
+    - Tronque à max_len si besoin.
+    """
+    if not address or not address.strip():
+        return ""
+    s = address.strip()
+    if "," in s:
+        s = s.split(",")[0].strip()
+    for sep in (" des ", " de ", " du "):
+        if sep in s:
+            part = s.split(sep)[-1].strip()
+            if part:
+                s = part
+            break
+    if len(s) <= max_len:
+        return s
+    return s[: max_len - 3] + "..."
+
+
+def _svg_content_to_drawing(svg_content: str | bytes) -> Any:
+    """Convertit du contenu SVG (str ou bytes) en drawing ReportLab via un fichier temporaire.
+
+    svg2rlg() n'accepte que str | PathLike[str], pas BytesIO.
+    """
+    import os
+    import tempfile
+
+    from svglib.svglib import svg2rlg
+
+    content = (
+        svg_content.encode("utf-8") if isinstance(svg_content, str) else svg_content
+    )
+    fd, path = tempfile.mkstemp(suffix=".svg")
+    try:
+        try:
+            os.write(fd, content)
+        finally:
+            os.close(fd)
+        return svg2rlg(path)
+    finally:
+        with contextlib.suppress(OSError):
+            Path(path).unlink()
+
+
+def _format_patient_name_s2(patient_name: str) -> str:
+    """Formate le nom patient pour S2 : **Prénom NOM** (point d'entrée visuel clinique).
+
+    Accepte "Nom Prénom" (ex. Hauser Ariane, JASIQI Drin) ou "Prénom Nom" (ex. Ariane Hauser).
+    Détection : si le premier token est tout en majuscules → "Nom Prénom", sinon "Prénom Nom".
+    Retourne du HTML pour Paragraph : "<b>Prénom NOM</b>" ou "<b>Nom</b>".
+    """
+    if not patient_name or not patient_name.strip():
+        return "Patient"
+    s = patient_name.strip()
+    parts = s.split(None, 1)
+    if len(parts) == 2:  # noqa: PLR2004
+        a, b = (parts[0] or "").strip(), (parts[1] or "").strip()
+        if not a and not b:
+            return "<b>Patient</b>"
+        # "Nom Prénom" si premier token tout en majuscules (ex. HAUSER, JASIQI)
+        if a and a.isupper() and len(a) > 1:
+            prenom, nom = b.capitalize(), a.upper()
+        else:
+            prenom, nom = a.capitalize(), (b or a).upper()
+        bits = [x for x in (prenom, nom) if x]
+        return f"<b>{' '.join(bits)}</b>" if bits else "<b>Patient</b>"
+    nom_only = (parts[0] or "").strip().upper()
+    return f"<b>{nom_only}</b>" if nom_only else "<b>Patient</b>"
+
+
+# Constantes pour la détection d'aller-retour
+_MIN_ITEMS_FOR_ROUND_TRIP = 2
+_MAX_TRANSPORT_DISPLAY_LENGTH = 55
+_TRANSPORT_DISPLAY_TRUNCATE_LENGTH = 52
+# A/R : réserver place pour " ↔ [A/R]" (~10 car) pour qu'il reste sur la 1ère ligne
+_MAX_TRANSPORT_DISPLAY_LENGTH_AR = 42
+_TRANSPORT_DISPLAY_TRUNCATE_LENGTH_AR = 39
+# Tolérance pour les montants (delta acceptable en CHF)
+_AMOUNT_TOLERANCE_CHF = Decimal("5.00")
+# Fenêtre temporelle maximale pour un aller-retour (en heures)
+_MAX_ROUND_TRIP_TIME_WINDOW_HOURS = 12
+
+
+def _detect_and_group_round_trips(
+    invoice_lines_with_bookings: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Détecte et regroupe les aller-retour dans les lignes de facture.
+
+    Priorité de détection:
+    1. Champs explicites (parent_booking_id, is_return) si disponibles
+    2. Heuristique (adresses inversées + même jour + ≤12h + montants similaires)
+
+    Args:
+        invoice_lines_with_bookings: Liste de dict avec:
+            - 'line': InvoiceLine
+            - 'booking': Booking (ou None)
+            - 'patient_id': int (depuis line.meta)
+            - 'patient_name': str (depuis line.meta)
+            - 'date': datetime (depuis booking.scheduled_time)
+            - 'pickup': str (depuis booking.pickup_location)
+            - 'dropoff': str (depuis booking.dropoff_location)
+            - 'amount': Decimal (depuis line.line_total)
+
+    Returns:
+        Liste de lignes consolidées avec:
+            - 'is_round_trip': bool
+            - 'transport_display': str (format "A ↔ B" pour A/R, "A → B" pour aller simple)
+            - 'transport_type': str ("A/R" ou "Aller")
+            - 'date', 'patient_name', 'amount', etc.
+    """
+    from datetime import datetime
+
+    # ✅ ÉTAPE 1: Détection par champs explicites (parent_booking_id, is_return)
+    explicit_pairs: dict[int, list[dict[str, Any]]] = {}  # parent_id -> [items]
+    items_by_booking_id: dict[int, dict[str, Any]] = {}  # booking.id -> item
+    used_by_explicit = set()  # Indices utilisés par la détection explicite
+
+    for idx, item in enumerate(invoice_lines_with_bookings):
+        booking = item.get("booking")
+        if not booking:
+            continue
+        booking_id = getattr(booking, "id", None)
+        if booking_id:
+            items_by_booking_id[booking_id] = item
+
+        # Détecter les paires explicites via parent_booking_id
+        parent_id = getattr(booking, "parent_booking_id", None)
+        is_return = getattr(booking, "is_return", False)
+
+        if parent_id:
+            # Ce booking est un retour lié à un parent
+            if parent_id not in explicit_pairs:
+                explicit_pairs[parent_id] = []
+            explicit_pairs[parent_id].append(
+                {"idx": idx, "item": item, "type": "return"}
+            )
+        elif is_return and booking_id:
+            # Ce booking est marqué comme retour (chercher le parent)
+            if parent_id:
+                if parent_id not in explicit_pairs:
+                    explicit_pairs[parent_id] = []
+                explicit_pairs[parent_id].append(
+                    {"idx": idx, "item": item, "type": "return"}
+                )
+
+    # Regrouper les paires explicites trouvées
+    consolidated_explicit = []
+    for parent_id, return_items in explicit_pairs.items():
+        if len(return_items) != 1:
+            # Plusieurs retours pour un même parent = ambiguïté, ignorer
+            continue
+        parent_item = items_by_booking_id.get(parent_id)
+        if not parent_item:
+            # Parent non trouvé dans les lignes de facture, ignorer
+            continue
+
+        return_data = return_items[0]
+        return_idx = return_data["idx"]
+        return_item = return_data["item"]
+        used_by_explicit.add(return_idx)
+
+        # Trouver l'index du parent dans la liste originale
+        parent_idx = None
+        for idx, item in enumerate(invoice_lines_with_bookings):
+            if (
+                item.get("booking")
+                and getattr(item["booking"], "id", None) == parent_id
+            ):
+                parent_idx = idx
+                used_by_explicit.add(parent_idx)
+                break
+
+        if parent_idx is None:
+            continue
+
+        # Créer ligne consolidée A/R
+        parent_booking = parent_item.get("booking")
+        return_booking = return_item.get("booking")
+        if not parent_booking or not return_booking:
+            continue
+
+        pickup_aller = getattr(parent_booking, "pickup_location", "") or ""
+        dropoff_aller = getattr(parent_booking, "dropoff_location", "") or ""
+
+        amount_aller = parent_item.get("amount", Decimal("0"))
+        amount_retour = return_item.get("amount", Decimal("0"))
+        raw_sum = amount_aller + amount_retour
+        amount_rounded = round_to_5_cents(Decimal(str(raw_sum)))
+
+        short_a = _short_label_for_transport(pickup_aller)
+        short_b = _short_label_for_transport(dropoff_aller)
+        detail_a = _short_detail_label(pickup_aller)
+        detail_b = _short_detail_label(dropoff_aller)
+
+        date_aller = parent_item.get("date")
+        date_retour = return_item.get("date")
+        earliest = (
+            date_aller
+            if (date_aller and date_retour and date_aller <= date_retour)
+            else date_retour
+        )
+
+        consolidated_explicit.append(
+            {
+                "is_round_trip": True,
+                "transport_type": "A/R",
+                "date": date_aller or date_retour,
+                "earliest_scheduled": earliest,
+                "patient_id": parent_item.get("patient_id"),
+                "patient_name": parent_item.get("patient_name", "Patient"),
+                "pickup": pickup_aller,
+                "dropoff": dropoff_aller,
+                "transport_display": f"{short_a} ↔ {short_b}",
+                "aller_detail": f"{short_a} → {short_b}",
+                "retour_detail": f"{short_b} → {short_a}",
+                "aller_detail_short": f"{detail_a} → {detail_b}",
+                "retour_detail_short": f"{detail_b} → {detail_a}",
+                "amount": amount_rounded,
+                "line1": parent_item.get("line"),
+                "line2": return_item.get("line"),
+                "booking1": parent_booking,
+                "booking2": return_booking,
+            }
+        )
+
+    # ✅ ÉTAPE 2: Heuristique pour les items non appariés explicitement
+    # Grouper par (patient_id, date_jour) pour les items restants
+    groups: dict[tuple[int, str], list[dict[str, Any]]] = defaultdict(list)
+
+    for idx, item in enumerate(invoice_lines_with_bookings):
+        if idx in used_by_explicit:
+            # Déjà traité par détection explicite, ignorer
+            continue
+        patient_id = item.get("patient_id")
+        date = item.get("date")
+
+        if not patient_id or not date:
+            # Pas de regroupement possible, garder tel quel
+            item["is_round_trip"] = False
+            item["transport_type"] = "Aller"
+            continue
+
+        # Date à la journée (sans heure)
+        date_key = (
+            date.strftime("%Y-%m-%d") if isinstance(date, datetime) else str(date)[:10]
+        )
+        groups[(patient_id, date_key)].append(item)
+
+    consolidated_lines = []
+
+    for (_patient_id, _date_key), items in groups.items():
+        if len(items) < _MIN_ITEMS_FOR_ROUND_TRIP:
+            # Pas assez d'items pour un A/R, garder tel quel
+            for item in items:
+                item["is_round_trip"] = False
+                item["transport_type"] = "Aller"
+                pickup = item.get("pickup", "")
+                dropoff = item.get("dropoff", "")
+                if pickup and dropoff:
+                    short_a = _short_label_for_transport(pickup)
+                    short_b = _short_label_for_transport(dropoff)
+                    item["transport_display"] = f"{short_a} → {short_b}"
+                else:
+                    item["transport_display"] = (
+                        f"{pickup} → {dropoff}" if pickup or dropoff else ""
+                    )
+                item["earliest_scheduled"] = item.get("date")
+                consolidated_lines.append(item)
+            continue
+
+        # Chercher des paires A→B et B→A
+        normalized_pairs = []
+        for item in items:
+            pickup = item.get("pickup", "")
+            dropoff = item.get("dropoff", "")
+            if not pickup or not dropoff:
+                continue
+            normalized_pairs.append(
+                {
+                    "item": item,
+                    "pickup_norm": _normalize_address_for_comparison(pickup),
+                    "dropoff_norm": _normalize_address_for_comparison(dropoff),
+                    "pickup_orig": pickup,
+                    "dropoff_orig": dropoff,
+                }
+            )
+
+        # Chercher les paires aller-retour avec validations strictes
+        matched_pairs = []
+        used_indices = set()
+        candidate_pairs = []  # Stocker toutes les paires candidates avant validation
+
+        for i, pair1 in enumerate(normalized_pairs):
+            if i in used_indices:
+                continue
+            for j, pair2 in enumerate(normalized_pairs[i + 1 :], start=i + 1):
+                if j in used_indices:
+                    continue
+                # Vérifier si pickup1 == dropoff2 ET dropoff1 == pickup2 (aller-retour)
+                if (
+                    pair1["pickup_norm"] == pair2["dropoff_norm"]
+                    and pair1["dropoff_norm"] == pair2["pickup_norm"]
+                ):
+                    item1 = pair1["item"]
+                    item2 = pair2["item"]
+                    date1 = item1.get("date")
+                    date2 = item2.get("date")
+                    delta_seconds = float("inf")
+                    if (
+                        date1
+                        and date2
+                        and isinstance(date1, datetime)
+                        and isinstance(date2, datetime)
+                    ):
+                        delta_seconds = abs((date2 - date1).total_seconds())
+                    candidate_pairs.append(
+                        {
+                            "idx1": i,
+                            "idx2": j,
+                            "pair1": pair1,
+                            "pair2": pair2,
+                            "delta_seconds": delta_seconds,
+                        }
+                    )
+
+        # ✅ Préférer les paires les plus proches temporellement (tri par delta croissant)
+        candidate_pairs.sort(key=lambda c: c["delta_seconds"])
+
+        # ✅ Valider chaque paire candidate avec critères stricts
+        for candidate in candidate_pairs:
+            idx1 = candidate["idx1"]
+            idx2 = candidate["idx2"]
+            pair1 = candidate["pair1"]
+            pair2 = candidate["pair2"]
+            item1 = pair1["item"]
+            item2 = pair2["item"]
+
+            # ✅ Validation 1: Montants identiques (ou delta ≤ tolérance)
+            amount1 = Decimal(str(item1.get("amount", 0)))
+            amount2 = Decimal(str(item2.get("amount", 0)))
+            amount_diff = abs(amount1 - amount2)
+            if amount_diff > _AMOUNT_TOLERANCE_CHF:
+                # Montants trop différents, ne pas regrouper
+                continue
+
+            # ✅ Validation 2: Fenêtre temporelle (si horaire disponible)
+            date1 = item1.get("date")
+            date2 = item2.get("date")
+            if (
+                date1
+                and date2
+                and isinstance(date1, datetime)
+                and isinstance(date2, datetime)
+            ):
+                time_diff = abs(
+                    (date2 - date1).total_seconds() / 3600
+                )  # Différence en heures
+                if time_diff > _MAX_ROUND_TRIP_TIME_WINDOW_HOURS:
+                    # Fenêtre temporelle trop large, ne pas regrouper
+                    continue
+
+            # ✅ Validation 3: Éviter ambiguïté (si plusieurs retours possibles pour le même aller)
+            # Compter combien de retours possibles existent pour cet aller
+            pickup1_norm = pair1["pickup_norm"]
+            dropoff1_norm = pair1["dropoff_norm"]
+            possible_returns = 0
+            for other_pair in normalized_pairs:
+                if (
+                    other_pair["pickup_norm"] == dropoff1_norm
+                    and other_pair["dropoff_norm"] == pickup1_norm
+                ):
+                    possible_returns += 1
+
+            # Si plus d'un retour possible, ne pas regrouper (ambiguïté)
+            if possible_returns > 1:
+                continue
+
+            # ✅ Toutes les validations passées : regrouper
+            matched_pairs.append((idx1, idx2))
+            used_indices.add(idx1)
+            used_indices.add(idx2)
+
+        # Créer les lignes consolidées
+        for idx1, idx2 in matched_pairs:
+            pair1 = normalized_pairs[idx1]
+            pair2 = normalized_pairs[idx2]
+            item1 = pair1["item"]
+            item2 = pair2["item"]
+
+            # Déterminer l'ordre (aller puis retour)
+            # L'aller est celui avec la date/heure la plus tôt
+            date1 = item1.get("date")
+            date2 = item2.get("date")
+            if date2 and date1 and date2 < date1:
+                # Inverser si nécessaire
+                item1, item2 = item2, item1
+                pair1, pair2 = pair2, pair1
+
+            # Créer ligne consolidée A/R avec détails aller/retour
+            # Déterminer quel est l'aller et quel est le retour
+            # Dans la détection, on a vérifié que :
+            # - pair1["pickup_norm"] == pair2["dropoff_norm"]
+            # - pair1["dropoff_norm"] == pair2["pickup_norm"]
+            # Donc pair1 : A → B et pair2 : B → A
+            # L'aller est celui avec la date/heure la plus tôt
+            date1 = item1.get("date")
+            date2 = item2.get("date")
+
+            if (
+                date1
+                and date2
+                and isinstance(date1, datetime)
+                and isinstance(date2, datetime)
+            ):
+                # Utiliser l'ordre temporel pour déterminer aller/retour
+                if date1 <= date2:
+                    # item1 est l'aller, item2 est le retour
+                    pickup_aller = pair1["pickup_orig"]
+                    dropoff_aller = pair1["dropoff_orig"]
+                else:
+                    # item2 est l'aller, item1 est le retour
+                    pickup_aller = pair2["pickup_orig"]
+                    dropoff_aller = pair2["dropoff_orig"]
+            else:
+                # Pas d'horaire disponible, utiliser l'ordre de détection
+                pickup_aller = pair1["pickup_orig"]
+                dropoff_aller = pair1["dropoff_orig"]
+
+            raw_sum = item1.get("amount", Decimal("0")) + item2.get(
+                "amount", Decimal("0")
+            )
+            amount_rounded = round_to_5_cents(Decimal(str(raw_sum)))
+            short_a = _short_label_for_transport(pickup_aller)
+            short_b = _short_label_for_transport(dropoff_aller)
+            detail_a = _short_detail_label(pickup_aller)
+            detail_b = _short_detail_label(dropoff_aller)
+            d1 = item1.get("date")
+            d2 = item2.get("date")
+            earliest = d1 if (d1 and d2 and d1 <= d2) else d2
+            consolidated = {
+                "is_round_trip": True,
+                "transport_type": "A/R",
+                "date": item1.get("date"),
+                "earliest_scheduled": earliest,
+                "patient_id": _patient_id,
+                "patient_name": item1.get("patient_name", "Patient"),
+                "pickup": pickup_aller,
+                "dropoff": dropoff_aller,
+                "transport_display": f"{short_a} ↔ {short_b}",
+                "aller_detail": f"{short_a} → {short_b}",
+                "retour_detail": f"{short_b} → {short_a}",
+                "aller_detail_short": f"{detail_a} → {detail_b}",
+                "retour_detail_short": f"{detail_b} → {detail_a}",
+                "amount": amount_rounded,
+                "line1": item1.get("line"),
+                "line2": item2.get("line"),
+                "booking1": item1.get("booking"),
+                "booking2": item2.get("booking"),
+            }
+            consolidated_lines.append(consolidated)
+
+        # Ajouter les items non appariés (allers simples)
+        for i, pair in enumerate(normalized_pairs):
+            if i not in used_indices:
+                item = pair["item"]
+                item["is_round_trip"] = False
+                item["transport_type"] = "Aller"
+                short_a = _short_label_for_transport(pair["pickup_orig"])
+                short_b = _short_label_for_transport(pair["dropoff_orig"])
+                item["transport_display"] = f"{short_a} → {short_b}"
+                item["earliest_scheduled"] = item.get("date")
+                consolidated_lines.append(item)
+
+    # ✅ Combiner les résultats explicites et heuristiques
+    return consolidated_explicit + consolidated_lines
+
+
+def _sort_consolidated_lines_for_s2(
+    consolidated_lines: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Tri stable pour les lignes S2: date puis patient puis earliest_scheduled."""
+    from datetime import datetime as dt
+
+    def sort_key(row: dict[str, Any]) -> tuple[str, str, str]:
+        d = row.get("date")
+        date_key = (
+            d.strftime("%Y-%m-%d")
+            if d and isinstance(d, dt)
+            else (str(d)[:10] if d else "")
+        )
+        patient = (row.get("patient_name") or "").strip()
+        earliest = row.get("earliest_scheduled")
+        earliest_key = (
+            earliest.strftime("%H:%M:%S")
+            if earliest and isinstance(earliest, dt)
+            else (str(earliest) if earliest else "")
+        )
+        return (date_key, patient, earliest_key)
+
+    return sorted(consolidated_lines, key=sort_key)
+
+
+# Note: Cette fonction n'est actuellement pas utilisée mais peut être utile pour
+# des formats d'adresse spécifiques dans le futur. Conservée pour référence.
+def _format_address_for_display(address: str) -> str:  # pyright: ignore[reportUnusedFunction]  # noqa: PLR0911
     """Formate une adresse pour l'affichage dans le PDF.
 
     Format de sortie :
@@ -84,6 +661,607 @@ def _format_address_for_display(address: str) -> str:  # noqa: PLR0911
 
     # Fallback : retourner l'adresse telle quelle
     return clean_address
+
+
+def _sanitize_billed_to_address(name: str, address: str) -> str:
+    """Nettoie l'adresse « Facturé à » avant formatage.
+
+    - Normalise les espaces.
+    - Retire le nom (ex. clinique) si déjà présent dans l'adresse (évite doublons).
+    - Supprime la répétition « CP Ville » si dupliquée (ex. 1247 Anières 9 1247).
+    """
+    import re
+
+    if not address or not str(address).strip():
+        return ""
+    s = " ".join(str(address).strip().split())
+
+    if name:
+        name_norm = re.sub(r"\s+", " ", name.strip().lower())
+        s_norm = s.lower()
+        if name_norm and name_norm in s_norm:
+            s = re.sub(re.escape(name), "", s, count=1, flags=re.IGNORECASE).strip(
+                " ,\n"
+            )
+
+    m = re.search(r"\b(\d{4}\s+[A-Za-zÀ-ÖØ-öø-ÿ'\- ]+)\b", s)
+    if m:
+        block = m.group(1).strip()
+        _min_dup = 2  # garder 1ère occurrence si bloc dupliqué
+        if s.lower().count(block.lower()) >= _min_dup:
+            first = re.search(re.escape(block), s, flags=re.IGNORECASE)
+            if first:
+                end = first.end()
+                s = s[:end].strip()
+    return s
+
+
+def _format_billed_to_three_lines(raw: str) -> str:
+    """Formate l'adresse « Facturé à » en exactement 2 lignes (rue+numéro, CP ville).
+
+    Utilisé avec le nom (ligne 1) pour un bloc 3 lignes propre :
+    - Ligne 1 : nom (billed_to_name)
+    - Ligne 2 : rue + numéro
+    - Ligne 3 : CP Ville (+ ", Suisse" si présent dans raw).
+
+    Retourne "ligne2<br/>ligne3" (sans espaces superflus, pas de répétition).
+    """
+    import re
+
+    if not raw or not str(raw).strip():
+        return "Adresse non renseignée"
+    s = " ".join(str(raw).strip().split())
+    has_suisse = "suisse" in s.lower()
+
+    postal_match = re.search(r"\b(\d{4})\b", s)
+    if not postal_match:
+        return s
+    postcode = postal_match.group(1)
+    pos = postal_match.start()
+    street = s[:pos].strip().rstrip(" ,")
+    rest = s[pos + 4 :].strip()
+    # Enlever pays (Suisse, etc.) de la ville
+    city = (
+        re.sub(
+            r"\s*(?:,?\s*)(?:Suisse|Switzerland|France|Deutschland|Germany|Italy|Italia)\s*$",
+            "",
+            rest,
+            flags=re.IGNORECASE,
+        )
+        .strip()
+        .rstrip(",")
+        .strip()
+    )
+    if not street:
+        street = "Adresse non renseignée"
+    if not city:
+        cp_city = postcode
+    else:
+        cp_city = f"{postcode} {city}"
+        if has_suisse:
+            cp_city = f"{cp_city}, Suisse"
+    return f"{street}<br/>{cp_city}"
+
+
+def _sanitize_legal_footer_for_iban(footer: str) -> str:
+    """Retire toute mention « [IBAN non configuré] » du legal_footer.
+
+    En prod, on ne doit jamais afficher cette phrase dans le PDF.
+    """
+    if not footer:
+        return ""
+    import re
+
+    s = footer
+    s = re.sub(
+        r"(<br\s*/?>\s*)?\s*IBAN\s*:\s*\[IBAN non configuré\]\s*",
+        "",
+        s,
+        flags=re.IGNORECASE,
+    )
+    s = re.sub(r"\[IBAN non configuré\]\s*", "", s, flags=re.IGNORECASE)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def _load_logo_ratio_safe(  # noqa: PLR0911
+    logo_path: Path | None, max_width_pt: float
+) -> tuple[Any, float, float]:
+    """Charge un logo (SVG/PNG/JPG) en préservant le ratio.
+
+    - max_width_pt : largeur max en points; hauteur calculée depuis le ratio du fichier.
+    - SVG : scale uniforme (min des rapports) pour éviter toute distorsion.
+    - Raster : ImageReader getSize, height = max_width * (ih/iw).
+
+    Returns:
+        (logo_img, width_pt, height_pt) ou (None, 0.0, 0.0) en cas d'erreur.
+    """
+    if not logo_path or not Path(logo_path).exists():
+        return (None, 0.0, 0.0)
+    try:
+        if Path(logo_path).suffix.lower() == ".svg":
+            from svglib.svglib import (                svg2rlg,
+            )
+
+            drawing = svg2rlg(str(logo_path))
+            if not drawing:
+                return (None, 0.0, 0.0)
+            ow = float(drawing.width)
+            oh = float(drawing.height)
+            if ow <= 0 or oh <= 0:
+                return (None, 0.0, 0.0)
+            scale = max_width_pt / ow
+            drawing.scale(scale, scale)
+            return (drawing, max_width_pt, oh * scale)
+        from reportlab.lib.utils import ImageReader
+        from reportlab.platypus import Image
+        ir = ImageReader(str(logo_path))
+        iw, ih = ir.getSize()
+        if iw <= 0:
+            return (None, 0.0, 0.0)
+        w_pt = max_width_pt
+        h_pt = max_width_pt * (float(ih) / float(iw))
+        img = Image(str(logo_path), width=w_pt, height=h_pt)
+        return (img, w_pt, h_pt)
+    except Exception as e:
+        app_logger.warning("Logo ratio-safe load failed: %s", e)
+        return (None, 0.0, 0.0)
+
+
+def _get_billed_to(invoice: "Invoice") -> tuple[str, str]:
+    """Retourne (nom, adresse formatée) pour le bloc « Facturé à »."""
+    if getattr(invoice, "billing_party_id", None):
+        from models import BillingParty as BillingPartyModel
+
+        bp = BillingPartyModel.query.get(invoice.billing_party_id)
+        if bp:
+            name = bp.display_name or "Payeur"
+            raw = bp.billing_address or "Adresse non renseignée"
+            raw = _sanitize_billed_to_address(name, raw)
+            return (
+                name,
+                _format_billed_to_three_lines(raw or "Adresse non renseignée"),
+            )
+        app_logger.warning(
+            "[PDF] billing_party_id=%s défini mais BillingParty introuvable (invoice_id=%s). Fallback.",
+            getattr(invoice, "billing_party_id", None),
+            getattr(invoice, "id", None),
+        )
+        return ("Payeur", "Adresse non renseignée")
+    if invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id:
+        from models import Client as ClientModel
+
+        institution = ClientModel.query.get(invoice.bill_to_client_id)
+        if institution and institution.is_institution:
+            app_logger.info(
+                "[PDF] Fallback legacy bill_to_client_id utilisé (invoice_id=%s, bill_to_client_id=%s).",
+                getattr(invoice, "id", None),
+                getattr(invoice, "bill_to_client_id", None),
+            )
+            name = institution.institution_name or "Institution"
+            raw = institution.billing_address or "Adresse non renseignée"
+            raw = _sanitize_billed_to_address(name, raw)
+            return (
+                name,
+                _format_billed_to_three_lines(raw or "Adresse non renseignée"),
+            )
+        app_logger.warning(
+            "[PDF] bill_to_client_id=%s défini mais institution introuvable/invalide (invoice_id=%s). Fallback.",
+            getattr(invoice, "bill_to_client_id", None),
+            getattr(invoice, "id", None),
+        )
+        return ("Institution", "Adresse non renseignée")
+    app_logger.info(
+        "[PDF] Fallback client bénéficiaire utilisé (invoice_id=%s, client_id=%s).",
+        getattr(invoice, "id", None),
+        getattr(invoice, "client_id", None),
+    )
+    client = invoice.client
+    name = (
+        f"{client.user.first_name or ''} {client.user.last_name or ''}".strip()
+        or client.user.username
+        or "Client"
+    )
+    raw = "Adresse non renseignée"
+    if hasattr(client, "domicile_address") and client.domicile_address:
+        street = client.domicile_address
+        if (
+            hasattr(client, "domicile_zip")
+            and hasattr(client, "domicile_city")
+            and client.domicile_zip
+            and client.domicile_city
+        ):
+            raw = f"{street}, {client.domicile_zip} {client.domicile_city}"
+        else:
+            raw = street
+    elif (
+        hasattr(client, "user")
+        and client.user
+        and hasattr(client.user, "address")
+        and client.user.address
+    ):
+        raw = client.user.address
+    raw = _sanitize_billed_to_address(name, raw)
+    return (name, _format_billed_to_three_lines(raw or "Adresse non renseignée"))
+
+
+def _build_s2_table(
+    invoice: "Invoice",
+    font_name: str,
+    font_name_bold: str,
+    s2_main_style: Any,
+    s2_detail_style: Any,
+    *,
+    include_non_ride: bool = False,
+    available_width_pt: float | None = None,
+) -> tuple[Any, list[dict[str, Any]]]:
+    """Construit le tableau unifié (Date | Client/Patient | Transport | Montant).
+
+    Utilisé pour toutes les factures (client et clinique).
+    - Factures client : colonne "Client" = nom du client
+    - Factures tierce partie/S2 : colonne "Patient" = nom du patient
+
+    Si available_width_pt est fourni (ex. doc.width), la colonne Transport prend toute la largeur
+    restante. Sinon, largeurs fixes de repli.
+    """
+    from reportlab.lib import colors
+    from reportlab.lib.units import cm
+    from reportlab.platypus import Paragraph, Table, TableStyle
+    from models import Booking
+
+    # ✅ Déterminer si c'est une facture client directe (non tierce partie)
+    strategy_value = None
+    try:
+        bs = getattr(invoice, "billing_strategy", None)
+        if bs is None:
+            strategy_value = None
+        else:
+            strategy_value = bs.value if hasattr(bs, "value") else str(bs)
+    except Exception:
+        strategy_value = None
+    is_s2_invoice = strategy_value == "s2_clinic_monthly"
+    is_third_party_invoice = bool(
+        getattr(invoice, "billing_party_id", None)
+        or (
+            invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id
+        )
+        or is_s2_invoice
+    )
+
+    lines_with_bookings: list[dict[str, Any]] = []
+    for line in invoice.lines:
+        if line.type != InvoiceLineType.RIDE or not line.reservation_id:
+            continue
+        booking = Booking.query.get(line.reservation_id)
+        if not booking:
+            continue
+
+        # ✅ Pour factures client (non tierce partie), utiliser le nom du client
+        # Pour factures tierce partie/S2, utiliser le patient depuis meta ou booking
+        patient_name = "Patient"
+        patient_id = None
+
+        if is_third_party_invoice or is_s2_invoice:
+            # Facture tierce partie ou S2 : utiliser le patient depuis meta ou booking
+            if hasattr(line, "meta") and isinstance(line.meta, dict):
+                patient_name = (
+                    line.meta.get("patient_name")
+                    or booking.customer_name
+                    or (
+                        f"{booking.client.user.first_name or ''} "
+                        f"{booking.client.user.last_name or ''}"
+                    ).strip()
+                    or "Patient"
+                )
+                patient_id = line.meta.get("patient_id") or booking.client_id
+            else:
+                patient_name = (
+                    booking.customer_name
+                    or (
+                        f"{booking.client.user.first_name or ''} "
+                        f"{booking.client.user.last_name or ''}"
+                    ).strip()
+                    or "Patient"
+                )
+                patient_id = booking.client_id
+        else:
+            # Facture client directe : utiliser le nom du client comme "patient"
+            client = invoice.client
+            if client and hasattr(client, "user") and client.user:
+                patient_name = (
+                    f"{client.user.first_name or ''} {client.user.last_name or ''}".strip()
+                    or client.user.username
+                    or "Client"
+                )
+            else:
+                patient_name = "Client"
+            patient_id = invoice.client_id if invoice.client_id else None
+        if len(patient_name) > MAX_PATIENT_NAME_LENGTH:
+            patient_name = patient_name[: MAX_PATIENT_NAME_LENGTH - 1] + "."
+        lines_with_bookings.append(
+            {
+                "line": line,
+                "booking": booking,
+                "patient_id": patient_id,
+                "patient_name": patient_name,
+                "date": booking.scheduled_time,
+                "pickup": booking.pickup_location or "",
+                "dropoff": booking.dropoff_location or "",
+                "amount": line.line_total,
+            }
+        )
+    consolidated = _detect_and_group_round_trips(lines_with_bookings)
+    consolidated = _sort_consolidated_lines_for_s2(consolidated)
+
+    # ✅ Header dynamique : "Client" pour factures client, "Patient" pour factures tierce partie/S2
+    patient_column_header = (
+        "Client" if not (is_third_party_invoice or is_s2_invoice) else "Patient"
+    )
+    table_data: list[list[Any]] = [
+        ["Date", patient_column_header, "Transport", "Montant"]
+    ]
+    s2_patient_separator_after_rows: list[int] = []
+    for i, item in enumerate(consolidated):
+        if i > 0:
+            prev = consolidated[i - 1]
+            pk_prev = (prev.get("patient_id"), prev.get("patient_name", ""))
+            pk_cur = (item.get("patient_id"), item.get("patient_name", ""))
+            if pk_prev != pk_cur:
+                s2_patient_separator_after_rows.append(len(table_data))
+        date_str = item["date"].strftime("%d.%m.%Y") if item.get("date") else ""
+        pn_raw = item.get("patient_name", "Patient")
+        if len(pn_raw) > MAX_PATIENT_NAME_LENGTH:
+            pn_raw = pn_raw[: MAX_PATIENT_NAME_LENGTH - 1] + "."
+        patient_cell = Paragraph(_format_patient_name_s2(pn_raw), s2_main_style)
+        amt = item.get("amount") or Decimal("0")
+        amount_val = f"{Decimal(amt):.2f}"
+        is_ar = (
+            item.get("is_round_trip")
+            and item.get("aller_detail")
+            and item.get("retour_detail")
+        )
+        if is_ar:
+            base = item.get("transport_display", "")
+            if len(base) > _MAX_TRANSPORT_DISPLAY_LENGTH_AR:
+                base = base[:_TRANSPORT_DISPLAY_TRUNCATE_LENGTH_AR] + "..."
+            main_text = (
+                f"{base}&nbsp;<font color='#aaaaaa' size='8'>↔</font>&nbsp;[A/R]"
+            )
+            ad = item.get("aller_detail_short") or item.get("aller_detail", "")
+            rd = item.get("retour_detail_short") or item.get("retour_detail", "")
+            detail_text = f"Aller : {ad} • Retour : {rd}"
+            para_main = Paragraph(f"<b>{main_text}</b>", s2_main_style)
+            para_detail = Paragraph(detail_text, s2_detail_style)
+            transport_cell = [para_main, para_detail]
+            amount_cell = Paragraph(
+                f'<para align="right"><b>{amount_val}</b></para>',
+                s2_main_style,
+            )
+        else:
+            transport = item.get("transport_display", "")
+            if len(transport) > _MAX_TRANSPORT_DISPLAY_LENGTH:
+                transport = transport[:_TRANSPORT_DISPLAY_TRUNCATE_LENGTH] + "..."
+            transport_cell = Paragraph(transport, s2_main_style)
+            amount_cell = Paragraph(
+                f'<para align="right">{amount_val}</para>',
+                s2_main_style,
+            )
+        table_data.append([date_str, patient_cell, transport_cell, amount_cell])
+
+    if include_non_ride:
+        for line in invoice.lines:
+            if line.type != InvoiceLineType.RIDE:
+                amt = line.line_total if line.line_total is not None else Decimal("0")
+                amount = f"{Decimal(amt):.2f}"
+                table_data.append(["", "", line.description[:30], amount])
+
+    date_w = 2 * cm
+    patient_w = 3 * cm
+    amount_w = 2.5 * cm
+    if available_width_pt is not None and available_width_pt > 0:
+        rest = available_width_pt - (date_w + patient_w + amount_w)
+        transport_w = max(rest, 1 * cm)
+    else:
+        transport_w = 9.9 * cm
+    col_widths = [date_w, patient_w, transport_w, amount_w]
+
+    tbl = Table(table_data, colWidths=col_widths, repeatRows=1)
+    style_rules: list[Any] = [
+        ("FONTNAME", (0, 0), (-1, 0), font_name_bold),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+        ("ALIGN", (-1, 0), (-1, -1), "RIGHT"),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 2),
+        ("TOPPADDING", (0, 0), (-1, 0), 2),
+        ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.black),
+        ("FONTNAME", (0, 1), (-1, -1), font_name),
+        ("BOTTOMPADDING", (0, 1), (-1, -1), 1),
+        ("TOPPADDING", (0, 1), (-1, -1), 1),
+        ("LEFTPADDING", (0, 0), (-1, -1), 1),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 1),
+        ("LEFTPADDING", (2, 0), (2, -1), 1),
+        ("RIGHTPADDING", (2, 0), (2, -1), 10),
+        ("LEFTPADDING", (3, 0), (3, -1), 4),
+    ]
+    for r in s2_patient_separator_after_rows:
+        style_rules.append(("LINEBELOW", (0, r), (-1, r), 0.15, colors.lightgrey))
+    tbl.setStyle(TableStyle(style_rules))
+    return (tbl, consolidated)
+
+
+def _build_totals_table(
+    invoice: "Invoice",
+    is_s2: bool,
+    is_third_party: bool,
+    font_name: str,
+    font_name_bold: str,
+    *,
+    template: str = "standard",
+    reminder_level: int | None = None,
+    reminder_fee: Decimal | None = None,
+    reminder_total_due: Decimal | None = None,
+    reminder_principal: Decimal | float | None = None,
+) -> Any:
+    """Construit le tableau des totaux (sous-total, TVA, total).
+
+    En mode rappel : mini-table structurée
+    « Montant facture initiale » + « Frais de rappel N°X » + « TOTAL À FACTURER ».
+    """
+    from reportlab.lib.units import cm
+    from reportlab.platypus import Table, TableStyle
+    subtotal = float(invoice.subtotal_amount)
+    vat_total = float(invoice.vat_total_amount)
+    total = float(invoice.total_amount)
+    vat_is_applicable = False
+    vat_label_display = "TVA"
+    if isinstance(invoice.meta, dict) and "vat" in invoice.meta:
+        vat_meta = invoice.meta.get("vat", {})
+        vat_is_applicable = bool(vat_meta.get("applicable", False))
+        if vat_meta.get("label"):
+            vat_label_display = str(vat_meta["label"])
+    elif vat_total > 0:
+        vat_is_applicable = True
+
+    is_reminder = reminder_level is not None and reminder_fee is not None
+    if is_reminder and reminder_total_due is not None:
+        final_total = float(reminder_total_due)
+        reminder_fee_float = float(reminder_fee) if reminder_fee is not None else 0.0
+        principal_float = (
+            float(reminder_principal) if reminder_principal is not None else (final_total - reminder_fee_float)
+        )
+    else:
+        final_total = total
+        reminder_fee_float = 0.0
+        principal_float = subtotal
+
+    total_label = "TOTAL À FACTURER :" if is_s2 else "TOTAL :"
+    total_amt = f"CHF {final_total:.2f}" if is_s2 else f"{final_total:.2f}"
+
+    reminder_fee_label = (
+        f"Frais de rappel N°{reminder_level} :" if is_reminder and reminder_level else "Frais de rappel :"
+    )
+    reminder_fee_amt = f"CHF {reminder_fee_float:.2f}"
+    principal_amt = f"CHF {principal_float:.2f}"
+
+    # ✅ Mode rappel : mini-table structurée (Sous-total facture + Frais + TOTAL)
+    if is_reminder:
+        principal_label = "Montant facture initiale :"
+        if template == "detailed":
+            if is_third_party:
+                total_data = [
+                    ["", "", "", "", principal_label, principal_amt],
+                    ["", "", "", "", reminder_fee_label, reminder_fee_amt],
+                    ["", "", "", "", total_label, total_amt],
+                ]
+                col_widths = [2 * cm, 2.5 * cm, 3 * cm, 3 * cm, 2.5 * cm, 2 * cm]
+            else:
+                total_data = [
+                    ["", "", "", principal_label, principal_amt],
+                    ["", "", "", reminder_fee_label, reminder_fee_amt],
+                    ["", "", "", total_label, total_amt],
+                ]
+                col_widths = [2.5 * cm, 4 * cm, 4 * cm, 2.5 * cm, 2.5 * cm]
+        elif is_third_party:
+            total_data = [
+                ["", "", "", principal_label, principal_amt],
+                ["", "", "", reminder_fee_label, reminder_fee_amt],
+                ["", "", "", total_label, total_amt],
+            ]
+            col_widths = [2 * cm, 3 * cm, 4.5 * cm, 2 * cm, 2.5 * cm]
+        else:
+            total_data = [
+                ["", "", principal_label, principal_amt],
+                ["", "", reminder_fee_label, reminder_fee_amt],
+                ["", "", total_label, total_amt],
+            ]
+            col_widths = [2.5 * cm, 6 * cm, 2.5 * cm, 2.5 * cm]
+    elif template == "detailed":
+        if is_third_party:
+            if vat_is_applicable:
+                total_data = [
+                    ["", "", "", "", "Sous-total :", f"{subtotal:.2f}"],
+                    ["", "", "", "", f"{vat_label_display} :", f"{vat_total:.2f}"],
+                    ["", "", "", "", total_label, total_amt],
+                ]
+            else:
+                total_data = [["", "", "", "", total_label, total_amt]]
+            col_widths = [2 * cm, 2.5 * cm, 3 * cm, 3 * cm, 2.5 * cm, 2 * cm]
+        else:
+            if vat_is_applicable:
+                total_data = [
+                    ["", "", "", "Sous-total :", f"{subtotal:.2f}"],
+                    ["", "", "", f"{vat_label_display} :", f"{vat_total:.2f}"],
+                    ["", "", "", total_label, total_amt],
+                ]
+            else:
+                total_data = [["", "", "", total_label, total_amt]]
+            col_widths = [2.5 * cm, 4 * cm, 4 * cm, 2.5 * cm, 2.5 * cm]
+    elif is_third_party:
+        if vat_is_applicable:
+            total_data = [
+                ["", "", "", "Sous-total :", f"{subtotal:.2f}"],
+                ["", "", "", f"{vat_label_display} :", f"{vat_total:.2f}"],
+                ["", "", "", total_label, total_amt],
+            ]
+        else:
+            total_data = [["", "", "", total_label, total_amt]]
+        col_widths = [2 * cm, 3 * cm, 4.5 * cm, 2 * cm, 2.5 * cm]
+    else:
+        if vat_is_applicable:
+            total_data = [
+                ["", "", "Sous-total :", f"{subtotal:.2f}"],
+                ["", "", f"{vat_label_display} :", f"{vat_total:.2f}"],
+                ["", "", total_label, total_amt],
+            ]
+        else:
+            total_data = [["", "", total_label, total_amt]]
+        col_widths = [2.5 * cm, 6 * cm, 2.5 * cm, 2.5 * cm]
+
+    total_table = Table(total_data, colWidths=col_widths)
+    if template == "detailed":
+        if is_third_party or is_s2:
+            style_rules = [
+                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                ("ALIGN", (4, 0), (5, -1), "RIGHT"),
+                ("FONTSIZE", (0, 0), (-1, -1), 10),
+            ]
+        else:
+            style_rules = [
+                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                ("ALIGN", (3, 0), (4, -1), "RIGHT"),
+                ("FONTSIZE", (0, 0), (-1, -1), 10),
+            ]
+    elif is_third_party:
+        style_rules = [
+            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+            ("ALIGN", (3, 0), (4, -1), "RIGHT"),
+            ("FONTSIZE", (0, 0), (-1, -1), 10),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ]
+    else:
+        style_rules = [
+            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+            ("ALIGN", (2, 0), (3, -1), "RIGHT"),
+            ("FONTSIZE", (0, 0), (-1, -1), 10),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ]
+    # ✅ Style des polices : dernière ligne (total) en gras, autres en normal
+    # Si mode rappel, la ligne de frais est aussi en normal, seule la dernière ligne (total) est en gras
+    if vat_is_applicable or is_reminder:
+        # Plusieurs lignes : toutes sauf la dernière en normal, dernière en gras
+        style_rules.extend(
+            [
+                ("FONTNAME", (0, 0), (-1, -2), font_name),
+                ("FONTNAME", (0, -1), (-1, -1), font_name_bold),
+            ]
+        )
+    else:
+        # Une seule ligne : en gras
+        style_rules.append(("FONTNAME", (0, 0), (-1, -1), font_name_bold))
+    total_table.setStyle(TableStyle(style_rules))
+    return total_table
 
 
 class PDFService:
@@ -153,7 +1331,48 @@ class PDFService:
         return self.template_builder.extract_invoice_data(invoice)
 
     def generate_invoice_pdf(self, invoice):
-        """Génère le PDF d'une facture."""
+        """Génère le PDF d'une facture.
+
+        ⚠️ PROTECTION IMMUTABILITÉ:
+        Ne modifie JAMAIS invoice.pdf_url si:
+        - invoice.status est SENT, PARTIALLY_PAID, ou PAID (facture verrouillée)
+        - invoice.pdf_url existe déjà (PDF déjà généré)
+
+        Cette protection évite les régressions où un "regenerate" en prod
+        écraserait un PDF déjà envoyé au client.
+        """
+        from models.enums import InvoiceStatus
+
+        # ✅ PROTECTION: Vérifier si la facture est "verrouillée" (déjà envoyée/payée)
+        locked_statuses = {InvoiceStatus.SENT, InvoiceStatus.PARTIALLY_PAID, InvoiceStatus.PAID}
+        if invoice.status in locked_statuses:
+            app_logger.warning(
+                (
+                    "[PDF PROTECTION] Tentative de régénération PDF pour facture verrouillée: "
+                    "invoice_id=%s, status=%s, pdf_url=%s. PDF non modifié."
+                ),
+                invoice.id,
+                invoice.status.value,
+                invoice.pdf_url,
+            )
+            # Retourner le PDF existant si disponible, sinon None
+            return invoice.pdf_url if invoice.pdf_url else None
+
+        # ✅ PROTECTION: Si un PDF existe déjà, ne pas l'écraser (sauf si explicitement demandé)
+        # Note: Cette protection peut être contournée via un flag explicite si nécessaire
+        # Pour l'instant, on protège par défaut
+        if invoice.pdf_url:
+            app_logger.info(
+                (
+                    "[PDF PROTECTION] Facture %s a déjà un PDF (%s). "
+                    "Pour forcer la régénération, utiliser un flag explicite."
+                ),
+                invoice.id,
+                invoice.pdf_url,
+            )
+            # Retourner le PDF existant
+            return invoice.pdf_url
+
         try:
             # Charger la facture avec toutes les relations
             invoice = (
@@ -171,8 +1390,92 @@ class PDFService:
                 msg = "Facture non trouvée"
                 raise ValueError(msg)
 
-            # Générer le contenu PDF
-            pdf_content = self._create_invoice_pdf_content(invoice)
+            # ✅ Monitoring performance : mesurer le temps de génération
+            start_time = perf_counter()
+            pdf_content, nb_rows = self._create_invoice_pdf_content(invoice)
+            generation_ms = int((perf_counter() - start_time) * 1000)
+
+            # ✅ Déterminer billing_type pour métriques Prometheus
+            strategy_value = None
+            try:
+                bs = getattr(invoice, "billing_strategy", None)
+                if bs is None:
+                    strategy_value = None
+                else:
+                    strategy_value = bs.value if hasattr(bs, "value") else str(bs)
+            except Exception:
+                strategy_value = None
+            is_s2 = strategy_value == "s2_clinic_monthly"
+            is_third_party = bool(
+                getattr(invoice, "billing_party_id", None)
+                or (
+                    invoice.bill_to_client_id
+                    and invoice.bill_to_client_id != invoice.client_id
+                )
+                or is_s2
+            )
+            if is_s2:
+                billing_type = "clinic"
+            elif is_third_party:
+                billing_type = "partner"
+            else:
+                billing_type = "client"
+
+            # ✅ Métriques Prometheus
+            try:
+                from services.monitoring.prometheus import observe_invoice_pdf_perf
+
+                observe_invoice_pdf_perf(
+                    pdf_kind="invoice",
+                    billing_type=billing_type,
+                    template_version=TEMPLATE_VERSION,
+                    nb_rows=nb_rows,
+                    duration_ms=generation_ms,
+                    warning_threshold_rows=PERF_WARNING_ROWS_THRESHOLD,
+                    warning_threshold_ms=PERF_WARNING_MS_THRESHOLD,
+                )
+            except ImportError:
+                pass  # Prometheus non disponible
+            except Exception as e:
+                app_logger.debug("[PDF] Error tracking Prometheus metrics: %s", e)
+
+            # ✅ Logging performance
+            invoice_id = invoice.id
+
+            # WARNING si seuils dépassés
+            if (
+                nb_rows > PERF_WARNING_ROWS_THRESHOLD
+                or generation_ms > PERF_WARNING_MS_THRESHOLD
+            ):
+                warnings = []
+                if nb_rows > PERF_WARNING_ROWS_THRESHOLD:
+                    warnings.append(f"rows={nb_rows}>{PERF_WARNING_ROWS_THRESHOLD}")
+                if generation_ms > PERF_WARNING_MS_THRESHOLD:
+                    warnings.append(
+                        f"time={generation_ms}ms>{PERF_WARNING_MS_THRESHOLD}ms"
+                    )
+                app_logger.warning(
+                    (
+                        "InvoicePDF slow/large (invoice_id=%s, nb_rows=%s, generation_ms=%s, "
+                        "template_version=%s, thresholds_exceeded=[%s])"
+                    ),
+                    invoice_id,
+                    nb_rows,
+                    generation_ms,
+                    TEMPLATE_VERSION,
+                    ", ".join(warnings),
+                )
+            else:
+                app_logger.info(
+                    (
+                        "InvoicePDF generated (invoice_id=%s, nb_rows=%s, generation_ms=%s, "
+                        "template_version=%s)"
+                    ),
+                    invoice_id,
+                    nb_rows,
+                    generation_ms,
+                    TEMPLATE_VERSION,
+                )
 
             # Sauvegarder le fichier
             filename = (
@@ -181,8 +1484,9 @@ class PDFService:
             )
             filepath = Path(self.invoices_dir, filename)
 
+            pdf_bytes: bytes = pdf_content if isinstance(pdf_content, bytes) else b""
             with filepath.open("wb") as f:
-                f.write(pdf_content)
+                f.write(pdf_bytes)
 
             # ✅ URL dynamique depuis config
             pdf_base_url = current_app.config.get(
@@ -201,9 +1505,49 @@ class PDFService:
             )
             raise
 
-    def generate_reminder_pdf(self, invoice, level):
-        """Génère le PDF d'un rappel."""
+    def generate_reminder_pdf(self, invoice, level, reminder=None):
+        """Génère le PDF d'un rappel consolidé.
+
+        Args:
+            invoice: Facture principale (INTOUCHABLE - ne sera jamais modifiée)
+            level: Niveau du rappel (1, 2, 3)
+            reminder: InvoiceReminder avec les montants consolidés (optionnel pour rétrocompatibilité)
+
+        Returns:
+            str: URL du PDF du rappel (reminder_*.pdf, distinct de invoice.pdf_url)
+
+        Important:
+            - Ne modifie JAMAIS invoice.pdf_url, invoice.total_amount, invoice.lines
+            - Génère un PDF séparé avec filename unique (reminder_*)
+            - Le PDF est stocké dans reminder.pdf_url, pas invoice.pdf_url
+        """
+        import os
+        REMINDER_DEBUG = os.getenv("REMINDER_DEBUG", "0") == "1"
+
+        # ✅ Capturer l'état initial pour vérification (même si REMINDER_DEBUG est False)
+        invoice_before = {
+            "id": invoice.id,
+            "invoice_number": invoice.invoice_number,
+            "pdf_url": invoice.pdf_url,
+            "total_amount": float(invoice.total_amount) if invoice.total_amount else 0,
+            "balance_due": float(invoice.balance_due) if invoice.balance_due else 0,
+            "due_date": invoice.due_date.isoformat() if invoice.due_date else None,
+        }
+
         try:
+            # ✅ Logs de debug pour tracer les modifications
+            if REMINDER_DEBUG:
+                app_logger.info(
+                    (
+                        "[REMINDER_DEBUG] generate_reminder_pdf START: invoice_id=%s, level=%s, "
+                        "invoice.pdf_url (avant)=%s, invoice.total (avant)=%s"
+                    ),
+                    invoice.id,
+                    level,
+                    invoice_before["pdf_url"],
+                    invoice_before["total_amount"],
+                )
+
             # Charger la facture avec toutes les relations
             invoice = (
                 Invoice.query.options(
@@ -221,18 +1565,114 @@ class PDFService:
                 msg = "Facture non trouvée"
                 raise ValueError(msg)
 
-            # Générer le contenu PDF du rappel
-            pdf_content = self._create_reminder_pdf_content(invoice, level)
+            # ✅ Monitoring performance : mesurer le temps de génération
+            # ✅ IMPORTANT: Réutiliser le template facture avec paramètres reminder
+            start_time = perf_counter()
+            reminder_fee = Decimal("0.00")
+            reminder_total_due = invoice.total_amount
+            reminder_principal = invoice.total_amount
+            if reminder:
+                reminder_fee = reminder.reminder_fee_amount or Decimal("0.00")
+                reminder_total_due = reminder.total_due or invoice.total_amount
+                reminder_principal = reminder.principal_amount or (reminder_total_due - reminder_fee)
+            elif invoice.reminder_fee_amount:
+                reminder_fee = invoice.reminder_fee_amount
+                reminder_total_due = invoice.balance_due
+                reminder_principal = (invoice.balance_due or Decimal("0")) - (invoice.reminder_fee_amount or Decimal("0"))
 
-            # Sauvegarder le fichier
-            filename = (
-                f"reminder_{invoice.invoice_number}_level{level}_"
-                f"{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.pdf"
+            if REMINDER_DEBUG:
+                app_logger.info(
+                    (
+                        "[REMINDER_DEBUG] Génération PDF rappel avec template facture: "
+                        "invoice_id=%s, level=%s, reminder_fee=%s, reminder_principal=%s, reminder_total_due=%s"
+                    ),
+                    invoice.id,
+                    level,
+                    float(reminder_fee),
+                    float(reminder_principal),
+                    float(reminder_total_due),
+                )
+
+            # ✅ Réutiliser le template facture avec paramètres reminder
+            pdf_content, nb_rows = self._create_invoice_pdf_content(
+                invoice,
+                reminder_level=level,
+                reminder_fee=reminder_fee,
+                reminder_total_due=reminder_total_due,
+                reminder_principal=reminder_principal,
             )
+            generation_ms = int((perf_counter() - start_time) * 1000)
+
+            # ✅ Déterminer billing_type pour métriques Prometheus
+            strategy_value = None
+            try:
+                bs = getattr(invoice, "billing_strategy", None)
+                if bs is None:
+                    strategy_value = None
+                else:
+                    strategy_value = bs.value if hasattr(bs, "value") else str(bs)
+            except Exception:
+                strategy_value = None
+            is_s2 = strategy_value == "s2_clinic_monthly"
+            is_third_party = bool(
+                getattr(invoice, "billing_party_id", None)
+                or (
+                    invoice.bill_to_client_id
+                    and invoice.bill_to_client_id != invoice.client_id
+                )
+                or is_s2
+            )
+            if is_s2:
+                billing_type = "clinic"
+            elif is_third_party:
+                billing_type = "partner"
+            else:
+                billing_type = "client"
+
+            # ✅ Métriques Prometheus
+            try:
+                from services.monitoring.prometheus import observe_invoice_pdf_perf
+
+                observe_invoice_pdf_perf(
+                    pdf_kind="reminder",
+                    billing_type=billing_type,
+                    template_version=TEMPLATE_VERSION,
+                    nb_rows=nb_rows,
+                    duration_ms=generation_ms,
+                    warning_threshold_rows=PERF_WARNING_ROWS_THRESHOLD,
+                    warning_threshold_ms=PERF_WARNING_MS_THRESHOLD,
+                )
+            except ImportError:
+                pass  # Prometheus non disponible
+            except Exception as e:
+                app_logger.debug("[PDF] Error tracking Prometheus metrics: %s", e)
+
+            # ✅ Sauvegarder le fichier avec un filename unique (reminder_*)
+            # IMPORTANT: Ce PDF est distinct de invoice.pdf_url (facture initiale)
+            # Format: reminder_{invoice_number}_L{level}_{reminder_id}.pdf
+            # L'ID du reminder garantit l'unicité même en cas de création simultanée
+            reminder_id = reminder.id if reminder and hasattr(reminder, "id") and reminder.id else None
+            if reminder_id:
+                # Utiliser l'ID du reminder pour garantir l'unicité
+                filename = f"reminder_{invoice.invoice_number}_L{level}_{reminder_id}.pdf"
+            else:
+                # Fallback: utiliser timestamp + UUID si reminder_id n'est pas disponible
+                import uuid
+                unique_suffix = f"{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+                filename = f"reminder_{invoice.invoice_number}_L{level}_{unique_suffix}.pdf"
+                app_logger.warning(
+                    (
+                        "[PDF] reminder_id non disponible pour facture %s, niveau %s. "
+                        "Utilisation d'un suffixe UUID pour garantir l'unicité."
+                    ),
+                    invoice.id,
+                    level,
+                )
             filepath = Path(self.invoices_dir, filename)
 
+            pdf_bytes: bytes = pdf_content if isinstance(pdf_content, bytes) else b""
             with filepath.open("wb") as f:
-                f.write(pdf_content)
+                f.write(pdf_bytes)
 
             # ✅ URL dynamique
             pdf_base_url = current_app.config.get(
@@ -241,7 +1681,39 @@ class PDFService:
             uploads_base = current_app.config.get("UPLOADS_PUBLIC_BASE", "/uploads")
             pdf_url = f"{pdf_base_url}{uploads_base}/invoices/{filename}"
 
-            app_logger.info("PDF de rappel généré: %s", pdf_url)
+            # ✅ Logs de debug pour vérifier que invoice n'a pas été modifié
+            if REMINDER_DEBUG:
+                invoice_after = {
+                    "pdf_url": invoice.pdf_url,
+                    "total_amount": float(invoice.total_amount) if invoice.total_amount else 0,
+                    "balance_due": float(invoice.balance_due) if invoice.balance_due else 0,
+                    "due_date": invoice.due_date.isoformat() if invoice.due_date else None,
+                }
+                app_logger.info(
+                    (
+                        "[REMINDER_DEBUG] generate_reminder_pdf END: invoice_id=%s, level=%s, "
+                        "reminder_pdf_url=%s, invoice.pdf_url (INCHANGÉ)=%s, "
+                        "invoice.total (INCHANGÉ)=%s, filepath=%s"
+                    ),
+                    invoice.id,
+                    level,
+                    pdf_url,
+                    invoice_after["pdf_url"],
+                    invoice_after["total_amount"],
+                    filepath,
+                )
+                # Vérification de sécurité: invoice.pdf_url ne doit pas avoir changé
+                if invoice_after["pdf_url"] != invoice_before.get("pdf_url"):
+                    app_logger.error(
+                        (
+                            "[REMINDER_DEBUG] ⚠️ BUG DÉTECTÉ: invoice.pdf_url a changé ! "
+                            "Avant=%s, Après=%s"
+                        ),
+                        invoice_before.get("pdf_url"),
+                        invoice_after["pdf_url"],
+                    )
+
+            app_logger.info("PDF de rappel généré: %s (facture initiale inchangée: %s)", pdf_url, invoice.pdf_url)
             return pdf_url
 
         except Exception as e:
@@ -250,51 +1722,83 @@ class PDFService:
             )
             raise
 
-    def _create_invoice_pdf_content(self, invoice):
+    def _create_invoice_pdf_content(
+        self,
+        invoice,
+        reminder_level: int | None = None,
+        reminder_fee: Decimal | None = None,
+        reminder_total_due: Decimal | None = None,
+        reminder_principal: Decimal | float | None = None,
+    ):
         """Crée le contenu PDF d'une facture selon la variante de template
-        sélectionnée."""
-        # Récupérer la variante de template depuis les paramètres de facturation
+        sélectionnée.
+
+        Construit un reminder_ctx unique (is_reminder, display_reminder_level, etc.)
+        avant tout rendu, puis le passe aux templates. Évite tout recalcul dans
+        standard/detailed/minimal.
+
+        Returns:
+            tuple[bytes, int]: (contenu PDF, nombre de lignes après regroupement)
+        """
+        level = reminder_level
+        is_reminder = bool(level)
+        display_reminder_level = f"RAPPEL N°{level}" if level else None
+        reminder_ctx = {
+            "is_reminder": is_reminder,
+            "display_reminder_level": display_reminder_level,
+            "reminder_level": level,
+            "reminder_fee": reminder_fee,
+            "reminder_principal": reminder_principal,
+            "reminder_total_due": reminder_total_due,
+        }
+
         billing_settings = CompanyBillingSettings.query.filter_by(
             company_id=invoice.company_id
         ).first()
-        template_variant = "standard"  # Par défaut
+        template_variant = "standard"
         if billing_settings and billing_settings.pdf_template_variant:
             template_variant = billing_settings.pdf_template_variant.lower()
 
-        # Router vers la méthode appropriée selon la variante
         if template_variant == "minimal":
-            return self._create_minimal_invoice_pdf(invoice, billing_settings)
+            return self._create_minimal_invoice_pdf(invoice, billing_settings, reminder_ctx)
         if template_variant == "detailed":
-            return self._create_detailed_invoice_pdf(invoice, billing_settings)
-        # standard ou default
-        return self._create_standard_invoice_pdf(invoice, billing_settings)
+            return self._create_detailed_invoice_pdf(invoice, billing_settings, reminder_ctx)
+        return self._create_standard_invoice_pdf(invoice, billing_settings, reminder_ctx)
 
-    def _create_standard_invoice_pdf(self, invoice, billing_settings):
-        """Crée le contenu PDF d'une facture avec le template standard
-        (format actuel)."""
+    def _create_standard_invoice_pdf(
+        self,
+        invoice,
+        billing_settings,
+        reminder_ctx: dict[str, Any],
+    ):
+        """Crée le contenu PDF d'une facture avec le template standard.
+
+        reminder_ctx: is_reminder, display_reminder_level, reminder_level, reminder_fee,
+            reminder_principal, reminder_total_due (calculés une seule fois dans
+            _create_invoice_pdf_content).
+        """
         # Import ici pour éviter les problèmes de dépendances circulaires
         # ruff: noqa: I001
         from io import BytesIO
 
-        from reportlab.lib import colors  # pyright: ignore[reportMissingModuleSource]
-        from reportlab.lib.enums import (  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.lib import colors
+        from reportlab.lib.enums import (
             TA_CENTER,
             TA_LEFT,
         )
-        from reportlab.lib.pagesizes import (  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.lib.pagesizes import (
             A4,
         )
-        from reportlab.lib.styles import (  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.lib.styles import (
             ParagraphStyle,
             getSampleStyleSheet,
         )
-        from reportlab.lib.units import cm  # pyright: ignore[reportMissingModuleSource]
-        from reportlab.pdfbase import pdfmetrics  # pyright: ignore[reportMissingModuleSource]
-        from reportlab.pdfbase.ttfonts import (  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.lib.units import cm
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import (
             TTFont,
         )
-        from reportlab.platypus import (  # pyright: ignore[reportMissingModuleSource]
-            Image,
+        from reportlab.platypus import (
             Paragraph,
             SimpleDocTemplate,
             Spacer,
@@ -307,10 +1811,17 @@ class PDFService:
             pdfmetrics.registerFont(
                 TTFont("DejaVuSans", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
             )
+            pdfmetrics.registerFont(
+                TTFont(
+                    "DejaVuSans-Bold",
+                    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                )
+            )
             font_name = "DejaVuSans"
+            font_name_bold = "DejaVuSans-Bold"
         except Exception:
-            # Fallback sur Helvetica si DejaVu n'est pas disponible
             font_name = "Helvetica"
+            font_name_bold = "Helvetica-Bold"
 
         buffer = BytesIO()
         doc = SimpleDocTemplate(
@@ -344,6 +1855,28 @@ class PDFService:
             textColor=colors.black,
             alignment=TA_CENTER,
             spaceAfter=6,
+            fontName=font_name,
+        )
+        s2_main_style = ParagraphStyle(
+            "S2Main",
+            parent=styles["Normal"],
+            fontSize=9,
+            leading=9.5,
+            textColor=colors.black,
+            alignment=TA_LEFT,
+            spaceBefore=0,
+            spaceAfter=0,
+            fontName=font_name,
+        )
+        s2_detail_style = ParagraphStyle(
+            "S2Detail",
+            parent=styles["Normal"],
+            fontSize=7,
+            leading=8,
+            textColor=colors.grey,
+            alignment=TA_LEFT,
+            spaceBefore=0,
+            spaceAfter=0,
             fontName=font_name,
         )
 
@@ -388,54 +1921,10 @@ class PDFService:
                     logo_path = uploads_dir / logo_url_clean
 
                 if logo_path and Path(logo_path).exists():
-                    # Calculer les proportions du logo original (2251x540)
-                    # Ratio largeur/hauteur = 2251/540 ≈ 4.17
-                    # Utiliser des pourcentages pour s'adapter à tous les formats
-                    logo_width_percent = 0.15  # 15% de la largeur de page
-
-                    # Convertir en points (1 inch = 72 points,
-                    # page A4 ≈ 21cm = 595 points)
-                    logo_width = 595 * logo_width_percent  # ≈ 89 points
-                    logo_height = logo_width / 4.17  # ≈ 21 points
-
-                    # Vérifier si c'est un fichier SVG
-                    if logo_path.suffix.lower() == ".svg":
-                        # Convertir SVG en drawing ReportLab avec svglib
-                        try:
-                            from svglib.svglib import (  # pyright: ignore[reportMissingImports]
-                                svg2rlg,
-                            )
-
-                            drawing = svg2rlg(str(logo_path))
-                            if drawing:
-                                # Redimensionner le drawing
-                                original_width = drawing.width
-                                original_height = drawing.height
-                                if original_width > 0 and original_height > 0:
-                                    scale_x = logo_width / original_width
-                                    scale_y = logo_height / original_height
-                                    drawing.scale(scale_x, scale_y)
-                                logo_img = drawing
-                            else:
-                                app_logger.warning(
-                                    "Impossible de convertir le SVG en drawing: %s",
-                                    logo_path,
-                                )
-                        except Exception as svg_error:
-                            app_logger.error(
-                                "Erreur lors de la conversion SVG: %s - %s",
-                                logo_path,
-                                str(svg_error),
-                            )
-                            # En cas d'erreur, on continue sans logo plutôt que
-                            # de faire échouer la génération
-                            logo_img = None
-                    else:
-                        # Pour les autres formats (PNG, JPG, etc.),
-                        # utiliser Image directement
-                        logo_img = Image(
-                            logo_path, width=logo_width, height=logo_height
-                        )
+                    max_width_pt = 595 * 0.24
+                    logo_img, logo_width, logo_height = _load_logo_ratio_safe(
+                        logo_path, max_width_pt
+                    )
             except Exception as e:
                 app_logger.warning("Impossible de charger le logo: %s", e)
 
@@ -488,8 +1977,7 @@ class PDFService:
                 story.append(logo_table)
             else:
                 # Pour les images standard (PNG, JPG), utiliser un Paragraph
-                from reportlab.lib.styles import (  # pyright: ignore[reportMissingModuleSource]
-                    ParagraphStyle,
+                from reportlab.lib.styles import (                    ParagraphStyle,
                 )
 
                 logo_style = ParagraphStyle(
@@ -524,59 +2012,7 @@ class PDFService:
         story.append(Spacer(1, 20))
 
         # === INFORMATIONS CLIENT OU INSTITUTION (DROITE) ===
-        # Si facturation tierce, afficher l'institution, sinon le client
-        if invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id:
-            # 🏥 Facturation tierce : afficher l'institution payeuse
-            from models import Client as ClientModel
-
-            institution = ClientModel.query.get(invoice.bill_to_client_id)
-
-            if institution and institution.is_institution:
-                billed_to_name = institution.institution_name or "Institution"
-                billed_to_address_raw = (
-                    institution.billing_address or "Adresse non renseignée"
-                )
-                billed_to_address = _format_address_for_display(billed_to_address_raw)
-            else:
-                # Fallback si l'institution n'est pas trouvée
-                billed_to_name = "Institution"
-                billed_to_address = "Adresse non renseignée"
-        else:
-            # 👤 Facturation directe : afficher le client
-            client = invoice.client
-            billed_to_name = (
-                f"{client.user.first_name or ''} {client.user.last_name or ''}".strip()
-                or client.user.username
-                or "Client"
-            )
-
-            # Adresse du client formatée correctement
-            billed_to_address = "Adresse non renseignée"
-            if hasattr(client, "domicile_address") and client.domicile_address:
-                street_address = client.domicile_address
-                if (
-                    hasattr(client, "domicile_zip")
-                    and hasattr(client, "domicile_city")
-                    and client.domicile_zip
-                    and client.domicile_city
-                ):
-                    # Construire l'adresse complète puis la formater
-                    full_address = (
-                        f"{street_address}, {client.domicile_zip} "
-                        f"{client.domicile_city}"
-                    )
-                    billed_to_address = _format_address_for_display(full_address)
-                else:
-                    billed_to_address = _format_address_for_display(street_address)
-            elif (
-                hasattr(client, "user")
-                and client.user
-                and hasattr(client.user, "address")
-                and client.user.address
-            ):
-                billed_to_address = _format_address_for_display(client.user.address)
-
-        # Informations de facturation alignées à droite
+        billed_to_name, billed_to_address = _get_billed_to(invoice)
         billed_to_info_right = f"""
         <para align="right">
         <b>Facturé à :</b><br/>
@@ -584,20 +2020,37 @@ class PDFService:
         {billed_to_address}
         </para>
         """
-
         story.append(Paragraph(billed_to_info_right, normal_style))
         story.append(Spacer(1, 20))
 
-        # === INFORMATIONS FACTURE (GAUCHE) ===
-        # ✅ Ajouter mention de rappel si applicable
-        reminder_text = ""
-        if invoice.reminder_level and invoice.reminder_level > 0:
-            reminder_text = f'<br/><b><font color="red">RAPPEL N°{invoice.reminder_level}</font></b>'
+        # === BANDEAU RAPPEL (si mode rappel) ===
+        display_reminder_level = reminder_ctx.get("display_reminder_level")
+        if display_reminder_level:
+            bandeau = Table(
+                [[Paragraph(f"<b>{display_reminder_level}</b>", ParagraphStyle("Bandeau", parent=styles["Normal"], fontSize=14, fontName=font_name_bold, alignment=TA_CENTER, textColor=colors.HexColor("#8B0000")))]],
+                colWidths=[17 * cm],
+            )
+            bandeau.setStyle(
+                TableStyle(
+                    [
+                        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFE5E5")),
+                        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                        ("TOPPADDING", (0, 0), (-1, -1), 10),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+                        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#CC0000")),
+                    ]
+                )
+            )
+            story.append(bandeau)
+            story.append(Spacer(1, 12))
 
+        # === INFORMATIONS FACTURE (GAUCHE) ===
+        echeance_label = "Date d'échéance initiale :" if reminder_ctx.get("is_reminder") else "Date d'échéance :"
         invoice_info_left = f"""
-        <b>Numéro de facture :</b> {invoice.invoice_number}{reminder_text}<br/>
+        <b>Numéro de facture :</b> {invoice.invoice_number}<br/>
         <b>Date d'émission :</b> {invoice.issued_at.strftime("%d.%m.%Y")}<br/>
-        <b>Date d'échéance :</b> {invoice.due_date.strftime("%d.%m.%Y")}<br/>
+        <b>{echeance_label}</b> {invoice.due_date.strftime("%d.%m.%Y")}<br/>
         <b>Période :</b> {invoice.period_month:02d}.{invoice.period_year}
         """
 
@@ -607,7 +2060,7 @@ class PDFService:
         # === TABLEAU DES COURSES ===
         # Fonction pour formater les adresses longues avec retour à la ligne
         # dans les colonnes
-        def format_address_for_table(address, max_length=25):
+        def format_address_for_table(address, max_length=25):  # pyright: ignore[reportUnusedFunction]
             if not address or address == "Adresse inconnue":
                 return "Adresse non renseignée"
 
@@ -646,258 +2099,94 @@ class PDFService:
 
             return "\n".join(lines[:3])  # Maximum 3 lignes avec \n au lieu de <br/>
 
-        # Vérifier si c'est une facturation tierce pour ajouter la colonne "Patient"
-        is_third_party = (
-            invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id
-        )
-
-        # En-têtes du tableau
-        if is_third_party:
-            table_data = [["Date", "Patient", "Départ", "Arrivée", "Montant"]]
-        else:
-            table_data = [["Date", "Départ", "Arrivée", "Montant"]]
-
-        # Ajouter les lignes de facture - utiliser les vraies données des bookings
-        for line in invoice.lines:
-            # Pour les lignes de réservation, extraire les informations
-            if line.type == InvoiceLineType.RIDE and line.reservation_id:
-                # Essayer de récupérer les informations de la réservation
-                from models import Booking
-
-                booking = Booking.query.get(line.reservation_id)
-
-                if booking:
-                    # Récupérer la vraie date de la course
-                    date_str = (
-                        booking.scheduled_time.strftime("%d/%m/%Y")
-                        if booking.scheduled_time
-                        else ""
-                    )
-
-                    # Nom du patient (pour facturation tierce)
-                    patient_name = ""
-                    if is_third_party:
-                        patient_name = (
-                            booking.customer_name
-                            or (
-                                f"{booking.client.user.first_name or ''} "
-                                f"{booking.client.user.last_name or ''}"
-                            ).strip()
-                            or "Patient"
-                        )
-                        # Tronquer si trop long
-                        if len(patient_name) > MAX_PATIENT_NAME_LENGTH:
-                            patient_name = (
-                                patient_name[: MAX_PATIENT_NAME_LENGTH - 1] + "."
-                            )
-
-                    # Supprimer le mot "Trajet" et nettoyer les adresses
-                    departure = format_address_for_table(
-                        booking.pickup_location, max_length=20 if is_third_party else 25
-                    )
-                    arrival = format_address_for_table(
-                        booking.dropoff_location,
-                        max_length=20 if is_third_party else 25,
-                    )
-                    amount = f"{line.line_total:.2f}"
-
-                    # Construire la ligne selon le type de facturation
-                    if is_third_party:
-                        table_data.append(
-                            [date_str, patient_name, departure, arrival, amount]
-                        )
-                    else:
-                        table_data.append([date_str, departure, arrival, amount])
-                else:
-                    # Si pas de booking trouvé, utiliser la description
-                    # mais séparer départ/arrivée
-                    date_str = ""
-                    desc = line.description
-                    if " → " in desc:
-                        parts = desc.split(" → ")
-                        departure = format_address_for_table(
-                            parts[0], max_length=20 if is_third_party else 25
-                        )
-                        arrival = (
-                            format_address_for_table(
-                                parts[1], max_length=20 if is_third_party else 25
-                            )
-                            if len(parts) > 1
-                            else ""
-                        )
-                    else:
-                        departure = format_address_for_table(
-                            desc, max_length=20 if is_third_party else 25
-                        )
-                        arrival = ""
-                    amount = f"{line.line_total:.2f}"
-
-                    # Construire la ligne selon le type de facturation
-                    if is_third_party:
-                        table_data.append([date_str, "N/A", departure, arrival, amount])
-                    else:
-                        table_data.append([date_str, departure, arrival, amount])
+        # ✅ Unifier : utiliser toujours le tableau S2 (Date | Patient | Transport | Montant)
+        # pour toutes les factures (client et clinique)
+        strategy_value = None
+        try:
+            bs = getattr(invoice, "billing_strategy", None)
+            if bs is None:
+                strategy_value = None
             else:
-                # Pour les autres types de lignes, utiliser la description
-                date_str = ""
-                departure = format_address_for_table(
-                    line.description, max_length=20 if is_third_party else 25
-                )
-                arrival = ""
-                amount = f"{line.line_total:.2f}"
-
-                # Construire la ligne selon le type de facturation
-                if is_third_party:
-                    table_data.append([date_str, "N/A", departure, arrival, amount])
-                else:
-                    table_data.append([date_str, departure, arrival, amount])
-
-        # Adapter les largeurs de colonnes selon le type de facturation
-        if is_third_party:
-            services_table = Table(
-                table_data, colWidths=[2 * cm, 3 * cm, 4.5 * cm, 4.5 * cm, 2.5 * cm]
+                strategy_value = bs.value if hasattr(bs, "value") else str(bs)
+        except Exception:
+            strategy_value = None
+        is_s2 = strategy_value == "s2_clinic_monthly"
+        is_third_party = bool(
+            getattr(invoice, "billing_party_id", None)
+            or (
+                invoice.bill_to_client_id
+                and invoice.bill_to_client_id != invoice.client_id
             )
-        else:
-            services_table = Table(
-                table_data, colWidths=[2.5 * cm, 6 * cm, 6 * cm, 2.5 * cm]
-            )
-        services_table.setStyle(
-            TableStyle(
-                [
-                    # En-têtes
-                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                    ("FONTSIZE", (0, 0), (-1, -1), 10),
-                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                    ("ALIGN", (3, 0), (3, -1), "RIGHT"),
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
-                    ("TOPPADDING", (0, 0), (-1, 0), 8),
-                    ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.black),
-                    # Corps du tableau
-                    ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
-                    ("BOTTOMPADDING", (0, 1), (-1, -1), 8),
-                    ("TOPPADDING", (0, 1), (-1, -1), 8),
-                    # Lignes de séparation fines entre les lignes
-                    ("LINEBELOW", (0, 1), (-1, -2), 0.25, colors.lightgrey),
-                ]
-            )
+            or is_s2
         )
 
-        story.append(services_table)
-        story.append(Spacer(1, 15))
+        # ✅ Utiliser toujours _build_s2_table (même pour factures client)
+        s2_table, consolidated_lines = _build_s2_table(
+            invoice,
+            font_name,
+            font_name_bold,
+            s2_main_style,
+            s2_detail_style,
+            include_non_ride=False,
+            available_width_pt=doc.width,
+        )
+
+        # ✅ Utiliser toujours le tableau unifié S2
+        story.append(Paragraph("<b>DÉTAIL DES TRANSPORTS</b>", normal_style))
+        story.append(Spacer(1, 6))
+        story.append(s2_table)
+        story.append(Spacer(1, 4))
 
         # === TOTAL ===
-        subtotal_amount = float(invoice.subtotal_amount)
-        vat_total_amount = float(invoice.vat_total_amount)
-        total_amount = float(invoice.total_amount)
-
-        # Vérifier si la TVA est applicable
-        # (présente dans les métadonnées ou montant > 0)
-        vat_is_applicable = False
-        vat_label_display = "TVA"
-        if isinstance(invoice.meta, dict) and "vat" in invoice.meta:
-            vat_meta = invoice.meta.get("vat", {})
-            vat_is_applicable = vat_meta.get("applicable", False)
-            if vat_meta.get("label"):
-                vat_label_display = vat_meta.get("label")
-        elif vat_total_amount > 0:
-            # Fallback : si montant TVA > 0, considérer comme applicable
-            vat_is_applicable = True
-
-        # Ligne de séparation plus épaisse avant le total
-        total_separator = Table([[""]], colWidths=[16 * cm])
+        if reminder_ctx.get("is_reminder"):
+            story.append(Spacer(1, 16))  # Respiration avant totaux (rappel)
+        total_separator = Table([[""]], colWidths=[17 * cm])
         total_separator.setStyle(
-            TableStyle(
-                [
-                    ("LINEBELOW", (0, 0), (0, 0), 1, colors.black),
-                ]
-            )
+            TableStyle([("LINEBELOW", (0, 0), (0, 0), 1, colors.black)])
         )
         story.append(total_separator)
         story.append(Spacer(1, 8))
 
-        # Adapter le tableau du total selon le type de facturation et si TVA applicable
-        if is_third_party:
-            if vat_is_applicable:
-                total_data = [
-                    ["", "", "", "Sous-total :", f"{subtotal_amount:.2f}"],
-                    ["", "", "", f"{vat_label_display} :", f"{vat_total_amount:.2f}"],
-                    ["", "", "", "TOTAL :", f"{total_amount:.2f}"],
-                ]
-            else:
-                total_data = [
-                    ["", "", "", "TOTAL :", f"{total_amount:.2f}"],
-                ]
-            total_table = Table(
-                total_data, colWidths=[2 * cm, 3 * cm, 4.5 * cm, 2 * cm, 2.5 * cm]
+        # ✅ Récapitulatif détaillé (nombre A/R, nombre allers simples, total transports)
+        # Affiché pour toutes les factures utilisant le tableau unifié
+        if consolidated_lines:
+            round_trip_count = sum(
+                1 for item in consolidated_lines if item.get("is_round_trip", False)
             )
-        else:
-            if vat_is_applicable:
-                total_data = [
-                    ["", "", "Sous-total :", f"{subtotal_amount:.2f}"],
-                    ["", "", f"{vat_label_display} :", f"{vat_total_amount:.2f}"],
-                    ["", "", "TOTAL :", f"{total_amount:.2f}"],
-                ]
-            else:
-                total_data = [
-                    ["", "", "TOTAL :", f"{total_amount:.2f}"],
-                ]
-            total_table = Table(
-                total_data, colWidths=[2.5 * cm, 6 * cm, 2.5 * cm, 2.5 * cm]
+            one_way_count = sum(
+                1 for item in consolidated_lines if not item.get("is_round_trip", False)
             )
+            # ✅ A/R compte pour 1 transport (pas 2)
+            total_transports = round_trip_count + one_way_count
 
-        # Style du tableau du total
-        if is_third_party:
-            style_rules = [
-                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                (
-                    "ALIGN",
-                    (3, 0),
-                    (4, -1),
-                    "RIGHT",
-                ),  # Labels et montants alignés à droite
-                ("FONTSIZE", (0, 0), (-1, -1), 10),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-                ("TOPPADDING", (0, 0), (-1, -1), 6),
-            ]
-            if vat_is_applicable:
-                # Sous-total et TVA en normal, Total en gras
-                style_rules.extend(
-                    [
-                        ("FONTNAME", (0, 0), (-1, -2), "Helvetica"),
-                        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
-                    ]
-                )
-            else:
-                # Total uniquement en gras
-                style_rules.append(("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"))
-            total_table.setStyle(TableStyle(style_rules))
-        else:
-            style_rules = [
-                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                (
-                    "ALIGN",
-                    (2, 0),
-                    (3, -1),
-                    "RIGHT",
-                ),  # Labels et montants alignés à droite
-                ("FONTSIZE", (0, 0), (-1, -1), 10),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-                ("TOPPADDING", (0, 0), (-1, -1), 6),
-            ]
-            if vat_is_applicable:
-                # Sous-total et TVA en normal, Total en gras
-                style_rules.extend(
-                    [
-                        ("FONTNAME", (0, 0), (-1, -2), "Helvetica"),
-                        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
-                    ]
-                )
-            else:
-                # Total uniquement en gras
-                style_rules.append(("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"))
-            total_table.setStyle(TableStyle(style_rules))
+            # Récapitulatif détaillé avec micro-note
+            recap_text = (
+                f"<b>Récapitulatif</b><br/>"
+                f"- Transports aller-retour : {round_trip_count}<br/>"
+                f"- Transports aller simple : {one_way_count}<br/>"
+                f"- Total transports : {total_transports}<br/>"
+                f'<font size="7" color="grey">'
+                f"(Un aller-retour compte comme 1 transport)"
+                f"</font>"
+            )
+            recap_para = Paragraph(recap_text, normal_style)
+            story.append(recap_para)
+            story.append(Spacer(1, 8))
 
+        # ✅ Utiliser toujours le format unifié pour les totaux (même libellé "TOTAL À FACTURER")
+        # ✅ Si mode rappel, ajouter la ligne de frais de rappel
+        total_table = _build_totals_table(
+            invoice,
+            True,
+            is_third_party,
+            font_name,
+            font_name_bold,
+            template="standard",
+            reminder_level=reminder_ctx.get("reminder_level"),
+            reminder_fee=reminder_ctx.get("reminder_fee"),
+            reminder_total_due=reminder_ctx.get("reminder_total_due"),
+            reminder_principal=reminder_ctx.get("reminder_principal"),
+        )
         story.append(total_table)
         story.append(Spacer(1, 30))
 
@@ -919,36 +2208,66 @@ class PDFService:
         # Message de facturation avec valeurs dynamiques
         jours_text = "jours" if payment_terms_days > 1 else "jour"
 
-        # Informations bancaires (récupérer depuis billing_settings)
-        iban_value = "[IBAN non configuré]"  # Valeur par défaut si non configuré
+        # Informations bancaires (récupérer depuis billing_settings ou company)
+        # En prod, si IBAN non lisible (déchiffrement invalide) : masquer, ne pas afficher "[IBAN non configuré]"
+        iban_value = None
         if billing_settings and billing_settings.iban:
             iban_value = billing_settings.iban
         elif hasattr(company, "iban") and company.iban:
             iban_value = company.iban
 
         # Message du pied de page : utiliser legal_footer si disponible,
-        # sinon message dynamique
-        if billing_settings and billing_settings.legal_footer:
-            # Utiliser le texte légal personnalisé depuis les paramètres
-            footer_message = billing_settings.legal_footer
-        else:
-            # Message dynamique par défaut avec valeurs des paramètres
+        # sinon message dynamique. En mode rappel, texte dédié (soft mais ferme).
+        if display_reminder_level:
             footer_message = (
+                "Sauf erreur de notre part, cette facture est restée impayée à ce jour. "
+                "Nous vous remercions de bien vouloir procéder à son règlement dans les plus brefs délais. "
+                "Des frais de rappel ont été ajoutés conformément à nos conditions générales."
+            )
+            if iban_value:
+                footer_message = (
+                    f"{footer_message} Paiement par virement bancaire : IBAN : {iban_value}"
+                )
+        elif billing_settings and billing_settings.legal_footer:
+            footer_message = _sanitize_legal_footer_for_iban(
+                billing_settings.legal_footer
+            )
+        else:
+            base = (
                 f"En votre aimable règlement net sous {payment_terms_days} "
                 f"{jours_text} avec nos remerciements anticipés. "
                 f"En cas de retard de paiement, des frais de rappel d'un montant "
                 f"de CHF {overdue_fee:.2f} vous seront facturés, "
-                f"conformément à nos conditions générales. "
-                f"Paiement par virement bancaire : IBAN : {iban_value}"
+                f"conformément à nos conditions générales."
             )
+            if iban_value:
+                footer_message = (
+                    f"{base} Paiement par virement bancaire : IBAN : {iban_value}"
+                )
+            else:
+                footer_message = base
+                app_logger.warning(
+                    "PDF (standard): IBAN non affiché (absent ou illisible, ex. erreur déchiffrement)."
+                )
 
         story.append(Spacer(1, 20))  # Espace avant le pied de page
         story.append(Paragraph(footer_message, centered_style))
 
+        if display_reminder_level:
+            mention = (
+                f"Document généré automatiquement – facture initiale n° {invoice.invoice_number} inchangée."
+            )
+            story.append(Spacer(1, 8))
+            story.append(
+                Paragraph(
+                    f'<font size="8" color="grey">{mention}</font>',
+                    centered_style,
+                )
+            )
+
         # === QR-BILL SUISSE OFFICIEL SUR PAGE SÉPARÉE ===
         # Forcer une nouvelle page pour le QR-Bill (toujours après la facture)
-        from reportlab.platypus import (  # pyright: ignore[reportMissingModuleSource]
-            PageBreak,
+        from reportlab.platypus import (            PageBreak,
         )
 
         story.append(PageBreak())
@@ -964,13 +2283,7 @@ class PDFService:
 
             if qr_bill_svg_content:
                 # Convertir le SVG directement en drawing ReportLab
-
-                from svglib.svglib import (  # pyright: ignore[reportMissingImports]
-                    svg2rlg,
-                )
-
-                # Convertir SVG en drawing ReportLab
-                drawing = svg2rlg(BytesIO(qr_bill_svg_content))
+                drawing = _svg_content_to_drawing(qr_bill_svg_content)
 
                 if drawing:
                     # Redimensionner le drawing pour qu'il s'adapte à la page
@@ -979,8 +2292,7 @@ class PDFService:
                     drawing.scale(12 * cm / drawing.width, 6 * cm / drawing.height)
 
                     # Centrer le QR-Bill avec un tableau
-                    from reportlab.platypus import (  # pyright: ignore[reportMissingModuleSource]
-                        Table,
+                    from reportlab.platypus import (                        Table,
                         TableStyle,
                     )
 
@@ -1011,11 +2323,7 @@ class PDFService:
                     # Ajouter le QR-Bill centré au PDF sur la deuxième page
                     story.append(qr_table)
             else:
-                story.append(
-                    Paragraph(
-                        "QR-Bill non disponible - IBAN non configuré", normal_style
-                    )
-                )
+                story.append(Paragraph("QR-Bill non disponible", normal_style))
 
         except Exception as e:
             app_logger.warning("Impossible de générer le QR-Bill: %s", e)
@@ -1024,34 +2332,44 @@ class PDFService:
         # Générer le PDF
         doc.build(story)
 
-        # Retourner le contenu
+        # Retourner le contenu et le nombre de lignes
         buffer.seek(0)
-        return buffer.getvalue()
+        # ✅ Calculer nb_rows depuis consolidated_lines (après regroupement aller/retour)
+        nb_rows = len(consolidated_lines) if consolidated_lines else 0
+        return (buffer.getvalue(), nb_rows)
 
-    def _create_minimal_invoice_pdf(self, invoice, billing_settings):
-        """Crée le contenu PDF d'une facture avec le template minimal
-        (version simplifiée)."""
+    def _create_minimal_invoice_pdf(
+        self,
+        invoice,
+        billing_settings,
+        reminder_ctx: dict[str, Any],
+    ):
+        """Crée le contenu PDF d'une facture avec le template minimal.
+
+        reminder_ctx: is_reminder, display_reminder_level, reminder_level, reminder_fee,
+            reminder_principal, reminder_total_due (calculés une seule fois).
+        """
         # ruff: noqa: I001
         from io import BytesIO
 
-        from reportlab.lib import colors  # pyright: ignore[reportMissingModuleSource]
-        from reportlab.lib.enums import (  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.lib import colors
+        from reportlab.lib.enums import (
             TA_CENTER,
             TA_LEFT,
         )
-        from reportlab.lib.pagesizes import (  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.lib.pagesizes import (
             A4,
         )
-        from reportlab.lib.styles import (  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.lib.styles import (
             ParagraphStyle,
             getSampleStyleSheet,
         )
-        from reportlab.lib.units import cm  # pyright: ignore[reportMissingModuleSource]
-        from reportlab.pdfbase import pdfmetrics  # pyright: ignore[reportMissingModuleSource]
-        from reportlab.pdfbase.ttfonts import (  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.lib.units import cm
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import (
             TTFont,
         )
-        from reportlab.platypus import (  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.platypus import (
             PageBreak,
             Paragraph,
             SimpleDocTemplate,
@@ -1111,7 +2429,14 @@ class PDFService:
         story.append(Spacer(1, 15))
 
         # === INFORMATIONS CLIENT (SIMPLIFIÉES) ===
-        if invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id:
+        if getattr(invoice, "billing_party_id", None):
+            from models import BillingParty as BillingPartyModel
+
+            bp = BillingPartyModel.query.get(invoice.billing_party_id)
+            billed_to_name = bp.display_name if bp and bp.display_name else "Payeur"
+        elif (
+            invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id
+        ):
             from models import Client as ClientModel
 
             institution = ClientModel.query.get(invoice.bill_to_client_id)
@@ -1131,25 +2456,59 @@ class PDFService:
         story.append(Paragraph(billed_to_info, normal_style))
         story.append(Spacer(1, 10))
 
-        # === INFORMATIONS FACTURE (SIMPLIFIÉES) ===
-        # ✅ Ajouter mention de rappel si applicable
-        reminder_text = ""
-        if invoice.reminder_level and invoice.reminder_level > 0:
-            reminder_text = (
-                f' - <b><font color="red">RAPPEL N°{invoice.reminder_level}</font></b>'
-            )
+        # === Contexte rappel (défini avant Numéro de facture / Facture) ===
+        display_reminder_level = reminder_ctx.get("display_reminder_level")
+        is_reminder = reminder_ctx.get("is_reminder", False)
 
+        # === BANDEAU RAPPEL (si mode rappel) ===
+        if display_reminder_level:
+            bandeau = Table(
+                [[Paragraph(f"<b>{display_reminder_level}</b>", ParagraphStyle("BandeauM", parent=styles["Normal"], fontSize=14, fontName="Helvetica-Bold", alignment=TA_CENTER, textColor=colors.HexColor("#8B0000")))]],
+                colWidths=[17 * cm],
+            )
+            bandeau.setStyle(
+                TableStyle(
+                    [
+                        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFE5E5")),
+                        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                        ("TOPPADDING", (0, 0), (-1, -1), 10),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+                        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#CC0000")),
+                    ]
+                )
+            )
+            story.append(bandeau)
+            story.append(Spacer(1, 12))
+
+        # === INFORMATIONS FACTURE (SIMPLIFIÉES) ===
+        echeance_label = "Échéance initiale:" if is_reminder else "Échéance:"
         invoice_info = (
-            f"<b>Facture {invoice.invoice_number}</b>{reminder_text} - "
+            f"<b>Facture {invoice.invoice_number}</b> - "
             f"{invoice.issued_at.strftime('%d.%m.%Y')} - "
-            f"Échéance: {invoice.due_date.strftime('%d.%m.%Y')}"
+            f"{echeance_label} {invoice.due_date.strftime('%d.%m.%Y')}"
         )
         story.append(Paragraph(invoice_info, normal_style))
         story.append(Spacer(1, 15))
 
         # === TABLEAU SIMPLIFIÉ (DATE + MONTANT SEULEMENT) ===
-        is_third_party = (
-            invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id
+        strategy_value = None
+        try:
+            bs = getattr(invoice, "billing_strategy", None)
+            if bs is None:
+                strategy_value = None
+            else:
+                strategy_value = bs.value if hasattr(bs, "value") else str(bs)
+        except Exception:
+            strategy_value = None
+        is_s2 = strategy_value == "s2_clinic_monthly"
+        is_third_party = bool(
+            getattr(invoice, "billing_party_id", None)
+            or (
+                invoice.bill_to_client_id
+                and invoice.bill_to_client_id != invoice.client_id
+            )
+            or is_s2
         )
         table_data = (
             [["Date", "Patient", "Montant"]]
@@ -1170,14 +2529,30 @@ class PDFService:
                     )
                     amount = f"{line.line_total:.2f}"
                     if is_third_party:
-                        patient_name = (
-                            booking.customer_name
-                            or (
-                                f"{booking.client.user.first_name or ''} "
-                                f"{booking.client.user.last_name or ''}"
-                            ).strip()
-                            or "Patient"
-                        )
+                        # ✅ S2: Utiliser le snapshot patient_name depuis line.meta (traçabilité juridique)
+                        # Ne jamais recalculer depuis booking.client.user (le nom peut avoir changé)
+                        patient_name = "Patient"
+                        if hasattr(line, "meta") and isinstance(line.meta, dict):
+                            # Priorité: meta.patient_name (snapshot S2) > booking.customer_name > booking.client.user
+                            patient_name = (
+                                line.meta.get("patient_name")
+                                or booking.customer_name
+                                or (
+                                    f"{booking.client.user.first_name or ''} "
+                                    f"{booking.client.user.last_name or ''}"
+                                ).strip()
+                                or "Patient"
+                            )
+                        else:
+                            # Fallback si meta n'existe pas (rétro-compatibilité)
+                            patient_name = (
+                                booking.customer_name
+                                or (
+                                    f"{booking.client.user.first_name or ''} "
+                                    f"{booking.client.user.last_name or ''}"
+                                ).strip()
+                                or "Patient"
+                            )
                         if len(patient_name) > MAX_PATIENT_NAME_LENGTH:
                             patient_name = (
                                 patient_name[: MAX_PATIENT_NAME_LENGTH - 1] + "."
@@ -1218,34 +2593,83 @@ class PDFService:
         story.append(Spacer(1, 10))
 
         # === TOTAL SIMPLIFIÉ ===
-        total_amount = float(invoice.total_amount)
-        total_data = [["TOTAL :", f"{total_amount:.2f} CHF"]]
+        # ✅ Mode rappel : mini-table (Sous-total facture + Frais + TOTAL)
+        if is_reminder and reminder_ctx.get("reminder_fee") is not None and reminder_ctx.get("reminder_total_due") is not None and reminder_ctx.get("reminder_principal") is not None:
+            principal_float = float(reminder_ctx["reminder_principal"])
+            reminder_fee_float = float(reminder_ctx["reminder_fee"])
+            final_total = float(reminder_ctx["reminder_total_due"])
+            level = reminder_ctx.get("reminder_level")
+            reminder_fee_label = f"Frais de rappel N°{level} :" if level else "Frais de rappel :"
+            total_data = [
+                ["Montant facture initiale :", f"CHF {principal_float:.2f}"],
+                [reminder_fee_label, f"CHF {reminder_fee_float:.2f}"],
+                ["TOTAL :", f"CHF {final_total:.2f}"],
+            ]
+        else:
+            total_amount = float(invoice.total_amount)
+            total_data = [["TOTAL :", f"{total_amount:.2f} CHF"]]
         total_table = Table(total_data, colWidths=[4 * cm, 2.5 * cm])
-        total_table.setStyle(
-            TableStyle(
+        style_rules = [
+            ("ALIGN", (0, 0), (0, -1), "RIGHT"),
+            ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+            ("FONTSIZE", (0, 0), (-1, -1), 10),
+        ]
+        if is_reminder:
+            style_rules.extend(
                 [
-                    ("ALIGN", (0, 0), (0, 0), "RIGHT"),
-                    ("ALIGN", (1, 0), (1, 0), "RIGHT"),
-                    ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
-                    ("FONTSIZE", (0, 0), (-1, -1), 10),
+                    ("FONTNAME", (0, 0), (-1, -2), font_name),
+                    ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
                 ]
             )
-        )
+        else:
+            style_rules.append(("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"))
+        total_table.setStyle(TableStyle(style_rules))
         story.append(total_table)
         story.append(Spacer(1, 20))
 
         # === PIED DE PAGE SIMPLIFIÉ ===
-        if billing_settings and billing_settings.legal_footer:
-            footer_message = billing_settings.legal_footer
+        if is_reminder:
+            footer_message = (
+                "Sauf erreur de notre part, cette facture est restée impayée à ce jour. "
+                "Merci de procéder à son règlement dans les plus brefs délais. "
+                "Des frais de rappel ont été ajoutés conformément à nos conditions générales."
+            )
+            iban_value_min = (
+                billing_settings.iban if billing_settings and billing_settings.iban else None
+            )
+            if iban_value_min:
+                footer_message += f" IBAN: {iban_value_min}"
+        elif billing_settings and billing_settings.legal_footer:
+            footer_message = _sanitize_legal_footer_for_iban(
+                billing_settings.legal_footer
+            )
         else:
-            iban_display = (
+            iban_value_min = (
                 billing_settings.iban
                 if billing_settings and billing_settings.iban
-                else "Non configuré"
+                else None
             )
-            footer_message = f"Merci de votre règlement. IBAN: {iban_display}"
+            if iban_value_min:
+                footer_message = f"Merci de votre règlement. IBAN: {iban_value_min}"
+            else:
+                footer_message = "Merci de votre règlement."
+                app_logger.warning(
+                    "PDF (minimal): IBAN non affiché (absent ou illisible, ex. erreur déchiffrement)."
+                )
 
         story.append(Paragraph(footer_message, centered_style))
+
+        if is_reminder:
+            mention = (
+                f"Document généré automatiquement – facture initiale n° {invoice.invoice_number} inchangée."
+            )
+            story.append(Spacer(1, 8))
+            story.append(
+                Paragraph(
+                    f'<font size="8" color="grey">{mention}</font>',
+                    centered_style,
+                )
+            )
 
         # === QR-BILL (SIMPLIFIÉ) ===
         story.append(PageBreak())
@@ -1255,11 +2679,7 @@ class PDFService:
             qr_bill_service = self.qrbill_service
             qr_bill_svg_content = qr_bill_service.generate_qr_bill_svg(invoice)
             if qr_bill_svg_content:
-                from svglib.svglib import (  # pyright: ignore[reportMissingImports]
-                    svg2rlg,
-                )
-
-                drawing = svg2rlg(BytesIO(qr_bill_svg_content))
+                drawing = _svg_content_to_drawing(qr_bill_svg_content)
                 if drawing:
                     drawing.width = 12 * cm
                     drawing.height = 6 * cm
@@ -1283,31 +2703,38 @@ class PDFService:
         buffer.seek(0)
         return buffer.getvalue()
 
-    def _create_detailed_invoice_pdf(self, invoice, billing_settings):
-        """Crée le contenu PDF d'une facture avec le template détaillé
-        (version enrichie)."""
+    def _create_detailed_invoice_pdf(
+        self,
+        invoice,
+        billing_settings,
+        reminder_ctx: dict[str, Any],
+    ):
+        """Crée le contenu PDF d'une facture avec le template détaillé.
+
+        reminder_ctx: is_reminder, display_reminder_level, reminder_level, reminder_fee,
+            reminder_principal, reminder_total_due (calculés une seule fois).
+        """
         # ruff: noqa: I001
         from io import BytesIO
 
-        from reportlab.lib import colors  # pyright: ignore[reportMissingModuleSource]
-        from reportlab.lib.enums import (  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.lib import colors
+        from reportlab.lib.enums import (
             TA_CENTER,
             TA_LEFT,
         )
-        from reportlab.lib.pagesizes import (  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.lib.pagesizes import (
             A4,
         )
-        from reportlab.lib.styles import (  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.lib.styles import (
             ParagraphStyle,
             getSampleStyleSheet,
         )
-        from reportlab.lib.units import cm  # pyright: ignore[reportMissingModuleSource]
-        from reportlab.pdfbase import pdfmetrics  # pyright: ignore[reportMissingModuleSource]
-        from reportlab.pdfbase.ttfonts import (  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.lib.units import cm
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import (
             TTFont,
         )
-        from reportlab.platypus import (  # pyright: ignore[reportMissingModuleSource]
-            Image,
+        from reportlab.platypus import (
             PageBreak,
             Paragraph,
             SimpleDocTemplate,
@@ -1321,10 +2748,17 @@ class PDFService:
             pdfmetrics.registerFont(
                 TTFont("DejaVuSans", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
             )
+            pdfmetrics.registerFont(
+                TTFont(
+                    "DejaVuSans-Bold",
+                    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                )
+            )
             font_name = "DejaVuSans"
+            font_name_bold = "DejaVuSans-Bold"
         except Exception:
-            # Fallback sur Helvetica si DejaVu n'est pas disponible
             font_name = "Helvetica"
+            font_name_bold = "Helvetica-Bold"
 
         buffer = BytesIO()
         doc = SimpleDocTemplate(
@@ -1364,6 +2798,28 @@ class PDFService:
             spaceAfter=4,
             fontName=font_name,
         )
+        s2_main_style = ParagraphStyle(
+            "S2Main",
+            parent=styles["Normal"],
+            fontSize=9,
+            leading=9.5,
+            textColor=colors.black,
+            alignment=TA_LEFT,
+            spaceBefore=0,
+            spaceAfter=0,
+            fontName=font_name,
+        )
+        s2_detail_style = ParagraphStyle(
+            "S2Detail",
+            parent=styles["Normal"],
+            fontSize=7,
+            leading=8,
+            textColor=colors.grey,
+            alignment=TA_LEFT,
+            spaceBefore=0,
+            spaceAfter=0,
+            fontName=font_name,
+        )
 
         story = []
         company = invoice.company
@@ -1388,30 +2844,10 @@ class PDFService:
                     )
                     logo_path = uploads_dir / logo_url_clean
                     if logo_path and Path(logo_path).exists():
-                        logo_width_percent = 0.15
-                        logo_width = 595 * logo_width_percent
-                        logo_height = logo_width / 4.17
-                        if logo_path.suffix.lower() == ".svg":
-                            try:
-                                from svglib.svglib import (  # pyright: ignore[reportMissingImports]
-                                    svg2rlg,
-                                )
-
-                                drawing = svg2rlg(str(logo_path))
-                                if drawing:
-                                    original_width = drawing.width
-                                    original_height = drawing.height
-                                    if original_width > 0 and original_height > 0:
-                                        scale_x = logo_width / original_width
-                                        scale_y = logo_height / original_height
-                                        drawing.scale(scale_x, scale_y)
-                                    logo_img = drawing
-                            except Exception:
-                                pass
-                        else:
-                            logo_img = Image(
-                                logo_path, width=logo_width, height=logo_height
-                            )
+                        max_width_pt = 595 * 0.24
+                        logo_img, logo_width, logo_height = _load_logo_ratio_safe(
+                            logo_path, max_width_pt
+                        )
             except Exception:
                 pass
 
@@ -1480,51 +2916,51 @@ class PDFService:
         story.append(Paragraph(company_info_detailed, normal_style))
         story.append(Spacer(1, 20))
 
-        # === INFORMATIONS CLIENT DÉTAILLÉES ===
-        if invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id:
-            from models import Client as ClientModel
-
-            institution = ClientModel.query.get(invoice.bill_to_client_id)
-            if institution and institution.is_institution:
-                billed_to_name = institution.institution_name or "Institution"
-                billed_to_address = (
-                    institution.billing_address or "Adresse non renseignée"
-                )
+        # ✅ Déterminer si c'est une facture S2 (pour le formatage)
+        strategy_value = None
+        try:
+            bs = getattr(invoice, "billing_strategy", None)
+            if bs is None:
+                strategy_value = None
             else:
-                billed_to_name = "Institution"
-                billed_to_address = "Adresse non renseignée"
-        else:
-            client = invoice.client
-            billed_to_name = (
-                f"{client.user.first_name or ''} {client.user.last_name or ''}".strip()
-                or client.user.username
-                or "Client"
-            )
-            billed_to_address = "Adresse non renseignée"
-            if hasattr(client, "domicile_address") and client.domicile_address:
-                street_address = client.domicile_address
-                if (
-                    hasattr(client, "domicile_zip")
-                    and hasattr(client, "domicile_city")
-                    and client.domicile_zip
-                    and client.domicile_city
-                ):
-                    billed_to_address = (
-                        f"{street_address}\n{client.domicile_zip} "
-                        f"{client.domicile_city} Suisse"
-                    )
-                else:
-                    billed_to_address = street_address
+                strategy_value = bs.value if hasattr(bs, "value") else str(bs)
+        except Exception:
+            strategy_value = None
+        is_s2 = strategy_value == "s2_clinic_monthly"
 
+        # === INFORMATIONS CLIENT DÉTAILLÉES ===
+        billed_to_name, billed_to_address_formatted = _get_billed_to(invoice)
         billed_to_info_detailed = f"""
         <para align="right">
         <b>Facturé à :</b><br/>
         {billed_to_name}<br/>
-        {billed_to_address}
+        {billed_to_address_formatted}
         </para>
         """
         story.append(Paragraph(billed_to_info_detailed, normal_style))
         story.append(Spacer(1, 20))
+
+        # === BANDEAU RAPPEL (si mode rappel) ===
+        display_reminder_level = reminder_ctx.get("display_reminder_level")
+        if display_reminder_level:
+            bandeau = Table(
+                [[Paragraph(f"<b>{display_reminder_level}</b>", ParagraphStyle("BandeauD", parent=styles["Normal"], fontSize=14, fontName=font_name_bold, alignment=TA_CENTER, textColor=colors.HexColor("#8B0000")))]],
+                colWidths=[17 * cm],
+            )
+            bandeau.setStyle(
+                TableStyle(
+                    [
+                        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFE5E5")),
+                        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                        ("TOPPADDING", (0, 0), (-1, -1), 10),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+                        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#CC0000")),
+                    ]
+                )
+            )
+            story.append(bandeau)
+            story.append(Spacer(1, 12))
 
         # === INFORMATIONS FACTURE DÉTAILLÉES ===
         status_value = (
@@ -1533,16 +2969,12 @@ class PDFService:
             else str(invoice.status)
         )
         period_str = f"{invoice.period_month:02d}.{invoice.period_year}"
-
-        # ✅ Ajouter mention de rappel si applicable
-        reminder_text = ""
-        if invoice.reminder_level and invoice.reminder_level > 0:
-            reminder_text = f'<br/><b><font color="red">RAPPEL N°{invoice.reminder_level}</font></b>'
+        echeance_label = "Date d'échéance initiale :" if reminder_ctx.get("is_reminder") else "Date d'échéance :"
 
         invoice_info_detailed = f"""
-        <b>Numéro de facture :</b> {invoice.invoice_number}{reminder_text}<br/>
+        <b>Numéro de facture :</b> {invoice.invoice_number}<br/>
         <b>Date d'émission :</b> {invoice.issued_at.strftime("%d.%m.%Y")}<br/>
-        <b>Date d'échéance :</b> {invoice.due_date.strftime("%d.%m.%Y")}<br/>
+        <b>{echeance_label}</b> {invoice.due_date.strftime("%d.%m.%Y")}<br/>
         <b>Période de facturation :</b> {period_str}<br/>
         <b>Statut :</b> {status_value}
         """
@@ -1550,15 +2982,27 @@ class PDFService:
         story.append(Spacer(1, 20))
 
         # === TABLEAU DÉTAILLÉ AVEC NOTES ===
-        is_third_party = (
-            invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id
+        strategy_value = None
+        try:
+            bs = getattr(invoice, "billing_strategy", None)
+            if bs is None:
+                strategy_value = None
+            else:
+                strategy_value = bs.value if hasattr(bs, "value") else str(bs)
+        except Exception:
+            strategy_value = None
+        is_s2 = strategy_value == "s2_clinic_monthly"
+        is_third_party = bool(
+            getattr(invoice, "billing_party_id", None)
+            or (
+                invoice.bill_to_client_id
+                and invoice.bill_to_client_id != invoice.client_id
+            )
+            or is_s2
         )
-        if is_third_party:
-            table_data = [["Date", "Patient", "Départ", "Arrivée", "Note", "Montant"]]
-        else:
-            table_data = [["Date", "Départ", "Arrivée", "Note", "Montant"]]
 
-        def format_address_for_table(address, max_length=20):
+        def format_address_for_table(address, max_length=25):  # pyright: ignore[reportUnusedFunction]
+            """Formate une adresse pour le tableau (version compacte)."""
             if not address or address == "Adresse inconnue":
                 return "Adresse non renseignée"
             clean_address = address.replace(", Suisse", "").strip()
@@ -1567,190 +3011,79 @@ class PDFService:
             clean_address = re.sub(r"^Trajet\s+", "", clean_address)
             clean_address = clean_address.replace(" Suisse", "").strip()
             clean_address = clean_address.replace(" · ", " ").replace("·", "")
+            # Pour S2, on veut des adresses plus courtes et lisibles
             if len(clean_address) <= max_length:
                 return clean_address
-            words = clean_address.split(" ")
-            lines = []
-            current_line = ""
-            for word in words:
-                test_line = current_line + (" " if current_line else "") + word
-                if len(test_line) <= max_length:
-                    current_line = test_line
-                else:
-                    if current_line:
-                        lines.append(current_line)
-                    current_line = word
-            if current_line:
-                lines.append(current_line)
-            return "\n".join(lines[:2])
+            # Tronquer intelligemment (garder le début)
+            return clean_address[: max_length - 3] + "..."
 
-        for line in invoice.lines:
-            if line.type == InvoiceLineType.RIDE and line.reservation_id:
-                from models import Booking
-
-                booking = Booking.query.get(line.reservation_id)
-                if booking:
-                    date_str = (
-                        booking.scheduled_time.strftime("%d/%m/%Y")
-                        if booking.scheduled_time
-                        else ""
-                    )
-                    departure = format_address_for_table(
-                        booking.pickup_location, max_length=18
-                    )
-                    arrival = format_address_for_table(
-                        booking.dropoff_location, max_length=18
-                    )
-                    note = line.note or ""
-                    amount = f"{line.line_total:.2f}"
-                    if is_third_party:
-                        patient_name = (
-                            booking.customer_name
-                            or (
-                                f"{booking.client.user.first_name or ''} "
-                                f"{booking.client.user.last_name or ''}"
-                            ).strip()
-                            or "Patient"
-                        )
-                        if len(patient_name) > MAX_PATIENT_NAME_LENGTH:
-                            patient_name = (
-                                patient_name[: MAX_PATIENT_NAME_LENGTH - 1] + "."
-                            )
-                        table_data.append(
-                            [date_str, patient_name, departure, arrival, note, amount]
-                        )
-                    else:
-                        table_data.append([date_str, departure, arrival, note, amount])
-                else:
-                    note = line.note or ""
-                    amount = f"{line.line_total:.2f}"
-                    if is_third_party:
-                        table_data.append(["", "N/A", "", "", note, amount])
-                    else:
-                        table_data.append(["", "", "", note, amount])
-            else:
-                note = line.note or ""
-                amount = f"{line.line_total:.2f}"
-                if is_third_party:
-                    table_data.append(
-                        ["", "N/A", line.description[:30], "", note, amount]
-                    )
-                else:
-                    table_data.append(["", line.description[:30], "", note, amount])
-
-        if is_third_party:
-            services_table = Table(
-                table_data,
-                colWidths=[2 * cm, 2.5 * cm, 3 * cm, 3 * cm, 2.5 * cm, 2 * cm],
-            )
-        else:
-            services_table = Table(
-                table_data, colWidths=[2.5 * cm, 4 * cm, 4 * cm, 2.5 * cm, 2.5 * cm]
-            )
-        services_table.setStyle(
-            TableStyle(
-                [
-                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                    ("FONTSIZE", (0, 0), (-1, -1), 9),
-                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                    ("ALIGN", (-1, 0), (-1, -1), "RIGHT"),
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.black),
-                    ("LINEBELOW", (0, 1), (-1, -2), 0.25, colors.lightgrey),
-                ]
-            )
+        # ✅ Unifier : utiliser toujours le tableau S2 (Date | Patient | Transport | Montant)
+        # pour toutes les factures (client et clinique)
+        s2_table, consolidated_lines = _build_s2_table(
+            invoice,
+            font_name,
+            font_name_bold,
+            s2_main_style,
+            s2_detail_style,
+            include_non_ride=True,
+            available_width_pt=doc.width,
         )
-        story.append(services_table)
-        story.append(Spacer(1, 15))
+
+        story.append(Paragraph("<b>DÉTAIL DES TRANSPORTS</b>", normal_style))
+        story.append(Spacer(1, 6))
+        story.append(s2_table)
+        story.append(Spacer(1, 4))
 
         # === TOTAL DÉTAILLÉ ===
-        subtotal_amount = float(invoice.subtotal_amount)
-        vat_total_amount = float(invoice.vat_total_amount)
-        total_amount = float(invoice.total_amount)
-
-        vat_is_applicable = False
-        vat_label_display = "TVA"
-        if isinstance(invoice.meta, dict) and "vat" in invoice.meta:
-            vat_meta = invoice.meta.get("vat", {})
-            vat_is_applicable = vat_meta.get("applicable", False)
-            if vat_meta.get("label"):
-                vat_label_display = vat_meta.get("label")
-        elif vat_total_amount > 0:
-            vat_is_applicable = True
-
-        total_separator = Table([[""]], colWidths=[16 * cm])
+        total_separator = Table([[""]], colWidths=[17 * cm])
         total_separator.setStyle(
             TableStyle([("LINEBELOW", (0, 0), (0, 0), 1, colors.black)])
         )
         story.append(total_separator)
         story.append(Spacer(1, 8))
 
-        if is_third_party:
-            if vat_is_applicable:
-                total_data = [
-                    ["", "", "", "", "Sous-total :", f"{subtotal_amount:.2f}"],
-                    [
-                        "",
-                        "",
-                        "",
-                        "",
-                        f"{vat_label_display} :",
-                        f"{vat_total_amount:.2f}",
-                    ],
-                    ["", "", "", "", "TOTAL :", f"{total_amount:.2f}"],
-                ]
-            else:
-                total_data = [["", "", "", "", "TOTAL :", f"{total_amount:.2f}"]]
-            total_table = Table(
-                total_data,
-                colWidths=[2 * cm, 2.5 * cm, 3 * cm, 3 * cm, 2.5 * cm, 2 * cm],
+        # ✅ Récapitulatif détaillé (nombre A/R, nombre allers simples, total transports)
+        # Affiché pour toutes les factures utilisant le tableau unifié
+        if consolidated_lines:
+            round_trip_count = sum(
+                1 for item in consolidated_lines if item.get("is_round_trip", False)
             )
-        else:
-            if vat_is_applicable:
-                total_data = [
-                    ["", "", "", "Sous-total :", f"{subtotal_amount:.2f}"],
-                    ["", "", "", f"{vat_label_display} :", f"{vat_total_amount:.2f}"],
-                    ["", "", "", "TOTAL :", f"{total_amount:.2f}"],
-                ]
-            else:
-                total_data = [["", "", "", "TOTAL :", f"{total_amount:.2f}"]]
-            total_table = Table(
-                total_data, colWidths=[2.5 * cm, 4 * cm, 4 * cm, 2.5 * cm, 2.5 * cm]
+            one_way_count = sum(
+                1 for item in consolidated_lines if not item.get("is_round_trip", False)
             )
+            # ✅ A/R compte pour 1 transport (pas 2)
+            total_transports = round_trip_count + one_way_count
 
-        if is_third_party:
-            style_rules = [
-                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                ("ALIGN", (4, 0), (5, -1), "RIGHT"),
-                ("FONTSIZE", (0, 0), (-1, -1), 10),
-            ]
-            if vat_is_applicable:
-                style_rules.extend(
-                    [
-                        ("FONTNAME", (0, 0), (-1, -2), "Helvetica"),
-                        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
-                    ]
-                )
-            else:
-                style_rules.append(("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"))
-            total_table.setStyle(TableStyle(style_rules))
-        else:
-            style_rules = [
-                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                ("ALIGN", (3, 0), (4, -1), "RIGHT"),
-                ("FONTSIZE", (0, 0), (-1, -1), 10),
-            ]
-            if vat_is_applicable:
-                style_rules.extend(
-                    [
-                        ("FONTNAME", (0, 0), (-1, -2), "Helvetica"),
-                        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
-                    ]
-                )
-            else:
-                style_rules.append(("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"))
-            total_table.setStyle(TableStyle(style_rules))
+            # Récapitulatif détaillé avec micro-note
+            recap_text = (
+                f"<b>Récapitulatif</b><br/>"
+                f"- Transports aller-retour : {round_trip_count}<br/>"
+                f"- Transports aller simple : {one_way_count}<br/>"
+                f"- Total transports : {total_transports}<br/>"
+                f'<font size="7" color="grey">'
+                f"(Un aller-retour compte comme 1 transport)"
+                f"</font>"
+            )
+            recap_para = Paragraph(recap_text, detail_style)
+            story.append(recap_para)
+            story.append(Spacer(1, 8))
 
+        # ✅ Utiliser toujours le format unifié pour les totaux (même libellé "TOTAL À FACTURER")
+        # ✅ Si mode rappel, ajouter la ligne de frais de rappel
+        if reminder_ctx.get("is_reminder"):
+            story.append(Spacer(1, 16))  # Respiration avant totaux (rappel)
+        total_table = _build_totals_table(
+            invoice,
+            True,
+            is_third_party,
+            font_name,
+            font_name_bold,
+            template="detailed",
+            reminder_level=reminder_ctx.get("reminder_level"),
+            reminder_fee=reminder_ctx.get("reminder_fee"),
+            reminder_total_due=reminder_ctx.get("reminder_total_due"),
+            reminder_principal=reminder_ctx.get("reminder_principal"),
+        )
         story.append(total_table)
         story.append(Spacer(1, 30))
 
@@ -1770,26 +3103,61 @@ class PDFService:
             overdue_fee = billing_settings.overdue_fee
 
         jours_text = "jours" if payment_terms_days > 1 else "jour"
-        iban_value = "[IBAN non configuré]"
+        iban_value = None
         if billing_settings and billing_settings.iban:
             iban_value = billing_settings.iban
         elif hasattr(company, "iban") and company.iban:
             iban_value = company.iban
 
-        if billing_settings and billing_settings.legal_footer:
-            footer_message = billing_settings.legal_footer
-        else:
+        # ✅ Pied de page : rappel dédié ou legal_footer / modalités standard
+        if display_reminder_level:
             footer_message = (
+                "Sauf erreur de notre part, cette facture est restée impayée à ce jour. "
+                "Nous vous remercions de bien vouloir procéder à son règlement dans les plus brefs délais. "
+                "Des frais de rappel ont été ajoutés conformément à nos conditions générales."
+            )
+            if iban_value:
+                footer_message += f" Paiement par virement bancaire : IBAN : {iban_value}"
+        elif billing_settings and billing_settings.legal_footer:
+            footer_message = _sanitize_legal_footer_for_iban(
+                billing_settings.legal_footer
+            )
+            if iban_value and "IBAN" not in footer_message:
+                footer_message += (
+                    f"<br/>Paiement par virement bancaire : IBAN : {iban_value}"
+                )
+        else:
+            payment_info = ""
+            if iban_value:
+                payment_info = f"<br/><br/><b>Paiement par virement bancaire :</b><br/>IBAN : {iban_value}"
+            else:
+                app_logger.warning(
+                    "PDF (detailed): IBAN non affiché (absent ou illisible, ex. erreur déchiffrement)."
+                )
+            footer_message = (
+                f"<b>Modalités de paiement</b><br/>"
                 f"En votre aimable règlement net sous {payment_terms_days} "
-                f"{jours_text} avec nos remerciements anticipés. "
+                f"{jours_text} avec nos remerciements anticipés.<br/>"
                 f"En cas de retard de paiement, des frais de rappel d'un montant "
                 f"de CHF {overdue_fee:.2f} vous seront facturés, "
-                f"conformément à nos conditions générales. "
-                f"Paiement par virement bancaire : IBAN : {iban_value}"
+                f"conformément à nos conditions générales."
+                f"{payment_info}"
             )
 
         story.append(Spacer(1, 20))
         story.append(Paragraph(footer_message, centered_style))
+
+        if display_reminder_level:
+            mention = (
+                f"Document généré automatiquement – facture initiale n° {invoice.invoice_number} inchangée."
+            )
+            story.append(Spacer(1, 8))
+            story.append(
+                Paragraph(
+                    f'<font size="8" color="grey">{mention}</font>',
+                    centered_style,
+                )
+            )
 
         # === QR-BILL ===
         story.append(PageBreak())
@@ -1799,11 +3167,7 @@ class PDFService:
             qr_bill_service = self.qrbill_service
             qr_bill_svg_content = qr_bill_service.generate_qr_bill_svg(invoice)
             if qr_bill_svg_content:
-                from svglib.svglib import (  # pyright: ignore[reportMissingImports]
-                    svg2rlg,
-                )
-
-                drawing = svg2rlg(BytesIO(qr_bill_svg_content))
+                drawing = _svg_content_to_drawing(qr_bill_svg_content)
                 if drawing:
                     drawing.width = 12 * cm
                     drawing.height = 6 * cm
@@ -1825,25 +3189,27 @@ class PDFService:
 
         doc.build(story)
         buffer.seek(0)
-        return buffer.getvalue()
+        # ✅ Calculer nb_rows depuis consolidated_lines (après regroupement aller/retour)
+        nb_rows = len(consolidated_lines) if consolidated_lines else 0
+        return (buffer.getvalue(), nb_rows)
 
     def _create_swiss_qr_bill_layout(self, invoice, billing_settings, qr_image):
         """Crée le layout authentique du QR-Bill suisse."""
         # ruff: noqa: I001
-        from reportlab.lib import colors  # pyright: ignore[reportMissingModuleSource]
-        from reportlab.lib.enums import (  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.lib import colors
+        from reportlab.lib.enums import (
             TA_CENTER,
             TA_LEFT,
         )
-        from reportlab.lib.styles import (  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.lib.styles import (
             ParagraphStyle,
             getSampleStyleSheet,
         )
-        from reportlab.pdfbase import pdfmetrics  # pyright: ignore[reportMissingModuleSource]
-        from reportlab.pdfbase.ttfonts import (  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import (
             TTFont,
         )
-        from reportlab.platypus import (  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.platypus import (
             Paragraph,
             Spacer,
         )
@@ -2066,21 +3432,21 @@ class PDFService:
     def _create_official_swiss_qr_bill(self, invoice, billing_settings, qr_image):
         """Crée un QR-Bill suisse officiel avec le format exact."""
         # ruff: noqa: I001
-        from reportlab.lib import colors  # pyright: ignore[reportMissingModuleSource]
-        from reportlab.lib.enums import (  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.lib import colors
+        from reportlab.lib.enums import (
             TA_CENTER,
             TA_LEFT,
         )
-        from reportlab.lib.styles import (  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.lib.styles import (
             ParagraphStyle,
             getSampleStyleSheet,
         )
-        from reportlab.lib.units import cm  # pyright: ignore[reportMissingModuleSource]
-        from reportlab.pdfbase import pdfmetrics  # pyright: ignore[reportMissingModuleSource]
-        from reportlab.pdfbase.ttfonts import (  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.lib.units import cm
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import (
             TTFont,
         )
-        from reportlab.platypus import (  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.platypus import (
             Paragraph,
             Spacer,
             Table,
@@ -2312,24 +3678,38 @@ class PDFService:
 
         return qr_bill_table
 
-    def _create_reminder_pdf_content(self, invoice, level):
-        """Crée le contenu PDF d'un rappel."""
+    def _create_reminder_pdf_content(self, invoice, level, reminder=None):
+        """⚠️ DÉPRÉCIÉ: Cette fonction n'est plus utilisée.
+
+        Le PDF de rappel utilise maintenant le template facture via _create_invoice_pdf_content()
+        avec les paramètres reminder_level, reminder_fee, reminder_total_due.
+
+        Cette fonction est conservée uniquement pour rétrocompatibilité mais ne devrait plus être appelée.
+
+        TODO: remove after v5.1 — ne pas laisser du code mort indéfiniment.
+
+        Args:
+            invoice: Facture principale
+            level: Niveau du rappel (1, 2, 3)
+            reminder: InvoiceReminder avec montants consolidés (optionnel pour rétrocompatibilité)
+        """
         # Import ici pour éviter les problèmes de dépendances circulaires
         from io import BytesIO
 
-        from reportlab.lib import colors  # pyright: ignore[reportMissingModuleSource]
-        from reportlab.lib.enums import (  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.lib import colors
+        from reportlab.lib.enums import (
             TA_CENTER,
         )
-        from reportlab.lib.pagesizes import (  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.lib.pagesizes import (
             A4,
         )
-        from reportlab.lib.styles import (  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.lib.styles import (
             ParagraphStyle,
             getSampleStyleSheet,
         )
-        from reportlab.lib.units import cm  # pyright: ignore[reportMissingModuleSource]
-        from reportlab.platypus import (  # pyright: ignore[reportMissingModuleSource]
+        from reportlab.lib.units import cm
+        from reportlab.platypus import (
+            PageBreak,
             Paragraph,
             SimpleDocTemplate,
             Spacer,
@@ -2374,8 +3754,22 @@ class PDFService:
             ["Nouvelle échéance:", invoice.due_date.strftime("%d.%m.%Y")],
         ]
 
-        # ✅ Afficher le montant initial vs frais de rappel (si applicable)
-        if invoice.reminder_fee_amount and invoice.reminder_fee_amount > 0:
+        # ✅ Afficher le montant consolidé (rappel consolidé)
+        if reminder and reminder.total_due > 0:
+            # Mode rappel consolidé : afficher principal + frais = total
+            invoice_info.extend(
+                [
+                    ["Montant initial:", f"CHF {reminder.principal_amount:.2f}"],
+                    [
+                        f"Frais de rappel N°{level}:",
+                        f"CHF {reminder.reminder_fee_amount:.2f}",
+                    ],
+                    ["", ""],  # Ligne vide
+                    ["Total à payer:", f"CHF {reminder.total_due:.2f}"],
+                ]
+            )
+        elif invoice.reminder_fee_amount and invoice.reminder_fee_amount > 0:
+            # Mode legacy (rétrocompatibilité) : utiliser les valeurs de la facture
             initial_amount = invoice.total_amount - invoice.reminder_fee_amount
             invoice_info.extend(
                 [
@@ -2487,9 +3881,63 @@ class PDFService:
             )
             story.append(Paragraph(banking_info, styles["Normal"]))
 
+        # ✅ QR-BILL pour le rappel consolidé (si reminder fourni avec montant total)
+        if reminder and reminder.total_due > 0 and reminder.qr_reference:
+            story.append(Spacer(1, 30))
+            story.append(PageBreak())
+            story.append(Spacer(1, 545))
+
+            try:
+                # Créer une facture "virtuelle" pour le QR-bill avec le montant total
+                class VirtualInvoiceForReminder:
+                    def __init__(self, invoice, reminder):  # pyright: ignore[reportMissingSuperCall]
+                        self.id = reminder.id
+                        self.invoice_number = f"{invoice.invoice_number}-R{level}"
+                        self.company_id = invoice.company_id
+                        self.company = invoice.company
+                        self.client = invoice.client
+                        self.client_id = invoice.client_id
+                        self.bill_to_client_id = invoice.bill_to_client_id
+                        self.billing_party_id = invoice.billing_party_id
+                        self.billed_to_company_id = invoice.billed_to_company_id
+                        self.billing_strategy = invoice.billing_strategy
+                        self.total_amount = reminder.total_due
+                        self.qr_reference = reminder.qr_reference
+
+                virtual_invoice = VirtualInvoiceForReminder(invoice, reminder)
+                qr_bill_svg_content = self.qrbill_service.generate_qr_bill_svg(
+                    virtual_invoice
+                )
+
+                if qr_bill_svg_content:
+                    drawing = _svg_content_to_drawing(qr_bill_svg_content)
+                    if drawing:
+                        drawing.width = 12 * cm
+                        drawing.height = 6 * cm
+                        drawing.scale(12 * cm / drawing.width, 6 * cm / drawing.height)
+                        qr_table = Table([[drawing, ""]], colWidths=[6 * cm, 12 * cm])
+                        qr_table.setStyle(
+                            TableStyle(
+                                [
+                                    ("ALIGN", (0, 0), (0, 0), "LEFT"),
+                                    ("ALIGN", (1, 0), (1, 0), "LEFT"),
+                                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                                    ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+                                ]
+                            )
+                        )
+                        story.append(qr_table)
+                        app_logger.info("QR-bill ajouté au PDF de rappel consolidé")
+            except Exception as e:
+                app_logger.warning(
+                    "Échec de l'ajout du QR-bill au PDF de rappel: %s", str(e)
+                )
+                # Ne pas bloquer si le QR-bill échoue
+
         # Générer le PDF
         doc.build(story)
 
-        # Retourner le contenu
+        # Retourner le contenu et le nombre de lignes
+        # Note: Les rappels n'ont pas de tableau de transports, donc nb_rows = 0
         buffer.seek(0)
-        return buffer.getvalue()
+        return (buffer.getvalue(), 0)

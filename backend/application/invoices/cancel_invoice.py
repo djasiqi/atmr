@@ -3,14 +3,34 @@
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any, Protocol
 
-from models.enums import InvoiceStatus
+from models.enums import InvoiceBillingStrategy, InvoiceStatus
 
 logger = logging.getLogger(__name__)
+
+
+def _is_direct_client_invoice(invoice: Any) -> bool:
+    """Détecte une facture client directe (patient payeur, pas clinique/tierce).
+
+    Utilisé pour ne jamais recalculer ni appliquer résolution patient→clinique
+    à l'annulation ; préserver l'override « facturer client » (billed_to_type
+    reste 'patient').
+    """
+    billed_to = getattr(invoice, "billed_to_company_id", None)
+    strategy = getattr(invoice, "billing_strategy", None)
+    bill_to_client = getattr(invoice, "bill_to_client_id", None)
+    if billed_to is not None or bill_to_client is not None:
+        return False
+    try:
+        s = strategy if isinstance(strategy, InvoiceBillingStrategy) else InvoiceBillingStrategy(strategy)
+    except (ValueError, TypeError):
+        return False
+    return s == InvoiceBillingStrategy.S1_PATIENT
 
 
 class _BookingRepo(Protocol):
@@ -82,6 +102,10 @@ class CancelInvoiceUseCase:
         Side-effects:
             - DB: Met à jour Invoice.status, Invoice.balance_due,
               Booking.invoice_line_id
+            - Si facture client directe (S1_PATIENT, pas clinique/tierce) :
+              ré-assertion billed_to_type='patient', billed_to_company_id=None,
+              billing_party_id=None sur chaque booking libéré (override
+              « facturer client » préservé, jamais de résolution patient→clinique).
             - DB: Commit transaction (ou rollback en cas d'erreur)
         """
         invoice = input_data.invoice
@@ -121,6 +145,9 @@ class CancelInvoiceUseCase:
         # Libérer les réservations liées à chaque ligne
         from models import Booking, db
 
+        is_direct_client = _is_direct_client_invoice(invoice)
+        freed_count = 0
+
         for line in invoice.lines:
             if hasattr(line, "reservation_id") and line.reservation_id:
                 booking_dto = self._booking_repo.find_by_id(line.reservation_id)
@@ -134,6 +161,39 @@ class CancelInvoiceUseCase:
                     ):
                         booking.invoice_line_id = None
                         booking.updated_at = datetime.now(UTC)
+                        # Facture client directe : NE JAMAIS recalculer billed_to_type ni
+                        # appliquer résolution patient→clinique. Ré-asserter l'override
+                        # « facturer client » pour garder billed_to_type = 'patient'
+                        # (idempotent sur le payeur).
+                        if is_direct_client:
+                            try:
+                                booking.billed_to_type = "patient"
+                                booking.billed_to_company_id = None
+                                booking.billing_party_id = None
+                            except Exception:  # best-effort (DTO / champs absents)
+                                pass
+                        freed_count += 1
+                        if os.getenv("BILLING_DEBUG", "0") == "1":
+                            _fmt = (
+                                "[CancelInvoice] freed booking_id=%s billed_to_type=%s "
+                                "billed_to_company_id=%s billing_party_id=%s status=%s invoice_line_id=%s"
+                            )
+                            logger.info(
+                                _fmt,
+                                booking.id,
+                                getattr(booking, "billed_to_type", None),
+                                getattr(booking, "billed_to_company_id", None),
+                                getattr(booking, "billing_party_id", None),
+                                getattr(booking, "status", None),
+                                getattr(booking, "invoice_line_id", None),
+                            )
+
+        invoice_id_val = getattr(invoice, "id", None)
+        logger.info(
+            "Cancel invoice_id=%s freed %s booking(s)",
+            invoice_id_val,
+            freed_count,
+        )
 
         # Mettre à jour la facture
         invoice_any: Any = invoice

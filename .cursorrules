@@ -1,22 +1,52 @@
 # Règles pour les agents Cursor - Projet ATMR
 
 ## 📝 Documentation
+
 - **TOUS les fichiers Markdown (.md) doivent être créés UNIQUEMENT dans le dossier `docs/`**
 - Ne jamais créer de fichiers .md à la racine du projet
 - Ne jamais créer un dossier `doc/` (utiliser `docs/` qui existe déjà)
 - Les fichiers de documentation doivent respecter cette convention
 
 ## 🌐 Langue
+
 - Toujours répondre en français
 - Tous les commentaires, messages d'erreur, et documentation doivent être en français
 
 ## 📁 Structure du projet
+
 - Backend : `backend/`
 - Frontend web : `frontend/`
 - Mobile : `mobile/operations-app/`
 - Documentation : `docs/`
 
 ## 🔧 Conventions de code
+
 - Respecter les conventions de nommage existantes
 - Documenter les changements importants dans `docs/`
 - Suivre les patterns et architectures existantes (DDD, etc.)
+
+## 🐳 Docker obligatoire (Python / DB / migrations)
+
+- **Tout accès à la base de données** doit se faire **via Docker** (docker compose / docker exec), jamais depuis la machine hôte.
+- **Toute exécution Python** (scripts, `py_compile`, tooling, etc.) doit se faire **via Docker**.
+- **Migrations** :
+  - Ne **jamais** écrire une migration Alembic "à la main".
+  - Toujours générer les migrations **automatiquement** via **`alembic revision --autogenerate` exécuté dans le container**.
+
+## 🔐 Accès serveur (prod) / environnement local (dev)
+- **Production** : accès serveur uniquement via SSH `ssh deploy@138.201.155.201` (utilisateur `deploy`, serveur prod).
+- **Développement** : utiliser l'environnement **local** basé sur **Docker** (docker compose) — il existe un serveur de dev local en containers.
+
+## ✅ Qualité / warnings (obligatoire en fin de tâche)
+- À la fin de **chaque tâche**, l'agent doit **corriger tous les warnings/erreurs** détectés (lint, type-check, format, etc.) dans les fichiers touchés.
+- Même si un warning semble "faux positif", il doit être **résolu** (refactor, `noqa` ciblé, ou équivalent) pour garder une base propre.
+- Si un warning ne peut pas être corrigé sans risque, l'agent doit :
+  - **expliquer** pourquoi,
+  - proposer l'alternative la plus sûre (ex: `noqa` très ciblé) et la mettre en place.
+
+## 📋 Documentation des tâches dans les fichiers .md
+- Si un document `.md` est fourni comme base de travail (via `@fichier.md` ou sélection de lignes), l'agent doit :
+  - À la **fin de la tâche**, mettre à jour le document `.md` pour indiquer ce qui a été **implémenté**.
+  - Marquer les éléments complétés avec `✅ **Implémenté** :` suivi d'une description et des références aux fichiers/chemins pertinents.
+  - Indiquer ce qui **reste à faire** uniquement pour la partie sélectionnée/travaillée.
+  - Cette mise à jour doit être faite **uniquement dans la section concernée** du document (pas dans tout le document).

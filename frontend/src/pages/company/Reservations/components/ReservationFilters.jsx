@@ -10,6 +10,7 @@ const ReservationFilters = ({
   setStatusFilter,
   sortOrder,
   setSortOrder,
+  searchInputRef,
 }) => {
   const [dateMode, setDateMode] = React.useState('all'); // "all", "single", "range"
   const [startDate, setStartDate] = React.useState('');
@@ -146,6 +147,7 @@ const ReservationFilters = ({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className={styles.searchInput}
+              ref={searchInputRef}
             />
             {searchTerm && (
               <button

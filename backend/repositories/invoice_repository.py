@@ -413,12 +413,17 @@ class InvoiceRepository:
         from datetime import UTC, datetime, timedelta
         from decimal import Decimal
 
-        from models.enums import InvoiceStatus
+        from models.enums import InvoiceBillingStrategy, InvoiceStatus
 
         invoice = Invoice()
         invoice.company_id = invoice_data["company_id"]
         invoice.client_id = invoice_data["client_id"]
         invoice.bill_to_client_id = invoice_data.get("bill_to_client_id")
+        invoice.billing_party_id = invoice_data.get("billing_party_id")
+        invoice.billing_strategy = invoice_data.get(
+            "billing_strategy", InvoiceBillingStrategy.S1_PATIENT
+        )
+        invoice.billed_to_company_id = invoice_data.get("billed_to_company_id")
         invoice.period_month = invoice_data["period_month"]
         invoice.period_year = invoice_data["period_year"]
         invoice.invoice_number = invoice_data["invoice_number"]

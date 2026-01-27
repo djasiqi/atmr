@@ -80,17 +80,68 @@
   background: var(--bg-primary);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-md);
-  padding: var(--spacing-md);
-  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
   box-shadow: var(--shadow-sm);
+}
+
+.accordion {
+  padding: 0;
+  overflow: hidden;
+}
+
+.accordionHeader {
+  width: 100%;
+  padding: var(--spacing-sm);
+  background: var(--bg-secondary);
+  border: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--transition-base);
+}
+
+.accordionHeader:hover {
+  background: var(--bg-tertiary);
+}
+
+.accordionHeader:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: -2px;
+}
+
+.accordionTitle {
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--brand-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.accordionIcon {
+  font-size: 18px;
+  color: var(--text-secondary);
+  transition: transform var(--transition-base);
+}
+
+.accordionIconOpen {
+  transform: rotate(180deg);
+}
+
+.accordionContent {
+  padding: var(--spacing-sm);
+  border-top: 1px solid var(--border-primary);
 }
 
 .section h2 {
   font-size: var(--font-lg);
   font-weight: var(--font-weight-semibold);
   color: var(--brand-primary);
-  margin: 0 0 var(--spacing-lg) 0;
-  padding-bottom: var(--spacing-sm);
+  margin: 0 0 var(--spacing-md) 0;
+  padding-bottom: var(--spacing-xs);
   border-bottom: 2px solid var(--border-primary);
   display: flex;
   align-items: center;
@@ -579,6 +630,42 @@
   font-size: var(--font-xs);
   font-weight: var(--font-weight-medium);
   grid-column: 1 / -1;
+}
+
+/* ====== Helpers UI (P1) ====== */
+.mutedText {
+  color: var(--text-secondary);
+  font-size: var(--font-xs);
+  margin: 0 0 var(--spacing-sm) 0;
+}
+
+.separator {
+  border: none;
+  border-top: 1px solid var(--border-primary);
+  margin: var(--spacing-md) 0;
+}
+
+.dropdownList {
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  box-shadow: var(--shadow-sm);
+  max-height: 220px;
+  overflow: auto;
+}
+
+.dropdownItem {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: var(--spacing-sm) var(--spacing-md);
+  cursor: pointer;
+  color: var(--text-primary);
+}
+
+.dropdownItem:hover {
+  background: var(--bg-secondary);
 }
 
 /* ====== ToggleField ====== */

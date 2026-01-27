@@ -19,6 +19,7 @@ from flask_mail import Mail, Message  # pyright: ignore[reportMissingImports]
 
 from ext import mail
 
+from .recipient_utils import normalize_relationship_label
 from .validators import EmailValidator
 
 logger = logging.getLogger(__name__)
@@ -129,6 +130,43 @@ class EmailService:
             )
 
             # Préparer les données pour le template
+            client_name = self._format_client_name(client)
+            recipient_name = client_name
+            recipient_type = "patient"
+            relationship_label = ""
+
+            billing_party = getattr(invoice, "billing_party", None)
+            billed_company = getattr(invoice, "billed_to_company", None)
+            bill_to_client = getattr(invoice, "bill_to_client", None)
+
+            if billing_party:
+                recipient_name = billing_party.display_name or client_name
+                recipient_type = getattr(billing_party.type, "value", billing_party.type)
+                try:
+                    from models.billing_party import ClientBillingParty
+
+                    link = ClientBillingParty.query.filter_by(
+                        client_id=invoice.client_id,
+                        billing_party_id=billing_party.id,
+                    ).first()
+                    relationship_label = (
+                        normalize_relationship_label(getattr(link, "role", "")) if link else ""
+                    )
+                except Exception:
+                    relationship_label = ""
+            elif billed_company:
+                recipient_name = billed_company.name or client_name
+                recipient_type = "clinic"
+            elif bill_to_client and getattr(bill_to_client, "is_institution", False):
+                institution_name = getattr(bill_to_client, "institution_name", None)
+                recipient_name = institution_name or client_name
+                recipient_type = "clinic"
+
+            is_clinic_recipient = str(recipient_type).lower() in {"clinic", "hospital", "ems"}
+            is_family_recipient = str(recipient_type).lower() == "family"
+            is_curator_recipient = str(recipient_type).lower() == "curatorship"
+            is_insurance_recipient = str(recipient_type).lower() == "insurance"
+
             template_data = {
                 "company_name": getattr(company, "name", "Votre entreprise"),
                 "invoice_number": invoice.invoice_number,
@@ -142,7 +180,15 @@ class EmailService:
                 ),
                 "total_amount": float(invoice.total_amount),
                 "currency": invoice.currency or "CHF",
-                "client_name": self._format_client_name(client),
+                "client_name": client_name,
+                "recipient_name": recipient_name,
+                "recipient_type": recipient_type,
+                "patient_name": client_name,
+                "relationship_label": normalize_relationship_label(relationship_label),
+                "is_clinic_recipient": is_clinic_recipient,
+                "is_family_recipient": is_family_recipient,
+                "is_curator_recipient": is_curator_recipient,
+                "is_insurance_recipient": is_insurance_recipient,
                 "payment_terms_days": getattr(
                     invoice, "payment_terms_days", 30
                 ),  # Fallback

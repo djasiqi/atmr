@@ -44,8 +44,8 @@ except ImportError:  # pragma: no cover
 
 
 # --- Imports de libs tiers (tous en haut pour Ruff E402) ---
-import sentry_sdk  # pyright: ignore[reportMissingImports]
-from dotenv import load_dotenv  # pyright: ignore[reportMissingImports]
+import sentry_sdk
+from dotenv import load_dotenv
 from flask import (
     Flask,
     current_app,
@@ -55,11 +55,12 @@ from flask import (
     send_from_directory,
 )
 from flask_cors import CORS
-from flask_talisman import Talisman  # pyright: ignore[reportMissingImports]
-from sentry_sdk.integrations.flask import (  # pyright: ignore[reportMissingImports]
+from flask_talisman import Talisman
+from sentry_sdk.integrations.flask import (
     FlaskIntegration,
 )
 from werkzeug.exceptions import (
+    BadRequest,
     HTTPException,
     NotFound,
 )
@@ -307,7 +308,7 @@ def create_app(config_name: str | None = None):
     # ✅ A2: Détection N+1 queries en développement
     if app.config.get("ENV") == "development" or app.config.get("SQLALCHEMY_ECHO"):
         try:
-            from nplusone.ext.flask_sqlalchemy import (  # type: ignore[import-untyped]
+            from nplusone.ext.flask_sqlalchemy import (
                 NPlusOne,
             )
 
@@ -381,9 +382,10 @@ def create_app(config_name: str | None = None):
             # Essayer d'obtenir l'engine dans un contexte d'application
             with app.app_context():
                 try:
-                    if hasattr(db, "engine") and db.engine is not None:
+                    _eng = getattr(db, "engine", None)
+                    if _eng is not None:
                         # Flask-SQLAlchemy 3+ utilise .engine directement
-                        engine = db.engine
+                        engine = _eng
                     elif hasattr(db, "get_engine"):
                         # Flask-SQLAlchemy <3 utilise get_engine() avec app context
                         engine = db.get_engine()
@@ -407,8 +409,9 @@ def create_app(config_name: str | None = None):
                         return
                     try:
                         with app.app_context():
-                            if hasattr(db, "engine") and db.engine is not None:
-                                db_engine = db.engine
+                            _db_eng = getattr(db, "engine", None)
+                            if _db_eng is not None:
+                                db_engine = _db_eng
                             elif hasattr(db, "get_engine"):
                                 db_engine = db.get_engine()
                             else:
@@ -427,8 +430,8 @@ def create_app(config_name: str | None = None):
     except ImportError as e:
         # Ne pas logger le warning en mode test (évite le bruit dans les tests)
         if (
-            os.getenv("FLASK_ENV") != "testing"
-            and os.getenv("FLASK_CONFIG") != "testing"
+            os.getenv("FLASK_ENV", "") != "testing"
+            and os.getenv("FLASK_CONFIG", "") != "testing"
         ):
             app.logger.warning("[2.9] OpenTelemetry non disponible (optionnel): %s", e)
     except Exception as e:
@@ -855,7 +858,7 @@ def create_app(config_name: str | None = None):
 
                 # Essayer de récupérer l'ID utilisateur si authentifié
                 try:
-                    from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
+                    from flask_jwt_extended import (
                         get_jwt_identity,
                     )
 
@@ -954,7 +957,7 @@ def create_app(config_name: str | None = None):
 
     # 3) Uploads
     uploads_root = Path(app.root_path, "uploads")
-    Path(uploads_root, exist_ok=True).mkdir(parents=True, exist_ok=True)
+    uploads_root.mkdir(parents=True, exist_ok=True)
     app.config.setdefault("UPLOADS_DIR", uploads_root)
     app.config.setdefault("UPLOADS_PUBLIC_BASE", "/uploads")
 
@@ -1980,7 +1983,7 @@ def create_app(config_name: str | None = None):
         # (évite 404 si RESTX rate) ---
         from routes.companies import CompanyDriversList, CompanyMe
 
-        @app.route("/api/companies/me", methods=["GET", "PUT", "OPTIONS"])  # type: ignore[reportArgumentType]
+        @app.route("/api/companies/me", methods=["GET", "PUT", "OPTIONS"])
         def _compat_companies_me():  # pyright: ignore[reportUnusedFunction]
             if request.method == "OPTIONS":
                 return make_response("", 204)
@@ -1991,10 +1994,10 @@ def create_app(config_name: str | None = None):
                 return res.put()
             raise NotFound
 
-        @app.route(  # type: ignore[reportArgumentType]
+        @app.route(
             "/api/v<int:version>/companies/me", methods=["GET", "PUT", "OPTIONS"]
         )
-        def _compat_companies_me_v(version: int):  # pyright: ignore  # noqa: ARG001
+        def _compat_companies_me_v(version: int):  # pyright: ignore[reportUnusedFunction]  # noqa: ARG001
             if request.method == "OPTIONS":
                 return make_response("", 204)
             res = CompanyMe()
@@ -2004,13 +2007,13 @@ def create_app(config_name: str | None = None):
                 return res.put()
             raise NotFound
 
-        @app.route("/api/companies/me/drivers", methods=["GET", "OPTIONS"])  # type: ignore[reportArgumentType]
+        @app.route("/api/companies/me/drivers", methods=["GET", "OPTIONS"])
         def _compat_companies_me_drivers():  # pyright: ignore[reportUnusedFunction]
             if request.method == "OPTIONS":
                 return make_response("", 204)
             return CompanyDriversList().get()
 
-        @app.route(  # type: ignore[reportArgumentType]
+        @app.route(
             "/api/v<int:version>/companies/me/drivers", methods=["GET", "OPTIONS"]
         )
         def _compat_companies_me_drivers_v(  # pyright: ignore[reportUnusedFunction]
@@ -2064,6 +2067,26 @@ def create_app(config_name: str | None = None):
         def missing_token_callback(error):  # pyright: ignore[reportUnusedFunction]
             return jsonify({"error": "missing_token", "message": str(error)}), 401
 
+        @app.errorhandler(BadRequest)
+        def handle_bad_request(e: BadRequest):  # pyright: ignore
+            app.logger.warning(
+                "[BadRequest] path=%s method=%s Content-Type=%s Content-Length=%s desc=%s",
+                getattr(request, "path", None),
+                getattr(request, "method", None),
+                getattr(request, "content_type", None),
+                getattr(request, "content_length", None),
+                getattr(e, "description", str(e)),
+            )
+            return (
+                jsonify(
+                    {
+                        "error": "Bad Request",
+                        "message": "Corps de requête JSON manquant ou invalide. Vérifiez Content-Type: application/json et le format du body.",
+                    }
+                ),
+                400,
+            )
+
         @app.errorhandler(HTTPException)
         def handle_http_exception(e: HTTPException):  # pyright: ignore
             if isinstance(e, NotFound):
@@ -2075,7 +2098,7 @@ def create_app(config_name: str | None = None):
         @app.errorhandler(Exception)
         def handle_exception(e: Exception):  # pyright: ignore[reportUnusedFunction]
             # Intercepter les erreurs JWT expirées qui peuvent échapper aux handlers JWT
-            from jwt.exceptions import (  # pyright: ignore[reportMissingImports]
+            from jwt.exceptions import (
                 ExpiredSignatureError,
                 InvalidTokenError,
             )

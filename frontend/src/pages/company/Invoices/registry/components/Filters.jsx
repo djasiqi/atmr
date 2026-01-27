@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import styles from './Filters.module.css';
 import { fetchCompanyClients } from '../../../../../services/companyService';
 
-const Filters = ({ filters, onFilterChange, companyId }) => {
+const Filters = ({ filters, onFilterChange, companyId, searchInputRef }) => {
   const [clients, setClients] = useState([]);
   const [loadingClients, setLoadingClients] = useState(false);
 
@@ -82,6 +82,7 @@ const Filters = ({ filters, onFilterChange, companyId }) => {
             placeholder="N° facture, client..."
             value={filters.q || ''}
             onChange={(e) => handleFilterChange('q', e.target.value)}
+            ref={searchInputRef}
           />
         </div>
 

@@ -9,6 +9,7 @@ Extrait depuis models.py (lignes ~1763-3258).
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -30,14 +31,16 @@ from sqlalchemy import (
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from typing_extensions import override
 
 from ext import db
 from security.crypto import get_encryption_service
 
 from .base import _as_bool, _iso
-from .enums import InvoiceLineType, InvoiceStatus, PaymentMethod
+from .enums import InvoiceBillingStrategy, InvoiceLineType, InvoiceStatus, PaymentMethod
+
+logger = logging.getLogger(__name__)
 
 
 class Invoice(db.Model):
@@ -56,6 +59,26 @@ class Invoice(db.Model):
     # Facturation tierce (Third-Party Billing)
     bill_to_client_id: Mapped[int | None] = mapped_column(
         ForeignKey("client.id"), nullable=True, index=True
+    )
+
+    # ✅ Payeur unifié (source de vérité à terme)
+    # Rétrocompat: on garde bill_to_client_id le temps de migrer progressivement.
+    billing_party_id: Mapped[int | None] = mapped_column(
+        ForeignKey("billing_parties.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
+    # ✅ Stratégie de facturation (S1/S2/...) + destinataire "company" (ex: clinique payeur en S2)
+    billing_strategy: Mapped[InvoiceBillingStrategy] = mapped_column(
+        SAEnum(
+            InvoiceBillingStrategy,
+            name="invoice_billing_strategy",
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
+        nullable=False,
+        server_default=InvoiceBillingStrategy.S1_PATIENT.value,
+    )
+    billed_to_company_id: Mapped[int | None] = mapped_column(
+        ForeignKey("company.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
     # Période de facturation
@@ -133,13 +156,17 @@ class Invoice(db.Model):
     meta = Column(JSONB, nullable=True)
 
     # Relations
-    company = relationship("Company", backref="invoices")
+    # NOTE: invoices a 2 FK vers Company (company_id + billed_to_company_id),
+    # donc il faut expliciter la FK pour éviter AmbiguousForeignKeysError.
+    company = relationship("Company", foreign_keys=[company_id], backref="invoices")
     client = relationship(
         "Client", foreign_keys=[client_id], backref="service_invoices"
     )
     bill_to_client = relationship(
         "Client", foreign_keys=[bill_to_client_id], backref="billing_invoices"
     )
+    billing_party = relationship("BillingParty", foreign_keys=[billing_party_id])
+    billed_to_company = relationship("Company", foreign_keys=[billed_to_company_id])
     lines = relationship(
         "InvoiceLine", back_populates="invoice", cascade="all, delete-orphan"
     )
@@ -162,6 +189,51 @@ class Invoice(db.Model):
         CheckConstraint("balance_due >= 0", name="chk_invoice_balance_nonneg"),
         CheckConstraint("amount_paid >= 0", name="chk_invoice_paid_nonneg"),
     )
+
+    @validates("bill_to_client_id", "billing_party_id", "billed_to_company_id")
+    def _v_payer_fields(self, key, value):
+        """Garde-fous P1: éviter les combinaisons incohérentes entre legacy et BillingParty.
+
+        Note: `@validates` est appelé AVANT l'affectation, donc on valide avec des
+        valeurs "prospectives" (value + autres champs existants).
+        """
+        bill_to_client_id = (
+            value if key == "bill_to_client_id" else self.bill_to_client_id
+        )
+        billing_party_id = (
+            value if key == "billing_party_id" else self.billing_party_id
+        )
+        if key == "billed_to_company_id":
+            _ = value  # valeur acceptée (validation métier ailleurs)
+
+        # Cas clinique: si billed_to_company_id est défini mais billing_party_id est NULL,
+        # on autorise l'état en V1 (P1.4) à condition que les courses soient mises en NEEDS_REVIEW
+        # et que l'UI permette de corriger le mapping. L'interdiction stricte pourra être réactivée
+        # plus tard quand la configuration sera complète en prod.
+
+        # Cas legacy: on autorise bill_to_client_id + billing_party_id uniquement si
+        # le BillingParty correspond au lien legacy (external_ref=legacy_client:<id>).
+        if bill_to_client_id is not None and billing_party_id is not None:
+            try:
+                from models.billing_party import BillingParty
+
+                bp = BillingParty.query.filter_by(id=int(billing_party_id)).first()
+                expected = f"legacy_client:{int(bill_to_client_id)}"
+                if not bp or (bp.external_ref or "") != expected:
+                    raise ValueError(
+                        "bill_to_client_id et billing_party_id sont incohérents (BillingParty ne correspond pas au payeur legacy)."
+                    )
+            except ValueError:
+                raise
+            except Exception as e:
+                # Ne pas casser le flush sur un problème de lecture ponctuel;
+                # on log et on laisse passer (fallback: validations use case).
+                logger.warning(
+                    "[Invoice] Impossible de valider la cohérence du payeur: %s",
+                    str(e),
+                )
+
+        return value
 
     @override
     def __repr__(self):
@@ -215,6 +287,13 @@ class Invoice(db.Model):
             "company_id": self.company_id,
             "client_id": self.client_id,
             "bill_to_client_id": self.bill_to_client_id,
+            "billing_party_id": self.billing_party_id,
+            "billing_strategy": (
+                self.billing_strategy.value
+                if hasattr(self.billing_strategy, "value")
+                else str(self.billing_strategy)
+            ),
+            "billed_to_company_id": self.billed_to_company_id,
             "period_month": self.period_month,
             "period_year": self.period_year,
             "invoice_number": self.invoice_number,
@@ -279,6 +358,12 @@ class Invoice(db.Model):
                 "contact_email": self.bill_to_client.contact_email,
             }
             if self.bill_to_client
+            else None,
+            "billed_to_company": {
+                "id": self.billed_to_company.id,
+                "name": self.billed_to_company.name,
+            }
+            if self.billed_to_company
             else None,
             "lines": [line.to_dict() for line in self.lines]
             if hasattr(self, "lines")
@@ -373,8 +458,16 @@ class InvoicePayment(db.Model):
     )
     reference: Mapped[str] = mapped_column(String(100), nullable=True)
 
+    # ✅ NOUVEAU : Lien vers le rappel (pour ventilation automatique)
+    reminder_id: Mapped[int | None] = mapped_column(
+        ForeignKey("invoice_reminders.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     # Relations
     invoice = relationship("Invoice", back_populates="payments")
+    reminder = relationship("InvoiceReminder", foreign_keys=[reminder_id])
 
     @override
     def __repr__(self):
@@ -389,11 +482,16 @@ class InvoicePayment(db.Model):
             "paid_at": _iso(self.paid_at),
             "method": self.method.value,
             "reference": self.reference,
+            "reminder_id": self.reminder_id,
         }
 
 
 class InvoiceReminder(db.Model):
-    """Rappels de facture."""
+    """Rappels de facture consolidés.
+
+    Modèle pour les rappels consolidés : le client voit UN document et paie UN montant.
+    En interne, on garde la traçabilité fine (montant principal + frais de rappel).
+    """
 
     __tablename__ = "invoice_reminders"
 
@@ -404,8 +502,31 @@ class InvoiceReminder(db.Model):
     added_fee: Mapped[Decimal] = mapped_column(
         Numeric(10, 2), nullable=False, default=0
     )
+
+    # ✅ NOUVEAU : Montants consolidés pour le rappel
+    principal_amount: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=0
+    )  # Montant de la facture initiale (sans frais)
+    reminder_fee_amount: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=0
+    )  # Frais de rappel
+    total_due: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=0
+    )  # Total à payer (principal + frais)
+
+    # ✅ NOUVEAU : QR-bill pour le rappel consolidé
+    qr_reference: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
+    # ✅ NOUVEAU : Statut du rappel (OPEN/PAID)
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="OPEN", server_default="OPEN"
+    )  # OPEN, PAID
+
     generated_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
     sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    paid_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     pdf_url: Mapped[str] = mapped_column(String(500), nullable=True)
@@ -425,8 +546,14 @@ class InvoiceReminder(db.Model):
             "invoice_id": self.invoice_id,
             "level": self.level,
             "added_fee": float(self.added_fee),
+            "principal_amount": float(self.principal_amount),
+            "reminder_fee_amount": float(self.reminder_fee_amount),
+            "total_due": float(self.total_due),
+            "qr_reference": self.qr_reference,
+            "status": self.status,
             "generated_at": _iso(self.generated_at),
             "sent_at": _iso(self.sent_at),
+            "paid_at": _iso(self.paid_at),
             "pdf_url": self.pdf_url,
             "note": self.note,
         }
@@ -533,6 +660,26 @@ class CompanyBillingSettings(db.Model):
     reminder2_template: Mapped[str | None] = mapped_column(Text, nullable=True)
     reminder3_template: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Signature email personnalisée (injectée dans tous les emails de facturation/rappel)
+    email_signature_mode: Mapped[str] = mapped_column(
+        String(10), nullable=False, default="form", server_default="form"
+    )  # "text", "form" ou "html"
+    email_signature_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Mode "form": champs normalisés (génération auto du HTML)
+    signature_name: Mapped[str | None] = mapped_column(String(200), nullable=True)  # Nom complet
+    signature_title: Mapped[str | None] = mapped_column(String(200), nullable=True)  # Titre (ex: "Associé gérant")
+    signature_company: Mapped[str | None] = mapped_column(String(200), nullable=True)  # Société
+    signature_phone_main: Mapped[str | None] = mapped_column(String(50), nullable=True)  # Téléphone principal
+    signature_phone_mobile: Mapped[str | None] = mapped_column(String(50), nullable=True)  # Téléphone mobile
+    signature_email: Mapped[str | None] = mapped_column(String(200), nullable=True)  # Email
+    signature_website: Mapped[str | None] = mapped_column(String(200), nullable=True)  # Site web
+    signature_address_line: Mapped[str | None] = mapped_column(String(200), nullable=True)  # Ligne adresse
+    signature_zip: Mapped[str | None] = mapped_column(String(10), nullable=True)  # Code postal
+    signature_city: Mapped[str | None] = mapped_column(String(100), nullable=True)  # Ville
+    # Note: signature_logo_url supprimé - on utilise maintenant company.logo_url automatiquement
+    # Mode "html": template personnalisé
+    email_signature_html_template: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # Pied de page légal
     legal_footer: Mapped[str | None] = mapped_column(Text, nullable=True)
     pdf_template_variant = Column(String(20), nullable=False, default="default")
@@ -574,6 +721,20 @@ class CompanyBillingSettings(db.Model):
             "reminder1_template": self.reminder1_template,
             "reminder2_template": self.reminder2_template,
             "reminder3_template": self.reminder3_template,
+            "email_signature_mode": self.email_signature_mode,
+            "email_signature_text": self.email_signature_text,
+            "signature_name": self.signature_name,
+            "signature_title": self.signature_title,
+            "signature_company": self.signature_company,
+            "signature_phone_main": self.signature_phone_main,
+            "signature_phone_mobile": self.signature_phone_mobile,
+            "signature_email": self.signature_email,
+            "signature_website": self.signature_website,
+            "signature_address_line": self.signature_address_line,
+            "signature_zip": self.signature_zip,
+            "signature_city": self.signature_city,
+            # Note: signature_logo_url supprimé - on utilise maintenant company.logo_url automatiquement
+            "email_signature_html_template": self.email_signature_html_template,
             "legal_footer": self.legal_footer,
             "pdf_template_variant": self.pdf_template_variant,
             "vat_applicable": self.vat_applicable,

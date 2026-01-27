@@ -183,6 +183,68 @@ export const invoiceService = {
     window.URL.revokeObjectURL(url);
   },
 
+  // Exporter les paiements encaissés en CSV (comptabilité)
+  async exportPaymentsCSV(companyId, options = {}) {
+    const { year, month, decimal = 'comma', with_meta = 0, companyName } = options;
+
+    if (!year || !month) {
+      throw new Error('Année et mois sont requis');
+    }
+
+    const params = new URLSearchParams();
+    params.append('year', year);
+    params.append('month', month);
+    params.append('decimal', decimal);
+    if (with_meta) {
+      params.append('with_meta', with_meta);
+    }
+
+    try {
+      const response = await apiClient.get(
+        `${API_BASE}/invoices/companies/${companyId}/exports/payments.csv?${params}`,
+        {
+          responseType: 'blob',
+        }
+      );
+
+      // Vérifier si le blob est vide (pas de données)
+      if (response.data.size === 0) {
+        const error = new Error('Aucun paiement enregistré sur cette période');
+        error.response = { status: 404, data: { size: 0 } };
+        throw error;
+      }
+
+      // Créer un lien de téléchargement
+      const blob = new Blob([response.data], { type: 'text/csv; charset=utf-8' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      // Nom de fichier : encaissements_YYYY-MM.csv ou encaissements_NOM_ENTREPRISE_YYYY-MM.csv
+      const monthStr = String(month).padStart(2, '0');
+      let filename = `encaissements_${year}-${monthStr}.csv`;
+      if (companyName) {
+        // Sanitiser le nom de l'entreprise (enlever caractères spéciaux)
+        const sanitized = companyName
+          .replace(/[^a-zA-Z0-9\s-_]/g, '')
+          .replace(/\s+/g, '_')
+          .substring(0, 30); // Limiter la longueur
+        filename = `encaissements_${sanitized}_${year}-${monthStr}.csv`;
+      }
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      // Propager les erreurs HTTP avec le statut pour une gestion spécifique
+      if (err.response) {
+        throw err;
+      }
+      // Erreur réseau ou autre
+      throw new Error(err.message || "Erreur lors de l'export du CSV");
+    }
+  },
+
   // NOUVEAU: Récupérer la liste des institutions (cliniques)
   async fetchInstitutions(companyId) {
     const response = await apiClient.get(
@@ -192,15 +254,40 @@ export const invoiceService = {
   },
 
   // Clients éligibles (trajets non facturés)
-  async fetchEligibleClients(companyId, { search, limit, year, month } = {}) {
+  async fetchEligibleClients(
+    companyId,
+    { search, limit, year, month, bill_to_client_id, clinic_company_id, billed_to_type } = {}
+  ) {
     const params = new URLSearchParams();
     if (search) params.append('search', search);
     if (limit) params.append('limit', limit);
     if (year) params.append('year', year);
     if (month) params.append('month', month);
+    if (bill_to_client_id) params.append('bill_to_client_id', bill_to_client_id);
+    if (clinic_company_id) params.append('clinic_company_id', clinic_company_id);
+    if (billed_to_type) params.append('billed_to_type', billed_to_type);
     const query = params.toString();
     const response = await apiClient.get(
       `${API_BASE}/invoices/companies/${companyId}/clients/eligible${query ? `?${query}` : ''}`
+    );
+    return response.data;
+  },
+
+  // Totaux pour facture clinique mensuelle (S2)
+  async fetchClinicMonthlyTotals(
+    companyId,
+    { year, month, clinic_company_id, include_client_ids } = {}
+  ) {
+    const params = new URLSearchParams();
+    if (year) params.append('year', year);
+    if (month) params.append('month', month);
+    if (clinic_company_id) params.append('clinic_company_id', clinic_company_id);
+    if (include_client_ids && include_client_ids.length > 0) {
+      params.append('include_client_ids', include_client_ids.join(','));
+    }
+    const query = params.toString();
+    const response = await apiClient.get(
+      `${API_BASE}/invoices/companies/${companyId}/clinic-monthly-totals${query ? `?${query}` : ''}`
     );
     return response.data;
   },
@@ -273,6 +360,27 @@ export const invoiceService = {
     );
     return response.data;
   },
+
+  async fetchUnbilledReservationIds(companyId, clientId, filters = {}) {
+    const params = new URLSearchParams();
+
+    if (filters.year) params.append('year', filters.year);
+    if (filters.month) params.append('month', filters.month);
+    if (filters.billed_to_type) params.append('billed_to_type', filters.billed_to_type);
+
+    const response = await apiClient.get(
+      `${API_BASE}/invoices/companies/${companyId}/clients/${clientId}/unbilled-reservations/ids?${params}`
+    );
+    return response.data;
+  },
+
+  // Récupérer une réservation spécifique par ID (pour hydratation d'objets minimaux)
+  async fetchReservationById(companyId, reservationId) {
+    const response = await apiClient.get(
+      `${API_BASE}/invoices/companies/${companyId}/reservations/${reservationId}`
+    );
+    return response.data;
+  },
 };
 
 // Fonctions utilitaires pour les composants
@@ -281,6 +389,13 @@ export const formatCurrency = (amount) => {
     style: 'currency',
     currency: 'CHF',
   }).format(amount);
+};
+
+/** Format montant CHF pour S2 override dialog/footer : "40.00 CHF". Utilise toFixed(2). */
+export const formatCurrencyCHF = (value) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '0.00 CHF';
+  return `${n.toFixed(2)} CHF`;
 };
 
 export const formatDate = (dateString) => {
@@ -398,4 +513,5 @@ export const {
   fetchBillingSettings,
   updateBillingSettings,
   exportInvoicesCSV,
+  exportPaymentsCSV,
 } = invoiceService;

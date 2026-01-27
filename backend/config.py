@@ -249,6 +249,13 @@ class Config:
     # ✅ URLs dynamiques pour PDFs/uploads
     PDF_BASE_URL: str = os.getenv("PDF_BASE_URL", "http://localhost:5000")
     UPLOADS_PUBLIC_BASE = os.getenv("UPLOADS_PUBLIC_BASE", "/uploads")
+    # URL publique de base pour les emails (logos en mode URL). Priorité: PUBLIC_BASE_URL > PDF_BASE_URL
+    # Prod-grade: PUBLIC_BASE_URL doit pointer vers le domaine public (pas localhost).
+    # /uploads/company_logos/... doit être accessible sans auth avec Content-Type image/*.
+    PUBLIC_BASE_URL: str = os.getenv("PUBLIC_BASE_URL") or os.getenv("PDF_BASE_URL", "http://localhost:5000")
+    # Mode envoi email factures/rappels: brevo_api (URL logo) | brevo_smtp (CID MIME multipart/related)
+    # SMTP: BREVO_SMTP_PASSWORD obligatoire (pas de fallback API_KEY). Port 587 sortant + DKIM/SPF.
+    EMAIL_PROVIDER_MODE: str = (os.getenv("EMAIL_PROVIDER_MODE", "brevo_api") or "brevo_api").strip().lower()
 
     # --- Rate Limiting Configuration ---
     # ✅ Configuration adaptative selon l'environnement

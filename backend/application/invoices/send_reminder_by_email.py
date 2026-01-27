@@ -18,6 +18,7 @@ from ext import db
 from models import Client, Company, CompanyBillingSettings, Invoice, InvoiceReminder
 from services.documents.pdf import PDFService
 from services.email.brevo_provider import BrevoEmailProvider
+from services.email.signature_utils import inject_signature_into_html
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,10 @@ class SendReminderByEmailInput:
 
     reminder_id: int
     recipient_email: str | None = None  # Si None, utilise client.contact_email
-    force_regenerate_pdf: bool = False  # Regénérer le PDF même s'il existe
+    force_regenerate_pdf: bool = False
+    # ⚠️ IMPORTANT: Ce flag régénère UNIQUEMENT le PDF du rappel (reminder.pdf_url).
+    # Il ne modifie JAMAIS invoice.pdf_url (la facture initiale reste intacte).
+    # Pour forcer la régénération du PDF du rappel, utiliser force_regenerate_pdf=True.
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,78 +138,90 @@ class SendReminderByEmailUseCase:
                     status_code=400,
                 )
 
-            # 4. Utiliser le PDF de la facture originale (pas un PDF de rappel spécifique)
+            # 4. ✅ CORRECTION: Utiliser le PDF du rappel (reminder.pdf_url), PAS le PDF de la facture
+            # La facture initiale reste intacte, le rappel a son propre PDF
             pdf_path = None
-            logger.info(
-                "[REMINDER EMAIL] invoice.pdf_url=%s, force_regenerate=%s",
-                invoice.pdf_url,
-                input_data.force_regenerate_pdf,
-            )
-            if not invoice.pdf_url or input_data.force_regenerate_pdf:
+            import os
+            REMINDER_DEBUG = os.getenv("REMINDER_DEBUG", "0") == "1"
+
+            if REMINDER_DEBUG:
                 logger.info(
-                    "Génération du PDF pour la facture %s (pour rappel N°%s)",
-                    invoice.invoice_number,
-                    reminder.level,
+                    (
+                        "[REMINDER_DEBUG] send_reminder_by_email: reminder_id=%s, "
+                        "reminder.pdf_url=%s, invoice.pdf_url (INCHANGÉ)=%s, force_regenerate=%s"
+                    ),
+                    reminder.id,
+                    reminder.pdf_url,
+                    invoice.pdf_url,
+                    input_data.force_regenerate_pdf,
                 )
-                pdf_url = self.pdf_service.generate_invoice_pdf(invoice)
-                if pdf_url:
-                    invoice.pdf_url = pdf_url
-                    db.session.commit()
-                    # Convertir l'URL en chemin système si nécessaire
-                    from flask import current_app
 
-                    uploads_dir = Path(
-                        current_app.config.get("UPLOAD_FOLDER", "/app/uploads")
+            # Utiliser le PDF du rappel (généré lors de la création du rappel)
+            # ⚠️ IMPORTANT: force_regenerate_pdf régénère UNIQUEMENT reminder.pdf_url,
+            # jamais invoice.pdf_url (la facture initiale reste intacte).
+            if not reminder.pdf_url or input_data.force_regenerate_pdf:
+                if input_data.force_regenerate_pdf:
+                    logger.info(
+                        (
+                            "[REMINDER EMAIL] Régénération du PDF du rappel N°%s pour facture %s "
+                            "(reminder.pdf_url uniquement, invoice.pdf_url inchangé)"
+                        ),
+                        reminder.level,
+                        invoice.invoice_number,
                     )
-
-                    # Extraire le chemin relatif depuis l'URL
-                    if pdf_url.startswith("/uploads/"):
-                        relative_path = pdf_url.removeprefix("/uploads/")
-                    elif "/uploads/" in pdf_url:
-                        relative_path = pdf_url.split("/uploads/", 1)[1]
+                    # Régénérer uniquement le PDF du rappel (pas la facture)
+                    # ✅ GARANTIE: generate_reminder_pdf ne modifie JAMAIS invoice.pdf_url
+                    pdf_url = self.pdf_service.generate_reminder_pdf(invoice, reminder.level, reminder)
+                    if pdf_url:
+                        reminder.pdf_url = pdf_url
+                        db.session.commit()
                     else:
-                        relative_path = None
-
-                    if relative_path:
-                        pdf_path = str(uploads_dir / relative_path)
-                        logger.info(
-                            "[REMINDER EMAIL] PDF généré: %s -> %s",
-                            pdf_url,
-                            pdf_path,
+                        logger.warning(
+                            "Impossible de régénérer le PDF du rappel N°%s pour la facture %s",
+                            reminder.level,
+                            invoice.invoice_number,
                         )
                 else:
                     logger.warning(
-                        "Impossible de générer le PDF pour la facture %s",
-                        invoice.invoice_number,
+                        (
+                            "[REMINDER EMAIL] Aucun PDF disponible pour le rappel N°%s (reminder.pdf_url=%s). "
+                            "Le rappel doit être généré avec son PDF avant l'envoi par email."
+                        ),
+                        reminder.level,
+                        reminder.pdf_url,
                     )
-            elif invoice.pdf_url:
-                # Utiliser le PDF existant de la facture
+
+            # Extraire le chemin système depuis reminder.pdf_url
+            if reminder.pdf_url:
                 from flask import current_app
 
                 uploads_dir = Path(
                     current_app.config.get("UPLOAD_FOLDER", "/app/uploads")
                 )
 
-                # Extraire le chemin relatif depuis l'URL (gérer les URLs complètes et relatives)
-                if invoice.pdf_url.startswith("/uploads/"):
-                    # URL relative : /uploads/invoices/...
-                    relative_path = invoice.pdf_url.removeprefix("/uploads/")
-                elif "/uploads/" in invoice.pdf_url:
-                    # URL complète : http://localhost:5000/uploads/invoices/...
-                    relative_path = invoice.pdf_url.split("/uploads/", 1)[1]
+                # Extraire le chemin relatif depuis l'URL
+                if reminder.pdf_url.startswith("/uploads/"):
+                    relative_path = reminder.pdf_url.removeprefix("/uploads/")
+                elif "/uploads/" in reminder.pdf_url:
+                    relative_path = reminder.pdf_url.split("/uploads/", 1)[1]
                 else:
-                    logger.warning(
-                        "[REMINDER EMAIL] Format d'URL inattendu pour invoice.pdf_url: %s",
-                        invoice.pdf_url,
-                    )
                     relative_path = None
 
                 if relative_path:
                     pdf_path = str(uploads_dir / relative_path)
-                    logger.info(
-                        "[REMINDER EMAIL] PDF de la facture extrait de l'URL: %s -> %s",
-                        invoice.pdf_url,
-                        pdf_path,
+                    if REMINDER_DEBUG:
+                        logger.info(
+                            (
+                                "[REMINDER_DEBUG] PDF du rappel extrait: %s -> %s (exists=%s)"
+                            ),
+                            reminder.pdf_url,
+                            pdf_path,
+                            Path(pdf_path).exists(),
+                        )
+                else:
+                    logger.warning(
+                        "[REMINDER EMAIL] Format d'URL inattendu pour reminder.pdf_url: %s",
+                        reminder.pdf_url,
                     )
 
             logger.info(
@@ -381,7 +397,33 @@ class SendReminderByEmailUseCase:
                 </html>
                 """
 
-            # 9. Préparer l'attachement PDF
+            # 8.5. Injecter la signature email si configurée
+            provider_mode = (
+                (os.getenv("EMAIL_PROVIDER_MODE", "brevo_api") or "brevo_api")
+                .strip()
+                .lower()
+            )
+            logo_mode = "url" if provider_mode == "brevo_api" else "cid"
+            cache_bust = str(reminder.id) if logo_mode == "url" else None
+
+            logo_info = None
+            if billing_settings:
+                html_content, logo_info = inject_signature_into_html(
+                    html_content,
+                    company=company,
+                    billing_settings=billing_settings,
+                    logo_mode=logo_mode,
+                    cache_bust=cache_bust,
+                )
+
+            # 9. Préparer les attachements (PDF + logo inline si mode CID)
+            EMAIL_SIGNATURE_DEBUG = os.getenv("EMAIL_SIGNATURE_DEBUG", "0") == "1"
+            if EMAIL_SIGNATURE_DEBUG:
+                logger.info(
+                    "[EMAIL_SIGNATURE_DEBUG] send_reminder_by_email: provider_mode=%s, logo_mode=%s",
+                    provider_mode,
+                    logo_mode,
+                )
             attachments = []
             if pdf_bytes:
                 attachments.append(
@@ -390,6 +432,39 @@ class SendReminderByEmailUseCase:
                         "content": pdf_bytes,
                     }
                 )
+            # Logo inline pour signature (CID)
+            if logo_info:
+                # Vérifier que logo_info est valide avant d'ajouter
+                if not logo_info.get("bytes") or len(logo_info.get("bytes", b"")) == 0:
+                    logger.warning(
+                        "[REMINDER EMAIL] Logo bytes vides pour rappel N°%s - logo inline ignoré",
+                        reminder.level,
+                    )
+                elif logo_info.get("cid") != "company_logo":
+                    logger.warning(
+                        "[REMINDER EMAIL] CID inattendu: %s (attendu: company_logo) - logo inline ignoré",
+                        logo_info.get("cid"),
+                    )
+                else:
+                    attachments.append(
+                        {
+                            "filename": logo_info["filename"],
+                            "content": logo_info["bytes"],
+                            "cid": logo_info["cid"],  # Doit être "company_logo"
+                            "mime_type": logo_info["mime_type"],
+                        }
+                    )
+                    if EMAIL_SIGNATURE_DEBUG:
+                        logger.info(
+                            (
+                                "[EMAIL_SIGNATURE_DEBUG] send_reminder_by_email: logo inline ajouté - "
+                                "cid=%s, filename=%s, mime_type=%s, bytes_len=%d"
+                            ),
+                            logo_info["cid"],
+                            logo_info["filename"],
+                            logo_info["mime_type"],
+                            len(logo_info["bytes"]),
+                        )
 
             # 10. Envoyer l'email via Brevo
             subject_prefix = {

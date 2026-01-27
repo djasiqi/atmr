@@ -169,6 +169,7 @@ def init_namespaces(app):
     from routes.analytics import analytics_ns  # /analytics
     from routes.app_version import app_version_ns  # Version check mobile
     from routes.auth import auth_ns
+    from routes.billing_review import billing_review_ns  # ✅ P5: Contrôle facturation
     from routes.bookings import bookings_ns
     from routes.clients import clients_ns
     from routes.companies import companies_ns
@@ -198,6 +199,9 @@ def init_namespaces(app):
         security_monitoring_ns,
     )  # ✅ S3: Monitoring sécurité
     from routes.shadow_mode_routes import shadow_mode_bp  # Shadow Mode RL
+    from routes.transport_vouchers import (  # ✅ P3: Bons de transport
+        transport_vouchers_ns,
+    )
     from routes.utils import utils_ns
 
     # Routes RL (uniquement disponible dans l'environnement RL)
@@ -269,6 +273,12 @@ def init_namespaces(app):
 
     # Routes invoices
     api_v1.add_namespace(invoices_ns, path="/invoices")
+
+    # ✅ P5: Routes contrôle facturation
+    api_v1.add_namespace(billing_review_ns, path="/billing")
+
+    # ✅ P3: Routes transport vouchers (bons de transport)
+    api_v1.add_namespace(transport_vouchers_ns, path="/transport-vouchers")
 
     # Routes email (configuration Brevo)
     api_v1.add_namespace(email_ns, path="/email")

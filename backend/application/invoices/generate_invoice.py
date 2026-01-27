@@ -6,6 +6,7 @@ vers l'architecture DDD.
 
 from __future__ import annotations  # noqa: I001
 
+# pyright: reportUnusedImport=false, reportUnusedVariable=false, reportGeneralTypeIssues=false
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -23,7 +24,8 @@ from infrastructure.invoices.invoice_description_builder import (
     InvoiceDescriptionBuilder,
 )
 from infrastructure.invoices.invoice_number_generator import InvoiceNumberGenerator
-from models import Booking, Invoice, InvoiceLineType, InvoiceStatus
+from models import BillingParty, Booking, Invoice, InvoiceLineType, InvoiceStatus
+from models.enums import InvoiceBillingStrategy
 from repositories.booking_repository import BookingRepository
 from repositories.client_repository import ClientRepository
 from repositories.company_billing_settings_repository import (
@@ -32,7 +34,12 @@ from repositories.company_billing_settings_repository import (
 from repositories.invoice_line_repository import InvoiceLineRepository
 from repositories.invoice_repository import InvoiceRepository
 from repositories.invoice_sequence_repository import InvoiceSequenceRepository
+from services.billing.billing_party_linker import (
+    get_or_create_billing_party_for_legacy_bill_to_client,
+    resolve_billing_party_for_clinic,
+)
 from services.documents.pdf import PDFService
+from services.documents.qrbill import QRBillService
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +55,12 @@ class GenerateInvoiceInput:
         client_id: ID du bénéficiaire du service (patient)
         period_year: Année de facturation (ex: 2025)
         period_month: Mois de facturation (1-12)
+        billing_party_id: ID du destinataire de facturation unifié (BillingParty).
+            Doit appartenir à l'entreprise (company_id).
         bill_to_client_id: ID du payeur (clinique/institution).
             Si None, client_id paie directement
+        clinic_company_id: ID d'une clinique (Company) pour facturation mensuelle (S2).
+            Résolu via ClinicBillingPartyMapping -> BillingParty.
         reservation_ids: Liste d'IDs de réservations spécifiques.
             Si None, prend toutes les réservations non facturées
         overrides: Dict facultatif {reservation_id: {amount, vat_rate, note}}
@@ -59,7 +70,9 @@ class GenerateInvoiceInput:
     client_id: int
     period_year: int
     period_month: int
+    billing_party_id: int | None = None
     bill_to_client_id: int | None = None
+    clinic_company_id: int | None = None
     reservation_ids: list[int] | None = None
     overrides: dict[str, Any] | None = None
 
@@ -144,6 +157,17 @@ class GenerateInvoiceUseCase:
             GenerateInvoiceOutput avec la facture créée
         """
         try:
+            # Garde-fou: un seul mode "destinataire" à la fois.
+            destinations = [
+                bool(input_data.billing_party_id),
+                bool(input_data.bill_to_client_id),
+                bool(input_data.clinic_company_id),
+            ]
+            if sum(destinations) > 1:
+                raise ValueError(
+                    "Fournir un seul parmi billing_party_id, bill_to_client_id, clinic_company_id."
+                )
+
             # 1. Récupérer les paramètres de facturation
             billing_settings_dto = self.billing_settings_repo.find_or_create(
                 input_data.company_id
@@ -160,8 +184,21 @@ class GenerateInvoiceUseCase:
                     if isinstance(value, dict):
                         overrides_map[reservation_id] = value
 
-            # 3. Vérifier le client payeur si fourni
-            if input_data.bill_to_client_id:
+            # 3. Résoudre le destinataire de facturation
+            billing_party_id: int | None = None
+            payer_needs_review_reason: str | None = None
+            if input_data.billing_party_id:
+                bp = BillingParty.query.filter_by(
+                    id=input_data.billing_party_id,
+                    company_id=input_data.company_id,
+                    is_active=True,
+                ).first()
+                if not bp:
+                    raise ValueError(
+                        "BillingParty introuvable, inactif, ou n'appartient pas à l'entreprise."
+                    )
+                billing_party_id = bp.id
+            elif input_data.bill_to_client_id:
                 bill_to_client = self.client_repo.find_model_by_id_and_company(
                     input_data.bill_to_client_id, input_data.company_id
                 )
@@ -173,6 +210,33 @@ class GenerateInvoiceUseCase:
                         "Le client %s n'est pas marqué comme institution",
                         input_data.bill_to_client_id,
                     )
+
+                # ✅ Nouveau: créer/associer un BillingParty (destinataire unifié)
+                bp = get_or_create_billing_party_for_legacy_bill_to_client(
+                    company_id=input_data.company_id,
+                    bill_to_client_id=input_data.bill_to_client_id,
+                )
+                billing_party_id = bp.id if bp is not None else None
+            elif input_data.clinic_company_id:
+                # ✅ S2: Validation du mapping clinique → billing_party (prérequis pour S2)
+                bp = resolve_billing_party_for_clinic(
+                    company_id=input_data.company_id,
+                    clinic_company_id=input_data.clinic_company_id,
+                )
+                if bp is None:
+                    # Mapping manquant : refuser la génération et mettre les bookings en NEEDS_REVIEW
+                    from models.enums import BillingReviewStatus
+
+                    payer_needs_review_reason = (
+                        "Destinataire de facturation clinique non configuré "
+                        "(mapping clinique → billing_party manquant). "
+                        "Veuillez configurer le mapping dans les paramètres de facturation."
+                    )
+                    billing_party_id = None
+                    # Mettre les bookings en NEEDS_REVIEW avant de lever l'erreur
+                    # (sera fait plus tard dans le code après récupération des reservations)
+                else:
+                    billing_party_id = bp.id
 
             # 4. Récupérer les réservations
             target_statuses = ["COMPLETED", "RETURN_COMPLETED"]
@@ -301,6 +365,117 @@ class GenerateInvoiceUseCase:
                 msg = "Aucune réservation trouvée pour cette période"
                 raise ValueError(msg)
 
+            # ✅ P2.2: Résoudre automatiquement le payeur selon la date (séjour actif + payeur par défaut)
+            from models.enums import BillingReviewStatus
+            from services.billing.client_stay_resolver import (
+                detect_billing_conflict_with_stay,
+                find_active_stay_for_booking,
+                resolve_billing_party_for_booking,
+            )
+
+            for r in reservations:
+                # Résoudre le payeur automatiquement selon la date (gère transitions temporelles)
+                payer_resolved = resolve_billing_party_for_booking(
+                    booking=r,
+                    company_id=input_data.company_id,
+                )
+
+                # Ne pas overwrite patient → clinique en facture client directe (clinic_company_id absent).
+                # L'utilisateur a explicitement choisi "facturation client" ; conserver l'override "facturer patient"
+                # pour les hospitalisés (sinon, après annulation, les transports repassent en "facturer clinique").
+                if payer_resolved and input_data.clinic_company_id is not None:
+                    # Appliquer seulement si le booking n'a pas déjà un payeur explicite
+                    current_billed_to_type = (
+                        getattr(r, "billed_to_type", None) or "patient"
+                    ).lower()
+                    current_billing_party_id = getattr(r, "billing_party_id", None)
+
+                    # Si pas de payeur explicite, utiliser la résolution automatique
+                    if current_billed_to_type == "patient" and not current_billing_party_id:
+                        try:
+                            if payer_resolved.get("billed_to_type"):
+                                r.billed_to_type = payer_resolved["billed_to_type"]
+                            if payer_resolved.get("billed_to_company_id"):
+                                r.billed_to_company_id = payer_resolved["billed_to_company_id"]
+                            if payer_resolved.get("billing_party_id"):
+                                r.billing_party_id = payer_resolved["billing_party_id"]
+                            # ✅ P4: Renseigner billing_source et billing_source_ref pour traçabilité
+                            if payer_resolved.get("billing_source"):
+                                from models.enums import BillingSource
+                                billing_source_str = payer_resolved["billing_source"]
+                                try:
+                                    # Les valeurs retournées sont déjà en snake_case (comme l'enum)
+                                    r.billing_source = BillingSource(billing_source_str)
+                                except (ValueError, AttributeError) as e:
+                                    logger.warning(
+                                        "[GenerateInvoice] Booking %s: billing_source invalide: %s (%s)",
+                                        r.id,
+                                        billing_source_str,
+                                        e,
+                                    )
+                            if payer_resolved.get("billing_source_ref"):
+                                r.billing_source_ref = payer_resolved["billing_source_ref"]
+                            logger.info(
+                                (
+                                    "[GenerateInvoice] Booking %s: payeur résolu automatiquement "
+                                    "(billing_party_id=%s, type=%s, source=%s, source_ref=%s)"
+                                ),
+                                r.id,
+                                payer_resolved.get("billing_party_id"),
+                                payer_resolved.get("billed_to_type", "patient"),
+                                payer_resolved.get("billing_source"),
+                                payer_resolved.get("billing_source_ref"),
+                            )
+                        except Exception:
+                            # Best effort: certains DTO/mock peuvent ne pas exposer ces champs
+                            pass
+
+                # Détecter les conflits séjour vs payeur actuel
+                stay = find_active_stay_for_booking(booking=r)
+                if stay:
+                    has_conflict, conflict_reason = detect_billing_conflict_with_stay(
+                        booking=r,
+                        stay=stay,
+                        company_id=input_data.company_id,
+                    )
+                    if has_conflict:
+                        try:
+                            r.billing_review_status = BillingReviewStatus.NEEDS_REVIEW
+                            r.billing_override_reason = conflict_reason
+                            logger.warning(
+                                (
+                                    "[GenerateInvoice] Booking %s: conflit détecté avec séjour "
+                                    "(stay_id=%s) → marqué NEEDS_REVIEW: %s"
+                                ),
+                                r.id,
+                                stay.id,
+                                conflict_reason,
+                            )
+                        except Exception:
+                            # Best effort
+                            pass
+
+            # ✅ P1.4: si payeur non-patient mais pas de BillingParty, forcer NEEDS_REVIEW
+            # ✅ S2: Si mapping clinique manquant, refuser la génération et mettre en NEEDS_REVIEW
+            if payer_needs_review_reason:
+                for r in reservations:
+                    try:
+                        r.billing_review_status = BillingReviewStatus.NEEDS_REVIEW
+                        r.billing_override_reason = payer_needs_review_reason
+                    except Exception:
+                        # Best effort: certains DTO/mock peuvent ne pas exposer ces champs
+                        pass
+                # Si c'est un problème de mapping S2, refuser la génération
+                if input_data.clinic_company_id and not billing_party_id:
+                    db.session.commit()  # Sauvegarder les changements de statut
+                    msg = (
+                        f"Impossible de générer la facture : mapping clinique → billing_party manquant "
+                        f"pour clinic_company_id={input_data.clinic_company_id}. "
+                        f"Les bookings ont été mis en NEEDS_REVIEW. "
+                        f"Veuillez configurer le mapping dans les paramètres de facturation."
+                    )
+                    raise ValueError(msg)
+
             # 5. Générer le numéro de facture
             sequence_dto = self.invoice_sequence_repo.find_or_create(
                 input_data.company_id,
@@ -388,10 +563,34 @@ class GenerateInvoiceUseCase:
 
             # 8. Créer la facture
             two_places = Decimal("0.01")
+            meta: dict[str, Any] | None = None
+            if payer_needs_review_reason:
+                meta = {
+                    "billing_review_status": "needs_review",
+                    "needs_review_reason": payer_needs_review_reason,
+                    "payer_resolution": {
+                        "mode": "clinic_company_id",
+                        "clinic_company_id": input_data.clinic_company_id,
+                    },
+                }
+            # ✅ S2: Déterminer si c'est une facture S2 (clinique mensuelle multi-patients)
+            # S2 = clinic_company_id fourni ET plusieurs clients différents dans les bookings
+            unique_client_ids = {r.client_id for r in reservations if hasattr(r, "client_id")}
+            is_s2 = (
+                input_data.clinic_company_id is not None
+                and len(unique_client_ids) > 1
+            )
+
             invoice_data = {
                 "company_id": input_data.company_id,
                 "client_id": input_data.client_id,
                 "bill_to_client_id": input_data.bill_to_client_id,
+                "billing_party_id": billing_party_id,
+                "billed_to_company_id": input_data.clinic_company_id,
+                "billing_strategy": (
+                    InvoiceBillingStrategy.S2_CLINIC_MONTHLY if is_s2
+                    else InvoiceBillingStrategy.S1_PATIENT
+                ),
                 "period_month": input_data.period_month,
                 "period_year": input_data.period_year,
                 "invoice_number": invoice_number,
@@ -404,6 +603,7 @@ class GenerateInvoiceUseCase:
                 "vat_total_amount": Decimal("0.00"),
                 "total_amount": Decimal("0.00"),
                 "balance_due": Decimal("0.00"),
+                "meta": meta,
             }
             invoice_dto = self.invoice_repo.create(invoice_data)
             # Récupérer le modèle pour les opérations suivantes
@@ -462,7 +662,13 @@ class GenerateInvoiceUseCase:
                 description = self.description_builder.build_description(
                     pickup_location=reservation.pickup_location or "",
                     dropoff_location=reservation.dropoff_location or "",
-                    patient_name=patient_name if input_data.bill_to_client_id else None,
+                    patient_name=patient_name
+                    if (
+                        input_data.bill_to_client_id
+                        or input_data.clinic_company_id
+                        or input_data.billing_party_id
+                    )
+                    else None,
                     bill_to_client_id=input_data.bill_to_client_id,
                 )
 
@@ -540,11 +746,23 @@ class GenerateInvoiceUseCase:
             }
             invoice.meta = cast(Any, current_meta)
 
-            # 11. Générer le PDF
+            # 11. Générer et sauvegarder la référence QR (si pas déjà présente)
+            if not invoice.qr_reference:
+                qrbill_service = QRBillService()
+                qr_ref = qrbill_service._get_payment_reference(invoice)
+                if qr_ref:
+                    invoice.qr_reference = qr_ref
+                    logger.debug(
+                        "Référence QR sauvegardée pour facture %s: %s",
+                        invoice.invoice_number,
+                        qr_ref,
+                    )
+
+            # 12. Générer le PDF
             pdf_url = self.pdf_service.generate_invoice_pdf(invoice)
             invoice.pdf_url = pdf_url
 
-            # 12. Commit de la transaction
+            # 13. Commit de la transaction
             db.session.commit()
 
             if input_data.bill_to_client_id:

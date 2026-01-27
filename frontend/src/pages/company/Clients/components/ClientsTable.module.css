@@ -33,10 +33,20 @@
 .table tbody tr {
   border-bottom: 1px solid var(--border-primary);
   transition: var(--transition-base);
+  cursor: pointer;
 }
 
 .table tbody tr:hover {
   background: var(--bg-hover);
+}
+
+.table tbody tr.selected {
+  background: #eff6ff;
+  border-left: 4px solid #3b82f6;
+}
+
+.table tbody tr.selected:hover {
+  background: #dbeafe;
 }
 
 .table tbody tr.inactive {
@@ -61,11 +71,17 @@
 .clientName {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
+  gap: var(--spacing-xs);
   font-weight: var(--font-weight-semibold);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.contextBadge {
+  font-size: 0.875rem;
+  opacity: 0.8;
+  flex-shrink: 0;
 }
 
 .institutionBadge {

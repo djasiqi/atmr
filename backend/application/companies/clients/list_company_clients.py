@@ -91,8 +91,7 @@ class ListCompanyClientsUseCase:
         if input_data.per_page < 1 or input_data.per_page > self.MAX_PER_PAGE:
             # #region agent log
             logger.error(
-                "[ListCompanyClientsUseCase] Validation failed: "
-                "per_page=%s > MAX_PER_PAGE=%s",
+                "[ListCompanyClientsUseCase] Validation failed: per_page=%s > MAX_PER_PAGE=%s",
                 input_data.per_page,
                 self.MAX_PER_PAGE,
             )
@@ -112,16 +111,19 @@ class ListCompanyClientsUseCase:
             per_page = max(input_data.per_page, 1)
 
             q = (input_data.search or "").strip()
-            all_clients = self._client_repo.find_by_company_with_user_and_search(
+            # Utiliser find_models_by_company_with_user_and_search pour obtenir les modèles SQLAlchemy
+            # qui ont la méthode serialize avec toutes les relations (default_billing, etc.)
+            all_clients_models = self._client_repo.find_models_by_company_with_user_and_search(
                 input_data.company_id, q if q else None
             )
-            total = len(all_clients)
+            total = len(all_clients_models)
 
             start_idx = (page - 1) * per_page
             end_idx = start_idx + per_page
-            page_clients = all_clients[start_idx:end_idx]
+            page_clients = all_clients_models[start_idx:end_idx]
 
-            serialized: list[dict[str, Any]] = [c.to_dict() for c in page_clients]
+            # Utiliser serialize au lieu de to_dict() pour inclure default_billing et toutes les relations
+            serialized: list[dict[str, Any]] = [c.serialize for c in page_clients]
 
             return ListCompanyClientsOutput(
                 success=True,

@@ -1,9 +1,86 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import styles from './NewInvoiceModal.module.css';
-import { generateInvoice, invoiceService } from '../../../../../services/invoiceService';
+import { formatCurrencyCHF, generateInvoice, invoiceService } from '../../../../../services/invoiceService';
+import { setBookingPayer } from '../../../../../services/billingReviewService';
 import ReservationSelector from './ReservationSelector';
+import useUrlSearchSync from '../../../../../hooks/useUrlSearchSync';
+import useCompanyData from '../../../../../hooks/useCompanyData';
 
-const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initialDraft = null }) => {
+const formatApiError = (err) => {
+  const data = err?.response?.data ?? err?.data ?? err;
+  const status = err?.response?.status;
+  const statusText = err?.response?.statusText;
+
+  const extractMessage = (value, depth = 0) => {
+    if (value === null || value === undefined) return null;
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+    if (Array.isArray(value)) {
+      const parts = value.map((item) => extractMessage(item, depth + 1)).filter(Boolean);
+      return parts.length ? parts.join('\n') : null;
+    }
+    if (typeof value === 'object') {
+      const candidates = [
+        value.message,
+        value.error,
+        value.detail,
+        value.description,
+        value.reason,
+        value.title,
+      ];
+      for (const candidate of candidates) {
+        const msg = extractMessage(candidate, depth + 1);
+        if (msg) return msg;
+      }
+      if (value.errors) {
+        const msg = extractMessage(value.errors, depth + 1);
+        if (msg) return msg;
+      }
+      if (value.data) {
+        const msg = extractMessage(value.data, depth + 1);
+        if (msg) return msg;
+      }
+    }
+    return null;
+  };
+
+  const main = extractMessage(data) || extractMessage(err?.message);
+
+  // ✅ Marshmallow: préférer les messages dans data.errors si message est générique
+  const genericValidation = 'Erreur de validation des données';
+  let preferred = main;
+  if (data && typeof data === 'object' && data.errors && typeof data.errors === 'object') {
+    const flat = [];
+    const visit = (o) => {
+      if (Array.isArray(o)) o.forEach((x) => { const m = extractMessage(x); if (m) flat.push(m); });
+      else if (o && typeof o === 'object') Object.values(o).forEach(visit);
+    };
+    visit(data.errors);
+    const firstError = flat[0];
+    if (firstError && (!preferred || preferred === genericValidation)) {
+      preferred = flat.length > 1 ? flat.join(' ; ') : firstError;
+    }
+  }
+
+  const statusLabel = status ? `HTTP ${status}${statusText ? ` ${statusText}` : ''}` : null;
+  if (preferred && statusLabel && !preferred.includes(statusLabel)) {
+    return `${preferred} (${statusLabel})`;
+  }
+  return preferred || statusLabel || 'Erreur inconnue';
+};
+
+const NewInvoiceModal = ({
+  open,
+  onClose,
+  onInvoiceGenerated,
+  companyId,
+  initialDraft = null,
+  refreshTrigger = 0,
+}) => {
+  const navigate = useNavigate();
+  const { company } = useCompanyData();
   const [billingType, setBillingType] = useState('direct'); // 'direct', 'third_party' ou 'partner'
   const [formData, setFormData] = useState({
     client_id: '',
@@ -21,16 +98,51 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
   // ✅ Référence pour garder le focus sur l'input de recherche
   const clientSearchInputRef = useRef(null);
   const wasInputFocusedRef = useRef(false);
+  const searchDebounceRef = useRef(null);
+  const { initialSearch, shouldFocus, consumeFocus, initialized } = useUrlSearchSync();
   const [institutions, setInstitutions] = useState([]);
   const [partners, setPartners] = useState([]);
   const [partnersLoading, setPartnersLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
+  const lastInstitutionRef = useRef(null);
+  // ✅ Génération groupée (batch) - génère N factures en une opération (une par patient)
+  // Note: Ce n'est PAS une vraie consolidation (1 facture unique pour tous les patients)
+  // Pour une vraie consolidation, il faudrait modifier le backend
+  const [isConsolidated, setIsConsolidated] = useState(false);
+  // ✅ S2: Facture clinique mensuelle unique (1 facture pour tous les patients)
+  // En mode third_party, S2 est activé par défaut
+  const [isClinicMonthly, setIsClinicMonthly] = useState(false);
+  const [includeClientIds, setIncludeClientIds] = useState([]); // Exceptions: limiter à certains patients
+  // ✅ Totaux S2 (basés sur tous les transports éligibles, pas la sélection UI)
+  const [s2Totals, setS2Totals] = useState({
+    total_eligible: 0,
+    total_amount_eligible: 0,
+    total_excluded: 0,
+    total_amount_excluded: 0,
+    excluded_bookings: [], // Liste des bookings exclus pour affichage dans l'accordéon
+  });
+  const [s2TotalsLoading, setS2TotalsLoading] = useState(false);
+  // ✅ États pour les accordéons S2 (validation rapide)
+  const [showS2Summary, setShowS2Summary] = useState(true); // Résumé (ouvert par défaut)
+  const [showS2Exclusions, setShowS2Exclusions] = useState(false); // Exclusions (fermé par défaut)
+  const [showDirectTransports, setShowDirectTransports] = useState(false); // Transports à facturer (fermé par défaut, comme S2)
+  const [showPartnerSummary, setShowPartnerSummary] = useState(true); // Facture partenaire (ouvert par défaut)
+  const [showS2Patients, setShowS2Patients] = useState(false); // Patients inclus (fermé par défaut)
+  const [showS2Advanced, setShowS2Advanced] = useState(false); // Options avancées (fermé par défaut)
+  const [expandedPatientId, setExpandedPatientId] = useState(null); // Patient dont on affiche les détails
+  // ✅ États pour les trajets des patients (S2 - marge d'erreur)
+  const [patientBookings, setPatientBookings] = useState({}); // { client_id: [booking_objects] }
+  const [patientBookingsLoading, setPatientBookingsLoading] = useState({}); // { client_id: boolean }
+  const [bookingOverridesInProgress, setBookingOverridesInProgress] = useState(new Set()); // IDs des bookings en cours d'override
+  const [bookingOverrideConfirm, setBookingOverrideConfirm] = useState(null); // { bookingId, clientId } pour la confirmation inline
+  const confirmButtonRef = useRef(null); // Référence pour le focus automatique sur le bouton "Confirmer"
+  const overrideRequestVersions = useRef({}); // { bookingId: version } pour ignorer les réponses obsolètes
+  const overrideInFlightRef = useRef(new Set()); // Sync guard: prevent double submit (state updates async)
 
   // NOUVEAU: Gestion des sélections de réservations par client
   const [selectedReservations, setSelectedReservations] = useState({}); // { client_id: [reservation_objects] }
-  const [showReservationSelection, setShowReservationSelection] = useState(false);
   const [overrides, setOverrides] = useState({});
   const [preselectedReservations, setPreselectedReservations] = useState({});
   useEffect(() => {
@@ -85,7 +197,9 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
 
       setSelectedReservations({});
       setClientSearch('');
-      setShowReservationSelection(true);
+      const el0 = clientSearchInputRef.current;
+      if (el0) el0.value = '';
+      if (billing === 'direct') setShowDirectTransports(true);
       return;
     }
 
@@ -101,15 +215,568 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
     setOverrides({});
     setSelectedReservations({});
     setPreselectedReservations({});
-    setShowReservationSelection(false);
+    setShowDirectTransports(false);
     setClientSearch('');
+    const el1 = clientSearchInputRef.current;
+    if (el1) el1.value = '';
   }, [open, initialDraft]);
+
+  useEffect(() => {
+    if (!open || !initialized) return;
+    if (initialSearch && initialSearch !== clientSearch) {
+      setClientSearch(initialSearch);
+      const el = clientSearchInputRef.current;
+      if (el) el.value = initialSearch;
+    }
+    if (shouldFocus) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      requestAnimationFrame(() => {
+        clientSearchInputRef.current?.focus();
+      });
+      consumeFocus();
+    }
+  }, [open, initialized, initialSearch, shouldFocus, consumeFocus, clientSearch]);
+
+  const handleSearchChange = useCallback(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      searchDebounceRef.current = null;
+      const el = clientSearchInputRef.current;
+      if (el) setClientSearch(el.value);
+    }, 280);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, []);
   const [vatConfig, setVatConfig] = useState({
     applicable: false,
     defaultRate: 0,
     label: '',
     number: '',
   });
+
+  const selectedInstitution = useMemo(
+    () =>
+      institutions.find(
+        (inst) => String(inst.id) === String(formData.bill_to_client_id)
+      ) || null,
+    [institutions, formData.bill_to_client_id]
+  );
+
+  const clinicsForS2 = useMemo(
+    () => institutions.filter((i) => i.clinic_company_id),
+    [institutions]
+  );
+
+  /** ID de la clinique pour set-payer (billed_to_company_id). Fallback sur id si clinic_company_id absent. Entier >= 1 ou null. */
+  const clinicCompanyId = useMemo(() => {
+    const v = selectedInstitution?.clinic_company_id ?? selectedInstitution?.id;
+    if (v == null || v === undefined) return null;
+    const n = Number(v);
+    return Number.isFinite(n) && n >= 1 ? Math.floor(n) : null;
+  }, [selectedInstitution?.clinic_company_id, selectedInstitution?.id]);
+
+  // ✅ Ne plus forcer third_party quand bill_to_client_id existe : ça empêchait de cliquer
+  // sur "Facturation directe" / "Facturation partenaire" en mode facture clinique.
+
+  // ✅ En mode third_party, activer S2 par défaut (facture clinique mensuelle)
+  const hasInitializedS2 = useRef(false);
+  useEffect(() => {
+    if (!open) {
+      hasInitializedS2.current = false;
+      return;
+    }
+    if (billingType === 'third_party' && formData.bill_to_client_id && selectedInstitution?.clinic_company_id) {
+      // Activer S2 par défaut si on est en mode third_party avec une clinique (une seule fois)
+      if (!hasInitializedS2.current) {
+        setIsClinicMonthly(true);
+        setIsConsolidated(false);
+        setShowS2Advanced(false); // Masquer les options avancées par défaut
+        hasInitializedS2.current = true;
+      }
+    } else if (billingType !== 'third_party') {
+      // Désactiver S2 si on n'est plus en mode third_party
+      setIsClinicMonthly(false);
+      setShowS2Advanced(false);
+      hasInitializedS2.current = false;
+    }
+  }, [billingType, formData.bill_to_client_id, selectedInstitution?.clinic_company_id, open]);
+
+  // ✅ Charger les totaux S2 (tous les transports éligibles, pas la sélection UI)
+  useEffect(() => {
+    if (!open || !companyId) return;
+    if (!isClinicMonthly || !formData.bill_to_client_id || !selectedInstitution?.clinic_company_id) {
+      setS2Totals({
+        total_eligible: 0,
+        total_amount_eligible: 0,
+        total_excluded: 0,
+        total_amount_excluded: 0,
+        excluded_bookings: [],
+      });
+      // Réinitialiser les accordéons
+      setShowS2Summary(true);
+      setShowS2Exclusions(false);
+      setShowS2Patients(false);
+      setShowS2Advanced(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchS2Totals = async () => {
+      try {
+        setS2TotalsLoading(true);
+        const response = await invoiceService.fetchClinicMonthlyTotals(companyId, {
+          year: formData.period_year,
+          month: formData.period_month,
+          clinic_company_id: selectedInstitution.clinic_company_id,
+          include_client_ids: includeClientIds.length > 0 ? includeClientIds : undefined,
+        });
+
+        if (!cancelled && response?.data) {
+          // ✅ Hardening: safe Number pour éviter NaN
+          const safeTotalEligible = Number.isFinite(response.data.total_eligible) ? Math.floor(response.data.total_eligible) : 0;
+          const safeTotalAmountEligible = Number.isFinite(response.data.total_amount_eligible) && !Number.isNaN(response.data.total_amount_eligible)
+            ? Number(response.data.total_amount_eligible.toFixed(2))
+            : 0;
+          const safeTotalExcluded = Number.isFinite(response.data.total_excluded) ? Math.floor(response.data.total_excluded) : 0;
+          const safeTotalAmountExcluded = Number.isFinite(response.data.total_amount_excluded) && !Number.isNaN(response.data.total_amount_excluded)
+            ? Number(response.data.total_amount_excluded.toFixed(2))
+            : 0;
+          
+          const totals = {
+            total_eligible: safeTotalEligible,
+            total_amount_eligible: safeTotalAmountEligible,
+            total_excluded: safeTotalExcluded,
+            total_amount_excluded: safeTotalAmountExcluded,
+            excluded_bookings: Array.isArray(response.data.excluded_bookings) ? response.data.excluded_bookings : [],
+          };
+          setS2Totals(totals);
+          // Accordéon exclusions : fermé à l'accès, ouverture/fermeture manuelle
+        }
+      } catch (err) {
+        console.error('❌ [NewInvoiceModal] Erreur lors du chargement des totaux S2:', err);
+        if (!cancelled) {
+        setS2Totals({
+          total_eligible: 0,
+          total_amount_eligible: 0,
+          total_excluded: 0,
+          total_amount_excluded: 0,
+          excluded_bookings: [],
+        });
+        }
+      } finally {
+        if (!cancelled) {
+          setS2TotalsLoading(false);
+        }
+      }
+    };
+
+    fetchS2Totals();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    open,
+    companyId,
+    isClinicMonthly,
+    formData.bill_to_client_id,
+    formData.period_year,
+    formData.period_month,
+    selectedInstitution?.clinic_company_id,
+    includeClientIds,
+    refreshTrigger,
+  ]);
+
+  // ✅ Charger les bookings d'un patient pour afficher les trajets (S2 - marge d'erreur)
+  const loadPatientBookings = useCallback(async (clientId) => {
+    if (!companyId || !clientId || !isClinicMonthly || !formData.period_year || !formData.period_month) {
+      return;
+    }
+
+    try {
+      setPatientBookingsLoading((prev) => ({ ...prev, [clientId]: true }));
+      
+      const data = await invoiceService.fetchUnbilledReservations(companyId, clientId, {
+        year: formData.period_year,
+        month: formData.period_month,
+        // Filtrer uniquement les bookings de la clinique sélectionnée
+        billed_to_type: 'clinic', // On charge tous les bookings, on filtrera côté UI
+      });
+
+      const bookings = Array.isArray(data?.reservations) ? data.reservations : [];
+      
+      // ✅ Filtrer strictement les bookings de la clinique sélectionnée (hardening)
+      const clinicBookings = bookings.filter((booking) => {
+        // Filtre strict: billed_to_type doit être exactement 'clinic'
+        if (booking.billed_to_type !== 'clinic') {
+          return false;
+        }
+        // Si on a une clinique sélectionnée, vérifier aussi billed_to_company_id
+        if (selectedInstitution?.clinic_company_id) {
+          return booking.billed_to_company_id === selectedInstitution.clinic_company_id;
+        }
+        return true;
+      });
+
+      setPatientBookings((prev) => ({ ...prev, [clientId]: clinicBookings }));
+    } catch (err) {
+      console.error(`❌ [NewInvoiceModal] Erreur lors du chargement des trajets pour le patient ${clientId}:`, err);
+      setPatientBookings((prev) => ({ ...prev, [clientId]: [] }));
+    } finally {
+      setPatientBookingsLoading((prev) => ({ ...prev, [clientId]: false }));
+    }
+  }, [companyId, isClinicMonthly, formData.period_year, formData.period_month, selectedInstitution?.clinic_company_id]);
+
+  // ✅ Gérer l'override de facturation d'un booking (S2 - marge d'erreur) avec optimistic update
+  const handleBookingBillingOverride = useCallback(async (bookingId, newBilledToType) => {
+    const debugBilling = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('debugBilling') === '1';
+
+    if (!companyId) return;
+    if (bookingOverridesInProgress.has(bookingId) || overrideInFlightRef.current.has(bookingId)) {
+      return;
+    }
+
+    if (newBilledToType === 'clinic') {
+      if (clinicCompanyId == null || clinicCompanyId < 1) {
+        toast.error('Sélectionnez une clinique avant de réintégrer ce transport.', { duration: 5000 });
+        setBookingOverrideConfirm(null);
+        return;
+      }
+    }
+
+    overrideInFlightRef.current.add(bookingId);
+    setBookingOverridesInProgress((prev) => new Set(prev).add(bookingId));
+
+    const requestVersion = Date.now() + Math.random();
+    overrideRequestVersions.current[bookingId] = requestVersion;
+
+    const affectedClientId = Object.keys(patientBookings).find((clientId) =>
+      patientBookings[clientId]?.some((b) => b.id === bookingId)
+    );
+    const previousBooking = affectedClientId 
+      ? patientBookings[affectedClientId]?.find((b) => b.id === bookingId)
+      : (s2Totals.excluded_bookings || []).find((b) => b.id === bookingId);
+    const previousBilledToType = previousBooking?.billed_to_type || 'clinic';
+    const previousTotals = { ...s2Totals };
+
+    const doRollback = () => {
+      if (affectedClientId && previousBooking) {
+        setPatientBookings((prev) => ({
+          ...prev,
+          [affectedClientId]: prev[affectedClientId].map((b) =>
+            b.id === bookingId ? { ...b, billed_to_type: previousBilledToType } : b
+          ),
+        }));
+      }
+      setS2Totals(previousTotals);
+    };
+
+    const cleanup = () => {
+      overrideInFlightRef.current.delete(bookingId);
+      setBookingOverridesInProgress((prev) => {
+        const next = new Set(prev);
+        next.delete(bookingId);
+        return next;
+      });
+      delete overrideRequestVersions.current[bookingId];
+    };
+
+    if (affectedClientId && previousBooking) {
+      setPatientBookings((prev) => ({
+        ...prev,
+        [affectedClientId]: prev[affectedClientId].map((b) =>
+          b.id === bookingId ? { ...b, billed_to_type: newBilledToType } : b
+        ),
+      }));
+      if (previousBilledToType === 'clinic' && newBilledToType === 'patient') {
+        setS2Totals((prev) => ({
+          ...prev,
+          excluded_bookings: [...(prev.excluded_bookings || []), { ...previousBooking, billed_to_type: 'patient' }],
+        }));
+      } else if (previousBilledToType === 'patient' && newBilledToType === 'clinic') {
+        setS2Totals((prev) => ({
+          ...prev,
+          excluded_bookings: (prev.excluded_bookings || []).filter((b) => b.id !== bookingId),
+        }));
+      }
+    }
+    if (!affectedClientId && previousBooking && previousBilledToType === 'patient' && newBilledToType === 'clinic') {
+      setS2Totals((prev) => ({
+        ...prev,
+        excluded_bookings: (prev.excluded_bookings || []).filter((b) => b.id !== bookingId),
+      }));
+    }
+
+    try {
+      const reason = newBilledToType === 'patient' 
+        ? 'Override manuel depuis modal S2: facturation patient'
+        : 'Override manuel depuis modal S2: retour facturation clinique';
+
+      const payload = {
+        billed_to_type: newBilledToType,
+        billing_party_id: null,
+        billed_to_company_id: newBilledToType === 'clinic' ? clinicCompanyId : null,
+        reason,
+      };
+      // Check: bookingId doit venir de booking.id, pas d'index / rowIndex
+      const selectedBooking = previousBooking ?? { id: bookingId };
+      console.log('[NewInvoiceModal] set-payer call', {
+        selectedBooking,
+        bookingId: selectedBooking?.id ?? bookingId,
+        payload,
+      });
+      const response = await setBookingPayer(bookingId, payload);
+
+      if (overrideRequestVersions.current[bookingId] !== requestVersion) {
+        if (debugBilling) console.log(`[NewInvoiceModal] Requête obsolète ignorée booking ${bookingId}`);
+        return;
+      }
+
+      const rawAmount = response?.data?.amount;
+      const rawOld = response?.data?.old_amount;
+      const numAmount = Number(rawAmount);
+      const numOld = Number(rawOld);
+      const valid = Number.isFinite(numAmount) && !Number.isNaN(numAmount)
+        && Number.isFinite(numOld) && !Number.isNaN(numOld);
+
+      if (!valid) {
+        console.error("[NewInvoiceModal] Réponse API invalide (amount/old_amount manquants ou NaN)", {
+          bookingId,
+          amount: rawAmount,
+          old_amount: rawOld,
+        });
+        doRollback();
+        toast.error('Réponse invalide (montants manquants). Veuillez réessayer.');
+        return;
+      }
+
+      const safeNewAmount = numAmount;
+      const safeOldAmount = numOld;
+
+      if (debugBilling) {
+        console.log("[NewInvoiceModal DEBUG] override response", {
+          booking_id: bookingId,
+          old_amount: rawOld,
+          amount: rawAmount,
+          clinic_rate: response?.data?.clinic_rate,
+          rate_source: response?.data?.rate_source,
+        });
+      }
+      
+      // ✅ Mettre à jour bookingOverrideConfirm avec les valeurs strictes de la réponse API
+      // ✅ Ces valeurs seront utilisées pour les calculs de delta dans les messages de confirmation
+      setBookingOverrideConfirm((prev) =>
+        prev?.bookingId === bookingId
+          ? { ...prev, newAmount: safeNewAmount, oldAmount: safeOldAmount }
+          : prev
+      );
+      
+      // ✅ Mettre à jour le booking avec le nouveau montant dans l'UI
+      if (affectedClientId && previousBooking) {
+        setPatientBookings((prev) => ({
+          ...prev,
+          [affectedClientId]: prev[affectedClientId].map((b) =>
+            b.id === bookingId
+              ? { ...b, billed_to_type: newBilledToType, amount: safeNewAmount }
+              : b
+          ),
+        }));
+      }
+      
+      // ✅ Mettre à jour aussi dans excluded_bookings si présent
+      if (previousBooking && !affectedClientId) {
+        setS2Totals((prev) => ({
+          ...prev,
+          excluded_bookings: (prev.excluded_bookings || []).map((b) =>
+            b.id === bookingId
+              ? { ...b, billed_to_type: newBilledToType, amount: safeNewAmount }
+              : b
+          ),
+        }));
+      }
+
+      // ✅ RÈGLE STRICTE : totaux recalculés UNIQUEMENT depuis la réponse API.
+      // On ne corrige pas les totaux localement avec delta : on refetch fetchClinicMonthlyTotals
+      // (source de vérité). delta = response.amount - response.old_amount sert uniquement pour
+      // l'affichage confirmation (message) ; aucun fallback sur booking.amount / bookingOverrideConfirm.
+
+      // ✅ Rafraîchir les totaux S2 depuis le serveur (source de vérité)
+      const totalsResponse = await invoiceService.fetchClinicMonthlyTotals(companyId, {
+        year: formData.period_year,
+        month: formData.period_month,
+        clinic_company_id: clinicCompanyId ?? selectedInstitution?.clinic_company_id ?? undefined,
+        include_client_ids: includeClientIds.length > 0 ? includeClientIds : undefined,
+      });
+
+      if (overrideRequestVersions.current[bookingId] !== requestVersion) {
+        if (debugBilling) console.log(`[NewInvoiceModal] Réponse obsolète ignorée (totals) booking ${bookingId}`);
+        return;
+      }
+
+      if (totalsResponse?.data) {
+        // ✅ Hardening: safe Number pour éviter NaN
+        const safeTotalEligible = Number.isFinite(totalsResponse.data.total_eligible) ? Math.floor(totalsResponse.data.total_eligible) : 0;
+        const safeTotalAmountEligible = Number.isFinite(totalsResponse.data.total_amount_eligible) && !Number.isNaN(totalsResponse.data.total_amount_eligible) 
+          ? Number(totalsResponse.data.total_amount_eligible.toFixed(2)) 
+          : 0;
+        const safeTotalExcluded = Number.isFinite(totalsResponse.data.total_excluded) ? Math.floor(totalsResponse.data.total_excluded) : 0;
+        const safeTotalAmountExcluded = Number.isFinite(totalsResponse.data.total_amount_excluded) && !Number.isNaN(totalsResponse.data.total_amount_excluded)
+          ? Number(totalsResponse.data.total_amount_excluded.toFixed(2))
+          : 0;
+        
+        setS2Totals({
+          total_eligible: safeTotalEligible,
+          total_amount_eligible: safeTotalAmountEligible,
+          total_excluded: safeTotalExcluded,
+          total_amount_excluded: safeTotalAmountExcluded,
+          excluded_bookings: Array.isArray(totalsResponse.data.excluded_bookings) ? totalsResponse.data.excluded_bookings : [],
+        });
+      }
+
+      // ✅ Rafraîchir les bookings du patient concerné depuis le serveur
+      if (affectedClientId) {
+        await loadPatientBookings(Number(affectedClientId));
+      }
+
+      // ✅ Toast de succès
+      toast.success(
+        newBilledToType === 'patient'
+          ? 'Transport facturé au patient (exclu de la facture clinique)'
+          : 'Transport facturé à la clinique (inclus dans la facture)'
+      );
+    } catch (err) {
+      if (overrideRequestVersions.current[bookingId] !== requestVersion) {
+        if (debugBilling) console.log(`[NewInvoiceModal] Erreur requête obsolète ignorée booking ${bookingId}`);
+        return;
+      }
+      const backendPayload = err?.response?.data;
+      const status = err?.response?.status;
+      const isNotFound = status === 404
+        || backendPayload?.error_code === 'not_found'
+        || (typeof backendPayload?.message === 'string' && backendPayload.message.toLowerCase().includes('non trouvé'));
+      console.error(`❌ [NewInvoiceModal] Erreur override booking ${bookingId}:`, err);
+      if (backendPayload != null) {
+        console.error(`❌ [NewInvoiceModal] Réponse backend (${status}):`, backendPayload);
+      }
+      console.error(`❌ [NewInvoiceModal] Payload envoyé:`, { bookingId, billed_to_type: newBilledToType, billed_to_company_id: newBilledToType === 'clinic' ? clinicCompanyId : null });
+      doRollback();
+      setBookingOverrideConfirm(null);
+      if (isNotFound) {
+        // Rafraîchir la liste (totaux S2 + bookings patient) et toast explicite
+        const refreshTotals = async () => {
+          try {
+            const totalsResponse = await invoiceService.fetchClinicMonthlyTotals(companyId, {
+              year: formData.period_year,
+              month: formData.period_month,
+              clinic_company_id: clinicCompanyId ?? selectedInstitution?.clinic_company_id ?? undefined,
+              include_client_ids: includeClientIds.length > 0 ? includeClientIds : undefined,
+            });
+            if (totalsResponse?.data) {
+              setS2Totals({
+                total_eligible: Number.isFinite(totalsResponse.data.total_eligible) ? Math.floor(totalsResponse.data.total_eligible) : 0,
+                total_amount_eligible: Number.isFinite(totalsResponse.data.total_amount_eligible) && !Number.isNaN(totalsResponse.data.total_amount_eligible) ? Number(totalsResponse.data.total_amount_eligible.toFixed(2)) : 0,
+                total_excluded: Number.isFinite(totalsResponse.data.total_excluded) ? Math.floor(totalsResponse.data.total_excluded) : 0,
+                total_amount_excluded: Number.isFinite(totalsResponse.data.total_amount_excluded) && !Number.isNaN(totalsResponse.data.total_amount_excluded) ? Number(totalsResponse.data.total_amount_excluded.toFixed(2)) : 0,
+                excluded_bookings: Array.isArray(totalsResponse.data.excluded_bookings) ? totalsResponse.data.excluded_bookings : [],
+              });
+            }
+          } catch (e) {
+            /* ignorer */
+          }
+        };
+        refreshTotals();
+        if (affectedClientId) loadPatientBookings(Number(affectedClientId));
+        toast.error('La course n\'existe plus ou n\'est pas accessible pour cette société.', { duration: 5000 });
+      } else {
+        toast.error(formatApiError(err) || 'Erreur lors de la modification de la facturation', { duration: 5000 });
+      }
+    } finally {
+      cleanup();
+    }
+  }, [
+    companyId,
+    bookingOverridesInProgress,
+    clinicCompanyId,
+    selectedInstitution?.clinic_company_id,
+    formData.period_year,
+    formData.period_month,
+    includeClientIds,
+    patientBookings,
+    loadPatientBookings,
+    s2Totals,
+  ]);
+
+  // ✅ Reset UI state override quand clinic_company_id/year/month change (hardening)
+  useEffect(() => {
+    if (!isClinicMonthly) return;
+    
+    // Réinitialiser tous les états UI des overrides
+    setExpandedPatientId(null);
+    setBookingOverrideConfirm(null);
+    setPatientBookings({});
+    setPatientBookingsLoading({});
+    setShowS2Patients(false);
+    setBookingOverridesInProgress(new Set());
+    // ✅ Nettoyer les versions de requêtes obsolètes
+    overrideRequestVersions.current = {};
+  }, [
+    selectedInstitution?.clinic_company_id,
+    formData.period_year,
+    formData.period_month,
+    isClinicMonthly,
+  ]);
+
+  // ✅ Charger automatiquement les bookings d'un patient quand on l'ouvre (S2 - marge d'erreur)
+  useEffect(() => {
+    if (!expandedPatientId || !isClinicMonthly) return;
+    
+    const bookings = patientBookings[expandedPatientId] || [];
+    const isLoading = patientBookingsLoading[expandedPatientId] || false;
+    
+    // Charger les bookings si on vient d'ouvrir et qu'ils ne sont pas déjà chargés
+    if (bookings.length === 0 && !isLoading) {
+      loadPatientBookings(expandedPatientId);
+    }
+  }, [expandedPatientId, isClinicMonthly, patientBookings, patientBookingsLoading, loadPatientBookings]);
+
+  // ✅ Focus automatique sur le bouton "Confirmer" quand la confirmation s'affiche
+  useEffect(() => {
+    if (bookingOverrideConfirm && confirmButtonRef.current) {
+      // Petit délai pour s'assurer que le DOM est mis à jour
+      setTimeout(() => {
+        confirmButtonRef.current?.focus();
+      }, 100);
+    }
+  }, [bookingOverrideConfirm]);
+
+  // ✅ Gestion des touches clavier (Escape = annuler, Enter = confirmer)
+  useEffect(() => {
+    if (!bookingOverrideConfirm) return;
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setBookingOverrideConfirm(null);
+      } else if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+        // Enter seul (pas Shift+Enter, Ctrl+Enter, etc.)
+        const confirmButton = confirmButtonRef.current;
+        if (confirmButton && !confirmButton.disabled) {
+          e.preventDefault();
+          confirmButton.click();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [bookingOverrideConfirm]);
 
   // Charger la liste des institutions à l'ouverture du modal
   useEffect(() => {
@@ -231,6 +898,36 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
     };
   }, [companyId, open]);
 
+  useEffect(() => {
+    if (!open) return;
+    if (billingType !== 'third_party' || !formData.bill_to_client_id) return;
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    setFormData((prev) => {
+      const shouldUpdatePeriod =
+        prev.period_year !== currentYear || prev.period_month !== currentMonth;
+      if (!shouldUpdatePeriod) return prev;
+      return {
+        ...prev,
+        period_year: currentYear,
+        period_month: currentMonth,
+      };
+    });
+    setClientSearch('');
+    const elSearch = clientSearchInputRef.current;
+    if (elSearch) elSearch.value = '';
+    if (lastInstitutionRef.current !== formData.bill_to_client_id) {
+      lastInstitutionRef.current = formData.bill_to_client_id;
+      setOverrides({});
+      setSelectedReservations({});
+      setFormData((prev) => ({
+        ...prev,
+        client_ids: [],
+      }));
+    }
+  }, [billingType, formData.bill_to_client_id, open]);
+
   // Charger les clients éligibles (trajets non facturés) avec recherche
   useEffect(() => {
     if (!open || !companyId) return;
@@ -249,6 +946,10 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
           limit: 120,
           year: formData.period_year,
           month: formData.period_month,
+          bill_to_client_id:
+            billingType === 'third_party' ? formData.bill_to_client_id : undefined,
+          clinic_company_id: selectedInstitution?.clinic_company_id,
+          billed_to_type: billingType === 'direct' ? 'patient' : undefined,
         });
 
         const response = await invoiceService.fetchEligibleClients(companyId, {
@@ -256,6 +957,10 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
           limit: 120,
           year: formData.period_year,
           month: formData.period_month,
+          bill_to_client_id:
+            billingType === 'third_party' ? formData.bill_to_client_id : undefined,
+          clinic_company_id: selectedInstitution?.clinic_company_id,
+          billed_to_type: billingType === 'direct' ? 'patient' : undefined,
         });
 
         console.log('🔍 [NewInvoiceModal] Réponse reçue:', {
@@ -295,10 +1000,32 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
           });
           return next;
         });
+        if (
+          billingType === 'third_party' &&
+          formData.bill_to_client_id &&
+          formData.client_ids.length === 0 &&
+          list.length > 0
+        ) {
+          setFormData((prev) => ({
+            ...prev,
+            client_ids: list.map((client) => client.id),
+          }));
+        }
       } catch (err) {
-        console.error('Erreur lors du chargement des clients éligibles:', err);
+        console.error('❌ [NewInvoiceModal] Erreur lors du chargement des clients éligibles:', {
+          error: err,
+          message: err?.message,
+          response: err?.response,
+          responseData: err?.response?.data,
+          status: err?.response?.status,
+          companyId,
+          period: { year: formData.period_year, month: formData.period_month },
+          billingType,
+          bill_to_client_id: formData.bill_to_client_id,
+        });
         if (!cancelled) {
-          setClients([]);
+          // ✅ Ne pas vider les clients existants en cas d'erreur pour éviter de perdre les données
+          // Seulement définir l'erreur pour informer l'utilisateur
           setClientsError(
             'Impossible de charger les clients à facturer. Vérifiez que votre backend est à jour.'
           );
@@ -320,13 +1047,24 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
       }
     };
 
-    const timer = setTimeout(fetchClients, 250);
+    const timer = setTimeout(fetchClients, 100);
 
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [companyId, open, clientSearch, formData.period_year, formData.period_month]);
+  }, [
+    companyId,
+    open,
+    clientSearch,
+    formData.period_year,
+    formData.period_month,
+    formData.bill_to_client_id,
+    formData.client_ids.length,
+    billingType,
+    selectedInstitution?.clinic_company_id,
+    refreshTrigger,
+  ]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -336,7 +1074,7 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
     }));
   };
 
-  const handleClientToggle = (clientId) => {
+  const _handleClientToggle = (clientId) => {
     setFormData((prev) => {
       const isSelected = prev.client_ids.includes(clientId);
       const newClientIds = isSelected
@@ -385,6 +1123,35 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
       };
     });
   }, []);
+
+  // ✅ Sélectionner toutes les réservations disponibles pour le client actif (mode direct)
+  // Optimisation: utilise l'endpoint IDs-only, ne charge pas les détails (plus rapide)
+  // Les totaux utilisent directSummary quand sélection complète
+  // Note: activeClientId sera défini plus bas, on utilise formData.client_id directement
+  const handleSelectAllReservations = useCallback(async () => {
+    const clientId = formData.client_id ? parseInt(formData.client_id, 10) : null;
+    if (!companyId || !clientId || !formData.period_year || !formData.period_month) return;
+    
+    try {
+      // ✅ Optimisation: charger uniquement les IDs (plus rapide, pas de détails)
+      const idsData = await invoiceService.fetchUnbilledReservationIds(companyId, clientId, {
+        year: formData.period_year,
+        month: formData.period_month,
+        billed_to_type: 'patient', // Mode direct = facturation patient
+      });
+
+      const reservationIds = Array.isArray(idsData?.reservation_ids) ? idsData.reservation_ids : [];
+      if (reservationIds.length > 0) {
+        // Créer des objets minimaux avec uniquement l'ID
+        // Les totaux utiliseront directSummaryTTC pour sélection complète
+        const minimalReservations = reservationIds.map((id) => ({ id }));
+        handleReservationSelectionChange(clientId, minimalReservations);
+      }
+    } catch (err) {
+      console.error('Erreur lors du chargement des IDs de réservations:', err);
+      toast.error('Erreur lors du chargement des transports');
+    }
+  }, [companyId, formData.client_id, formData.period_year, formData.period_month, handleReservationSelectionChange]);
 
   const handleOverrideChange = useCallback((reservationId, patch) => {
     const key = String(reservationId);
@@ -436,25 +1203,41 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
   }, [selectedClientIds, clientCache]);
 
   const allClients = useMemo(() => {
+    // Facturation directe : uniquement les clients éligibles (trajets non facturés) retournés par l'API
+    if (billingType === 'direct') {
+      return [...clients];
+    }
+    // Tierce-partie / partenaire : sélectionnés d'abord, puis éligibles
     const seen = new Set();
     const ordered = [];
-
     selectedClients.forEach((client) => {
       if (client && !seen.has(client.id)) {
         seen.add(client.id);
         ordered.push(client);
       }
     });
-
     clients.forEach((client) => {
       if (client && !seen.has(client.id)) {
         seen.add(client.id);
         ordered.push(client);
       }
     });
-
     return ordered;
-  }, [clients, selectedClients]);
+  }, [billingType, clients, selectedClients]);
+
+  useEffect(() => {
+    if (
+      billingType !== 'direct' ||
+      clientsLoading ||
+      !formData.client_id
+    ) return;
+    const id = parseInt(formData.client_id, 10);
+    if (Number.isNaN(id)) return;
+    const inList = clients.some((c) => c.id === id);
+    if (!inList) {
+      setFormData((prev) => ({ ...prev, client_id: '' }));
+    }
+  }, [billingType, clientsLoading, formData.client_id, clients]);
 
   useEffect(() => {
     const hasPendingPreselection = Object.values(preselectedReservations).some(
@@ -496,9 +1279,31 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
     return allClients.find((client) => client.id === target) || null;
   }, [allClients, formData.client_id]);
 
+  const selectedPartner = useMemo(() => {
+    if (!formData.partnership_id) return null;
+    const id = parseInt(formData.partnership_id, 10);
+    if (Number.isNaN(id)) return null;
+    return partners.find((p) => p.partnership_id === id) || null;
+  }, [formData.partnership_id, partners]);
+
+  // ✅ Vérifier si une réservation est minimale (contient uniquement l'ID)
+  const isMinimalReservation = useCallback((reservation) => {
+    return reservation && typeof reservation.id !== 'undefined' && 
+           (reservation.amount === undefined || reservation.amount === null) &&
+           !reservation.pickup_location && !reservation.dropoff_location;
+  }, []);
+
   const computeTotals = useCallback(
     (reservationsList = []) => {
-      return reservationsList.reduce(
+      // ✅ Filtrer les objets minimaux : ne pas utiliser amount=0 pour eux
+      const validReservations = reservationsList.filter((r) => !isMinimalReservation(r));
+      
+      if (validReservations.length === 0 && reservationsList.length > 0) {
+        // Toutes les réservations sont minimales : retourner null pour indiquer qu'il faut hydrater
+        return null;
+      }
+      
+      return validReservations.reduce(
         (acc, reservation) => {
           const override = overrides[String(reservation?.id)] || {};
           const baseAmount = Number(
@@ -524,18 +1329,80 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
         { base: 0, vat: 0, total: 0 }
       );
     },
-    [overrides, vatConfig]
+    [overrides, vatConfig, isMinimalReservation]
   );
 
   const activeClientId = formData.client_id ? parseInt(formData.client_id, 10) : null;
+
+  /** Résumé par client (count + total HT) depuis eligible. Utilisé pour l’aperçu sans charger le détail. */
+  const directSummary = useMemo(() => {
+    if (clientsLoading || !formData.client_id || !directClient) return null;
+    const count = directClient.unbilled_count ?? 0;
+    const totalAmount = Number(directClient.unbilled_total_amount);
+    const total = Number.isFinite(totalAmount) ? totalAmount : 0;
+    return { count, totalAmount: total };
+  }, [clientsLoading, formData.client_id, directClient]);
+  
+  /** TTC du résumé (HT + TVA selon vatConfig) pour affichage aperçu. */
+  const directSummaryTTC = useMemo(() => {
+    if (!directSummary) return null;
+    const base = directSummary.totalAmount;
+    const vat = vatConfig.applicable
+      ? Number(((base * (vatConfig.defaultRate || 0)) / 100).toFixed(2))
+      : 0;
+    return Number((base + vat).toFixed(2));
+  }, [directSummary, vatConfig.applicable, vatConfig.defaultRate]);
+  
   const directSelection = useMemo(() => {
     if (!activeClientId) return [];
     return selectedReservations[activeClientId] || [];
   }, [activeClientId, selectedReservations]);
-  const directTotals = useMemo(
-    () => computeTotals(directSelection),
-    [computeTotals, directSelection]
-  );
+  
+  // ✅ Calculer les totaux : utiliser directSummaryTTC si sélection complète avec IDs uniquement
+  const _directTotals = useMemo(() => {
+    // Si sélection complète et que directSelection contient uniquement des IDs (objets minimaux),
+    // utiliser directSummaryTTC (optimisation: pas besoin de charger les détails)
+    const hasOnlyIds = directSelection.length > 0 && directSelection.every(
+      (r) => isMinimalReservation(r)
+    );
+    
+    if (
+      directSummary &&
+      directSelection.length === directSummary.count &&
+      hasOnlyIds
+    ) {
+      // Sélection complète avec objets minimaux (IDs uniquement) : utiliser directSummaryTTC
+      return {
+        base: directSummary.totalAmount,
+        vat: vatConfig.applicable
+          ? Number(((directSummary.totalAmount * (vatConfig.defaultRate || 0)) / 100).toFixed(2))
+          : 0,
+        total: directSummaryTTC || 0,
+      };
+    }
+    
+    // Sinon, calculer depuis les réservations (sélection partielle ou objets complets)
+    const computed = computeTotals(directSelection);
+    
+    // ✅ Guardrail : si computeTotals retourne null (tous minimaux non hydratés), retourner null
+    if (computed === null) {
+      return null;
+    }
+    
+    return computed;
+  }, [computeTotals, directSelection, directSummary, directSummaryTTC, vatConfig, isMinimalReservation]);
+  
+  // ✅ Détecter sélection partielle: selectedCount < directSummary.count
+  const isPartialSelection = useMemo(() => {
+    if (!directSummary || !directSelection.length) return false;
+    return directSelection.length < directSummary.count;
+  }, [directSummary, directSelection.length]);
+
+  // ✅ Détecter si la sélection contient des objets minimaux non hydratés
+  const hasUnhydratedMinimals = useMemo(() => {
+    if (!directSelection.length) return false;
+    return directSelection.some((r) => isMinimalReservation(r));
+  }, [directSelection, isMinimalReservation]);
 
   const consolidatedSelection = useMemo(
     () => Object.values(selectedReservations).reduce((acc, list) => acc.concat(list || []), []),
@@ -545,6 +1412,25 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
     () => computeTotals(consolidatedSelection),
     [computeTotals, consolidatedSelection]
   );
+  
+  // ✅ Détecter si sélection manuelle de trajets (pour affichage conditionnel)
+  const hasManualSelection = useMemo(
+    () => Object.keys(selectedReservations || {}).some(
+      (clientId) => selectedReservations[clientId]?.length > 0
+    ),
+    [selectedReservations]
+  );
+
+  // Calculer les totaux éligibles (tous les transports disponibles, pas seulement sélectionnés)
+  const _eligibleReservationsCount = useMemo(() => {
+    return formData.client_ids.reduce((total, clientId) => {
+      // On ne peut pas calculer exactement sans charger toutes les réservations
+      // On utilise le unbilled_count du client si disponible
+      const client = clients.find((c) => c.id === clientId);
+      return total + (client?.unbilled_count || 0);
+    }, 0);
+  }, [formData.client_ids, clients]);
+
 
   const formatCurrency = useCallback((value) => `${Number(value || 0).toFixed(2)} CHF`, []);
 
@@ -619,12 +1505,13 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
       let result;
 
       if (billingType === 'direct') {
-        // Facturation directe
+        // Facturation directe — zéro friction : on peut générer sans ouvrir "Transports à facturer"
         const clientId = parseInt(formData.client_id);
         const reservs = Array.isArray(selectedReservations?.[clientId])
           ? selectedReservations[clientId]
           : [];
         const reservationIds = reservs.length > 0 ? reservs.map((r) => r?.id || r) : undefined;
+        // reservation_ids undefined → backend facture tous les unbilled du client pour la période
         const overridePayload = buildOverridesPayload(reservs);
 
         const payload = {
@@ -671,8 +1558,140 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
         fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NewInvoiceModal.jsx:handleSubmit',message:'Après onInvoiceGenerated',data:{called:true},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
         // #endregion
       } else if (billingType === 'third_party') {
-        // Facturation tierce (consolidée)
-        // NOUVEAU: Préparer le mapping des réservations par client
+        // Facturation tierce
+
+        // ✅ S2: Facture clinique mensuelle unique
+        if (isClinicMonthly && selectedInstitution?.clinic_company_id) {
+          const payload = {
+            mode: 'clinic_monthly',
+            clinic_company_id: selectedInstitution.clinic_company_id,
+            period_year: formData.period_year,
+            period_month: formData.period_month,
+          };
+
+          // Ajouter include_client_ids si sélectionné
+          if (includeClientIds.length > 0) {
+            payload.include_client_ids = includeClientIds;
+          }
+
+          // Ajouter overrides si présents
+          const overridePayload = buildOverridesPayload(consolidatedSelection);
+          if (Object.keys(overridePayload).length > 0) {
+            payload.overrides = overridePayload;
+          }
+
+          try {
+            result = await generateInvoice(companyId, payload);
+
+            // ✅ Gérer l'erreur "déjà générée" (409) avec option d'ouvrir la facture existante
+            if (result?.error || result?.status === 409 || (result?.response?.status === 409)) {
+              const errorData = result?.error || result?.data?.error || result?.response?.data?.error || {};
+              const existingInvoiceId = errorData.existing_invoice_id;
+              const existingInvoiceNumber = errorData.existing_invoice_number || 'N/A';
+              
+              if (existingInvoiceId) {
+                // ✅ UX: Proposer d'ouvrir la facture existante
+                const openExisting = window.confirm(
+                  `${errorData.error || 'Facture déjà générée'}\n\n` +
+                  `Souhaitez-vous ouvrir la facture existante ?`
+                );
+                if (openExisting) {
+                  // ✅ Ouvrir la facture existante : naviguer vers le registre avec recherche
+                  // Fallback: utiliser le listing avec search=invoice_number
+                  if (company?.public_id) {
+                    // Naviguer vers le registre des factures avec recherche
+                    navigate(
+                      `/dashboard/company/${company.public_id}/invoices/clients?search=${encodeURIComponent(existingInvoiceNumber)}&focusSearch=1`
+                    );
+                    onClose(); // Fermer le modal
+                  } else {
+                    // Fallback si public_id non disponible
+                    setError(
+                      `Facture déjà générée (${existingInvoiceNumber}). ` +
+                      `ID: ${existingInvoiceId}. Veuillez utiliser le registre des factures pour l'ouvrir.`
+                    );
+                  }
+                } else {
+                  setError(errorData.error || 'Facture déjà générée');
+                }
+              } else {
+                setError(errorData.error || 'Erreur lors de la génération de la facture');
+              }
+              setLoading(false);
+              return;
+            }
+
+            if (result?.pdf_url) {
+              window.open(result.pdf_url, '_blank');
+            } else if (result?.data?.pdf_url) {
+              window.open(result.data.pdf_url, '_blank');
+            }
+
+            if (result?.data) {
+              onInvoiceGenerated(result.data);
+            } else if (result) {
+              onInvoiceGenerated(result);
+            }
+
+            setSuccessMessage('1 facture clinique mensuelle générée avec succès');
+            setLoading(false);
+            return;
+          } catch (err) {
+            // ✅ Logger l'erreur complète pour le debug
+            console.error('❌ [NewInvoiceModal] Erreur lors de la génération de facture clinique mensuelle:', {
+              error: err,
+              message: err?.message,
+              response: err?.response,
+              responseData: err?.response?.data,
+              status: err?.response?.status,
+              statusText: err?.response?.statusText,
+            });
+            
+            // Gérer les erreurs HTTP (409, 400, 422, etc.)
+            if (err?.response?.status === 409) {
+              const errorData = err?.response?.data?.error || {};
+              const existingInvoiceId = errorData.existing_invoice_id;
+              const existingInvoiceNumber = errorData.existing_invoice_number || 'N/A';
+              
+              if (existingInvoiceId) {
+                const openExisting = window.confirm(
+                  `${errorData.error || 'Facture déjà générée'}\n\n` +
+                  `Souhaitez-vous ouvrir la facture existante ?`
+                );
+                if (openExisting) {
+                  // ✅ Ouvrir la facture existante : naviguer vers le registre avec recherche
+                  if (company?.public_id) {
+                    navigate(
+                      `/dashboard/company/${company.public_id}/invoices/clients?search=${encodeURIComponent(existingInvoiceNumber)}&focusSearch=1`
+                    );
+                    onClose(); // Fermer le modal
+                  } else {
+                    // Fallback si public_id non disponible
+                    setError(
+                      `Facture déjà générée (${existingInvoiceNumber}). ` +
+                      `ID: ${existingInvoiceId}. Veuillez utiliser le registre des factures pour l'ouvrir.`
+                    );
+                  }
+                } else {
+                  setError(errorData.error || 'Facture déjà générée');
+                }
+              } else {
+                setError(errorData.error || 'Facture déjà générée');
+              }
+            } else if (err?.response?.status === 422) {
+              // ✅ Erreur 422: Aucun transport éligible
+              const errorData = err?.response?.data?.error || {};
+              setError(errorData.error || 'Aucun transport clinique éligible pour cette période/sélection');
+            } else {
+              setError(formatApiError(err) || 'Erreur lors de la génération de la facture');
+            }
+            setLoading(false);
+            // ✅ Ne pas réinitialiser les données en cas d'erreur pour permettre à l'utilisateur de corriger
+            return;
+          }
+        }
+
+        // ✅ Préparer le mapping des réservations par client
         const clientReservations = {};
         formData.client_ids.forEach((clientId) => {
           const reservs = selectedReservations?.[clientId];
@@ -683,44 +1702,175 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
 
         const overridePayload = buildOverridesPayload(consolidatedSelection);
 
-        const payload = {
-          client_ids: formData.client_ids.map((id) => parseInt(id)),
-          bill_to_client_id: parseInt(formData.bill_to_client_id),
-          period_year: formData.period_year,
-          period_month: formData.period_month,
-          client_reservations:
-            Object.keys(clientReservations).length > 0 ? clientReservations : undefined,
-        };
-
-        if (Object.keys(overridePayload).length > 0) {
-          payload.overrides = overridePayload;
-        }
-
-        result = await invoiceService.generateConsolidatedInvoice(companyId, payload);
-
-        if (result.invoices && result.invoices.length > 0) {
-          setSuccessMessage(
-            `${result.success_count} facture(s) générée(s) avec succès${
-              result.error_count > 0 ? `, ${result.error_count} erreur(s)` : ''
-            }`
-          );
-
-          // Ouvrir les PDFs dans de nouveaux onglets
-          result.invoices.forEach((inv) => {
-            if (inv.pdf_url) {
-              window.open(inv.pdf_url, '_blank');
+        if (isConsolidated) {
+          // ✅ Mode batch: utiliser le vrai endpoint consolidé (GenerateConsolidatedInvoiceUseCase)
+          // Ce use-case génère une facture PAR patient (pas une seule facture pour tous)
+          // Toutes les factures sont adressées à bill_to_client_id (institution payeuse)
+          
+          // Vérifier si sélection manuelle de trajets (avertir l'utilisateur)
+          const hasManualSelection = Object.keys(clientReservations).length > 0;
+          if (hasManualSelection) {
+            const confirmConsolidate = window.confirm(
+              '⚠️ Mode génération groupée (batch)\n\n' +
+              'Le mode groupé facture automatiquement TOUS les trajets éligibles du mois pour chaque patient.\n\n' +
+              '⚠️ Votre sélection manuelle de trajets sera ignorée.\n\n' +
+              'Pour conserver votre sélection manuelle, utilisez le mode "factures séparées" (décocher "Génération groupée").\n\n' +
+              'Continuer avec la génération automatique ?'
+            );
+            if (!confirmConsolidate) {
+              setLoading(false);
+              return;
             }
+          }
+
+          // ✅ Utiliser le vrai endpoint consolidé avec client_ids[] + bill_to_client_id
+          // Le backend génère une facture par client, toutes adressées à bill_to_client_id
+          const payload = {
+            client_ids: formData.client_ids.map((id) => parseInt(id)),
+            bill_to_client_id: parseInt(formData.bill_to_client_id),
+            period_year: formData.period_year,
+            period_month: formData.period_month,
+            // Note: client_reservations est supporté par le use-case si besoin
+            // Mais en mode "groupé", on laisse le backend gérer automatiquement par période
+            // pour éviter les incohérences (une facture par client avec ses propres réservations)
+          };
+
+          // Si sélection manuelle et utilisateur a confirmé, on peut essayer d'envoyer client_reservations
+          // Mais attention: le use-case génère une facture PAR client, donc chaque client_reservations[client_id]
+          // doit contenir uniquement les réservations de ce client
+          if (hasManualSelection && Object.keys(clientReservations).length > 0) {
+            // Vérifier que chaque client_reservations[client_id] contient uniquement les réservations de ce client
+            const validClientReservations = {};
+            formData.client_ids.forEach((clientId) => {
+              const reservs = clientReservations[clientId] || [];
+              if (reservs.length > 0) {
+                validClientReservations[clientId] = reservs;
+              }
+            });
+            if (Object.keys(validClientReservations).length > 0) {
+              payload.client_reservations = validClientReservations;
+            }
+          }
+
+          if (Object.keys(overridePayload).length > 0) {
+            payload.overrides = overridePayload;
+          }
+
+          result = await invoiceService.generateConsolidatedInvoice(companyId, payload);
+
+          if (result.invoices && result.invoices.length > 0) {
+            // ✅ Mode consolidé: le use-case génère une facture par patient
+            const invoiceCount = result.invoices.length;
+            const patientNames = formData.client_ids
+              .map((id) => {
+                const client = clients.find((c) => c.id === parseInt(id));
+                return client ? `${client.first_name} ${client.last_name}` : `Client ${id}`;
+              })
+              .join(', ');
+
+            if (invoiceCount === formData.client_ids.length) {
+              // Toutes les factures ont été générées avec succès
+              setSuccessMessage(
+                `${invoiceCount} facture(s) générée(s) en batch pour ${formData.client_ids.length} patient(s): ${patientNames}${
+                  result.error_count > 0 ? `, ${result.error_count} erreur(s)` : ''
+                }`
+              );
+            } else {
+              // Génération partielle
+              setSuccessMessage(
+                `${invoiceCount} facture(s) générée(s) sur ${formData.client_ids.length} patient(s) (batch partiel): ${patientNames}${
+                  result.error_count > 0 ? `, ${result.error_count} erreur(s)` : ''
+                }`
+              );
+            }
+
+            // Ouvrir les PDFs dans de nouveaux onglets
+            result.invoices.forEach((inv) => {
+              if (inv.pdf_url) {
+                window.open(inv.pdf_url, '_blank');
+              }
+            });
+
+            // Notifier le parent pour chaque facture
+            result.invoices.forEach((inv) => onInvoiceGenerated(inv));
+          } else if (result.success_count === 0) {
+            // Aucune facture générée (toutes en erreur)
+            setError('Aucune facture n\'a pu être générée. Vérifiez les erreurs ci-dessous.');
+          }
+
+          if (result?.errors && result.errors.length > 0) {
+            const errorMessages = result.errors
+              .map((e) => {
+                const clientName = clients.find((c) => c.id === e.client_id);
+                const name = clientName 
+                  ? `${clientName.first_name} ${clientName.last_name}` 
+                  : `Client ${e.client_id}`;
+                return `${name}: ${formatApiError(e?.error ?? e)}`;
+              })
+              .join('\n');
+            setError(`Erreurs:\n${errorMessages}`);
+          }
+        } else {
+          // ✅ Mode séparé: 1 facture par patient (comportement actuel)
+          // Générer une facture pour chaque client sélectionné
+          const invoicePromises = formData.client_ids.map(async (clientId) => {
+            const clientReservs = clientReservations[clientId] || [];
+            const clientOverrides = {};
+            // Extraire les overrides pour ce client uniquement
+            Object.keys(overridePayload).forEach((reservationId) => {
+              const reservation = consolidatedSelection.find((r) => r.id === parseInt(reservationId));
+              if (reservation && reservation.client_id === parseInt(clientId)) {
+                clientOverrides[reservationId] = overridePayload[reservationId];
+              }
+            });
+
+            const payload = {
+              client_id: parseInt(clientId),
+              bill_to_client_id: parseInt(formData.bill_to_client_id),
+              period_year: formData.period_year,
+              period_month: formData.period_month,
+              reservation_ids: clientReservs.length > 0 ? clientReservs : undefined,
+            };
+
+            if (Object.keys(clientOverrides).length > 0) {
+              payload.overrides = clientOverrides;
+            }
+
+            return generateInvoice(companyId, payload);
           });
 
-          // Notifier le parent pour chaque facture
-          result.invoices.forEach((inv) => onInvoiceGenerated(inv));
-        }
+          const results = await Promise.all(invoicePromises);
+          const successfulInvoices = results.filter((r) => r && !r.error);
+          const failedInvoices = results.filter((r) => r && r.error);
 
-        if (result?.errors && result.errors.length > 0) {
-          const errorMessages = result.errors
-            .map((e) => `Client ${e.client_id}: ${e.error}`)
-            .join('\n');
-          setError(`Erreurs:\n${errorMessages}`);
+          if (successfulInvoices.length > 0) {
+            setSuccessMessage(
+              `${successfulInvoices.length} facture(s) générée(s) avec succès${
+                failedInvoices.length > 0 ? `, ${failedInvoices.length} erreur(s)` : ''
+              }`
+            );
+
+            // Ouvrir les PDFs dans de nouveaux onglets
+            successfulInvoices.forEach((inv) => {
+              if (inv?.pdf_url) {
+                window.open(inv.pdf_url, '_blank');
+              } else if (inv?.data?.pdf_url) {
+                window.open(inv.data.pdf_url, '_blank');
+              }
+            });
+
+            // Notifier le parent pour chaque facture
+            successfulInvoices.forEach((inv) => {
+              onInvoiceGenerated(inv?.data || inv);
+            });
+          }
+
+          if (failedInvoices.length > 0) {
+            const errorMessages = failedInvoices
+              .map((inv) => formatApiError(inv.error))
+              .join('\n');
+            setError(`Erreurs:\n${errorMessages}`);
+          }
         }
       } else if (billingType === 'partner') {
         // Facturation partenaire
@@ -748,14 +1898,44 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
 
       // Fermer le modal si tout s'est bien passé et pas d'erreurs
       if (!result || !result.errors || result.errors.length === 0) {
+        // Reset de l'état avant fermeture pour éviter les états fantômes
+        setSelectedReservations({});
+        setOverrides({});
+        setIsConsolidated(false); // ✅ Reset génération groupée (batch)
+        setIsClinicMonthly(false); // ✅ Reset S2
+        setIncludeClientIds([]); // ✅ Reset exceptions
+        // ✅ Reset accordéons S2
+        setShowS2Summary(true);
+        setShowS2Exclusions(false);
+        setShowS2Patients(false);
+        setShowS2Advanced(false);
+        setExpandedPatientId(null);
+        setFormData((prev) => ({
+          ...prev,
+          client_ids: [],
+          client_id: '',
+        }));
         setTimeout(() => {
           onClose();
         }, 2000);
       }
     } catch (err) {
-      setError(
-        err.response?.data?.error || err.message || 'Erreur lors de la génération de la facture'
-      );
+      // ✅ Logger l'erreur complète pour le debug
+      console.error('❌ [NewInvoiceModal] Erreur lors de la génération de la facture:', {
+        error: err,
+        message: err?.message,
+        response: err?.response,
+        responseData: err?.response?.data,
+        status: err?.response?.status,
+        statusText: err?.response?.statusText,
+        stack: err?.stack,
+      });
+      
+      const errorMessage = formatApiError(err) || 'Erreur lors de la génération de la facture';
+      setError(errorMessage);
+      
+      // ✅ Ne pas réinitialiser les données en cas d'erreur pour permettre à l'utilisateur de corriger
+      // Les clients et réservations restent visibles
     } finally {
       setLoading(false);
     }
@@ -766,7 +1946,17 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
     setSuccessMessage(null);
     setBillingType('direct');
     setSelectedReservations({});
-    setShowReservationSelection(false);
+    setShowDirectTransports(false);
+    setShowPartnerSummary(true);
+    setIsConsolidated(false); // ✅ Reset génération groupée (batch)
+    setIsClinicMonthly(false); // ✅ Reset S2
+    setIncludeClientIds([]); // ✅ Reset exceptions
+    // ✅ Reset accordéons S2
+    setShowS2Summary(true);
+    setShowS2Exclusions(false);
+    setShowS2Patients(false);
+    setShowS2Advanced(false);
+    setExpandedPatientId(null);
     setFormData({
       client_id: '',
       client_ids: [],
@@ -776,6 +1966,22 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
     });
     onClose();
   };
+
+  // ✅ Calculer le nombre de patients inclus en mode S2 (avant le return conditionnel)
+  const s2PatientsCount = useMemo(() => {
+    if (!isClinicMonthly) return 0;
+    if (includeClientIds.length > 0) {
+      return includeClientIds.length;
+    }
+    // Si aucun filtre, tous les clients éligibles sont inclus
+    return clients.length;
+  }, [isClinicMonthly, includeClientIds.length, clients.length]);
+
+  // ✅ Formater le nom du mois (avant le return conditionnel)
+  const monthName = useMemo(() => {
+    const monthNames = ['Janv', 'Févr', 'Mars', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sept', 'Oct', 'Nov', 'Déc'];
+    return monthNames[formData.period_month - 1] || '';
+  }, [formData.period_month]);
 
   if (!open) return null;
 
@@ -798,7 +2004,7 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
 
   return (
     <div className="modal-overlay">
-      <div className="modal-content modal-xl">
+      <div className={`modal-content modal-xl ${styles.modalInvoice}`}>
         <div className="modal-header">
           <h2 className="modal-title">Nouvelle facture</h2>
           <button className="modal-close" onClick={handleClose}>
@@ -806,13 +2012,22 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className={styles.form}>
+        <form
+          onSubmit={handleSubmit}
+          className={`${styles.form} ${styles.modalInvoiceForm} ${
+            (billingType === 'third_party' && formData.bill_to_client_id) ||
+            (billingType === 'direct' && formData.client_id) ||
+            (billingType === 'partner' && formData.partnership_id)
+              ? styles.formWithStickyFooter
+              : ''
+          }`}
+        >
+          <div className={styles.modalBody}>
           {error && <div className="alert alert-error mb-md">{error}</div>}
 
           {successMessage && <div className={styles.success}>{successMessage}</div>}
 
-          {/* Type de facturation */}
-          <div className={styles.formGroup}>
+          <div className={`${styles.formGroup} ${styles.stickyBillingType}`}>
             <label className={styles.label}>Type de facturation</label>
             <div className={styles.radioGroup}>
               <label className={styles.radioLabel}>
@@ -848,84 +2063,107 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
             </div>
           </div>
 
-          {/* Facturation directe */}
+          {/* Facturation directe — même modèle que facturation clinique */}
           {billingType === 'direct' && (
             <>
-              <div className={styles.formGroup}>
-                <label htmlFor="clientSearch" className={styles.label}>
-                  Recherche client
-                </label>
-                <input
-                  ref={clientSearchInputRef}
-                  id="clientSearch"
-                  type="search"
-                  className={styles.searchInput}
-                  placeholder="Nom, prénom ou email"
-                  value={clientSearch}
-                  onChange={(e) => setClientSearch(e.target.value)}
-                  onFocus={() => {
-                    wasInputFocusedRef.current = true;
-                  }}
-                  onBlur={() => {
-                    wasInputFocusedRef.current = false;
-                  }}
-                  disabled={clientsLoading}
-                />
-                <small className={styles.hint}>
-                  Affiche uniquement les clients avec trajets non facturés.
-                </small>
+              {/* Header direct : client + période (style s2Header) */}
+              <div className={styles.s2Header}>
+                <div className={styles.s2HeaderRow}>
+                  <span className={styles.s2HeaderLabel}>👤 Client</span>
+                  <div className={styles.s2HeaderClinique} style={{ flex: 1, maxWidth: '100%' }}>
+                    <input
+                      ref={clientSearchInputRef}
+                      id="clientSearch"
+                      type="search"
+                      className={styles.searchInput}
+                      placeholder="Recherche nom, prénom, email"
+                      autoComplete="off"
+                      defaultValue={clientSearch}
+                      onChange={handleSearchChange}
+                      onFocus={() => { wasInputFocusedRef.current = true; }}
+                      onBlur={() => { wasInputFocusedRef.current = false; }}
+                      style={{ marginBottom: 8 }}
+                    />
+                    <select
+                      id="client_id"
+                      name="client_id"
+                      value={formData.client_id}
+                      onChange={handleInputChange}
+                      className={styles.select}
+                      required
+                      disabled={loading || clientsLoading}
+                    >
+                      <option value="">Sélectionner un client</option>
+                      {allClients.map((client) => (
+                        <option key={client.id} value={client.id}>
+                          {`${formatClientLabel(client)}${
+                            directClient && client.id === directClient.id && clientSearch.trim()
+                              ? ' (sélectionné)'
+                              : ''
+                          }`}
+                        </option>
+                      ))}
+                    </select>
+                    {clientsLoading && <small className={styles.hint}>Chargement…</small>}
+                    {!clientsLoading && allClients.length === 0 && (
+                      <small className={styles.hint}>Aucun client avec transports à facturer.</small>
+                    )}
+                  </div>
+                </div>
+                <div className={styles.s2HeaderRow}>
+                  <div className={styles.s2HeaderMeta}>
+                    <span className={styles.s2HeaderLabel}>Période à facturer</span>
+                    {formData.client_id && directSummary && directSummary.count > 0 && (
+                      <>
+                        <span className={styles.s2HeaderMetaSep}>•</span>
+                        <span>{directSummary.count} transport{directSummary.count > 1 ? 's' : ''}</span>
+                      </>
+                    )}
+                  </div>
+                  <div className={styles.s2HeaderPeriod}>
+                    <select
+                      id="direct_period_month"
+                      name="period_month"
+                      value={formData.period_month}
+                      onChange={handleInputChange}
+                      className={styles.select}
+                      disabled={loading}
+                    >
+                      {months.map((m) => (
+                        <option key={m.value} value={m.value}>{m.label}</option>
+                      ))}
+                    </select>
+                    <select
+                      id="direct_period_year"
+                      name="period_year"
+                      value={formData.period_year}
+                      onChange={handleInputChange}
+                      className={styles.select}
+                      disabled={loading}
+                    >
+                      {years.map((y) => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
               </div>
 
               {clientsError && <div className="alert alert-error mb-sm">{clientsError}</div>}
 
-              <div className={styles.formGroup}>
-                <label htmlFor="client_id" className={styles.label}>
-                  Client *
-                </label>
-                <select
-                  id="client_id"
-                  name="client_id"
-                  value={formData.client_id}
-                  onChange={handleInputChange}
-                  className={styles.select}
-                  required
-                  disabled={loading || clientsLoading}
-                >
-                  <option value="">Sélectionner un client</option>
-                  {allClients.map((client) => (
-                    <option key={client.id} value={client.id}>
-                      {`${formatClientLabel(client)}${
-                        directClient && client.id === directClient.id && clientSearch.trim()
-                          ? ' (sélectionné)'
-                          : ''
-                      }`}
-                    </option>
-                  ))}
-                </select>
-                {clientsLoading && <small className={styles.hint}>Chargement des clients…</small>}
-                {!clientsLoading && allClients.length === 0 && (
-                  <small className={styles.hint}>
-                    Aucun client avec transports à facturer pour le moment.
-                  </small>
-                )}
-              </div>
-
-              {/* Sélection des transports pour facturation directe */}
+              {/* Transports à facturer — résumé = footer sticky + summaryLine sous la liste */}
               {formData.client_id && (
                 <div className={styles.formGroup}>
-                  <div className={styles.sectionHeader}>
-                    <label className={styles.label}>Transports à facturer</label>
-                    <button
-                      type="button"
-                      className={styles.toggleBtn}
-                      onClick={() => setShowReservationSelection(!showReservationSelection)}
-                    >
-                      {showReservationSelection ? '▼ Masquer' : '▶ Sélectionner'}
-                    </button>
-                  </div>
-
-                  {showReservationSelection && (
-                    <>
+                  <button
+                    type="button"
+                    onClick={() => setShowDirectTransports(!showDirectTransports)}
+                    className={`${styles.accordion} ${styles.accordionInfo} ${showDirectTransports ? styles.isOpen : ''}`}
+                  >
+                    <span>Transports à facturer ({clientsLoading ? '—' : (directSummary ? directSummary.count : '—')})</span>
+                    <span>{showDirectTransports ? '▼' : '▶'}</span>
+                  </button>
+                  {showDirectTransports && (
+                    <div className={`${styles.accordionContent} ${styles.accordionContentInfo}`}>
                       <ReservationSelector
                         companyId={companyId}
                         clientId={parseInt(formData.client_id)}
@@ -934,36 +2172,13 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
                         billToType="patient"
                         vatConfig={vatConfig}
                         overrides={overrides}
-                        preselectedIds={
-                          preselectedReservations[parseInt(formData.client_id, 10)] || []
-                        }
+                        preselectedIds={preselectedReservations[parseInt(formData.client_id, 10)] || []}
                         onOverrideChange={handleOverrideChange}
                         onSelectionChange={(reservations) =>
-                          handleReservationSelectionChange(
-                            parseInt(formData.client_id),
-                            reservations
-                          )
+                          handleReservationSelectionChange(parseInt(formData.client_id), reservations)
                         }
                       />
-                      {directSelection.length > 0 && (
-                        <div className={styles.summaryCard}>
-                          <div className={styles.summaryCardRow}>
-                            <span>Montant HT</span>
-                            <strong>{formatCurrency(directTotals.base)}</strong>
-                          </div>
-                          {vatConfig.applicable && directTotals.vat > 0 && (
-                            <div className={styles.summaryCardRow}>
-                              <span>TVA totale</span>
-                              <strong>{formatCurrency(directTotals.vat)}</strong>
-                            </div>
-                          )}
-                          <div className={`${styles.summaryCardRow} ${styles.summaryCardTotal}`}>
-                            <span>Total TTC</span>
-                            <strong>{formatCurrency(directTotals.total)}</strong>
-                          </div>
-                        </div>
-                      )}
-                    </>
+                    </div>
                   )}
                 </div>
               )}
@@ -973,233 +2188,1222 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
           {/* Facturation tierce */}
           {billingType === 'third_party' && (
             <>
-              <div className={styles.formGroup}>
-                <label htmlFor="bill_to_client_id" className={styles.label}>
-                  Institution payeuse *
-                </label>
-                <select
-                  id="bill_to_client_id"
-                  name="bill_to_client_id"
-                  value={formData.bill_to_client_id}
-                  onChange={handleInputChange}
-                  className={styles.select}
-                  required
-                  disabled={loading}
-                >
-                  <option value="">Sélectionner une institution</option>
-                  {institutions.map((inst) => (
-                    <option key={inst.id} value={inst.id}>
-                      {inst.institution_name}
-                    </option>
-                  ))}
-                </select>
-                {institutions.length === 0 && (
-                  <small className={styles.hint}>
-                    Aucune institution disponible. Créez d'abord des clients institutions.
-                  </small>
-                )}
-              </div>
+                  {/* Header tierce : clinique + période (même modèle que direct/partenaire, plus d’étape intermédiaire) */}
+                  <div className={styles.s2Header}>
+                    <div className={styles.s2HeaderRow}>
+                      <span className={styles.s2HeaderLabel}>🏥 Clinique</span>
+                      <div className={styles.s2HeaderClinique}>
+                        <select
+                          id="s2_bill_to_client_id"
+                          name="bill_to_client_id"
+                          value={formData.bill_to_client_id}
+                          onChange={handleInputChange}
+                          className={styles.select}
+                          disabled={loading}
+                        >
+                          <option value="">Sélectionner une clinique</option>
+                          {clinicsForS2.map((inst) => (
+                            <option key={inst.id} value={inst.id}>
+                              {inst.institution_name || 'Clinique'}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className={styles.s2HeaderRow}>
+                      <div className={styles.s2HeaderMeta}>
+                        <span>👥 {s2PatientsCount} patient{s2PatientsCount > 1 ? 's' : ''}</span>
+                        <span className={styles.s2HeaderMetaSep}>•</span>
+                        <span className={styles.s2HeaderLabel}>Période à facturer</span>
+                      </div>
+                      <div className={styles.s2HeaderPeriod}>
+                        <select
+                          id="s2_period_month"
+                          name="period_month"
+                          value={formData.period_month}
+                          onChange={handleInputChange}
+                          className={styles.select}
+                          disabled={loading}
+                        >
+                          {months.map((m) => (
+                            <option key={m.value} value={m.value}>{m.label}</option>
+                          ))}
+                        </select>
+                        <select
+                          id="s2_period_year"
+                          name="period_year"
+                          value={formData.period_year}
+                          onChange={handleInputChange}
+                          className={styles.select}
+                          disabled={loading}
+                        >
+                          {years.map((y) => (
+                            <option key={y} value={y}>{y}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
 
-              <div className={styles.formGroup}>
-                <label className={styles.label}>Sélection des patients</label>
-
-                {/* Liste simplifiée pour sélectionner les patients */}
-                <div className={styles.clientsList}>
-                  {clients.map((client) => (
-                    <label key={client.id} className={styles.checkboxLabel}>
-                      <input
-                        type="checkbox"
-                        checked={formData.client_ids.includes(client.id)}
-                        onChange={() => handleClientToggle(client.id)}
-                        disabled={loading}
-                      />
-                      {`${client.first_name || ''} ${client.last_name || ''}`.trim() ||
-                        client.username}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Sélection des transports pour chaque patient sélectionné */}
-              {formData.client_ids.length > 0 && formData.period_year && formData.period_month && (
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Transports à facturer</label>
-
-                  <div className={styles.patientsWithReservations}>
-                    {formData.client_ids.map((clientId) => {
-                      const client = clients.find((c) => c.id === clientId);
-                      if (!client) return null;
-
-                      const reservationsCount = selectedReservations?.[clientId]?.length || 0;
-
-                      return (
-                        <div key={clientId} className={styles.patientSection}>
-                          <div className={styles.patientSectionHeader}>
-                            <h4 className={styles.patientName}>
-                              {`${client.first_name || ''} ${client.last_name || ''}`.trim() ||
-                                client.username}
-                            </h4>
-                            {reservationsCount > 0 && (
-                              <span className={styles.reservationCount}>
-                                {reservationsCount} transport(s)
-                              </span>
+                  {formData.bill_to_client_id && selectedInstitution?.clinic_company_id && (
+                  <>
+                  {/* ✅ SECTION 0: Résumé (ouvert par défaut) */}
+                  <div className={styles.formGroup}>
+                    <button
+                      type="button"
+                      onClick={() => setShowS2Summary(!showS2Summary)}
+                      className={`${styles.accordion} ${styles.accordionInfo} ${showS2Summary ? styles.isOpen : ''}`}
+                    >
+                      <span>
+                        ✓ Facture clinique mensuelle
+                      </span>
+                      <span>{showS2Summary ? '▼' : '▶'}</span>
+                    </button>
+                    {showS2Summary && (
+                      <div className={`${styles.accordionContent} ${styles.accordionContentInfo}`}>
+                        <div style={{ fontSize: '13px', color: '#475569', lineHeight: '1.8' }}>
+                          <div><strong>1 facture unique</strong> pour tous les patients hospitalisés</div>
+                          <div style={{ marginTop: '12px' }}>
+                            <div>• <strong>Période :</strong> {monthName} {formData.period_year}</div>
+                            <div>• <strong>Patients inclus :</strong> {s2PatientsCount}</div>
+                            <div>• <strong>Transports inclus :</strong> {s2Totals.total_eligible}</div>
+                            <div style={{ marginTop: '8px', fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>
+                              • <strong>Total inclus :</strong> {formatCurrencyCHF(s2Totals.total_amount_eligible)}
+                            </div>
+                            {s2Totals.total_excluded > 0 && (
+                              <div style={{ marginTop: '8px', fontSize: '12px', color: '#92400e' }}>
+                                • <strong>Exclusions :</strong> {s2Totals.total_excluded} transport{s2Totals.total_excluded > 1 ? 's' : ''} • {formatCurrencyCHF(s2Totals.total_amount_excluded)}
+                              </div>
                             )}
                           </div>
-
-                          <div className={styles.patientReservations}>
-                            <ReservationSelector
-                              key={`${clientId}-${formData.period_year}-${formData.period_month}`}
-                              companyId={companyId}
-                              clientId={clientId}
-                              clientName={
-                                client.full_name || `${client.first_name} ${client.last_name}`
-                              }
-                              period={{ year: formData.period_year, month: formData.period_month }}
-                              billToType="clinic"
-                              vatConfig={vatConfig}
-                              overrides={overrides}
-                              preselectedIds={preselectedReservations[clientId] || []}
-                              onOverrideChange={handleOverrideChange}
-                              onSelectionChange={(reservations) =>
-                                handleReservationSelectionChange(clientId, reservations)
-                              }
-                            />
-                          </div>
                         </div>
-                      );
-                    })}
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
 
-              {consolidatedSelection.length > 0 && (
-                <div className={styles.summaryCard}>
-                  <div className={styles.summaryCardRow}>
-                    <span>Montant HT global</span>
-                    <strong>{formatCurrency(consolidatedTotals.base)}</strong>
-                  </div>
-                  {vatConfig.applicable && consolidatedTotals.vat > 0 && (
-                    <div className={styles.summaryCardRow}>
-                      <span>TVA totale</span>
-                      <strong>{formatCurrency(consolidatedTotals.vat)}</strong>
+                  {/* ✅ SECTION 1: Patients inclus (information principale - D'ABORD) */}
+                  {s2PatientsCount > 0 && (
+                    <div className={styles.formGroup}>
+                      <button
+                        type="button"
+                        onClick={() => setShowS2Patients(!showS2Patients)}
+                        className={`${styles.accordion} ${styles.accordionInfo} ${showS2Patients ? styles.isOpen : ''}`}
+                      >
+                        <span>
+                          ▶ Patients inclus ({s2PatientsCount})
+                        </span>
+                        <span>{showS2Patients ? '▼' : '▶'}</span>
+                      </button>
+                      {showS2Patients && (
+                        <div className={`${styles.accordionContent} ${styles.accordionContentInfo}`}>
+                          {/* ✅ Helper text S2 */}
+                          <div style={{ 
+                            marginBottom: '12px', 
+                            padding: '10px', 
+                            background: '#eff6ff', 
+                            border: '1px solid #bfdbfe',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            color: '#1e40af',
+                            lineHeight: '1.5'
+                          }}>
+                            <strong>S2 inclut automatiquement tous les transports cliniques éligibles</strong> ; utilisez l'override pour les exceptions.
+                          </div>
+                          {clients.length === 0 ? (
+                            <div style={{ color: '#6b7280', fontSize: '13px', textAlign: 'center', padding: '12px' }}>
+                              Chargement des patients...
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              {clients
+                                .filter((client) => {
+                                  // ✅ Filtrer : n'afficher que les patients avec au moins 1 transport clinique
+                                  const transportCount = client.unbilled_count || 0;
+                                  return transportCount > 0;
+                                })
+                                .map((client) => {
+                                  const clientName = `${client.first_name || ''} ${client.last_name || ''}`.trim() || client.username;
+                                  const isExpanded = expandedPatientId === client.id;
+                                  const bookings = patientBookings[client.id] || [];
+                                  const isLoading = patientBookingsLoading[client.id] || false;
+                                  
+                                  // Compter les transports cliniques vs patients pour ce patient
+                                  const patientBookingsCount = bookings.filter((b) => b.billed_to_type === 'patient').length;
+                                  const totalBookingsCount = bookings.length;
+                                  
+                                  return (
+                                    <div key={client.id} style={{ 
+                                      padding: '8px 12px', 
+                                      background: '#fff', 
+                                      border: '1px solid #e5e7eb', 
+                                      borderRadius: '6px'
+                                    }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                                          <span style={{ fontSize: '13px', color: '#111827', fontWeight: 500 }}>
+                                            {clientName}
+                                          </span>
+                                          <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                                            ({totalBookingsCount > 0 ? totalBookingsCount : client.unbilled_count || 0} transport{totalBookingsCount > 1 || (totalBookingsCount === 0 && (client.unbilled_count || 0) > 1) ? 's' : ''})
+                                          </span>
+                                          {totalBookingsCount > 0 && (
+                                            <span style={{ 
+                                              fontSize: '11px', 
+                                              padding: '2px 6px',
+                                              borderRadius: '4px',
+                                              fontWeight: 500,
+                                              ...(patientBookingsCount === 0 
+                                                ? { background: '#d1fae5', color: '#065f46' }
+                                                : { background: '#fef3c7', color: '#92400e' })
+                                            }}>
+                                              {patientBookingsCount === 0 
+                                                ? '✓ Tout clinique'
+                                                : `⚠ ${patientBookingsCount} facturé${patientBookingsCount > 1 ? 's' : ''} au patient`}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const newExpandedId = isExpanded ? null : client.id;
+                                            setExpandedPatientId(newExpandedId);
+                                            // Fermer la confirmation si on ferme le patient
+                                            if (!newExpandedId && bookingOverrideConfirm?.clientId === client.id) {
+                                              setBookingOverrideConfirm(null);
+                                            }
+                                            // Charger les bookings si on ouvre et qu'ils ne sont pas déjà chargés
+                                            if (newExpandedId && bookings.length === 0 && !isLoading) {
+                                              loadPatientBookings(client.id);
+                                            }
+                                          }}
+                                          className="btn btn-link"
+                                          style={{ 
+                                            padding: '2px 6px', 
+                                            fontSize: '11px', 
+                                            color: '#0369a1',
+                                            textDecoration: 'underline',
+                                            whiteSpace: 'nowrap'
+                                          }}
+                                        >
+                                          {isExpanded ? 'Fermer' : 'Voir trajets'}
+                                        </button>
+                                      </div>
+                                      {isExpanded && (
+                                        <div style={{ 
+                                          marginTop: '12px', 
+                                          padding: '12px', 
+                                          background: '#f9fafb', 
+                                          border: '1px solid #e5e7eb',
+                                          borderRadius: '6px'
+                                        }}>
+                                          {isLoading ? (
+                                            <div style={{ color: '#6b7280', fontSize: '12px', textAlign: 'center', padding: '12px' }}>
+                                              Chargement des trajets...
+                                            </div>
+                                          ) : bookings.length === 0 ? (
+                                            <div style={{ color: '#6b7280', fontSize: '12px', textAlign: 'center', padding: '12px' }}>
+                                              Aucun trajet trouvé pour cette période.
+                                            </div>
+                                          ) : (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                              {bookings.map((booking) => {
+                                                const isPatientBilling = booking.billed_to_type === 'patient';
+                                                const isOverrideInProgress = bookingOverridesInProgress.has(booking.id);
+                                                const isConfirming = bookingOverrideConfirm?.bookingId === booking.id;
+                                                // ✅ Safety rules S2: Vérifier si le booking est modifiable
+                                                // Normaliser billing_review_status en lowercase pour comparaison
+                                                const normalizedReviewStatus = booking.billing_review_status 
+                                                  ? String(booking.billing_review_status).toLowerCase() 
+                                                  : null;
+                                                const isLocked = normalizedReviewStatus === 'locked';
+                                                const isInvoiced = booking.invoice_line_id != null && booking.invoice_line_id !== undefined;
+                                                const isNoClinic = isPatientBilling && !clinicCompanyId;
+                                                const isNotModifiable = isLocked || isInvoiced || isNoClinic;
+                                                
+                                                // Tooltips spécifiques selon la raison de désactivation
+                                                const tooltipMessage = isInvoiced 
+                                                  ? 'Inclus dans une facture (ligne existante).'
+                                                  : (isLocked 
+                                                    ? 'Transport verrouillé (contrôle facturation).'
+                                                    : (isNoClinic 
+                                                      ? 'Sélectionnez une clinique avant de réintégrer ce transport.'
+                                                      : null));
+                                                const scheduledDate = booking.scheduled_time ? new Date(booking.scheduled_time) : null;
+                                                const dateStr = scheduledDate 
+                                                  ? scheduledDate.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '.')
+                                                  : '';
+                                                const pickupAddress = booking.pickup_address || '';
+                                                const dropoffAddress = booking.dropoff_address || '';
+                                                // ✅ Règle UX stricte : ne JAMAIS afficher booking.amount dans le message de confirmation
+                                                // ✅ Avant réponse API : afficher "— (recalcul en cours)"
+                                                // ✅ Après réponse API : afficher confirmedNewAmount uniquement
+                                                const isRecalculating = isConfirming && isOverrideInProgress;
+                                                // ✅ Règle stricte : utiliser uniquement les valeurs de l'API (response.amount et response.old_amount)
+                                                // ✅ Aucun fallback sur booking.amount
+                                                const confirmedNewAmount = isConfirming && bookingOverrideConfirm?.newAmount != null 
+                                                  ? bookingOverrideConfirm.newAmount 
+                                                  : null;
+                                                const confirmedOldAmount = isConfirming && bookingOverrideConfirm?.oldAmount != null 
+                                                  ? bookingOverrideConfirm.oldAmount 
+                                                  : null;
+                                                
+                                                // ✅ HARDENING : dans le confirm dialog, ne JAMAIS rendre booking.amount.
+                                                const confirmDisplayAmount = (isRecalculating || confirmedNewAmount == null)
+                                                  ? null
+                                                  : (Number.isFinite(confirmedNewAmount) && !Number.isNaN(confirmedNewAmount)
+                                                    ? confirmedNewAmount
+                                                    : null);
+                                                let amount;
+                                                if (!isConfirming) {
+                                                  const rawAmount = Number(booking.amount || 0);
+                                                  amount = Number.isFinite(rawAmount) && !Number.isNaN(rawAmount) ? rawAmount : 0;
+                                                } else {
+                                                  amount = confirmDisplayAmount;
+                                                }
+                                                
+                                                return (
+                                                  <div key={booking.id} style={{
+                                                    padding: '6px 10px',
+                                                    background: '#fff',
+                                                    border: '1px solid #e5e7eb',
+                                                    borderRadius: '4px',
+                                                    fontSize: '12px'
+                                                  }}>
+                                                    {!isConfirming ? (
+                                                      // ✅ Affichage ultra compact (1 ligne: date + pickup→dropoff + montant, switch à droite)
+                                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                                                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                                                          {dateStr && (
+                                                            <span style={{ fontWeight: 500, color: '#111827', fontSize: '11px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                                              {dateStr}
+                                                            </span>
+                                                          )}
+                                                          {pickupAddress && dropoffAddress && (
+                                                            <span style={{ color: '#4b5563', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
+                                                              {pickupAddress} → {dropoffAddress}
+                                                            </span>
+                                                          )}
+                                                          <span style={{ fontWeight: 600, color: '#111827', fontSize: '11px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                                            {formatCurrencyCHF(amount)}
+                                                          </span>
+                                                          {/* ✅ Safety: Label "Déjà facturé" si booking facturé */}
+                                                          {isInvoiced && (
+                                                            <span style={{ 
+                                                              fontSize: '10px', 
+                                                              color: '#dc2626', 
+                                                              fontWeight: 500,
+                                                              padding: '2px 6px',
+                                                              background: '#fee2e2',
+                                                              borderRadius: '3px',
+                                                              whiteSpace: 'nowrap',
+                                                              flexShrink: 0,
+                                                              marginLeft: '8px'
+                                                            }}>
+                                                              Déjà facturé
+                                                            </span>
+                                                          )}
+                                                        </div>
+                                                        {/* Switch aligné à droite */}
+                                                        <div 
+                                                          role="switch"
+                                                          aria-checked={isPatientBilling}
+                                                          aria-disabled={isOverrideInProgress || isNotModifiable}
+                                                          aria-label={isPatientBilling ? 'Facturer le patient' : 'Facturé à la clinique'}
+                                                          tabIndex={(isOverrideInProgress || isNotModifiable) ? -1 : 0}
+                                                          title={tooltipMessage || (isPatientBilling ? 'Facturer le patient' : 'Facturé à la clinique')}
+                                                          style={{
+                                                            position: 'relative',
+                                                            width: '40px',
+                                                            height: '22px',
+                                                            borderRadius: '11px',
+                                                            background: isPatientBilling ? '#dc2626' : '#3b82f6',
+                                                            cursor: (isOverrideInProgress || isNotModifiable) ? 'not-allowed' : 'pointer',
+                                                            transition: 'background-color 0.2s',
+                                                            flexShrink: 0,
+                                                            opacity: (isOverrideInProgress || isNotModifiable) ? 0.5 : 1,
+                                                            pointerEvents: (isOverrideInProgress || isNotModifiable) ? 'none' : 'auto'
+                                                          }}
+                                                          onClick={(e) => {
+                                                            if (isOverrideInProgress || isNotModifiable) {
+                                                              e.preventDefault();
+                                                              e.stopPropagation();
+                                                              return;
+                                                            }
+                                                            e.preventDefault();
+                                                            const newState = !isPatientBilling;
+                                                            if (newState) {
+                                                              // Bascule vers ON (patient) → confirmation
+                                                              setBookingOverrideConfirm({ bookingId: booking.id, clientId: client.id, action: 'set_patient' });
+                                                            } else {
+                                                              // Bascule vers OFF (clinique) → confirmation
+                                                              setBookingOverrideConfirm({ bookingId: booking.id, clientId: client.id, action: 'cancel' });
+                                                            }
+                                                          }}
+                                                          onKeyDown={(e) => {
+                                                            if (isOverrideInProgress || isNotModifiable) return;
+                                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                              e.preventDefault();
+                                                              const newState = !isPatientBilling;
+                                                              if (newState) {
+                                                                setBookingOverrideConfirm({ bookingId: booking.id, clientId: client.id, action: 'set_patient' });
+                                                              } else {
+                                                                setBookingOverrideConfirm({ bookingId: booking.id, clientId: client.id, action: 'cancel' });
+                                                              }
+                                                            }
+                                                          }}
+                                                        >
+                                                          <div style={{
+                                                            position: 'absolute',
+                                                            top: '2px',
+                                                            left: isPatientBilling ? '20px' : '2px',
+                                                            width: '18px',
+                                                            height: '18px',
+                                                            borderRadius: '50%',
+                                                            background: '#fff',
+                                                            transition: 'left 0.2s',
+                                                            boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                                                          }} />
+                                                        </div>
+                                                      </div>
+                                                    ) : (
+                                                      // ✅ Confirmation inline
+                                                      <div 
+                                                        role="alertdialog"
+                                                        aria-labelledby="confirm-title"
+                                                        aria-describedby="confirm-description"
+                                                        style={{ 
+                                                          padding: '12px', 
+                                                          background: '#fef3c7', 
+                                                          border: '1px solid #fbbf24',
+                                                          borderRadius: '6px'
+                                                        }}
+                                                      >
+                                                        <div 
+                                                          id="confirm-title"
+                                                          aria-live="polite"
+                                                          style={{ marginBottom: '12px', fontSize: '13px', color: '#78350f', fontWeight: 500 }}
+                                                        >
+                                                          {bookingOverrideConfirm.action === 'set_patient' 
+                                                            ? 'Facturer ce transport au patient ?'
+                                                            : 'Annuler l\'override et facturer à la clinique ?'}
+                                                        </div>
+                                                        <div 
+                                                          id="confirm-description"
+                                                          aria-live="polite"
+                                                          style={{ marginBottom: '12px', fontSize: '12px', color: '#92400e', lineHeight: '1.6' }}
+                                                        >
+                                                          {bookingOverrideConfirm.action === 'set_patient' ? (
+                                                            <>
+                                                              <div style={{ marginBottom: '6px' }}>
+                                                                Ce transport sera exclu de la facture clinique mensuelle.
+                                                              </div>
+                                                              {confirmDisplayAmount != null ? (
+                                                                <div style={{ fontSize: '11px', color: '#78350f', fontStyle: 'italic', marginBottom: '4px' }}>
+                                                                  Montant patient appliqué : <strong>{formatCurrencyCHF(confirmDisplayAmount)}</strong> (recalculé selon tarif patient)
+                                                                </div>
+                                                              ) : isOverrideInProgress ? (
+                                                                <div style={{ fontSize: '11px', color: '#78350f', fontStyle: 'italic', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                  <span className={styles.spinner} aria-hidden="true" />
+                                                                  Montant patient appliqué : <strong>—</strong> (recalcul en cours)
+                                                                </div>
+                                                              ) : (
+                                                                <div style={{ fontSize: '11px', color: '#78350f', fontStyle: 'italic', marginBottom: '4px' }}>
+                                                                  Montant patient appliqué : <strong>—</strong>
+                                                                </div>
+                                                              )}
+                                                              {!isOverrideInProgress && confirmedNewAmount != null && confirmedOldAmount != null && (
+                                                                <div style={{ fontSize: '11px', color: '#78350f', fontStyle: 'italic' }}>
+                                                                  → Total S2 : <strong>{(() => {
+                                                                    // ✅ RÈGLE STRICTE : totaux/delta uniquement depuis response (amount, old_amount). Aucun fallback.
+                                                                    // ✅ Passage clinic → patient : on retire du total l’ancien montant (old_amount)
+                                                                    const currentTotal = Number.isFinite(s2Totals.total_amount_eligible) && !Number.isNaN(s2Totals.total_amount_eligible) ? s2Totals.total_amount_eligible : 0;
+                                                                    const newTotal = Math.max(0, Number((currentTotal - confirmedOldAmount).toFixed(2)));
+                                                                    const safe = Number.isFinite(newTotal) && !Number.isNaN(newTotal) ? newTotal : 0;
+                                                                    return formatCurrencyCHF(safe);
+                                                                  })()}</strong> ({(() => {
+                                                                    const currentCount = Number.isFinite(s2Totals.total_eligible) ? s2Totals.total_eligible : 0;
+                                                                    const newCount = Math.max(0, Math.floor(currentCount - 1));
+                                                                    return newCount;
+                                                                  })()} transport{(() => {
+                                                                    const currentCount = Number.isFinite(s2Totals.total_eligible) ? s2Totals.total_eligible : 0;
+                                                                    const newCount = Math.max(0, Math.floor(currentCount - 1));
+                                                                    return newCount > 1 ? 's' : '';
+                                                                  })()}) (<span style={{ color: '#dc2626' }}>- {formatCurrencyCHF(confirmedOldAmount)}</span>)
+                                                                </div>
+                                                              )}
+                                                            </>
+                                                          ) : (
+                                                            <>
+                                                              <div style={{ marginBottom: '6px' }}>
+                                                                Ce transport sera inclus dans la facture clinique mensuelle.
+                                                              </div>
+                                                              {confirmDisplayAmount != null ? (
+                                                                <div style={{ fontSize: '11px', color: '#78350f', fontStyle: 'italic', marginBottom: '4px' }}>
+                                                                  Montant clinique appliqué : <strong>{formatCurrencyCHF(confirmDisplayAmount)}</strong> (recalculé selon tarif clinique préférentiel)
+                                                                </div>
+                                                              ) : isOverrideInProgress ? (
+                                                                <div style={{ fontSize: '11px', color: '#78350f', fontStyle: 'italic', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                  <span className={styles.spinner} aria-hidden="true" />
+                                                                  Montant clinique appliqué : <strong>—</strong> (recalcul en cours)
+                                                                </div>
+                                                              ) : (
+                                                                <div style={{ fontSize: '11px', color: '#78350f', fontStyle: 'italic', marginBottom: '4px' }}>
+                                                                  Montant clinique appliqué : <strong>—</strong>
+                                                                </div>
+                                                              )}
+                                                              {!isOverrideInProgress && confirmedNewAmount != null && confirmedOldAmount != null && (
+                                                                <div style={{ fontSize: '11px', color: '#78350f', fontStyle: 'italic' }}>
+                                                                  → Total S2 : <strong>{(() => {
+                                                                    const currentTotal = Number.isFinite(s2Totals.total_amount_eligible) && !Number.isNaN(s2Totals.total_amount_eligible) ? s2Totals.total_amount_eligible : 0;
+                                                                    const newTotal = currentTotal + confirmedNewAmount;
+                                                                    const safeNewTotal = Number.isFinite(newTotal) && !Number.isNaN(newTotal) ? Number(newTotal.toFixed(2)) : 0;
+                                                                    return formatCurrencyCHF(safeNewTotal);
+                                                                  })()}</strong> ({(() => {
+                                                                    const currentCount = Number.isFinite(s2Totals.total_eligible) ? s2Totals.total_eligible : 0;
+                                                                    const newCount = Math.floor(currentCount + 1);
+                                                                    return newCount;
+                                                                  })()} transport{(() => {
+                                                                    const currentCount = Number.isFinite(s2Totals.total_eligible) ? s2Totals.total_eligible : 0;
+                                                                    const newCount = Math.floor(currentCount + 1);
+                                                                    return newCount > 1 ? 's' : '';
+                                                                  })()}) (<span style={{ color: '#059669' }}>+ {formatCurrencyCHF(confirmedNewAmount)}</span>)
+                                                                </div>
+                                                              )}
+                                                            </>
+                                                          )}
+                                                        </div>
+                                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                                          <button
+                                                            ref={confirmButtonRef}
+                                                            type="button"
+                                                            onClick={async () => {
+                                                              const newBilledToType = bookingOverrideConfirm.action === 'set_patient' ? 'patient' : 'clinic';
+                                                              setBookingOverrideConfirm(null);
+                                                              await handleBookingBillingOverride(booking.id, newBilledToType);
+                                                            }}
+                                                            className="btn btn-primary"
+                                                            disabled={isOverrideInProgress || isNoClinic}
+                                                            style={{ 
+                                                              padding: '6px 12px', 
+                                                              fontSize: '12px',
+                                                              opacity: (isOverrideInProgress || isNoClinic) ? 0.6 : 1
+                                                            }}
+                                                          >
+                                                            {isOverrideInProgress ? 'En cours...' : 'Confirmer'}
+                                                          </button>
+                                                          <button
+                                                            type="button"
+                                                            onClick={() => setBookingOverrideConfirm(null)}
+                                                            className="btn btn-secondary"
+                                                            disabled={isOverrideInProgress}
+                                                            style={{ 
+                                                              padding: '6px 12px', 
+                                                              fontSize: '12px',
+                                                              opacity: isOverrideInProgress ? 0.6 : 1
+                                                            }}
+                                                          >
+                                                            Annuler
+                                                          </button>
+                                                        </div>
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              {clients.filter((client) => (client.unbilled_count || 0) === 0).length > 0 && (
+                                <div style={{ 
+                                  padding: '8px 12px', 
+                                  background: '#f9fafb', 
+                                  border: '1px solid #e5e7eb', 
+                                  borderRadius: '6px',
+                                  fontSize: '12px',
+                                  color: '#6b7280',
+                                  fontStyle: 'italic'
+                                }}>
+                                  {clients.filter((client) => (client.unbilled_count || 0) === 0).length} patient{clients.filter((client) => (client.unbilled_count || 0) === 0).length > 1 ? 's' : ''} avec 0 transport clinique {clients.filter((client) => (client.unbilled_count || 0) === 0).length > 1 ? 'sont' : 'est'} exclu{clients.filter((client) => (client.unbilled_count || 0) === 0).length > 1 ? 's' : ''} de cette facture
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
-                  <div className={`${styles.summaryCardRow} ${styles.summaryCardTotal}`}>
-                    <span>Total TTC</span>
-                    <strong>{formatCurrency(consolidatedTotals.total)}</strong>
-                  </div>
-                </div>
-              )}
 
-              <small className={styles.hint}>
-                {formData.client_ids.length} patient(s) sélectionné(s) •{' '}
-                {Object.values(selectedReservations || {}).reduce(
-                  (sum, res) => sum + (res?.length || 0),
-                  0
-                )}{' '}
-                transport(s) au total
-              </small>
+                  {/* ✅ SECTION 2: Exclusions (alerte secondaire - ENSUITE) */}
+                  {s2Totals.total_excluded > 0 && (
+                    <div className={styles.formGroup}>
+                      <button
+                        type="button"
+                        onClick={() => setShowS2Exclusions(!showS2Exclusions)}
+                        className={`${styles.accordion} ${styles.accordionWarning} ${showS2Exclusions ? styles.isOpen : ''}`}
+                      >
+                        <span>
+                          ⚠️ Transports non facturés à la clinique
+                        </span>
+                        <span>{showS2Exclusions ? '▼' : '▶'}</span>
+                      </button>
+                      {showS2Exclusions && (
+                        <div className={`${styles.accordionContent} ${styles.accordionContentWarning}`}>
+                          <div style={{ marginBottom: '12px', lineHeight: '1.6' }}>
+                            <strong>{s2Totals.total_excluded} transport{s2Totals.total_excluded > 1 ? 's' : ''} • {formatCurrencyCHF(s2Totals.total_amount_excluded)}</strong>
+                          </div>
+                          <div style={{ marginBottom: '16px', fontSize: '12px', color: '#92400e' }}>
+                            Transports facturés au patient (override). Vous pouvez les réintégrer à la facture clinique.
+                          </div>
+                          
+                          {/* ✅ Liste des transports exclus avec switch pour correction rapide */}
+                          {Array.isArray(s2Totals.excluded_bookings) && s2Totals.excluded_bookings.length > 0 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              {s2Totals.excluded_bookings.map((booking) => {
+                                const isPatientBilling = booking.billed_to_type === 'patient';
+                                const isOverrideInProgress = bookingOverridesInProgress.has(booking.id);
+                                const isConfirming = bookingOverrideConfirm?.bookingId === booking.id;
+                                
+                                // ✅ Safety rules S2: Vérifier si le booking est modifiable
+                                const normalizedReviewStatus = booking.billing_review_status 
+                                  ? String(booking.billing_review_status).toLowerCase() 
+                                  : null;
+                                const isLocked = normalizedReviewStatus === 'locked';
+                                const isInvoiced = booking.invoice_line_id != null && booking.invoice_line_id !== undefined;
+                                const isNoClinic = !clinicCompanyId;
+                                const isNotModifiable = isLocked || isInvoiced || isNoClinic;
+                                
+                                // Tooltips spécifiques selon la raison de désactivation
+                                const tooltipMessage = isInvoiced 
+                                  ? 'Inclus dans une facture (ligne existante).'
+                                  : (isLocked 
+                                    ? 'Transport verrouillé (contrôle facturation).'
+                                    : (isNoClinic 
+                                      ? 'Sélectionnez une clinique avant de réintégrer ce transport.'
+                                      : null));
+                                
+                                const scheduledDate = booking.scheduled_time ? new Date(booking.scheduled_time) : null;
+                                const dateStr = scheduledDate 
+                                  ? scheduledDate.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '.')
+                                  : '';
+                                
+                                // ✅ Règle UX stricte : ne JAMAIS afficher booking.amount dans le message de confirmation
+                                // ✅ Avant réponse API : afficher "— (recalcul en cours)"
+                                // ✅ Après réponse API : afficher confirmedNewAmount uniquement
+                                const isRecalculating = isConfirming && isOverrideInProgress;
+                                // ✅ Règle stricte : utiliser uniquement les valeurs de l'API (response.amount et response.old_amount)
+                                // ✅ Aucun fallback sur booking.amount
+                                const confirmedNewAmount = isConfirming && bookingOverrideConfirm?.newAmount != null 
+                                  ? bookingOverrideConfirm.newAmount 
+                                  : null;
+                                const confirmedOldAmount = isConfirming && bookingOverrideConfirm?.oldAmount != null 
+                                  ? bookingOverrideConfirm.oldAmount 
+                                  : null;
+                                
+                                // ✅ HARDENING : dans le confirm dialog, ne JAMAIS rendre booking.amount.
+                                const confirmDisplayAmount = (isRecalculating || confirmedNewAmount == null)
+                                  ? null
+                                  : (Number.isFinite(confirmedNewAmount) && !Number.isNaN(confirmedNewAmount)
+                                    ? confirmedNewAmount
+                                    : null);
+                                let amount;
+                                if (!isConfirming) {
+                                  const rawAmount = Number(booking.amount || 0);
+                                  amount = Number.isFinite(rawAmount) && !Number.isNaN(rawAmount) ? rawAmount : 0;
+                                } else {
+                                  amount = confirmDisplayAmount;
+                                }
+                                
+                                // Nom du patient (customer_name ou client info)
+                                const patientName = booking.customer_name || booking.client_name || 'Patient inconnu';
+                                
+                                // Adresses
+                                const pickupAddress = booking.pickup_address || booking.pickup_location || '';
+                                const dropoffAddress = booking.dropoff_address || booking.dropoff_location || '';
+                                
+                                return (
+                                  <div key={booking.id} style={{
+                                    padding: '6px 10px',
+                                    background: '#fff',
+                                    border: '1px solid #fbbf24',
+                                    borderRadius: '4px',
+                                    fontSize: '12px'
+                                  }}>
+                                    {!isConfirming ? (
+                                      // ✅ Affichage compact (1 ligne: date • patient • pickup→dropoff • montant, switch à droite)
+                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                                          {dateStr && (
+                                            <span style={{ fontWeight: 500, color: '#111827', fontSize: '11px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                              {dateStr}
+                                            </span>
+                                          )}
+                                          <span style={{ color: '#92400e', fontSize: '11px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                            •
+                                          </span>
+                                          <span style={{ color: '#4b5563', fontSize: '11px', whiteSpace: 'nowrap', flexShrink: 0, maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                            {patientName}
+                                          </span>
+                                          {pickupAddress && dropoffAddress && (
+                                            <>
+                                              <span style={{ color: '#92400e', fontSize: '11px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                                •
+                                              </span>
+                                              <span style={{ color: '#4b5563', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
+                                                {pickupAddress} → {dropoffAddress}
+                                              </span>
+                                            </>
+                                          )}
+                                          <span style={{ fontWeight: 600, color: '#111827', fontSize: '11px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                            {formatCurrencyCHF(amount)}
+                                          </span>
+                                          {/* Badge "Override patient" */}
+                                          <span style={{ 
+                                            fontSize: '10px', 
+                                            color: '#92400e', 
+                                            fontWeight: 500,
+                                            padding: '2px 6px',
+                                            background: '#fef3c7',
+                                            borderRadius: '3px',
+                                            whiteSpace: 'nowrap',
+                                            flexShrink: 0,
+                                            marginLeft: '4px'
+                                          }}>
+                                            Override patient
+                                          </span>
+                                          {/* ✅ Safety: Label "Déjà facturé" si booking facturé */}
+                                          {isInvoiced && (
+                                            <span style={{ 
+                                              fontSize: '10px', 
+                                              color: '#dc2626', 
+                                              fontWeight: 500,
+                                              padding: '2px 6px',
+                                              background: '#fee2e2',
+                                              borderRadius: '3px',
+                                              whiteSpace: 'nowrap',
+                                              flexShrink: 0,
+                                              marginLeft: '4px'
+                                            }}>
+                                              Déjà facturé
+                                            </span>
+                                          )}
+                                        </div>
+                                        {/* Switch aligné à droite (OFF=Clinique, ON=Patient) */}
+                                        <div 
+                                          role="switch"
+                                          aria-checked={isPatientBilling}
+                                          aria-disabled={isOverrideInProgress || isNotModifiable}
+                                          aria-label={isPatientBilling ? 'Facturer le patient' : 'Facturé à la clinique'}
+                                          tabIndex={(isOverrideInProgress || isNotModifiable) ? -1 : 0}
+                                          title={tooltipMessage || (isPatientBilling ? 'Facturer le patient' : 'Revenir à la clinique')}
+                                          style={{
+                                            position: 'relative',
+                                            width: '40px',
+                                            height: '22px',
+                                            borderRadius: '11px',
+                                            background: isPatientBilling ? '#dc2626' : '#3b82f6',
+                                            cursor: (isOverrideInProgress || isNotModifiable) ? 'not-allowed' : 'pointer',
+                                            transition: 'background-color 0.2s',
+                                            flexShrink: 0,
+                                            opacity: (isOverrideInProgress || isNotModifiable) ? 0.5 : 1,
+                                            pointerEvents: (isOverrideInProgress || isNotModifiable) ? 'none' : 'auto'
+                                          }}
+                                          onClick={(e) => {
+                                            if (isOverrideInProgress || isNotModifiable) {
+                                              e.preventDefault();
+                                              e.stopPropagation();
+                                              return;
+                                            }
+                                            e.preventDefault();
+                                            // Pour les exclusions, on veut toujours revenir à la clinique (OFF)
+                                            if (isPatientBilling) {
+                                              setBookingOverrideConfirm({ bookingId: booking.id, action: 'cancel' });
+                                            }
+                                          }}
+                                          onKeyDown={(e) => {
+                                            if (isOverrideInProgress || isNotModifiable) return;
+                                            if (e.key === 'Enter' || e.key === ' ') {
+                                              e.preventDefault();
+                                              if (isPatientBilling) {
+                                                setBookingOverrideConfirm({ bookingId: booking.id, action: 'cancel' });
+                                              }
+                                            }
+                                          }}
+                                        >
+                                          <div style={{
+                                            position: 'absolute',
+                                            top: '2px',
+                                            left: isPatientBilling ? '20px' : '2px',
+                                            width: '18px',
+                                            height: '18px',
+                                            borderRadius: '50%',
+                                            background: '#fff',
+                                            transition: 'left 0.2s',
+                                            boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                                          }} />
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      // ✅ Confirmation inline
+                                      <div 
+                                        role="alertdialog"
+                                        aria-labelledby="confirm-title"
+                                        aria-describedby="confirm-description"
+                                        style={{ 
+                                          padding: '12px', 
+                                          background: '#fef3c7', 
+                                          border: '1px solid #fbbf24',
+                                          borderRadius: '6px'
+                                        }}
+                                      >
+                                        <div 
+                                          id="confirm-title"
+                                          aria-live="polite"
+                                          style={{ marginBottom: '12px', fontSize: '13px', color: '#78350f', fontWeight: 500 }}
+                                        >
+                                          Inclure ce transport dans la facture clinique mensuelle ?
+                                        </div>
+                                        <div 
+                                          id="confirm-description"
+                                          aria-live="polite"
+                                          style={{ marginBottom: '12px', fontSize: '12px', color: '#92400e', lineHeight: '1.6' }}
+                                        >
+                                          <div style={{ marginBottom: '6px' }}>
+                                            Ce transport sera inclus dans la facture clinique mensuelle.
+                                          </div>
+                                          {confirmDisplayAmount != null ? (
+                                            <div style={{ fontSize: '11px', color: '#78350f', fontStyle: 'italic', marginBottom: '4px' }}>
+                                              Montant clinique appliqué : <strong>{formatCurrencyCHF(confirmDisplayAmount)}</strong> (recalculé selon tarif clinique préférentiel)
+                                            </div>
+                                          ) : isOverrideInProgress ? (
+                                            <div style={{ fontSize: '11px', color: '#78350f', fontStyle: 'italic', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                              <span className={styles.spinner} aria-hidden="true" />
+                                              Montant clinique appliqué : <strong>—</strong> (recalcul en cours)
+                                            </div>
+                                          ) : (
+                                            <div style={{ fontSize: '11px', color: '#78350f', fontStyle: 'italic', marginBottom: '4px' }}>
+                                              Montant clinique appliqué : <strong>—</strong>
+                                            </div>
+                                          )}
+                                          {!isOverrideInProgress && confirmedNewAmount != null && confirmedOldAmount != null && (
+                                            <div style={{ fontSize: '11px', color: '#78350f', fontStyle: 'italic' }}>
+                                              → Total S2 : <strong>{(() => {
+                                                const currentTotal = Number.isFinite(s2Totals.total_amount_eligible) && !Number.isNaN(s2Totals.total_amount_eligible) ? s2Totals.total_amount_eligible : 0;
+                                                const newTotal = currentTotal + confirmedNewAmount;
+                                                const safeNewTotal = Number.isFinite(newTotal) && !Number.isNaN(newTotal) ? Number(newTotal.toFixed(2)) : 0;
+                                                return formatCurrencyCHF(safeNewTotal);
+                                              })()}</strong> ({(() => {
+                                                const currentCount = Number.isFinite(s2Totals.total_eligible) ? s2Totals.total_eligible : 0;
+                                                const newCount = Math.floor(currentCount + 1);
+                                                return newCount;
+                                              })()} transport{(() => {
+                                                const currentCount = Number.isFinite(s2Totals.total_eligible) ? s2Totals.total_eligible : 0;
+                                                const newCount = Math.floor(currentCount + 1);
+                                                return newCount > 1 ? 's' : '';
+                                              })()}) (<span style={{ color: '#059669' }}>+ {formatCurrencyCHF(confirmedNewAmount)}</span>)
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                          <button
+                                            ref={confirmButtonRef}
+                                            type="button"
+                                            onClick={async () => {
+                                              // ✅ Ne PAS fermer le message immédiatement - le garder ouvert pour afficher les valeurs de l'API
+                                              // setBookingOverrideConfirm(null); // ❌ Retiré : ferme le message avant que newAmount soit disponible
+                                              await handleBookingBillingOverride(booking.id, 'clinic');
+                                              // ✅ Fermer le message APRÈS avoir reçu la réponse de l'API (fait dans handleBookingBillingOverride)
+                                            }}
+                                            className="btn btn-primary"
+                                            disabled={isOverrideInProgress || isNoClinic}
+                                            style={{ 
+                                              padding: '6px 12px', 
+                                              fontSize: '12px',
+                                              opacity: (isOverrideInProgress || isNoClinic) ? 0.6 : 1
+                                            }}
+                                          >
+                                            {isOverrideInProgress ? 'En cours...' : 'Confirmer'}
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setBookingOverrideConfirm(null)}
+                                            className="btn btn-secondary"
+                                            disabled={isOverrideInProgress}
+                                            style={{ 
+                                              padding: '6px 12px', 
+                                              fontSize: '12px',
+                                              opacity: isOverrideInProgress ? 0.6 : 1
+                                            }}
+                                          >
+                                            Annuler
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div style={{ color: '#6b7280', fontSize: '12px', textAlign: 'center', padding: '12px' }}>
+                              Aucun transport exclu trouvé.
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ✅ SECTION 3: Options avancées (accordion, fermé par défaut) */}
+                  <div className={styles.formGroup}>
+                    <button
+                      type="button"
+                      onClick={() => setShowS2Advanced(!showS2Advanced)}
+                      className={`${styles.accordion} ${styles.accordionInfo} ${showS2Advanced ? styles.isOpen : ''}`}
+                      style={{ background: showS2Advanced ? '#f0f9ff' : 'transparent' }}
+                    >
+                      <span style={{ fontWeight: 500, fontSize: '13px' }}>
+                        ▶ Options avancées
+                      </span>
+                      <span>{showS2Advanced ? '▼' : '▶'}</span>
+                    </button>
+                    {showS2Advanced && (
+                      <div className={`${styles.accordionContent} ${styles.accordionContentInfo}`}>
+                        {/* Limiter à certains patients */}
+                        <div style={{ marginBottom: '16px' }}>
+                          <label className={styles.label} style={{ marginBottom: '8px' }}>
+                            Limiter à certains patients (optionnel)
+                          </label>
+                          <small className={styles.hint} style={{ display: 'block', marginBottom: '8px', color: '#6b7280', fontSize: '12px' }}>
+                            Par défaut, tous les patients de la clinique sont inclus. Sélectionnez des patients pour créer une facture partielle.
+                          </small>
+                          <div className={styles.clientsList} style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                            {clients.map((client) => (
+                              <label key={client.id} className={styles.checkboxLabel}>
+                                <input
+                                  type="checkbox"
+                                  checked={includeClientIds.includes(client.id)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setIncludeClientIds([...includeClientIds, client.id]);
+                                    } else {
+                                      setIncludeClientIds(includeClientIds.filter((id) => id !== client.id));
+                                    }
+                                  }}
+                                  disabled={loading}
+                                />
+                                <span>
+                                  {`${client.first_name || ''} ${client.last_name || ''}`.trim() ||
+                                    client.username}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                          {includeClientIds.length > 0 && (
+                            <small className={styles.hint} style={{ display: 'block', marginTop: '8px', color: '#0369a1', fontSize: '12px' }}>
+                              {includeClientIds.length} patient{includeClientIds.length > 1 ? 's' : ''} sélectionné{includeClientIds.length > 1 ? 's' : ''} (facture partielle)
+                            </small>
+                          )}
+                        </div>
+
+                      </div>
+                    )}
+                  </div>
+                </>
+                  )}
             </>
           )}
 
-          {/* Facturation partenaire */}
+          {/* Facturation partenaire — même modèle que clinique / direct */}
           {billingType === 'partner' && (
             <>
+              <div className={styles.s2Header}>
+                <div className={styles.s2HeaderRow}>
+                  <span className={styles.s2HeaderLabel}>🤝 Partenaire</span>
+                  <div className={styles.s2HeaderClinique} style={{ flex: 1, maxWidth: '100%' }}>
+                    <select
+                      id="partnership_id"
+                      name="partnership_id"
+                      value={formData.partnership_id}
+                      onChange={handleInputChange}
+                      className={styles.select}
+                      required
+                      disabled={loading || partnersLoading}
+                    >
+                      <option value="">Sélectionner un partenaire</option>
+                      {partners.map((partner) => (
+                        <option key={partner.partnership_id} value={partner.partnership_id}>
+                          {partner.partner_company_name} ({partner.unbilled_transfers_count} transfert{partner.unbilled_transfers_count > 1 ? 's' : ''} • {formatCurrency(partner.total_amount)})
+                        </option>
+                      ))}
+                    </select>
+                    {partnersLoading && <small className={styles.hint}>Chargement…</small>}
+                    {!partnersLoading && partners.length === 0 && (
+                      <small className={styles.hint}>Aucun partenaire avec transferts facturables.</small>
+                    )}
+                  </div>
+                </div>
+                <div className={styles.s2HeaderRow}>
+                  <div className={styles.s2HeaderMeta}>
+                    <span className={styles.s2HeaderLabel}>Période à facturer</span>
+                    {selectedPartner && (
+                      <>
+                        <span className={styles.s2HeaderMetaSep}>•</span>
+                        <span>{selectedPartner.unbilled_transfers_count} transfert{selectedPartner.unbilled_transfers_count > 1 ? 's' : ''}</span>
+                      </>
+                    )}
+                  </div>
+                  <div className={styles.s2HeaderPeriod}>
+                    <select
+                      id="partner_period_month"
+                      name="period_month"
+                      value={formData.period_month}
+                      onChange={handleInputChange}
+                      className={styles.select}
+                      disabled={loading}
+                    >
+                      {months.map((m) => (
+                        <option key={m.value} value={m.value}>{m.label}</option>
+                      ))}
+                    </select>
+                    <select
+                      id="partner_period_year"
+                      name="period_year"
+                      value={formData.period_year}
+                      onChange={handleInputChange}
+                      className={styles.select}
+                      disabled={loading}
+                    >
+                      {years.map((y) => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {selectedPartner && (
+                <div className={styles.formGroup}>
+                  <button
+                    type="button"
+                    onClick={() => setShowPartnerSummary(!showPartnerSummary)}
+                    className={`${styles.accordion} ${styles.accordionInfo} ${showPartnerSummary ? styles.isOpen : ''}`}
+                  >
+                    <span>✓ Facture partenaire</span>
+                    <span>{showPartnerSummary ? '▼' : '▶'}</span>
+                  </button>
+                  {showPartnerSummary && (
+                    <div className={`${styles.accordionContent} ${styles.accordionContentInfo}`}>
+                      <div style={{ fontSize: 13, color: '#475569', lineHeight: 1.8 }}>
+                        <div><strong>1 facture</strong> pour {selectedPartner.partner_company_name}</div>
+                        <div style={{ marginTop: 12 }}>
+                          <div>• <strong>Période :</strong> {monthName} {formData.period_year}</div>
+                          <div>• <strong>Transferts inclus :</strong> {selectedPartner.unbilled_transfers_count}</div>
+                          <div style={{ marginTop: 8, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
+                            • <strong>Total :</strong> {formatCurrency(selectedPartner.total_amount)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Période (masquée en S2, direct, partenaire et tierce, déjà dans les headers) */}
+          {billingType !== 'direct' && billingType !== 'partner' && billingType !== 'third_party' && (
+            <div className={styles.formRow}>
               <div className={styles.formGroup}>
-                <label htmlFor="partnership_id" className={styles.label}>
-                  Partenaire *
+                <label htmlFor="period_year" className={styles.label}>
+                  Année
                 </label>
                 <select
-                  id="partnership_id"
-                  name="partnership_id"
-                  value={formData.partnership_id}
+                  id="period_year"
+                  name="period_year"
+                  value={formData.period_year}
                   onChange={handleInputChange}
                   className={styles.select}
-                  required
-                  disabled={loading || partnersLoading}
+                  disabled={loading}
                 >
-                  <option value="">Sélectionner un partenaire</option>
-                  {partners.map((partner) => (
-                    <option key={partner.partnership_id} value={partner.partnership_id}>
-                      {partner.partner_company_name} ({partner.unbilled_transfers_count} transfert{partner.unbilled_transfers_count > 1 ? 's' : ''} • {formatCurrency(partner.total_amount)} {partner.currency})
+                  {years.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
                     </option>
                   ))}
                 </select>
-                {partnersLoading && <small className={styles.hint}>Chargement des partenaires…</small>}
-                {!partnersLoading && partners.length === 0 && (
-                  <small className={styles.hint}>
-                    Aucun partenaire avec transferts facturables pour le moment.
-                  </small>
-                )}
               </div>
-            </>
+
+              <div className={styles.formGroup}>
+                <label htmlFor="period_month" className={styles.label}>
+                  Mois
+                </label>
+                <select
+                  id="period_month"
+                  name="period_month"
+                  value={formData.period_month}
+                  onChange={handleInputChange}
+                  className={styles.select}
+                  disabled={loading}
+                >
+                  {months.map((month) => (
+                    <option key={month.value} value={month.value}>
+                      {month.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
           )}
 
-          {/* Période */}
-          <div className={styles.formRow}>
-            <div className={styles.formGroup}>
-              <label htmlFor="period_year" className={styles.label}>
-                Année
-              </label>
-              <select
-                id="period_year"
-                name="period_year"
-                value={formData.period_year}
-                onChange={handleInputChange}
-                className={styles.select}
-                disabled={loading}
-              >
-                {years.map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className={styles.formGroup}>
-              <label htmlFor="period_month" className={styles.label}>
-                Mois
-              </label>
-              <select
-                id="period_month"
-                name="period_month"
-                value={formData.period_month}
-                onChange={handleInputChange}
-                className={styles.select}
-                disabled={loading}
-              >
-                {months.map((month) => (
-                  <option key={month.value} value={month.value}>
-                    {month.label}
-                  </option>
-                ))}
-              </select>
-            </div>
           </div>
 
-          <div className="modal-footer">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="btn btn-secondary"
-              disabled={loading}
-            >
-              Annuler
-            </button>
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={
-                loading ||
-                (billingType === 'direct' && !formData.client_id) ||
-                (billingType === 'third_party' &&
-                  (formData.client_ids.length === 0 || !formData.bill_to_client_id))
-              }
-            >
-              {loading ? 'Génération...' : 'Générer la facture'}
-            </button>
-          </div>
+          {/* Footer sticky avec totaux (third_party, direct, partenaire) */}
+          {((billingType === 'third_party' && formData.bill_to_client_id) ||
+            (billingType === 'direct' && formData.client_id) ||
+            (billingType === 'partner' && formData.partnership_id)) && (
+            <div className={styles.stickyFooter}>
+              <div className={styles.stickyFooterContent}>
+                <div className={styles.stickyFooterTotals}>
+                  {billingType === 'direct' ? (
+                    clientsLoading && formData.client_id ? (
+                      <span className={styles.stickyFooterEmpty}>Chargement des totaux…</span>
+                    ) : !formData.client_id ? (
+                      <span className={styles.stickyFooterEmpty}>Sélectionnez un client</span>
+                    ) : directSummary && directSummary.count > 0 ? (
+                      directSelection.length === 0 ? (
+                        <div className={styles.stickyFooterEmptyWithAction}>
+                          <span>Aucun transport sélectionné (0/{directSummary.count})</span>
+                          <button
+                            type="button"
+                            className={styles.stickyFooterActionLink}
+                            onClick={handleSelectAllReservations}
+                            disabled={loading || clientsLoading}
+                          >
+                            Tout sélectionner
+                          </button>
+                        </div>
+                      ) : isPartialSelection ? (
+                        _directTotals === null || hasUnhydratedMinimals ? (
+                          <span className={styles.stickyFooterTotal}>
+                            Sélection partielle {directSelection.length}/{directSummary.count} • TTC <strong>—</strong>
+                            <span className={styles.stickyFooterWarning} style={{ marginLeft: '8px', fontSize: '0.9em', color: '#ff9800' }}>
+                              (Détails requis pour calculer le total)
+                            </span>
+                          </span>
+                        ) : (
+                          <span className={styles.stickyFooterTotal}>
+                            Sélection partielle {directSelection.length}/{directSummary.count} • TTC <strong>{formatCurrency(_directTotals.total)}</strong>
+                          </span>
+                        )
+                      ) : (
+                        <span className={styles.stickyFooterTotal}>
+                          1 facture client • {directSummary.count} transport{directSummary.count > 1 ? 's' : ''} • Total TTC <strong>{formatCurrency(directSummaryTTC)}</strong>
+                        </span>
+                      )
+                    ) : directSummary && directSummary.count === 0 ? (
+                      <span className={styles.stickyFooterEmpty}>Aucun transport à facturer</span>
+                    ) : (
+                      <span className={styles.stickyFooterEmpty}>—</span>
+                    )
+                  ) : billingType === 'partner' ? (
+                    selectedPartner ? (
+                      <span className={styles.stickyFooterTotal}>
+                        1 facture partenaire • {selectedPartner.unbilled_transfers_count} transfert{selectedPartner.unbilled_transfers_count > 1 ? 's' : ''} • Total <strong>{formatCurrency(selectedPartner.total_amount)}</strong>
+                      </span>
+                    ) : (
+                      <span className={styles.stickyFooterEmpty}>Sélectionnez un partenaire</span>
+                    )
+                  ) : isClinicMonthly ? (
+                    // ✅ Mode S2: Résumé facture clinique mensuelle
+                    <>
+                      {s2TotalsLoading ? (
+                        <span className={styles.stickyFooterEmpty}>Chargement des totaux...</span>
+                      ) : s2Totals.total_eligible === 0 ? (
+                        <span className={styles.stickyFooterEmpty} style={{ color: '#dc2626' }}>
+                          ⚠️ Aucun transport clinique éligible{includeClientIds.length > 0 ? ' pour les patients sélectionnés' : ''} sur cette période
+                        </span>
+                      ) : (
+                        <span className={styles.stickyFooterTotal}>
+                          1 facture clinique • {s2Totals.total_eligible} transport{s2Totals.total_eligible > 1 ? 's' : ''} inclus • Total <strong>{formatCurrencyCHF(s2Totals.total_amount_eligible)}</strong>
+                        </span>
+                      )}
+                    </>
+                  ) : isConsolidated && formData.client_ids.length >= 2 ? (
+                    <>
+                      <span className={styles.stickyFooterTotal}>
+                        {formData.client_ids.length} factures • Total <strong>{formatCurrency(consolidatedTotals.total)}</strong>
+                      </span>
+                      {vatConfig.applicable && consolidatedTotals.vat > 0 && (
+                        <span className={styles.stickyFooterVat}>
+                          HT: {formatCurrency(consolidatedTotals.base)} • TVA: {formatCurrency(consolidatedTotals.vat)}
+                        </span>
+                      )}
+                    </>
+                  ) : consolidatedSelection.length > 0 ? (
+                    <>
+                      <span className={styles.stickyFooterTotal}>
+                        {consolidatedSelection.length} transport{consolidatedSelection.length > 1 ? 's' : ''} • Total <strong>{formatCurrency(consolidatedTotals.total)}</strong>
+                      </span>
+                      {vatConfig.applicable && consolidatedTotals.vat > 0 && (
+                        <span className={styles.stickyFooterVat}>
+                          HT: {formatCurrency(consolidatedTotals.base)} • TVA: {formatCurrency(consolidatedTotals.vat)}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span className={styles.stickyFooterEmpty}>
+                      {isClinicMonthly ? 'Facture clinique mensuelle (tous les transports éligibles seront inclus)' : 'Sélectionnez des transports'}
+                    </span>
+                  )}
+                </div>
+                <div className={styles.stickyFooterActions}>
+                  <button
+                    type="button"
+                    onClick={handleClose}
+                    className="btn btn-secondary"
+                    disabled={loading}
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={
+                      loading ||
+                      (billingType === 'direct'
+                        ? !formData.client_id || clientsLoading || !directSummary || directSummary.count === 0 || directSelection.length === 0
+                        // ✅ Zéro friction : pas besoin d'ouvrir "Transports à facturer", directSummary = eligible
+                        // ✅ Mais nécessite au moins une sélection (même si directSummary.count > 0)
+                        : billingType === 'partner'
+                          ? !formData.partnership_id
+                          : isClinicMonthly
+                            ? !formData.bill_to_client_id || !selectedInstitution?.clinic_company_id || s2TotalsLoading || s2Totals.total_eligible === 0
+                            : formData.client_ids.length === 0 || !formData.bill_to_client_id || consolidatedSelection.length === 0)
+                    }
+                  >
+                    {loading
+                      ? 'Génération...'
+                      : billingType === 'direct'
+                        ? 'Générer la facture'
+                        : billingType === 'partner'
+                          ? 'Générer la facture'
+                          : isClinicMonthly
+                            ? 'Générer facture clinique (mois)'
+                            : isConsolidated && formData.client_ids.length >= 2
+                              ? (hasManualSelection ? 'Générer groupé (ignore la sélection)' : `Générer ${formData.client_ids.length} factures`)
+                              : formData.client_ids.length > 1
+                                ? `Générer ${formData.client_ids.length} factures`
+                                : 'Générer la facture'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
         </form>
       </div>
     </div>

@@ -151,6 +151,20 @@ class Client(db.Model):
     payments = relationship(
         "Payment", back_populates="client", passive_deletes=True, lazy=True
     )
+    stays = relationship(
+        "ClientStay",
+        back_populates="client",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        lazy=True,
+    )
+    transport_vouchers = relationship(
+        "TransportVoucher",
+        back_populates="client",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        lazy=True,
+    )
 
     # Validators
     @validates("contact_email")

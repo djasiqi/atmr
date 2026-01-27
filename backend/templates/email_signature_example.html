@@ -1,0 +1,37 @@
+<!--
+Template HTML d'exemple pour signature email (2 colonnes + ligne verticale + ligne horizontale + logo).
+
+Variables disponibles:
+- {{ name }} : Nom de l'entreprise
+- {{ phone }} : Téléphone
+- {{ email }} : Email (billing_email prioritaire, sinon contact_email)
+- {{ address }} : Adresse formatée (lignes séparées par <br>)
+- {{ logo_url }} : URL du logo (email_signature_logo_url ou company.logo_url)
+
+Structure recommandée:
+- Table-based (compatible Outlook)
+- Ligne verticale: <td style="border-left: 2px solid #1b4b7a;">
+- Ligne horizontale: <div style="border-top: 1px solid #1b4b7a;">
+- Logo en bas via <img>
+-->
+
+<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, sans-serif; font-size: 11px; color: #333; margin-top: 12px;">
+  <tr>
+    <td style="vertical-align: top; padding-right: 12px;">
+      <strong>{{ name }}</strong><br>
+      {% if contact_name %}{{ contact_name }}<br>{% endif %}
+      {{ phone }}<br>
+      {{ email }}<br>
+      {% if website %}{{ website }}<br>{% endif %}
+      {{ address }}
+    </td>
+    <td width="1" style="border-left: 2px solid #1b4b7a; padding-left: 12px; vertical-align: top;">
+      <!-- Colonne droite optionnelle (peut être laissée vide ou utilisée pour info supplémentaire) -->
+    </td>
+  </tr>
+</table>
+<div style="border-top: 1px solid #1b4b7a; margin-top: 12px; padding-top: 8px;">
+  {% if logo_url %}
+    <img src="{{ logo_url }}" height="26" alt="Logo" style="display: block;" />
+  {% endif %}
+</div>

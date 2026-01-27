@@ -2,12 +2,27 @@
 
 from __future__ import annotations
 
+import re
 from typing import Protocol
 
 from domain.client_dto import ClientDTO
 from models import Client, User
 
 logger = __import__("logging").getLogger(__name__)
+
+DATE_DDMMYYYY_RE = re.compile(r"^(\d{2})[./-](\d{2})[./-](\d{4})$")
+
+
+def _build_search_patterns(search: str) -> list[str]:
+    term = search.strip()
+    if not term:
+        return []
+    patterns = {f"%{term}%"}
+    match = DATE_DDMMYYYY_RE.match(term)
+    if match:
+        day, month, year = match.groups()
+        patterns.add(f"%{year}-{month}-{day}%")
+    return list(patterns)
 
 
 class ClientRepositoryPort(Protocol):
@@ -202,7 +217,7 @@ class ClientRepository:
         Returns:
             Liste de ClientDTO avec données user chargées
         """
-        from sqlalchemy import or_
+        from sqlalchemy import String, cast, func, or_
         from sqlalchemy.orm import joinedload
 
         from models import ClientType, User
@@ -212,14 +227,39 @@ class ClientRepository:
             Client.client_type != ClientType.SELF_SERVICE,
         )
 
-        if search:
-            pattern = f"%{search}%"
-            query = query.filter(
-                or_(
-                    Client.user.has(User.first_name.ilike(pattern)),
-                    Client.user.has(User.last_name.ilike(pattern)),
-                )
-            )
+        patterns = _build_search_patterns(search or "")
+        if patterns:
+            user_fields = [
+                User.first_name,
+                User.last_name,
+                User.email,
+                User.phone,
+                User.username,
+                cast(User.birth_date, String),
+                func.concat(
+                    func.coalesce(User.first_name, ""), " ", func.coalesce(User.last_name, "")
+                ),
+                func.concat(
+                    func.coalesce(User.last_name, ""), " ", func.coalesce(User.first_name, "")
+                ),
+            ]
+            client_fields = [
+                Client.contact_email,
+                Client.contact_phone,
+                Client.domicile_address,
+                Client.domicile_zip,
+                Client.domicile_city,
+                Client.residence_facility,
+                Client.institution_name,
+                Client.billing_address,
+            ]
+            conditions = []
+            for pattern in patterns:
+                for field in user_fields:
+                    conditions.append(Client.user.has(field.ilike(pattern)))
+                for field in client_fields:
+                    conditions.append(field.ilike(pattern))
+            query = query.filter(or_(*conditions))
 
         clients = query.all()
         return [self._to_dto(client, include_user=True) for client in clients]
@@ -239,25 +279,55 @@ class ClientRepository:
 
         Note:
             Méthode legacy - utiliser find_by_company_with_user_and_search() pour obtenir des DTOs
+            Cette méthode charge aussi default_billed_to_company pour inclure default_billing dans serialize
         """
-        from sqlalchemy import or_
+        from sqlalchemy import String, cast, func, or_
         from sqlalchemy.orm import joinedload
 
         from models import ClientType, User
 
-        query = Client.query.options(joinedload(Client.user)).filter(
+        # Charger user et default_billed_to_company pour que serialize inclue default_billing
+        query = Client.query.options(
+            joinedload(Client.user),
+            joinedload(Client.default_billed_to_company)
+        ).filter(
             Client.company_id == company_id,
             Client.client_type != ClientType.SELF_SERVICE,
         )
 
-        if search:
-            pattern = f"%{search}%"
-            query = query.filter(
-                or_(
-                    Client.user.has(User.first_name.ilike(pattern)),
-                    Client.user.has(User.last_name.ilike(pattern)),
-                )
-            )
+        patterns = _build_search_patterns(search or "")
+        if patterns:
+            user_fields = [
+                User.first_name,
+                User.last_name,
+                User.email,
+                User.phone,
+                User.username,
+                cast(User.birth_date, String),
+                func.concat(
+                    func.coalesce(User.first_name, ""), " ", func.coalesce(User.last_name, "")
+                ),
+                func.concat(
+                    func.coalesce(User.last_name, ""), " ", func.coalesce(User.first_name, "")
+                ),
+            ]
+            client_fields = [
+                Client.contact_email,
+                Client.contact_phone,
+                Client.domicile_address,
+                Client.domicile_zip,
+                Client.domicile_city,
+                Client.residence_facility,
+                Client.institution_name,
+                Client.billing_address,
+            ]
+            conditions = []
+            for pattern in patterns:
+                for field in user_fields:
+                    conditions.append(Client.user.has(field.ilike(pattern)))
+                for field in client_fields:
+                    conditions.append(field.ilike(pattern))
+            query = query.filter(or_(*conditions))
 
         return query.all()
 

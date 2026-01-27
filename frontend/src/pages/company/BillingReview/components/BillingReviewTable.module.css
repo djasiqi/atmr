@@ -1,0 +1,258 @@
+/* frontend/src/pages/company/BillingReview/components/BillingReviewTable.module.css */
+.tableContainer {
+  overflow-x: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-primary);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg-primary);
+}
+
+.table thead {
+  background: var(--bg-secondary);
+}
+
+.table th {
+  padding: var(--spacing-md);
+  text-align: left;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  border-bottom: 2px solid var(--border-primary);
+}
+
+.table td {
+  padding: var(--spacing-md);
+  border-bottom: 1px solid var(--border-primary);
+  font-size: var(--font-sm);
+}
+
+.table tbody tr:hover {
+  background: var(--bg-hover);
+}
+
+.rowClickable {
+  cursor: pointer;
+}
+
+.badge {
+  display: inline-block;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-medium);
+}
+
+.badgeDraft {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+.badgeNeedsReview {
+  background: #fdecea;
+  color: #b42318;
+}
+
+.badgeReady {
+  background: #d4edda;
+  color: #155724;
+}
+
+.badgeLocked {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.badgeDefault {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+.payerType {
+  color: var(--text-tertiary);
+  font-size: var(--font-xs);
+}
+
+.recipientBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-medium);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.recipientBadgeOk {
+  background: #e8f7ee;
+  color: #0f5132;
+}
+
+.recipientBadgeReview {
+  background: #fdecea;
+  color: #b42318;
+}
+
+.recipientBadgeConflict {
+  background: #fdecea;
+  color: #b42318;
+}
+
+.recipientBadgeVoucher {
+  background: #e8f1ff;
+  color: #1d4ed8;
+}
+
+.recipientBadgeMissing {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.recipientBadgeUnknown {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+.source {
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+}
+
+.sourceRef {
+  color: var(--text-tertiary);
+  font-size: var(--font-xs);
+}
+
+.sourceCell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.sourceChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-medium);
+}
+
+.sourceChipMuted {
+  background: var(--bg-secondary);
+  color: var(--text-tertiary);
+}
+
+.sourceTooltip {
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--text-tertiary);
+  font-size: var(--font-xs);
+  cursor: help;
+}
+
+.alerts {
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
+.alert {
+  font-size: var(--font-lg);
+  cursor: help;
+}
+
+.alertChip {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background: #fdecea;
+  color: #b42318;
+  font-size: var(--font-xs);
+}
+
+.alertChipLabel {
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.alertChipText {
+  color: #7a1f1c;
+}
+
+.alertChipEmpty {
+  color: var(--text-tertiary);
+  font-size: var(--font-xs);
+}
+
+.actions {
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
+.actions button {
+  padding: var(--spacing-xs);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--font-lg);
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-base);
+}
+
+.actions button:hover {
+  background: var(--bg-hover);
+}
+
+.loading,
+.empty {
+  padding: var(--spacing-xl);
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.batchActions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-md);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-primary);
+  margin-bottom: var(--spacing-sm);
+}
+
+.selectionCount {
+  font-weight: var(--font-weight-medium);
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+}
+
+.btnBatch {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--brand-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: background var(--transition-base);
+}
+
+.btnBatch:hover {
+  background: var(--brand-hover);
+}
+
+.selectedRow {
+  background: var(--bg-hover);
+}

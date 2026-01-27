@@ -214,6 +214,16 @@ class CreateCompanyClientUseCase:
             "residence_facility": validated_data.get("residence_facility"),
             # ✅ Numéro AVS ajouté
             "avs_number": validated_data.get("avs_number"),
+            # Accès logement
+            "door_code": validated_data.get("door_code"),
+            "floor": validated_data.get("floor"),
+            "access_notes": validated_data.get("access_notes"),
+            # Médecin traitant
+            "gp_name": validated_data.get("gp_name"),
+            "gp_phone": validated_data.get("gp_phone"),
+            # Facturation par défaut
+            "default_billed_to_type": validated_data.get("default_billed_to_type"),
+            "default_billed_to_contact": validated_data.get("default_billed_to_contact"),
         }
 
         try:

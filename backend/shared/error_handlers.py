@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 
 from routes.api_error_utils import (
     create_conflict_error,
+    create_error_response,
     create_internal_error,
     create_not_found_error,
     create_permission_error,
@@ -134,6 +135,24 @@ class APIErrorHandler:
             f" (ID: {resource_id})" if resource_id is not None else "",
         )
         return create_not_found_error(resource_type, resource_id)
+
+    @staticmethod
+    def handle_not_found_error(
+        message: str,
+        logger_instance: logging.Logger | None = None,
+    ) -> tuple[dict[str, Any], int]:
+        """Gère une erreur 404 avec message personnalisé.
+
+        Args:
+            message: Message d'erreur (ex: "Booking 10 non trouvé")
+            logger_instance: Logger à utiliser (défaut: logger du module)
+
+        Returns:
+            Tuple (response_json, status_code) pour Flask
+        """
+        log = logger_instance or logger
+        log.warning("Not found: %s", message)
+        return create_error_response(message, 404, error_code="not_found")
 
     @staticmethod
     def handle_validation_error(

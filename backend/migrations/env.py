@@ -7,6 +7,18 @@ from flask import current_app, has_app_context
 from sqlalchemy import engine_from_config, pool
 from sqlalchemy.engine import URL
 
+# ✅ Permettre l'autogénération hors contexte Flask (ex: via Docker)
+# Alembic doit recevoir un MetaData (target_metadata) même sans current_app.
+try:
+    # Importer db + models pour enregistrer les tables sur le metadata.
+    from ext import db as ext_db
+
+    import models  # side-effect: charger tous les modèles
+
+    FALLBACK_METADATA = ext_db.metadata
+except Exception:  # pragma: no cover
+    FALLBACK_METADATA = None
+
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
@@ -112,13 +124,6 @@ def get_engine_url():
     return get_database_url()
 
 
-# add your model's MetaData object here
-# for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
-# Note: L'URL sera forcée dans run_migrations_online() via get_database_url()
-# On ne la définit pas ici pour éviter les problèmes d'échappement et de reconstruction
-
 target_db = current_app.extensions["migrate"].db if has_app_context() else None
 
 # other values from the config, defined by the needs of env.py,
@@ -128,11 +133,13 @@ target_db = current_app.extensions["migrate"].db if has_app_context() else None
 
 
 def get_metadata():
-    if target_db is None:
-        return None
-    if hasattr(target_db, "metadatas"):
-        return target_db.metadatas[None]
-    return target_db.metadata
+    # En contexte Flask (Flask-Migrate), utiliser la DB de l'app.
+    if target_db is not None:
+        if hasattr(target_db, "metadatas"):
+            return target_db.metadatas[None]
+        return target_db.metadata
+    # Hors contexte Flask (ex: alembic via Docker), fallback sur ext.db.metadata.
+    return FALLBACK_METADATA
 
 
 def run_migrations_offline():

@@ -9,6 +9,48 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
+.emailConfigCompact {
+  padding: 16px;
+  margin-bottom: 0;
+  box-shadow: none;
+}
+
+.emailConfigCompact .header {
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+}
+
+.emailConfigCompact .headerCompact {
+  margin-bottom: 8px;
+}
+
+.emailConfigCompact .successMessage,
+.emailConfigCompact .errorMessage {
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.emailConfigCompact .infoBox,
+.emailConfigCompact .warningBox,
+.emailConfigCompact .successBox {
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.emailConfigCompact .form {
+  margin-bottom: 16px;
+}
+
+.emailConfigCompact .formRow {
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.emailConfigCompact .dnsSection {
+  margin-top: 16px;
+  padding-top: 16px;
+}
+
 .header {
   display: flex;
   justify-content: space-between;
@@ -16,6 +58,12 @@
   margin-bottom: 20px;
   padding-bottom: 16px;
   border-bottom: 2px solid #f0f0f0;
+}
+
+.headerCompact {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
 }
 
 .header h2 {

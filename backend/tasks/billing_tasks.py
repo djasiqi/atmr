@@ -14,7 +14,7 @@ from application.invoices.process_automatic_reminders import (
     ProcessAutomaticRemindersInput,
     ProcessAutomaticRemindersUseCase,
 )
-from models import Company, Invoice, InvoiceReminder, InvoiceStatus, db
+from models import Booking, Company, Invoice, InvoiceReminder, InvoiceStatus, db
 
 Client: Any = None
 try:
@@ -245,22 +245,6 @@ def generate_monthly_invoices():
 
                 for client in active_clients:
                     try:
-                        # Vérifier qu'une facture n'existe pas déjà pour cette
-                        # période
-                        existing_invoice = (
-                            db.session.query(Invoice)
-                            .filter(
-                                Invoice.company_id == company.id,
-                                Invoice.client_id == client.id,
-                                Invoice.period_year == period_year,
-                                Invoice.period_month == period_month,
-                            )
-                            .first()
-                        )
-
-                        if existing_invoice:
-                            continue
-
                         # Vérifier qu'il y a des réservations pour cette période
                         from datetime import datetime as dt
 
@@ -290,29 +274,134 @@ def generate_monthly_invoices():
                         ]
 
                         if reservations:
-                            # Générer la facture
+                            # Générer les factures en "split" par destinataire.
+                            # Priorité:
+                            # 1) booking.billing_party_id (destinataire unifié explicite)
+                            # 2) booking.billed_to_type != patient + booking.billed_to_company_id (clinique)
+                            # 3) patient (défaut)
                             from application.invoices.generate_invoice import (
                                 GenerateInvoiceInput,
                             )
 
-                            generate_input = GenerateInvoiceInput(
-                                company_id=company.id,
-                                client_id=client.id,
-                                period_year=period_year,
-                                period_month=period_month,
-                            )
-                            generate_result = generate_invoice_uc.execute(
-                                generate_input
-                            )
-                            if generate_result.success and generate_result.invoice:
-                                invoice = generate_result.invoice
-                                invoices_generated += 1
+                            groups: dict[str, dict[str, Any]] = {}
+                            for r in reservations:
+                                bp_id = getattr(r, "billing_party_id", None)
+                                billed_to_type = str(getattr(r, "billed_to_type", "") or "patient").lower()
+                                clinic_id = getattr(r, "billed_to_company_id", None)
 
-                                app_logger.info(
-                                    "Facture générée: %s pour client %s",
-                                    invoice.invoice_number,
-                                    client.id,
+                                if bp_id:
+                                    key = f"bp:{int(bp_id)}"
+                                    dest = {"billing_party_id": int(bp_id), "clinic_company_id": None}
+                                elif billed_to_type != "patient" and clinic_id:
+                                    key = f"clinic:{int(clinic_id)}"
+                                    dest = {"billing_party_id": None, "clinic_company_id": int(clinic_id)}
+                                else:
+                                    key = "patient"
+                                    dest = {"billing_party_id": None, "clinic_company_id": None}
+
+                                if key not in groups:
+                                    groups[key] = {"reservation_ids": [], **dest}
+                                groups[key]["reservation_ids"].append(int(r.id))
+
+                            for key, g in groups.items():
+                                # ✅ S2: Validation du mapping clinique → billing_party (prérequis pour S2)
+                                clinic_company_id = g.get("clinic_company_id")
+                                if clinic_company_id:
+                                    from models.enums import BillingReviewStatus
+                                    from services.billing.billing_party_linker import (
+                                        resolve_billing_party_for_clinic,
+                                    )
+
+                                    # Vérifier que le mapping existe
+                                    billing_party = resolve_billing_party_for_clinic(
+                                        company_id=company.id,
+                                        clinic_company_id=clinic_company_id,
+                                    )
+                                    if not billing_party:
+                                        # Mapping manquant : mettre les bookings en NEEDS_REVIEW
+                                        booking_ids = g.get("reservation_ids", [])
+                                        reason = (
+                                            f"Mapping clinique → billing_party manquant pour "
+                                            f"clinic_company_id={clinic_company_id}. "
+                                            f"Veuillez configurer le mapping dans les paramètres de facturation."
+                                        )
+                                        for booking_id in booking_ids:
+                                            booking = Booking.query.get(booking_id)
+                                            if booking:
+                                                try:
+                                                    booking.billing_review_status = (
+                                                        BillingReviewStatus.NEEDS_REVIEW
+                                                    )
+                                                    booking.billing_override_reason = reason
+                                                except Exception:
+                                                    pass
+                                        app_logger.warning(
+                                            (
+                                                "Génération S2 refusée pour clinic_company_id=%s "
+                                                "(mapping manquant). %s bookings mis en NEEDS_REVIEW."
+                                            ),
+                                            clinic_company_id,
+                                            len(booking_ids),
+                                        )
+                                        db.session.commit()
+                                        continue  # Passer au groupe suivant
+
+                                # Empêcher les doublons: une facture par (client, période, destinataire)
+                                existing_invoice_q = db.session.query(Invoice).filter(
+                                    Invoice.company_id == company.id,
+                                    Invoice.client_id == client.id,
+                                    Invoice.period_year == period_year,
+                                    Invoice.period_month == period_month,
                                 )
+                                if g.get("billing_party_id"):
+                                    existing_invoice_q = existing_invoice_q.filter(
+                                        Invoice.billing_party_id == int(g["billing_party_id"])
+                                    )
+                                elif g.get("clinic_company_id"):
+                                    existing_invoice_q = existing_invoice_q.filter(
+                                        Invoice.billed_to_company_id == int(g["clinic_company_id"])
+                                    )
+                                else:
+                                    existing_invoice_q = existing_invoice_q.filter(
+                                        Invoice.billing_party_id.is_(None),
+                                        Invoice.bill_to_client_id.is_(None),
+                                        Invoice.billed_to_company_id.is_(None),
+                                    )
+
+                                if existing_invoice_q.first():
+                                    continue
+
+                                generate_input = GenerateInvoiceInput(
+                                    company_id=company.id,
+                                    client_id=client.id,
+                                    period_year=period_year,
+                                    period_month=period_month,
+                                    billing_party_id=g.get("billing_party_id"),
+                                    clinic_company_id=g.get("clinic_company_id"),
+                                    reservation_ids=g.get("reservation_ids") or None,
+                                )
+                                generate_result = generate_invoice_uc.execute(generate_input)
+                                if generate_result.success and generate_result.invoice:
+                                    invoice = generate_result.invoice
+                                    invoices_generated += 1
+                                    app_logger.info(
+                                        "Facture générée: %s (dest=%s) pour client %s",
+                                        invoice.invoice_number,
+                                        key,
+                                        client.id,
+                                    )
+                                elif not generate_result.success:
+                                    # Si la génération a échoué (ex: mapping manquant), les bookings
+                                    # ont déjà été mis en NEEDS_REVIEW par generate_invoice.py
+                                    app_logger.warning(
+                                        (
+                                            "Génération de facture échouée pour client %s, "
+                                            "dest=%s: %s"
+                                        ),
+                                        client.id,
+                                        key,
+                                        generate_result.error,
+                                    )
 
                     except Exception as e:
                         app_logger.error(

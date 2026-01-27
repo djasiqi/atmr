@@ -105,8 +105,15 @@ const PartnershipsTab = () => {
       setPartnerships(active);
       setPendingRequests(pending);
     } catch (err) {
-      console.error('❌ Erreur chargement partenariats:', err);
-      showError('Impossible de charger les partenariats');
+      const status = err?.response?.status;
+      const data = err?.response?.data;
+      console.error('❌ Erreur chargement partenariats:', status, data, err);
+      const isServerError =
+        status === 500 || data?.error_code === 'internal_error';
+      const message = isServerError
+        ? 'Erreur serveur lors du chargement des partenariats'
+        : data?.error ?? 'Impossible de charger les partenariats';
+      showError(message);
     } finally {
       setLoading(false);
     }
@@ -188,8 +195,20 @@ const PartnershipsTab = () => {
       loadPartnerships();
       loadStats();
     } catch (err) {
-      console.error('Erreur création partenariat:', err);
-      showError(err?.response?.data?.error || 'Erreur lors de la création');
+      const status = err?.response?.status;
+      const data = err?.response?.data;
+      const msg =
+        data?.error ?? data?.message ?? 'Erreur lors de la création';
+      let display = msg;
+      if (status === 409) {
+        display = msg || 'Un partenariat existe déjà ou une demande est en attente.';
+      } else if (status === 404) {
+        display = msg || 'Entreprise partenaire introuvable.';
+      } else if (status === 400) {
+        display = msg || 'Données invalides (vérifiez l’entreprise sélectionnée).';
+      }
+      console.error('Erreur création partenariat:', status, data, err);
+      showError(display);
     }
   };
 

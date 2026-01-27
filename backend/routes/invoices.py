@@ -1,18 +1,19 @@
 import json
 import logging
+import os
 import traceback
 from datetime import UTC, datetime
 from decimal import Decimal
 
 from flask import request
-from flask_jwt_extended import jwt_required  # pyright: ignore[reportMissingImports]
-from flask_restx import (  # pyright: ignore[reportMissingImports]
+from flask_jwt_extended import jwt_required
+from flask_restx import (
     Namespace,
     Resource,
     fields,
     reqparse,
 )
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
 from sqlalchemy.orm import joinedload
 
@@ -39,7 +40,10 @@ from middleware.trace_id import get_trace_id
 from models import (
     Booking,
     Client,
+    ClientStay,
+    Company,
     Invoice,
+    InvoiceLine,
     InvoicePayment,
     User,
     db,
@@ -286,8 +290,18 @@ invoice_generate_model = invoices_ns.model(
             fields.Integer(description="ID client", minimum=1),
             description="Liste d'IDs clients (au moins 1 élément)",
         ),
+        "billing_party_id": fields.Integer(
+            description="ID BillingParty (destinataire unifié) - alternative à bill_to_client_id",
+            minimum=1,
+            allow_null=True,
+        ),
         "bill_to_client_id": fields.Integer(
             description="ID client payeur (facturation tierce)",
+            minimum=1,
+            allow_null=True,
+        ),
+        "clinic_company_id": fields.Integer(
+            description="ID clinique payeuse (Company) - alternative à bill_to_client_id",
             minimum=1,
             allow_null=True,
         ),
@@ -1038,7 +1052,7 @@ class CompanyBillingSettingsResource(Resource):
             data = request.get_json() or {}
 
             # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-            from marshmallow import (  # pyright: ignore[reportMissingImports]
+            from marshmallow import (
                 ValidationError,
             )
 
@@ -1222,9 +1236,14 @@ class EligibleClients(Resource):
         minimum=1,
         maximum=200,
     )
+    @invoices_ns.param(
+        "billed_to_type",
+        "Filtrer par type de facturation: 'patient' = facturation directe au client uniquement",
+        type="string",
+    )
     def get(self, company_id: int):
         """Liste les clients ayant des trajets non facturés,
-        avec possibilité de recherche."""
+        avec possibilité de recherche. Si billed_to_type=patient, uniquement les transports à facturer au patient."""
         # ✅ DDD: Utilise use-case au lieu de service directement
         from routes.companies import _get_current_company_via_use_case
 
@@ -1252,6 +1271,10 @@ class EligibleClients(Resource):
         search = (request.args.get("search") or "").strip()
         period_year = request.args.get("year", type=int)
         period_month = request.args.get("month", type=int)
+        period_month_threshold = PERIOD_MONTH_THRESHOLD
+        bill_to_client_id = request.args.get("bill_to_client_id", type=int)
+        clinic_company_id = request.args.get("clinic_company_id", type=int)
+        billed_to_type = (request.args.get("billed_to_type") or "").strip().lower()
         try:
             limit = int(request.args.get("limit", 50))
         except ValueError:
@@ -1260,41 +1283,78 @@ class EligibleClients(Resource):
 
         # Log pour debug
         logger.info(
-            "🔍 [EligibleClients] Paramètres reçus: company_id=%s, year=%s, month=%s, search=%s, limit=%s",
+            "🔍 [EligibleClients] Paramètres reçus: company_id=%s, year=%s, month=%s, search=%s, limit=%s, billed_to_type=%s",
             company_id,
             period_year,
             period_month,
             search,
             limit,
+            billed_to_type or None,
         )
+
+        if bill_to_client_id and not clinic_company_id:
+            institution = Client.query.filter_by(
+                id=bill_to_client_id, company_id=company_id, is_institution=True
+            ).first()
+            if institution:
+                clinic_company_id = getattr(
+                    institution, "default_billed_to_company_id", None
+                )
+                if not clinic_company_id and institution.institution_name:
+                    clinic_company = Company.query.filter_by(
+                        name=institution.institution_name
+                    ).first()
+                    if clinic_company:
+                        clinic_company_id = clinic_company.id
 
         # ✅ Pour les courses transférées :
         # - L'entreprise propriétaire (company_id) peut facturer le client
         # - L'entreprise exécutante (executing_company_id) peut facturer l'entreprise propriétaire
         # Ici, on cherche les clients avec courses où l'entreprise est propriétaire
-        unbilled_query = db.session.query(
-            Booking.client_id.label("client_id"),
-            func.count(Booking.id).label("unbilled_count"),
-            func.max(func.coalesce(Booking.completed_at, Booking.scheduled_time)).label(
-                "last_ride_at"
-            ),
-        ).filter(
-            Booking.company_id == company_id,  # Entreprise propriétaire
-            Booking.status.in_(
-                [
-                    BookingStatus.COMPLETED.value,
-                    BookingStatus.RETURN_COMPLETED.value,
-                ]
-            ),
-            Booking.invoice_line_id.is_(None),
+        # ✅ Unbilled = pas de ligne facture OU ligne liée à une facture annulée (récupération après annulation)
+        unbilled_query = (
+            db.session.query(
+                Booking.client_id.label("client_id"),
+                func.count(Booking.id).label("unbilled_count"),
+                func.coalesce(func.sum(Booking.amount), 0).label("unbilled_total_amount"),
+                func.max(func.coalesce(Booking.completed_at, Booking.scheduled_time)).label(
+                    "last_ride_at"
+                ),
+            )
+            .outerjoin(InvoiceLine, Booking.invoice_line_id == InvoiceLine.id)
+            .outerjoin(Invoice, InvoiceLine.invoice_id == Invoice.id)
+            .filter(
+                Booking.company_id == company_id,  # Entreprise propriétaire
+                Booking.status.in_(
+                    [
+                        BookingStatus.COMPLETED.value,
+                        BookingStatus.RETURN_COMPLETED.value,
+                    ]
+                ),
+                or_(
+                    Booking.invoice_line_id.is_(None),
+                    Invoice.status == InvoiceStatus.CANCELLED,
+                ),
+            )
         )
+
+        # Facturation directe au client : uniquement les transports à facturer au patient
+        if billed_to_type == "patient":
+            unbilled_query = unbilled_query.filter(Booking.billed_to_type == "patient")
+
+        # S2 / facturation clinique : uniquement les clients avec ≥1 transport à facturer à la clinique
+        # (exclut les patients qui n'ont que des transports "patient", ex. après annulation facture client)
+        if clinic_company_id and billed_to_type != "patient":
+            unbilled_query = unbilled_query.filter(
+                Booking.billed_to_type == "clinic",
+                Booking.billed_to_company_id == clinic_company_id,
+            )
 
         # Filtrer par période si fournie
         if period_year and period_month:
-            PERIOD_MONTH_THRESHOLD = 12
             # Créer des dates timezone-naive pour la comparaison (scheduled_time est timezone-naive dans la DB)
             start_date = datetime(period_year, period_month, 1)
-            if period_month == PERIOD_MONTH_THRESHOLD:
+            if period_month == period_month_threshold:
                 end_date = datetime(period_year + 1, 1, 1)
             else:
                 end_date = datetime(period_year, period_month + 1, 1)
@@ -1312,6 +1372,7 @@ class EligibleClients(Resource):
             db.session.query(
                 Client,
                 unbilled_subquery.c.unbilled_count,
+                unbilled_subquery.c.unbilled_total_amount,
                 unbilled_subquery.c.last_ride_at,
             )
             .join(unbilled_subquery, Client.id == unbilled_subquery.c.client_id)
@@ -1323,6 +1384,25 @@ class EligibleClients(Resource):
                 Client.client_type != ClientType.SELF_SERVICE,
             )
         )
+
+        if clinic_company_id:
+            stay_query = db.session.query(ClientStay.client_id).filter(
+                ClientStay.company_id == clinic_company_id,
+                ClientStay.status == "active",
+            )
+            if period_year and period_month:
+                start_date = datetime(period_year, period_month, 1)
+                if period_month == period_month_threshold:
+                    end_date = datetime(period_year + 1, 1, 1)
+                else:
+                    end_date = datetime(period_year, period_month + 1, 1)
+                stay_query = stay_query.filter(
+                    ClientStay.start_date <= end_date,
+                    (ClientStay.end_date.is_(None))
+                    | (ClientStay.end_date >= start_date),
+                )
+            stay_subquery = stay_query.distinct().subquery()
+            query = query.join(stay_subquery, Client.id == stay_subquery.c.client_id)
 
         if search:
             pattern = f"%{search.lower()}%"
@@ -1339,9 +1419,12 @@ class EligibleClients(Resource):
         )
 
         clients = []
-        for client, unbilled_count, last_ride_at in results:
+        for client, unbilled_count, unbilled_total_amount, last_ride_at in results:
             payload = client.serialize
             payload["unbilled_count"] = int(unbilled_count or 0)
+            # HT ; string "125.00" pour éviter imprécisions float (SUM Numeric/Decimal)
+            raw = float(unbilled_total_amount or 0)
+            payload["unbilled_total_amount"] = f"{round(raw, 2):.2f}"
             payload["last_ride_at"] = (
                 last_ride_at.isoformat() if isinstance(last_ride_at, datetime) else None
             )
@@ -1357,6 +1440,236 @@ class EligibleClients(Resource):
         )
 
         return success_response(data={"clients": clients, "total": len(clients)})
+
+
+@invoices_ns.route("/companies/<int:company_id>/clinic-monthly-totals")
+class ClinicMonthlyTotals(Resource):
+    """Endpoint pour récupérer les totaux des transports éligibles pour une facture clinique mensuelle."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    @invoices_ns.param("year", "Année (ex: 2025)", type="integer", required=True)
+    @invoices_ns.param("month", "Mois (1-12)", type="integer", required=True)
+    @invoices_ns.param("clinic_company_id", "ID de la clinique", type="integer", required=True)
+    @invoices_ns.param("include_client_ids", "IDs clients à inclure (optionnel, séparés par virgule)", type="string")
+    def get(self, company_id: int):  # noqa: PLR0911
+        """Récupère les totaux des transports éligibles pour une facture clinique mensuelle.
+
+        Retourne:
+        - total_eligible: Nombre de transports éligibles (billed_to_type='clinic')
+        - total_amount_eligible: Montant total des transports éligibles
+        - total_excluded: Nombre de transports exclus (billed_to_type='patient')
+        - total_amount_excluded: Montant total des transports exclus
+        """
+        try:
+            from routes.companies import _get_current_company_via_use_case
+
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                return error_response, status_code
+
+            # Vérifier que l'ID de l'entreprise correspond
+            cid_obj = getattr(company, "id", None)
+            try:
+                cid = int(cid_obj) if cid_obj is not None else None
+            except (ValueError, TypeError, OverflowError):
+                cid = None
+            except Exception:
+                logger.debug("Unexpected error converting company.id to int: %s", cid_obj)
+                cid = None
+            if cid != company_id:
+                return APIErrorHandler.handle_permission_error(
+                    "Entreprise non trouvée ou accès refusé",
+                    logger_instance=logger,
+                )
+
+            # Récupérer les paramètres
+            period_year = request.args.get("year", type=int)
+            period_month = request.args.get("month", type=int)
+            clinic_company_id = request.args.get("clinic_company_id", type=int)
+            include_client_ids_param = request.args.get("include_client_ids", type=str)
+
+            if not period_year or not period_month or not clinic_company_id:
+                return APIErrorHandler.handle_validation_error(
+                    "Les paramètres year, month et clinic_company_id sont requis",
+                    logger_instance=logger,
+                )
+
+            # Parser include_client_ids si fourni
+            include_client_ids = None
+            if include_client_ids_param:
+                try:
+                    include_client_ids = [int(x.strip()) for x in include_client_ids_param.split(",") if x.strip()]
+                except (ValueError, TypeError):
+                    include_client_ids = None
+
+            # Calculer les dates de période
+            start_date = datetime(period_year, period_month, 1)
+            if period_month == PERIOD_MONTH_THRESHOLD:
+                end_date = datetime(period_year + 1, 1, 1)
+            else:
+                end_date = datetime(period_year, period_month + 1, 1)
+
+            target_statuses = [
+                BookingStatus.COMPLETED.value,
+                BookingStatus.RETURN_COMPLETED.value,
+            ]
+            # Règle métier : eligible (clinique) et excluded (patient) partagent le même périmètre
+            # (status COMPLETED/RETURN_COMPLETED, période [start_date, end_date)) pour cohérence S2.
+
+            # ✅ Hardening: safe Number(amount||0) pour éviter NaN
+            def safe_amount(amount):
+                """Convertit un montant en float de manière sûre, retourne 0.0 si invalide."""
+                if amount is None:
+                    return 0.0
+                try:
+                    return float(amount)
+                except (ValueError, TypeError):
+                    return 0.0
+
+            # ✅ Transports éligibles (billed_to_type='clinic') - filtre strict
+            eligible_query = Booking.query.filter(
+                Booking.company_id == company_id,
+                Booking.billed_to_company_id == clinic_company_id,
+                Booking.billed_to_type == "clinic",
+                Booking.status.in_(target_statuses),
+                Booking.invoice_line_id.is_(None),
+                Booking.scheduled_time >= start_date,
+                Booking.scheduled_time < end_date,
+            )
+
+            # Appliquer le filtre include_client_ids si fourni
+            if include_client_ids:
+                eligible_query = eligible_query.filter(Booking.client_id.in_(include_client_ids))
+
+            # Calculer les totaux des transports éligibles
+            eligible_bookings = eligible_query.all()
+            total_eligible = len(eligible_bookings)
+            total_amount_eligible = sum(safe_amount(b.amount) for b in eligible_bookings)
+
+            # eligible_client_ids : liste plate de client_id (DISTINCT), pour exclusions
+            stmt = (
+                select(Booking.client_id)
+                .where(
+                    Booking.company_id == company_id,
+                    Booking.billed_to_company_id == clinic_company_id,
+                    Booking.billed_to_type == "clinic",
+                    Booking.status.in_(target_statuses),
+                    Booking.invoice_line_id.is_(None),
+                    Booking.scheduled_time >= start_date,
+                    Booking.scheduled_time < end_date,
+                )
+                .distinct()
+            )
+            if include_client_ids:
+                stmt = stmt.where(Booking.client_id.in_(include_client_ids))
+            eligible_client_ids = db.session.scalars(stmt).all()
+
+            # Transports exclus (billed_to_type=patient, même période).
+            # Priorité : include_client_ids si fourni, sinon eligible_client_ids, sinon vide.
+            # Jamais de booking patient si le client n'a aucun booking clinique eligible.
+            # On évite toute requête exclusions (et tout .in_([])) quand les deux sont vides.
+            excluded_query = Booking.query.filter(
+                Booking.company_id == company_id,
+                Booking.billed_to_type == "patient",
+                Booking.status.in_(target_statuses),
+                Booking.invoice_line_id.is_(None),
+                Booking.scheduled_time >= start_date,
+                Booking.scheduled_time < end_date,
+            )
+            excluded_bookings: list[Booking] = []
+            total_excluded = 0
+            total_amount_excluded = 0.0
+
+            if include_client_ids:
+                excluded_query = excluded_query.filter(
+                    Booking.client_id.in_(include_client_ids)
+                )
+                excluded_bookings = excluded_query.all()
+                total_excluded = len(excluded_bookings)
+                total_amount_excluded = sum(safe_amount(b.amount) for b in excluded_bookings)
+            elif eligible_client_ids:
+                excluded_query = excluded_query.filter(
+                    Booking.client_id.in_(eligible_client_ids)
+                )
+                excluded_bookings = excluded_query.all()
+                total_excluded = len(excluded_bookings)
+                total_amount_excluded = sum(safe_amount(b.amount) for b in excluded_bookings)
+            else:
+                # Aucune requête exclusions : excluded_bookings reste []
+                pass
+
+            if os.getenv("BILLING_DEBUG", "0") == "1":
+                _excl_fmt = (
+                    "[ClinicMonthlyExcluded] booking_id=%s billed_to_type=%s "
+                    "billed_to_company_id=%s billing_party_id=%s status=%s invoice_line_id=%s"
+                )
+                for b in excluded_bookings:
+                    logger.info(
+                        _excl_fmt,
+                        b.id,
+                        getattr(b, "billed_to_type", None),
+                        getattr(b, "billed_to_company_id", None),
+                        getattr(b, "billing_party_id", None),
+                        getattr(b, "status", None),
+                        getattr(b, "invoice_line_id", None),
+                    )
+
+            # Retourner aussi les détails des transports exclus pour affichage
+            excluded_details = []
+            for booking in excluded_bookings:
+                excluded_details.append({
+                    "id": booking.id,
+                    "date": booking.scheduled_time.isoformat() if booking.scheduled_time else None,
+                    "scheduled_time": booking.scheduled_time.isoformat() if booking.scheduled_time else None,  # ✅ Alias pour compatibilité frontend
+                    "pickup_location": booking.pickup_location,
+                    "pickup_address": booking.pickup_location,  # ✅ Alias pour compatibilité frontend
+                    "dropoff_location": booking.dropoff_location,
+                    "dropoff_address": booking.dropoff_location,  # ✅ Alias pour compatibilité frontend
+                    "customer_name": booking.customer_name,
+                    "client_name": booking.customer_name,  # ✅ Alias pour compatibilité frontend
+                    "amount": float(booking.amount or 0),
+                    "billed_to_type": booking.billed_to_type,
+                    "billed_to_company_id": booking.billed_to_company_id,
+                    "billing_source": booking.billing_source.value if booking.billing_source else None,
+                    "status": booking.status.value if booking.status else None,
+                    # ✅ Ajouter invoice_line_id et billing_review_status pour safety rules S2
+                    "invoice_line_id": booking.invoice_line_id,
+                    # ✅ Normaliser billing_review_status en lowercase pour cohérence frontend
+                    "billing_review_status": (
+                        booking.billing_review_status.value.lower() if booking.billing_review_status else None
+                    ),
+                })
+
+            return success_response(data={
+                "total_eligible": total_eligible,
+                "total_amount_eligible": total_amount_eligible,
+                "total_excluded": total_excluded,
+                "total_amount_excluded": total_amount_excluded,
+                "excluded_bookings": excluded_details,  # ✅ Détails des transports exclus
+            })
+
+        except (OperationalError, DBAPIError) as e:
+            logger.error(
+                "Erreur DB lors de la récupération des totaux clinique mensuelle (DB error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+            return APIErrorHandler.handle_exception(e, logger)
+        except (ValueError, TypeError, AttributeError) as e:
+            logger.error(
+                "Erreur de validation lors de la récupération des totaux (validation error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+            return APIErrorHandler.handle_validation_error(
+                str(e), logger_instance=logger
+            )
+        except Exception as e:
+            logger.exception(
+                "Erreur inattendue lors de la récupération des totaux clinique mensuelle"
+            )
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 @invoices_ns.route("/companies/<int:company_id>/invoices/generate")
@@ -1383,7 +1696,7 @@ class GenerateInvoice(Resource):
             data = request.get_json() or {}
 
             # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-            from marshmallow import (  # type: ignore[reportMissingImports]
+            from marshmallow import (
                 ValidationError,
             )
 
@@ -1406,14 +1719,88 @@ class GenerateInvoice(Resource):
             client_ids = validated_data.get("client_ids", [])
             # NOUVEAU: support facturation tierce
             bill_to_client_id = validated_data.get("bill_to_client_id")
+            # NOUVEAU: support facturation clinique via Company (source Booking.billed_to_company_id)
+            clinic_company_id = validated_data.get("clinic_company_id")
+            # NOUVEAU: support BillingParty explicite (destinataire unifié)
+            billing_party_id = validated_data.get("billing_party_id")
             period_year = validated_data["period_year"]
             period_month = validated_data["period_month"]
+            # ✅ S2: Mode de génération
+            mode = validated_data.get("mode", "standard")
+            # ✅ S2: Exceptions pour facture clinique mensuelle
+            include_client_ids = validated_data.get("include_client_ids")
+            exclude_client_ids = validated_data.get("exclude_client_ids")
 
             # period_year et period_month sont déjà validés par le schema,
             # donc toujours présents
             # ✅ DDD: Utilise adapter au lieu de service directement
             client_reservations = validated_data.get("client_reservations")
             overrides = validated_data.get("overrides")
+
+            # ✅ Cas 0: Facture clinique mensuelle unique (S2)
+            if mode == "clinic_monthly":
+                if not clinic_company_id:
+                    result, status_code = APIErrorHandler.handle_validation_error(
+                        "clinic_company_id est requis pour mode='clinic_monthly'",
+                        logger_instance=logger,
+                    )
+                    return result, status_code
+
+                logger.info(
+                    "Génération facture clinique mensuelle (S2): clinique %s, période %s/%s",
+                    clinic_company_id,
+                    period_month,
+                    period_year,
+                )
+
+                from application.invoices.generate_clinic_monthly_invoice import (
+                    GenerateClinicMonthlyInvoiceInput,
+                    GenerateClinicMonthlyInvoiceUseCase,
+                )
+
+                uc = GenerateClinicMonthlyInvoiceUseCase()
+                input_data = GenerateClinicMonthlyInvoiceInput(
+                    company_id=company_id,
+                    clinic_company_id=clinic_company_id,
+                    period_year=period_year,
+                    period_month=period_month,
+                    include_client_ids=include_client_ids,
+                    exclude_client_ids=exclude_client_ids,
+                    overrides=overrides,
+                )
+                invoice_result = uc.execute(input_data)
+
+                if not invoice_result.success:
+                    # ✅ S2: Si erreur 409 (déjà générée), retourner l'invoice_id existante pour UX
+                    HTTP_409_CONFLICT = 409
+                    if invoice_result.status_code == HTTP_409_CONFLICT:
+                        result = invoice_result.error or {"error": "Facture déjà générée"}
+                        status_code = HTTP_409_CONFLICT
+                    else:
+                        result, status_code = (
+                            invoice_result.error,
+                            invoice_result.status_code or 400,
+                        )
+                elif invoice_result.invoice:
+                    result = invoice_result.invoice.to_dict()
+                    status_code = 201
+                elif invoice_result.invoice_id:
+                    from repositories.invoice_repository import InvoiceRepository
+
+                    invoice_repo = InvoiceRepository()
+                    invoice_model = invoice_repo.find_model_by_id_and_company(
+                        invoice_result.invoice_id, company_id
+                    )
+                    if invoice_model:
+                        result = invoice_model.to_dict()
+                        status_code = 201
+                    else:
+                        result = {"error": "Facture générée mais non trouvée"}
+                        status_code = 500
+                else:
+                    result = {"error": "Facture générée mais non retournée"}
+                    status_code = 500
+                return result, status_code
 
             # Cas 1: Facturation groupée de plusieurs clients vers une
             # institution
@@ -1485,6 +1872,19 @@ class GenerateInvoice(Resource):
 
             # Cas 2: Facturation simple (avec ou sans tierce)
             elif client_id:
+                # Validation: un seul mode "destinataire" à la fois
+                destinations = [
+                    bool(billing_party_id),
+                    bool(bill_to_client_id),
+                    bool(clinic_company_id),
+                ]
+                if sum(destinations) > 1:
+                    result, status_code = APIErrorHandler.handle_validation_error(
+                        "Fournir un seul parmi billing_party_id, bill_to_client_id, clinic_company_id",
+                        logger_instance=logger,
+                    )
+                    return result, status_code
+
                 # Vérifier que le client appartient à l'entreprise
                 # Imports locaux pour éviter dépendances circulaires
                 from repositories.client_repository import ClientRepository
@@ -1525,7 +1925,9 @@ class GenerateInvoice(Resource):
                             client_id=client_id,
                             period_year=period_year,
                             period_month=period_month,
+                            billing_party_id=None,
                             bill_to_client_id=bill_to_client_id,
+                            clinic_company_id=None,
                             reservation_ids=validated_data.get("reservation_ids"),
                             overrides=overrides,
                         )
@@ -1571,7 +1973,9 @@ class GenerateInvoice(Resource):
                         client_id=client_id,
                         period_year=period_year,
                         period_month=period_month,
+                        billing_party_id=billing_party_id,
                         bill_to_client_id=bill_to_client_id,
+                        clinic_company_id=clinic_company_id,
                         reservation_ids=validated_data.get("reservation_ids"),
                         overrides=overrides,
                     )
@@ -1792,6 +2196,23 @@ class SendInvoice(Resource):
             recipient_email = data.get("recipient_email")
             force_regenerate_pdf = data.get("force_regenerate_pdf", False)
 
+            from models.partner_invoice import (
+                PartnerInvoice,
+                PartnerInvoiceStatus,
+            )
+
+            # Facture partenaire : seul "paper" (marquer envoyée) est supporté
+            if (
+                send_method == "email"
+                and PartnerInvoice.query.filter_by(
+                    id=invoice_id, executing_company_id=company_id
+                ).first()
+            ):
+                return APIErrorHandler.handle_validation_error(
+                    "Pour les factures partenaires, utilisez 'Marquer comme envoyée' (send_method=paper).",
+                    logger_instance=logger,
+                )
+
             if send_method == "email":
                 # Envoi par email avec use case
                 send_use_case = SendInvoiceByEmailUseCase()
@@ -1821,12 +2242,44 @@ class SendInvoice(Resource):
                     message=f"Facture envoyée par email à {result.recipient}",
                 )
 
-            # send_method == "paper" : Marquer juste comme envoyée
-            # Utiliser le repository pour récupérer la facture
+            # send_method == "paper" : Marquer comme envoyée
+            # Facture partenaire (PartnerInvoice) : seul executing_company peut envoyer, uniquement si DRAFT
+            partner_invoice = PartnerInvoice.query.filter_by(
+                id=invoice_id, executing_company_id=company_id
+            ).first()
+            if partner_invoice:
+                if partner_invoice.status != PartnerInvoiceStatus.DRAFT:
+                    return APIErrorHandler.handle_validation_error(
+                        "Déjà envoyée ou statut invalide (utilisez une facture en brouillon)",
+                        logger_instance=logger,
+                    )
+                from services.partnerships.invoices import PartnerInvoiceService
+
+                svc = PartnerInvoiceService()
+                try:
+                    pi = svc.mark_as_sent(invoice_id, company_id)
+                except ValueError as e:
+                    return APIErrorHandler.handle_validation_error(
+                        str(e), logger_instance=logger
+                    )
+                return success_response(
+                    data={
+                        "invoice_id": invoice_id,
+                        "sent_at": (
+                            pi.sent_at.isoformat() if pi.sent_at else None
+                        ),
+                        "send_method": "paper",
+                    },
+                    message="Facture marquée comme envoyée (courrier papier)",
+                )
+
+            # Facture classique (Invoice)
             from repositories.invoice_repository import InvoiceRepository
 
             invoice_repo = InvoiceRepository()
-            invoice = invoice_repo.find_model_by_id_and_company(invoice_id, company_id)
+            invoice = invoice_repo.find_model_by_id_and_company(
+                invoice_id, company_id
+            )
             if not invoice:
                 return APIErrorHandler.handle_not_found(
                     "Facture",
@@ -1834,15 +2287,17 @@ class SendInvoice(Resource):
                     logger,
                 )
 
-            # Marquer comme envoyée
             invoice.status = InvoiceStatus.SENT
             invoice.sent_at = datetime.now(UTC)
             db.session.commit()
 
+            sent_at_iso = (
+                invoice.sent_at.isoformat() if invoice.sent_at else None
+            )
             return success_response(
                 data={
                     "invoice_id": invoice_id,
-                    "sent_at": invoice.sent_at.isoformat() if invoice.sent_at else None,  # pyright: ignore[reportOptionalMemberAccess]
+                    "sent_at": sent_at_iso,
                     "send_method": "paper",
                 },
                 message="Facture marquée comme envoyée (courrier papier)",
@@ -2086,22 +2541,44 @@ class InvoicePayments(Resource):
 
             # Valider le montant (combiner validation format et valeur)
             data = request.get_json()
-            raw_amount = data.get("amount", 0)
-            try:
-                amount = Decimal(str(raw_amount))
-                # Vérifier que le montant est positif dans le même bloc try
-                if amount <= AMOUNT_ZERO:
+            raw_amount = data.get("amount")
+
+            # Calculer le solde restant dû pour la facture
+            current_paid = Decimal(str(invoice.amount_paid or 0))
+            total_amount = Decimal(str(invoice.total_amount or 0))
+            balance_due = total_amount - current_paid
+
+            # Si aucun montant n'est fourni, utiliser le solde restant (paiement complet)
+            if raw_amount is None or raw_amount == "":
+                amount = balance_due
+                logger.info(
+                    "Paiement complet sans montant spécifié, utilisation du solde restant: %s",
+                    float(amount),
+                )
+            else:
+                try:
+                    amount = Decimal(str(raw_amount))
+                    # Vérifier que le montant est positif
+                    if amount <= AMOUNT_ZERO:
+                        return APIErrorHandler.handle_validation_error(
+                            "Le montant doit être positif",
+                            field="amount",
+                            logger_instance=logger,
+                        )
+                    # Limiter le montant au solde restant (éviter surpaiement)
+                    if amount > balance_due:
+                        logger.warning(
+                            "Montant saisi (%s) supérieur au solde restant (%s), limitation au solde",
+                            float(amount),
+                            float(balance_due),
+                        )
+                        amount = balance_due
+                except (ValueError, TypeError, Exception):
                     return APIErrorHandler.handle_validation_error(
-                        "Le montant doit être positif",
+                        "Montant invalide",
                         field="amount",
                         logger_instance=logger,
                     )
-            except (ValueError, TypeError, Exception):
-                return APIErrorHandler.handle_validation_error(
-                    "Montant invalide",
-                    field="amount",
-                    logger_instance=logger,
-                )
             method = data.get("method", "bank_transfer")
             # Normaliser le libellé/valeur provenant du frontend (labels FR ou
             # constantes uppercase)
@@ -2165,20 +2642,62 @@ class InvoicePayments(Resource):
                         late_fee = Decimal(str(invoice.late_fee_amount or 0))
                         invoice.total_amount = subtotal + late_fee
 
-            # Créer le paiement
+            # ✅ VENTILATION AUTOMATIQUE : Détecter si c'est un paiement pour un rappel consolidé
+            from models import InvoiceReminder
+
+            # Constante pour la tolérance de comparaison de montants
+            AMOUNT_TOLERANCE = Decimal("0.01")
+
+            open_reminder = (
+                InvoiceReminder.query.filter_by(
+                    invoice_id=invoice.id,
+                    status="OPEN",
+                )
+                .order_by(InvoiceReminder.level.desc())  # Prendre le dernier rappel
+                .first()
+            )
+
+            reminder_id = None
+            principal_payment_amount = amount
+            reminder_fee_payment_amount = Decimal("0.00")
+
+            if open_reminder and abs(float(amount) - float(open_reminder.total_due)) < float(AMOUNT_TOLERANCE):
+                # ✅ Paiement correspond au total du rappel consolidé → ventilation automatique
+                logger.info(
+                    "Paiement pour rappel consolidé détecté: reminder_id=%s, total_due=%s, amount=%s",
+                    open_reminder.id,
+                    float(open_reminder.total_due),
+                    float(amount),
+                )
+
+                reminder_id = open_reminder.id
+                principal_payment_amount = open_reminder.principal_amount
+                reminder_fee_payment_amount = open_reminder.reminder_fee_amount
+
+                # Marquer le rappel comme payé
+                open_reminder.status = "PAID"
+                open_reminder.paid_at = datetime.now(UTC)
+
+                logger.info(
+                    "Ventilation automatique: principal=%s CHF → facture, frais=%s CHF → rappel",
+                    float(principal_payment_amount),
+                    float(reminder_fee_payment_amount),
+                )
+
+            # Créer le paiement (montant total pour l'export CSV, mais ventilé en interne)
             payment = InvoicePayment()
             payment.invoice_id = invoice.id
-            payment.amount = 0.0
+            payment.amount = amount  # Montant total payé (pour export CSV)
             payment.method = (
                 method_value  # passer la valeur ENUM attendue par la colonne SAEnum
             )
             payment.paid_at = datetime.now(UTC)
+            payment.reminder_id = reminder_id  # Lien vers le rappel si applicable
             db.session.add(payment)
 
-            # Mettre à jour le montant payé de la facture
-            current_paid = Decimal(str(invoice.amount_paid or 0))
-            total_amount = Decimal(str(invoice.total_amount or 0))
-            invoice.amount_paid = current_paid + amount
+            # ✅ Mettre à jour le montant payé de la facture (SEULEMENT le principal)
+            # Les frais de rappel sont gérés séparément via le rappel
+            invoice.amount_paid = current_paid + principal_payment_amount
             invoice.balance_due = total_amount - invoice.amount_paid
 
             # Mettre à jour le statut
@@ -2310,19 +2829,32 @@ class InvoiceReminders(Resource):
             )
 
             if reminder_result.success and reminder_result.reminder:
-                # ✅ DDD: Régénérer le PDF via use case
-                uc_pdf = GenerateInvoicePdfUseCase()
-                pdf_result = uc_pdf.execute(invoice=invoice)
+                # ✅ IMPORTANT: Ne JAMAIS régénérer le PDF de la facture initiale
+                # Le rappel a son propre PDF stocké dans reminder.pdf_url
+                # La facture initiale (invoice.pdf_url) reste INTACTE
 
-                if pdf_result.ok and pdf_result.pdf_url:
-                    invoice.pdf_url = pdf_result.pdf_url
-                    db.session.commit()
+                import os
+                REMINDER_DEBUG = os.getenv("REMINDER_DEBUG", "0") == "1"
 
-                    return {
-                        "message": f"Rappel niveau {level} généré et PDF mis à jour",
-                        "reminder_level": invoice.reminder_level,
-                        "pdf_url": pdf_result.pdf_url,
-                    }
+                if REMINDER_DEBUG:
+                    logger.info(
+                        (
+                            "[REMINDER_DEBUG] Rappel généré: invoice_id=%s, level=%s, "
+                            "invoice.pdf_url=%s (INTACT), reminder.pdf_url=%s"
+                        ),
+                        invoice.id,
+                        level,
+                        invoice.pdf_url,
+                        reminder_result.reminder.pdf_url,
+                    )
+
+                return {
+                    "message": f"Rappel niveau {level} généré avec succès",
+                    "reminder_level": invoice.reminder_level,
+                    "reminder_id": reminder_result.reminder.id,
+                    "reminder_pdf_url": reminder_result.reminder.pdf_url,
+                    "invoice_pdf_url": invoice.pdf_url,  # PDF initial intact
+                }, 200
             return reminder_result.error or APIErrorHandler.handle_validation_error(
                 "Impossible de générer le rappel",
                 logger_instance=logger,
@@ -2555,11 +3087,49 @@ class RegenerateInvoicePdf(Resource):
                     logger,
                 )
 
+            # ✅ PROTECTION IMMUTABILITÉ: Vérifier si la facture est "verrouillée"
+            from models.enums import InvoiceStatus
+
+            locked_statuses = {InvoiceStatus.SENT, InvoiceStatus.PARTIALLY_PAID, InvoiceStatus.PAID}
+            if invoice.status in locked_statuses:
+                logger.warning(
+                    (
+                        "[PDF PROTECTION] Tentative de régénération PDF pour facture verrouillée: "
+                        "invoice_id=%s, status=%s, pdf_url=%s. Opération refusée."
+                    ),
+                    invoice.id,
+                    invoice.status.value,
+                    invoice.pdf_url,
+                )
+                return APIErrorHandler.handle_validation_error(
+                    (
+                        f"Impossible de régénérer le PDF: la facture est {invoice.status.value} "
+                        "et ne peut plus être modifiée."
+                    ),
+                    logger_instance=logger,
+                ), 400
+
             # ✅ DDD: Régénérer le PDF via use case
             uc = GenerateInvoicePdfUseCase()
             pdf_result = uc.execute(invoice=invoice)
 
             if pdf_result.ok and pdf_result.pdf_url:
+                # ✅ PROTECTION: Double vérification avant d'écraser invoice.pdf_url
+                if invoice.pdf_url and invoice.pdf_url != pdf_result.pdf_url:
+                    logger.warning(
+                        (
+                            "[PDF PROTECTION] Tentative d'écrasement PDF existant: "
+                            "invoice_id=%s, ancien=%s, nouveau=%s. Opération refusée."
+                        ),
+                        invoice.id,
+                        invoice.pdf_url,
+                        pdf_result.pdf_url,
+                    )
+                    return APIErrorHandler.handle_validation_error(
+                        "Un PDF existe déjà pour cette facture. Utilisez un flag explicite pour forcer la régénération.",
+                        logger_instance=logger,
+                    ), 400
+
                 invoice.pdf_url = pdf_result.pdf_url
                 db.session.commit()
                 return {"message": "PDF régénéré", "pdf_url": pdf_result.pdf_url}
@@ -2627,11 +3197,13 @@ class CancelInvoice(Resource):
                     logger_instance=logger,
                 )
 
-            # Utiliser le repository pour récupérer la facture
+            # Utiliser le repository pour récupérer la facture (avec lines pour libérer les réservations)
             from repositories.invoice_repository import InvoiceRepository
 
             invoice_repo = InvoiceRepository()
-            invoice = invoice_repo.find_model_by_id_and_company(invoice_id, company_id)
+            invoice = invoice_repo.find_model_by_id_with_eager_loading(
+                invoice_id, company_id
+            )
             if not invoice:
                 return APIErrorHandler.handle_not_found(
                     "Facture",
@@ -2911,6 +3483,7 @@ class InstitutionsList(Resource):
                         "id": inst.id,
                         "institution_name": inst.institution_name
                         or "Institution sans nom",
+                        "clinic_company_id": inst.default_billed_to_company_id,
                         "contact_email": inst.contact_email,
                         "contact_phone": inst.contact_phone,
                         "billing_address": inst.billing_address,
@@ -3152,13 +3725,16 @@ class UnbilledReservations(Resource):
                 logger.warning(
                     (
                         "   - Booking #%s: %s, %s, status=%s, "
-                        "billed_to_type=%s, invoice_line_id=%s"
+                        "billed_to_type=%s billed_to_company_id=%s billing_party_id=%s "
+                        "invoice_line_id=%s"
                     ),
                     r.id,
                     r.customer_name,
                     r.scheduled_time,
                     r.status,
                     r.billed_to_type,
+                    getattr(r, "billed_to_company_id", None),
+                    getattr(r, "billing_party_id", None),
                     r.invoice_line_id,
                 )
 
@@ -3169,8 +3745,13 @@ class UnbilledReservations(Resource):
                         "date": r.scheduled_time.isoformat()
                         if r.scheduled_time
                         else None,
+                        "scheduled_time": r.scheduled_time.isoformat()
+                        if r.scheduled_time
+                        else None,  # ✅ Alias pour compatibilité frontend
                         "pickup_location": r.pickup_location,
+                        "pickup_address": r.pickup_location,  # ✅ Alias pour compatibilité frontend
                         "dropoff_location": r.dropoff_location,
+                        "dropoff_address": r.dropoff_location,  # ✅ Alias pour compatibilité frontend
                         "amount": float(r.amount or 0),
                         "billed_to_type": r.billed_to_type,
                         "billed_to_company_id": r.billed_to_company_id,
@@ -3180,6 +3761,18 @@ class UnbilledReservations(Resource):
                         "is_urgent": r.is_urgent or False,
                         "is_return": r.is_return or False,
                         "medical_facility": r.medical_facility,
+                        # ✅ Ajouter billing_source et billing_source_ref pour traçabilité
+                        # Note: billing_source est un enum str, .value retourne la valeur snake_case
+                        "billing_source": (
+                            r.billing_source.value if r.billing_source else None
+                        ),
+                        "billing_source_ref": r.billing_source_ref,
+                        # ✅ Ajouter invoice_line_id et billing_review_status pour le modal S2
+                        "invoice_line_id": r.invoice_line_id,
+                        # ✅ Normaliser billing_review_status en lowercase pour cohérence frontend
+                        "billing_review_status": (
+                            r.billing_review_status.value.lower() if r.billing_review_status else None
+                        ),
                     }
                     for r in reservations
                 ],
@@ -3220,6 +3813,205 @@ class UnbilledReservations(Resource):
             # Erreur inattendue : logger avec trace complète
             logger.exception(
                 "Erreur inattendue lors de la récupération des réservations non facturées"
+            )
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@invoices_ns.route(
+    "/companies/<int:company_id>/clients/<int:client_id>/unbilled-reservations/ids"
+)
+class UnbilledReservationIds(Resource):
+    """Endpoint pour récupérer uniquement les IDs des réservations non encore facturées d'un client."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def get(self, company_id, client_id):
+        """Récupère uniquement les IDs des réservations non facturées avec filtres optionnels
+        Query params:
+        - year: Année (ex: 2025)
+        - month: Mois (ex: 10)
+        - billed_to_type: Type de facturation ("patient", "clinic", "insurance").
+
+        Retour: { reservation_ids: [1, 2, 3, ...] }
+        """
+        try:
+            # ✅ DDD: Utilise use-case au lieu de service directement
+            from routes.companies import _get_current_company_via_use_case
+
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                return error_response, status_code
+
+            # Vérifier que l'ID de l'entreprise correspond
+            cid_obj = getattr(company, "id", None)
+            try:
+                cid = int(cid_obj) if cid_obj is not None else None
+            except (ValueError, TypeError, OverflowError):
+                cid = None
+            except Exception:
+                logger.debug(
+                    "Unexpected error converting company.id to int: %s", cid_obj
+                )
+                cid = None
+            if cid != company_id:
+                return APIErrorHandler.handle_permission_error(
+                    "Non autorisé",
+                    logger_instance=logger,
+                )
+
+            # Récupérer les paramètres
+            period_year = request.args.get("year", type=int)
+            period_month = request.args.get("month", type=int)
+            billed_to_filter = request.args.get("billed_to_type", type=str)
+
+            # ✅ Utilisation du repository pour la requête optimisée (IDs uniquement)
+            from repositories.booking_repository import BookingRepository
+
+            booking_repo = BookingRepository()
+            reservation_ids = booking_repo.find_unbilled_ids_by_company_and_client(
+                company_id=company_id,
+                client_id=client_id,
+                period_year=period_year,
+                period_month=period_month,
+                billed_to_type=billed_to_filter,
+            )
+
+            return {
+                "reservation_ids": reservation_ids,
+            }
+
+        except (OperationalError, DBAPIError) as e:
+            logger.error(
+                "Erreur DB lors de la récupération des IDs de réservations non facturées (DB error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+            return APIErrorHandler.handle_exception(e, logger)
+        except (ValueError, TypeError, AttributeError) as e:
+            logger.error(
+                "Erreur de validation lors de la récupération des IDs de réservations non facturées (validation error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+            return APIErrorHandler.handle_validation_error(
+                str(e), logger_instance=logger
+            )
+        except Exception as e:
+            logger.exception(
+                "Erreur inattendue lors de la récupération des IDs de réservations non facturées"
+            )
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@invoices_ns.route("/companies/<int:company_id>/reservations/<int:reservation_id>")
+class SingleReservation(Resource):
+    """Endpoint pour récupérer une réservation spécifique par ID."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def get(self, company_id, reservation_id):  # noqa: PLR0911
+        """Récupère les détails d'une réservation spécifique.
+
+        Utilisé pour hydrater les objets minimaux {id} en objets complets
+        sans dépendre de la période/status de l'endpoint unbilled-reservations.
+        """
+        try:
+            from routes.companies import _get_current_company_via_use_case
+
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                return error_response, status_code
+
+            # Vérifier que l'ID de l'entreprise correspond
+            cid_obj = getattr(company, "id", None)
+            try:
+                cid = int(cid_obj) if cid_obj is not None else None
+            except (ValueError, TypeError, OverflowError):
+                cid = None
+            except Exception:
+                logger.debug(
+                    "Unexpected error converting company.id to int: %s", cid_obj
+                )
+                cid = None
+            if cid != company_id:
+                return APIErrorHandler.handle_permission_error(
+                    "Non autorisé",
+                    logger_instance=logger,
+                )
+
+            # Validation
+            if reservation_id <= 0:
+                return APIErrorHandler.handle_validation_error(
+                    "reservation_id must be positive",
+                    field="reservation_id",
+                    logger_instance=logger,
+                )
+
+            # Récupérer la réservation
+            from repositories.booking_repository import BookingRepository
+
+            booking_repo = BookingRepository()
+            booking = booking_repo.find_model_by_id_with_visibility(
+                reservation_id, company_id
+            )
+
+            if not booking:
+                return APIErrorHandler.handle_not_found(
+                    "Réservation",
+                    resource_id=reservation_id,
+                    logger_instance=logger,
+                )
+
+            # Formater la réponse dans le même format que unbilled-reservations
+            return {
+                "reservation": {
+                    "id": booking.id,
+                    "date": booking.scheduled_time.isoformat()
+                    if booking.scheduled_time
+                    else None,
+                    "scheduled_time": booking.scheduled_time.isoformat()
+                    if booking.scheduled_time
+                    else None,
+                    "pickup_location": booking.pickup_location,
+                    "pickup_address": booking.pickup_location,
+                    "dropoff_location": booking.dropoff_location,
+                    "dropoff_address": booking.dropoff_location,
+                    "amount": float(booking.amount or 0),
+                    "billed_to_type": booking.billed_to_type,
+                    "billed_to_company_id": booking.billed_to_company_id,
+                    "billed_to_contact": booking.billed_to_contact,
+                    "customer_name": booking.customer_name,
+                    "status": booking.status.value,
+                    "is_urgent": booking.is_urgent or False,
+                    "is_return": booking.is_return or False,
+                    "medical_facility": booking.medical_facility,
+                    "billing_source": (
+                        booking.billing_source.value if booking.billing_source else None
+                    ),
+                    "billing_source_ref": booking.billing_source_ref,
+                    "invoice_line_id": booking.invoice_line_id,
+                }
+            }
+
+        except (OperationalError, DBAPIError) as e:
+            logger.error(
+                "Erreur DB lors de la récupération de la réservation (DB error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+            return APIErrorHandler.handle_exception(e, logger)
+        except (ValueError, TypeError, AttributeError) as e:
+            logger.error(
+                "Erreur de validation lors de la récupération de la réservation (validation error: %s): %s",
+                type(e).__name__,
+                str(e),
+            )
+            return APIErrorHandler.handle_validation_error(
+                str(e), logger_instance=logger
+            )
+        except Exception as e:
+            logger.exception(
+                "Erreur inattendue lors de la récupération de la réservation"
             )
             return APIErrorHandler.handle_exception(e, logger)
 
@@ -3892,4 +4684,267 @@ class BillablePartnersDebug(Resource):
             return success_response(data=debug_data)
         except Exception as e:
             logger.exception("Erreur lors du debug des partenaires facturables")
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@invoices_ns.route("/companies/<int:company_id>/exports/payments.csv")
+class ExportPaymentsCSV(Resource):
+    """Export CSV des paiements encaissés pour la comptabilité suisse."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    @invoices_ns.param("year", "Année (YYYY)", required=True, type=int)
+    @invoices_ns.param("month", "Mois (1-12)", required=True, type=int)
+    @invoices_ns.param(
+        "decimal",
+        "Séparateur décimal (dot|comma). dot=150.50, comma=150,50",
+        required=False,
+        type=str,
+        default="dot",
+    )
+    @invoices_ns.param(
+        "with_meta",
+        "Inclure métadonnées en commentaire (0|1)",
+        required=False,
+        type=int,
+        default=0,
+    )
+    @invoices_ns.response(200, "CSV généré avec succès")
+    @invoices_ns.response(400, "Paramètres invalides", validation_error_model)
+    @invoices_ns.response(401, "Non authentifié", permission_error_model)
+    @invoices_ns.response(403, "Non autorisé", permission_error_model)
+    def get(self, company_id):
+        """Exporte un CSV mensuel des paiements encaissés.
+
+        Format CSV (séparateur `;`, UTF-8):
+        Date paiement; Numéro facture; Client; Montant encaissé (CHF); Moyen de paiement; Référence; Devise; Type; ID paiement
+
+        Règles:
+        - Basé sur la DATE DE PAIEMENT (paid_at), pas la date de facture
+        - Inclut uniquement les paiements validés (paid_at != NULL)
+        - 1 ligne = 1 paiement (paiements partiels possibles)
+        - Factures annulées exclues
+        - Même CSV pour clients (S1) et cliniques (S2)
+
+        Paramètres optionnels:
+        - decimal=dot|comma : Format décimal (dot=150.50, comma=150,50). Défaut: dot
+        """
+        from datetime import datetime
+        from io import StringIO
+
+        from flask import make_response
+
+        from models.enums import (
+            InvoiceBillingStrategy,
+            InvoiceStatus,
+            PaymentMethod,
+        )
+
+        try:
+            # Récupérer et valider les paramètres
+            year = request.args.get("year", type=int)
+            month = request.args.get("month", type=int)
+            decimal_separator = request.args.get("decimal", "dot", type=str)
+
+            # Validation des paramètres
+            MONTH_MIN = 1
+            MONTH_MAX = 12
+            validation_error = None
+            if not year or not month:
+                validation_error = APIErrorHandler.handle_validation_error(
+                    "Les paramètres 'year' et 'month' sont requis",
+                    logger_instance=logger,
+                )
+            elif month < MONTH_MIN or month > MONTH_MAX:
+                validation_error = APIErrorHandler.handle_validation_error(
+                    f"Le paramètre 'month' doit être entre {MONTH_MIN} et {MONTH_MAX}",
+                    logger_instance=logger,
+                )
+            elif decimal_separator not in ("dot", "comma"):
+                validation_error = APIErrorHandler.handle_validation_error(
+                    "Le paramètre 'decimal' doit être 'dot' ou 'comma'",
+                    logger_instance=logger,
+                )
+
+            if validation_error:
+                return validation_error
+
+            # À ce stade, year et month sont garantis non-None
+            assert year is not None
+            assert month is not None
+
+            # Vérifier que l'entreprise existe et que l'utilisateur y a accès
+            company = Company.query.get(company_id)
+            if not company:
+                return APIErrorHandler.handle_not_found("Company", company_id, logger)
+
+            # Calculer les dates de début et fin du mois
+            DECEMBER = 12
+            start_date = datetime(year, month, 1, tzinfo=UTC)
+            if month == DECEMBER:
+                end_date = datetime(year + 1, 1, 1, tzinfo=UTC)
+            else:
+                end_date = datetime(year, month + 1, 1, tzinfo=UTC)
+
+            # Récupérer les paiements encaissés dans le mois
+            # Filtrer par:
+            # - company_id (factures de l'entreprise)
+            # - paid_at dans le mois
+            # - invoice.status != CANCELLED
+            # Précharger les relations nécessaires avec joinedload
+            payments = (
+                db.session.query(InvoicePayment)
+                .join(Invoice, InvoicePayment.invoice_id == Invoice.id)
+                .options(
+                    joinedload(InvoicePayment.invoice).joinedload(Invoice.client).joinedload(
+                        Client.user
+                    ),
+                    joinedload(InvoicePayment.invoice).joinedload(Invoice.billed_to_company),
+                )
+                .filter(Invoice.company_id == company_id)
+                .filter(Invoice.status != InvoiceStatus.CANCELLED)
+                .filter(InvoicePayment.paid_at >= start_date)
+                .filter(InvoicePayment.paid_at < end_date)
+                .order_by(InvoicePayment.paid_at)
+                .all()
+            )
+
+            # Récupérer paramètre with_meta
+            with_meta = request.args.get("with_meta", 0, type=int)
+
+            # Générer le CSV
+            output = StringIO()
+            output.write("\ufeff")  # BOM UTF-8 pour Excel
+
+            # Métadonnées en commentaire (si activées)
+            if with_meta:
+                export_date = datetime.now(UTC).strftime("%d.%m.%Y %H:%M:%S")
+                period_str = f"{month:02d}.{year}"
+                output.write(f"# Période: {period_str}\n")
+                output.write(f"# Entreprise ID: {company_id}\n")
+                output.write(f"# Date d'export: {export_date}\n")
+                output.write("#\n")  # Ligne vide pour séparer
+
+            # En-têtes
+            headers = [
+                "Date paiement",
+                "Numéro facture",
+                "Client",
+                "Montant encaissé (CHF)",
+                "Moyen de paiement",
+                "Référence",
+                "Devise",
+                "Type",
+                "ID paiement",
+            ]
+            output.write(";".join(headers) + "\n")
+
+            # Lignes de données
+            for payment in payments:
+                invoice = payment.invoice
+                if not invoice:
+                    continue
+
+                # Date paiement (format DD.MM.YYYY pour comptabilité suisse)
+                _paid_at = getattr(payment, "paid_at", None)
+                paid_date = (
+                    _paid_at.strftime("%d.%m.%Y") if _paid_at is not None else ""
+                )
+
+                # Numéro facture
+                invoice_number = invoice.invoice_number or ""
+
+                # Client : S1 = nom client, S2 = raison sociale clinique
+                client_name = ""
+                if invoice.billing_strategy == InvoiceBillingStrategy.S2_CLINIC_MONTHLY:
+                    # S2 : utiliser le nom de la clinique (billed_to_company)
+                    if invoice.billed_to_company:
+                        client_name = invoice.billed_to_company.name or ""
+                elif invoice.client and invoice.client.user:
+                    # S1 : utiliser le nom du client
+                    first_name = invoice.client.user.first_name or ""
+                    last_name = invoice.client.user.last_name or ""
+                    client_name = f"{first_name} {last_name}".strip()
+                    if not client_name:
+                        client_name = invoice.client.user.username or ""
+
+                # Montant encaissé (2 décimales) avec séparateur configurable
+                # ✅ FIX: Si payment.amount est 0 mais invoice est PAID, utiliser le montant payé calculé
+                amount_float = float(payment.amount)
+                if amount_float == 0.0 and invoice.status == InvoiceStatus.PAID:
+                    # Garde-fou : calculer le montant depuis invoice.amount_paid
+                    # (pour les anciens paiements créés avec le bug)
+                    calculated_paid = float(invoice.amount_paid or 0)
+                    if calculated_paid > 0:
+                        logger.warning(
+                            "Paiement ID %s a amount=0 mais facture PAID, utilisation de amount_paid=%s",
+                            payment.id,
+                            calculated_paid,
+                        )
+                        amount_float = calculated_paid
+                if decimal_separator == "comma":
+                    amount = f"{amount_float:.2f}".replace(".", ",")
+                else:
+                    amount = f"{amount_float:.2f}"
+
+                # Moyen de paiement (traduire enum en français)
+                method_map = {
+                    PaymentMethod.BANK_TRANSFER: "Virement bancaire",
+                    PaymentMethod.CASH: "Espèces",
+                    PaymentMethod.CARD: "Carte",
+                    PaymentMethod.ADJUSTMENT: "Ajustement",
+                }
+                payment_method = method_map.get(payment.method, payment.method.value)
+
+                # Référence (qr_reference de la facture ou référence du paiement)
+                reference = payment.reference or invoice.qr_reference or ""
+
+                # Devise (toujours CHF)
+                currency = "CHF"
+
+                # Type : Client (S1) ou Clinique (S2)
+                invoice_type = (
+                    "Clinique"
+                    if invoice.billing_strategy == InvoiceBillingStrategy.S2_CLINIC_MONTHLY
+                    else "Client"
+                )
+
+                # ID paiement
+                payment_id = str(payment.id)
+
+                # Écrire la ligne (échapper les `;` dans les valeurs)
+                row = [
+                    paid_date,
+                    invoice_number,
+                    client_name.replace(";", ","),  # Remplacer ; par , pour éviter les problèmes
+                    amount,
+                    payment_method,
+                    reference.replace(";", ","),
+                    currency,
+                    invoice_type,
+                    payment_id,
+                ]
+                output.write(";".join(row) + "\n")
+
+            # Créer la réponse CSV
+            response = make_response(output.getvalue())
+            response.headers["Content-Disposition"] = (
+                f"attachment; filename=paiements_{year}_{month:02d}.csv"
+            )
+            response.headers["Content-Type"] = "text/csv; charset=utf-8"
+
+            logger.info(
+                "Export CSV paiements généré: company_id=%s, year=%s, month=%s, count=%s",
+                company_id,
+                year,
+                month,
+                len(payments),
+            )
+
+            return response
+
+        except ValueError as e:
+            return APIErrorHandler.handle_validation_error(str(e), logger_instance=logger)
+        except Exception as e:
+            logger.exception("Erreur lors de l'export CSV des paiements")
             return APIErrorHandler.handle_exception(e, logger)
