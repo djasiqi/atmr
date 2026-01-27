@@ -432,16 +432,26 @@ class BookingTransferService:
         transfer.status = TransferStatus.ACCEPTED
         transfer.accepted_at = datetime.now(UTC)
 
-        # Mettre à jour la course pour qu'elle appartienne à l'entreprise receveuse
+        # Modèle Owner vs Executor : company_id reste l'owner (facture client), executing_company_id = exécutant (facture partenaire).
         transfer.booking.executing_company_id = transfer.executing_company_id
-        # ✅ CRITIQUE: Changer le company_id pour que la course appartienne à l'entreprise receveuse
-        transfer.booking.company_id = transfer.executing_company_id
+        # Ne pas changer booking.company_id : il doit rester l'owner (A) pour que A continue à voir la course et facturer le client.
+        # B voit la course via executing_company_id et facture A (partner_cost).
         # Changer le statut de la course à ACCEPTED pour qu'elle apparaisse dans le dispatch
         # de l'entreprise partenaire (la course est toujours PENDING à ce stade car
         # elle a été réinitialisée lors de la proposition du transfert)
         transfer.booking.status = BookingStatus.ACCEPTED
         # S'assurer que le chauffeur est bien None (déjà révoqué lors de la proposition)
         transfer.booking.driver_id = None
+
+        # Garde-fou : booking.company_id doit rester l'owner (détecte une réintroduction de mutation)
+        if transfer.booking.company_id != transfer.owner_company_id:
+            logger.warning(
+                "[accept_transfer] Incohérence owner: booking.company_id=%s doit rester owner_company_id=%s (booking_id=%s, transfer_id=%s)",
+                transfer.booking.company_id,
+                transfer.owner_company_id,
+                transfer.booking_id,
+                transfer.id,
+            )
 
         # #region agent log
         try:

@@ -41,7 +41,9 @@ from routes.api_error_models import (
     create_permission_error_model,
     create_validation_error_model,
 )
+from routes.api_error_utils import create_error_response
 from routes.db_error_utils import format_integrity_error
+from services.partnerships.exceptions import StatsComputationError
 from services.security.idempotency import IdempotencyService
 from infrastructure.dispatch import queue_adapter as queue
 from shared.error_handlers import APIErrorHandler
@@ -762,6 +764,13 @@ class CompanySearch(Resource):
                 for c in companies
             ]
 
+            if current_app and current_app.config.get("DEBUG"):
+                logger.debug(
+                    "companies/search q=%r count=%d sample=%s",
+                    query,
+                    len(result),
+                    [(x["id"], x["name"]) for x in result[:5]],
+                )
             return {"data": result}, 200
         except Exception as e:
             logger.exception("Erreur lors de la recherche d'entreprises: %s", e)
@@ -775,12 +784,15 @@ class CompanyPartnerships(Resource):
     @role_required(UserRole.company)
     def get(self):
         """Récupère tous les partenariats de l'entreprise (actifs et en attente)."""
+        company = None
+        company_id_for_log: int | None = None
         try:
             company, error_response, status_code = _get_current_company_via_use_case()
             if error_response or not company:
                 return error_response or APIErrorHandler.handle_not_found(
                     "Company", None, logger
                 ), status_code or 404
+            company_id_for_log = company.id
 
             # Récupérer tous les partenariats (actifs et en attente)
             # - Partenariats où l'entreprise est propriétaire OU partenaire
@@ -908,6 +920,16 @@ class CompanyPartnerships(Resource):
                 enriched_data.append(p_dict)
 
             return success_response(data=enriched_data)
+        except StatsComputationError:
+            logger.exception(
+                "Erreur métier lors du chargement des statistiques de partenariats",
+                extra={"company_id": company_id_for_log},
+            )
+            return create_error_response(
+                "Erreur serveur lors du chargement des partenariats",
+                500,
+                error_code="internal_error",
+            )
         except Exception as e:
             logger.exception("Erreur lors de la récupération des partenariats")
             return APIErrorHandler.handle_exception(e, logger)
