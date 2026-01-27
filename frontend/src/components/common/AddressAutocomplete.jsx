@@ -178,8 +178,8 @@ export default function AddressAutocomplete({
 
     // 1) Proxy backend — mélange alias/favoris + Photon si ton backend le fait
     try {
-      // ✅ Utiliser apiClient qui gère automatiquement le baseURL
-      const url = `/geocode/autocomplete?q=${encodeURIComponent(q)}&lat=${encodeURIComponent(
+      // ✅ URL relative au baseURL (pas de / initial) pour que prod atteigne /api/v1/geocode/autocomplete
+      const url = `geocode/autocomplete?q=${encodeURIComponent(q)}&lat=${encodeURIComponent(
         BIAS.lat
       )}&lon=${encodeURIComponent(BIAS.lon)}&limit=${encodeURIComponent(maxResults)}`;
       // #region agent log
@@ -427,7 +427,7 @@ export default function AddressAutocomplete({
     if (shouldEnrich) {
       try {
         const response = await apiClient.get(
-          `/geocode/place-details?place_id=${encodeURIComponent(it.place_id)}`
+          `geocode/place-details?place_id=${encodeURIComponent(it.place_id)}`
         );
 
         if (response.status === 200 && response.data) {
