@@ -131,7 +131,7 @@ const PartnershipsTab = () => {
       console.error('Erreur recherche entreprises:', err);
       showError('Erreur lors de la recherche');
       setSearchResults([]);
-      setLastSearchQuery(q);
+      setLastSearchQuery(''); // Ne pas afficher "Aucune entreprise trouvée" en cas d'erreur réseau/API
     } finally {
       setSearching(false);
     }

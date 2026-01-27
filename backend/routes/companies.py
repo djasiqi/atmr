@@ -725,11 +725,13 @@ class CompanySearch(Resource):
             if not query or len(query) < self.MIN_SEARCH_QUERY_LENGTH:
                 return {"data": []}, 200
 
-            # Recherche par nom, email ou domaine (insensible à la casse) — filtre is_approved
+            # Recherche par nom, email ou domaine (insensible à la casse).
+            # Pour "Demander un partenariat", on affiche toutes les entreprises correspondantes
+            # (pas seulement is_approved), afin que des demandes puissent être envoyées à toute
+            # entreprise connue (ex: emmenez-moi.ch).
             pattern = f"%{query}%"
             companies = (
-                Company.query.filter(Company.is_approved.is_(True))
-                .filter(
+                Company.query.filter(
                     or_(
                         Company.name.ilike(pattern),
                         Company.contact_email.ilike(pattern),

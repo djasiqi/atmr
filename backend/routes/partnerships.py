@@ -24,6 +24,107 @@ logger = logging.getLogger(__name__)
 partnerships_ns = Namespace("partnerships", description="Partenariats")
 
 
+@partnerships_ns.route("/")
+class CreatePartnershipRequest(Resource):
+    """POST /partnerships — Créer une demande de partenariat (depuis le modal « Demander un partenariat »)."""
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self):
+        try:
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                return error_response or APIErrorHandler.handle_not_found(
+                    "Company", None, logger
+                ), status_code or 404
+
+            data = request.get_json(silent=True) or {}
+            partner_company_id = data.get("partner_company_id")
+            if not partner_company_id:
+                return APIErrorHandler.handle_validation_error(
+                    "partner_company_id requis",
+                    field="partner_company_id",
+                    logger_instance=logger,
+                ), 400
+
+            from models.enums import TransferModel
+            from services.partnerships.core import PartnershipService
+
+            default_partner_tariff_percent = data.get("default_partner_tariff_percent", 90)
+            payment_terms_days = data.get("payment_terms_days", 30)
+            auto_accept_rules = bool(data.get("auto_accept_rules", False))
+
+            partnership = PartnershipService.create_partnership(
+                owner_company_id=company.id,
+                partner_company_id=int(partner_company_id),
+                default_transfer_model=TransferModel.SUBCONTRACT,
+                default_partner_tariff_percent=float(default_partner_tariff_percent),
+                payment_terms_days=int(payment_terms_days),
+                auto_accept=auto_accept_rules,
+                auto_invoice=True,
+            )
+            return success_response(data=partnership.to_dict(), status_code=201)
+        except ValueError as e:
+            return {"error": str(e)}, 400
+        except Exception as e:
+            logger.exception("Erreur création partenariat: %s", e)
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@partnerships_ns.route("/<int:partnership_id>/accept")
+class AcceptPartnershipRequest(Resource):
+    """POST /partnerships/<id>/accept — Accepter une demande de partenariat."""
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self, partnership_id: int):
+        try:
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                return error_response or APIErrorHandler.handle_not_found(
+                    "Company", None, logger
+                ), status_code or 404
+
+            from services.partnerships.core import PartnershipService
+
+            partnership = PartnershipService.accept_partnership_request(
+                partnership_id=partnership_id, company_id=company.id
+            )
+            return success_response(data=partnership.to_dict())
+        except ValueError as e:
+            return {"error": str(e)}, 400
+        except Exception as e:
+            logger.exception("Erreur acceptation partenariat: %s", e)
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@partnerships_ns.route("/<int:partnership_id>/reject")
+class RejectPartnershipRequest(Resource):
+    """POST /partnerships/<id>/reject — Refuser une demande de partenariat."""
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self, partnership_id: int):
+        try:
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                return error_response or APIErrorHandler.handle_not_found(
+                    "Company", None, logger
+                ), status_code or 404
+
+            from services.partnerships.core import PartnershipService
+
+            partnership = PartnershipService.reject_partnership_request(
+                partnership_id=partnership_id, company_id=company.id
+            )
+            return success_response(data=partnership.to_dict())
+        except ValueError as e:
+            return {"error": str(e)}, 400
+        except Exception as e:
+            logger.exception("Erreur refus partenariat: %s", e)
+            return APIErrorHandler.handle_exception(e, logger)
+
+
 @partnerships_ns.route("/for-transfer")
 class PartnershipsForTransfer(Resource):
     @jwt_required()
