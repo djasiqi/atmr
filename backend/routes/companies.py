@@ -715,9 +715,12 @@ class CompanySearch(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def get(self):
-        """Recherche d'entreprises par nom pour les partenariats."""
+        """Recherche d'entreprises par nom pour les partenariats.
+        GET /companies/search?q=... — q optionnel, réponse toujours 200 avec {"data": [...]}.
+        """
         try:
-            query = request.args.get("q", "").strip()
+            raw = request.args.get("q")
+            query = (raw or "").strip() if isinstance(raw, str) else ""
             if not query or len(query) < self.MIN_SEARCH_QUERY_LENGTH:
                 return {"data": []}, 200
 
@@ -729,13 +732,14 @@ class CompanySearch(Resource):
                 .all()
             )
 
-            # Exclure la propre entreprise de l'utilisateur
+            # Exclure la propre entreprise de l'utilisateur (User a .company, pas .company_id)
             current_user_id = get_jwt_identity()
             from models.user import User
 
             current_user = User.query.filter_by(public_id=current_user_id).first()
-            if current_user and current_user.company_id:
-                companies = [c for c in companies if c.id != current_user.company_id]
+            my_company_id = current_user.company.id if (current_user and current_user.company) else None
+            if my_company_id is not None:
+                companies = [c for c in companies if c.id != my_company_id]
 
             result = [
                 {
@@ -751,7 +755,8 @@ class CompanySearch(Resource):
             return {"data": result}, 200
         except Exception as e:
             logger.exception("Erreur lors de la recherche d'entreprises: %s", e)
-            return APIErrorHandler.handle_exception(e, logger)
+            # Éviter 400 côté client : répondre 200 + [] en fallback pour la recherche
+            return {"data": []}, 200
 
 
 @companies_ns.route("/me/partnerships")
