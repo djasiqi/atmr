@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Any, Dict
 
 from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from typing_extensions import override
 
@@ -20,6 +21,8 @@ class DelayEvent(db.Model):
 
     Stocke les événements de retard détectés pour analytics,
     identification de causes récurrentes et suivi de résolution.
+    ON DELETE CASCADE sur assignment_id : à la suppression d'un assignment,
+    les delay_events liés sont supprimés (évite ForeignKeyViolation).
     """
 
     __tablename__ = "delay_events"
@@ -33,9 +36,17 @@ class DelayEvent(db.Model):
 
     id = Column(Integer, primary_key=True)
     assignment_id = Column(
-        Integer, ForeignKey("assignment.id"), nullable=False, index=True
+        Integer,
+        ForeignKey("assignment.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     booking_id = Column(Integer, ForeignKey("booking.id"), nullable=False, index=True)
+
+    assignment = relationship(
+        "Assignment",
+        back_populates="delay_events",
+    )
 
     delay_minutes = Column(
         Integer, nullable=False

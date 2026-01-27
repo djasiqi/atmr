@@ -301,6 +301,11 @@ class Assignment(db.Model):
     )
     booking = relationship("Booking", backref="assignments", passive_deletes=True)
     driver = relationship("Driver", backref="assignments", passive_deletes=True)
+    delay_events = relationship(
+        "DelayEvent",
+        back_populates="assignment",
+        passive_deletes=True,
+    )
 
     @property
     def serialize(self) -> dict[str, Any]:

@@ -311,7 +311,16 @@ class UpdateDriverBookingStatusUseCase:
 
                             trigger = self._maybe_trigger_dispatch
                             if trigger is not None:
-                                trigger(booking.company_id, "reassign")
+                                # Éviter un autoflush pendant le trigger : la suppression
+                                # de l'assignment est encore en attente ; un .get() ou
+                                # une lecture dans le trigger peut déclencher un flush
+                                # et provoquer ForeignKeyViolation si delay_events existe.
+                                # La FK delay_events.assignment_id en ON DELETE CASCADE
+                                # règle la cause ; no_autoflush évite le flush trop tôt.
+                                from ext import db
+
+                                with db.session.no_autoflush:
+                                    trigger(booking.company_id, "reassign")
                         else:
                             _set_status(booking, "CANCELED")
 
