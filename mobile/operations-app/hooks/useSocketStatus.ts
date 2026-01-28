@@ -1,13 +1,15 @@
 // mobile/operations-app/hooks/useSocketStatus.ts
 
 import { useEffect, useState, useRef } from "react";
-import { getSocket } from "@/services/socket";
+import { getSocket, getConnectionState, type ConnectionState } from "@/services/socket";
 
 export interface SocketStatus {
   connected: boolean;
   reconnecting: boolean;
   latency: number | null;
   lastConnected: Date | null;
+  /** P0.3: ONLINE | RECONNECTING | OFFLINE (OFFLINE = logout explicite ou jamais connecté) */
+  connectionState?: ConnectionState;
 }
 
 /**
@@ -19,43 +21,31 @@ export function useSocketStatus(): SocketStatus {
   const [reconnecting, setReconnecting] = useState(false);
   const [latency, setLatency] = useState<number | null>(null);
   const [lastConnected, setLastConnected] = useState<Date | null>(null);
+  const [connectionState, setConnectionState] = useState<ConnectionState>("OFFLINE");
   const socketRef = useRef<any>(null);
   const reconnectAttemptRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const connectedRef = useRef(false); // Pour suivre l'état précédent dans les closures
+  const connectedRef = useRef(false);
 
   useEffect(() => {
-    // Fonction pour mettre à jour l'état depuis le socket actuel
+    // Fonction pour mettre à jour l'état depuis le socket actuel + P0.3 getConnectionState()
     const updateStatus = () => {
+      const state = getConnectionState();
+      setConnectionState(state);
       const socket = getSocket();
       if (!socket) {
-        console.log("[useSocketStatus] ❌ Aucun socket disponible (getSocket() retourne null)");
         setConnected(false);
-        setReconnecting(false);
+        setReconnecting(state === "RECONNECTING");
         connectedRef.current = false;
         return;
       }
-      
-      console.log("[useSocketStatus] Socket état:", {
-        connected: socket.connected,
-        id: socket.id,
-        disconnected: socket.disconnected,
-      });
 
-      // Mettre à jour l'état initial
       const wasConnected = connectedRef.current;
       const isNowConnected = socket.connected;
-      
       setConnected(isNowConnected);
       connectedRef.current = isNowConnected;
-      
-      // Si le socket vient de se connecter, mettre à jour lastConnected
+      setReconnecting(state === "RECONNECTING");
       if (isNowConnected && !wasConnected) {
         setLastConnected(new Date());
-      }
-      
-      // Si le socket est déconnecté mais qu'on était connecté avant, ne pas marquer comme reconnexion immédiatement
-      if (!isNowConnected && wasConnected) {
-        // Laisser les événements gérer la reconnexion
       }
     };
 
@@ -64,13 +54,13 @@ export function useSocketStatus(): SocketStatus {
       updateStatus();
     }, 2000); // Vérifier toutes les 2 secondes
 
-    // Obtenir le socket initial
+    // Obtenir le socket initial et état P0.3
     const socket = getSocket();
     socketRef.current = socket;
+    updateStatus(); // mise à jour immédiate (connected, reconnecting, connectionState)
 
     if (!socket) {
-      setConnected(false);
-      setReconnecting(false);
+      setConnectionState(getConnectionState());
       return () => {
         clearInterval(statusCheckInterval);
       };
@@ -86,7 +76,7 @@ export function useSocketStatus(): SocketStatus {
 
     // Écouter les événements de connexion
     const handleConnect = () => {
-      console.log("[useSocketStatus] Socket connecté");
+      setConnectionState(getConnectionState());
       setConnected(true);
       connectedRef.current = true;
       setReconnecting(false);
@@ -98,15 +88,15 @@ export function useSocketStatus(): SocketStatus {
       }
     };
 
-    const handleDisconnect = (reason?: string) => {
-      console.log("[useSocketStatus] Socket déconnecté:", reason);
+    const handleDisconnect = () => {
+      setConnectionState(getConnectionState());
       setConnected(false);
       connectedRef.current = false;
-      setReconnecting(false);
+      setReconnecting(getConnectionState() === "RECONNECTING");
     };
 
-    const handleReconnect = (attemptNumber: number) => {
-      console.log("[useSocketStatus] Socket reconnecté, tentative:", attemptNumber);
+    const handleReconnect = () => {
+      setConnectionState(getConnectionState());
       setConnected(true);
       connectedRef.current = true;
       setReconnecting(false);
@@ -118,24 +108,18 @@ export function useSocketStatus(): SocketStatus {
       }
     };
 
-    const handleReconnectAttempt = (attemptNumber: number) => {
-      console.log("[useSocketStatus] Tentative de reconnexion:", attemptNumber);
+    const handleReconnectAttempt = () => {
+      setConnectionState(getConnectionState());
       setReconnecting(true);
       setConnected(false);
       connectedRef.current = false;
     };
 
-    const handleConnectError = (error: any) => {
-      console.warn("[useSocketStatus] Erreur de connexion:", error);
+    const handleConnectError = () => {
+      setConnectionState(getConnectionState());
       setConnected(false);
       connectedRef.current = false;
-      // Marquer comme en reconnexion après un court délai
-      if (reconnectAttemptRef.current) {
-        clearTimeout(reconnectAttemptRef.current);
-      }
-      reconnectAttemptRef.current = setTimeout(() => {
-        setReconnecting(true);
-      }, 1000);
+      setReconnecting(true);
     };
 
     // Attacher les listeners
@@ -165,8 +149,9 @@ export function useSocketStatus(): SocketStatus {
   return {
     connected,
     reconnecting,
-    latency, // null pour l'instant, peut être enrichi plus tard
+    latency,
     lastConnected,
+    connectionState,
   };
 }
 

@@ -7,13 +7,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
-import sentry_sdk  # pyright: ignore[reportMissingImports]
+import sentry_sdk
 from flask import (
     current_app,
     make_response,
     request,
 )
-from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
+from flask_jwt_extended import (
     create_access_token,
     create_refresh_token,
     decode_token,
@@ -21,18 +21,18 @@ from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
     get_jwt_identity,
     jwt_required,
 )
-from flask_mail import Message  # pyright: ignore[reportMissingImports]
-from flask_restx import (  # pyright: ignore[reportMissingImports]
+from flask_mail import Message
+from flask_restx import (
     Namespace,
     Resource,
     fields,
 )
 from itsdangerous import URLSafeTimedSerializer
-from marshmallow import (  # pyright: ignore[reportMissingImports]
+from marshmallow import (
     Schema,
     ValidationError,
 )
-from marshmallow import fields as ma_fields  # pyright: ignore[reportMissingImports]
+from marshmallow import fields as ma_fields
 
 from application.users import (
     AuthenticateUserInput,
@@ -654,10 +654,8 @@ class Login(Resource):
                                 "location": "auth.py:Login.post",
                                 "message": "after create_access_token",
                                 "data": {
-                                    "has_access_token": access_token is not None,
-                                    "token_length": len(access_token)
-                                    if access_token
-                                    else 0,
+                                    "has_access_token": bool(access_token),
+                                    "token_length": len(access_token),
                                 },
                                 "timestamp": datetime.now(UTC).isoformat(),
                                 "sessionId": "debug-session",
@@ -1150,7 +1148,7 @@ class LoginTest(Resource):
         import os
 
         from flask import abort, current_app, request
-        from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
+        from flask_jwt_extended import (
             create_access_token,
             create_refresh_token,
         )
@@ -1269,6 +1267,17 @@ class RefreshToken(Resource):
                     "Refresh token missing - trace_id: %s",
                     trace_id,
                 )
+                # ✅ P0.1: Log structuré refresh failure (corrélation driver_id / device_id / session_diag)
+                logger.info(
+                    "auth_refresh_failure",
+                    extra={
+                        "event": "auth_refresh_failure",
+                        "cause": "missing_refresh_token",
+                        "device_id": request.headers.get("X-Device-ID"),
+                        "session_diag": request.headers.get("X-Session-Diag"),
+                        "trace_id": trace_id,
+                    },
+                )
                 error_response, _ = APIErrorHandler.handle_validation_error(
                     "refresh_token requis (cookie, body ou Authorization header)",
                     logger_instance=logger,
@@ -1283,6 +1292,17 @@ class RefreshToken(Resource):
                 logger.warning(
                     "Refresh token invalid - trace_id: %s",
                     trace_id,
+                )
+                # ✅ P0.1: Log structuré refresh failure avec cause (corrélation device_id / session_diag)
+                logger.info(
+                    "auth_refresh_failure",
+                    extra={
+                        "event": "auth_refresh_failure",
+                        "cause": "invalid_or_expired",
+                        "device_id": request.headers.get("X-Device-ID"),
+                        "session_diag": request.headers.get("X-Session-Diag"),
+                        "trace_id": trace_id,
+                    },
                 )
                 if error_response:
                     error_response["trace_id"] = trace_id
@@ -1317,6 +1337,18 @@ class RefreshToken(Resource):
                     "Refresh token rejeté : compte désactivé pour user %s (role: %s)",
                     user_public_id,
                     user.role.value if user.role else "unknown",
+                )
+                # ✅ P0.1: Log structuré refresh failure (cause compte désactivé)
+                logger.info(
+                    "auth_refresh_failure",
+                    extra={
+                        "event": "auth_refresh_failure",
+                        "cause": "account_disabled",
+                        "user_public_id": user_public_id,
+                        "device_id": request.headers.get("X-Device-ID"),
+                        "session_diag": request.headers.get("X-Session-Diag"),
+                        "trace_id": get_trace_id(),
+                    },
                 )
                 return APIErrorHandler.handle_permission_error(
                     error_message or "Compte désactivé",
@@ -1622,6 +1654,7 @@ class Logout(Resource):
             # ✅ Priorité 7: Récupérer user_id pour audit logging
             current_user_id = get_jwt_identity()
             user = None
+            driver_id_for_log = None
             if current_user_id:
                 user = user_repo.find_by_public_id(current_user_id)
 
@@ -1682,6 +1715,7 @@ class Logout(Resource):
 
                     driver_repo = DriverRepository()
                     driver = driver_repo.find_model_by_user_id(user.id)
+                    driver_id_for_log = driver.id if driver else None
                     if driver:
                         from models import DeviceToken
 
@@ -1780,6 +1814,19 @@ class Logout(Resource):
                     security_logout_total.inc()
                 except Exception as audit_error:
                     logger.warning("Échec audit logging logout: %s", audit_error)
+
+                # ✅ P0.1: Log structuré logout explicite (corrélation driver_id / device_id / session_diag)
+                logger.info(
+                    "auth_logout_explicit",
+                    extra={
+                        "event": "auth_logout_explicit",
+                        "driver_id": driver_id_for_log,
+                        "user_public_id": current_user_id,
+                        "device_id": request.headers.get("X-Device-ID"),
+                        "session_diag": request.headers.get("X-Session-Diag"),
+                        "trace_id": get_trace_id(),
+                    },
+                )
 
                 # ✅ Migration localStorage → cookies httpOnly
                 # Créer la réponse avec make_response pour pouvoir supprimer les cookies
@@ -2300,7 +2347,7 @@ class CSRFTokenResource(Resource):
                 if jwt_identity:
                     if isinstance(jwt_identity, dict):
                         # Extraire user_id depuis les claims JWT
-                        from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
+                        from flask_jwt_extended import (
                             get_jwt,
                         )
 

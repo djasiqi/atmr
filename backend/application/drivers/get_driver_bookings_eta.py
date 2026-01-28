@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Callable, Protocol, Sequence
+from typing import Any, Callable, Sequence
 
 
 @dataclass(frozen=True, slots=True)
@@ -19,17 +19,6 @@ class DriverBookingsEtaResponse:
     has_gps: bool
     driver_position: dict[str, float] | None
     bookings: list[BookingEtaItem]
-
-
-class _BookingLike(Protocol):
-    id: int
-    pickup_lat: float | None
-    pickup_lon: float | None
-    dropoff_lat: float | None
-    dropoff_lon: float | None
-    duration_seconds: int | None
-    distance_meters: float | int | None
-    status: object | None
 
 
 class GetDriverBookingsETAUseCase:
@@ -50,7 +39,7 @@ class GetDriverBookingsETAUseCase:
         *,
         driver_lat: float | None,
         driver_lon: float | None,
-        bookings: Sequence[_BookingLike],
+        bookings: Sequence[Any],
     ) -> DriverBookingsEtaResponse:
         if driver_lat is None or driver_lon is None:
             return DriverBookingsEtaResponse(

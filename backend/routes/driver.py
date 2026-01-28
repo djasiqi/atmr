@@ -9,13 +9,13 @@ from typing import Any, cast
 from typing import cast as tcast
 
 from flask import current_app, request
-from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
+from flask_jwt_extended import (
     create_access_token,
     create_refresh_token,
     get_jwt_identity,
     jwt_required,
 )
-from flask_restx import (  # pyright: ignore[reportMissingImports]
+from flask_restx import (
     Namespace,
     Resource,
     fields,
@@ -431,9 +431,7 @@ class DriverProfile(Resource):
             data = request.get_json() or {}
 
             # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-            from marshmallow import (  # pyright: ignore[reportMissingImports]
-                ValidationError,
-            )
+            from marshmallow import ValidationError
 
             from schemas.driver_schemas import DriverProfileUpdateSchema
             from schemas.validation_utils import (
@@ -1313,7 +1311,7 @@ class BookingDetails(Resource):
             )
             from repositories.booking_repository import BookingRepository
 
-            uc = GetDriverBookingDetailsUseCase(booking_repo=BookingRepository())
+            uc = GetDriverBookingDetailsUseCase(booking_repo=BookingRepository())  # type: ignore[reportArgumentType]
             result = uc.execute(booking_id=booking_id, driver_id=driver.id)
             if result is None:
                 return APIErrorHandler.handle_not_found(
@@ -1373,7 +1371,7 @@ class CompanyLiveLocations(Resource):
             from repositories.driver_repository import DriverRepository
 
             uc = GetCompanyDriversLiveLocationsUseCase(
-                driver_repo=DriverRepository(),
+                driver_repo=DriverRepository(),  # type: ignore[reportArgumentType]
                 get_last_location_fn=get_driver_last_location,
             )
             uc_res = uc.execute(company_id=company_id)
@@ -1970,6 +1968,61 @@ class SavePushToken(Resource):
         return result, status_code
 
 
+@driver_ns.route("/me/push-privacy")
+class DriverPushPrivacy(Resource):
+    """Réglage mode discret push pour le chauffeur (pas de nom client sur lockscreen).
+
+    Contrôle d'accès / multi-tenant :
+    - @jwt_required() + @role_required(UserRole.driver).
+    - get_driver_from_token() détermine le driver (donc le user = driver.user_id).
+    - user = User.query.get(driver.user_id) : aucun user_id ni driver_id dans le body.
+    - Seules valeurs acceptées en PATCH : "detailed" | "discreet" (après .strip().lower()), sinon 400.
+    """
+
+    @jwt_required()
+    @role_required(UserRole.driver)
+    def get(self):
+        """Récupérer le mode push (detailed | discreet)."""
+        from http import HTTPStatus
+
+        from models import User
+
+        driver, err, code = get_driver_from_token()
+        if err:
+            return err, code or HTTPStatus.UNAUTHORIZED
+        user = User.query.get(driver.user_id) if driver else None
+        if not user:
+            return {"error": "User not found"}, HTTPStatus.NOT_FOUND
+        mode = getattr(user, "push_privacy_mode", None) or "detailed"
+        return {"push_privacy_mode": mode}, 200
+
+    @jwt_required()
+    @role_required(UserRole.driver)
+    def patch(self):
+        """Mettre à jour le mode push (detailed | discreet)."""
+        from http import HTTPStatus
+
+        from models import User
+
+        driver, err, code = get_driver_from_token()
+        if err:
+            return err, code or HTTPStatus.UNAUTHORIZED
+        user = User.query.get(driver.user_id) if driver else None
+        if not user:
+            return {"error": "User not found"}, HTTPStatus.NOT_FOUND
+        data = request.get_json(silent=True) or {}
+        mode = (data.get("push_privacy_mode") or "").strip().lower()
+        if mode not in ("detailed", "discreet"):
+            return (
+                {"error": "push_privacy_mode doit être 'detailed' ou 'discreet'"},
+                HTTPStatus.BAD_REQUEST,
+            )
+        if hasattr(user, "push_privacy_mode"):
+            user.push_privacy_mode = mode
+            db.session.commit()
+        return {"push_privacy_mode": mode}, 200
+
+
 @driver_ns.route("/<int:driver_id>/update-profile")
 class UpdateDriverProfile(Resource):
     @jwt_required()
@@ -2045,8 +2098,8 @@ class TripTrackingReplay(Resource):
                 from shared.geo_utils import haversine_distance
 
                 uc = GetTripTrackingReplayUseCase(
-                    get_assignment_fn=AssignmentRepository().find_model_by_id,
-                    get_positions_fn=TripTrackingRepository().find_models_by_assignment_id,
+                    get_assignment_fn=AssignmentRepository().find_model_by_id,  # type: ignore[reportArgumentType]
+                    get_positions_fn=TripTrackingRepository().find_models_by_assignment_id,  # type: ignore[reportArgumentType]
                     haversine_distance_fn=haversine_distance,
                 )
                 uc_res = uc.execute(assignment_id=assignment_id, driver_id=driver.id)
@@ -2272,8 +2325,8 @@ class SwitchToEnterprise(Resource):
                     pass
                 # #endregion
                 uc = SwitchToEnterpriseUseCase(
-                    find_company_fn=CompanyRepository().find_model_by_id,
-                    find_company_user_fn=find_company_user_for_driver,
+                    find_company_fn=CompanyRepository().find_model_by_id,  # type: ignore[reportArgumentType]
+                    find_company_user_fn=find_company_user_for_driver,  # type: ignore[reportArgumentType]
                     create_access_token_fn=create_access_token,
                     create_refresh_token_fn=create_refresh_token,
                     store_refresh_token_fn=_store_refresh_token_fn,
@@ -2282,7 +2335,7 @@ class SwitchToEnterprise(Resource):
                 )
                 uc_res = uc.execute(
                     SwitchToEnterpriseCommand(
-                        driver=driver,
+                        driver=driver,  # type: ignore[reportArgumentType]
                         access_expires_delta=access_delta,
                         refresh_expires_delta=refresh_delta,
                         device_id=request.headers.get("X-Device-ID"),
@@ -2463,7 +2516,7 @@ class QuickAcceptBooking(Resource):
             try:
                 from shared.notifications import notify_booking_update
 
-                notify_booking_update(booking, "accepted")
+                notify_booking_update(driver_id=driver.id, booking=booking)
             except Exception:
                 logger.exception("Erreur notification après quick-accept")
 
@@ -2556,7 +2609,7 @@ class QuickRejectBooking(Resource):
             try:
                 from shared.notifications import notify_booking_update
 
-                notify_booking_update(booking, "cancelled")
+                notify_booking_update(driver_id=driver.id, booking=booking)
             except Exception:
                 logger.exception("Erreur notification après quick-reject")
 

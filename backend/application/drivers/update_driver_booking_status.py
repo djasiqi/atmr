@@ -44,20 +44,16 @@ def _set_status(booking: _BookingLike, status_name: str) -> None:
 
 
 class _BookingRepo(Protocol):
-    def find_model_by_id(self, booking_id: int) -> _BookingLike | None: ...
-
-
-class _AssignmentLike(Protocol):
-    id: object
+    def find_model_by_id(self, booking_id: int) -> Any | None: ...
 
 
 class _AssignmentRepo(Protocol):
-    def find_model_by_booking_id(self, booking_id: int) -> _AssignmentLike | None: ...
+    def find_model_by_booking_id(self, booking_id: int) -> Any | None: ...
 
 
 class _DbSession(Protocol):
     def commit(self) -> None: ...
-    def delete(self, obj: object) -> None: ...
+    def delete(self, instance: object) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)

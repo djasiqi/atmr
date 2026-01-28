@@ -205,6 +205,14 @@ export const getLoginStyles = (mode: LoginMode) => {
       fontSize: 14,
       flex: 1,
     },
+    rememberMeHint: {
+      color: palette.secondary,
+      fontSize: 11,
+      opacity: 0.85,
+      marginTop: 4,
+      marginLeft: 30,
+      marginBottom: 8,
+    },
   });
 
   return { styles, palette };

@@ -1,6 +1,6 @@
 """✅ Schemas Marshmallow pour validation des endpoints company."""
 
-from marshmallow import (  # pyright: ignore[reportMissingImports]
+from marshmallow import (
     Schema,
     fields,
     validate,
@@ -132,6 +132,9 @@ class ClientCreateSchema(Schema):
     # Champs institution
     is_institution = fields.Bool(load_default=False)
     institution_name = fields.Str(validate=validate.Length(max=200), allow_none=True)
+
+    # Statut (actif par défaut)
+    is_active = fields.Bool(load_default=True)
 
     # Établissement de résidence (EMS, clinique, foyer, etc.)
     residence_facility = fields.Str(validate=validate.Length(max=200), allow_none=True)

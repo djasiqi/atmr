@@ -15,64 +15,59 @@ L.Icon.Default.mergeOptions({
 
 const defaultCenter = [46.8182, 8.2275]; // CH
 
-// ---- Icônes personnalisées pour les chauffeurs ----
-const createDriverIcon = (status = 'available') => {
-  const colors = {
-    available: '#00796b', // Vert de marque
-    busy: '#ff9800', // Orange
-    offline: '#9e9e9e', // Gris
-    emergency: '#f44336', // Rouge
-  };
+// ---- Couleurs par statut (pour CircleMarker, pas d’icône = pas de bug Leaflet default icon) ----
+const STATUS_COLORS = {
+  available: '#00796b',
+  busy: '#ff9800',
+  offline: '#9e9e9e',
+  emergency: '#f44336',
+};
 
-  const emojis = {
-    available: '🚗',
-    busy: '🚕',
-    offline: '🚙',
-    emergency: '🚨',
-  };
-
-  return L.divIcon({
-    html: `
-      <div style="
-        background: ${colors[status]};
-        border: 3px solid white;
-        border-radius: 50%;
-        width: 32px;
-        height: 32px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-        font-size: 14px;
-        position: relative;
-      ">
-        ${emojis[status]}
-      </div>
-    `,
-    className: 'custom-driver-icon',
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
-    popupAnchor: [0, -16],
+/** Crée un CircleMarker pour un chauffeur (évite le bug d’icône Leaflet manquante). */
+const createDriverCircleMarker = (latlng, status = 'available') => {
+  const color = STATUS_COLORS[status] ?? STATUS_COLORS.available;
+  return L.circleMarker(latlng, {
+    radius: 8,
+    fillColor: color,
+    color: '#fff',
+    weight: 2,
+    fillOpacity: 1,
   });
 };
 
-// ---- helpers coords -------------------------------------------------
+// ---- helpers coords (normalisation + validation) --------------------
 const toNumOrNull = (v) => {
   if (v === null || v === undefined) return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 };
-const toLatLngSafe = (lat, lon) => {
+
+/** Normalise lat/lon (parseFloat, alias lat|latitude, lon|lng|longitude) et rejette invalides. */
+const normaliseCoords = (lat, lon) => {
   const la = toNumOrNull(lat);
   const lo = toNumOrNull(lon);
-  return la !== null && lo !== null ? [la, lo] : null;
+  if (la === null || lo === null) return { center: null, reason: 'missing_or_nan' };
+  if (Math.abs(la) > 90) return { center: null, reason: 'lat_out_of_range' };
+  if (Math.abs(lo) > 180) return { center: null, reason: 'lon_out_of_range' };
+  if (la === 0 && lo === 0) return { center: null, reason: 'zero_coords' };
+  return { center: [la, lo], reason: null };
 };
-const resolveDriverCoords = (d) =>
-  toLatLngSafe(d.current_lat, d.current_lon) ||
-  toLatLngSafe(d.latitude, d.longitude) ||
-  toLatLngSafe(d.last_latitude, d.last_longitude) ||
-  (d.last_position && toLatLngSafe(d.last_position.lat, d.last_position.lon)) ||
-  null;
+
+const resolveDriverCoords = (d) => {
+  const candidates = [
+    [d.current_lat, d.current_lon],
+    [d.latitude, d.longitude],
+    [d.lat, d.lon],
+    [d.lat, d.lng],
+    [d.last_latitude, d.last_longitude],
+  ];
+  if (d.last_position) candidates.push([d.last_position.lat, d.last_position.lon]);
+  for (const [la, lo] of candidates) {
+    const r = normaliseCoords(la, lo);
+    if (r.center) return r.center;
+  }
+  return null;
+};
 
 // Déterminer le statut du chauffeur
 const getDriverStatus = (driver) => {
@@ -147,11 +142,18 @@ const createStyledTooltip = (driver) => {
   `;
 };
 
+const MAP_DEBUG =
+  typeof window !== 'undefined' &&
+  (window.__MAP_DEBUG === true || sessionStorage.getItem('MAP_DEBUG') === '1');
+
 export default function DriverLiveMap({ drivers: propDrivers }) {
   const mapRef = useRef(null);
   const mapElRef = useRef(null);
-  const markersRef = useRef({}); // { [driverId]: L.Marker }
+  const markersRef = useRef({}); // { [driverId]: L.Layer (CircleMarker) }
+  const hasAutoFittedRef = useRef(false); // fitBounds une seule fois au premier marker
   const [searchQuery, setSearchQuery] = useState('');
+  const [mapReady, setMapReady] = useState(false);
+  const [mapDebugInfo, setMapDebugInfo] = useState(null); // dev only
   const { driver: staticDrivers, company } = useCompanyData();
 
   // Utiliser les drivers passés en props si disponibles, sinon ceux de useCompanyData
@@ -269,13 +271,14 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
       setTimeout(checkAndInvalidateSize, 100);
 
       mapRef.current = map;
+      setMapReady(true);
       console.log('[DriverLiveMap] ✅ Carte initialisée avec succès');
     } catch (error) {
       console.error('[DriverLiveMap] ❌ Erreur initialisation carte:', error);
     }
 
     return () => {
-      // ⚠️ StrictMode va appeler le cleanup immédiatement en dev -> remets tout à zéro
+      setMapReady(false);
       try {
         if (mapRef.current) {
           mapRef.current.remove();
@@ -298,7 +301,7 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
       if (!ll) return; // ignore si pas de coords valides
 
       const status = getDriverStatus(d);
-      const m = L.marker(ll, { icon: createDriverIcon(status) }).addTo(map);
+      const m = createDriverCircleMarker(ll, status).addTo(map);
 
       // Logique intelligente 4 directions : haut/bas ET gauche/droite
       const updateTooltipDirection = () => {
@@ -384,64 +387,105 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
     const socket = getCompanySocket();
     if (!socket) return;
 
-    if (company?.id) {
+    hasAutoFittedRef.current = false;
+
+    const requestLocations = () => {
       try {
-        socket.emit('join_company', { company_id: company.id });
-      } catch {}
-    }
+        socket.emit('get_driver_locations');
+        if (MAP_DEBUG) console.log('[DriverLiveMap] get_driver_locations emitted');
+      } catch (e) {
+        console.error('Failed to request driver locations:', e);
+      }
+    };
+
+    const debug = {
+      received: 0,
+      valid: 0,
+      lastUpdate: null,
+      sample: null,
+      exclusionReasons: [],
+      joinedReceived: false,
+      fallbackUsed: false,
+    };
+    if (MAP_DEBUG) setMapDebugInfo({ ...debug });
 
     const onLoc = (data) => {
       const map = getMap();
-      if (!map) return;
+      debug.received += 1;
+      if (MAP_DEBUG && debug.received <= 5) {
+        try {
+          console.log('[DriverLiveMap] driver_location_update payload', data);
+        } catch (_) {}
+      }
 
-      // Backend : { driver_id, lat|latitude, lon|lng|longitude, ... }
+      if (!map) {
+        if (MAP_DEBUG) {
+          debug.exclusionReasons = (debug.exclusionReasons.slice(-4).concat('map_not_ready')).slice(-5);
+          setMapDebugInfo({ ...debug });
+        }
+        return;
+      }
+
       const id = data.driver_id ?? data.id;
       const lat = data.lat ?? data.latitude ?? data.current_lat;
       const lon = data.lon ?? data.lng ?? data.longitude ?? data.current_lon;
-      const ll = toLatLngSafe(lat, lon);
-      if (!id || !ll) return;
+      const { center: ll, reason } = normaliseCoords(lat, lon);
+
+      if (!id) {
+        if (MAP_DEBUG) {
+          debug.exclusionReasons = (debug.exclusionReasons.slice(-4).concat('missing_driver_id')).slice(-5);
+          setMapDebugInfo({ ...debug });
+        }
+        return;
+      }
+      if (!ll) {
+        if (MAP_DEBUG) {
+          debug.exclusionReasons = (debug.exclusionReasons.slice(-4).concat(reason || 'invalid_coords')).slice(-5);
+          debug.lastUpdate = new Date().toISOString();
+          setMapDebugInfo({ ...debug });
+        }
+        return;
+      }
+
+      debug.valid += 1;
+      if (debug.valid === 1) debug.sample = { driver_id: id, lat: ll[0], lon: ll[1] };
+      debug.lastUpdate = new Date().toISOString();
+      if (MAP_DEBUG) setMapDebugInfo({ ...debug });
 
       const firstName = data.first_name || data.name || `Driver ${id}`;
+      // wasEmpty = aucun marker valide sur la carte (pas le nombre d’updates reçues)
+      const wasEmpty = Object.keys(markersRef.current).length === 0;
 
       if (!markersRef.current[id]) {
-        // Trouver le driver complet pour le statut
         const fullDriver = drivers.find((d) => d.id === id) || {
           id,
           first_name: firstName,
           is_active: true,
         };
         const status = getDriverStatus(fullDriver);
-        const m = L.marker(ll, { icon: createDriverIcon(status) }).addTo(map);
+        const m = createDriverCircleMarker(ll, status).addTo(map);
 
-        // Fonction pour mettre à jour la direction du tooltip
         const updateTooltipDirection = () => {
           const bounds = map.getBounds();
           const center = bounds.getCenter();
           const markerLat = ll[0];
           const markerLng = ll[1];
-
-          // Calculer la distance au centre en vertical et horizontal
           const verticalDist = Math.abs(markerLat - center.lat);
           const horizontalDist = Math.abs(markerLng - center.lng);
-
           let direction;
           let offset;
-
           if (verticalDist > horizontalDist) {
-            // Position dominante = vertical (haut/bas)
             direction = markerLat > center.lat ? 'bottom' : 'top';
             offset = direction === 'bottom' ? [0, 20] : [0, -20];
           } else {
-            // Position dominante = horizontal (gauche/droite)
             direction = markerLng > center.lng ? 'left' : 'right';
             offset = direction === 'left' ? [-10, 0] : [10, 0];
           }
-
           m.unbindTooltip();
           m.bindTooltip(createStyledTooltip(fullDriver), {
             permanent: true,
-            direction: direction,
-            offset: offset,
+            direction,
+            offset,
             className: 'custom-driver-tooltip',
           }).openTooltip();
         };
@@ -450,12 +494,16 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
         map.on('moveend zoomend', updateTooltipDirection);
 
         markersRef.current[id] = m;
+
+        // fitBounds une seule fois au premier marker valide (évite zooms agressifs à chaque update GPS)
+        if (wasEmpty && !hasAutoFittedRef.current) {
+          fitBoundsToMarkers(14);
+          hasAutoFittedRef.current = true;
+        }
       } else {
-        // Mettre à jour la position
         const marker = markersRef.current[id];
         marker.setLatLng(ll);
 
-        // Mettre à jour le contenu et la direction
         const fullDriver = drivers.find((d) => d.id === id) || {
           id,
           first_name: firstName,
@@ -466,47 +514,57 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
         const center = bounds.getCenter();
         const markerLat = ll[0];
         const markerLng = ll[1];
-
-        // Calculer la distance au centre
         const verticalDist = Math.abs(markerLat - center.lat);
         const horizontalDist = Math.abs(markerLng - center.lng);
-
-        let direction;
-        let offset;
-
-        if (verticalDist > horizontalDist) {
-          direction = markerLat > center.lat ? 'bottom' : 'top';
-          offset = direction === 'bottom' ? [0, 20] : [0, -20];
-        } else {
-          direction = markerLng > center.lng ? 'left' : 'right';
-          offset = direction === 'left' ? [-10, 0] : [10, 0];
-        }
+        const direction = verticalDist > horizontalDist
+          ? (markerLat > center.lat ? 'bottom' : 'top')
+          : (markerLng > center.lng ? 'left' : 'right');
+        const offset = direction === 'bottom' ? [0, 20] : direction === 'top' ? [0, -20] : direction === 'left' ? [-10, 0] : [10, 0];
 
         marker.unbindTooltip();
         marker
           .bindTooltip(createStyledTooltip(fullDriver), {
             permanent: true,
-            direction: direction,
-            offset: offset,
+            direction,
+            offset,
             className: 'custom-driver-tooltip',
           })
           .openTooltip();
+        // pas de fitBounds sur les updates : l’utilisateur garde la main sur la vue
       }
-
-      fitBoundsToMarkers(14);
     };
 
-    // ✅ Écouter les mises à jour de position en temps réel
     socket.on('driver_location_update', onLoc);
 
-    // Explicitly request driver locations when component mounts
-    try {
-      socket.emit('get_driver_locations');
-    } catch (e) {
-      console.error('Failed to request driver locations:', e);
+    let fallbackId = null;
+    let retryId = null;
+    let onJoined = null;
+
+    if (company?.id) {
+      try {
+        socket.emit('join_company', { company_id: company.id });
+      } catch {}
+      onJoined = () => {
+        if (MAP_DEBUG) setMapDebugInfo((p) => ({ ...(p || {}), joinedReceived: true }));
+        requestLocations();
+        socket.off('joined_company', onJoined);
+      };
+      socket.once('joined_company', onJoined);
+      fallbackId = setTimeout(() => {
+        socket.off('joined_company', onJoined);
+        if (MAP_DEBUG) setMapDebugInfo((p) => ({ ...(p || {}), fallbackUsed: true }));
+        if (Object.keys(markersRef.current).length === 0) requestLocations();
+      }, 1500);
+      retryId = setTimeout(() => {
+        if (Object.keys(markersRef.current).length === 0) requestLocations();
+      }, 3000);
     }
 
     return () => {
+      // Cleanup: pas de fuite listeners ni timers (ordre: timers puis listeners)
+      if (fallbackId != null) clearTimeout(fallbackId);
+      if (retryId != null) clearTimeout(retryId);
+      if (onJoined) socket.off('joined_company', onJoined);
       socket.off('driver_location_update', onLoc);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -751,6 +809,63 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
           }}
         >
           🗺️ Initialisation de la carte...
+        </div>
+      )}
+      {mapReady && (
+        <button
+          type="button"
+          onClick={() => fitBoundsToMarkers(14)}
+          style={{
+            position: 'absolute',
+            bottom: 8,
+            right: 8,
+            zIndex: 1000,
+            padding: '6px 12px',
+            fontSize: 12,
+            fontWeight: 600,
+            color: '#00796b',
+            background: 'rgba(255,255,255,0.95)',
+            border: '1px solid #00796b',
+            borderRadius: 8,
+            boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+            cursor: 'pointer',
+          }}
+          title="Recadrer sur les chauffeurs"
+        >
+          Recentrer
+        </button>
+      )}
+      {MAP_DEBUG && mapDebugInfo && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 8,
+            left: 8,
+            right: 80,
+            padding: '8px 10px',
+            background: 'rgba(0,0,0,0.75)',
+            color: '#eee',
+            fontSize: 11,
+            fontFamily: 'monospace',
+            borderRadius: 6,
+            zIndex: 1000,
+            maxHeight: 120,
+            overflow: 'auto',
+          }}
+        >
+          <div><strong>MAP_DEBUG</strong></div>
+          <div>Reçues: {mapDebugInfo.received} | Valides: {mapDebugInfo.valid}</div>
+          <div>
+            joined_company: {mapDebugInfo.joinedReceived ? '✓ reçu' : '–'}
+            {mapDebugInfo.fallbackUsed ? ' | fallback 1.5s utilisé' : ''}
+          </div>
+          {mapDebugInfo.lastUpdate && <div>Dernière mise à jour: {mapDebugInfo.lastUpdate}</div>}
+          {mapDebugInfo.sample && (
+            <div>Exemple 1er chauffeur: lat={mapDebugInfo.sample.lat} lon={mapDebugInfo.sample.lon} id={mapDebugInfo.sample.driver_id}</div>
+          )}
+          {mapDebugInfo.exclusionReasons?.length > 0 && (
+            <div>Exclusions: {mapDebugInfo.exclusionReasons.join(', ')}</div>
+          )}
         </div>
       )}
     </div>

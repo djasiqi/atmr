@@ -93,6 +93,8 @@ class SqlAlchemyClientWriter:
         if client_attrs.get("default_billed_to_type"):
             client.default_billed_to_type = client_attrs.get("default_billed_to_type")
         client.default_billed_to_contact = client_attrs.get("default_billed_to_contact")
+        if "is_active" in client_attrs:
+            client.is_active = bool(client_attrs["is_active"])
 
         db.session.add(client)
         db.session.flush()  # Pour obtenir client.id
@@ -102,28 +104,27 @@ class SqlAlchemyClientWriter:
         institution_name = client_attrs.get("institution_name")
         if is_institution and institution_name:
             try:
-                # Créer la Company pour la clinique
-                clinic_company = Company(
-                    name=client.institution_name,
-                    user_id=user.id,
-                    address=client.domicile_address or "",
-                    latitude=(
-                        float(client.domicile_lat)
-                        if getattr(client, "domicile_lat", None) is not None
-                        else None
-                    ),
-                    longitude=(
-                        float(client.domicile_lon)
-                        if getattr(client, "domicile_lon", None) is not None
-                        else None
-                    ),
-                    contact_email=client.contact_email or user.email or "",
-                    contact_phone=client.contact_phone or user.phone or "",
-                    service_area="",
-                    max_daily_bookings=50,
-                    is_approved=False,
-                    preferential_rate=preferential_rate,
+                # Créer la Company pour la clinique (attributs assignés pour compatibilité type-checker)
+                clinic_company = Company()
+                clinic_company.name = client.institution_name
+                clinic_company.user_id = user.id
+                clinic_company.address = client.domicile_address or ""
+                clinic_company.latitude = (
+                    float(client.domicile_lat)
+                    if getattr(client, "domicile_lat", None) is not None
+                    else None
                 )
+                clinic_company.longitude = (
+                    float(client.domicile_lon)
+                    if getattr(client, "domicile_lon", None) is not None
+                    else None
+                )
+                clinic_company.contact_email = client.contact_email or user.email or ""
+                clinic_company.contact_phone = client.contact_phone or user.phone or ""
+                clinic_company.service_area = ""
+                clinic_company.max_daily_bookings = 50
+                clinic_company.is_approved = False
+                clinic_company.preferential_rate = preferential_rate
                 db.session.add(clinic_company)
                 db.session.flush()  # Pour obtenir clinic_company.id
 
@@ -140,26 +141,24 @@ class SqlAlchemyClientWriter:
                     else:
                         billing_address = f"{client.domicile_zip} {client.domicile_city}"
 
-                billing_party = BillingParty(
-                    company_id=company_id,  # L'entreprise de transport
-                    type=BillingPartyType.CLINIC,
-                    display_name=client.institution_name,
-                    billing_address=billing_address or "Adresse non renseignée",
-                    contact_email=client.contact_email or user.email,
-                    contact_phone=client.contact_phone or user.phone,
-                    external_ref=f"clinic_company:{clinic_company.id}",
-                    is_active=True,
-                )
+                billing_party = BillingParty()
+                billing_party.company_id = company_id  # L'entreprise de transport
+                billing_party.type = BillingPartyType.CLINIC
+                billing_party.display_name = client.institution_name
+                billing_party.billing_address = billing_address or "Adresse non renseignée"
+                billing_party.contact_email = client.contact_email or user.email
+                billing_party.contact_phone = client.contact_phone or user.phone
+                billing_party.external_ref = f"clinic_company:{clinic_company.id}"
+                billing_party.is_active = True
                 db.session.add(billing_party)
                 db.session.flush()  # Pour obtenir billing_party.id
 
                 # Créer le mapping clinique → billing party
-                mapping = ClinicBillingPartyMapping(
-                    company_id=company_id,  # L'entreprise de transport
-                    clinic_company_id=clinic_company.id,  # La clinique (payeur)
-                    billing_party_id=billing_party.id,  # Le destinataire de facturation
-                    is_active=True,
-                )
+                mapping = ClinicBillingPartyMapping()
+                mapping.company_id = company_id  # L'entreprise de transport
+                mapping.clinic_company_id = clinic_company.id  # La clinique (payeur)
+                mapping.billing_party_id = billing_party.id  # Le destinataire de facturation
+                mapping.is_active = True
                 db.session.add(mapping)
 
                 logger.info(

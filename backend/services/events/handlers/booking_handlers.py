@@ -130,9 +130,16 @@ def handle_booking_updated(event: dict[str, Any]) -> None:
             booking_data["changes"] = event.get("changes")
 
             company_id = int(getattr(booking, "company_id", event.get("company_id") or 0) or 0)
+            status_val = booking_data.get("status")  # pour P0: detecter driver progress
 
-            # ✅ Si le chauffeur est l'initiateur, on notifie l'entreprise (et pas le chauffeur)
-            if actor_role == "driver" and actor_id == int(driver_id):
+            # ✅ P0: Si le chauffeur est l'initiateur OU si le statut indique une action chauffeur
+            # (en_route / in_progress / completed / return_completed), on notifie UNIQUEMENT
+            # l'entreprise. Jamais de push au chauffeur pour ses propres actions.
+            is_driver_actor = (
+                (actor_role == "driver" and actor_id is not None and int(actor_id) == int(driver_id))
+                or (str(status_val or "").lower() in {"en_route", "in_progress", "completed", "return_completed"})
+            )
+            if is_driver_actor:
                 if company_id:
                     fanout_booking_updated_to_company(
                         company_id=company_id,
@@ -141,9 +148,7 @@ def handle_booking_updated(event: dict[str, Any]) -> None:
                         send_push=True,
                     )
                 logger.debug(
-                    "[EventBus] BookingUpdatedEvent from driver %s -> notified company %s (booking %s)",
-                    driver_id,
-                    company_id,
+                    "[EventBus] BookingUpdatedEvent from driver / driver progress -> company only (no push driver), booking %s",
                     booking_id,
                 )
                 return

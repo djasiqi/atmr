@@ -39,11 +39,21 @@ const ClientEditForm = ({
       return genderStr;
     })(),
     avs_number: client.avs_number || '',
+    phone: client.phone || client.user_phone || client.user?.phone || '',
     contact_email: client.contact_email || '',
     contact_phone: client.contact_phone || '',
     domicile_address: client.domicile_address || client.domicile?.address || '',
     domicile_zip: client.domicile_zip || client.domicile?.zip || '',
     domicile_city: client.domicile_city || client.domicile?.city || '',
+    door_code: client.access?.door_code ?? client.door_code ?? '',
+    floor: client.access?.floor ?? client.floor ?? '',
+    access_notes: client.access?.notes ?? client.access_notes ?? '',
+    gp_name: client.gp?.name ?? client.gp_name ?? '',
+    gp_phone: client.gp?.phone ?? client.gp_phone ?? '',
+    billing_address: client.billing_address || '',
+    show_billing_info: !!(client.billing_address && String(client.billing_address).trim()),
+    default_billed_to_type: client.default_billing?.billed_to_type ?? client.default_billed_to_type ?? '',
+    default_billed_to_contact: client.default_billing?.billed_to_contact ?? client.default_billed_to_contact ?? '',
     preferential_rate: client.preferential_rate || '',
     is_active: client.is_active !== false,
   });
@@ -52,6 +62,10 @@ const ClientEditForm = ({
   const [domicileCoords, setDomicileCoords] = useState({
     lat: client.domicile_lat || client.domicile?.lat || null,
     lon: client.domicile_lon || client.domicile?.lon || null,
+  });
+  const [billingCoords, setBillingCoords] = useState({
+    lat: client.billing_lat ?? null,
+    lon: client.billing_lon ?? null,
   });
   const [expandedSections, setExpandedSections] = useState({
     essential: true,
@@ -63,10 +77,16 @@ const ClientEditForm = ({
   });
   const [billingPartiesScrollBottom, setBillingPartiesScrollBottom] = useState(16);
   const billingPartiesScrollRef = useRef(null);
+  const [showAdvancedBilling, setShowAdvancedBilling] = useState(
+    !!(
+      ((client.default_billing?.billed_to_type && client.default_billing.billed_to_type !== 'patient') ||
+        (client.default_billing?.billed_to_contact && client.default_billing.billed_to_contact.trim()))
+    )
+  );
 
   // Détecter les modifications
   useEffect(() => {
-    const originalData = {
+    const orig = {
       is_institution: client.is_institution || false,
       institution_name: client.institution_name || '',
       first_name: client.user_first_name || client.first_name || client.user?.first_name || '',
@@ -74,34 +94,42 @@ const ClientEditForm = ({
       residence_facility: client.residence_facility || '',
       birth_date: client.user_birth_date || client.user?.birth_date || '',
       gender: (() => {
-        const genderValue = client.user_gender || client.user?.gender || '';
-        if (!genderValue) return '';
-        const genderStr = String(genderValue).toLowerCase();
-        if (genderStr === 'homme' || genderStr === 'male') return 'male';
-        if (genderStr === 'femme' || genderStr === 'female') return 'female';
-        return genderStr;
+        const g = client.user_gender || client.user?.gender || '';
+        if (!g) return '';
+        const s = String(g).toLowerCase();
+        if (s === 'homme' || s === 'male') return 'male';
+        if (s === 'femme' || s === 'female') return 'female';
+        return s;
       })(),
-    avs_number: client.avs_number || '',
-    contact_email: client.contact_email || '',
-    contact_phone: client.contact_phone || '',
-    domicile_address: client.domicile_address || client.domicile?.address || '',
+      avs_number: client.avs_number || '',
+      phone: client.phone || client.user_phone || client.user?.phone || '',
+      contact_email: client.contact_email || '',
+      contact_phone: client.contact_phone || '',
+      domicile_address: client.domicile_address || client.domicile?.address || '',
       domicile_zip: client.domicile_zip || client.domicile?.zip || '',
       domicile_city: client.domicile_city || client.domicile?.city || '',
+      door_code: client.access?.door_code ?? client.door_code ?? '',
+      floor: client.access?.floor ?? client.floor ?? '',
+      access_notes: client.access?.notes ?? client.access_notes ?? '',
+      gp_name: client.gp?.name ?? client.gp_name ?? '',
+      gp_phone: client.gp?.phone ?? client.gp_phone ?? '',
+      billing_address: client.billing_address || '',
+      show_billing_info: !!(client.billing_address && String(client.billing_address).trim()),
+      default_billed_to_type: client.default_billing?.billed_to_type ?? client.default_billed_to_type ?? '',
+      default_billed_to_contact: client.default_billing?.billed_to_contact ?? client.default_billed_to_contact ?? '',
       preferential_rate: client.preferential_rate || '',
       is_active: client.is_active !== false,
     };
-    
-    const hasChanges = JSON.stringify(formData) !== JSON.stringify(originalData) ||
-                       JSON.stringify(domicileCoords) !== JSON.stringify({
-                         lat: client.domicile_lat || client.domicile?.lat || null,
-                         lon: client.domicile_lon || client.domicile?.lon || null,
-                       });
-    
+    const domOrig = { lat: client.domicile_lat || client.domicile?.lat || null, lon: client.domicile_lon || client.domicile?.lon || null };
+    const billOrig = { lat: client.billing_lat ?? null, lon: client.billing_lon ?? null };
+    const hasChanges = JSON.stringify(formData) !== JSON.stringify(orig) ||
+                       JSON.stringify(domicileCoords) !== JSON.stringify(domOrig) ||
+                       JSON.stringify(billingCoords) !== JSON.stringify(billOrig);
     if (hasUnsavedChanges !== hasChanges) {
       setHasUnsavedChanges(hasChanges);
       onUnsavedChangesChange?.(hasChanges);
     }
-  }, [formData, domicileCoords, client, hasUnsavedChanges, onUnsavedChangesChange]);
+  }, [formData, domicileCoords, billingCoords, client, hasUnsavedChanges, onUnsavedChangesChange]);
 
   useEffect(() => {
     if (expandedSections.billingParties && billingPartiesScrollRef.current) {
@@ -136,10 +164,13 @@ const ClientEditForm = ({
       domicile_city: parsed.city,
     }));
 
-    setDomicileCoords({
-      lat: item.lat ?? null,
-      lon: item.lon ?? null,
-    });
+    setDomicileCoords({ lat: item.lat ?? null, lon: item.lon ?? null });
+  };
+
+  const handleBillingAddressSelect = (item) => {
+    const full = item.label || '';
+    setFormData((prev) => ({ ...prev, billing_address: full }));
+    setBillingCoords({ lat: item.lat ?? null, lon: item.lon ?? null });
   };
 
   const handleSubmit = async (e) => {
@@ -163,34 +194,46 @@ const ClientEditForm = ({
     setError(null);
 
     try {
-      // Construire le payload de base sans les champs utilisateur
+      const hasSeparateBilling = formData.show_billing_info && formData.billing_address?.trim();
+      const fullDomicile = [formData.domicile_address, formData.domicile_zip, formData.domicile_city]
+        .filter(Boolean)
+        .join(', ');
+      const billingAddress = hasSeparateBilling
+        ? formData.billing_address.trim()
+        : fullDomicile || null;
+
       const payload = {
         is_institution: formData.is_institution,
-        institution_name: formData.institution_name,
-        residence_facility: formData.residence_facility,
-        avs_number: formData.avs_number,
-        contact_email: formData.contact_email,
-        contact_phone: formData.contact_phone,
-        domicile_address: formData.domicile_address,
-        domicile_zip: formData.domicile_zip,
-        domicile_city: formData.domicile_city,
-        preferential_rate: formData.preferential_rate,
+        institution_name: formData.institution_name || null,
+        residence_facility: formData.residence_facility || null,
+        avs_number: formData.avs_number?.trim() || null,
+        contact_email: formData.contact_email?.trim() || null,
+        contact_phone: formData.contact_phone?.trim() || null,
+        billing_address: billingAddress,
+        billing_lat: hasSeparateBilling ? billingCoords.lat : domicileCoords.lat,
+        billing_lon: hasSeparateBilling ? billingCoords.lon : domicileCoords.lon,
+        domicile_address: formData.domicile_address?.trim() || null,
+        domicile_zip: formData.domicile_zip?.trim() || null,
+        domicile_city: formData.domicile_city?.trim() || null,
+        preferential_rate: formData.preferential_rate ? parseFloat(formData.preferential_rate) : null,
         is_active: formData.is_active,
         domicile_lat: domicileCoords.lat,
         domicile_lon: domicileCoords.lon,
+        door_code: formData.door_code?.trim() || null,
+        floor: formData.floor?.trim() || null,
+        access_notes: formData.access_notes?.trim() || null,
+        gp_name: formData.gp_name?.trim() || null,
+        gp_phone: formData.gp_phone?.trim() || null,
+        default_billed_to_type: formData.default_billed_to_type || null,
+        default_billed_to_contact: formData.default_billed_to_contact?.trim() || null,
       };
 
-      // Ajouter les champs utilisateur uniquement si ce n'est pas une institution
       if (!formData.is_institution) {
-        // Ne pas envoyer gender si vide ou undefined
-        if (formData.gender && formData.gender.trim()) {
-          payload.gender = formData.gender;
-        }
-        payload.first_name = formData.first_name;
-        payload.last_name = formData.last_name;
-        if (formData.birth_date && formData.birth_date.trim()) {
-          payload.birth_date = formData.birth_date;
-        }
+        payload.first_name = formData.first_name?.trim() || null;
+        payload.last_name = formData.last_name?.trim() || null;
+        payload.phone = formData.phone?.trim() || null;
+        if (formData.gender?.trim()) payload.gender = formData.gender;
+        if (formData.birth_date?.trim()) payload.birth_date = formData.birth_date;
       }
 
       await onSave(payload);
@@ -407,11 +450,22 @@ const ClientEditForm = ({
                       />
                     </div>
                   </div>
+                  <div className={styles.formGroup}>
+                    <label htmlFor="phone" className={styles.label}>Téléphone</label>
+                    <input
+                      type="tel"
+                      id="phone"
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handleChange}
+                      className={styles.input}
+                      placeholder="+41 22 123 45 67"
+                      disabled={loading}
+                    />
+                  </div>
                   <div className={styles.formRowTwo}>
                     <div className={styles.formGroup}>
-                      <label htmlFor="contact_email" className={styles.label}>
-                        Email de contact
-                      </label>
+                      <label htmlFor="contact_email" className={styles.label}>Email de contact</label>
                       <input
                         type="email"
                         id="contact_email"
@@ -424,9 +478,7 @@ const ClientEditForm = ({
                       />
                     </div>
                     <div className={styles.formGroup}>
-                      <label htmlFor="contact_phone" className={styles.label}>
-                        Téléphone
-                      </label>
+                      <label htmlFor="contact_phone" className={styles.label}>Téléphone de contact</label>
                       <input
                         type="tel"
                         id="contact_phone"
@@ -501,13 +553,10 @@ const ClientEditForm = ({
               </div>
               <div className={styles.formRow}>
                 <div className={styles.formGroup}>
-                  <label htmlFor="domicile_address_street" className={styles.label}>
-                    Rue et numéro
-                  </label>
+                  <label htmlFor="domicile_address_street" className={styles.label}>Rue et numéro</label>
                   <input
                     type="text"
                     id="domicile_address_street"
-                    name="domicile_address"
                     value={formData.domicile_address}
                     className={styles.input}
                     readOnly
@@ -515,13 +564,10 @@ const ClientEditForm = ({
                   />
                 </div>
                 <div className={styles.formGroup}>
-                  <label htmlFor="domicile_zip" className={styles.label}>
-                    Code postal
-                  </label>
+                  <label htmlFor="domicile_zip" className={styles.label}>Code postal</label>
                   <input
                     type="text"
                     id="domicile_zip"
-                    name="domicile_zip"
                     value={formData.domicile_zip}
                     className={styles.input}
                     readOnly
@@ -529,13 +575,10 @@ const ClientEditForm = ({
                   />
                 </div>
                 <div className={styles.formGroup}>
-                  <label htmlFor="domicile_city" className={styles.label}>
-                    Ville
-                  </label>
+                  <label htmlFor="domicile_city" className={styles.label}>Ville</label>
                   <input
                     type="text"
                     id="domicile_city"
-                    name="domicile_city"
                     value={formData.domicile_city}
                     className={styles.input}
                     readOnly
@@ -543,6 +586,78 @@ const ClientEditForm = ({
                   />
                 </div>
               </div>
+              {!formData.is_institution && (
+                <>
+                  <div className={styles.formRow}>
+                    <div className={styles.formGroup}>
+                      <label htmlFor="door_code" className={styles.label}>Code porte</label>
+                      <input
+                        type="text"
+                        id="door_code"
+                        name="door_code"
+                        value={formData.door_code}
+                        onChange={handleChange}
+                        className={styles.input}
+                        placeholder="Ex: 4521"
+                        disabled={loading}
+                      />
+                    </div>
+                    <div className={styles.formGroup}>
+                      <label htmlFor="floor" className={styles.label}>Étage</label>
+                      <input
+                        type="text"
+                        id="floor"
+                        name="floor"
+                        value={formData.floor}
+                        onChange={handleChange}
+                        className={styles.input}
+                        placeholder="Ex: 2e étage"
+                        disabled={loading}
+                      />
+                    </div>
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label htmlFor="access_notes" className={styles.label}>Notes d&apos;accès</label>
+                    <textarea
+                      id="access_notes"
+                      name="access_notes"
+                      value={formData.access_notes}
+                      onChange={handleChange}
+                      className={styles.textarea}
+                      placeholder="Ex: appeler avant d'arriver…"
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className={styles.formRow}>
+                    <div className={styles.formGroup}>
+                      <label htmlFor="gp_name" className={styles.label}>Médecin traitant</label>
+                      <input
+                        type="text"
+                        id="gp_name"
+                        name="gp_name"
+                        value={formData.gp_name}
+                        onChange={handleChange}
+                        className={styles.input}
+                        placeholder="Nom du médecin"
+                        disabled={loading}
+                      />
+                    </div>
+                    <div className={styles.formGroup}>
+                      <label htmlFor="gp_phone" className={styles.label}>Téléphone du médecin</label>
+                      <input
+                        type="tel"
+                        id="gp_phone"
+                        name="gp_phone"
+                        value={formData.gp_phone}
+                        onChange={handleChange}
+                        className={styles.input}
+                        placeholder="+41 22 000 00 00"
+                        disabled={loading}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -563,6 +678,93 @@ const ClientEditForm = ({
           </button>
           {expandedSections.billing && (
             <div className={styles.accordionContent}>
+              {!formData.is_institution && (
+                <>
+                  <div className={styles.checkboxGroup}>
+                    <label className={styles.checkboxLabel}>
+                      <input
+                        type="checkbox"
+                        name="show_billing_info"
+                        checked={formData.show_billing_info}
+                        onChange={handleChange}
+                        disabled={loading}
+                      />
+                      <span className={styles.checkboxText}>
+                        <strong>Adresse de facturation différente</strong>
+                        <small>Par défaut, la facturation utilise l&apos;adresse de domicile</small>
+                      </span>
+                    </label>
+                  </div>
+                  {formData.show_billing_info && (
+                    <div className={styles.formGroup}>
+                      <label htmlFor="billing_address" className={styles.label}>Adresse de facturation</label>
+                      <AddressAutocomplete
+                        name="billing_address"
+                        value={formData.billing_address}
+                        onChange={(e) => {
+                          setBillingCoords({ lat: null, lon: null });
+                          setFormData((prev) => ({ ...prev, billing_address: e.target.value }));
+                        }}
+                        onSelect={handleBillingAddressSelect}
+                        placeholder="Ex: Avenue de la Gare 5, 1003, Lausanne"
+                        disabled={loading}
+                      />
+                      <small className={styles.hint}>💡 Si différente de l&apos;adresse de domicile</small>
+                    </div>
+                  )}
+                  <div className={styles.checkboxGroup}>
+                    <label className={styles.checkboxLabel}>
+                      <input
+                        type="checkbox"
+                        checked={showAdvancedBilling}
+                        onChange={(e) => setShowAdvancedBilling(e.target.checked)}
+                        disabled={loading}
+                      />
+                      <span className={styles.checkboxText}>
+                        <strong>Options de facturation avancées</strong>
+                        <small>Type de facturation par défaut et contact principal</small>
+                      </span>
+                    </label>
+                  </div>
+                  {showAdvancedBilling && (
+                    <div className={styles.formRow}>
+                      <div className={styles.formGroup}>
+                        <label htmlFor="default_billed_to_type" className={styles.label}>
+                          Type de facturation par défaut
+                        </label>
+                        <select
+                          id="default_billed_to_type"
+                          name="default_billed_to_type"
+                          value={formData.default_billed_to_type}
+                          onChange={handleChange}
+                          className={styles.input}
+                          disabled={loading}
+                        >
+                          <option value="">— Laisser par défaut —</option>
+                          <option value="patient">Patient</option>
+                          <option value="clinic">Clinique</option>
+                          <option value="insurance">Assurance</option>
+                        </select>
+                      </div>
+                      <div className={styles.formGroup}>
+                        <label htmlFor="default_billed_to_contact" className={styles.label}>
+                          Contact facturation par défaut
+                        </label>
+                        <input
+                          type="text"
+                          id="default_billed_to_contact"
+                          name="default_billed_to_contact"
+                          value={formData.default_billed_to_contact}
+                          onChange={handleChange}
+                          className={styles.input}
+                          placeholder="Ex: Service facturation"
+                          disabled={loading}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
               <div className={styles.formGroup}>
                 <label htmlFor="preferential_rate" className={styles.label}>
                   {formData.is_institution

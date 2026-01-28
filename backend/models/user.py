@@ -73,6 +73,10 @@ class User(db.Model):
     push_token: Mapped[str | None] = mapped_column(
         String(255), nullable=True, index=True
     )
+    # 🔔 Mode discret push : "detailed" (nom client sur lockscreen) | "discreet" (pas de nom)
+    push_privacy_mode: Mapped[str | None] = mapped_column(
+        String(20), nullable=True
+    )
 
     password: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[UserRole] = mapped_column(

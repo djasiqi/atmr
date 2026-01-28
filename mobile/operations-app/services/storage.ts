@@ -2,21 +2,22 @@
 // Helper pour le stockage sécurisé et non-sécurisé des tokens et données d'authentification
 
 import * as SecureStore from "expo-secure-store";
+import { debugAuthLog, isDebugAuthEnabled } from "@/services/authDebug";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Crypto from "expo-crypto";
 import type { DriverAccountInfo } from "@/services/enterpriseDispatch";
 
 // ============ Clés de stockage sécurisé (SecureStore) ============
+// Namespaces : auth.* = tokens chauffeur ; enterprise.* = tokens entreprise ; driver.* = rememberMe (voir rememberMeStorage)
 const SECURE_KEYS = {
   REFRESH_TOKEN: "auth.refresh_token",
-  ACCESS_TOKEN: "auth.access_token", // ✅ Amélioration : Access token aussi dans SecureStore
-  USER_PUBLIC_ID: "auth.user_public_id", // Optionnel, pour auto-login
-  // ✅ CORRECTION : Enterprise tokens dans SecureStore (au lieu d'AsyncStorage)
+  ACCESS_TOKEN: "auth.access_token",
+  USER_PUBLIC_ID: "auth.user_public_id",
   ENTERPRISE_TOKEN: "enterprise.token",
   ENTERPRISE_REFRESH: "enterprise.refresh",
-  // ✅ PHASE 1 : Mémorisation des identifiants (chiffrés)
+  // Legacy (préférez driver.* via rememberMeStorage pour le flux chauffeur)
   SAVED_EMAIL: "auth.saved_email",
-  SAVED_PASSWORD: "auth.saved_password_encrypted", // ⚠️ Chiffré avec expo-crypto
+  SAVED_PASSWORD: "auth.saved_password_encrypted",
 } as const;
 
 // ============ Cache en mémoire pour optimisation des performances ============
@@ -426,6 +427,12 @@ export const secureStorage = {
       // Mettre à jour le cache immédiatement
       cachedEnterpriseRefreshToken = token;
       enterpriseRefreshTokenCacheTime = Date.now();
+      if (isDebugAuthEnabled()) {
+        debugAuthLog("ent_refresh_write", {
+          key: SECURE_KEYS.ENTERPRISE_REFRESH,
+          len: token.length,
+        });
+      }
     } catch (error) {
       // ✅ CORRECTION : Gérer les erreurs de stockage (ex: Keychain/Keystore inaccessible)
       console.error("[Storage] ❌ Erreur lors de la sauvegarde du refresh token Enterprise:", error);
@@ -460,6 +467,13 @@ export const secureStorage = {
     cachedEnterpriseRefreshToken = token;
     enterpriseRefreshTokenCacheTime = now;
 
+    if (isDebugAuthEnabled()) {
+      debugAuthLog("ent_refresh_read", {
+        key: SECURE_KEYS.ENTERPRISE_REFRESH,
+        present: token ? 1 : 0,
+        len: token?.length ?? 0,
+      });
+    }
     return token;
   },
 

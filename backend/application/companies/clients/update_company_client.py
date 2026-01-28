@@ -8,7 +8,10 @@ from typing import Any, Protocol
 
 class _UserLike(Protocol):
     birth_date: Any
-    gender: Any  # ✅ Ajout du genre
+    gender: Any
+    first_name: Any
+    last_name: Any
+    phone: Any
 
 
 class _ClientLike(Protocol):
@@ -28,7 +31,14 @@ class _ClientLike(Protocol):
     domicile_lat: Any
     domicile_lon: Any
     preferential_rate: Any
-    avs_number: Any  # ✅ Ajout du numéro AVS
+    avs_number: Any
+    door_code: Any
+    floor: Any
+    access_notes: Any
+    gp_name: Any
+    gp_phone: Any
+    default_billed_to_type: Any
+    default_billed_to_contact: Any
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,6 +158,39 @@ class UpdateCompanyClientUseCase:
         # ✅ Numéro AVS
         if "avs_number" in data:
             client.avs_number = data["avs_number"] or None
+
+        # Accès logement
+        if "door_code" in data:
+            client.door_code = data["door_code"] or None
+        if "floor" in data:
+            client.floor = data["floor"] or None
+        if "access_notes" in data:
+            client.access_notes = data["access_notes"] or None
+
+        # Médecin traitant
+        if "gp_name" in data:
+            client.gp_name = data["gp_name"] or None
+        if "gp_phone" in data:
+            client.gp_phone = data["gp_phone"] or None
+
+        # Facturation par défaut
+        if "default_billed_to_type" in data:
+            v = (data["default_billed_to_type"] or "").strip().lower()
+            client.default_billed_to_type = (
+                v if v in ("patient", "clinic", "insurance") else "patient"
+            )
+        if "default_billed_to_contact" in data:
+            client.default_billed_to_contact = data["default_billed_to_contact"] or None
+
+        # Champs User (first_name, last_name, phone)
+        user = getattr(client, "user", None)
+        if user is not None:
+            if "first_name" in data:
+                user.first_name = (data["first_name"] or "").strip() or None
+            if "last_name" in data:
+                user.last_name = (data["last_name"] or "").strip() or None
+            if "phone" in data:
+                user.phone = (data["phone"] or "").strip() or None
 
         # Champ User.birth_date (format YYYY-MM-DD)
         if "birth_date" in data and getattr(client, "user", None):

@@ -310,12 +310,22 @@ export function getCompanySocket() {
           const upgradeError = typeof errorDescription === 'string' ? errorDescription.includes('upgrade') : false;
           sendDebugLog({location:'companySocket.js:connect_error',message:'Connection error received',data:{error_message:err?.message||String(err),error_type:err?.type,error_description:errorDescription,error_description_type:typeof errorDescription,has_token:!!getAccessToken(),transport:socket.io.engine?.transport?.name,upgrade_error:upgradeError,socket_url:socketUrl,socket_path:socketOptions.path,current_transport:socket.io?.engine?.transport?.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'});
           // #endregion
+          const msg = err?.message || err?.description || (err?.data && err.data.message) || String(err || '');
           console.error(JSON.stringify({
             event: 'socket_connect_error',
-            error: err?.message || String(err),
+            error: msg,
             timestamp: new Date().toISOString()
           }));
           connectPromise = null;
+          // Backend envoie maintenant des codes via ConnectionRefusedError (AUTH_REQUIRED, TOKEN_EXPIRED, etc.)
+          // L’app peut écouter socket_connection_rejected pour afficher un toast / logout.
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('socket_connection_rejected', {
+                detail: { message: msg, code: msg, originalError: err },
+              })
+            );
+          }
           reject(err);
         });
 

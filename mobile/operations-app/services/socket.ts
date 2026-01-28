@@ -6,8 +6,15 @@ import { Platform } from "react-native";
 import Constants from "expo-constants";
 import { baseURL, getAssignedTrips, getCompanyMessages, type Booking, type Message } from "./api";
 import { resolveBookingConflicts, resolveMessageConflicts, type Conflict } from "./conflictResolution";
+import { getSessionDiagHeaderValue, pushSessionEvent, setConnectionStateSuffix } from "./sessionJournal";
+import type { SessionEvent } from "./sessionJournal";
 
 type SocketRole = "driver" | "enterprise";
+
+/** P0.3+ État connexion socket pour UI (ONLINE / RECONNECTING / OFFLINE). Jamais de logout sur disconnect. */
+export type ConnectionState = "ONLINE" | "RECONNECTING" | "OFFLINE";
+let connectionState: ConnectionState = "OFFLINE";
+let explicitDisconnect = false;
 
 // ✅ EventEmitter simple pour notifier les composants du resync
 class SimpleEventEmitter {
@@ -199,29 +206,37 @@ let networkUnsubscribe: (() => void) | null = null; // NetInfo unsubscribe funct
 
 const IS_DEV = __DEV__;
 
-function buildOptions(token: string) {
+/** R1: payload auth socket pour corrélation backend (device_id, session_diag). */
+export type SocketAuthExtras = { device_id?: string; session_diag?: string | null };
+
+function buildOptions(
+  token: string,
+  role: SocketRole = "driver",
+  extras?: SocketAuthExtras
+) {
   // ✅ Jitter anti-storm: ajouter variation aléatoire pour éviter reconnexions simultanées
-  const jitterDelay = Math.random() * 1000; // 0-1000ms (augmenté)
-  const jitterMax = Math.random() * 2000; // 0-2000ms (augmenté)
-  
+  const jitterDelay = Math.random() * 1000; // 0-1000ms
+  const jitterMax = Math.random() * 2000; // 0-2000ms
+  // ✅ P0.3: driver = retry infini; enterprise = 10 tentatives
+  const reconnectionAttempts = role === "driver" ? Infinity : 10;
+  const auth: Record<string, unknown> = { token };
+  if (extras?.device_id != null) auth.device_id = extras.device_id;
+  if (extras?.session_diag != null) auth.session_diag = extras.session_diag;
   const base = {
     path: "/socket.io", // ⚠️ sans slash final
-    auth: { token },
+    auth,
     extraHeaders: { Authorization: `Bearer ${token}` },
     reconnection: true,
-    reconnectionAttempts: 10,  // Max 10 tentatives (au lieu de Infinity)
-    reconnectionDelay: 5000 + jitterDelay,  // ✅ Augmenté de 1s à 5s + jitter (5000-6000ms)
-    reconnectionDelayMax: 30000 + jitterMax,  // ✅ Augmenté de 10s à 30s + jitter (30000-32000ms)
+    reconnectionAttempts,
+    reconnectionDelay: 5000 + jitterDelay,
+    reconnectionDelayMax: 30000 + jitterMax,
     timeout: 20000,
-    forceNew: false,  // Réutiliser connexion existante
-    // ✅ FIX: Toujours inclure polling comme fallback (même en HTTPS)
-    // React Native peut avoir des problèmes avec websocket sur certains réseaux
-    transports: ["websocket", "polling"], // ✅ Toujours inclure polling
+    forceNew: false,
+    transports: ["websocket", "polling"],
     upgrade: true,
     rememberUpgrade: true,
     secure: IS_SECURE,
   };
-  // ✅ Polling toujours inclus dans base, plus besoin de logique conditionnelle
   return base;
 }
 
@@ -395,20 +410,52 @@ export async function connectSocket(
     console.log("✅ Message event listeners setup complete");
   }
 
+  // ✅ P0.3: Un disconnect ultérieur est "explicite" seulement si disconnectSocket() a été appelé
+  explicitDisconnect = false;
+
+  if (socketRole === "driver") {
+    pushSessionEvent("SOCKET_CONNECTING");
+    setConnectionStateSuffix("RECONN");
+    connectionState = "RECONNECTING";
+  }
+
+  // ✅ R1: device_id + session_diag dans socket.auth pour corrélation backend (connect/disconnect)
+  let device_id: string | undefined;
+  let session_diag: string | null = null;
+  if (socketRole === "driver") {
+    try {
+      const { asyncStorage } = await import("./storage");
+      device_id = await asyncStorage.getOrCreateDeviceId();
+    } catch {
+      // R3: storage edge-case — pas de logout, socket continue sans device_id, event pour enquête
+      device_id = undefined;
+      pushSessionEvent("DEVICE_ID_ERROR");
+    }
+    session_diag = getSessionDiagHeaderValue(); // peut être null, auth envoyé quand même (token seul minimum)
+  }
+
   console.log(`[connectSocket] 📍 Avant création socket, SOCKET_ORIGIN=${SOCKET_ORIGIN}`);
+  
+  const authExtras: SocketAuthExtras =
+    socketRole === "driver" ? { device_id, session_diag: session_diag ?? undefined } : {};
   
   connectPromise = new Promise<Socket>((resolve, reject) => {
     try {
       // ✅ Normalisation finale avant l'appel io() pour éviter //socket.io
       const normalizedOrigin = SOCKET_ORIGIN.replace(/\/+$/, "").trim();
+      const opts = buildOptions(token, socketRole ?? "driver", authExtras);
       console.log(`[connectSocket] 📍 Appel io() avec SOCKET_ORIGIN=${normalizedOrigin}`);
-      console.log(`[connectSocket] 📍 Options:`, buildOptions(token));
       // ⚠️ Utiliser l'origine sans /api sinon 404 sur /api/socket.io
-      // ✅ S'assurer que l'origine n'a pas de slash final pour éviter //socket.io
-      socket = io(normalizedOrigin, buildOptions(token));
+      socket = io(normalizedOrigin, opts);
       console.log(`[connectSocket] ✅ Socket créé:`, socket ? `id=${socket.id || 'pending'}` : 'NULL');
 
       socket.on("connect", async () => {
+        // ✅ P0.3: SessionEvents + état UI (ONLINE / RECONN / OFF) — jamais de logout sur disconnect
+        if (socketRole === "driver") {
+          connectionState = "ONLINE";
+          setConnectionStateSuffix("ONLINE");
+          pushSessionEvent("SOCKET_CONNECTED");
+        }
         // ✅ Logs structurés
         console.log(JSON.stringify({
           event: "socket_connect",
@@ -723,6 +770,14 @@ export async function connectSocket(
       });
 
       socket.on("disconnect", (reason) => {
+        // ✅ P0.3: SessionEvents — jamais de logout sur disconnect
+        if (socketRole === "driver") {
+          pushSessionEvent(("SOCKET_DISCONNECTED:" + String(reason)) as SessionEvent);
+          if (!explicitDisconnect) {
+            connectionState = "RECONNECTING";
+            setConnectionStateSuffix("RECONN");
+          }
+        }
         // ✅ Logs structurés
         console.log(JSON.stringify({
           event: "socket_disconnect",
@@ -731,7 +786,7 @@ export async function connectSocket(
         }));
         connectPromise = null;
         
-        // ✅ Ne pas reconnecter si serveur a déconnecté volontairement
+        // ✅ Ne pas reconnecter si serveur a déconnecté volontairement (io server disconnect / unauthorized)
         const reasonStr = String(reason);
         if (reasonStr === "io server disconnect" || reasonStr === "unauthorized") {
           console.log(JSON.stringify({
@@ -739,16 +794,27 @@ export async function connectSocket(
             reason: reasonStr,
             timestamp: new Date().toISOString()
           }));
-          // Désactiver la reconnexion automatique
           if (socket && socket.io) {
             (socket.io.opts as any).reconnection = false;
           }
-          return; // Pas de reconnexion auto
+          return;
+        }
+      });
+
+      // ✅ P0.3: reconnect_attempt (Manager socket.io) — SessionEvent pour observabilité
+      (socket as any).io?.on?.("reconnect_attempt", (n: number) => {
+        if (socketRole === "driver") {
+          pushSessionEvent(("SOCKET_RECONNECT_ATTEMPT:" + n) as SessionEvent);
         }
       });
 
       // ✅ Handler reconnect : rejoin automatiquement les rooms après reconnexion
       socket.on("reconnect", (attempt) => {
+        if (socketRole === "driver") {
+          pushSessionEvent("SOCKET_RECONNECT_SUCCESS");
+          connectionState = "ONLINE";
+          setConnectionStateSuffix("ONLINE");
+        }
         // ✅ Logs structurés
         console.log(JSON.stringify({
           event: "socket_reconnect",
@@ -779,7 +845,12 @@ export async function connectSocket(
       });
 
       socket.on("connect_error", (err: any) => {
-        const errorMsg = err?.message || String(err);
+        const errorMsg = (err?.message || String(err)).slice(0, 200);
+        if (socketRole === "driver") {
+          pushSessionEvent(("SOCKET_CONNECT_ERROR:" + errorMsg) as SessionEvent);
+          setConnectionStateSuffix("RECONN");
+          connectionState = "RECONNECTING";
+        }
         const isRateLimit = errorMsg.includes("rate limit") || 
                            errorMsg.includes("Trop de tentatives") ||
                            errorMsg.includes("retry_after");
@@ -1019,17 +1090,18 @@ export function getSocket(): Socket | null {
 }
 
 export function disconnectSocket() {
+  // ✅ P0.3: Logout explicite uniquement — jamais de logout sur simple disconnect
+  explicitDisconnect = true;
+  connectionState = "OFFLINE";
+  setConnectionStateSuffix("OFF");
   try {
     socket?.off();
     socket?.disconnect();
     
-    // ✅ Nettoyer heartbeat interval
     if (heartbeatInterval) {
       clearInterval(heartbeatInterval);
       heartbeatInterval = null;
     }
-    
-    // ✅ Nettoyer listener réseau
     if (networkUnsubscribe) {
       networkUnsubscribe();
       networkUnsubscribe = null;
@@ -1051,6 +1123,11 @@ export function disconnectSocket() {
     connectPromise = null;
     lastHeartbeat = Date.now();
   }
+}
+
+/** P0.3: État connexion pour l'UI (ONLINE / RECONNECTING / OFFLINE). OFFLINE = logout explicite ou jamais connecté. */
+export function getConnectionState(): ConnectionState {
+  return connectionState;
 }
 
 // ✅ Heartbeat métier : envoie métadonnées métier toutes les 60s

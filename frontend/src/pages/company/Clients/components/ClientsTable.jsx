@@ -1,6 +1,7 @@
 import React from 'react';
 import styles from './ClientsTable.module.css';
 import ClientTableRowActions from './ClientTableRowActions';
+import { getClientDisplayName } from '../../../../utils/clientSearchUtils';
 
 const ClientsTable = ({ clients, onSelect, onEdit, onDelete, selectedClientId, onRefresh: _onRefresh }) => {
   if (!clients || clients.length === 0) {
@@ -38,26 +39,7 @@ const ClientsTable = ({ clients, onSelect, onEdit, onDelete, selectedClientId, o
         </thead>
         <tbody>
           {clients.map((client) => {
-            // Déterminer le nom à afficher
-            // Le backend retourne first_name, last_name et full_name depuis Client.serialize
-            let displayName = `Client #${client.id}`;
-            
-            if (client.is_institution && client.institution_name) {
-              displayName = client.institution_name;
-            } else {
-              // Utiliser full_name si disponible, sinon construire depuis first_name et last_name
-              if (client.full_name && client.full_name !== 'Nom non renseigné') {
-                displayName = client.full_name;
-              } else {
-                const firstName = client.first_name || '';
-                const lastName = client.last_name || '';
-                
-                if (firstName || lastName) {
-                  displayName = `${firstName} ${lastName}`.trim();
-                }
-              }
-            }
-            
+            const displayName = getClientDisplayName(client);
             const isSelected = selectedClientId === client.id;
             const cityZip = client.domicile?.city
               ? `${client.domicile.zip || ''} ${client.domicile.city}`.trim()

@@ -119,12 +119,20 @@ def notify_booking_assigned(booking: Booking) -> None:
     company_id = int(getattr(booking, "company_id", 0) or 0)
     booking_id = getattr(booking, "id", None)
     driver_id = getattr(booking, "driver_id", None)
+    booking_data: Dict[str, Any] | None = None
+    try:
+        booking_data = (
+            booking.to_dict() if hasattr(booking, "to_dict") else {"id": booking_id}
+        )
+    except (ValueError, TypeError, AttributeError):
+        booking_data = {"id": booking_id}
 
-    # ✅ Utiliser le service centralisé de fan-out
+    # ✅ Utiliser le service centralisé de fan-out (booking_data → message métier avec client_name)
     fanout_booking_assigned_to_company(
         company_id=company_id,
         booking_id=booking_id or 0,
         driver_id=driver_id,
+        booking_data=booking_data,
     )
 
 

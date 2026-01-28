@@ -4,6 +4,19 @@
 import * as LocalAuthentication from "expo-local-authentication";
 import { loginDriver } from "@/services/api";
 import { secureStorage } from "@/services/storage";
+import {
+  getRememberedCredentials,
+  setRememberMe,
+  clearRememberedCredentials,
+} from "@/utils/rememberMeStorage";
+
+/** Lancée quand aucun identifiant mémorisé alors que la biométrie est proposée → éviter boucle UX "biométrie échoue sans raison". */
+export class BiometricNoCredentialsError extends Error {
+  constructor() {
+    super("Identifiants mémorisés indisponibles.");
+    this.name = "BiometricNoCredentialsError";
+  }
+}
 
 /**
  * ✅ PHASE 2 : Vérifie si l'authentification biométrique est disponible sur l'appareil
@@ -96,8 +109,10 @@ export async function authenticateWithBiometric(
 
 /**
  * ✅ PHASE 2 : Auto-login avec authentification biométrique
- * Récupère les identifiants sauvegardés, demande l'authentification biométrique,
- * puis procède au login automatique si l'authentification réussit
+ * Règle : la biométrie dépend de "Se souvenir de moi" (identifiants mémorisés dans rememberMeStorage).
+ * useAuth n'appelle cette fonction que lorsqu'aucun token valide n'est disponible (refresh échoué ou absent),
+ * donc on n'exige jamais le mot de passe si un token est disponible.
+ * Récupère les identifiants mémorisés, demande la biométrie, puis login si succès.
  * @param options Options d'authentification biométrique
  * @returns true si l'auto-login a réussi, false sinon
  */
@@ -119,13 +134,12 @@ export async function autoLoginWithBiometric(
       return false;
     }
 
-    // 2. Récupérer les identifiants sauvegardés
-    const savedCreds = await secureStorage.getSavedCredentials();
-    if (!savedCreds.email || !savedCreds.password) {
-      if (__DEV__) {
-        console.log("[BiometricAuth] ⚠️ Aucun identifiant sauvegardé, auto-login impossible");
-      }
-      return false;
+    // 2. Récupérer les identifiants mémorisés (SecureStore, "Se souvenir de moi")
+    const savedCreds = await getRememberedCredentials();
+    if (!savedCreds?.email || !savedCreds?.password) {
+      await setRememberMe(false);
+      await clearRememberedCredentials();
+      throw new BiometricNoCredentialsError();
     }
 
     // 3. Demander l'authentification biométrique
@@ -166,10 +180,8 @@ export async function autoLoginWithBiometric(
     }
     return true;
   } catch (error: any) {
+    if (error instanceof BiometricNoCredentialsError) throw error;
     console.error("[BiometricAuth] ❌ Erreur lors de l'auto-login avec biométrie:", error);
-    
-    // Ne pas exposer les détails de l'erreur à l'utilisateur
-    // (pour éviter de révéler si c'est un problème d'identifiants ou de réseau)
     return false;
   }
 }

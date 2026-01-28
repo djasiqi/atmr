@@ -52,7 +52,7 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
     const [allDrivers, setAllDrivers] = useState<DriverSuggestion[]>([]);
     const [loadingAllDrivers, setLoadingAllDrivers] = useState(false);
 
-    // ✅ Marquer une course urgente
+    // ✅ Marquer une course urgente (autorisé uniquement si pickup_at sentinelle 00:00)
     const handleMarkUrgent = useCallback(
         async (rideId: string, extraDelayMinutes = 15) => {
             if (markingUrgent === rideId) return;
@@ -68,6 +68,10 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
                 );
                 await onSuccess?.();
             } catch (error: any) {
+                if (error?.response?.status === 409) {
+                    Alert.alert("Course déjà planifiée", "Course déjà planifiée (urgent indisponible).");
+                    return;
+                }
                 const message =
                     error?.response?.data?.error ??
                     error?.message ??

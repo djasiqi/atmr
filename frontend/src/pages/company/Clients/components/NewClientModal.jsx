@@ -31,6 +31,7 @@ const NewClientModal = ({ onClose, onSave }) => {
     gp_phone: '',
     default_billed_to_type: '',
     default_billed_to_contact: '',
+    is_active: true,
   });
 
   const [loading, setLoading] = useState(false);
@@ -373,8 +374,9 @@ const NewClientModal = ({ onClose, onSave }) => {
       payload.contact_email = formData.contact_email?.trim() || null;
       payload.contact_phone = formData.contact_phone?.trim() || null;
 
-      // Nettoyer le payload : supprimer les valeurs null/undefined/vides
+      // Nettoyer le payload : supprimer les valeurs null/undefined/vides (sauf is_active)
       Object.keys(payload).forEach((key) => {
+        if (key === 'is_active') return;
         if (payload[key] === null || payload[key] === undefined || payload[key] === '') {
           delete payload[key];
         }
@@ -982,6 +984,25 @@ const NewClientModal = ({ onClose, onSave }) => {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Statut */}
+          <div className={styles.section}>
+            <div className={styles.checkboxGroup}>
+              <label className={styles.checkboxLabel}>
+                <input
+                  type="checkbox"
+                  name="is_active"
+                  checked={formData.is_active}
+                  onChange={handleChange}
+                  disabled={loading}
+                />
+                <span className={styles.checkboxText}>
+                  <strong>Client actif</strong>
+                  <small>Les clients inactifs n&apos;apparaissent pas dans les sélections</small>
+                </span>
+              </label>
+            </div>
           </div>
 
           {/* Options de création */}

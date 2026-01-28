@@ -161,6 +161,24 @@ module.exports = {
           return middlewares;
         };
       }
+
+      // ✅ Ne pas afficher l'overlay pour le rejet Socket.IO uniquement (python-socketio #590)
+      // Condition stricte : message "Connection rejected" ET stack/message indique socket.io ou engine.io
+      config.client = config.client || {};
+      const baseOverlay = typeof config.client.overlay === 'object' ? config.client.overlay : {};
+      config.client.overlay = {
+        ...baseOverlay,
+        runtimeErrors: (error) => {
+          const msg = (error && error.message) ? String(error.message) : String(error);
+          const stack = (error && error.stack) ? String(error.stack) : '';
+          const fromSocket = stack.includes('socket.io') || stack.includes('engine.io') || msg.includes('socket.io') || msg.includes('engine.io');
+          if (msg.includes('Connection rejected by server') && fromSocket) return false;
+          if (typeof baseOverlay.runtimeErrors === 'function') {
+            return baseOverlay.runtimeErrors(error);
+          }
+          return true;
+        },
+      };
       
       return config;
     };

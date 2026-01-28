@@ -19,6 +19,7 @@ from models import (
     Company,
     CompanyBillingSettings,
     CompanyPlanningSettings,
+    User,
     UserRole,
 )
 from routes.companies import get_company_from_token
@@ -90,6 +91,16 @@ operational_settings_model = settings_ns.model(
         "dispatch_enabled": fields.Boolean(description="Dispatch automatique activé"),
         "latitude": fields.Float(description="Latitude du siège", allow_null=True),
         "longitude": fields.Float(description="Longitude du siège", allow_null=True),
+    },
+)
+
+push_privacy_model = settings_ns.model(
+    "PushPrivacy",
+    {
+        "push_privacy_mode": fields.String(
+            description="detailed = nom client sur lockscreen ; discreet = pas de nom",
+            enum=["detailed", "discreet"],
+        ),
     },
 )
 
@@ -207,6 +218,54 @@ class OperationalSettings(Resource):
             db.session.rollback()
             logger.error("[Settings] Error updating operational settings: %s", e)
             return APIErrorHandler.handle_exception(e, logger)
+
+
+@settings_ns.route("/push-privacy")
+class PushPrivacySettings(Resource):
+    """Réglage mode discret pour les push (pas de nom client sur lockscreen).
+
+    Contrôle d'accès / multi-tenant :
+    - @jwt_required() + @role_required(UserRole.company).
+    - get_company_from_token() détermine la company (donc le user = company.user_id).
+    - user = User.query.get(company.user_id) : aucun user_id ni company_id dans le body.
+    - Seules valeurs acceptées en PATCH : "detailed" | "discreet" (après .strip().lower()), sinon 400.
+    """
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        """Récupérer le mode push (detailed | discreet)."""
+        company, err, code = get_company_from_token()
+        if err:
+            return err, code
+        user = User.query.get(company.user_id) if company else None
+        if not user:
+            return {"error": "User not found"}, HTTPStatus.NOT_FOUND
+        mode = getattr(user, "push_privacy_mode", None) or "detailed"
+        return {"push_privacy_mode": mode}, 200
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    @settings_ns.expect(push_privacy_model)
+    def patch(self):
+        """Mettre à jour le mode push (detailed | discreet)."""
+        company, err, code = get_company_from_token()
+        if err:
+            return err, code
+        user = User.query.get(company.user_id) if company else None
+        if not user:
+            return {"error": "User not found"}, HTTPStatus.NOT_FOUND
+        data = request.get_json(silent=True) or {}
+        mode = (data.get("push_privacy_mode") or "").strip().lower()
+        if mode not in ("detailed", "discreet"):
+            return (
+                {"error": "push_privacy_mode doit être 'detailed' ou 'discreet'"},
+                HTTPStatus.BAD_REQUEST,
+            )
+        if hasattr(user, "push_privacy_mode"):
+            user.push_privacy_mode = mode
+            db.session.commit()
+        return {"push_privacy_mode": mode}, 200
 
 
 @settings_ns.route("/billing")

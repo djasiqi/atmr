@@ -18,6 +18,11 @@ import DeleteConfirmModal from './components/DeleteConfirmModal';
 import ClientDrawer from './components/ClientDrawer';
 import styles from './CompanyClients.module.css';
 import useUrlSearchSync from '../../../hooks/useUrlSearchSync';
+import {
+  normalizeText,
+  buildSearchHaystack,
+  getClientDisplayName,
+} from '../../../utils/clientSearchUtils';
 
 const CompanyClients = () => {
   const [clients, setClients] = useState([]);
@@ -113,100 +118,40 @@ const CompanyClients = () => {
     }
   }, [searchParams]);
 
-  // Filtrer et trier les clients
-  const filteredAndSortedClients = React.useMemo(() => {
-    // 1. Filtrer
-    let filtered = clients.filter((client) => {
-      // Filtre par texte - Recherche complète et insensible à la casse
-      const matchesSearch = searchTerm
-        ? (() => {
-            const search = searchTerm.toLowerCase().trim();
-            
-            // Fonction helper pour normaliser et chercher (enlever accents)
-            const normalizeText = (text) => {
-              return (text || '')
-                .toLowerCase()
-                .normalize('NFD')
-                .replace(/[\u0300-\u036f]/g, ''); // Enlever les accents
-            };
-            
-            const searchNormalized = normalizeText(searchTerm);
-            
-            // ✅ VRAIS CHAMPS du backend (voir ClientDTO.to_dict() et ClientsTable.jsx)
-            const firstName = client.user_first_name || '';
-            const lastName = client.user_last_name || '';
-            const fullName = `${firstName} ${lastName}`.trim();
-            const institutionName = client.institution_name || '';
-            const email = client.contact_email || '';
-            const phone = client.contact_phone || '';
-            
-            // Adresse : client.domicile.address + zip + city
-            const address = client.domicile?.address || client.billing_address || '';
-            const zip = client.domicile?.zip || '';
-            const city = client.domicile?.city || '';
-            const fullAddress = `${address} ${zip} ${city}`.trim();
-            
-            // ID client
-            const clientId = String(client.id || '');
-            
-            // ✅ Tous les champs cherchables (VRAIS champs du backend)
-            const textFields = [
-              fullName,
-              firstName,
-              lastName,
-              institutionName,
-              email,
-              phone,
-              address,
-              fullAddress,
-              zip,
-              city,
-              clientId,
-            ];
-            
-            // Rechercher dans tous les champs (avec et sans normalisation)
-            return textFields.some((field) => {
-              if (!field) return false;
-              const fieldLower = String(field).toLowerCase();
-              const fieldNormalized = normalizeText(field);
-              
-              // Recherche avec et sans accents
-              return (
-                fieldLower.includes(search) ||
-                fieldNormalized.includes(searchNormalized)
-              );
-            });
-          })()
-        : true;
+  // Pré-calcul des haystacks normalisés (une fois par liste clients) — perf 563+ clients
+  const clientsWithHaystack = useMemo(
+    () =>
+      clients.map((c) => ({
+        client: c,
+        haystackNorm: normalizeText(buildSearchHaystack(c)),
+      })),
+    [clients]
+  );
 
-      // Filtre par type
+  // Filtrer et trier les clients
+  const filteredAndSortedClients = useMemo(() => {
+    // 1. Filtrer (réutilise haystackNorm, normalise le query une seule fois)
+    const qNorm = searchTerm ? normalizeText(searchTerm) : '';
+    let filtered = clientsWithHaystack.filter(({ client, haystackNorm }) => {
+      const matchesSearch = !qNorm || haystackNorm.includes(qNorm);
       const matchesType =
         filterType === 'all'
           ? true
           : filterType === 'institution'
             ? client.is_institution
             : !client.is_institution;
-
       return matchesSearch && matchesType;
     });
 
-    // 2. Trier
-    filtered.sort((a, b) => {
+    // 2. Trier (sur les clients)
+    const list = filtered.map(({ client }) => client);
+    list.sort((a, b) => {
       let compareA, compareB;
 
       switch (sortBy) {
         case 'name':
-          // ✅ Utiliser les VRAIS champs : user_first_name et user_last_name
-          compareA = (
-            a.institution_name ||
-            `${a.user_first_name || ''} ${a.user_last_name || ''}`.trim() ||
-            ''
-          ).toLowerCase();
-          compareB = (
-            b.institution_name ||
-            `${b.user_first_name || ''} ${b.user_last_name || ''}`.trim() ||
-            ''
-          ).toLowerCase();
+          compareA = getClientDisplayName(a).toLowerCase();
+          compareB = getClientDisplayName(b).toLowerCase();
           break;
         case 'email':
           compareA = (a.contact_email || '').toLowerCase();
@@ -225,8 +170,8 @@ const CompanyClients = () => {
       return 0;
     });
 
-    return filtered;
-  }, [clients, searchTerm, filterType, sortBy, sortOrder]);
+    return list;
+  }, [clientsWithHaystack, searchTerm, filterType, sortBy, sortOrder]);
 
   // 3. Paginer
   const totalPages = Math.ceil(filteredAndSortedClients.length / itemsPerPage);

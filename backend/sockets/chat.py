@@ -20,10 +20,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, cast
 from typing import cast as tcast
 
-import jwt.exceptions as jwt_exceptions  # pyright: ignore[reportMissingImports]
+import jwt.exceptions as jwt_exceptions
 from flask import current_app, request, session
-from flask_jwt_extended import decode_token  # pyright: ignore[reportMissingImports]
-from flask_socketio import SocketIO, emit, join_room  # pyright: ignore[reportMissingModuleSource]
+from flask_jwt_extended import decode_token
+from flask_socketio import SocketIO, emit, join_room
+from socketio.exceptions import ConnectionRefusedError as SocketConnectionRefusedError
 
 from ext import db, redis_client
 from models import Company, Driver, Message, SenderRole, User, UserRole
@@ -444,7 +445,7 @@ def init_chat_socket(socketio: SocketIO):
     # #endregion
 
     @socketio.on("connect", namespace="/")
-    def handle_connect(auth: dict[str, Any] | None) -> bool:  # noqa: PLR0911
+    def handle_connect(auth: dict[str, Any] | None) -> bool:
         # #region agent log - DÉSACTIVÉ EN PRODUCTION
         if os.getenv("FLASK_ENV") == "development":
             try:
@@ -476,6 +477,10 @@ def init_chat_socket(socketio: SocketIO):
                 "Trace-Id"
             )
             now = datetime.now(UTC)
+            # R1: device_id + session_diag depuis socket.auth pour corrélation (connect/disconnect)
+            auth_dict = auth if isinstance(auth, dict) else {}
+            device_id = auth_dict.get("device_id")
+            session_diag = auth_dict.get("session_diag")
 
             # ✅ Log origin pour debug CORS
             origin = request.headers.get("Origin") or request.headers.get("ORIGIN")
@@ -567,16 +572,11 @@ def init_chat_socket(socketio: SocketIO):
                         "request_trace_id": trace_id,
                     },
                 )
-                emit(
-                    "error",
-                    {
-                        "error": f"Trop de tentatives de connexion. Réessayez dans {retry_after or 60} secondes.",
-                        "retry_after": retry_after or 60,
-                    },
-                )
                 ws_metrics.on_error("rate_limit_exceeded")
                 ws_metrics.on_rate_limit_hit("connect")
-                return False
+                raise SocketConnectionRefusedError(
+                    "RATE_LIMIT", {"retry_after": retry_after or 60}
+                )
 
             # ✅ Logs conditionnels (désactiver en production)
             is_prod = current_app.config.get("ENV") == "production"
@@ -727,16 +727,8 @@ def init_chat_socket(socketio: SocketIO):
                         "request_trace_id": trace_id,
                     },
                 )
-                emit(
-                    "unauthorized",
-                    {
-                        "error": "Token JWT manquant",
-                        "reason": "token_missing",
-                        "hint": "Vérifiez que le token est présent dans Authorization header, cookie access_token, ou payload auth.token",
-                    },
-                )
                 ws_metrics.on_error("token_missing")
-                return False
+                raise SocketConnectionRefusedError("AUTH_REQUIRED")
 
             # ✅ Log conditionnel (uniquement en dev)
             try:
@@ -918,20 +910,8 @@ def init_chat_socket(socketio: SocketIO):
                         },
                     )
 
-                # ✅ Toujours émettre l'erreur au client (même si on ne log pas)
-                emit(
-                    "unauthorized",
-                    {
-                        "error": "Token expiré. Veuillez vous reconnecter.",
-                        "reason": "token_expired",
-                        "hint": "Utilisez refresh-token pour obtenir un nouveau token avant de reconnecter.",
-                        "retry_after": 5,  # ✅ Indiquer au client d'attendre 5s avant de réessayer
-                    },
-                )
                 ws_metrics.on_error("token_expired")
-                # ✅ Retourner False pour refuser la connexion proprement
-                # Note: L'upgrade WebSocket a déjà eu lieu, mais Flask-SocketIO fermera la connexion
-                return False
+                raise SocketConnectionRefusedError("TOKEN_EXPIRED", {"retry_after": 5}) from None
             except jwt_exceptions.InvalidAudienceError:
                 logger.info(
                     "socket_connect_error",
@@ -943,9 +923,8 @@ def init_chat_socket(socketio: SocketIO):
                         "request_trace_id": trace_id,
                     },
                 )
-                emit("unauthorized", {"error": "Token invalide (audience incorrecte)."})
                 ws_metrics.on_error("token_invalid_audience")
-                return False
+                raise SocketConnectionRefusedError("AUTH_INVALID") from None
             except Exception as e:
                 # ✅ Dev-only: afficher la cause exacte (sinon "Token invalide." est trop vague)
                 with suppress(Exception):
@@ -995,12 +974,8 @@ def init_chat_socket(socketio: SocketIO):
                         "request_trace_id": trace_id,
                     },
                 )
-                emit(
-                    "unauthorized",
-                    {"error": "Token invalide.", "reason": "token_decode_error"},
-                )
                 ws_metrics.on_error("token_decode_error")
-                return False
+                raise SocketConnectionRefusedError("AUTH_INVALID") from e
 
             public_id = decoded.get("sub")
             if not public_id:
@@ -1014,9 +989,8 @@ def init_chat_socket(socketio: SocketIO):
                         "request_trace_id": trace_id,
                     },
                 )
-                emit("unauthorized", {"error": "Token sans 'sub'"})
                 ws_metrics.on_error("token_invalid")
-                return False
+                raise SocketConnectionRefusedError("AUTH_INVALID")
 
             logger.debug(
                 "socket_token_validated",
@@ -1067,9 +1041,8 @@ def init_chat_socket(socketio: SocketIO):
                         "request_trace_id": trace_id,
                     },
                 )
-                emit("unauthorized", {"error": "Utilisateur non trouvé"})
                 ws_metrics.on_error("user_not_found")
-                return False
+                raise SocketConnectionRefusedError("AUTH_INVALID")
 
             # Stash session minimale
             session["user_id"] = user.id
@@ -1082,7 +1055,6 @@ def init_chat_socket(socketio: SocketIO):
             if user.role == UserRole.driver:
                 driver = Driver.query.filter_by(user_id=user.id).first()
                 if not driver or not driver.company_id:
-                    msg = "Chauffeur ou entreprise associée introuvable"
                     logger.error(
                         "socket_connect_error",
                         extra={
@@ -1094,7 +1066,7 @@ def init_chat_socket(socketio: SocketIO):
                             "request_trace_id": trace_id,
                         },
                     )
-                    raise Exception(msg)
+                    raise SocketConnectionRefusedError("DRIVER_OR_COMPANY_NOT_FOUND")
 
                 company_room = f"company_{driver.company_id}"
                 driver_room = f"driver_{driver.id}"
@@ -1110,6 +1082,8 @@ def init_chat_socket(socketio: SocketIO):
                     "company_id": driver.company_id,
                     "ip": client_ip,
                     "role": "driver",
+                    "device_id": device_id,
+                    "session_diag": session_diag,
                 }
 
                 # ✅ Métriques
@@ -1121,7 +1095,7 @@ def init_chat_socket(socketio: SocketIO):
                 logger.info(
                     "socket_connect_success",
                     extra={
-                        "event": "connect_success",
+                        "event": "socket_connect_success",
                         "sid": sid,
                         "user_id": user.id,
                         "user_public_id": public_id,
@@ -1130,6 +1104,8 @@ def init_chat_socket(socketio: SocketIO):
                         "role": "driver",
                         "rooms": [company_room, driver_room],
                         "ip": client_ip,
+                        "device_id": device_id,
+                        "session_diag": session_diag,
                         "timestamp": now.isoformat(),
                         "request_trace_id": trace_id,
                     },
@@ -1149,9 +1125,8 @@ def init_chat_socket(socketio: SocketIO):
                             "request_trace_id": trace_id,
                         },
                     )
-                    emit("unauthorized", {"error": "Entreprise introuvable"})
                     ws_metrics.on_error("company_not_found")
-                    return False
+                    raise SocketConnectionRefusedError("COMPANY_NOT_FOUND")
 
                 room = f"company_{company.id}"
                 join_room(room)
@@ -1163,6 +1138,8 @@ def init_chat_socket(socketio: SocketIO):
                     "company_id": company.id,
                     "ip": client_ip,
                     "role": "company",
+                    "device_id": device_id,
+                    "session_diag": session_diag,
                 }
 
                 # ✅ Métriques
@@ -1173,7 +1150,7 @@ def init_chat_socket(socketio: SocketIO):
                 logger.info(
                     "socket_connect_success",
                     extra={
-                        "event": "connect_success",
+                        "event": "socket_connect_success",
                         "sid": sid,
                         "user_id": user.id,
                         "user_public_id": public_id,
@@ -1181,6 +1158,8 @@ def init_chat_socket(socketio: SocketIO):
                         "role": "company",
                         "rooms": [room],
                         "ip": client_ip,
+                        "device_id": device_id,
+                        "session_diag": session_diag,
                         "timestamp": now.isoformat(),
                         "request_trace_id": trace_id,
                     },
@@ -1224,15 +1203,15 @@ def init_chat_socket(socketio: SocketIO):
                         "request_trace_id": trace_id,
                     },
                 )
-                emit("unauthorized", {"error": "Rôle non autorisé pour le chat"})
                 ws_metrics.on_error("role_not_authorized")
-                return False
+                raise SocketConnectionRefusedError("AUTH_FORBIDDEN")
 
             return True
 
+        except SocketConnectionRefusedError:
+            raise
         except Exception as e:
             # ✅ Gérer toutes les exceptions pour éviter "server error"
-            error_msg = f"Erreur de connexion: {e!s}"
             # ✅ Récupérer les variables qui peuvent ne pas être définies si l'exception est levée tôt
             client_ip = (
                 request.environ.get("REMOTE_ADDR", "unknown")
@@ -1296,10 +1275,7 @@ def init_chat_socket(socketio: SocketIO):
                 },
             )
             ws_metrics.on_error("connect_exception")
-            with suppress(Exception):
-                # Si emit échoue, on ne peut rien faire
-                emit("unauthorized", {"error": error_msg})
-            return False
+            raise SocketConnectionRefusedError("CONNECT_ERROR") from e
 
     @socketio.on("team_chat_message")
     def handle_team_chat(data):  # noqa: PLR0911
@@ -2330,7 +2306,7 @@ def init_chat_socket(socketio: SocketIO):
 
                     # Vérifier si batch déjà traité
                     if redis_client.exists(processed_key):
-                        batch_ids = redis_client.smembers(processed_key)
+                        batch_ids = cast(set[bytes], redis_client.smembers(processed_key))
                         if batch_id.encode() in batch_ids:
                             logger.info(
                                 "⚠️ [Déduplication] Batch déjà traité: driver=%s, batch_id=%s",
@@ -2809,7 +2785,7 @@ def init_chat_socket(socketio: SocketIO):
             logger.info(
                 "socket_disconnect",
                 extra={
-                    "event": "disconnect",
+                    "event": "socket_disconnect",
                     "sid": sid,
                     "user_id": user_id,
                     "user_public_id": info.get("user_public_id") if info else None,
@@ -2817,6 +2793,8 @@ def init_chat_socket(socketio: SocketIO):
                     "company_id": company_id,
                     "role": info.get("role") if info else None,
                     "ip": info.get("ip") if info else None,
+                    "device_id": info.get("device_id") if info else None,
+                    "session_diag": info.get("session_diag") if info else None,
                     "timestamp": now.isoformat(),
                     "request_trace_id": trace_id,
                 },

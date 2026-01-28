@@ -14,6 +14,10 @@ from ext import app_logger
 from schemas.socket_events import EVENT_VERSION, SocketEvent
 from services.events.night_mode import should_send_night_notification
 from services.notifications.push import send_push_message
+from services.notifications.push_message_builder import (
+    EVENT_ASSIGNED,
+    build_push_message,
+)
 from services.realtime.socketio import (
     emit_company_event,
     emit_date_event,
@@ -113,6 +117,39 @@ def _get_notification_thread_id(notification_type: str) -> str | None:
     }
 
     return thread_mapping.get(notification_type)
+
+
+def _get_recipient_discreet_mode(
+    *,
+    company_id: int | None = None,
+    driver_id: int | None = None,
+) -> bool:
+    """True si le destinataire (entreprise ou chauffeur) a activé le mode discret push.
+
+    Lit User.push_privacy_mode via Company.user_id ou Driver.user_id.
+    Valeurs : "discreet" => True, "detailed" ou absent => False.
+    """
+    try:
+        from models import Company, Driver, User
+
+        user_id: int | None = None
+        if company_id:
+            company = Company.query.get(company_id)
+            if company:
+                user_id = getattr(company, "user_id", None)
+        elif driver_id:
+            driver = Driver.query.get(driver_id)
+            if driver:
+                user_id = getattr(driver, "user_id", None)
+        if not user_id:
+            return False
+        user = User.query.get(user_id)
+        if not user:
+            return False
+        mode = getattr(user, "push_privacy_mode", None) or "detailed"
+        return str(mode).strip().lower() == "discreet"
+    except Exception:
+        return False
 
 
 def _send_push_to_driver(
@@ -444,49 +481,28 @@ def fanout_booking_assigned_to_driver(
             driver_id,
         )
 
-    # 2. Push notification (background)
-    pickup_address = None
-    dropoff_address = None
-    try:
-        pickup_address = (
-            (booking_data or {}).get("pickup_address")
-            or (booking_data or {}).get("pickup_location")
-        )
-        dropoff_address = (
-            (booking_data or {}).get("dropoff_address")
-            or (booking_data or {}).get("dropoff_location")
-        )
-    except Exception:
-        pickup_address = None
-        dropoff_address = None
-
-    route = None
-    if pickup_address and dropoff_address:
-        route = f"{pickup_address} → {dropoff_address}"
-    elif pickup_address:
-        route = str(pickup_address)
-    elif dropoff_address:
-        route = f"Destination: {dropoff_address}"
-
+    # 2. Push notification (background) — message métier (nom client + contexte), jamais ID-only
+    push_ctx: Dict[str, Any] = dict(booking_data or {})
+    push_ctx.setdefault("id", booking_id)
+    discrete = _get_recipient_discreet_mode(driver_id=driver_id)
+    msg = build_push_message(
+        EVENT_ASSIGNED,
+        push_ctx,
+        "driver",
+        discrete_mode=discrete,
+    )
     app_logger.warning(
         "[event_fanout] Sending push notification to driver %s for booking %s (pickup: %s)",
         driver_id,
         booking_id,
-        pickup_address or "-",
+        push_ctx.get("pickup_location") or push_ctx.get("pickup_address") or "-",
     )
 
     result = _send_push_to_driver(
         driver_id=driver_id,
-        title="Course assignée",
-        body=(
-            f"Vous êtes assigné à la course #{booking_id}."
-            + (f" {route}" if route else " Ouvrez l’application pour voir les détails.")
-        ),
-        data={
-            "type": "booking",
-            "booking_id": booking_id,
-            "deepLink": f"atmr://booking/{booking_id}",
-        },
+        title=msg["title"],
+        body=msg["body"],
+        data=msg["data"],
     )
 
     app_logger.warning(
@@ -501,6 +517,8 @@ def fanout_booking_assigned_to_company(
     company_id: int,
     booking_id: int,
     driver_id: int | None = None,
+    *,
+    booking_data: Dict[str, Any] | None = None,
 ) -> None:
     """Fan-out hybride pour une mission assignée (notification à l'entreprise).
 
@@ -508,6 +526,7 @@ def fanout_booking_assigned_to_company(
         company_id: ID de l'entreprise
         booking_id: ID de la mission
         driver_id: ID du chauffeur assigné (optionnel)
+        booking_data: Données de la mission (client_name, time_formatted, etc.) pour message métier
     """
     # 1. Socket.IO (foreground)
     try:
@@ -523,20 +542,24 @@ def fanout_booking_assigned_to_company(
             company_id,
         )
 
-    # 2. Push notification (background)
+    # 2. Push notification (background) — toujours via builder (jamais "ID-only")
+    push_ctx: Dict[str, Any] = (
+        {**booking_data, "id": booking_data.get("id") or booking_id}
+        if booking_data
+        else {"id": booking_id}
+    )
+    discrete = _get_recipient_discreet_mode(company_id=company_id, driver_id=None)
+    msg = build_push_message(
+        EVENT_ASSIGNED,
+        push_ctx,
+        "company",
+        discrete_mode=discrete,
+    )
     _send_push_to_company(
         company_id=company_id,
-        title="Course assignée",
-        body=(
-            f"Course #{booking_id} assignée"
-            + (f" au chauffeur #{driver_id}." if driver_id else ".")
-        ),
-        data={
-            "type": "booking_assigned",
-            "booking_id": booking_id,
-            "driver_id": driver_id,
-            "deepLink": f"atmr://booking/{booking_id}",
-        },
+        title=msg["title"],
+        body=msg["body"],
+        data=msg["data"],
     )
 
 

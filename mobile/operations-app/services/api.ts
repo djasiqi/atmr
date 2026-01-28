@@ -4,6 +4,10 @@ import { Platform } from "react-native";
 import axios, { isAxiosError } from "axios";
 import { secureStorage, asyncStorage } from "./storage";
 import { AuthNotReadyError, isPublicEndpoint } from "@/services/authGuards";
+import {
+  getSessionDiagHeaderValue,
+  pushSessionEvent,
+} from "@/services/sessionJournal";
 
 // ✅ Helper pour les logs de debug (dev uniquement)
 // Évite les warnings de connexion en production
@@ -463,6 +467,12 @@ api.interceptors.request.use(
       }
     }
 
+    // ✅ P0.1: X-Session-Diag (dernier reason code) pour corrélation backend
+    const sessionDiag = getSessionDiagHeaderValue();
+    if (sessionDiag) {
+      config.headers["X-Session-Diag"] = sessionDiag;
+    }
+
     return config;
   },
   (error) => Promise.reject(error)
@@ -558,6 +568,7 @@ api.interceptors.response.use(
       // (401 = refresh token expiré/invalide, 403 = refus côté refresh)
       // Ne pas déconnecter pour erreurs réseau temporaires
       if (refreshStatus === 401 || refreshStatus === 403) {
+        pushSessionEvent("REFRESH_FAIL");
         console.error(
           `[API Interceptor] ❌ Refresh token échoué (${refreshStatus}):`,
           error.response?.data || error.message
@@ -583,9 +594,17 @@ api.interceptors.response.use(
 
     const isAuthError = error.response?.status === 401;
     if (isAuthError && !originalRequest._retry) {
+      // ✅ P0.1: 401 = access token expiré/invalide → journal avant refresh
+      pushSessionEvent("API_401");
 
-      // Si déjà en train de refresh, mettre en queue
+      // ✅ P0.2: Si déjà en train de refresh, attendre le même (singleflight) puis rejouer
       if (isRefreshing) {
+        pushSessionEvent("REFRESH_WAIT");
+        if (__DEV__) {
+          console.log(
+            `[API Interceptor] REFRESH_WAIT — requête en file (refresh_inflight_count=${failedQueue.length + 1})`
+          );
+        }
         return new Promise<string>((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         })
@@ -596,12 +615,14 @@ api.interceptors.response.use(
           .catch((err) => Promise.reject(err));
       }
 
-      // Premier 401 → tenter refresh
+      // Premier 401 → tenter refresh (jamais logout sans avoir tenté refresh)
       originalRequest._retry = true;
       isRefreshing = true;
+      pushSessionEvent("REFRESH_START");
 
       try {
         const newAccessToken = await refreshDriverTokenSingleflight();
+        pushSessionEvent("REFRESH_SUCCESS");
         if (__DEV__) {
           console.log(
             `[API Interceptor] Token refreshed, cache updated. New token cached.`
@@ -631,11 +652,12 @@ api.interceptors.response.use(
         // - Autres erreurs (500, etc.) = ne pas déconnecter non plus
         
         if (refreshStatus === 401) {
-          // Refresh token expiré/invalide → déconnecter
+          // Refresh token expiré/invalide → déconnecter (uniquement après échec refresh)
+          pushSessionEvent("REFRESH_FAIL");
           console.error(
             "[API Interceptor] 🚫 Refresh token expiré/invalide (401). Déconnexion forcée."
           );
-          
+
           processQueue(refreshError, null);
           await secureStorage.clearAll();
           await asyncStorage.clearAuth();

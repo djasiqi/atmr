@@ -508,11 +508,9 @@ class AssignmentRepository:
         from sqlalchemy.orm import joinedload
 
         from models import Booking
-        from shared.time_utils import (
-            _booking_time_expr,
-        )
 
-        time_expr = _booking_time_expr()
+        # Expression pour scheduled_time (alignée avec _booking_time_expr de dispatch_helpers)
+        time_expr = Booking.scheduled_time
         previous_assignments = (
             Assignment.query.join(Booking, Booking.id == Assignment.booking_id)
             .options(joinedload(Assignment.booking))

@@ -7,7 +7,7 @@ import React, {
   useMemo,
   useState,
 } from "react";
-import { AppState, AppStateStatus } from "react-native";
+import { Alert, AppState, AppStateStatus } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Crypto from "expo-crypto";
 
@@ -22,6 +22,13 @@ import {
   invalidateInterceptorCache,
 } from "@/services/api";
 import { secureStorage, asyncStorage } from "@/services/storage";
+import {
+  getRememberMe,
+  setRememberMe as persistRememberMe,
+  setRememberedCredentials,
+  clearRememberedCredentials,
+  RememberMeStorageError,
+} from "@/utils/rememberMeStorage";
 // ✅ CORRECTION : Les tokens Enterprise sont maintenant dans SecureStore
 import {
   ENTERPRISE_SESSION_KEY,
@@ -38,8 +45,14 @@ import {
 } from "@/services/enterpriseAuth";
 import { notifyAuthReady, notifyAuthNotReady } from "@/services/authSync";
 import { isAuthNotReadyError } from "@/services/authGuards";
+import { debugAuthLog, isDebugAuthEnabled } from "@/services/authDebug";
+import { pushSessionEvent } from "@/services/sessionJournal";
+import { connectSocket, disconnectSocket } from "@/services/socket";
 // ✅ PHASE 2 : Import de l'authentification biométrique
-import { autoLoginWithBiometric } from "@/services/biometricAuth";
+import {
+  autoLoginWithBiometric,
+  BiometricNoCredentialsError,
+} from "@/services/biometricAuth";
 
 // ✅ Helper pour les logs de debug (dev uniquement)
 // Évite les warnings de connexion en production
@@ -206,8 +219,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const handleDriverLoginSuccess = useCallback(
     async (response: AuthResponse) => {
+      pushSessionEvent("LOGIN_SUCCESS");
       // ✅ Les tokens sont déjà stockés dans loginDriver() (SecureStore + AsyncStorage)
       setDriverToken(response.token);
+      pushSessionEvent("TOKEN_STORED");
       await storeMode("driver");
       // ✅ P1 strict: rendre l'auth "ready" avant tout appel protégé (ex: /driver/me/profile)
       // Sinon l'intercepteur rejette avec AUTH_NOT_READY et on se retrouve avec un faux "login failed".
@@ -306,7 +321,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     let isMounted = true;
+    let bootstrapStoredMode: string | null = null;
+    let enterpriseRestored = false;
     (async () => {
+      pushSessionEvent("APP_START");
       try {
         // ⚡ OPTIMISATION Phase 2 : Lecture parallèle des tokens et données de stockage
         // ✅ CORRECTION : Lire aussi les tokens Enterprise en parallèle pour éviter les race conditions
@@ -328,6 +346,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           secureStorage.getEnterpriseRefreshToken(), // Enterprise refresh token
           AsyncStorage.getItem(ENTERPRISE_SESSION_KEY), // Enterprise session (données non sensibles)
         ]);
+        if (isDebugAuthEnabled()) {
+          debugAuthLog("boot_storage", {
+            has_ent_refresh: enterpriseRefreshToken ? 1 : 0,
+            len: enterpriseRefreshToken?.length ?? 0,
+          });
+        }
 
         // Traiter le mode stocké
         if (storedMode === "driver" || storedMode === "enterprise") {
@@ -426,8 +450,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                       }
                     }
                   } catch (autoLoginError) {
-                    console.warn("[useAuth] ⚠️ Auto-login avec authentification biométrique échoué:", autoLoginError);
-                    // Si l'auto-login échoue aussi, nettoyer
+                    if (autoLoginError instanceof BiometricNoCredentialsError) {
+                      if (isMounted) {
+                        Alert.alert(
+                          "",
+                          "Identifiants mémorisés indisponibles. Veuillez vous reconnecter."
+                        );
+                      }
+                    } else {
+                      console.warn("[useAuth] ⚠️ Auto-login avec authentification biométrique échoué:", autoLoginError);
+                    }
                     await secureStorage.clearAll();
                     await asyncStorage.clearAuth();
                     if (isMounted) {
@@ -452,17 +484,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             // 3. Si aucun token n'a fonctionné, essayer auto-login avec authentification biométrique
             if (!profileLoaded && !driverAccessToken && !driverRefreshToken) {
               try {
-                // Tenter l'auto-login avec authentification biométrique
                 const biometricSuccess = await autoLoginWithBiometric({
                   promptMessage: "Authentifiez-vous pour vous reconnecter",
                   cancelLabel: "Annuler",
-                  disableDeviceFallback: false, // Permet code PIN si biométrie échoue
+                  disableDeviceFallback: false,
                   fallbackLabel: "Utiliser le code PIN",
                 });
 
                 if (biometricSuccess) {
                   notifyAuthReady();
-                  // Si l'auto-login biométrique réussit, charger le profil
                   const profile = await fetchDriverProfile();
                   if (isMounted) {
                     setDriver(profile);
@@ -472,7 +502,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     console.log("[useAuth] ✅ Auto-login réussi avec authentification biométrique");
                   }
                 } else {
-                  // Si l'authentification biométrique échoue ou est annulée, nettoyer
                   await clearDriverStorage();
                   if (isMounted) {
                     setDriver(null);
@@ -480,8 +509,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                   }
                 }
               } catch (autoLoginError) {
-                console.warn("[useAuth] ⚠️ Auto-login avec authentification biométrique échoué:", autoLoginError);
-                // Si l'auto-login échoue, nettoyer
+                if (autoLoginError instanceof BiometricNoCredentialsError) {
+                  if (isMounted) {
+                    Alert.alert(
+                      "",
+                      "Identifiants mémorisés indisponibles. Veuillez vous reconnecter."
+                    );
+                  }
+                } else {
+                  console.warn("[useAuth] ⚠️ Auto-login avec authentification biométrique échoué:", autoLoginError);
+                }
                 await clearDriverStorage();
                 if (isMounted) {
                   setDriver(null);
@@ -503,6 +540,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         if (enterpriseToken && enterpriseSessionRaw) {
           try {
+            enterpriseRestored = true;
             const parsed: EnterpriseSessionState =
               JSON.parse(enterpriseSessionRaw);
             // Restaurer la session depuis le stockage
@@ -512,6 +550,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               token: enterpriseToken,
               refreshToken: enterpriseRefreshToken ?? parsed.refreshToken ?? null,
             });
+            // ✅ P1 : Notifier auth ready dès que la session entreprise est restaurée
+            // Évite "missing_refresh_token" : les requêtes ne partent qu'une fois les tokens chargés
+            notifyAuthReady();
 
             // Si la session vient d'être créée (juste après un login), ne pas la vérifier immédiatement
             // Supprimer le flag pour les prochaines fois
@@ -579,6 +620,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           } catch (error) {
             // eslint-disable-next-line no-console
             console.warn("Erreur lors de la restauration de la session entreprise :", error);
+            enterpriseRestored = false;
             await clearEnterpriseStorage();
             setEnterpriseSession(null);
           }
@@ -586,9 +628,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } finally {
         if (isMounted) {
           setInitialLoading(false);
-          // ✅ CORRECTION #1 : Notifier que l'auth est prête
-          // Permet aux intercepteurs de savoir que les tokens sont chargés
-          notifyAuthReady();
+          // ✅ P1 : Ne pas débloquer les requêtes enterprise si la session n'a pas été restaurée
+          // Évite AUTH_NOT_READY missing_refresh_token (root cause: finally notifiait toujours)
+          const isEnterpriseWithoutSession =
+            bootstrapStoredMode === "enterprise" && !enterpriseRestored;
+          if (isDebugAuthEnabled()) {
+            debugAuthLog("notify_auth_ready", {
+              mode: bootstrapStoredMode ?? undefined,
+              enterprise_restored: enterpriseRestored ? 1 : 0,
+            });
+          }
+          if (!isEnterpriseWithoutSession) {
+            notifyAuthReady();
+          }
         }
       }
     })();
@@ -769,95 +821,74 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [driverToken, mode]);
 
-  // ✅ PHASE 3 : Refresh automatique au retour au premier plan
-  // ✅ CORRECTION CRITIQUE : Toujours tenter un refresh si le token est expiré ou proche de l'expiration
-  // Cela évite les déconnexions après un long séjour en arrière-plan
+  // ✅ PHASE 3 + P0.4 : Refresh et FOREGROUND_RESYNC au retour au premier plan
+  // 1) recharger tokens si besoin 2) ping /driver/me avec retry court 3) reconnect socket
+  // Jamais de déconnexion après 30–60 min en arrière-plan
   useEffect(() => {
     if (!driverToken || mode !== "driver") return;
 
     const handleAppStateChange = async (nextAppState: AppStateStatus) => {
       if (nextAppState === "active") {
-        // ✅ CORRECTION : Toujours vérifier le token au retour au premier plan
-        // Même si l'app était en arrière-plan pendant longtemps
-        const expiresAt = getTokenExpiration(driverToken);
-        if (!expiresAt) {
-          console.warn("[useAuth] ⚠️ Impossible de décoder l'expiration du token, tentative de refresh préventif");
-          // Si on ne peut pas décoder, tenter quand même un refresh si refresh token disponible
-          try {
+        pushSessionEvent("APP_FOREGROUND");
+        pushSessionEvent("FOREGROUND_RESYNC_START");
+        let resyncOk = true;
+        try {
+          // 1) Recharger tokens depuis storage et refresh si expiré / proche expiration
+          const expiresAt = getTokenExpiration(driverToken);
+          if (!expiresAt) {
             const refreshToken = await secureStorage.getRefreshToken();
             if (refreshToken) {
-              console.log("[useAuth] 🔄 Token non décodable, refresh préventif au retour au premier plan...");
-              const newAccessToken = await refreshDriverTokenSingleflight();
-              setDriverToken(newAccessToken);
-              invalidateInterceptorCache();
-              console.log("[useAuth] ✅ Refresh préventif réussi");
+              try {
+                const newAccessToken = await refreshDriverTokenSingleflight();
+                setDriverToken(newAccessToken);
+                invalidateInterceptorCache();
+              } catch (_e) {
+                // continuer, l’intercepteur gérera
+              }
             }
-          } catch (error: any) {
-            console.warn("[useAuth] ⚠️ Refresh préventif échoué:", error?.message);
-            // Ne pas déconnecter, l'intercepteur gérera si nécessaire
+          } else {
+            const timeUntilExpiry = expiresAt - Date.now();
+            const refreshThreshold = 15 * 60 * 1000;
+            if (timeUntilExpiry <= 0 || timeUntilExpiry < refreshThreshold) {
+              const refreshToken = await secureStorage.getRefreshToken();
+              if (refreshToken) {
+                try {
+                  const newAccessToken = await refreshDriverTokenSingleflight();
+                  setDriverToken(newAccessToken);
+                  invalidateInterceptorCache();
+                } catch (_e) {
+                  // ne pas déconnecter
+                }
+              }
+            }
           }
-          return;
-        }
 
-        const now = Date.now();
-        const timeUntilExpiry = expiresAt - now;
-        const refreshThreshold = 15 * 60 * 1000; // 15 minutes
-
-        // ✅ CORRECTION CRITIQUE : Rafraîchir si :
-        // 1. Token déjà expiré (timeUntilExpiry <= 0)
-        // 2. Token expire dans moins de 15 minutes (timeUntilExpiry < refreshThreshold)
-        // Cela garantit qu'un refresh est toujours tenté après un long séjour en arrière-plan
-        if (timeUntilExpiry <= 0 || (timeUntilExpiry > 0 && timeUntilExpiry < refreshThreshold)) {
-          const isExpired = timeUntilExpiry <= 0;
-          console.log(
-            `[useAuth] 🔄 App revenue au premier plan, token ${isExpired ? "EXPIRÉ" : "proche expiration"} (${Math.round(Math.abs(timeUntilExpiry) / 1000 / 60)}min), refresh nécessaire...`
-          );
-          try {
-            const refreshToken = await secureStorage.getRefreshToken();
-            if (!refreshToken) {
-              console.error("[useAuth] ❌ Aucun refresh token disponible au retour au premier plan");
-              // Ne pas déconnecter immédiatement, l'intercepteur gérera lors de la prochaine requête
-              return;
+          // 2) Ping /driver/me avec retry court (2 tentatives)
+          const tokenForPing = await secureStorage.getAccessToken();
+          if (tokenForPing) {
+            for (let attempt = 1; attempt <= 2; attempt++) {
+              try {
+                await fetchDriverProfile();
+                break;
+              } catch (e) {
+                if (attempt === 2) {
+                  resyncOk = false;
+                  console.warn("[useAuth] FOREGROUND_RESYNC ping /driver/me échoué après 2 essais");
+                }
+              }
             }
-
-            const newAccessToken = await refreshDriverTokenSingleflight();
-            setDriverToken(newAccessToken);
-            invalidateInterceptorCache();
-            console.log(
-              `[useAuth] ✅ Refresh au retour au premier plan réussi (token ${isExpired ? "était expiré" : "était proche expiration"})`
-            );
-          } catch (error: any) {
-            const status = error?.response?.status;
-            const isNetworkError = !error?.response;
-
-            // ✅ Distinguer les types d'erreurs
-            if (status === 401 || status === 403) {
-              console.error(
-                `[useAuth] ❌ Refresh au retour au premier plan échoué (${status}):`,
-                error?.response?.data || error?.message
-              );
-              // Ne pas déconnecter ici, l'intercepteur gérera lors de la prochaine requête
-              // Cela évite une déconnexion prématurée si c'est juste une erreur réseau temporaire
-            } else if (isNetworkError) {
-              console.warn(
-                "[useAuth] ⚠️ Erreur réseau lors du refresh au retour au premier plan. L'intercepteur gérera lors de la prochaine requête."
-              );
-              // Ne pas déconnecter pour erreur réseau, l'utilisateur reste connecté
-            } else {
-              console.warn(
-                `[useAuth] ⚠️ Refresh au retour au premier plan échoué (status: ${status}):`,
-                error?.message
-              );
-              // Ne pas déconnecter pour autres erreurs, l'intercepteur gérera
-            }
-            // Ne pas déconnecter, l'intercepteur gérera lors de la prochaine requête réelle
           }
-        } else {
-          // Token valide et pas proche de l'expiration
-          console.log(
-            `[useAuth] ✅ Token valide au retour au premier plan (expire dans ${Math.round(timeUntilExpiry / 1000 / 60)}min)`
-          );
+
+          // 3) Reconnect socket (resubscribe fait dans connectSocket)
+          const tokenForSocket = await secureStorage.getAccessToken();
+          if (tokenForSocket) {
+            connectSocket(tokenForSocket, "driver").catch(() => {});
+          }
+        } finally {
+          pushSessionEvent(resyncOk ? "FOREGROUND_RESYNC_SUCCESS" : "FOREGROUND_RESYNC_FAIL");
         }
+      } else {
+        pushSessionEvent("APP_BACKGROUND");
       }
     };
 
@@ -1060,20 +1091,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const response = await loginDriver(email, password);
         await handleDriverLoginSuccess(response);
 
-        // ✅ PHASE 1 : Sauvegarder les identifiants si l'utilisateur a coché "Se souvenir de moi"
+        // ✅ PHASE 1 : Se souvenir de moi — SecureStore uniquement, jamais de log du mot de passe
         if (rememberMe) {
           try {
-            await secureStorage.saveCredentials(email, password);
-            if (__DEV__) {
-              console.log("[useAuth] ✅ Identifiants sauvegardés pour auto-login");
-            }
-          } catch (error) {
-            console.warn("[useAuth] ⚠️ Erreur lors de la sauvegarde des identifiants:", error);
-            // Ne pas bloquer le login si la sauvegarde échoue
+            await persistRememberMe(true);
+            await setRememberedCredentials(email.trim(), password);
+          } catch {
+            await persistRememberMe(false);
+            throw new RememberMeStorageError();
           }
         } else {
-          // Si l'utilisateur ne veut pas se souvenir, supprimer les identifiants existants
-          await secureStorage.clearSavedCredentials();
+          await persistRememberMe(false);
+          await clearRememberedCredentials();
         }
       } finally {
         setDriverLoading(false);
@@ -1083,11 +1112,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   );
 
   const logout = useCallback(async () => {
+    pushSessionEvent("LOGOUT_TRIGGERED");
     setDriverLoading(true);
-    // ✅ CORRECTION #1 : Notifier que l'auth n'est plus prête
     notifyAuthNotReady();
     try {
-      // Appeler /auth/logout pour invalider server-side
+      const keepRememberedCreds = await getRememberMe();
+
       const accessToken = await secureStorage.getAccessToken();
       const refreshToken = await secureStorage.getRefreshToken();
 
@@ -1095,26 +1125,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         try {
           await api.post(
             "/auth/logout",
-            { refresh_token: refreshToken ?? null }, // ✅ Envoyer refresh_token si disponible
+            { refresh_token: refreshToken ?? null },
             {
               headers: { Authorization: `Bearer ${accessToken}` },
             }
           );
         } catch (error) {
-          // Ignorer les erreurs de logout (token peut être déjà expiré)
           console.warn("Erreur lors du logout server-side:", error);
         }
       }
 
-      // Nettoyer tout le stockage
       await secureStorage.clearAll();
       await asyncStorage.clearAuth();
 
-      // ✅ PHASE 1 : Supprimer les identifiants sauvegardés lors du logout
-      await secureStorage.clearSavedCredentials();
+      if (!keepRememberedCreds) {
+        await clearRememberedCredentials();
+      }
 
-      // ⚡ OPTIMISATION : Invalider le cache de l'intercepteur lors du logout
       invalidateInterceptorCache();
+
+      // ✅ P0.3: Déconnecter le socket uniquement sur logout explicite (jamais sur simple disconnect)
+      disconnectSocket();
 
       // Reset state
       setDriver(null);

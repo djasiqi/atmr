@@ -18,6 +18,7 @@ import {
   DispatchSettingsUpdate,
   ScheduleRidePayload,
   MarkUrgentPayload,
+  MarkUrgentResponse,
   DispatchMessage,
   RideEditPayload,
   RideCreatePayload,
@@ -148,11 +149,23 @@ export const scheduleRide = async (
   await enterpriseApi.post(`/dispatch/v1/rides/${rideId}/schedule`, payload);
 };
 
+const URGENT_DEBUG = false;
+
 export const markRideUrgent = async (
   rideId: string,
   payload: MarkUrgentPayload
-) => {
-  await enterpriseApi.post(`/dispatch/v1/rides/${rideId}/urgent`, payload);
+): Promise<MarkUrgentResponse> => {
+  if (__DEV__ && URGENT_DEBUG) {
+    console.log("[markRideUrgent] payload", { rideId, payload });
+  }
+  const { data } = await enterpriseApi.post<MarkUrgentResponse>(
+    `/dispatch/v1/rides/${rideId}/urgent`,
+    payload
+  );
+  if (__DEV__ && URGENT_DEBUG) {
+    console.log("[markRideUrgent] response", data);
+  }
+  return data;
 };
 
 export const runDispatch = async (

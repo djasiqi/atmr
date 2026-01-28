@@ -10,6 +10,7 @@ import * as Sentry from "@sentry/react-native";
 import { waitForAuthReady } from "@/services/authSync";
 import { secureStorage, asyncStorage } from "@/services/storage";
 import { AuthNotReadyError, isPublicEndpoint } from "@/services/authGuards";
+import { debugAuthLog, isDebugAuthEnabled } from "@/services/authDebug";
 
 // ✅ Helper pour les logs de debug (dev uniquement)
 // Évite les warnings de connexion en production
@@ -753,12 +754,33 @@ enterpriseApi.interceptors.request.use(
               console.debug("[ENT] Token ajouté à la requête:", config.url);
             }
           } else {
-            // ✅ P1 (strict): tenter un refresh unique, sinon rejeter (pas de requête sans Authorization)
+            // ✅ P1 (strict): ne jamais appeler /auth/refresh sans refresh_token
+            // Vérifier explicitement avant refresh → fail fast, UX "Connexion…" / "Session expirée"
+            const refreshToken = await secureStorage.getEnterpriseRefreshToken();
+            if (isDebugAuthEnabled()) {
+              debugAuthLog("interceptor_before_refresh", {
+                refresh_present: refreshToken ? 1 : 0,
+              });
+            }
+            if (!refreshToken) {
+              if (__DEV__) {
+                console.warn(
+                  "[ENT] AUTH_NOT_READY (missing_refresh_token) - requête bloquée:",
+                  config.url
+                );
+              }
+              throw new AuthNotReadyError({
+                kind: "enterprise",
+                reason: "missing_refresh_token",
+                url: "/auth/refresh",
+              });
+            }
+            // ✅ P1: tenter un refresh unique, sinon rejeter (pas de requête sans Authorization)
             if (__DEV__) {
               console.warn("[ENT] Aucun token, tentative refresh singleflight:", config.url);
             }
             try {
-              const payload = await refreshEnterpriseTokenSingleflight();
+              const payload = await refreshEnterpriseTokenSingleflight(refreshToken);
               headers.set("Authorization", `Bearer ${payload.token}`);
             } catch (e) {
               throw new AuthNotReadyError({

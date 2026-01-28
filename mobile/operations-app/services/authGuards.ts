@@ -24,6 +24,25 @@ export function isAuthNotReadyError(error: unknown): error is AuthNotReadyError 
   );
 }
 
+/**
+ * Message UX à afficher à l'utilisateur pour AUTH_NOT_READY.
+ * Évite d'afficher le message technique "AUTH_NOT_READY: enterprise: missing_refresh_token (/auth/refresh)".
+ */
+export function getAuthNotReadyDisplayMessage(error: unknown): string | null {
+  if (!isAuthNotReadyError(error)) return null;
+  const reason = (error as AuthNotReadyError).reason;
+  if (reason === "missing_refresh_token") {
+    return "Session expirée ou inexistante. Veuillez vous reconnecter.";
+  }
+  if (reason === "auth_ready_timeout") {
+    return "Connexion en cours…";
+  }
+  if (reason === "missing_token_and_refresh_failed") {
+    return "Session expirée. Veuillez vous reconnecter.";
+  }
+  return "Connexion en cours…";
+}
+
 // Centralisation: définition "public endpoint" (pas besoin d'Authorization Bearer)
 export function isPublicEndpoint(
   url: string | undefined,

@@ -8,11 +8,11 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, cast
 
 from flask import current_app, request
-from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
+from flask_jwt_extended import (
     get_jwt_identity,
     jwt_required,
 )
-from flask_restx import Namespace, Resource  # pyright: ignore[reportMissingImports]
+from flask_restx import Namespace, Resource
 from sqlalchemy import or_
 
 from ext import db, limiter, role_required
@@ -456,6 +456,8 @@ def _build_ride_summary(
             ),
         }
 
+    # pickup_at (API) = scheduled_time (modèle). Ne jamais transformer 00:00 en null :
+    # 00:00:00 = valeur sentinelle "heure non définie", à traiter côté client par isPickupSentinel.
     summary: Dict[str, Any] = {
         "id": str(booking.id),
         "time": {
@@ -2172,33 +2174,36 @@ class MobileRideUrgent(Resource):
             company_mobile_dispatch_ns.abort(404, "Course introuvable")
             raise AssertionError("Booking not found") from None
 
+        # -----------------------------------------------------------------------
+        # RÈGLE MÉTIER SENTINELLE 00:00 (pickup_at / scheduled_time)
+        # - pickup_at = 00:00:00 est une VALEUR SENTINELLE = "heure non définie" (unset).
+        # - pickup_at != 00:00:00 = "course déjà planifiée".
+        # - Urgent autorisé UNIQUEMENT si sentinelle (éviter modification accidentelle).
+        # - Dans l'API ride, ce champ est exposé sous time.pickup_at.
+        # - Aucun parsing ne doit transformer 00:00 en null ; aucun affichage ne doit
+        #   montrer 00:00 comme une vraie heure utilisateur.
+        # -----------------------------------------------------------------------
+        st = booking.scheduled_time
+        st_naive = (
+            st.replace(tzinfo=None) if st and getattr(st, "tzinfo", None) else st
+        )
+        is_sentinel = (
+            st_naive is not None
+            and st_naive.hour == 0
+            and st_naive.minute == 0
+            and st_naive.second == 0
+        )
+
+        if st is not None and not is_sentinel:
+            return {
+                "error": "Ride already scheduled; urgent allowed only when pickup time is unset (00:00)",
+                "message": "Ride already scheduled; urgent allowed only when pickup time is unset (00:00)",
+            }, 409
+
         booking.is_urgent = True
-
-        # ✅ Calculer la nouvelle heure planifiée
-        from datetime import UTC, datetime
-
-        now = datetime.now(UTC)
-
-        # Si scheduled_time est None, à minuit (00:00), ou dans le passé,
-        # utiliser l'heure actuelle + délai
-        if not booking.scheduled_time:
-            booking.scheduled_time = now + timedelta(minutes=extra_delay_minutes)
-        else:
-            # Vérifier si l'heure est à minuit (00:00)
-            is_midnight = (
-                booking.scheduled_time.hour == 0 and booking.scheduled_time.minute == 0
-            )
-            # Vérifier si l'heure est dans le passé
-            is_past = booking.scheduled_time < now
-
-            if is_midnight or is_past:
-                # Utiliser l'heure actuelle + délai
-                booking.scheduled_time = now + timedelta(minutes=extra_delay_minutes)
-            else:
-                # Ajouter le délai à l'heure existante
-                booking.scheduled_time = booking.scheduled_time + timedelta(
-                    minutes=extra_delay_minutes
-                )
+        now = now_local()
+        booking.scheduled_time = now + timedelta(minutes=extra_delay_minutes)
+        booking.time_confirmed = True
 
         db.session.add(booking)
         db.session.commit()
@@ -3616,12 +3621,27 @@ class MobileUpdateRide(Resource):
             new_notes = getattr(booking, "notes_medical", None)
             new_scheduled = getattr(booking, "scheduled_time", None)
 
-            if "scheduled_time" in payload and _iso(old_scheduled) != _iso(new_scheduled):
-                changes["scheduled_time"] = {"from": _iso(old_scheduled), "to": _iso(new_scheduled)}
-            if "pickup_address" in payload and str(old_pickup or "") != str(new_pickup or ""):
-                changes["pickup_location"] = {"from": str(old_pickup or "") or None, "to": str(new_pickup or "") or None}
-            if "dropoff_address" in payload and str(old_dropoff or "") != str(new_dropoff or ""):
-                changes["dropoff_location"] = {"from": str(old_dropoff or "") or None, "to": str(new_dropoff or "") or None}
+            if "scheduled_time" in payload and _iso(old_scheduled) != _iso(
+                new_scheduled
+            ):
+                changes["scheduled_time"] = {
+                    "from": _iso(old_scheduled),
+                    "to": _iso(new_scheduled),
+                }
+            if "pickup_address" in payload and str(old_pickup or "") != str(
+                new_pickup or ""
+            ):
+                changes["pickup_location"] = {
+                    "from": str(old_pickup or "") or None,
+                    "to": str(new_pickup or "") or None,
+                }
+            if "dropoff_address" in payload and str(old_dropoff or "") != str(
+                new_dropoff or ""
+            ):
+                changes["dropoff_location"] = {
+                    "from": str(old_dropoff or "") or None,
+                    "to": str(new_dropoff or "") or None,
+                }
             if "notes" in payload and str(old_notes or "") != str(new_notes or ""):
                 # éviter d'envoyer des notes trop longues en notification
                 changes["notes"] = {
@@ -3644,7 +3664,9 @@ class MobileUpdateRide(Resource):
                     )
                 )
         except Exception:
-            logger.exception("[MobileUpdateRide] Failed to publish BookingUpdatedEvent changes")
+            logger.exception(
+                "[MobileUpdateRide] Failed to publish BookingUpdatedEvent changes"
+            )
 
         # Journaliser l'action
         tools = AgentTools(company_id)

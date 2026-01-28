@@ -6,6 +6,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Device from "expo-device";
 import { Platform, AppState } from "react-native";
 import Constants from "expo-constants";
+import { useRouter } from "expo-router";
 import { useAuth } from "@/hooks/useAuth";
 import { useEnterpriseSocket } from "@/hooks/useEnterpriseSocket";
 import api from "@/services/api";
@@ -28,6 +29,7 @@ Notifications.setNotificationHandler({
 export const useEnterpriseNotifications = () => {
   const { enterpriseSession, loading } = useAuth();
   const socket = useEnterpriseSocket();
+  const router = useRouter();
   const appState = useRef(AppState.currentState);
   const notificationHandlersRef = useRef<{
     newBooking?: (data: any) => void;
@@ -321,14 +323,34 @@ export const useEnterpriseNotifications = () => {
     const responseListener = Notifications.addNotificationResponseReceivedListener(
       (response) => {
         console.log("📲 L'utilisateur a interagi avec une notification:", response);
-        // Ici on pourrait gérer la navigation vers la page appropriée
-        const data = response.notification.request.content.data;
-        if (data?.type === "new_booking" || data?.type === "booking_updated") {
-          // Naviguer vers la page de détails de la course si nécessaire
-          // router.push(`/ride-details/${data.bookingId}`);
-        } else if (data?.type === "chat_message") {
-          // Naviguer vers le chat si nécessaire
-          // router.push("/chat");
+        const data = response.notification.request.content.data as Record<string, unknown> | undefined;
+        if (!data) return;
+
+        // Extraire booking_id : backend envoie booking_id (snake_case) ou legacy bookingId
+        const rawId = data.booking_id ?? data.bookingId;
+        const deepLink = typeof data.deep_link === "string" ? data.deep_link : typeof data.deepLink === "string" ? data.deepLink : null;
+
+        let rideId: string | null = null;
+        if (rawId != null) {
+          const n = typeof rawId === "number" ? rawId : parseInt(String(rawId), 10);
+          if (!Number.isNaN(n) && n > 0) rideId = String(n);
+        }
+        if (!rideId && deepLink) {
+          const match = /atmr:\/\/enterprise\/rides\/(\d+)/i.exec(deepLink);
+          if (match?.[1]) rideId = match[1];
+        }
+
+        const notifType = typeof data.type === "string" ? data.type : "";
+
+        if (rideId) {
+          router.push({
+            pathname: "/(enterprise)/ride-details",
+            params: { rideId },
+          } as any);
+        } else if (notifType === "chat_message" || notifType === "message") {
+          router.push("/(enterprise)/chat" as any);
+        } else if (notifType && (notifType.includes("booking") || notifType.includes("booking_assigned"))) {
+          console.warn("⚠️ Notification booking sans booking_id — impossible d'ouvrir la course", data);
         }
       }
     );
@@ -337,7 +359,7 @@ export const useEnterpriseNotifications = () => {
       notificationListener.remove();
       responseListener.remove();
     };
-  }, []);
+  }, [router]);
 };
 
 async function registerForPushNotificationsAsync(): Promise<string | null> {

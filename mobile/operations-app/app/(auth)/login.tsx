@@ -1,5 +1,5 @@
 // src/app/(auth)/login.tsx
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   SafeAreaView,
   View,
@@ -9,6 +9,7 @@ import {
   Platform,
   Alert,
   TextInput,
+  ActivityIndicator,
 } from "react-native";
 import { router } from "expo-router";
 import Ionicons from "react-native-vector-icons/Ionicons";
@@ -16,6 +17,13 @@ import Ionicons from "react-native-vector-icons/Ionicons";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader } from "@/components/ui/Loader";
 import { getLoginStyles } from "@/styles/loginStyles";
+import {
+  getRememberMe,
+  setRememberMe as persistRememberMe,
+  getRememberedCredentials,
+  clearRememberedCredentials,
+  RememberMeStorageError,
+} from "@/utils/rememberMeStorage";
 
 export default function LoginScreen() {
   const { login, loading, setMode } = useAuth();
@@ -23,7 +31,61 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
   const { styles, palette } = useMemo(() => getLoginStyles("driver"), []);
+
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      try {
+        const rm = await getRememberMe();
+        if (!isMounted) return;
+        if (rm) {
+          const creds = await getRememberedCredentials();
+          if (!isMounted) return;
+          if (creds?.email && creds?.password) {
+            setEmail(creds.email);
+            setPassword(creds.password);
+            setRememberMe(true);
+          } else {
+            await persistRememberMe(false);
+            await clearRememberedCredentials();
+            setRememberMe(false);
+          }
+        } else {
+          setRememberMe(false);
+        }
+      } catch {
+        if (isMounted) setRememberMe(false);
+        void clearRememberedCredentials().catch(() => {});
+      } finally {
+        if (isMounted) setHydrated(true);
+      }
+    })();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleToggleRememberMe = async () => {
+    const next = !rememberMe;
+    if (next) {
+      try {
+        await persistRememberMe(true);
+        setRememberMe(true);
+      } catch {
+        setRememberMe(false);
+        Alert.alert("", "Impossible d'enregistrer sur cet appareil.");
+      }
+    } else {
+      try {
+        await persistRememberMe(false);
+        setRememberMe(false);
+      } catch {
+        setRememberMe(false);
+      }
+    }
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -36,7 +98,12 @@ export default function LoginScreen() {
     try {
       await login(email, password, rememberMe);
       router.replace("/(tabs)/mission");
-    } catch {
+    } catch (e) {
+      if (e instanceof RememberMeStorageError) {
+        Alert.alert("", "Impossible d'enregistrer sur cet appareil.");
+        router.replace("/(tabs)/mission");
+        return;
+      }
       Alert.alert("Connexion échouée", "Email ou mot de passe incorrect.");
     }
   };
@@ -57,6 +124,11 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.form}>
+            {!hydrated && (
+              <View style={{ paddingVertical: 8, alignItems: "center" }}>
+                <ActivityIndicator size="small" color={palette.secondary} />
+              </View>
+            )}
             <View style={styles.inputBlock}>
               <Text style={styles.label}>Email Chauffeur</Text>
               <TextInput
@@ -67,6 +139,7 @@ export default function LoginScreen() {
                 autoCapitalize="none"
                 value={email}
                 onChangeText={setEmail}
+                editable={hydrated}
               />
             </View>
 
@@ -80,6 +153,7 @@ export default function LoginScreen() {
                   secureTextEntry={!showPassword}
                   value={password}
                   onChangeText={setPassword}
+                  editable={hydrated}
                 />
                 <TouchableOpacity
                   style={styles.eyeButton}
@@ -97,8 +171,9 @@ export default function LoginScreen() {
             {/* ✅ PHASE 1 : Checkbox "Se souvenir de moi" */}
             <TouchableOpacity
               style={styles.rememberMeContainer}
-              onPress={() => setRememberMe(!rememberMe)}
+              onPress={handleToggleRememberMe}
               activeOpacity={0.7}
+              disabled={!hydrated}
             >
               <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
                 {rememberMe && (
@@ -107,6 +182,9 @@ export default function LoginScreen() {
               </View>
               <Text style={styles.checkboxLabel}>Se souvenir de moi</Text>
             </TouchableOpacity>
+            <Text style={styles.rememberMeHint}>
+              Stocké de manière sécurisée sur cet appareil (Keychain/Keystore).
+            </Text>
 
             <TouchableOpacity
               style={styles.helperLink}

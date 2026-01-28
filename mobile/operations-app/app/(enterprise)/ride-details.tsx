@@ -19,6 +19,7 @@ import "dayjs/locale/fr";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { isCompletedStatus, normalizeBookingStatus } from "@/utils/bookingStatus";
+import { isPickupSentinel } from "@/utils/urgentTime";
 import { TransferRideModal } from "@/components/enterprise/transfers/TransferRideModal";
 
 // ✅ Palette professionnelle cohérente avec les autres pages
@@ -270,6 +271,10 @@ export default function RideDetailsScreen() {
 
   const handleMarkUrgent = useCallback(async () => {
     if (!rideId) return;
+    if (!isPickupSentinel(detail?.summary?.time?.pickup_at)) {
+      setErrorMessage("Course déjà planifiée (urgent indisponible).");
+      return;
+    }
     setActionLoading(true);
     setErrorMessage(null);
     try {
@@ -280,6 +285,10 @@ export default function RideDetailsScreen() {
         "La course est marquée urgente (+15 min)."
       );
     } catch (error: any) {
+      if (error?.response?.status === 409) {
+        setErrorMessage("Course déjà planifiée (urgent indisponible).");
+        return;
+      }
       const message =
         error?.response?.data?.error ??
         error?.message ??
@@ -288,7 +297,7 @@ export default function RideDetailsScreen() {
     } finally {
       setActionLoading(false);
     }
-  }, [loadDetail, rideId]);
+  }, [detail?.summary?.time?.pickup_at, loadDetail, rideId]);
 
   const handleScheduleConfirm = useCallback(async () => {
     if (!rideId) return;
@@ -380,16 +389,11 @@ export default function RideDetailsScreen() {
     manualDriverId.trim().length === 0 || actionLoading;
 
   const headerTitle = summary
-    ? `${summary.client.name} • ${summary.time.pickup_at ? dayjs(summary.time.pickup_at).format("DD MMM HH:mm") : "⏱️ À définir"}`
+    ? `${summary.client.name} • ${!isPickupSentinel(summary?.time?.pickup_at) ? dayjs(summary.time.pickup_at).format("DD MMM HH:mm") : "⏱️ À définir"}`
     : "Course";
 
-  // ✅ Vérifier si la course a une heure planifiée valide (pas juste minuit)
-  const hasScheduledTime = useMemo(() => {
-    if (!summary?.time?.pickup_at) return false;
-    const scheduled = dayjs(summary.time.pickup_at);
-    // Si l'heure est à minuit (00:00), considérer comme non planifiée
-    return scheduled.hour() !== 0 || scheduled.minute() !== 0;
-  }, [summary?.time?.pickup_at]);
+  // ✅ Urgent autorisé uniquement si sentinelle 00:00 (heure non définie)
+  const showUrgentActions = isPickupSentinel(summary?.time?.pickup_at);
 
   if (loading) {
     return (
@@ -484,7 +488,7 @@ export default function RideDetailsScreen() {
       </View>
 
       {/* ✅ Section Actions rapides (affichée seulement si pas d'heure planifiée) */}
-      {!hasScheduledTime && (
+      {showUrgentActions && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Actions rapides</Text>
           <View style={styles.quickActions}>
@@ -493,7 +497,11 @@ export default function RideDetailsScreen() {
               onPress={handleMarkUrgent}
               disabled={actionLoading}
             >
-              <Text style={styles.quickActionText}>Marquer urgent +15 min</Text>
+              {actionLoading ? (
+                <ActivityIndicator size="small" color={palette.primary} />
+              ) : (
+                <Text style={styles.quickActionText}>Marquer urgent +15 min</Text>
+              )}
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.quickActionButton}

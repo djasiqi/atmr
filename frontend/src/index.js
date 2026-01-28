@@ -72,26 +72,27 @@ if (ENVIRONMENT !== 'development') {
   onTTFB(sendWebVitalToSentry);
 }
 
-// ===== GESTION ERREURS EXTENSIONS NAVIGATEUR =====
+// ===== GESTION ERREURS EXTENSIONS NAVIGATEUR + SOCKET =====
 // ⚡ Ignorer l'erreur "listener indicated asynchronous response"
 // qui est généralement causée par des extensions de navigateur
+// ⚡ Intercepter "Connection rejected by server" (socket.io / python-socketio #590)
+//    pour éviter le crash quand le serveur refuse la connexion sans data.message
 window.addEventListener(
   'error',
   (event) => {
-    const message = event.message || '';
+    const message = event.message || (event.error?.message ?? '') || '';
+    const stack = event.error?.stack ?? '';
     const chunkFailedRegex = /Loading chunk [\w-]+ failed/i;
 
     if (
       message.includes('listener indicated an asynchronous response') ||
       message.includes('message channel closed')
     ) {
-      // Ignorer silencieusement cette erreur (elle vient des extensions)
       event.preventDefault();
       return false;
     }
 
     if (chunkFailedRegex.test(message)) {
-      // Recharge la page une seule fois pour retenter de charger les chunks
       if (!window.__RELOADING_FROM_CHUNK_ERROR__) {
         window.__RELOADING_FROM_CHUNK_ERROR__ = true;
         window.location.reload();
@@ -99,13 +100,39 @@ window.addEventListener(
       event.preventDefault();
       return false;
     }
+
+    // Socket.IO : rejet sans data.message (python-socketio #590) — on masque seulement si ça vient bien du transport
+    const fromSocketTransport =
+      stack.includes('socket.io') || stack.includes('engine.io') || message.includes('socket.io') || message.includes('engine.io');
+    const isSocketRejection =
+      message.includes('Connection rejected by server') && fromSocketTransport;
+    const isOnpacketUndefined =
+      message.includes('message') && message.includes('undefined') && stack.includes('onpacket') && fromSocketTransport;
+    if (isSocketRejection || isOnpacketUndefined) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (process.env.NODE_ENV === 'development') {
+        window.__SOCKET_REJECTION_SUPPRESS_COUNT = (window.__SOCKET_REJECTION_SUPPRESS_COUNT || 0) + 1;
+        console.warn(
+          '[App] Connexion Socket refusée (interceptée). Vérifiez auth/backend.',
+          'Count:', window.__SOCKET_REJECTION_SUPPRESS_COUNT,
+          event.error
+        );
+      } else {
+        console.warn('[App] Connexion Socket refusée par le serveur.', event.error);
+      }
+      window.dispatchEvent(
+        new CustomEvent('socket_connection_rejected', { detail: { message, originalError: event.error } })
+      );
+      return true;
+    }
   },
   true
 );
 
-// Gérer aussi les erreurs de promesse non catchées liées aux extensions
+// Gérer aussi les erreurs de promesse non catchées (extensions + Socket rejet)
 window.addEventListener('unhandledrejection', (event) => {
-  const reasonMessage = event.reason?.message || '';
+  const reasonMessage = event.reason?.message || String(event.reason || '');
   const chunkFailedRegex = /Loading chunk [\w-]+ failed/i;
 
   if (
@@ -114,6 +141,26 @@ window.addEventListener('unhandledrejection', (event) => {
   ) {
     // Ignorer silencieusement cette erreur (elle vient des extensions)
     event.preventDefault();
+    return;
+  }
+
+  // Socket.IO : rejet sans data.message (python-socketio #590) — uniquement si stack/raison indique socket/engine
+  const reasonStack = (event.reason?.stack || '').toString();
+  const fromSocket = reasonStack.includes('socket.io') || reasonStack.includes('engine.io')
+    || reasonMessage.includes('socket.io') || reasonMessage.includes('engine.io');
+  if (reasonMessage.includes('Connection rejected by server') && fromSocket) {
+    event.preventDefault();
+    if (process.env.NODE_ENV === 'development') {
+      window.__SOCKET_REJECTION_SUPPRESS_COUNT = (window.__SOCKET_REJECTION_SUPPRESS_COUNT || 0) + 1;
+      console.warn('[App] Connexion Socket refusée (promise, interceptée). Count:', window.__SOCKET_REJECTION_SUPPRESS_COUNT, event.reason);
+    } else {
+      console.warn('[App] Connexion Socket refusée par le serveur.', event.reason);
+    }
+    window.dispatchEvent(
+      new CustomEvent('socket_connection_rejected', {
+        detail: { message: reasonMessage, originalError: event.reason },
+      })
+    );
     return;
   }
 

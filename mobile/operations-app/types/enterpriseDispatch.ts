@@ -202,6 +202,13 @@ export interface MarkUrgentPayload {
   reason?: string;
 }
 
+export interface MarkUrgentResponse {
+  ride_id: string;
+  is_urgent: boolean;
+  scheduled_time: string | null;
+  audit_event_id?: string;
+}
+
 export interface DispatchMessage {
   id: number | string;
   sender_id: number | string | null;

@@ -13,6 +13,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { useAuth } from "@/hooks/useAuth";
 import {
+  getLastSessionEvent,
+  getLastSessionEventFromStorage,
+  subscribeSessionJournal,
+} from "@/services/sessionJournal";
+import {
   updateDriverProfile,
   updateDriverPhoto,
   switchToEnterpriseToken,
@@ -51,6 +56,21 @@ export default function ProfileScreen() {
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const [switchingToEnterprise, setSwitchingToEnterprise] = useState(false);
   const [showSwitchModal, setShowSwitchModal] = useState(false);
+  const [lastSessionDiag, setLastSessionDiag] = useState<{
+    event: string;
+    at: number;
+  } | null>(() => getLastSessionEvent());
+
+  useEffect(() => {
+    const unsub = subscribeSessionJournal((event, at) => {
+      setLastSessionDiag({ event, at });
+    });
+    setLastSessionDiag(getLastSessionEvent());
+    getLastSessionEventFromStorage().then((v) => {
+      if (v) setLastSessionDiag(v);
+    });
+    return unsub;
+  }, []);
 
   useEffect(() => {
     if (driver) {
@@ -477,6 +497,39 @@ export default function ProfileScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* P0.1 – Menu debug chauffeur : dernier reason session (X-Session-Diag) */}
+        {__DEV__ && lastSessionDiag && (
+          <View
+            style={{
+              marginHorizontal: 16,
+              marginTop: 12,
+              padding: 10,
+              backgroundColor: "#f0f4f0",
+              borderRadius: 8,
+              borderLeftWidth: 3,
+              borderLeftColor: "#0A7F59",
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 11,
+                color: "#5F7369",
+                marginBottom: 4,
+                fontWeight: "600",
+              }}
+            >
+              Debug – Dernier événement session
+            </Text>
+            <Text style={{ fontSize: 13, color: "#1a1a1a" }}>
+              {lastSessionDiag.event}
+            </Text>
+            <Text style={{ fontSize: 11, color: "#888", marginTop: 2 }}>
+              {new Date(lastSessionDiag.at).toLocaleString()} · envoyé en
+              X-Session-Diag
+            </Text>
+          </View>
+        )}
 
         {/* Espacement final */}
         <View style={profileStyles.bottomSpacing} />

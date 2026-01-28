@@ -65,6 +65,23 @@ const CompanyDashboard = () => {
   // Variables préfixées avec _ car l'alerte est désactivée mais le hook reste actif
   const { delayCount: _delayCount, hasCriticalDelays: _hasCriticalDelays, hasDelays: _hasDelays } = useDispatchDelays(dispatchDay, 120000);
 
+  // ✅ Toast lorsque la connexion Socket est refusée (backend envoie AUTH_REQUIRED, TOKEN_EXPIRED, etc.)
+  useEffect(() => {
+    const handler = (e) => {
+      const code = (e.detail?.code || e.detail?.message || '').toString();
+      const authCodes = ['AUTH_REQUIRED', 'AUTH_INVALID', 'TOKEN_EXPIRED', 'AUTH_FORBIDDEN', 'COMPANY_NOT_FOUND', 'DRIVER_OR_COMPANY_NOT_FOUND'];
+      if (authCodes.some((c) => code.includes(c))) {
+        toast.error('Session expirée ou accès refusé. Reconnectez-vous.', { duration: 5000 });
+      } else if (code.includes('RATE_LIMIT')) {
+        toast.warning('Trop de tentatives de connexion. Réessayez dans quelques instants.', { duration: 5000 });
+      } else if (code.includes('CONNECT_ERROR') || code) {
+        toast.error('Connexion temps réel refusée. Vérifiez votre authentification.', { duration: 5000 });
+      }
+    };
+    window.addEventListener('socket_connection_rejected', handler);
+    return () => window.removeEventListener('socket_connection_rejected', handler);
+  }, []);
+
   // ✅ 3.4.2: Hook pour dashboard temps réel dispatch (refresh toutes les 2 minutes)
   const {
     loading: loadingRealtimeDashboard,

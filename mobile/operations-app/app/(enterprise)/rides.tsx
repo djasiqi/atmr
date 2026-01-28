@@ -21,6 +21,7 @@ import dayjs from "dayjs";
 import "dayjs/locale/fr";
 
 import { useAuth } from "@/hooks/useAuth";
+import { getAuthNotReadyDisplayMessage, isAuthNotReadyError } from "@/services/authGuards";
 import { useEnterpriseContext } from "@/context/EnterpriseContext";
 import { useThrottledCallback } from "@/hooks/useDebouncedCallback";
 import { createShadow } from "@/styles/shadowStyles";
@@ -33,8 +34,10 @@ import { TransferRideModal } from "@/components/enterprise/transfers/TransferRid
 import {
   getDispatchRides,
   scheduleRide,
+  markRideUrgent,
   cancelRide,
 } from "@/services/enterpriseDispatch";
+import { isPickupSentinel } from "@/utils/urgentTime";
 import { RideSummary } from "@/types/enterpriseDispatch";
 import { useRideActions } from "@/hooks/useRideActions";
 import { router } from "expo-router";
@@ -109,6 +112,7 @@ export default function EnterpriseRidesScreen() {
     label?: string;
   }>({ rideId: null, scheduledTime: null, label: undefined });
   const [actionLoading, setActionLoading] = useState(false);
+  const [urgentLoadingRideId, setUrgentLoadingRideId] = useState<string | null>(null);
   const [cancelModal, setCancelModal] = useState<{
     ride: RideSummary | null;
     shouldBill: boolean;
@@ -134,20 +138,14 @@ export default function EnterpriseRidesScreen() {
     return base.format("dddd D MMMM");
   }, [currentDate]);
 
-  // ✅ Trier les courses : d'abord celles avec horaire (plus proche à plus éloignée), puis celles à définir
+  // ✅ Trier les courses : d'abord celles avec horaire (plus proche à plus éloignée), puis celles à définir (sentinelle 00:00)
   const sortedRides = useMemo(() => {
     const withTime: RideSummary[] = [];
     const withoutTime: RideSummary[] = [];
 
     rides.forEach((ride) => {
-      if (ride.time.pickup_at) {
-        const moment = dayjs(ride.time.pickup_at);
-        // Si l'heure est à minuit (00:00), c'est une heure non définie
-        if (moment.hour() === 0 && moment.minute() === 0) {
-          withoutTime.push(ride);
-        } else {
-          withTime.push(ride);
-        }
+      if (ride.time.pickup_at && !isPickupSentinel(ride.time.pickup_at)) {
+        withTime.push(ride);
       } else {
         withoutTime.push(ride);
       }
@@ -176,7 +174,13 @@ export default function EnterpriseRidesScreen() {
       console.log("[rides.tsx] Courses reçues:", response.items.length, "courses");
       setRides(response.items);
     } catch (error: any) {
+      // ✅ Invariant C: refresh_token absent → forcer login (pas "connexion en cours" infini)
+      if (isAuthNotReadyError(error) && ["missing_refresh_token", "auth_ready_timeout"].includes((error as any).reason)) {
+        router.replace("/(enterprise-auth)/login" as any);
+        return;
+      }
       const message =
+        getAuthNotReadyDisplayMessage(error) ??
         error?.response?.data?.error ??
         error?.message ??
         "Impossible de charger les courses.";
@@ -302,24 +306,42 @@ export default function EnterpriseRidesScreen() {
 
   const handleUrgent = useCallback(
     async (ride: RideSummary) => {
-      // Planifier la course pour l'heure actuelle + 15 minutes
-      const now = dayjs();
-      const urgentTime = now.add(15, "minute");
-      const localISO = urgentTime.format("YYYY-MM-DDTHH:mm:ss");
-
+      // Garde-fou local : urgent uniquement si pickup_at sentinelle (00:00 ou absent)
+      if (!isPickupSentinel(ride.time?.pickup_at)) {
+        Alert.alert(
+          "Course déjà planifiée",
+          "Urgent disponible uniquement pour une course sans heure (00:00)."
+        );
+        return;
+      }
       setActionLoading(true);
+      setUrgentLoadingRideId(ride.id);
       try {
-        await scheduleRide(ride.id, { pickup_at: localISO });
+        await markRideUrgent(ride.id, { extra_delay_minutes: 15 });
         await loadRides();
-        Alert.alert("Urgent", `La course a été planifiée pour ${urgentTime.format("HH:mm")} (dans 15 minutes).`);
+        const urgentTime = dayjs().add(15, "minute");
+        Alert.alert(
+          "Urgent",
+          `La course a été planifiée pour ${urgentTime.format("HH:mm")} (dans 15 minutes).`
+        );
       } catch (error: any) {
+        if (isAuthNotReadyError(error) && ["missing_refresh_token", "auth_ready_timeout"].includes((error as any).reason)) {
+          router.replace("/(enterprise-auth)/login" as any);
+          return;
+        }
+        if (error?.response?.status === 409) {
+          Alert.alert("Course déjà planifiée", "Course déjà planifiée (urgent indisponible).");
+          return;
+        }
         const message =
+          getAuthNotReadyDisplayMessage(error) ??
           error?.response?.data?.error ??
           error?.message ??
           "Impossible de planifier la course en urgence.";
         Alert.alert("Erreur", message);
       } finally {
         setActionLoading(false);
+        setUrgentLoadingRideId(null);
       }
     },
     [loadRides]
@@ -342,7 +364,12 @@ export default function EnterpriseRidesScreen() {
       await scheduleRide(scheduleModal.rideId, { pickup_at: localISO });
       await loadRides();
     } catch (error: any) {
+      if (isAuthNotReadyError(error) && ["missing_refresh_token", "auth_ready_timeout"].includes((error as any).reason)) {
+        router.replace("/(enterprise-auth)/login" as any);
+        return;
+      }
       const message =
+        getAuthNotReadyDisplayMessage(error) ??
         error?.response?.data?.error ??
         error?.message ??
         "Impossible de planifier l'horaire.";
@@ -370,12 +397,11 @@ export default function EnterpriseRidesScreen() {
   }, []);
 
   const handleSchedule = useCallback((ride: RideSummary) => {
-    // Si la course a déjà une heure, l'utiliser, sinon utiliser l'heure actuelle
+    // Heure initiale : si course déjà planifiée (pickup_at != sentinelle 00:00), utiliser cette heure ; sinon maintenant
     let initialTime: Date | null = null;
-    if (ride.time.pickup_at) {
+    if (ride.time.pickup_at && !isPickupSentinel(ride.time.pickup_at)) {
       initialTime = dayjs(ride.time.pickup_at).toDate();
     } else {
-      // Utiliser la date actuelle avec l'heure actuelle comme valeur par défaut
       initialTime = dayjs().toDate();
     }
     setScheduleModal({
@@ -413,7 +439,12 @@ export default function EnterpriseRidesScreen() {
       await refreshData();
       setCancelModal({ ride: null, shouldBill: false });
     } catch (error: any) {
+      if (isAuthNotReadyError(error) && ["missing_refresh_token", "auth_ready_timeout"].includes((error as any).reason)) {
+        router.replace("/(enterprise-auth)/login" as any);
+        return;
+      }
       const message =
+        getAuthNotReadyDisplayMessage(error) ??
         error?.response?.data?.error ??
         error?.message ??
         "Impossible d'annuler la course.";
@@ -505,26 +536,21 @@ export default function EnterpriseRidesScreen() {
               const isExpanded = expandedRideId === ride.id;
               const needsBottomMargin = isLast && isExpanded;
 
-              // ✅ Calculer l'heure de pickup (identique au dashboard)
+              // ✅ Calculer l'heure de pickup : 00:00 = sentinelle "non définie", ne jamais afficher comme heure
               let pickupTime: string | null = null;
-              if (ride.time.pickup_at) {
-                const pickupMoment = dayjs(ride.time.pickup_at);
-                // Si l'heure est à minuit (00:00), c'est probablement une heure non définie
-                pickupTime =
-                  pickupMoment.hour() === 0 && pickupMoment.minute() === 0
-                    ? null
-                    : pickupMoment.format("HH[h]mm");
+              if (ride.time.pickup_at && !isPickupSentinel(ride.time.pickup_at)) {
+                pickupTime = dayjs(ride.time.pickup_at).format("HH[h]mm");
               }
 
               // ✅ Normaliser le statut en minuscules pour éviter les problèmes de casse
               const normalizedStatus = ride.status ? String(ride.status).toLowerCase().trim() : undefined;
 
-              // ✅ Calcul du retard : uniquement si la course est assignée, l'heure prévue est passée, ET la course n'est pas terminée
+              // ✅ Calcul du retard : uniquement si heure réelle (pas sentinelle 00:00), assignée, passée, non terminée
               let delayMinutes: number | null = null;
               // ✅ P0-1: Utiliser la fonction de normalisation
               const { isCompletedStatus } = require("@/utils/bookingStatus");
               const isCompleted = isCompletedStatus(ride.status);
-              if (!isCompleted && ride.driver?.name && ride.time.pickup_at) {
+              if (!isCompleted && ride.driver?.name && ride.time.pickup_at && !isPickupSentinel(ride.time.pickup_at)) {
                 const scheduledTime = dayjs(ride.time.pickup_at);
                 const now = dayjs();
                 if (scheduledTime.isValid() && scheduledTime.isBefore(now)) {
@@ -554,7 +580,6 @@ export default function EnterpriseRidesScreen() {
                       delayMinutes: delayMinutes,
                       badges: priorityBadge ? [priorityBadge] : undefined,
                       onPress: () => handleOpenDetails(ride.id),
-                      // ✅ Suppression des actions : dispatch urgent +15min et assignement chauffeur
                       onQuickAction: undefined,
                       onPrimaryAction: undefined,
                       footerActions: (
@@ -591,6 +616,24 @@ export default function EnterpriseRidesScreen() {
                                 </View>
                                 <Text style={[styles.actionButtonGhostText, { color: palette.modalButton }]}>Planifier</Text>
                               </TouchableOpacity>
+                              {isPickupSentinel(ride.time?.pickup_at) && (
+                                <TouchableOpacity
+                                  style={[styles.actionButtonGhost, { flexBasis: "30%" }]}
+                                  onPress={() => handleUrgent(ride)}
+                                  disabled={!!actionLoading || urgentLoadingRideId === ride.id}
+                                >
+                                  <View style={styles.actionButtonIcon}>
+                                    {urgentLoadingRideId === ride.id ? (
+                                      <ActivityIndicator size="small" color="#F59E0B" />
+                                    ) : (
+                                      <Ionicons name="flash" size={16} color="#F59E0B" />
+                                    )}
+                                  </View>
+                                  <Text style={[styles.actionButtonGhostText, { color: "#F59E0B" }]}>
+                                    {urgentLoadingRideId === ride.id ? "..." : "Urgent +15min"}
+                                  </Text>
+                                </TouchableOpacity>
+                              )}
                               <TouchableOpacity
                                 style={[styles.actionButtonGhost, { flexBasis: "30%" }]}
                                 onPress={() => handleOpenDetails(ride.id)}
@@ -802,7 +845,12 @@ export default function EnterpriseRidesScreen() {
                     setScheduleModal({ rideId: null, scheduledTime: null, label: undefined });
                   })
                   .catch((error: any) => {
+                    if (isAuthNotReadyError(error) && ["missing_refresh_token", "auth_ready_timeout"].includes((error as any).reason)) {
+                      router.replace("/(enterprise-auth)/login" as any);
+                      return;
+                    }
                     const message =
+                      getAuthNotReadyDisplayMessage(error) ??
                       error?.response?.data?.error ??
                       error?.message ??
                       "Impossible de planifier l'horaire.";

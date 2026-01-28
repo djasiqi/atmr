@@ -25,9 +25,11 @@ import "dayjs/locale/fr";
 import { Ionicons } from "@expo/vector-icons";
 
 import { useAuth } from "@/hooks/useAuth";
+import { getAuthNotReadyDisplayMessage, isAuthNotReadyError } from "@/services/authGuards";
 import { useEnterpriseNotifications } from "@/hooks/useEnterpriseNotifications";
 import { useThrottledCallback } from "@/hooks/useDebouncedCallback";
 import { isCompletedStatus } from "@/utils/bookingStatus";
+import { isPickupSentinel } from "@/utils/urgentTime";
 import { createShadow } from "@/styles/shadowStyles";
 import {
   getDispatchRides,
@@ -252,7 +254,13 @@ export default function EnterpriseDashboardScreen() {
       // ✅ Charger les transferts entrants en arrière-plan
       loadIncomingTransfers();
     } catch (error: any) {
+      // ✅ Invariant C: refresh_token absent → forcer login (pas "connexion en cours" infini)
+      if (isAuthNotReadyError(error) && ["missing_refresh_token", "auth_ready_timeout"].includes((error as any).reason)) {
+        router.replace("/(enterprise-auth)/login" as any);
+        return;
+      }
       const message =
+        getAuthNotReadyDisplayMessage(error) ??
         error?.response?.data?.error ??
         error?.message ??
         "Impossible de charger les dernières informations dispatch.";
@@ -711,9 +719,9 @@ export default function EnterpriseDashboardScreen() {
                     ? undefined
                     : isPendingTransferReceiver && ride.transfer?.id
                       ? () => rideActions.handleRejectTransfer(ride.transfer!.id) // ❌ Refuser (receveur)
-                      : !canManageRide
+                      : !canManageRide || !isPickupSentinel(ride.time?.pickup_at)
                         ? undefined
-                        : () => handleUrgentDelay(ride.id); // 🚨 Marquer urgent
+                        : () => handleUrgentDelay(ride.id); // 🚨 Marquer urgent (sentinel 00:00 uniquement)
                   // #region agent log
                   try {
                     fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'dashboard.tsx:697-onQuickAction', message: 'onQuickAction computed', data: { rideId: ride.id, transferId: ride.transfer?.id, hasValue: !!value, isCompleted: isCompleted, canManageRide: canManageRide, isPendingTransferReceiver: isPendingTransferReceiver }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run12-final', hypothesisId: 'H1-FIX' }) }).catch(() => { });

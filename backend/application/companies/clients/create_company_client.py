@@ -224,6 +224,7 @@ class CreateCompanyClientUseCase:
             # Facturation par défaut
             "default_billed_to_type": validated_data.get("default_billed_to_type"),
             "default_billed_to_contact": validated_data.get("default_billed_to_contact"),
+            "is_active": validated_data.get("is_active", True),
         }
 
         try:

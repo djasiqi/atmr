@@ -10,10 +10,10 @@ const EditClientModal = ({ client, onClose, onSave }) => {
   const [formData, setFormData] = useState({
     is_institution: client.is_institution || false,
     institution_name: client.institution_name || '',
+    first_name: client.user_first_name ?? client.first_name ?? client.user?.first_name ?? '',
+    last_name: client.user_last_name ?? client.last_name ?? client.user?.last_name ?? '',
     residence_facility: client.residence_facility || '',
-    // ✅ CORRECTION: Les données user viennent avec préfixe user_ (user_gender, user_birth_date)
     birth_date: client.user_birth_date || client.user?.birth_date || '',
-    // ✅ Convertir gender de "HOMME"/"FEMME" vers "male"/"female" pour le select
     gender: (() => {
       const genderValue = client.user_gender || client.user?.gender || '';
       if (!genderValue) return '';
@@ -23,19 +23,33 @@ const EditClientModal = ({ client, onClose, onSave }) => {
       return genderStr;
     })(),
     avs_number: client.avs_number || '',
+    phone: client.phone || client.user_phone || client.user?.phone || '',
     contact_email: client.contact_email || '',
     contact_phone: client.contact_phone || '',
     billing_address: client.billing_address || '',
-    // ✅ CORRECTION: Lire directement depuis client.domicile_address, pas client.domicile.address
     domicile_address: client.domicile_address || client.domicile?.address || '',
     domicile_zip: client.domicile_zip || client.domicile?.zip || '',
     domicile_city: client.domicile_city || client.domicile?.city || '',
+    door_code: client.access?.door_code ?? client.door_code ?? '',
+    floor: client.access?.floor ?? client.floor ?? '',
+    access_notes: client.access?.notes ?? client.access_notes ?? '',
+    gp_name: client.gp?.name ?? client.gp_name ?? '',
+    gp_phone: client.gp?.phone ?? client.gp_phone ?? '',
+    show_billing_info: !!(client.billing_address && String(client.billing_address).trim()),
+    default_billed_to_type: client.default_billing?.billed_to_type ?? client.default_billed_to_type ?? '',
+    default_billed_to_contact: client.default_billing?.billed_to_contact ?? client.default_billed_to_contact ?? '',
     preferential_rate: client.preferential_rate || '',
-    is_active: client.is_active !== false, // Par défaut actif
+    is_active: client.is_active !== false,
   });
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [showAdvancedBilling, setShowAdvancedBilling] = useState(
+    !!(
+      (client.default_billing?.billed_to_type && client.default_billing.billed_to_type !== 'patient') ||
+      (client.default_billing?.billed_to_contact && client.default_billing.billed_to_contact.trim())
+    )
+  );
 
   // Coordonnées GPS pour adresse de domicile
   // ✅ CORRECTION: Lire directement depuis client.domicile_lat, pas client.domicile.lat
@@ -119,50 +133,66 @@ const EditClientModal = ({ client, onClose, onSave }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Validation
     if (formData.is_institution && !formData.institution_name.trim()) {
       setError("Le nom de l'institution est requis pour les institutions");
       return;
     }
 
-    if (!formData.is_institution && !formData.gender) {
-      setError("Merci de sélectionner une civilité");
-      return;
+    if (!formData.is_institution) {
+      if (!formData.first_name?.trim() || !formData.last_name?.trim()) {
+        setError('Le prénom et le nom sont requis');
+        return;
+      }
+      if (!formData.gender) {
+        setError("Merci de sélectionner une civilité");
+        return;
+      }
     }
 
     setLoading(true);
     setError(null);
 
     try {
-      // Construire le payload de base sans les champs utilisateur
+      const hasSeparateBilling = formData.show_billing_info && formData.billing_address?.trim();
+      const fullDomicile = [formData.domicile_address, formData.domicile_zip, formData.domicile_city]
+        .filter(Boolean)
+        .join(', ');
+      const billingAddress = hasSeparateBilling
+        ? formData.billing_address.trim()
+        : fullDomicile || null;
+
       const payload = {
         is_institution: formData.is_institution,
-        institution_name: formData.institution_name,
-        residence_facility: formData.residence_facility,
-        avs_number: formData.avs_number,
-        contact_email: formData.contact_email,
-        contact_phone: formData.contact_phone,
-        billing_address: formData.billing_address,
-        domicile_address: formData.domicile_address,
-        domicile_zip: formData.domicile_zip,
-        domicile_city: formData.domicile_city,
-        preferential_rate: formData.preferential_rate,
+        institution_name: formData.institution_name || null,
+        residence_facility: formData.residence_facility || null,
+        avs_number: formData.avs_number?.trim() || null,
+        contact_email: formData.contact_email?.trim() || null,
+        contact_phone: formData.contact_phone?.trim() || null,
+        billing_address: billingAddress,
+        billing_lat: hasSeparateBilling ? billingCoords.lat : domicileCoords.lat,
+        billing_lon: hasSeparateBilling ? billingCoords.lon : domicileCoords.lon,
+        domicile_address: formData.domicile_address?.trim() || null,
+        domicile_zip: formData.domicile_zip?.trim() || null,
+        domicile_city: formData.domicile_city?.trim() || null,
+        preferential_rate: formData.preferential_rate ? parseFloat(formData.preferential_rate) : null,
         is_active: formData.is_active,
         domicile_lat: domicileCoords.lat,
         domicile_lon: domicileCoords.lon,
-        billing_lat: billingCoords.lat,
-        billing_lon: billingCoords.lon,
+        door_code: formData.door_code?.trim() || null,
+        floor: formData.floor?.trim() || null,
+        access_notes: formData.access_notes?.trim() || null,
+        gp_name: formData.gp_name?.trim() || null,
+        gp_phone: formData.gp_phone?.trim() || null,
+        default_billed_to_type: formData.default_billed_to_type || null,
+        default_billed_to_contact: formData.default_billed_to_contact?.trim() || null,
       };
 
-      // Ajouter les champs utilisateur uniquement si ce n'est pas une institution
       if (!formData.is_institution) {
-        // Ne pas envoyer gender si vide ou undefined
-        if (formData.gender && formData.gender.trim()) {
-          payload.gender = formData.gender;
-        }
-        if (formData.birth_date && formData.birth_date.trim()) {
-          payload.birth_date = formData.birth_date;
-        }
+        payload.first_name = formData.first_name?.trim() || null;
+        payload.last_name = formData.last_name?.trim() || null;
+        payload.phone = formData.phone?.trim() || null;
+        if (formData.gender?.trim()) payload.gender = formData.gender;
+        if (formData.birth_date?.trim()) payload.birth_date = formData.birth_date;
       }
 
       console.log('📤 Payload envoyé:', payload);
@@ -205,7 +235,7 @@ const EditClientModal = ({ client, onClose, onSave }) => {
               {formData.is_institution ? 'Informations institution' : 'Informations client'}
             </h3>
 
-            <div className={styles.infoCard}>
+            <div className={formData.is_institution ? styles.infoCard : undefined}>
               {formData.is_institution ? (
                 <>
                   <div className={styles.infoRow}>
@@ -217,66 +247,95 @@ const EditClientModal = ({ client, onClose, onSave }) => {
                   <div className={styles.infoRow}>
                     <span className={styles.label}>Contact interne :</span>
                     <span className={styles.value}>
-                      {client.user_first_name || client.first_name || ''} {client.user_last_name || client.last_name || ''}
+                      {formData.first_name || formData.last_name
+                        ? `${formData.first_name} ${formData.last_name}`.trim()
+                        : '—'}
                     </span>
                   </div>
                 </>
               ) : (
                 <>
-                  <div className={styles.infoRow}>
-                    <span className={styles.label}>Nom :</span>
-                    <span className={styles.value}>
-                      {client.user_first_name || client.first_name || ''} {client.user_last_name || client.last_name || ''}
-                    </span>
+                  <div className={styles.formRow}>
+                    <div className={styles.formGroup}>
+                      <label htmlFor="first_name" className={styles.label}>Prénom *</label>
+                      <input
+                        type="text"
+                        id="first_name"
+                        name="first_name"
+                        value={formData.first_name}
+                        onChange={handleChange}
+                        className={styles.input}
+                        required
+                        disabled={loading}
+                      />
+                    </div>
+                    <div className={styles.formGroup}>
+                      <label htmlFor="last_name" className={styles.label}>Nom *</label>
+                      <input
+                        type="text"
+                        id="last_name"
+                        name="last_name"
+                        value={formData.last_name}
+                        onChange={handleChange}
+                        className={styles.input}
+                        required
+                        disabled={loading}
+                      />
+                    </div>
                   </div>
-                  <div className="form-group mt-sm">
-                    <label htmlFor="birth_date" className="form-label">
-                      Date de naissance
-                    </label>
+                  <div className={styles.formGroup}>
+                    <label htmlFor="phone" className={styles.label}>Téléphone</label>
+                    <input
+                      type="tel"
+                      id="phone"
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handleChange}
+                      className={styles.input}
+                      placeholder="+41 22 123 45 67"
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className={styles.formRow}>
+                    <div className={styles.formGroup}>
+                      <label htmlFor="gender" className={styles.label}>Civilité *</label>
+                      <select
+                        id="gender"
+                        name="gender"
+                        value={formData.gender}
+                        onChange={handleChange}
+                        className={styles.input}
+                        required
+                        disabled={loading}
+                      >
+                        <option value="">— Sélectionnez —</option>
+                        <option value="male">Monsieur</option>
+                        <option value="female">Madame</option>
+                      </select>
+                    </div>
+                    <div className={styles.formGroup}>
+                      <label htmlFor="avs_number" className={styles.label}>Numéro AVS</label>
+                      <input
+                        type="text"
+                        id="avs_number"
+                        name="avs_number"
+                        value={formData.avs_number}
+                        onChange={handleChange}
+                        className={styles.input}
+                        placeholder="756.XXXX.XXXX.XX"
+                        disabled={loading}
+                      />
+                    </div>
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label htmlFor="birth_date" className={styles.label}>Date de naissance</label>
                     <input
                       type="date"
                       id="birth_date"
                       name="birth_date"
                       value={formData.birth_date}
                       onChange={handleChange}
-                      className="form-input"
-                      disabled={loading}
-                    />
-                  </div>
-
-                  {/* ✅ Civilité */}
-                  <div className="form-group mt-sm">
-                    <label htmlFor="gender" className="form-label">
-                      Civilité
-                    </label>
-                    <select
-                      id="gender"
-                      name="gender"
-                      value={formData.gender}
-                      onChange={handleChange}
-                      className="form-input"
-                      disabled={loading}
-                      required={!formData.is_institution}
-                    >
-                      <option value="">Merci de sélectionner</option>
-                      <option value="male">Monsieur</option>
-                      <option value="female">Madame</option>
-                    </select>
-                  </div>
-
-                  {/* ✅ Numéro AVS */}
-                  <div className="form-group mt-sm">
-                    <label htmlFor="avs_number" className="form-label">
-                      Numéro AVS
-                    </label>
-                    <input
-                      type="text"
-                      id="avs_number"
-                      name="avs_number"
-                      value={formData.avs_number}
-                      onChange={handleChange}
-                      className="form-input"
-                      placeholder="756.XXXX.XXXX.XX"
+                      className={styles.input}
                       disabled={loading}
                     />
                   </div>
@@ -331,62 +390,125 @@ const EditClientModal = ({ client, onClose, onSave }) => {
             )}
           </div>
 
-          {/* Coordonnées */}
+          {/* Coordonnées / Facturation */}
           <div className={styles.section}>
             <h3 className={styles.sectionTitle}>Coordonnées de facturation</h3>
 
-            <div className={styles.formGroup}>
-              <label htmlFor="contact_email" className={styles.label}>
-                Email de contact
-              </label>
-              <input
-                type="email"
-                id="contact_email"
-                name="contact_email"
-                value={formData.contact_email}
-                onChange={handleChange}
-                className={styles.input}
-                placeholder="contact@exemple.ch"
-                disabled={loading}
-              />
+            <div className={styles.formRow}>
+              <div className={styles.formGroup}>
+                <label htmlFor="contact_email" className={styles.label}>Email de contact</label>
+                <input
+                  type="email"
+                  id="contact_email"
+                  name="contact_email"
+                  value={formData.contact_email}
+                  onChange={handleChange}
+                  className={styles.input}
+                  placeholder="contact@exemple.ch"
+                  disabled={loading}
+                />
+              </div>
+              <div className={styles.formGroup}>
+                <label htmlFor="contact_phone" className={styles.label}>Téléphone de contact</label>
+                <input
+                  type="tel"
+                  id="contact_phone"
+                  name="contact_phone"
+                  value={formData.contact_phone}
+                  onChange={handleChange}
+                  className={styles.input}
+                  placeholder="+41 22 123 45 67"
+                  disabled={loading}
+                />
+              </div>
             </div>
 
-            <div className={styles.formGroup}>
-              <label htmlFor="contact_phone" className={styles.label}>
-                Téléphone
+            <div className={styles.checkboxGroup}>
+              <label className={styles.checkboxLabel}>
+                <input
+                  type="checkbox"
+                  name="show_billing_info"
+                  checked={formData.show_billing_info}
+                  onChange={handleChange}
+                  disabled={loading}
+                />
+                <span className={styles.checkboxText}>
+                  <strong>Adresse de facturation différente</strong>
+                  <small>Par défaut, la facturation utilise l&apos;adresse de domicile</small>
+                </span>
               </label>
-              <input
-                type="tel"
-                id="contact_phone"
-                name="contact_phone"
-                value={formData.contact_phone}
-                onChange={handleChange}
-                className={styles.input}
-                placeholder="+41 22 123 45 67"
-                disabled={loading}
-              />
             </div>
 
-            <div className={styles.formGroup}>
-              <label htmlFor="billing_address" className={styles.label}>
-                Adresse de facturation
+            {formData.show_billing_info && (
+              <div className={styles.formGroup}>
+                <label htmlFor="billing_address" className={styles.label}>Adresse de facturation</label>
+                <AddressAutocomplete
+                  name="billing_address"
+                  value={formData.billing_address}
+                  onChange={(e) => {
+                    setBillingCoords({ lat: null, lon: null });
+                    setFormData((prev) => ({ ...prev, billing_address: e.target.value }));
+                  }}
+                  onSelect={handleBillingAddressSelect}
+                  placeholder="Ex: Avenue de la Gare 5, 1003, Lausanne"
+                  disabled={loading}
+                />
+                <small className={styles.hint}>💡 Si différente de l&apos;adresse de domicile</small>
+              </div>
+            )}
+
+            <div className={styles.checkboxGroup}>
+              <label className={styles.checkboxLabel}>
+                <input
+                  type="checkbox"
+                  checked={showAdvancedBilling}
+                  onChange={(e) => setShowAdvancedBilling(e.target.checked)}
+                  disabled={loading}
+                />
+                <span className={styles.checkboxText}>
+                  <strong>Options de facturation avancées</strong>
+                  <small>Type de facturation par défaut et contact principal</small>
+                </span>
               </label>
-              <AddressAutocomplete
-                name="billing_address"
-                value={formData.billing_address}
-                onChange={(e) => {
-                  setBillingCoords({ lat: null, lon: null });
-                  setFormData((prev) => ({
-                    ...prev,
-                    billing_address: e.target.value,
-                  }));
-                }}
-                onSelect={handleBillingAddressSelect}
-                placeholder="Ex: Avenue de la Gare 5, 1003, Lausanne"
-                disabled={loading}
-              />
-              <small className={styles.hint}>💡 Si différente de l'adresse de domicile</small>
             </div>
+
+            {showAdvancedBilling && (
+              <div className={styles.formRow}>
+                <div className={styles.formGroup}>
+                  <label htmlFor="default_billed_to_type" className={styles.label}>
+                    Type de facturation par défaut
+                  </label>
+                  <select
+                    id="default_billed_to_type"
+                    name="default_billed_to_type"
+                    value={formData.default_billed_to_type}
+                    onChange={handleChange}
+                    className={styles.input}
+                    disabled={loading}
+                  >
+                    <option value="">— Laisser par défaut —</option>
+                    <option value="patient">Patient</option>
+                    <option value="clinic">Clinique</option>
+                    <option value="insurance">Assurance</option>
+                  </select>
+                </div>
+                <div className={styles.formGroup}>
+                  <label htmlFor="default_billed_to_contact" className={styles.label}>
+                    Contact facturation par défaut
+                  </label>
+                  <input
+                    type="text"
+                    id="default_billed_to_contact"
+                    name="default_billed_to_contact"
+                    value={formData.default_billed_to_contact}
+                    onChange={handleChange}
+                    className={styles.input}
+                    placeholder="Ex: Service facturation"
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Adresse de domicile */}
@@ -436,9 +558,7 @@ const EditClientModal = ({ client, onClose, onSave }) => {
 
             <div className={styles.formRow}>
               <div className={styles.formGroup}>
-                <label htmlFor="domicile_address_street" className={styles.label}>
-                  Rue et numéro
-                </label>
+                <label htmlFor="domicile_address_street" className={styles.label}>Rue et numéro</label>
                 <input
                   type="text"
                   id="domicile_address_street"
@@ -449,11 +569,8 @@ const EditClientModal = ({ client, onClose, onSave }) => {
                   disabled={loading}
                 />
               </div>
-
               <div className={styles.formGroup}>
-                <label htmlFor="domicile_zip" className={styles.label}>
-                  Code postal
-                </label>
+                <label htmlFor="domicile_zip" className={styles.label}>Code postal</label>
                 <input
                   type="text"
                   id="domicile_zip"
@@ -465,11 +582,8 @@ const EditClientModal = ({ client, onClose, onSave }) => {
                   disabled={loading}
                 />
               </div>
-
               <div className={styles.formGroup}>
-                <label htmlFor="domicile_city" className={styles.label}>
-                  Ville
-                </label>
+                <label htmlFor="domicile_city" className={styles.label}>Ville</label>
                 <input
                   type="text"
                   id="domicile_city"
@@ -482,6 +596,79 @@ const EditClientModal = ({ client, onClose, onSave }) => {
                 />
               </div>
             </div>
+
+            <div className={styles.formRow}>
+              <div className={styles.formGroup}>
+                <label htmlFor="door_code" className={styles.label}>Code porte</label>
+                <input
+                  type="text"
+                  id="door_code"
+                  name="door_code"
+                  value={formData.door_code}
+                  onChange={handleChange}
+                  className={styles.input}
+                  placeholder="Ex: 4521"
+                  disabled={loading}
+                />
+              </div>
+              <div className={styles.formGroup}>
+                <label htmlFor="floor" className={styles.label}>Étage</label>
+                <input
+                  type="text"
+                  id="floor"
+                  name="floor"
+                  value={formData.floor}
+                  onChange={handleChange}
+                  className={styles.input}
+                  placeholder="Ex: 2e étage"
+                  disabled={loading}
+                />
+              </div>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label htmlFor="access_notes" className={styles.label}>Notes d&apos;accès</label>
+              <textarea
+                id="access_notes"
+                name="access_notes"
+                value={formData.access_notes}
+                onChange={handleChange}
+                className={styles.textarea}
+                placeholder="Ex: appeler avant d'arriver, sonnette à gauche…"
+                disabled={loading}
+              />
+            </div>
+
+            {!formData.is_institution && (
+              <div className={styles.formRow}>
+                <div className={styles.formGroup}>
+                  <label htmlFor="gp_name" className={styles.label}>Médecin traitant</label>
+                  <input
+                    type="text"
+                    id="gp_name"
+                    name="gp_name"
+                    value={formData.gp_name}
+                    onChange={handleChange}
+                    className={styles.input}
+                    placeholder="Nom du médecin"
+                    disabled={loading}
+                  />
+                </div>
+                <div className={styles.formGroup}>
+                  <label htmlFor="gp_phone" className={styles.label}>Téléphone du médecin</label>
+                  <input
+                    type="tel"
+                    id="gp_phone"
+                    name="gp_phone"
+                    value={formData.gp_phone}
+                    onChange={handleChange}
+                    className={styles.input}
+                    placeholder="+41 22 000 00 00"
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Tarif préférentiel */}

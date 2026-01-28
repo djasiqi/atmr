@@ -30,6 +30,33 @@ services:
       retries: 10
     restart: "no"
 
+  backend_tests:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.production
+      target: testing
+    depends_on:
+      postgres_test:
+        condition: service_healthy
+      redis_test:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://test:test@postgres_test:5432/atmr_test
+      REDIS_URL: redis://redis_test:6379/0
+      FLASK_CONFIG: testing
+      SECRET_KEY: test-secret-key
+      JWT_SECRET_KEY: test-jwt-secret
+      APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+      API_LEGACY_ENABLED: "false"
+      PYTHONPATH: /app
+      FLASK_APP: wsgi:app
+      SOCKETIO_ASYNC_MODE: threading
+      SKIP_SOCKETIO: "true"
+      RUN_E2E_TESTS: "1"
+    volumes:
+      - ./backend:/app
+    command: sh -c "flask db upgrade heads && python -m pytest tests/e2e/test_mobile_dispatch_urgent_sentinel_e2e.py -v --tb=short"
+
 volumes:
   pg_test_data:
   redis_test_data:

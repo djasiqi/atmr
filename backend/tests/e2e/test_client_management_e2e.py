@@ -5,6 +5,7 @@ Ces tests vérifient le flux complet de gestion client :
 - Mise à jour du profil client
 - Historique des bookings avec pagination
 - Isolation des données entre clients
+- Create → Update (phone, access_notes, etc.) → assert persisted (company clients)
 """
 
 import uuid
@@ -265,4 +266,73 @@ class TestClientBookingHistoryFlow:
         # Au moins certains des bookings créés doivent être dans les récentes
         assert any(bid in recent_booking_ids for bid in bookings_created), (
             "Au moins un des bookings créés doit être dans les récentes"
+        )
+
+
+class TestCompanyClientCreateUpdatePersistE2E:
+    """E2E : Create client (company) → Update phone / access_notes / etc. → Assert persisted.
+
+    Protège la chaîne Create → Edit (modal/drawer) → refresh : les champs
+    saisis à la création doivent rester modifiables et persistés.
+    """
+
+    def test_e2e_company_client_create_update_phone_persisted(
+        self, e2e_authenticated_company_client, e2e_company, db
+    ):
+        """Create client → Update phone (+ access_notes, etc.) → Assert persisted."""
+        api = e2e_authenticated_company_client
+        unique = str(uuid.uuid4())[:8]
+        email = f"e2e-create-update-{unique}@internal.atmr.local"
+
+        # 1. Create company client (aligné NewClientModal payload)
+        create_payload = {
+            "client_type": "PRIVATE",
+            "email": email,
+            "first_name": "E2E",
+            "last_name": "CreateUpdate",
+            "gender": "female",
+            "address": "Rue de la Paix 1, 1202 Genève",
+            "phone": "+41221234567",
+            "access_notes": "Notes créées à la création",
+            "is_active": True,
+        }
+        create_resp = api.post(
+            "/api/v1/companies/me/clients",
+            json=create_payload,
+            headers={"Content-Type": "application/json"},
+        )
+        assert create_resp.status_code == 201, (
+            f"Create doit réussir (201), reçu {create_resp.status_code}: "
+            f"{create_resp.get_json()}"
+        )
+        created = create_resp.get_json()
+        client_id = created.get("id")
+        assert client_id is not None, "Réponse create doit contenir id"
+
+        # 2. Update (aligné EditClientModal / ClientEditForm payload)
+        update_payload = {
+            "phone": "+41987654321",
+            "access_notes": "Notes modifiées en édition",
+            "first_name": "E2E",
+            "last_name": "CreateUpdate",
+            "gender": "female",
+        }
+        update_resp = api.put(
+            f"/api/v1/companies/me/clients/{client_id}",
+            json=update_payload,
+            headers={"Content-Type": "application/json"},
+        )
+        assert update_resp.status_code == 200, (
+            f"Update doit réussir (200), reçu {update_resp.status_code}: "
+            f"{update_resp.get_json()}"
+        )
+        updated = update_resp.get_json()
+
+        # 3. Assert persisted
+        assert updated.get("phone") == "+41987654321", (
+            "phone doit être persisté après update"
+        )
+        access = updated.get("access") or {}
+        assert access.get("notes") == "Notes modifiées en édition", (
+            "access_notes doit être persisté après update"
         )
