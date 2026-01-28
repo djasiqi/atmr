@@ -374,6 +374,31 @@ export const styles = StyleSheet.create({
     fontWeight: "600",
     color: palette.text,
   },
+  detailsSheetScroll: {
+    maxHeight: 360,
+    marginBottom: spacing.m,
+  },
+  detailsSheetSection: {
+    marginBottom: spacing.m,
+  },
+  detailsSheetSectionTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: palette.secondary,
+    marginBottom: spacing.s,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
+  detailsSheetLine: {
+    fontSize: 14,
+    color: palette.text,
+    marginBottom: 4,
+    lineHeight: 20,
+  },
+  detailsSheetLineLabel: {
+    fontWeight: "600",
+    color: palette.secondary,
+  },
 
   // ——— Compact mode (réduction hauteur ~25–35%) ———
   containerCompact: {

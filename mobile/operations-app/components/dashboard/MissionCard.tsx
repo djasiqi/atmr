@@ -721,6 +721,181 @@ const MissionCard: MissionCardType = ({
           <TouchableWithoutFeedback onPress={() => { }}>
             <View style={styles.detailsSheetCard}>
               <Text style={styles.detailsSheetTitle}>Actions</Text>
+
+              <ScrollView style={styles.detailsSheetScroll} showsVerticalScrollIndicator>
+                {/* Client */}
+                <View style={styles.detailsSheetSection}>
+                  <Text style={styles.detailsSheetSectionTitle}>Client</Text>
+                  {getCivilityLabel(mission.client?.gender) != null && (
+                    <Text style={styles.detailsSheetLine}>
+                      <Text style={styles.detailsSheetLineLabel}>Civilité : </Text>
+                      {getCivilityLabel(mission.client?.gender)}
+                    </Text>
+                  )}
+                  <Text style={styles.detailsSheetLine}>
+                    <Text style={styles.detailsSheetLineLabel}>Nom : </Text>
+                    {mission.client_name || mission.client?.full_name || "Non spécifié"}
+                  </Text>
+                  {mission.client?.birth_date != null && mission.client.birth_date !== "" && (
+                    <Text style={styles.detailsSheetLine}>
+                      <Text style={styles.detailsSheetLineLabel}>Date de naissance : </Text>
+                      {new Date(mission.client.birth_date).toLocaleDateString("fr-FR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                      })}
+                    </Text>
+                  )}
+                  <Text style={styles.detailsSheetLine}>
+                    <Text style={styles.detailsSheetLineLabel}>Statut : </Text>
+                    {formatStatus(status ?? "")}
+                  </Text>
+                </View>
+
+                {/* Horaires */}
+                <View style={styles.detailsSheetSection}>
+                  <Text style={styles.detailsSheetSectionTitle}>Horaires</Text>
+                  <Text style={styles.detailsSheetLine}>
+                    <Text style={styles.detailsSheetLineLabel}>Heure prévue : </Text>
+                    {formatTime(new Date(mission.scheduled_time))}
+                  </Text>
+                  {(getEstimatedArrival != null || getEstimatedArrivalDropoff != null) && (() => {
+                    const isAfterPickup = normalizedStatus === "IN_PROGRESS";
+                    const arrivalTime = isAfterPickup
+                      ? (getEstimatedArrivalDropoff?.(mission.id) ?? null)
+                      : (getEstimatedArrival?.(mission.id) ?? null);
+                    const secondsToTarget = isAfterPickup
+                      ? (getETAToDropoff?.(mission.id) ?? null)
+                      : (getETAToPickup?.(mission.id) ?? null);
+                    const minutesRounded = secondsToTarget != null ? formatDurationMinutes(secondsToTarget) : null;
+                    if (arrivalTime && minutesRounded != null) {
+                      return (
+                        <Text style={styles.detailsSheetLine}>
+                          <Text style={styles.detailsSheetLineLabel}>Arrivée estimée : </Text>
+                          {minutesRounded > 0 ? `${formatTime(arrivalTime)} (dans ${minutesRounded} min)` : formatTime(arrivalTime)}
+                        </Text>
+                      );
+                    }
+                    return null;
+                  })()}
+                </View>
+
+                {/* Adresses */}
+                <View style={styles.detailsSheetSection}>
+                  <Text style={styles.detailsSheetSectionTitle}>Adresses</Text>
+                  <Text style={styles.detailsSheetLine}>
+                    <Text style={styles.detailsSheetLineLabel}>Prise en charge : </Text>
+                    {formatAddressFallback(mission.pickup_location)}
+                  </Text>
+                  <Text style={styles.detailsSheetLine}>
+                    <Text style={styles.detailsSheetLineLabel}>Destination : </Text>
+                    {formatAddressFallback(mission.dropoff_location)}
+                  </Text>
+                </View>
+
+                {/* Hints prise en charge */}
+                {(() => {
+                  const pickupHints = getPickupHints(mission);
+                  if (pickupHints.length === 0) return null;
+                  return (
+                    <View style={styles.detailsSheetSection}>
+                      <Text style={styles.detailsSheetSectionTitle}>Infos prise en charge</Text>
+                      {pickupHints.map((h, i) => (
+                        <Text key={i} style={styles.detailsSheetLine}>
+                          <Text style={styles.detailsSheetLineLabel}>{h.label} : </Text>
+                          {h.value}
+                        </Text>
+                      ))}
+                    </View>
+                  );
+                })()}
+
+                {/* Hints destination */}
+                {(() => {
+                  const dropoffHints = getDropoffHints(mission);
+                  if (dropoffHints.length === 0) return null;
+                  return (
+                    <View style={styles.detailsSheetSection}>
+                      <Text style={styles.detailsSheetSectionTitle}>Infos destination</Text>
+                      {dropoffHints.map((h, i) => (
+                        <Text key={i} style={styles.detailsSheetLine}>
+                          <Text style={styles.detailsSheetLineLabel}>{h.label} : </Text>
+                          {h.value}
+                        </Text>
+                      ))}
+                    </View>
+                  );
+                })()}
+
+                {/* Notes générales (pas notes_medical, affichées dans Médical) */}
+                {mission.notes?.trim() && (
+                  <View style={styles.detailsSheetSection}>
+                    <Text style={styles.detailsSheetSectionTitle}>Notes</Text>
+                    <Text style={styles.detailsSheetLine}>{mission.notes.trim()}</Text>
+                  </View>
+                )}
+
+                {/* Médical */}
+                {(mission.medical_facility ?? mission.hospital_service ?? mission.doctor_name ?? mission.notes_medical) && (
+                  <View style={styles.detailsSheetSection}>
+                    <Text style={styles.detailsSheetSectionTitle}>Médical</Text>
+                    {mission.medical_facility?.trim() && (
+                      <Text style={styles.detailsSheetLine}>
+                        <Text style={styles.detailsSheetLineLabel}>Établissement : </Text>
+                        {mission.medical_facility.trim()}
+                      </Text>
+                    )}
+                    {mission.hospital_service?.trim() && (
+                      <Text style={styles.detailsSheetLine}>
+                        <Text style={styles.detailsSheetLineLabel}>Service : </Text>
+                        {mission.hospital_service.trim()}
+                      </Text>
+                    )}
+                    {mission.doctor_name?.trim() && (
+                      <Text style={styles.detailsSheetLine}>
+                        <Text style={styles.detailsSheetLineLabel}>Médecin : </Text>
+                        {mission.doctor_name.trim()}
+                      </Text>
+                    )}
+                    {mission.notes_medical?.trim() && (
+                      <Text style={styles.detailsSheetLine}>
+                        <Text style={styles.detailsSheetLineLabel}>Notes médicales : </Text>
+                        {mission.notes_medical.trim()}
+                      </Text>
+                    )}
+                  </View>
+                )}
+
+                {/* Instructions accès */}
+                {(mission.pickup_access_notes?.trim() || mission.dropoff_access_notes?.trim()) && (
+                  <View style={styles.detailsSheetSection}>
+                    <Text style={styles.detailsSheetSectionTitle}>Instructions d'accès</Text>
+                    {mission.pickup_access_notes?.trim() && (
+                      <Text style={styles.detailsSheetLine}>
+                        <Text style={styles.detailsSheetLineLabel}>Prise en charge : </Text>
+                        {mission.pickup_access_notes.trim()}
+                      </Text>
+                    )}
+                    {mission.dropoff_access_notes?.trim() && (
+                      <Text style={styles.detailsSheetLine}>
+                        <Text style={styles.detailsSheetLineLabel}>Destination : </Text>
+                        {mission.dropoff_access_notes.trim()}
+                      </Text>
+                    )}
+                  </View>
+                )}
+
+                {/* Chaise roulante */}
+                {(mission.wheelchair === true || mission.wheelchair_client_has === true || mission.wheelchair_need === true) && (
+                  <View style={styles.detailsSheetSection}>
+                    <Text style={styles.detailsSheetSectionTitle}>Chaise roulante</Text>
+                    <Text style={styles.detailsSheetLine}>
+                      {mission.wheelchair_need === true ? "Chaise roulante requise à la destination" : "Client avec chaise roulante"}
+                    </Text>
+                  </View>
+                )}
+              </ScrollView>
+
               <TouchableOpacity
                 onPress={() => {
                   setDetailsSheetVisible(false);
