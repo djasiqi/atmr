@@ -78,6 +78,25 @@ export function inferTripDirection(mission: MissionLike | null): TripDirection {
   return "unknown";
 }
 
+/** Priorité la plus haute pour que la mobilité soit toujours visible sur la card (premiers 3 hints). */
+const MOBILITY_PRIORITY_FIRST = 0;
+const MOBILITY_PRIORITY_SECOND = 0.5;
+
+/** Normalise une valeur API (bool, "true"/"false", 0/1) en booléen strict. Évite que "false" (string) soit truthy. */
+function toBool(v: unknown): boolean {
+  if (v === true || v === 1) return true;
+  if (v === "true" || v === "1") return true;
+  return false;
+}
+
+/** Ajoute les hints mobilité en tête (priorité 0 / 0.5) pour affichage prioritaire sur la card. Ne pousse rien si tous les flags sont falsy (false, 0, null, "false"). */
+function pushMobilityHints(out: HintItem[], mission: MissionLike): void {
+  if (toBool(mission.wheelchair_client_has) || toBool(mission.wheelchair))
+    out.push({ icon: "accessibility-outline", label: "Mobilité", value: "Client en chaise roulante", priority: MOBILITY_PRIORITY_FIRST });
+  if (toBool(mission.wheelchair_need))
+    out.push({ icon: "medkit-outline", label: "Mobilité", value: "Prendre une chaise roulante", priority: MOBILITY_PRIORITY_SECOND });
+}
+
 /** Infos pour accéder au point de départ (où récupérer le client). */
 export function getPickupHints(mission: MissionLike | null): HintItem[] {
   if (!mission) return [];
@@ -86,30 +105,27 @@ export function getPickupHints(mission: MissionLike | null): HintItem[] {
   const c = mission.client;
 
   if (dir === "outbound") {
+    // Mobilité en premier (visible sur la card sans "Voir plus")
+    pushMobilityHints(out, mission);
     // Pickup = domicile → infos domicile (code, étage, notes)
-    pushHint(out, "key-outline", "Code porte", c?.door_code, 1);
-    pushHint(out, "business-outline", "Étage", c?.floor, 2);
-    pushHint(out, "document-text-outline", "Notes d'accès", c?.access_notes, 3);
-    pushHint(out, "call-outline", "Contact", c?.contact_phone, 4);
-    if (mission.wheelchair_client_has || mission.wheelchair)
-      out.push({ icon: "accessibility-outline", label: "Mobilité", value: "Client en chaise roulante", priority: 5 });
-    if (mission.wheelchair_need)
-      out.push({ icon: "medkit-outline", label: "Mobilité", value: "Prendre une chaise roulante", priority: 6 });
+    pushHint(out, "key-outline", "Code porte", c?.door_code, 10);
+    pushHint(out, "business-outline", "Étage", c?.floor, 11);
+    pushHint(out, "document-text-outline", "Notes d'accès", c?.access_notes, 12);
+    pushHint(out, "call-outline", "Contact", c?.contact_phone, 13);
   } else if (dir === "return") {
+    // Mobilité en premier (pickup = hôpital mais chauffeur doit savoir avant d'arriver)
+    pushMobilityHints(out, mission);
     // Pickup = hôpital → infos médicales
     pushHint(out, "business-outline", "Service / Bâtiment", mission.hospital_service, 10);
     pushHint(out, "location-outline", "Établissement", mission.medical_facility, 11);
     pushHint(out, "person-outline", "Médecin", mission.doctor_name, 12);
     pushHint(out, "document-text-outline", "Notes sortie", mission.notes_medical, 13);
   } else {
-    // unknown (ex: restaurant → HUG) → uniquement pickup_access_notes si renseigné ; pas de fallback domicile (prudence)
+    // unknown (ex: restaurant → HUG) → mobilité en premier, puis instructions accès si renseigné
+    pushMobilityHints(out, mission);
     if (isMeaningful(mission.pickup_access_notes)) {
-      pushHint(out, "document-text-outline", "Instructions accès", mission.pickup_access_notes, 1);
+      pushHint(out, "document-text-outline", "Instructions accès", mission.pickup_access_notes, 10);
     }
-    if (mission.wheelchair_client_has || mission.wheelchair)
-      out.push({ icon: "accessibility-outline", label: "Mobilité", value: "Client en chaise roulante", priority: 5 });
-    if (mission.wheelchair_need)
-      out.push({ icon: "medkit-outline", label: "Mobilité", value: "Prendre une chaise roulante", priority: 6 });
   }
 
   out.sort((a, b) => a.priority - b.priority);
@@ -123,12 +139,15 @@ export function getDropoffHints(mission: MissionLike | null): HintItem[] {
   const out: HintItem[] = [];
   const c = mission.client;
 
+  // Mobilité en premier pour "À l'arrivée à destination" (IN_PROGRESS)
+  pushMobilityHints(out, mission);
+
   if (dir === "return") {
     // Dropoff = domicile → infos domicile
-    pushHint(out, "key-outline", "Code porte", c?.door_code, 1);
-    pushHint(out, "business-outline", "Étage", c?.floor, 2);
-    pushHint(out, "document-text-outline", "Notes d'accès", c?.access_notes, 3);
-    pushHint(out, "call-outline", "Contact", c?.contact_phone, 4);
+    pushHint(out, "key-outline", "Code porte", c?.door_code, 10);
+    pushHint(out, "business-outline", "Étage", c?.floor, 11);
+    pushHint(out, "document-text-outline", "Notes d'accès", c?.access_notes, 12);
+    pushHint(out, "call-outline", "Contact", c?.contact_phone, 13);
   } else {
     // Dropoff = hôpital (ou autre) → infos médicales + instructions accès destination si présentes
     pushHint(out, "business-outline", "Service / Bâtiment", mission.hospital_service, 20);

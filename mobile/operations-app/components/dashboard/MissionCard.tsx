@@ -500,9 +500,11 @@ const MissionCard: MissionCardType = ({
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   accessible
                   accessibilityRole="button"
-                  accessibilityLabel="Voir plus de détails"
+                  accessibilityLabel={`Voir plus de détails (${hints.length - 3} info${hints.length - 3 > 1 ? "s" : ""})`}
                 >
-                  <Text style={styles.notesSeeMoreText}>Voir plus</Text>
+                  <Text style={styles.notesSeeMoreText}>
+                    Voir plus (+{hints.length - 3} info{hints.length - 3 > 1 ? "s" : ""})
+                  </Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -557,9 +559,11 @@ const MissionCard: MissionCardType = ({
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   accessible
                   accessibilityRole="button"
-                  accessibilityLabel="Voir plus de détails"
+                  accessibilityLabel={`Voir plus de détails (${hints.length - 3} info${hints.length - 3 > 1 ? "s" : ""})`}
                 >
-                  <Text style={styles.notesSeeMoreText}>Voir plus</Text>
+                  <Text style={styles.notesSeeMoreText}>
+                    Voir plus (+{hints.length - 3} info{hints.length - 3 > 1 ? "s" : ""})
+                  </Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -885,15 +889,7 @@ const MissionCard: MissionCardType = ({
                   </View>
                 )}
 
-                {/* Chaise roulante */}
-                {(mission.wheelchair === true || mission.wheelchair_client_has === true || mission.wheelchair_need === true) && (
-                  <View style={styles.detailsSheetSection}>
-                    <Text style={styles.detailsSheetSectionTitle}>Chaise roulante</Text>
-                    <Text style={styles.detailsSheetLine}>
-                      {mission.wheelchair_need === true ? "Chaise roulante requise à la destination" : "Client avec chaise roulante"}
-                    </Text>
-                  </View>
-                )}
+                {/* Mobilité : déjà présente dans Infos prise en charge / Infos destination (getPickupHints / getDropoffHints), pas de section dédiée pour éviter duplication */}
               </ScrollView>
 
               <TouchableOpacity
