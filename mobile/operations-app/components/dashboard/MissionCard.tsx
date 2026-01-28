@@ -1,37 +1,106 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, TouchableOpacity, Alert } from "react-native";
+import { View, Text, TouchableOpacity, Alert, Modal, Pressable, ScrollView, TouchableWithoutFeedback, Platform } from "react-native";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import type { Booking as Mission, BookingStatus } from "@/services/api";
-import { styles } from "@/styles/missionCardStyles";
+import { styles, palette } from "@/styles/missionCardStyles";
 import { styles as groupStyles } from "@/styles/missionGroupStyles";
 import { updateTripStatus } from "@/services/api";
 import CancelJustificationModal from "./CancelJustificationModal";
 import { isCompletedStatus, isCanceledStatus, normalizeBookingStatus } from "@/utils/bookingStatus";
+import {
+  getAuthNotReadyDisplayMessage,
+  isAuthNotReadyError,
+  shouldShowAuthNotReadyAlert,
+} from "@/services/authGuards";
+import { getPickupHints, getDropoffHints } from "@/src/domain/missionHints";
+
+// ——— Helpers (pas de logique métier dans le JSX) ———
+const formatTime = (d: Date) =>
+  d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+const formatDurationMinutes = (seconds: number) => Math.max(0, Math.round(seconds / 60));
+/** Afficher la ligne "Départ" uniquement avant le début de la course (assigned/en_route). */
+const shouldShowDeparture = (normalizedStatus: string) =>
+  normalizedStatus !== "IN_PROGRESS";
+const formatAddressFallback = (value: string | undefined | null): string =>
+  value?.trim() || "Adresse non renseignée";
+
+/** Civilité pour l’en-tête : Madame / Monsieur selon le genre client (HOMME/FEMME). */
+const getCivilityLabel = (gender: string | undefined | null): string | null => {
+  if (!gender) return null;
+  const g = String(gender).toUpperCase();
+  if (g === "FEMME" || g === "FEMALE") return "Madame";
+  if (g === "HOMME" || g === "MALE") return "Monsieur";
+  return null; // AUTRE ou inconnu : pas de civilité affichée
+};
+
+const normNotes = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
+
+/** Retourne le texte des notes (dédupliqué / superset / concat) ou null si vide. Robuste : pas de "—". */
+function getNotesDisplay(
+  notes: string | undefined | null,
+  notesMedical: string | undefined | null
+): string | null {
+  const n = (notes ?? "").trim();
+  const nm = (notesMedical ?? "").trim();
+  if (!n && !nm) return null;
+  if (!n) return nm;
+  if (!nm) return n;
+  const nNorm = normNotes(n);
+  const nmNorm = normNotes(nm);
+  if (nNorm === nmNorm) return n;
+  if (nmNorm.includes(nNorm)) return nm;
+  if (nNorm.includes(nmNorm)) return n;
+  return `${n} — ${nm}`;
+}
+
+const NOTES_SEE_MORE_THRESHOLD = 100;
+
+/** Retour haptique léger (natif uniquement) pour les actions En route / À bord / Terminer */
+const triggerSelectionHaptic = () => {
+  if (Platform.OS === "web") return;
+  Haptics.selectionAsync().catch(() => { });
+};
 
 type Props = {
   mission: Mission | null;
   missionNumber?: number; // Numéro de la mission dans le groupe
   isGrouped?: boolean; // true si la mission fait partie d'un groupe
+  /** Largeur cible (responsive) — aligne card + map sur tous les formats */
+  contentWidth?: number;
+  /** Premier numéro appelable valide (contact_phone > phone > gp_phone) ou null si aucun */
+  callablePhone?: string | null;
   onCall?: () => void;
   onNavigate?: (destination: string) => void;
   onComplete?: (missionId: number) => void; // Prend maintenant l'ID de la mission
   onPressDetails?: () => void;
   onStatusChange?: (missionId: number, status: BookingStatus) => void;
+  /** Temps restant / arrivée (GET /driver/me/bookings/eta) : avant pickup = client, après pickup = destination */
+  getETAToPickup?: (bookingId: number) => number | null;
+  getETAToDropoff?: (bookingId: number) => number | null;
+  getEstimatedArrival?: (bookingId: number) => Date | null;
+  getEstimatedArrivalDropoff?: (bookingId: number) => Date | null;
+  getDelayMinutes?: (bookingId: number, scheduledTime: string) => number | null;
+  hasGPS?: boolean;
+  etaLoading?: boolean;
 };
 
 interface MissionCardType extends React.FC<Props> {
-  EmptyState: React.FC;
+  EmptyState: React.FC<{ contentWidth?: number }>;
 }
 
-// ✅ Composant visuel réutilisable lorsqu'il n'y a pas de mission (style épuré)
-const EmptyStateComponent: React.FC = () => (
-  <View style={styles.containerEnhanced}>
-    <Text style={{ fontSize: 18, textAlign: "center", color: "#15362B", fontWeight: "600", letterSpacing: 0.2 }}>
-      🚗 En attente de mission
-    </Text>
-    <Text
-      style={{ fontSize: 15, textAlign: "center", color: "#5F7369", marginTop: 10, lineHeight: 22 }}
-    >
+// ✅ Composant visuel réutilisable lorsqu'il n'y a pas de mission
+const EmptyStateComponent: React.FC<{ contentWidth?: number }> = ({ contentWidth: contentWidthProp }) => (
+  <View
+    style={[
+      styles.emptyStateContainer,
+      contentWidthProp != null
+        ? { width: contentWidthProp, alignSelf: "center" as const, marginHorizontal: 0 }
+        : Platform.OS === "web" && styles.emptyStateWebFixed,
+    ]}
+  >
+    <Text style={styles.emptyStateTitle}>🚗 En attente de mission</Text>
+    <Text style={styles.emptyStateSubtitle}>
       Vous serez notifié dès qu'une mission vous sera assignée.
     </Text>
   </View>
@@ -41,11 +110,20 @@ const MissionCard: MissionCardType = ({
   mission,
   missionNumber,
   isGrouped = false,
+  contentWidth: contentWidthProp,
+  callablePhone = null,
   onCall,
   onNavigate,
   onComplete,
   onPressDetails,
   onStatusChange,
+  getETAToPickup,
+  getETAToDropoff,
+  getEstimatedArrival,
+  getEstimatedArrivalDropoff,
+  getDelayMinutes,
+  hasGPS,
+  etaLoading = false,
 }) => {
   const [status, setStatus] = useState<Mission["status"] | undefined>(
     mission?.status
@@ -53,6 +131,12 @@ const MissionCard: MissionCardType = ({
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
   const [releaseModalVisible, setReleaseModalVisible] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [notesModalVisible, setNotesModalVisible] = useState(false);
+  const [notesFullText, setNotesFullText] = useState<string | null>(null);
+  const [detailsSheetVisible, setDetailsSheetVisible] = useState(false);
+
+  /** Mode compact par défaut : réduit la hauteur de la card (~25–35 %) pour libérer la map. */
+  const isCompact = true;
 
   useEffect(() => {
     setStatus(mission?.status);
@@ -105,12 +189,19 @@ const MissionCard: MissionCardType = ({
         }
       }
     } catch (error: any) {
+      // Dedupe : ne pas afficher un second popup si même erreur AUTH_NOT_READY dans les 2–3 s
+      if (isAuthNotReadyError(error) && !shouldShowAuthNotReadyAlert(error)) {
+        return;
+      }
+      const friendlyMsg = isAuthNotReadyError(error)
+        ? getAuthNotReadyDisplayMessage(error)
+        : null;
       const errorMsg =
-        error?.response?.data?.error || error?.message || "Erreur inconnue";
-      Alert.alert(
-        "Erreur",
-        `Impossible de mettre à jour le statut : ${errorMsg}`
-      );
+        friendlyMsg ??
+        error?.response?.data?.error ??
+        error?.message ??
+        "Erreur inconnue";
+      Alert.alert("Erreur", `Impossible de mettre à jour le statut : ${errorMsg}`);
     } finally {
       setIsUpdatingStatus(false);
     }
@@ -184,25 +275,14 @@ const MissionCard: MissionCardType = ({
     return <EmptyStateComponent />;
   }
 
-  // DEBUG : Afficher les champs de durée
-  console.log("[MissionCard] mission.id:", mission.id);
-  console.log(
-    "[MissionCard] mission.duration_seconds:",
-    mission.duration_seconds
-  );
-  console.log(
-    "[MissionCard] mission.estimated_duration:",
-    mission.estimated_duration
-  );
-  console.log(
-    "[MissionCard] mission.distance_meters:",
-    mission.distance_meters
-  );
-
   return (
     <View
       style={[
         styles.containerEnhanced,
+        contentWidthProp != null
+          ? { width: contentWidthProp, alignSelf: "center" as const, marginHorizontal: 0 }
+          : Platform.OS === "web" && styles.containerWebFixed,
+        isCompact && styles.containerCompact,
         isGrouped && groupStyles.groupedCardBorder,
       ]}
     >
@@ -213,138 +293,355 @@ const MissionCard: MissionCardType = ({
         </View>
       )}
 
-      {/* Ligne 1 : Nom et Statut */}
-      <View style={styles.headerRowEnhanced}>
-        <View style={{ flex: 1 }}>
+      {/* 1. MissionCardHeader : civilité (Madame/Monsieur) + identité client + statut */}
+      <View style={[styles.headerRowEnhanced, isCompact && styles.headerRowCompact]}>
+        <View style={styles.headerClientWrap}>
+          {(() => {
+            const civility = getCivilityLabel(mission.client?.gender);
+            return civility != null ? (
+              <Text style={styles.clientCivility}>{civility}</Text>
+            ) : null;
+          })()}
           <Text style={styles.clientName}>
             {mission.client_name ||
-              // ✅ P1-4 Phase 3.3: Utiliser client_name au lieu de customer_name
-              mission.client_name ||
               mission.client?.full_name ||
               "Non spécifié"}
           </Text>
-          {mission.client?.birth_date && (
-            <Text style={[styles.detailText, { fontSize: 12, marginTop: 4, color: "#5F7369" }]}>
-              📅 {new Date(mission.client.birth_date).toLocaleDateString('fr-FR', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric'
+          {mission.client?.birth_date != null && mission.client.birth_date !== "" && (
+            <Text style={styles.clientBirthDate}>
+              📅 {new Date(mission.client.birth_date).toLocaleDateString("fr-FR", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
               })}
             </Text>
           )}
         </View>
         <View style={styles.statusBadgeContainer}>
-          <Text style={styles.statusBadgeText}>
-            {formatStatus(status ?? "")}
-          </Text>
+          <Text style={styles.statusBadgeText}>{formatStatus(status ?? "")}</Text>
         </View>
       </View>
 
-      {/* Ligne 2 : Départ + Heure */}
-      <View style={styles.rowBetween}>
-        <Text style={styles.infoEnhanced}>📍 Départ :</Text>
-        <View style={styles.timeRow}>
-          <Ionicons
-            name="time-outline"
-            size={15}
-            color="#5F7369"
-            style={{ marginRight: 4 }}
-          />
-          <Text style={styles.timeEnhanced}>
-            {new Date(mission.scheduled_time).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </Text>
-        </View>
-      </View>
-      {/* Ligne 3 : Adresse Départ */}
-      <Text style={styles.detailText}>{mission.pickup_location}</Text>
-
-      {/* Ligne 4 : Arrivée + Durée estimée */}
-      {mission.dropoff_location && (
-        <>
-          <View style={styles.rowBetween}>
-            <Text style={styles.infoEnhanced}>🏁 Arrivée :</Text>
-            {/* Durée estimée formatée depuis duration_seconds */}
-            <Text style={styles.timeEnhanced}>
-              {mission.duration_seconds
-                ? `${Math.round(mission.duration_seconds / 60)} min`
-                : mission.estimated_duration || "Durée inconnue"}
-            </Text>
-          </View>
-          {/* Ligne 5 : Adresse Arrivée */}
-          <Text style={styles.detailText}>{mission.dropoff_location}</Text>
-        </>
-      )}
-
-      {/* Infos supplémentaires */}
-      <View style={styles.metaInfoSection}>
-        {/* AVANT le client à bord (assigned, en_route) : Afficher les infos chaise roulante */}
-        {normalizedStatus !== "IN_PROGRESS" && (mission.wheelchair_client_has || mission.wheelchair_need) && (
-          <View style={styles.wheelchairSection}>
-            {mission.wheelchair_client_has && (
-              <Text style={styles.wheelchairAlert}>
-                ♿ Client en chaise roulante
-              </Text>
+      {/* 2. MissionTimingBlock : départ prévu / arrivée estimée (si données) */}
+      {(getEstimatedArrival != null || getEstimatedArrivalDropoff != null) && (() => {
+        const isAfterPickup = normalizedStatus === "IN_PROGRESS";
+        const secondsToTarget = isAfterPickup
+          ? (getETAToDropoff?.(mission.id) ?? null)
+          : (getETAToPickup?.(mission.id) ?? null);
+        const arrivalTime = isAfterPickup
+          ? (getEstimatedArrivalDropoff?.(mission.id) ?? null)
+          : (getEstimatedArrival?.(mission.id) ?? null);
+        const hasCoords = isAfterPickup
+          ? !!(mission.dropoff_lat != null && mission.dropoff_lon != null)
+          : !!(mission.pickup_lat != null && mission.pickup_lon != null);
+        const arrivalAvailable =
+          !etaLoading &&
+          hasGPS !== false &&
+          hasCoords &&
+          secondsToTarget != null &&
+          arrivalTime != null;
+        const minutesRounded =
+          secondsToTarget != null ? formatDurationMinutes(secondsToTarget) : null;
+        const arrivalLabel = isAfterPickup ? "Arrivée à destination" : "Arrivée estimée";
+        let arrivalValueStr: string;
+        if (!arrivalAvailable) {
+          arrivalValueStr = "indisponible";
+        } else if (minutesRounded != null && minutesRounded <= 0) {
+          arrivalValueStr = "maintenant";
+        } else {
+          const scheduledDate = new Date(mission.scheduled_time).getTime();
+          const arrivalDate = arrivalTime.getTime();
+          const courseNotStarted = normalizedStatus !== "IN_PROGRESS";
+          if (courseNotStarted && arrivalDate < scheduledDate && minutesRounded != null && minutesRounded > 0) {
+            arrivalValueStr = `dans ${minutesRounded} min`;
+          } else if (courseNotStarted && arrivalDate < scheduledDate) {
+            arrivalValueStr = "estimée";
+          } else {
+            arrivalValueStr =
+              minutesRounded != null && minutesRounded > 0
+                ? `${formatTime(arrivalTime)} (dans ${minutesRounded} min)`
+                : formatTime(arrivalTime);
+          }
+        }
+        if (isCompact) {
+          const showDeparture = shouldShowDeparture(normalizedStatus);
+          const departureStr = formatTime(new Date(mission.scheduled_time));
+          return (
+            <View style={[styles.timingSection, styles.timingSectionCompact]}>
+              <View style={[styles.timingRow, styles.timingRowCompact]}>
+                {showDeparture && (
+                  <>
+                    <Ionicons name="time-outline" size={14} color={palette.timingDeparture} />
+                    <Text style={styles.timingTextCompact}>{departureStr}</Text>
+                    <Text style={styles.timingTextSecondaryCompact}>→</Text>
+                  </>
+                )}
+                <Ionicons name="timer-outline" size={14} color={palette.timingArrival} />
+                <Text style={[styles.timingTextCompact, !arrivalAvailable && styles.timingUnavailable]}>
+                  {arrivalValueStr}
+                </Text>
+              </View>
+            </View>
+          );
+        }
+        return (
+          <View style={styles.timingSection}>
+            {shouldShowDeparture(normalizedStatus) && (
+              <View style={styles.timingRow}>
+                <Ionicons name="time-outline" size={16} color={palette.timingDeparture} />
+                <Text style={styles.timingDeparture}>
+                  Départ prévu : {formatTime(new Date(mission.scheduled_time))}
+                </Text>
+              </View>
             )}
-            {mission.wheelchair_need && (
-              <Text style={styles.wheelchairAlert}>
-                🏥 Prendre une chaise roulante
+            <View style={styles.timingRow}>
+              <Ionicons name="timer-outline" size={16} color={palette.timingArrival} />
+              <Text style={[styles.timingArrival, !arrivalAvailable && styles.timingUnavailable]}>
+                {arrivalLabel} : {arrivalValueStr}
               </Text>
-            )}
+            </View>
           </View>
+        );
+      })()}
+
+      {/* 3. MissionRouteBlock : départ → destination (icônes) */}
+      <View style={[styles.routeSection, isCompact && styles.routeSectionCompact]}>
+        {isCompact ? (
+          <>
+            <View style={[styles.routeRowCompact, styles.routeRowCompactLast]}>
+              <Ionicons name="location-outline" size={16} color={palette.accent} />
+              <Text style={styles.routeAddressCompact} numberOfLines={1} ellipsizeMode="tail">
+                Départ : {formatAddressFallback(mission.pickup_location)}
+              </Text>
+            </View>
+            <View style={styles.routeRowCompact}>
+              <Ionicons name="flag-outline" size={16} color={palette.accent} />
+              <Text style={styles.routeAddressCompact} numberOfLines={1} ellipsizeMode="tail">
+                Destination : {formatAddressFallback(mission.dropoff_location)}
+              </Text>
+            </View>
+          </>
+        ) : (
+          <>
+            <View style={styles.routeRow}>
+              <View style={styles.routeIconWrap}>
+                <Ionicons name="location-outline" size={18} color={palette.accent} />
+              </View>
+              <View style={styles.routeContentWrap}>
+                <Text style={styles.routeLabel}>Départ</Text>
+                <Text style={styles.routeAddress} numberOfLines={2} ellipsizeMode="tail">
+                  {formatAddressFallback(mission.pickup_location)}
+                </Text>
+              </View>
+            </View>
+            <View style={[styles.routeRow, styles.routeRowLast]}>
+              <View style={styles.routeIconWrap}>
+                <Ionicons name="flag-outline" size={18} color={palette.accent} />
+              </View>
+              <View style={styles.routeContentWrap}>
+                <Text style={styles.routeLabel}>Destination</Text>
+                <Text style={styles.routeAddress} numberOfLines={2} ellipsizeMode="tail">
+                  {formatAddressFallback(mission.dropoff_location)}
+                </Text>
+              </View>
+            </View>
+          </>
         )}
+      </View>
 
-        {/* Ancien champ wheelchair (gardé pour compatibilité) - seulement avant client à bord */}
-        {normalizedStatus !== "IN_PROGRESS" &&
-          mission.wheelchair &&
-          !mission.wheelchair_client_has &&
-          !mission.wheelchair_need && (
-            <Text style={styles.infoEnhanced}>
-              ♿ Transport fauteuil roulant
-            </Text>
-          )}
-
-        {/* APRÈS le client à bord (in_progress) : Afficher les infos médicales */}
-        {normalizedStatus === "IN_PROGRESS" && (mission.medical_facility ||
-          mission.doctor_name ||
-          mission.hospital_service) && (
-            <View style={styles.medicalInfoSection}>
-              <Text style={styles.medicalTitle}>🏥 Destination médicale</Text>
-              {mission.medical_facility && (
-                <Text style={styles.medicalDetail}>
-                  📍 {mission.medical_facility}
-                </Text>
-              )}
-              {mission.doctor_name && (
-                <Text style={styles.medicalDetail}>
-                  👨‍⚕️ Dr {mission.doctor_name}
-                </Text>
-              )}
-              {mission.hospital_service && (
-                <Text style={styles.medicalDetail}>
-                  🚪 {mission.hospital_service}
-                </Text>
+      {/* 4. MissionHintsSection : accès contextuel (uniquement si données) */}
+      <View style={[styles.metaInfoSection, isCompact && styles.metaInfoSectionCompact]}>
+        {normalizedStatus !== "IN_PROGRESS" && (() => {
+          const hints = getPickupHints(mission);
+          if (hints.length === 0) return null;
+          const title = "À l'arrivée au point de départ";
+          const displayHints = isCompact ? hints.slice(0, 3) : hints;
+          const hasMoreHints = isCompact && hints.length > 3;
+          return (
+            <View style={[styles.hintsSection, isCompact && styles.hintsSectionCompact]}>
+              <Text style={[styles.hintsSectionTitle, isCompact && styles.hintsSectionTitleCompact]}>
+                {title}
+              </Text>
+              {displayHints.map((hint, i) => (
+                <View
+                  key={i}
+                  style={[
+                    isCompact ? styles.hintRowCompact : styles.hintRow,
+                    (isCompact ? i === displayHints.length - 1 && !hasMoreHints : i === hints.length - 1)
+                      ? (isCompact ? styles.hintRowCompactLast : styles.hintRowLast)
+                      : undefined,
+                  ]}
+                >
+                  {!isCompact && (
+                    <View style={styles.hintIconWrap}>
+                      <Ionicons name={hint.icon as any} size={16} color={palette.secondary} />
+                    </View>
+                  )}
+                  <View style={styles.routeContentWrap}>
+                    {isCompact ? (
+                      <Text style={styles.hintLineCompact} numberOfLines={1} ellipsizeMode="tail">
+                        {hint.label} : {hint.value}
+                      </Text>
+                    ) : (
+                      <>
+                        <Text style={styles.hintLabel}>{hint.label}</Text>
+                        <Text style={styles.hintValue} numberOfLines={2} ellipsizeMode="tail">
+                          {hint.value}
+                        </Text>
+                      </>
+                    )}
+                  </View>
+                </View>
+              ))}
+              {hasMoreHints && (
+                <TouchableOpacity
+                  onPress={() => setDetailsSheetVisible(true)}
+                  style={styles.notesSeeMoreButton}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessible
+                  accessibilityRole="button"
+                  accessibilityLabel="Voir plus de détails"
+                >
+                  <Text style={styles.notesSeeMoreText}>Voir plus</Text>
+                </TouchableOpacity>
               )}
             </View>
-          )}
+          );
+        })()}
+        {normalizedStatus === "IN_PROGRESS" && (() => {
+          const hints = getDropoffHints(mission);
+          if (hints.length === 0) return null;
+          const title = "À l'arrivée à destination";
+          const displayHints = isCompact ? hints.slice(0, 3) : hints;
+          const hasMoreHints = isCompact && hints.length > 3;
+          return (
+            <View style={[styles.hintsSection, isCompact && styles.hintsSectionCompact]}>
+              <Text style={[styles.hintsSectionTitle, isCompact && styles.hintsSectionTitleCompact]}>
+                {title}
+              </Text>
+              {displayHints.map((hint, i) => (
+                <View
+                  key={i}
+                  style={[
+                    isCompact ? styles.hintRowCompact : styles.hintRow,
+                    (isCompact ? i === displayHints.length - 1 && !hasMoreHints : i === hints.length - 1)
+                      ? (isCompact ? styles.hintRowCompactLast : styles.hintRowLast)
+                      : undefined,
+                  ]}
+                >
+                  {!isCompact && (
+                    <View style={styles.hintIconWrap}>
+                      <Ionicons name={hint.icon as any} size={16} color={palette.secondary} />
+                    </View>
+                  )}
+                  <View style={styles.routeContentWrap}>
+                    {isCompact ? (
+                      <Text style={styles.hintLineCompact} numberOfLines={1} ellipsizeMode="tail">
+                        {hint.label} : {hint.value}
+                      </Text>
+                    ) : (
+                      <>
+                        <Text style={styles.hintLabel}>{hint.label}</Text>
+                        <Text style={styles.hintValue} numberOfLines={2} ellipsizeMode="tail">
+                          {hint.value}
+                        </Text>
+                      </>
+                    )}
+                  </View>
+                </View>
+              ))}
+              {hasMoreHints && (
+                <TouchableOpacity
+                  onPress={() => setDetailsSheetVisible(true)}
+                  style={styles.notesSeeMoreButton}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessible
+                  accessibilityRole="button"
+                  accessibilityLabel="Voir plus de détails"
+                >
+                  <Text style={styles.notesSeeMoreText}>Voir plus</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          );
+        })()}
 
-        {/* Notes médicales - toujours visibles */}
-        {mission.notes_medical && (
-          <Text style={styles.notesEnhanced}>
-            📝 Notes : {mission.notes_medical}
-          </Text>
-        )}
-        {mission.notes && (
-          <Text style={styles.notesEnhanced}>📝 {mission.notes}</Text>
-        )}
+        {/* 5. MissionNotes : uniquement quand client à bord (IN_PROGRESS). Notes générales uniquement :
+            les notes médicales sont déjà affichées dans les hints "À l'arrivée à destination". */}
+        {normalizedStatus === "IN_PROGRESS" &&
+          (() => {
+            const notesText = (mission.notes ?? "").trim();
+            if (!notesText) return null;
+            const showSeeMore = notesText.length > NOTES_SEE_MORE_THRESHOLD;
+            return (
+              <View style={[styles.notesBlock, isCompact && styles.notesBlockCompact]}>
+                <Text
+                  style={[styles.notesEnhanced, isCompact && styles.notesEnhancedCompact]}
+                  numberOfLines={isCompact ? 1 : 2}
+                  ellipsizeMode="tail"
+                >
+                  Notes : {notesText}
+                </Text>
+                {showSeeMore && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setNotesFullText(notesText);
+                      setNotesModalVisible(true);
+                    }}
+                    style={isCompact ? styles.notesSeeMoreButtonCompact : styles.notesSeeMoreButton}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessible
+                    accessibilityRole="button"
+                    accessibilityLabel="Voir plus"
+                  >
+                    <Text style={styles.notesSeeMoreText}>Voir plus</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            );
+          })()}
       </View>
 
-      {/* Actions principales : Appeler, GPS, En route/À bord/Terminer */}
-      <View style={styles.actionsRowEnhanced}>
-        {onCall && (
-          <TouchableOpacity onPress={onCall} style={styles.actionItemEnhanced}>
+      {/* Modal Notes : backdrop = Pressable (ferme), inner = View (100% safe cross-platform) */}
+      <Modal
+        visible={notesModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setNotesModalVisible(false)}
+      >
+        <Pressable style={styles.notesModalBackdrop} onPress={() => setNotesModalVisible(false)}>
+          <TouchableWithoutFeedback onPress={() => { }}>
+            <View style={styles.notesModalCard}>
+              <Text style={styles.notesModalTitle}>Notes</Text>
+              <ScrollView style={styles.notesModalScroll} showsVerticalScrollIndicator>
+                <Text style={[styles.hintValue, styles.notesModalBody]} selectable>
+                  {notesFullText}
+                </Text>
+              </ScrollView>
+              <TouchableOpacity
+                onPress={() => setNotesModalVisible(false)}
+                style={styles.notesModalCloseButton}
+                accessible
+                accessibilityRole="button"
+                accessibilityLabel="Fermer"
+              >
+                <Text style={styles.notesModalCloseText}>Fermer</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableWithoutFeedback>
+        </Pressable>
+      </Modal>
+
+      {/* 6. MissionActionsPrimary : max 3 (Appeler, GPS, En route|À bord|Terminer) + Plus → Détails */}
+      <View style={[styles.actionsRowEnhanced, isCompact && styles.actionsRowCompact]}>
+        {callablePhone != null && (
+          <TouchableOpacity
+            onPress={onCall}
+            style={styles.actionItemEnhanced}
+            accessible
+            accessibilityRole="button"
+            accessibilityLabel="Appeler le client"
+          >
             <Ionicons name="call" size={18} color="white" />
             <Text style={styles.actionLabel}>Appeler</Text>
           </TouchableOpacity>
@@ -386,7 +683,6 @@ const MissionCard: MissionCardType = ({
         {normalizedStatus === "IN_PROGRESS" && (
           <TouchableOpacity
             onPress={() => {
-              // Ouvrir le modal de confirmation au lieu de terminer directement
               if (mission && onComplete) {
                 onComplete(mission.id);
               } else {
@@ -394,6 +690,7 @@ const MissionCard: MissionCardType = ({
               }
             }}
             style={styles.actionItemEnhanced}
+            disabled={isUpdatingStatus}
           >
             <Ionicons name="checkmark-done" size={18} color="white" />
             <Text style={styles.actionLabel}>Terminer</Text>
@@ -402,42 +699,72 @@ const MissionCard: MissionCardType = ({
 
         {onPressDetails && (
           <TouchableOpacity
-            onPress={onPressDetails}
-            style={styles.actionItemEnhanced}
+            onPress={() => setDetailsSheetVisible(true)}
+            style={styles.actionItemMore}
+            accessible
+            accessibilityRole="button"
+            accessibilityLabel="Plus d’actions"
           >
-            <Ionicons
-              name="information-circle-outline"
-              size={18}
-              color="white"
-            />
-            <Text style={styles.actionLabel}>Détails</Text>
+            <Ionicons name="ellipsis-horizontal" size={20} color={palette.text} />
           </TouchableOpacity>
         )}
       </View>
 
-      {/* Actions secondaires : Annuler (en dessous) */}
+      {/* Sheet Plus : slide depuis le bas, backdrop plus sombre */}
+      <Modal
+        visible={detailsSheetVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setDetailsSheetVisible(false)}
+      >
+        <Pressable style={styles.detailsSheetBackdrop} onPress={() => setDetailsSheetVisible(false)}>
+          <TouchableWithoutFeedback onPress={() => { }}>
+            <View style={styles.detailsSheetCard}>
+              <Text style={styles.detailsSheetTitle}>Actions</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setDetailsSheetVisible(false);
+                  onPressDetails?.();
+                }}
+                style={styles.detailsSheetItem}
+                accessible
+                accessibilityRole="button"
+                accessibilityLabel="Voir les détails complets"
+              >
+                <Ionicons name="information-circle-outline" size={22} color={palette.accent} />
+                <Text style={styles.detailsSheetItemText}>Voir les détails complets</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setDetailsSheetVisible(false)}
+                style={styles.notesModalCloseButton}
+                accessible
+                accessibilityRole="button"
+                accessibilityLabel="Fermer"
+              >
+                <Text style={styles.notesModalCloseText}>Fermer</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableWithoutFeedback>
+        </Pressable>
+      </Modal>
+
+      {/* 7. MissionActionsDanger : Libérer / Annuler (uniquement ASSIGNED ou EN_ROUTE) */}
       {(normalizedStatus === "ASSIGNED" || normalizedStatus === "EN_ROUTE") && (
-        <View style={styles.actionsRowSecondary}>
+        <View style={[styles.actionsRowSecondary, isCompact && styles.actionsRowSecondaryCompact]}>
           <TouchableOpacity
             onPress={handleReleasePress}
             activeOpacity={0.7}
-            style={[
-              styles.actionItemEnhanced,
-              { backgroundColor: "#6c757d", flex: 1, maxWidth: "48%" },
-            ]}
+            style={styles.actionItemSecondary}
           >
             <Ionicons name="refresh" size={18} color="white" />
             <Text style={styles.actionLabel}>Libérer</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setCancelModalVisible(true)}
-            style={[
-              styles.actionItemEnhanced,
-              { backgroundColor: "#dc3545", flex: 1, maxWidth: "48%" },
-            ]}
+            style={styles.actionItemDanger}
           >
             <Ionicons name="close-circle" size={18} color="white" />
-            <Text style={styles.actionLabel}>Annuler</Text>
+            <Text style={styles.actionLabel}>Annuler course</Text>
           </TouchableOpacity>
         </View>
       )}

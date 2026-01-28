@@ -924,6 +924,8 @@ class DriverBookingsETA(Resource):
                         "id": b.id,
                         "duration_seconds": b.duration_seconds,
                         "distance_meters": b.distance_meters,
+                        "eta_to_dropoff_seconds": None,
+                        "estimated_arrival_dropoff": None,
                     }
                     for b in bookings
                 ],
@@ -936,9 +938,11 @@ class DriverBookingsETA(Resource):
                 {
                     "id": item.id,
                     "eta_to_pickup_seconds": item.eta_to_pickup_seconds,
+                    "eta_to_dropoff_seconds": item.eta_to_dropoff_seconds,
                     "duration_seconds": item.duration_seconds,
                     "distance_meters": item.distance_meters,
                     "estimated_arrival": item.estimated_arrival,
+                    "estimated_arrival_dropoff": item.estimated_arrival_dropoff,
                 }
                 for item in resp.bookings
             ],

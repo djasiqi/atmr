@@ -11,6 +11,9 @@ const containerShadow = Platform.OS === 'web'
       elevation: 2,
     };
 
+const CONTENT_WIDTH = 380;
+const MAP_HEIGHT_WEB = 170;
+
 export const styles = StyleSheet.create({
   container: {
     height: 220,
@@ -19,8 +22,21 @@ export const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 12,
     ...containerShadow,
+    ...(Platform.OS === 'web' ? { width: CONTENT_WIDTH, alignSelf: 'center' as const, marginHorizontal: 0 } : {}),
   },
   map: {
     flex: 1,
+  },
+  // Web : placeholder 380×493 pour aligner avec la card
+  webPlaceholder: Platform.OS === 'web' ? { width: CONTENT_WIDTH, height: MAP_HEIGHT_WEB } : { height: 72 },
+  webPlaceholderInner: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F0F2F1',
+  },
+  webPlaceholderText: {
+    fontSize: 13,
+    color: '#91A59D',
   },
 });

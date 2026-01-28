@@ -23,6 +23,7 @@ import {
   switchToEnterpriseToken,
   invalidateInterceptorCache,
 } from "@/services/api";
+import { sendIngestEvent } from "@/src/config/telemetry";
 import { secureStorage, asyncStorage } from "@/services/storage";
 import {
   ENTERPRISE_SESSION_KEY,
@@ -280,12 +281,12 @@ export default function ProfileScreen() {
 
       // 5. Basculer vers le mode entreprise
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'profile.tsx:handleSwitchToEnterprise', message: 'Avant switchMode', data: { hasToken: !!enterpriseTokenResponse.token, hasRefreshToken: !!enterpriseTokenResponse.refresh_token, companyId: enterpriseTokenResponse.company.id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'D' }) }).catch(() => { });
+      sendIngestEvent({ location: 'profile.tsx:handleSwitchToEnterprise', message: 'Avant switchMode', data: { hasToken: !!enterpriseTokenResponse.token, hasRefreshToken: !!enterpriseTokenResponse.refresh_token, companyId: enterpriseTokenResponse.company.id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'D' });
       // #endregion
       await switchMode("enterprise");
       console.log("[Profile] Mode changé vers 'enterprise'");
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'profile.tsx:handleSwitchToEnterprise', message: 'Après switchMode', data: { mode: 'enterprise' }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'E' }) }).catch(() => { });
+      sendIngestEvent({ location: 'profile.tsx:handleSwitchToEnterprise', message: 'Après switchMode', data: { mode: 'enterprise' }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'E' });
       // #endregion
 
       // 6. Invalider le cache de l'intercepteur driver (par sécurité/cohérence)
@@ -305,7 +306,7 @@ export default function ProfileScreen() {
 
       // 10. Naviguer vers le dashboard entreprise
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'profile.tsx:handleSwitchToEnterprise', message: 'Avant navigation dashboard', data: { target: '/(enterprise)/dashboard' }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'F' }) }).catch(() => { });
+      sendIngestEvent({ location: 'profile.tsx:handleSwitchToEnterprise', message: 'Avant navigation dashboard', data: { target: '/(enterprise)/dashboard' }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'F' });
       // #endregion
       router.replace("/(enterprise)/dashboard" as any);
       Alert.alert(

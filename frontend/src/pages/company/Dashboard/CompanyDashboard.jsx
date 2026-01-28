@@ -27,6 +27,7 @@ import {
   fetchDispatchDelays,
 } from '../../../services/companyService';
 import useCompanyData from '../../../hooks/useCompanyData';
+import useCompanyAuthToken from '../../../hooks/useCompanyAuthToken';
 import useDispatchDelays from '../../../hooks/useDispatchDelays';
 import useRealtimeDashboard from '../../../hooks/useRealtimeDashboard';
 import styles from './CompanyDashboard.module.css';
@@ -61,9 +62,12 @@ const CompanyDashboard = () => {
   const socket = useCompanySocket();
   useDispatchStatus(socket); // Monitor dispatch status via WebSocket
 
-  // 🆕 Hook pour les retards dispatch (refresh toutes les 2 minutes)
-  // Variables préfixées avec _ car l'alerte est désactivée mais le hook reste actif
-  const { delayCount: _delayCount, hasCriticalDelays: _hasCriticalDelays, hasDelays: _hasDelays } = useDispatchDelays(dispatchDay, 120000);
+  // Rôle utilisateur : delays/live réservé COMPANY/ADMIN — lecture company_user uniquement (évite 403 si token DRIVER)
+  const user = useCompanyAuthToken();
+  const isCompanyOrAdmin = user && (user.isCompany || String(user.role || '').toLowerCase() === 'admin');
+
+  // Hook pour les retards dispatch (refresh toutes les 2 minutes). Désactivé si rôle DRIVER pour éviter 403.
+  const { delayCount: _delayCount, hasCriticalDelays: _hasCriticalDelays, hasDelays: _hasDelays } = useDispatchDelays(dispatchDay, 120000, !!isCompanyOrAdmin);
 
   // ✅ Toast lorsque la connexion Socket est refusée (backend envoie AUTH_REQUIRED, TOKEN_EXPIRED, etc.)
   useEffect(() => {

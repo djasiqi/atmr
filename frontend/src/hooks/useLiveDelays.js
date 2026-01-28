@@ -2,9 +2,13 @@ import { useState, useCallback, useEffect } from 'react';
 import { getLiveDelays } from '../services/dispatchMonitoringService';
 
 /**
- * Hook personnalisé pour gérer le chargement des retards en temps réel
+ * Hook pour les retards en temps réel (GET /company_dispatch/delays/live).
+ * Réservé COMPANY/ADMIN. Passer enabled: false si rôle DRIVER pour éviter 403.
+ *
+ * @param {string} date - Date au format YYYY-MM-DD
+ * @param {boolean} enabled - Si false, aucun fetch. Défaut true.
  */
-export const useLiveDelays = (date) => {
+export const useLiveDelays = (date, enabled = true) => {
   const [delays, setDelays] = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -40,12 +44,12 @@ export const useLiveDelays = (date) => {
     }
   }, [date]);
 
-  // ✅ Charger automatiquement les delays quand la date change
+  // Charger uniquement si autorisé (rôle company/admin) et date fournie
   useEffect(() => {
-    if (date) {
+    if (enabled && date) {
       loadDelays();
     }
-  }, [date, loadDelays]);
+  }, [enabled, date, loadDelays]);
 
   return {
     delays,

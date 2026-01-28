@@ -749,7 +749,11 @@ class CompanySearch(Resource):
             from models.user import User
 
             current_user = User.query.filter_by(public_id=current_user_id).first()
-            my_company_id = current_user.company.id if (current_user and current_user.company) else None
+            my_company_id = (
+                current_user.company.id
+                if (current_user and current_user.company)
+                else None
+            )
             if my_company_id is not None:
                 companies = [c for c in companies if c.id != my_company_id]
 
@@ -834,7 +838,10 @@ class CompanyPartnerships(Resource):
                         or (
                             p.status.value == existing.status.value
                             and (
-                                (p.created_at == existing.created_at and p.id > existing.id)
+                                (
+                                    p.created_at == existing.created_at
+                                    and p.id > existing.id
+                                )
                                 or (p.id > existing.id)
                             )
                         )
@@ -1371,10 +1378,14 @@ class CompanyReservations(Resource):
         day_str = (request.args.get("date") or "").strip()
         start_date = (request.args.get("start_date") or "").strip()
         end_date = (request.args.get("end_date") or "").strip()
-        search_term = (request.args.get("search") or request.args.get("q") or "").strip()
+        search_term = (
+            request.args.get("search") or request.args.get("q") or ""
+        ).strip()
         tab_filter = (request.args.get("tab") or "").strip().lower()
         sort_order = (request.args.get("sort_order") or "desc").strip().lower()
-        exclude_canceled = request.args.get("exclude_canceled", "false").lower() == "true"
+        exclude_canceled = (
+            request.args.get("exclude_canceled", "false").lower() == "true"
+        )
         max_days_range = 31  # Maximum 31 jours
 
         # Ajouter des paramètres de pagination
@@ -1502,9 +1513,7 @@ class CompanyReservations(Resource):
         try:
             stats_row = base_query.with_entities(
                 func.count(Booking.id),
-                func.sum(
-                    case((Booking.status == BookingStatus.PENDING, 1), else_=0)
-                ),
+                func.sum(case((Booking.status == BookingStatus.PENDING, 1), else_=0)),
                 func.sum(
                     case(
                         (
@@ -1535,9 +1544,7 @@ class CompanyReservations(Resource):
                         else_=0,
                     )
                 ),
-                func.sum(
-                    case((Booking.status == BookingStatus.CANCELED, 1), else_=0)
-                ),
+                func.sum(case((Booking.status == BookingStatus.CANCELED, 1), else_=0)),
                 func.coalesce(
                     func.sum(
                         case(
@@ -1639,28 +1646,32 @@ class CompanyReservations(Resource):
             client_user = aliased(User)
             driver_user = aliased(User)
             query = (
-                query.outerjoin(Client, Booking.client)
-                .outerjoin(client_user, Client.user)
-                .outerjoin(Driver, Booking.driver)
-                .outerjoin(driver_user, Driver.user)
-            ).filter(
-                or_(
-                    cast(Booking.id, String).ilike(like_term),
-                    Booking.customer_name.ilike(like_term),
-                    Booking.pickup_location.ilike(like_term),
-                    Booking.dropoff_location.ilike(like_term),
-                    Client.contact_email.ilike(like_term),
-                    Client.contact_phone.ilike(like_term),
-                    client_user.first_name.ilike(like_term),
-                    client_user.last_name.ilike(like_term),
-                    cast(client_user.email, String).ilike(like_term),
-                    client_user.phone.ilike(like_term),
-                    driver_user.first_name.ilike(like_term),
-                    driver_user.last_name.ilike(like_term),
-                    driver_user.username.ilike(like_term),
-                    cast(driver_user.email, String).ilike(like_term),
+                (
+                    query.outerjoin(Client, Booking.client)
+                    .outerjoin(client_user, Client.user)
+                    .outerjoin(Driver, Booking.driver)
+                    .outerjoin(driver_user, Driver.user)
                 )
-            ).distinct()
+                .filter(
+                    or_(
+                        cast(Booking.id, String).ilike(like_term),
+                        Booking.customer_name.ilike(like_term),
+                        Booking.pickup_location.ilike(like_term),
+                        Booking.dropoff_location.ilike(like_term),
+                        Client.contact_email.ilike(like_term),
+                        Client.contact_phone.ilike(like_term),
+                        client_user.first_name.ilike(like_term),
+                        client_user.last_name.ilike(like_term),
+                        cast(client_user.email, String).ilike(like_term),
+                        client_user.phone.ilike(like_term),
+                        driver_user.first_name.ilike(like_term),
+                        driver_user.last_name.ilike(like_term),
+                        driver_user.username.ilike(like_term),
+                        cast(driver_user.email, String).ilike(like_term),
+                    )
+                )
+                .distinct()
+            )
 
         # Tri
         order_scheduled = (
@@ -1676,13 +1687,9 @@ class CompanyReservations(Resource):
             order_id,
         )
 
-        total = (
-            query.order_by(None).with_entities(Booking.id).distinct().count()
-        )
+        total = query.order_by(None).with_entities(Booking.id).distinct().count()
 
-        reservations = (
-            query.offset((page - 1) * per_page).limit(per_page).all()
-        )
+        reservations = query.offset((page - 1) * per_page).limit(per_page).all()
 
         # Retourner les données dans le format attendu par le frontend
         try:
@@ -1785,7 +1792,9 @@ class AcceptReservation(Resource):
             clinic_rate = clinic_info.get("preferential_rate") if clinic_info else None
             if clinic_rate is not None:
                 current_amount = getattr(booking, "amount", None)
-                if current_amount is None or float(current_amount) != float(clinic_rate):
+                if current_amount is None or float(current_amount) != float(
+                    clinic_rate
+                ):
                     booking.amount = float(clinic_rate)
                     logger.info(
                         "💰 Tarif clinique appliqué à la confirmation (reservation_id=%s, amount=%s)",
@@ -2947,6 +2956,7 @@ class CreateManualReservation(Resource):
 
         scheduled_dt_for_stay = None
         from contextlib import suppress
+
         with suppress(Exception):
             scheduled_dt_for_stay = parse_local_naive(validated_data["scheduled_time"])
 
@@ -2964,7 +2974,9 @@ class CreateManualReservation(Resource):
                 logger.info(
                     "✅ [Facturation] Séjour actif trouvé: stay_id=%s (start_date=%s, end_date=%s)",
                     active_stay.id,
-                    active_stay.start_date.isoformat() if active_stay.start_date else None,
+                    active_stay.start_date.isoformat()
+                    if active_stay.start_date
+                    else None,
                     active_stay.end_date.isoformat() if active_stay.end_date else None,
                 )
             else:
@@ -3032,7 +3044,7 @@ class CreateManualReservation(Resource):
             _bt_raw = _norm_str(
                 getattr(client, "default_billed_to_type", "patient"), "patient"
             )
-            billed_to_type = (_bt_raw or "patient")
+            billed_to_type = _bt_raw or "patient"
             billed_to_type = billed_to_type.lower()
             logger.info(
                 "💳 [Facturation] Client non hospitalisé → billed_to_type = '%s' (default)",
@@ -3041,9 +3053,9 @@ class CreateManualReservation(Resource):
 
         # Résoudre billed_to_company_id si pas déjà défini
         if not billed_to_company_id:
-            billed_to_company_id = validated_data.get("billed_to_company_id") or getattr(
-                client, "default_billed_to_company_id", None
-            )
+            billed_to_company_id = validated_data.get(
+                "billed_to_company_id"
+            ) or getattr(client, "default_billed_to_company_id", None)
         billed_to_contact = _norm_str(
             validated_data.get("billed_to_contact")
             or getattr(client, "default_billed_to_contact", None),
@@ -3642,13 +3654,19 @@ class CreateManualReservation(Resource):
                     # Client non hospitalisé → default_client
                     outbound.billing_source = BillingSource.DEFAULT_CLIENT
                     outbound.billing_source_ref = None
-                    logger.info("💳 [Facturation] billing_source = DEFAULT_CLIENT (non hospitalisé)")
+                    logger.info(
+                        "💳 [Facturation] billing_source = DEFAULT_CLIENT (non hospitalisé)"
+                    )
 
                 # 🏥 Informations médicales (utilise données validées)
                 outbound.medical_facility = validated_data.get("medical_facility")
                 outbound.doctor_name = validated_data.get("doctor_name")
                 outbound.hospital_service = validated_data.get("hospital_service")
                 outbound.notes_medical = validated_data.get("notes_medical")
+                outbound.pickup_access_notes = validated_data.get("pickup_access_notes")
+                outbound.dropoff_access_notes = validated_data.get(
+                    "dropoff_access_notes"
+                )
                 outbound.wheelchair_client_has = validated_data.get(
                     "wheelchair_client_has", False
                 )
@@ -3708,6 +3726,12 @@ class CreateManualReservation(Resource):
                         "hospital_service"
                     )
                     return_booking.notes_medical = validated_data.get("notes_medical")
+                    return_booking.pickup_access_notes = validated_data.get(
+                        "pickup_access_notes"
+                    )
+                    return_booking.dropoff_access_notes = validated_data.get(
+                        "dropoff_access_notes"
+                    )
                     return_booking.wheelchair_client_has = validated_data.get(
                         "wheelchair_client_has", False
                     )
@@ -3776,8 +3800,8 @@ class ClientReservations(Resource):
             )
 
         include_invoices = (
-            (request.args.get("include_invoices") or "true").strip().lower() != "false"
-        )
+            request.args.get("include_invoices") or "true"
+        ).strip().lower() != "false"
         limit = None
         limit_raw = (request.args.get("limit") or "").strip()
         if limit_raw:

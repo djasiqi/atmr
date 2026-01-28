@@ -50,12 +50,11 @@ const Login = () => {
 
     setIsLoading(true);
     try {
-      localStorage.removeItem('authToken');
       const response = await apiClient.post('/auth/login', formData);
       const { token, user, refresh_token } = response.data;
 
       // #region agent log
-      console.log('[Login] Réponse API:', { hasToken: !!token, tokenType: typeof token, tokenValue: token, hasUser: !!user, responseData: response.data, cookies: document.cookie });
+      console.log('[Login] Réponse API:', { hasToken: !!token, tokenType: typeof token, hasUser: !!user, responseData: response.data, cookies: document.cookie });
       // #endregion
 
       if (!user || !user.role || !user.public_id) {
@@ -64,32 +63,43 @@ const Login = () => {
 
       console.log('✅ Connexion réussie :', user);
 
-      // ✅ Le backend utilise des cookies httpOnly pour l'authentification web
-      // Le token peut être dans la réponse JSON (pour mobile) ou dans un cookie (pour web)
-      // Si le token est présent dans la réponse, on le stocke dans localStorage (pour compatibilité mobile)
-      // Sinon, on utilise les cookies httpOnly (pour web)
       let roleSegment;
       if (token && typeof token === 'string') {
-        // Token présent dans la réponse JSON (mode mobile/compatibilité)
-        localStorage.setItem('authToken', token);
-        if (refresh_token) localStorage.setItem('refreshToken', refresh_token);
-        
-        // Décoder le token pour vérifier les informations (notamment le rôle)
-        // #region agent log
-        console.log('[Login] Token dans réponse JSON, décodage:', { token, tokenType: typeof token, tokenLength: token?.length });
-        // #endregion
         const decodedToken = jwtDecode(token);
         roleSegment = String(decodedToken.role || user.role || '').toLowerCase();
       } else {
-        // ✅ Mode web avec cookies httpOnly : le token est dans un cookie, pas besoin de le décoder
-        // Le backend a déjà défini les cookies httpOnly, on utilise juste les infos utilisateur
-        console.log('[Login] Mode cookies httpOnly, pas de token dans la réponse JSON');
         roleSegment = String(user.role || '').toLowerCase();
       }
-      
-      // Normaliser le rôle stocké (cohérent avec ProtectedRoute)
-      localStorage.setItem('user', JSON.stringify({ ...user, role: roleSegment }));
+
+      const userPayload = JSON.stringify({ ...user, role: roleSegment });
+
+      // Stockage séparé par rôle : company_* pour COMPANY/ADMIN (dashboard 3000), driver_* pour DRIVER (app 8081).
+      // Évite qu'un token DRIVER soit utilisé sur le dashboard company (403 sur company_dispatch/*).
+      if (roleSegment === 'company' || roleSegment === 'admin') {
+        localStorage.removeItem('driver_access_token');
+        localStorage.removeItem('driver_refresh_token');
+        localStorage.removeItem('driver_user');
+        localStorage.removeItem('driver_public_id');
+        localStorage.setItem('company_user', userPayload);
+        localStorage.setItem('company_public_id', user.public_id);
+        if (token) localStorage.setItem('company_access_token', token);
+        if (refresh_token) localStorage.setItem('company_refresh_token', refresh_token);
+      } else if (roleSegment === 'driver') {
+        localStorage.removeItem('company_access_token');
+        localStorage.removeItem('company_refresh_token');
+        localStorage.removeItem('company_user');
+        localStorage.removeItem('company_public_id');
+        localStorage.setItem('driver_user', userPayload);
+        localStorage.setItem('driver_public_id', user.public_id);
+        if (token) localStorage.setItem('driver_access_token', token);
+        if (refresh_token) localStorage.setItem('driver_refresh_token', refresh_token);
+      }
+
+      // Legacy (rétrocompat) pour routes sans allowedRoles
+      localStorage.setItem('user', userPayload);
       localStorage.setItem('public_id', user.public_id);
+      if (token) localStorage.setItem('authToken', token);
+      if (refresh_token) localStorage.setItem('refreshToken', refresh_token);
 
       // Vérification si l'utilisateur doit réinitialiser son mot de passe
       if (user.force_password_change) {

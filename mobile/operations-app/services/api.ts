@@ -3,25 +3,24 @@ import Constants from "expo-constants";
 import { Platform } from "react-native";
 import axios, { isAxiosError } from "axios";
 import { secureStorage, asyncStorage } from "./storage";
-import { AuthNotReadyError, isPublicEndpoint } from "@/services/authGuards";
+import {
+  AuthNotReadyError,
+  isPublicEndpoint,
+  reportAuthNotReadyMetric,
+} from "@/services/authGuards";
+import { notifyAuthNotReady, isAuthReadySync } from "@/services/authSync";
 import {
   getSessionDiagHeaderValue,
   pushSessionEvent,
 } from "@/services/sessionJournal";
+import { sendIngestEvent } from "@/src/config/telemetry";
 
-// ✅ Helper pour les logs de debug (dev uniquement)
-// Évite les warnings de connexion en production
-const debugLog = (data: any) => {
+// Helper pour les logs de debug (dev uniquement, ingest désactivable via EXPO_PUBLIC_DISABLE_INGEST)
+const debugLog = (data: Record<string, unknown>) => {
   if (__DEV__) {
     try {
-      fetch("http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      }).catch(() => {
-        // Ignorer silencieusement les erreurs de connexion au service de debug
-      });
-    } catch (e) {
+      sendIngestEvent(data);
+    } catch {
       // ignore
     }
   }
@@ -143,7 +142,7 @@ try {
   // ignore
 }
 
-// ✅ P2-2: CSRF Mobile - Support optionnel
+// ✅ P2-2: CSRF optionnel — driver = Bearer only. CSRF = cookie-session browser, pas requis pour Bearer API.
 let csrfToken: string | null = null;
 let csrfTokenPromise: Promise<string | null> | null = null;
 
@@ -166,34 +165,52 @@ async function fetchCSRFToken(): Promise<string | null> {
   csrfTokenPromise = (async () => {
     try {
       // ✅ P2-2: Récupérer le token CSRF depuis l'endpoint backend
-      // Note: Cet endpoint DOIT exister dans backend/routes/auth.py à /api/v1/auth/csrf-token
-      console.log(`🔄 [CSRF] Fetch token depuis: ${baseURL}/auth/csrf-token`);
-      
-      // ✅ Utiliser l'instance 'api' pour s'assurer que withCredentials est appliqué
-      const response = await api.get(`${baseURL}/auth/csrf-token`, {
-        withCredentials: Platform.OS === "web", // Sur web, envoyer les cookies
-      });
+      // Sur web: requête "simple" (fetch sans en-têtes custom) pour éviter preflight OPTIONS → GET jamais envoyé (preuve logs Docker)
+      const url = `${baseURL}/auth/csrf-token`;
+      console.log(`🔄 [CSRF] Fetch token depuis: ${url}`);
 
-      const token = response.data?.csrf_token || null;
+      let token: string | null = null;
+      if (Platform.OS === "web" && typeof fetch !== "undefined") {
+        // Requête simple GET (pas de Content-Type ni autre header) → pas de preflight, GET envoyé directement
+        const res = await fetch(url, { method: "GET", credentials: "omit" });
+        if (res.ok) {
+          const data = await res.json();
+          token = data?.csrf_token ?? null;
+        }
+      } else {
+        const response = await api.get("/auth/csrf-token", {
+          withCredentials: Platform.OS === "web",
+        });
+        token = response.data?.csrf_token ?? null;
+      }
+
       if (token) {
         csrfToken = token;
         console.log("✅ [CSRF] Token CSRF récupéré avec succès");
       } else {
-        console.warn("⚠️ [CSRF] Token CSRF non reçu du backend. Response:", response.data);
+        console.warn("⚠️ [CSRF] Token CSRF non reçu du backend.");
       }
 
       return token;
     } catch (error) {
-      // ✅ P2-2: En cas d'erreur, ne pas bloquer l'application (CSRF optionnel)
+      // ✅ P2-2: CSRF optionnel — driver = Bearer only ; ne pas considérer l'absence de CSRF comme panne API.
       if (isAxiosError(error)) {
-        console.warn("⚠️ [CSRF] Erreur lors de la récupération du token CSRF:", {
-          status: error.response?.status,
-          statusText: error.response?.statusText,
-          url: error.config?.url,
-          data: error.response?.data,
-        });
+        const isNetworkError =
+          error.code === "ERR_NETWORK" ||
+          error.message === "Network Error" ||
+          error.response == null;
+        if (isNetworkError) {
+          console.warn(
+            "⚠️ [CSRF] CSRF non disponible (optionnel). Auth Bearer uniquement pour les endpoints driver."
+          );
+        } else {
+          console.warn("⚠️ [CSRF] Erreur récupération token CSRF (optionnel):", {
+            status: error.response?.status,
+            url: error.config?.url,
+          });
+        }
       } else {
-        console.warn("⚠️ [CSRF] Impossible de récupérer le token CSRF:", error);
+        console.warn("⚠️ [CSRF] CSRF non disponible (optionnel), poursuite avec Bearer uniquement.");
       }
       csrfToken = null;
       return null;
@@ -228,8 +245,9 @@ export const invalidateCSRFToken = () => {
 export const api = axios.create({
   baseURL,
   timeout: 30000,
-  // ✅ Sur le web, activer withCredentials pour envoyer/recevoir les cookies httpOnly
-  withCredentials: Platform.OS === "web",
+  // ✅ Web driver (8081): pas de cookies — auth via Authorization Bearer uniquement (évite ERR_NETWORK / CORS).
+  // Native: withCredentials true si besoin cookies ailleurs.
+  withCredentials: Platform.OS !== "web",
   headers: {
     "Content-Type": "application/json",
     // ✅ X-Requested-With seulement sur mobile (pas sur web pour éviter les problèmes CORS)
@@ -280,6 +298,7 @@ const INTERCEPTOR_METRICS_LOG_INTERVAL = 100; // Log toutes les 100 requêtes
 export const invalidateInterceptorCache = () => {
   interceptorTokenCache = null;
   interceptorTokenCacheTime = 0;
+  resetAuthNotReadyDedupe();
   if (__DEV__) {
     interceptorCacheHitCount = 0;
     interceptorCacheMissCount = 0;
@@ -287,9 +306,32 @@ export const invalidateInterceptorCache = () => {
   }
 };
 
+/** Guard anti-race : dedupe AuthNotReadyError (missing_access_token) par endpoint pour éviter 5 popups si l'utilisateur clique 5 fois. */
+const AUTH_NOT_READY_DEDUPE_MS = 3000;
+let lastAuthNotReadyKey: string | null = null;
+let lastAuthNotReadyTime = 0;
+
+/** À appeler après clearAll / logout pour réinitialiser le dedupe. */
+export const resetAuthNotReadyDedupe = () => {
+  lastAuthNotReadyKey = null;
+  lastAuthNotReadyTime = 0;
+};
+
 // --- Authorization bearer + Device ID ---
 api.interceptors.request.use(
   async (config) => {
+    // ✅ Garde anti-régression : l'app chauffeur n'utilise PAS company_dispatch (réservé COMPANY/ADMIN).
+    // ETA / retard : utiliser uniquement GET /driver/me/bookings/eta.
+    const url = config.url ?? "";
+    if (url.includes("company_dispatch")) {
+      const msg =
+        "Driver app must not call company_dispatch. Use /driver/me/bookings/eta only.";
+      if (__DEV__) {
+        console.error("[API]", msg, "Blocked URL:", url);
+      }
+      throw new Error(msg);
+    }
+
     // ✅ CORRECTION #1 : Guard d'initialisation
     // Attendre que l'auth soit prête avant de permettre les requêtes (sauf login)
     const isLoginRequest =
@@ -307,6 +349,11 @@ api.interceptors.request.use(
             config.url
           );
         }
+        reportAuthNotReadyMetric({
+          kind: "driver",
+          reason: "auth_ready_timeout",
+          url: config.url,
+        });
         throw new AuthNotReadyError({
           kind: "driver",
           reason: "auth_ready_timeout",
@@ -403,7 +450,7 @@ api.interceptors.request.use(
       }
     }
 
-    // #region agent log
+    // #region agent log + debug non sensible (QA / 24h — __DEV__ uniquement)
     const logData = {
       location: "api.ts:interceptor:request",
       message: "interceptor request entry",
@@ -413,6 +460,7 @@ api.interceptors.request.use(
         isLoginRequest,
         baseURL: config.baseURL,
         hasToken: !!token,
+        isAuthReady: isAuthReadySync(),
         platform: Platform.OS,
         withCredentials: config.withCredentials,
         headers: {
@@ -425,6 +473,14 @@ api.interceptors.request.use(
       runId: "run1",
       hypothesisId: "A",
     };
+    if (__DEV__) {
+      console.log("[API] auth state (non sensible):", {
+        hasToken: !!token,
+        isAuthReady: isAuthReadySync(),
+        url: config.url,
+        ts: Date.now(),
+      });
+    }
     console.log("[DEBUG] Driver API interceptor:", JSON.stringify(logData, null, 2));
     debugLog(logData);
     // #endregion
@@ -440,17 +496,39 @@ api.interceptors.request.use(
 
     // ✅ P1 (strict): requête protégée => Authorization obligatoire
     // Si un Authorization explicite a été fourni, on n'impose pas le token driver.
+    // ✅ Guard anti-race : dedupe par endpoint + 2–3 s pour éviter 5 popups si l'utilisateur clique 5 fois.
     if (!isPublic && !hasExplicitAuthHeader && !token) {
-      if (__DEV__) {
+      // Option 1 — Assert soft en dev : attraper invariant cassé (isAuthReady mais pas de token)
+      if (__DEV__ && isAuthReadySync()) {
+        console.warn("[AUTH] isAuthReady=true but no token (invariant broken)");
+      }
+      const urlKey = config.url ?? "";
+      const now = Date.now();
+      const isDedupe =
+        urlKey === lastAuthNotReadyKey &&
+        now - lastAuthNotReadyTime < AUTH_NOT_READY_DEDUPE_MS;
+      if (!isDedupe) {
+        lastAuthNotReadyKey = urlKey;
+        lastAuthNotReadyTime = now;
+      }
+      if (__DEV__ && !isDedupe) {
         console.warn(
           "[API] AUTH_NOT_READY (missing access token) - requête rejetée:",
           config.url
         );
       }
+      if (!isDedupe) {
+        reportAuthNotReadyMetric({
+          kind: "driver",
+          reason: "missing_access_token",
+          url: config.url,
+        });
+      }
       throw new AuthNotReadyError({
         kind: "driver",
         reason: "missing_access_token",
         url: config.url,
+        silentDedupe: isDedupe,
       });
     }
 
@@ -576,6 +654,7 @@ api.interceptors.response.use(
         await secureStorage.clearAll();
         await asyncStorage.clearAuth();
         invalidateInterceptorCache();
+        notifyAuthNotReady();
         return Promise.reject(error);
       } else if (isNetworkError) {
         // Erreur réseau → ne pas déconnecter, juste rejeter
@@ -662,6 +741,7 @@ api.interceptors.response.use(
           await secureStorage.clearAll();
           await asyncStorage.clearAuth();
           invalidateInterceptorCache();
+          notifyAuthNotReady();
           return Promise.reject(refreshError);
         } else if (isNetworkError) {
           // Erreur réseau temporaire → ne pas déconnecter, juste rejeter l'erreur
@@ -696,18 +776,41 @@ api.interceptors.response.use(
 
     // Autres erreurs → log et rejeter
     if (isAxiosError(error)) {
+      const code = (error as any)?.code;
       console.warn("API Error", {
         url: error.config?.url,
         method: error.config?.method,
         status: error.response?.status,
         data: error.response?.data,
-        code: (error as any)?.code,
+        code,
         message: error.message,
       });
-      if ((error as any)?.code === "ECONNABORTED") {
+      if (code === "ECONNABORTED") {
         console.warn(
           "API Timeout (augmenté à 30s). Vérifiez la latence réseau/serveur."
         );
+      }
+      if (code === "ERR_NETWORK" && Platform.OS === "web") {
+        const origin = typeof window !== "undefined" ? window.location.origin : "?";
+        console.warn(
+          "[ERR_NETWORK] Sur le web (8081) : vérifiez 1) que le backend tourne sur",
+          baseURL.replace("/api/v1", ""),
+          "2) que CORS autorise l’origine",
+          origin,
+          "(ex: FLASK_CONFIG=development ou SOCKETIO_CORS_ORIGINS avec http://localhost:8081)."
+        );
+        // #region agent log — H3: URL exacte appelée lors de ERR_NETWORK
+        const fullURL = (originalRequest?.baseURL || "") + (originalRequest?.url || "");
+        sendIngestEvent({
+          location: "api.ts:response_interceptor",
+          message: "ERR_NETWORK",
+          data: { fullURL, method: originalRequest?.method, code, baseURL: originalRequest?.baseURL, url: originalRequest?.url },
+          timestamp: Date.now(),
+          sessionId: "debug-session",
+          runId: "run1",
+          hypothesisId: "H3",
+        });
+        // #endregion
       }
     }
     return Promise.reject(error);
@@ -915,6 +1018,8 @@ export const loginDriver = async (
       debugLog(beforeStoreLog);
       // #endregion
       await secureStorage.setAccessToken(data.token);
+      // ✅ Forcer l'intercepteur à relire le token à la prochaine requête (évite cache null)
+      invalidateInterceptorCache();
       // #region agent log
       const afterStoreLog = {
         location: "api.ts:loginDriver",
@@ -1242,7 +1347,11 @@ export type Booking = {
     last_name: string;
     full_name: string;
     birth_date?: string;
+    /** Genre client (HOMME/FEMME/AUTRE) pour afficher Madame/Monsieur */
+    gender?: string;
     contact_phone?: string; // ✅ P1-4 Phase 3.1: Utiliser client.contact_phone au lieu de client_phone au niveau racine
+    phone?: string; // Téléphone principal client
+    gp_phone?: string; // Téléphone médecin traitant (optionnel pour bouton Appeler)
     door_code?: string;
     floor?: string;
     access_notes?: string;
@@ -1259,6 +1368,10 @@ export type Booking = {
   doctor_name?: string;
   hospital_service?: string;
   notes_medical?: string;
+  /** Instructions d'accès au point de prise en charge (ex: restaurant, hôtel) */
+  pickup_access_notes?: string;
+  /** Instructions d'accès à la destination (ex: entrée B, étage 2) */
+  dropoff_access_notes?: string;
   // Nouveaux champs pour la chaise roulante
   wheelchair_client_has?: boolean;
   wheelchair_need?: boolean;

@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { ScrollView, Alert, Linking, View, RefreshControl } from "react-native";
+import { ScrollView, Alert, Linking, View, RefreshControl, Platform } from "react-native";
 import { useAuth } from "@/hooks/useAuth";
 import { useSocket } from "@/hooks/useSocket";
 import { useLocation } from "@/hooks/useLocation";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useDynamicETA } from "@/hooks/useDynamicETA";
+import { useMissionLayout } from "@/hooks/useMissionLayout";
 import MissionCard from "@/components/dashboard/MissionCard";
 import MissionGroupHeader from "@/components/dashboard/MissionGroupHeader";
 import MissionHeader from "@/components/dashboard/MissionHeader";
@@ -27,6 +28,7 @@ import {
   filterNextMissionsOnly,
   type DisplayMission,
 } from "@/utils/missionGrouping";
+import { getCallablePhone } from "@/utils/phone";
 import {
   scheduleMissionReminder,
   cancelMissionReminder,
@@ -69,9 +71,20 @@ export default function MissionScreen() {
   const { location } = useLocation();
   const socket = useSocket();
   useNotifications();
+  const { contentWidth, mapHeight, horizontalPadding } = useMissionLayout();
 
-  // Hook pour les ETAs dynamiques basés sur la position GPS
-  const { etas, hasGPS, getDuration } = useDynamicETA(!!driver);
+  // Hook pour les ETAs dynamiques basés sur la position GPS (GET /driver/me/bookings/eta uniquement)
+  const {
+    etas,
+    hasGPS,
+    getDuration,
+    getETAToPickup,
+    getETAToDropoff,
+    getEstimatedArrival,
+    getEstimatedArrivalDropoff,
+    getDelayMinutes,
+    isLoading: etaLoading,
+  } = useDynamicETA(!!driver);
 
   const [isLoading, setIsLoading] = useState(true);
   const [missions, setMissions] = useState<Booking[]>([]);
@@ -81,7 +94,8 @@ export default function MissionScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<number>(Date.now()); // Track last update time
 
-  const MISSIONS_CACHE_KEY = "missions_cache_v1";
+  // v2: backend envoie désormais client.phone et client.gp_phone (bouton Appeler) — bump pour invalider ancien cache
+  const MISSIONS_CACHE_KEY = "missions_cache_v2";
 
   // Filtrer les missions actives (aujourd'hui ou demain si après 19h)
   const activeMissions = useMemo(() => {
@@ -487,7 +501,7 @@ export default function MissionScreen() {
         )}
 
         {displayMissions.length > 0 ? (
-          <View className="px-4 pt-4">
+          <View style={{ paddingHorizontal: horizontalPadding, paddingTop: 16 }}>
             {displayMissions.map((displayMission, index) => {
               const { mission, missionNumber, groupInfo } = displayMission;
               const previousMission = index > 0 ? displayMissions[index - 1] : null;
@@ -515,12 +529,26 @@ export default function MissionScreen() {
                     }}
                     missionNumber={missionNumber}
                     isGrouped={groupInfo.isGrouped}
+                    getETAToPickup={getETAToPickup}
+                    getETAToDropoff={getETAToDropoff}
+                    getEstimatedArrival={getEstimatedArrival}
+                    getEstimatedArrivalDropoff={getEstimatedArrivalDropoff}
+                    getDelayMinutes={getDelayMinutes}
+                    hasGPS={hasGPS}
+                    etaLoading={etaLoading}
                     onComplete={() => handleOpenModal(mission.id)}
-                    onCall={() =>
-                      // ✅ P1-4 Phase 3.1: Utiliser client.contact_phone au lieu de client_phone
-                      (mission.client?.contact_phone || mission.client_phone) &&
-                      Linking.openURL(`tel:${mission.client?.contact_phone || mission.client_phone}`)
-                    }
+                    callablePhone={getCallablePhone(mission)}
+                    onCall={() => {
+                      const phone = getCallablePhone(mission);
+                      if (phone) {
+                        if (Platform.OS === "web") {
+                          (window as any).open(`tel:${phone}`);
+                          Alert.alert("Appel", "Ouverture de l'appel… Si rien ne se passe, aucun logiciel d'appel n'est peut-être configuré sur cet appareil.");
+                        } else {
+                          Linking.openURL(`tel:${phone}`);
+                        }
+                      }
+                    }}
                     onNavigate={() => {
                       // ✅ Normaliser le statut en majuscules pour correspondre au backend
                       const normalizedStatus = mission.status?.toUpperCase();
@@ -553,8 +581,8 @@ export default function MissionScreen() {
             })}
           </View>
         ) : (
-          <View className="flex-1 items-center justify-center py-10 px-4">
-            <MissionCard.EmptyState />
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 40, paddingHorizontal: horizontalPadding }}>
+            <MissionCard.EmptyState contentWidth={contentWidth} />
           </View>
         )}
 

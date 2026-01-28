@@ -509,17 +509,23 @@ def create_app(config_name: str | None = None):
 
     # Définir cors_origins même si Socket.IO est désactivé
     # (nécessaire pour CORS plus bas)
-    # ✅ Liste centralisée des origines CORS en développement
-    # Inclut toujours les origines essentielles (frontend React + Expo web)
+    # ✅ Liste centralisée des origines CORS en développement (pas de "*" + headers custom).
+    # Dev local : 3000 = dashboard company, 8081 = app chauffeur web (Bearer only, withCredentials=false).
+    # Pour éviter ERR_NETWORK sur le driver web (8081), le backend doit tourner avec FLASK_CONFIG=development
+    # ou SOCKETIO_CORS_ORIGINS contenant http://localhost:8081 et http://127.0.0.1:8081.
     CORS_DEV_ORIGINS = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "http://localhost:8081",  # App chauffeur web (Expo)
+        "http://127.0.0.1:8081",
         "http://localhost:3001",
         "http://127.0.0.1:3001",
         "http://localhost:5000",
         "http://127.0.0.1:5000",
-        "http://localhost:8081",  # ✅ Application mobile Expo web
-        "http://127.0.0.1:8081",  # ✅ Application mobile Expo web
+        "http://localhost:19006",
+        "http://127.0.0.1:19006",
+        "http://localhost:19000",
+        "http://127.0.0.1:19000",
     ]
 
     if config_name == "development":
@@ -576,6 +582,10 @@ def create_app(config_name: str | None = None):
             )
         else:
             cors_origins = []
+
+    # En dev/test uniquement : autoriser tous les headers CORS pour débloquer vite en local.
+    # En prod, on garde la liste explicite (sécurité).
+    cors_allow_headers_wildcard = config_name in ("development", "testing")
 
     if skip_socketio:
         app.logger.info("⏭️  Socket.IO désactivé (SKIP_SOCKETIO=1)")
@@ -1365,37 +1375,96 @@ def create_app(config_name: str | None = None):
         return resp
 
     # ✅ FIX CORS Mobile: Handler after_request pour garantir les headers CORS
-    # S'exécute APRÈS Flask-CORS pour s'assurer que les headers sont présents
+    # Sur TOUTES les réponses (OPTIONS, GET, POST, etc.) quand Origin est présent,
+    # sinon le navigateur bloque et affiche ERR_NETWORK (POST login 200 / GET profile).
     @app.after_request
     def _ensure_cors_headers_for_options(resp):  # pyright: ignore[reportUnusedFunction]
-        """Garantit que les headers CORS sont présents pour les requêtes OPTIONS."""
+        """Garantit que les headers CORS sont présents pour OPTIONS et pour les réponses réelles (GET/POST)."""
+        origin = request.headers.get("Origin")
+        has_acao = "Access-Control-Allow-Origin" in resp.headers
+        origin_in_cors = origin in cors_origins if origin else False
+        cors_len = len(cors_origins) if cors_origins else 0
+        # #region agent log — H1 H4: preuve CORS sur chaque réponse
+        _debug_log = {
+            "location": "app.py:after_request",
+            "message": "response",
+            "data": {
+                "method": request.method,
+                "path": request.path,
+                "origin": origin,
+                "has_acao": has_acao,
+                "origin_in_cors": origin_in_cors,
+                "cors_origins_len": cors_len,
+            },
+            "timestamp": __import__("time", fromlist=[]).time() * 1000,
+            "sessionId": "debug-session",
+            "runId": "run1",
+            "hypothesisId": "H1_H4",
+        }
+        app.logger.info("[DEBUG] after_request %s %s origin=%s has_acao=%s origin_in_cors=%s", request.method, request.path, origin, has_acao, origin_in_cors)
+        try:
+            _p = Path(os.getenv("DEBUG_LOG_PATH", r"c:\Users\jasiq\atmr\.cursor\debug.log"))
+            _p.parent.mkdir(parents=True, exist_ok=True)
+            with _p.open("a", encoding="utf-8") as _f:
+                _f.write(__import__("json").dumps(_debug_log) + "\n")
+        except Exception:
+            pass
+        # #endregion
         if request.method == "OPTIONS":
-            origin = request.headers.get("Origin")
             app.logger.info(
                 "[CORS-FIX] after_request pour OPTIONS %s, origin: %s, has_headers: %s",
                 request.path,
                 origin,
-                "Access-Control-Allow-Origin" in resp.headers,
+                has_acao,
             )
-            # Si les headers CORS ne sont pas présents, les ajouter
-            if (
-                origin
-                and origin in cors_origins
-                and "Access-Control-Allow-Origin" not in resp.headers
-            ):
-                resp.headers["Access-Control-Allow-Origin"] = origin
-                resp.headers["Access-Control-Allow-Methods"] = (
-                    "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-                )
-                resp.headers["Access-Control-Allow-Headers"] = (
-                    "Content-Type, Authorization, Cache-Control, Pragma, "
-                    "X-Device-ID, X-Company-ID, X-Session-ID, "
-                    "X-CSRF-Token, X-Csrf-Token, X-Requested-With"
-                )
-                resp.headers["Access-Control-Allow-Credentials"] = "true"
-                resp.headers["Access-Control-Max-Age"] = "3600"
+        # Pour TOUTE requête avec Origin : forcer les en-têtes CORS (origine exacte, jamais * avec credentials).
+        if origin and origin in cors_origins:
+            resp.headers["Access-Control-Allow-Origin"] = origin
+            resp.headers["Access-Control-Allow-Methods"] = (
+                "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+            )
+            # Allow-Headers : une seule source de vérité (echo), jamais "*" (ignoré avec credentials).
+            # Si déjà défini (ex. par le handler OPTIONS preflight) → ne pas écraser.
+            if "Access-Control-Allow-Headers" not in resp.headers:
+                if cors_allow_headers_wildcard:
+                    # Dev/test : echo exact de ce que le client a demandé (pas "*").
+                    req_headers = request.headers.get(
+                        "Access-Control-Request-Headers", ""
+                    ).strip()
+                    resp.headers["Access-Control-Allow-Headers"] = (
+                        req_headers
+                        if req_headers
+                        else (
+                            "Content-Type, Authorization, X-CSRF-Token, "
+                            "X-Csrf-Token, X-Requested-With, X-Session-Diag"
+                        )
+                    )
+                else:
+                    resp.headers["Access-Control-Allow-Headers"] = (
+                        "Content-Type, Authorization, Cache-Control, Pragma, "
+                        "X-Device-ID, X-Company-ID, X-Session-ID, "
+                        "X-CSRF-Token, X-Csrf-Token, X-Requested-With, "
+                        "X-Session-Diag, x-session-diag"
+                    )
+            resp.headers["Access-Control-Allow-Credentials"] = "true"
+            resp.headers["Access-Control-Max-Age"] = "3600"
+            _vary = resp.headers.get("Vary", "")
+            if "Origin" not in _vary:
+                resp.headers["Vary"] = (_vary + ", Origin").strip(", ")
+            # #region agent log — H1: preuve CORS ajouté
+            app.logger.info("[DEBUG] CORS added for %s %s", request.method, request.path)
+            try:
+                _p2 = Path(os.getenv("DEBUG_LOG_PATH", r"c:\Users\jasiq\atmr\.cursor\debug.log"))
+                with _p2.open("a", encoding="utf-8") as _f2:
+                    _f2.write(__import__("json").dumps({"location": "app.py:after_request", "message": "cors_added", "data": {"method": request.method, "path": request.path}, "hypothesisId": "H1"}) + "\n")
+            except Exception:
+                pass
+            # #endregion
+            if request.method != "OPTIONS":
                 app.logger.info(
-                    "[CORS-FIX] Headers CORS ajoutés manuellement pour %s", origin
+                    "[CORS-FIX] Headers CORS ajoutés pour %s %s (évite ERR_NETWORK)",
+                    request.method,
+                    request.path,
                 )
         return resp
 
@@ -1404,6 +1473,18 @@ def create_app(config_name: str | None = None):
     @app.before_request
     def _handle_cors_preflight():  # pyright: ignore[reportUnusedFunction]
         """Gère les requêtes OPTIONS preflight pour CORS (avant Flask-CORS)."""
+        # #region agent log — H2: preuve que la requête a atteint le backend
+        if request.path.startswith("/api/v1/"):
+            _req_log = {"location": "app.py:before_request", "message": "request_received", "data": {"method": request.method, "path": request.path, "origin": request.headers.get("Origin")}, "timestamp": __import__("time", fromlist=[]).time() * 1000, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H2"}
+            app.logger.info("[DEBUG] request_received %s %s origin=%s", request.method, request.path, request.headers.get("Origin"))
+            try:
+                _rp = Path(os.getenv("DEBUG_LOG_PATH", r"c:\Users\jasiq\atmr\.cursor\debug.log"))
+                _rp.parent.mkdir(parents=True, exist_ok=True)
+                with _rp.open("a", encoding="utf-8") as _rf:
+                    _rf.write(__import__("json").dumps(_req_log) + "\n")
+            except Exception:
+                pass
+        # #endregion
         # #region agent log - Log toutes les requêtes vers company_mobile/auth
         if request.path.startswith("/api/v1/company_mobile/auth"):
             log_path = Path(r"c:\Users\jasiq\atmr\.cursor\debug.log")
@@ -1513,18 +1594,40 @@ def create_app(config_name: str | None = None):
                 pass
             # #endregion
             if origin and origin in cors_origins:
-                response = make_response("", 204)
+                # ✅ Chrome n'envoie pas la requête réelle (GET/POST) après 204 No Content au preflight OPTIONS.
+                # Retourner 200 OK au lieu de 204 pour que Chrome envoie bien le GET/POST qui suit.
+                response = make_response("", 200)
                 response.headers["Access-Control-Allow-Origin"] = origin
                 response.headers["Access-Control-Allow-Methods"] = (
                     "GET, POST, PUT, PATCH, DELETE, OPTIONS"
                 )
-                response.headers["Access-Control-Allow-Headers"] = (
-                    "Content-Type, Authorization, Cache-Control, Pragma, "
-                    "X-Device-ID, X-Company-ID, X-Session-ID, "
-                    "X-CSRF-Token, X-Csrf-Token, X-Requested-With"
-                )
+                if cors_allow_headers_wildcard:
+                    # Echo exact de ce que le client demande (dev only). Jamais "*" avec credentials.
+                    req_headers = request.headers.get(
+                        "Access-Control-Request-Headers", ""
+                    ).strip()
+                    response.headers["Access-Control-Allow-Headers"] = (
+                        req_headers
+                        if req_headers
+                        else (
+                            "Content-Type, Authorization, X-CSRF-Token, "
+                            "X-Csrf-Token, X-Requested-With, X-Session-Diag"
+                        )
+                    )
+                else:
+                    response.headers["Access-Control-Allow-Headers"] = (
+                        "Content-Type, Authorization, Cache-Control, Pragma, "
+                        "X-Device-ID, X-Company-ID, X-Session-ID, "
+                        "X-CSRF-Token, X-Csrf-Token, X-Requested-With, "
+                        "X-Session-Diag, x-session-diag"
+                    )
                 response.headers["Access-Control-Allow-Credentials"] = "true"
-                response.headers["Access-Control-Max-Age"] = "3600"
+                response.headers["Access-Control-Max-Age"] = (
+                    "600" if cors_allow_headers_wildcard else "3600"
+                )
+                # Éviter cache preflight (ex. ancien 204) pour que Chrome envoie bien le GET/POST qui suit
+                response.headers["Cache-Control"] = "no-store, no-cache"
+                response.headers["Pragma"] = "no-cache"
                 app.logger.info(
                     "[CORS-PREFLIGHT] Réponse créée avec headers: %s",
                     str(dict(response.headers)),
@@ -1594,6 +1697,11 @@ def create_app(config_name: str | None = None):
         return None
 
     # 5) CORS
+    # ✅ Dev local : origines explicites (pas de * + headers custom).
+    #    - 8081 (driver web) = Bearer only, withCredentials=false.
+    #    - 3000 (dashboard company) = Bearer company_access_token (ou cookies si choisi ; choisir 1 modèle).
+    # ✅ Access-Control-Allow-Headers inclut Authorization ; OPTIONS géré partout.
+    # ✅ Méthodes : GET, POST, PUT, PATCH, DELETE, OPTIONS.
     # ✅ S1: Validation CORS en production - rejeter "*"
     if config_name == "production":
         # Normaliser cors_origins en liste pour validation
@@ -1669,23 +1777,28 @@ def create_app(config_name: str | None = None):
         ", ".join(cors_origins),
     )
 
+    # Jamais "*" avec credentials : liste explicite partout. En dev le preflight fait echo.
+    _cors_allow_headers: list[str] = [
+        "Content-Type",
+        "Authorization",
+        "Cache-Control",
+        "Pragma",
+        "X-Device-ID",
+        "X-Company-ID",
+        "X-Session-ID",
+        "X-CSRF-Token",
+        "X-Csrf-Token",
+        "X-Requested-With",
+        "X-Session-Diag",
+        "x-session-diag",
+    ]
     CORS(
         app,
         resources={r"/*": {"origins": "*" if cors_origins == "*" else cors_origins}},
         supports_credentials=True,
+        # Expose-Headers : utile seulement si le client lit des headers de réponse (ex. X-CSRF-Token). Pour body JSON seul, pas nécessaire.
         expose_headers=["Content-Type", "Authorization", "X-CSRF-Token"],
-        allow_headers=[
-            "Content-Type",
-            "Authorization",
-            "Cache-Control",
-            "Pragma",
-            "X-Device-ID",
-            "X-Company-ID",
-            "X-Session-ID",
-            "X-CSRF-Token",  # ✅ S1: Header CSRF pour protection
-            "X-Csrf-Token",  # Variante du header CSRF
-            "X-Requested-With",  # ✅ Header pour identifier les requêtes mobile (Expo)
-        ],  # ✅ Ajout des en-têtes personnalisés pour l'application mobile
+        allow_headers=_cors_allow_headers,
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     )
 

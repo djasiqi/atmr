@@ -15,6 +15,7 @@ import type {
     RideDetail,
     DriverSuggestion,
 } from "@/types/enterpriseDispatch";
+import { sendIngestEvent } from "@/src/config/telemetry";
 
 // ✅ Helper pour afficher des alertes cross-platform (web + native)
 const showAlert = (title: string, message: string, buttons: Array<{ text: string; style?: string; onPress?: () => void }>) => {
@@ -337,7 +338,7 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
         async (transferId: string) => {
             // #region agent log
             try {
-                fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useRideActions.tsx:handleAcceptTransfer', message: 'handleAcceptTransfer called', data: { transferId: transferId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H1-H2' }) }).catch(() => { });
+                sendIngestEvent({ location: 'useRideActions.tsx:handleAcceptTransfer', message: 'handleAcceptTransfer called', data: { transferId: transferId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H1-H2' });
             } catch { }
             // #endregion
             showAlert(
@@ -352,7 +353,7 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
                             try {
                                 // #region agent log
                                 try {
-                                    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useRideActions.tsx:handleAcceptTransfer:onPress', message: 'Calling acceptTransfer', data: { transferId: transferId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H3' }) }).catch(() => { });
+                                    sendIngestEvent({ location: 'useRideActions.tsx:handleAcceptTransfer:onPress', message: 'Calling acceptTransfer', data: { transferId: transferId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H3' });
                                 } catch { }
                                 // #endregion
                                 await acceptTransfer(transferId);
@@ -365,7 +366,7 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
                             } catch (error: any) {
                                 // #region agent log
                                 try {
-                                    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useRideActions.tsx:handleAcceptTransfer:error', message: 'acceptTransfer error', data: { transferId: transferId, error: String(error), errorMessage: error?.message, errorResponse: error?.response?.data }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H4' }) }).catch(() => { });
+                                    sendIngestEvent({ location: 'useRideActions.tsx:handleAcceptTransfer:error', message: 'acceptTransfer error', data: { transferId: transferId, error: String(error), errorMessage: error?.message, errorResponse: error?.response?.data }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H4' });
                                 } catch { }
                                 // #endregion
                                 const message =
@@ -387,7 +388,7 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
         async (transferId: string) => {
             // #region agent log
             try {
-                fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useRideActions.tsx:handleRejectTransfer', message: 'handleRejectTransfer called', data: { transferId: transferId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H1-H2' }) }).catch(() => { });
+                sendIngestEvent({ location: 'useRideActions.tsx:handleRejectTransfer', message: 'handleRejectTransfer called', data: { transferId: transferId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H1-H2' });
             } catch { }
             // #endregion
             showAlert(
@@ -402,7 +403,7 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
                             try {
                                 // #region agent log
                                 try {
-                                    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useRideActions.tsx:handleRejectTransfer:onPress', message: 'Calling rejectTransfer', data: { transferId: transferId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H3' }) }).catch(() => { });
+                                    sendIngestEvent({ location: 'useRideActions.tsx:handleRejectTransfer:onPress', message: 'Calling rejectTransfer', data: { transferId: transferId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H3' });
                                 } catch { }
                                 // #endregion
                                 await rejectTransfer(transferId);
@@ -415,7 +416,7 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
                             } catch (error: any) {
                                 // #region agent log
                                 try {
-                                    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useRideActions.tsx:handleRejectTransfer:error', message: 'rejectTransfer error', data: { transferId: transferId, error: String(error), errorMessage: error?.message, errorResponse: error?.response?.data }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H4' }) }).catch(() => { });
+                                    sendIngestEvent({ location: 'useRideActions.tsx:handleRejectTransfer:error', message: 'rejectTransfer error', data: { transferId: transferId, error: String(error), errorMessage: error?.message, errorResponse: error?.response?.data }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H4' });
                                 } catch { }
                                 // #endregion
                                 const message =

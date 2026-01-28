@@ -9,12 +9,14 @@ import { getLiveDelays, getOptimizerStatus } from '../services/dispatchMonitorin
 
 /**
  * Hook pour récupérer et gérer les retards de dispatch
+ * Appelle GET /company_dispatch/delays/live — réservé COMPANY/ADMIN. Ne pas appeler avec un token DRIVER.
  *
  * @param {string} date - Date au format YYYY-MM-DD (optionnel, défaut: aujourd'hui)
  * @param {number} refreshInterval - Intervalle de refresh en ms (0 = pas d'auto-refresh)
+ * @param {boolean} enabled - Si false, aucun fetch (évite 403 quand rôle DRIVER sur page company). Défaut true.
  * @returns {object} { delays, summary, loading, error, refresh, optimizerStatus }
  */
-export const useDispatchDelays = (date = null, refreshInterval = 0) => {
+export const useDispatchDelays = (date = null, refreshInterval = 0, enabled = true) => {
   const [delays, setDelays] = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -72,15 +74,16 @@ export const useDispatchDelays = (date = null, refreshInterval = 0) => {
     }
   }, []);
 
-  // Charger les données initiales
+  // Charger les données initiales uniquement si autorisé (rôle company/admin)
   useEffect(() => {
+    if (!enabled) return;
     refresh();
     fetchOptimizerStatus();
-  }, [refresh, fetchOptimizerStatus]);
+  }, [enabled, refresh, fetchOptimizerStatus]);
 
-  // Auto-refresh si activé
+  // Auto-refresh si activé et autorisé
   useEffect(() => {
-    if (refreshInterval <= 0) return;
+    if (!enabled || refreshInterval <= 0) return;
 
     const intervalId = setInterval(() => {
       refresh();
@@ -88,7 +91,7 @@ export const useDispatchDelays = (date = null, refreshInterval = 0) => {
     }, refreshInterval);
 
     return () => clearInterval(intervalId);
-  }, [refreshInterval, refresh, fetchOptimizerStatus]);
+  }, [enabled, refreshInterval, refresh, fetchOptimizerStatus]);
 
   // Compteurs utiles
   const delayCount = summary?.late || 0;

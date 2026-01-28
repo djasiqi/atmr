@@ -5,13 +5,21 @@ export class AuthNotReadyError extends Error {
   public readonly kind: ApiKind;
   public readonly reason: string;
   public readonly url?: string;
+  /** Si true, l'UI ne doit pas afficher un second popup (dedupe anti-spam). */
+  public readonly silentDedupe?: boolean;
 
-  constructor(params: { kind: ApiKind; reason: string; url?: string }) {
+  constructor(params: {
+    kind: ApiKind;
+    reason: string;
+    url?: string;
+    silentDedupe?: boolean;
+  }) {
     super(`AUTH_NOT_READY: ${params.kind}:${params.reason}${params.url ? ` (${params.url})` : ""}`);
     this.name = "AuthNotReadyError";
     this.kind = params.kind;
     this.reason = params.reason;
     this.url = params.url;
+    this.silentDedupe = params.silentDedupe;
   }
 }
 
@@ -24,6 +32,38 @@ export function isAuthNotReadyError(error: unknown): error is AuthNotReadyError 
   );
 }
 
+/** À utiliser avant d'afficher un popup pour AUTH_NOT_READY : si true, ne pas afficher (dedupe). */
+export function shouldShowAuthNotReadyAlert(error: unknown): boolean {
+  if (!isAuthNotReadyError(error)) return true;
+  return !(error as AuthNotReadyError).silentDedupe;
+}
+
+/**
+ * Option 2 — Métrique légère (placeholder).
+ * À appeler quand une AuthNotReadyError est levée (hors silentDedupe).
+ * Plus tard : Sentry / Datadog / Firebase — compter l'événement, tag mode: driver | enterprise,
+ * pour voir si ça réapparaît après une release.
+ */
+export function reportAuthNotReadyMetric(params: {
+  kind: ApiKind;
+  reason: string;
+  url?: string;
+}): void {
+  try {
+    if (__DEV__) {
+      console.debug(
+        "[AUTH] AuthNotReadyError (metric placeholder):",
+        params.kind,
+        params.reason,
+        params.url ?? ""
+      );
+    }
+    // TODO: Sentry/Datadog/Firebase — compter AuthNotReadyError (non silentDedupe), tag mode: driver | enterprise
+  } catch {
+    // Fire-and-forget : ne jamais faire échouer l'appelant (SDK externe peut throw plus tard).
+  }
+}
+
 /**
  * Message UX à afficher à l'utilisateur pour AUTH_NOT_READY.
  * Évite d'afficher le message technique "AUTH_NOT_READY: enterprise: missing_refresh_token (/auth/refresh)".
@@ -33,6 +73,9 @@ export function getAuthNotReadyDisplayMessage(error: unknown): string | null {
   const reason = (error as AuthNotReadyError).reason;
   if (reason === "missing_refresh_token") {
     return "Session expirée ou inexistante. Veuillez vous reconnecter.";
+  }
+  if (reason === "missing_access_token") {
+    return "Session non prête. Veuillez patienter ou vous reconnecter.";
   }
   if (reason === "auth_ready_timeout") {
     return "Connexion en cours…";

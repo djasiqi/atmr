@@ -11,6 +11,10 @@ import { styles } from '@/styles/missionMapStyles';
 type Props = {
   location: { coords: { latitude: number; longitude: number } };
   destination: string; // ex: "10 rue ... ville"
+  /** Largeur responsive (alignée avec la card) */
+  contentWidth?: number;
+  /** Hauteur du bloc carte (responsive tablette) */
+  mapHeight?: number;
 };
 
 // ✅ Directions API key (HTTP). Ne pas utiliser la clé Android Maps ici.
@@ -19,7 +23,7 @@ const DIRECTIONS_KEY = GOOGLE_API_KEY;
 const mask = (val: string | undefined) =>
   val ? `${val.slice(0, 6)}...${val.slice(-4)}` : 'undefined';
 
-const MissionMap: React.FC<Props> = ({ location, destination }) => {
+const MissionMap: React.FC<Props> = ({ location, destination, contentWidth, mapHeight }) => {
   const mapRef = useRef<MapView | null>(null);
   const [destinationCoords, setDestinationCoords] = useState<LatLng | null>(null);
   const lastGeocodeAlertAtRef = useRef<number>(0);
@@ -90,8 +94,14 @@ const MissionMap: React.FC<Props> = ({ location, destination }) => {
 
   const canDrawRoute = Boolean(DIRECTIONS_KEY && destinationCoords);
 
+  const containerStyle = [
+    styles.container,
+    contentWidth != null && { width: contentWidth, alignSelf: 'center' as const, marginHorizontal: 0 },
+    mapHeight != null && { height: mapHeight },
+  ];
+
   return (
-    <View style={styles.container}>
+    <View style={containerStyle}>
       <MapView
         ref={mapRef}
         style={styles.map}

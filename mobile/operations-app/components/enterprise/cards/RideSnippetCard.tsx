@@ -12,6 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { EnterpriseCard } from "./EnterpriseCard";
 import { isCompletedStatus } from "@/utils/bookingStatus";
+import { sendIngestEvent } from "@/src/config/telemetry";
 
 type BadgeTone = "default" | "warning" | "danger" | "info" | "success";
 
@@ -421,7 +422,7 @@ export const RideSnippetCard: React.FC<{
             // #region agent log
             (() => {
               try {
-                fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'RideSnippetCard.tsx:427', message: 'Quick actions rendering', data: { rideId: ride.id, hasOnQuickAction: !!ride.onQuickAction, hasOnPrimaryAction: !!ride.onPrimaryAction, isCompleted: isCompleted, assignedTo: ride.assignedTo, quickIcon: ride.quickIcon, primaryIcon: ride.primaryIcon, willShowActions: !!(ride.onQuickAction || ride.onPrimaryAction) && !isCompleted, willShowQuick: !!(ride.onQuickAction && (!ride.assignedTo || ride.quickIcon)) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run8', hypothesisId: 'H3-H4' }) }).catch(() => { });
+                sendIngestEvent({ location: 'RideSnippetCard.tsx:427', message: 'Quick actions rendering', data: { rideId: ride.id, hasOnQuickAction: !!ride.onQuickAction, hasOnPrimaryAction: !!ride.onPrimaryAction, isCompleted: isCompleted, assignedTo: ride.assignedTo, quickIcon: ride.quickIcon, primaryIcon: ride.primaryIcon, willShowActions: !!(ride.onQuickAction || ride.onPrimaryAction) && !isCompleted, willShowQuick: !!(ride.onQuickAction && (!ride.assignedTo || ride.quickIcon)) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run8', hypothesisId: 'H3-H4' });
               } catch { }
             })();
             // #endregion
@@ -436,7 +437,7 @@ export const RideSnippetCard: React.FC<{
                     onPress={(e) => {
                       // #region agent log
                       try {
-                        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'RideSnippetCard.tsx:onQuickAction:click', message: 'Quick action button clicked', data: { rideId: ride.id, hasOnQuickAction: !!ride.onQuickAction }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H1' }) }).catch(() => { });
+                        sendIngestEvent({ location: 'RideSnippetCard.tsx:onQuickAction:click', message: 'Quick action button clicked', data: { rideId: ride.id, hasOnQuickAction: !!ride.onQuickAction }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H1' });
                       } catch { }
                       // #endregion
                       ride.onQuickAction?.(e);
@@ -458,7 +459,7 @@ export const RideSnippetCard: React.FC<{
                     onPress={(e) => {
                       // #region agent log
                       try {
-                        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'RideSnippetCard.tsx:onPrimaryAction:click', message: 'Primary action button clicked', data: { rideId: ride.id, hasOnPrimaryAction: !!ride.onPrimaryAction }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H1' }) }).catch(() => { });
+                        sendIngestEvent({ location: 'RideSnippetCard.tsx:onPrimaryAction:click', message: 'Primary action button clicked', data: { rideId: ride.id, hasOnPrimaryAction: !!ride.onPrimaryAction }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H1' });
                       } catch { }
                       // #endregion
                       ride.onPrimaryAction?.(e);

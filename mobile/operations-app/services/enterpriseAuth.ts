@@ -11,20 +11,13 @@ import { waitForAuthReady } from "@/services/authSync";
 import { secureStorage, asyncStorage } from "@/services/storage";
 import { AuthNotReadyError, isPublicEndpoint } from "@/services/authGuards";
 import { debugAuthLog, isDebugAuthEnabled } from "@/services/authDebug";
+import { sendIngestEvent } from "@/src/config/telemetry";
 
-// ✅ Helper pour les logs de debug (dev uniquement)
-// Évite les warnings de connexion en production
-const debugLog = (data: any) => {
+const debugLog = (data: Record<string, unknown>) => {
   if (__DEV__) {
     try {
-      fetch("http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      }).catch(() => {
-        // Ignorer silencieusement les erreurs de connexion au service de debug
-      });
-    } catch (e) {
+      sendIngestEvent(data);
+    } catch {
       // ignore
     }
   }

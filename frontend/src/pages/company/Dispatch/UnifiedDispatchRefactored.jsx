@@ -15,6 +15,7 @@ import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/Co
 import useCompanySocket from '../../../hooks/useCompanySocket';
 import useDispatchStatus from '../../../hooks/useDispatchStatus';
 import useCompanyData from '../../../hooks/useCompanyData';
+import useCompanyAuthToken from '../../../hooks/useCompanyAuthToken';
 
 // Hooks personnalisés
 import { useDispatchData } from '../../../hooks/useDispatchData';
@@ -144,6 +145,10 @@ const UnifiedDispatchRefactored = () => {
     assignmentsCount: null,
   });
 
+  // Rôle utilisateur : delays/live réservé COMPANY/ADMIN — lecture company_user uniquement (évite 403 si token DRIVER)
+  const user = useCompanyAuthToken();
+  const isCompanyOrAdmin = user && (user.isCompany || String(user.role || '').toLowerCase() === 'admin');
+
   // Hooks personnalisés
   const { dispatchMode, loadDispatchMode } = useDispatchMode();
   const {
@@ -152,7 +157,7 @@ const UnifiedDispatchRefactored = () => {
     error: dispatchesError,
     loadDispatches,
   } = useDispatchData(date, dispatchMode);
-  const { delays, summary: _summary, loadDelays } = useLiveDelays(date);
+  const { delays, summary: _summary, loadDelays } = useLiveDelays(date, !!isCompanyOrAdmin);
 
   // 🆕 Ref pour compter les assignations réelles (mis à jour après chargement)
   // Utiliser une ref plutôt qu'un état pour éviter les re-renders inutiles

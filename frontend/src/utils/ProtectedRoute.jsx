@@ -2,46 +2,78 @@ import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 
+// Clés localStorage : snake_case (nouveau) + fallback camelCase pendant migration.
+const STORAGE_KEYS = {
+  company: {
+    token: 'company_access_token',
+    refresh: 'company_refresh_token',
+    tokenLegacy: 'company_authToken',
+    refreshLegacy: 'company_refreshToken',
+    user: 'company_user',
+    publicId: 'company_public_id',
+  },
+  driver: {
+    token: 'driver_access_token',
+    refresh: 'driver_refresh_token',
+    tokenLegacy: 'driver_authToken',
+    refreshLegacy: 'driver_refreshToken',
+    user: 'driver_user',
+    publicId: 'driver_public_id',
+  },
+  legacy: { token: 'authToken', refresh: 'refreshToken', tokenLegacy: null, refreshLegacy: null, user: 'user', publicId: 'public_id' },
+};
+
+const getToken = (keys) =>
+  localStorage.getItem(keys.token) || (keys.tokenLegacy ? localStorage.getItem(keys.tokenLegacy) : null);
+
+const getStorageKeys = (allowedRoles) => {
+  if (!Array.isArray(allowedRoles) || allowedRoles.length === 0) return STORAGE_KEYS.legacy;
+  const roles = allowedRoles.map((r) => String(r).toLowerCase());
+  if (roles.includes('company') || roles.includes('admin')) return STORAGE_KEYS.company;
+  if (roles.includes('driver')) return STORAGE_KEYS.driver;
+  return STORAGE_KEYS.legacy;
+};
+
+const clearSession = (keys) => {
+  try {
+    localStorage.removeItem(keys.token);
+    localStorage.removeItem(keys.refresh);
+    if (keys.tokenLegacy) localStorage.removeItem(keys.tokenLegacy);
+    if (keys.refreshLegacy) localStorage.removeItem(keys.refreshLegacy);
+    localStorage.removeItem(keys.user);
+    localStorage.removeItem(keys.publicId);
+  } catch (_) {}
+};
+
 const ProtectedRoute = ({ allowedRoles, children }) => {
   const location = useLocation();
-  const token = localStorage.getItem('authToken');
-  const rawUser = localStorage.getItem('user');
+  const keys = getStorageKeys(allowedRoles);
+  const token = getToken(keys);
+  const rawUser = localStorage.getItem(keys.user);
   const user = rawUser ? JSON.parse(rawUser) : null;
 
-  // ✅ Vérifier l'authentification : soit token dans localStorage (mobile), soit infos utilisateur (web avec cookies)
-  // Si on utilise des cookies httpOnly, le token n'est pas dans localStorage, mais les infos utilisateur sont stockées
   if (!token && !user) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
-  // ✅ Si on a un token dans localStorage (mode mobile), vérifier son expiration
-  // Si on utilise des cookies (pas de token), on compte sur le backend pour vérifier l'authentification
   let role = null;
   if (token) {
     try {
       const payload = jwtDecode(token);
       const now = Math.floor(Date.now() / 1000);
       if (typeof payload.exp === 'number' && payload.exp <= now) {
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('refreshToken');
-        localStorage.removeItem('user');
+        clearSession(keys);
         return <Navigate to="/login" replace state={{ from: location }} />;
       }
       role = String(payload?.role ?? user?.role ?? '').toLowerCase();
     } catch {
-      // Token invalide, supprimer et rediriger
-      localStorage.removeItem('authToken');
-      localStorage.removeItem('refreshToken');
-      localStorage.removeItem('user');
+      clearSession(keys);
       return <Navigate to="/login" replace state={{ from: location }} />;
     }
   } else {
-    // ✅ Mode cookies httpOnly : utiliser les infos utilisateur stockées
-    // Le backend vérifiera l'authentification via les cookies
     role = String(user?.role ?? '').toLowerCase();
   }
 
-  // Si des rôles sont exigés, comparer en lowercase
   if (Array.isArray(allowedRoles) && allowedRoles.length > 0) {
     const allowed = allowedRoles.map((r) => String(r).toLowerCase());
     if (!allowed.includes(role)) {

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import styles from './ClientFormModal.module.css';
 import AddressAutocomplete from '../../../../components/common/AddressAutocomplete';
 import { parseAddressWithEstablishment } from '../../../../utils/addressParser';
+import { normalizePhone, getPhoneValidationError } from '../../../../utils/phone';
 import ClientStaysSection from './ClientStaysSection';
 import ClientBillingPartiesSection from './ClientBillingPartiesSection';
 
@@ -152,6 +153,21 @@ const EditClientModal = ({ client, onClose, onSave }) => {
     setLoading(true);
     setError(null);
 
+    // Normalisation et validation des numéros de téléphone avant envoi
+    const normalizedPhone = normalizePhone(formData.phone);
+    const normalizedContactPhone = normalizePhone(formData.contact_phone);
+    const normalizedGpPhone = normalizePhone(formData.gp_phone);
+
+    const phoneError = getPhoneValidationError(normalizedPhone);
+    const contactPhoneError = getPhoneValidationError(normalizedContactPhone);
+    const gpPhoneError = getPhoneValidationError(normalizedGpPhone);
+
+    if (phoneError || contactPhoneError || gpPhoneError) {
+      setError(phoneError || contactPhoneError || gpPhoneError);
+      setLoading(false);
+      return;
+    }
+
     try {
       const hasSeparateBilling = formData.show_billing_info && formData.billing_address?.trim();
       const fullDomicile = [formData.domicile_address, formData.domicile_zip, formData.domicile_city]
@@ -167,7 +183,7 @@ const EditClientModal = ({ client, onClose, onSave }) => {
         residence_facility: formData.residence_facility || null,
         avs_number: formData.avs_number?.trim() || null,
         contact_email: formData.contact_email?.trim() || null,
-        contact_phone: formData.contact_phone?.trim() || null,
+        contact_phone: normalizedContactPhone,
         billing_address: billingAddress,
         billing_lat: hasSeparateBilling ? billingCoords.lat : domicileCoords.lat,
         billing_lon: hasSeparateBilling ? billingCoords.lon : domicileCoords.lon,
@@ -182,7 +198,7 @@ const EditClientModal = ({ client, onClose, onSave }) => {
         floor: formData.floor?.trim() || null,
         access_notes: formData.access_notes?.trim() || null,
         gp_name: formData.gp_name?.trim() || null,
-        gp_phone: formData.gp_phone?.trim() || null,
+        gp_phone: normalizedGpPhone,
         default_billed_to_type: formData.default_billed_to_type || null,
         default_billed_to_contact: formData.default_billed_to_contact?.trim() || null,
       };
@@ -190,7 +206,7 @@ const EditClientModal = ({ client, onClose, onSave }) => {
       if (!formData.is_institution) {
         payload.first_name = formData.first_name?.trim() || null;
         payload.last_name = formData.last_name?.trim() || null;
-        payload.phone = formData.phone?.trim() || null;
+        payload.phone = normalizedPhone;
         if (formData.gender?.trim()) payload.gender = formData.gender;
         if (formData.birth_date?.trim()) payload.birth_date = formData.birth_date;
       }
@@ -205,7 +221,12 @@ const EditClientModal = ({ client, onClose, onSave }) => {
       // onClose() sera appelé par handleSaveClient après le rechargement des données
     } catch (err) {
       console.error('❌ Erreur lors de la sauvegarde:', err);
-      setError(err.response?.data?.error || err.message || 'Erreur lors de la sauvegarde');
+      const errorMessage =
+        (typeof err === 'object' && err !== null && err.error) ||
+        err.response?.data?.error ||
+        err.message ||
+        'Erreur lors de la sauvegarde';
+      setError(errorMessage);
       setLoading(false);
     }
   };

@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   PanResponder,
   Animated,
+  Platform,
 } from "react-native";
 import { getTripDetails, Booking } from "@/services/api";
 import { Loader } from "@/components/ui/Loader";
@@ -137,11 +138,15 @@ export default function TripDetailsModal({ visible, tripId, onClose }: Props) {
             borderTopRightRadius: 20,
             height: "80%",
             maxHeight: "85%",
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: -3 },
-            shadowOpacity: 0.3,
-            shadowRadius: 10,
-            elevation: 10,
+            ...(Platform.OS === "web"
+              ? { boxShadow: "0 -3px 10px rgba(0,0,0,0.3)" }
+              : {
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: -3 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 10,
+                  elevation: 10,
+                }),
             transform: [{ translateY: pan }],
           }}
           {...panResponder.panHandlers}

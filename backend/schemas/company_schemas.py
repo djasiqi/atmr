@@ -64,17 +64,24 @@ class ManualBookingCreateSchema(Schema):
     billed_to_company_id = fields.Int(validate=validate.Range(min=1), allow_none=True)
     billed_to_contact = fields.Str(validate=validate.Length(max=200))
 
-    # Champs médicaux
-    medical_facility = fields.Str(validate=validate.Length(max=200))
-    doctor_name = fields.Str(validate=validate.Length(max=200))
-    hospital_service = fields.Str(validate=validate.Length(max=200))
-    notes_medical = fields.Str(validate=validate.Length(max=1000))
+    # Champs médicaux (optionnels : clé absente ou null acceptées)
+    medical_facility = fields.Str(validate=validate.Length(max=200), allow_none=True)
+    doctor_name = fields.Str(validate=validate.Length(max=200), allow_none=True)
+    hospital_service = fields.Str(validate=validate.Length(max=200), allow_none=True)
+    notes_medical = fields.Str(validate=validate.Length(max=1000), allow_none=True)
+    # Instructions d'accès pickup/destination (non-domicile : restaurant, hôtel, etc.)
+    pickup_access_notes = fields.Str(
+        validate=validate.Length(max=1000), allow_none=True
+    )
+    dropoff_access_notes = fields.Str(
+        validate=validate.Length(max=1000), allow_none=True
+    )
     wheelchair_client_has = fields.Bool()
     wheelchair_need = fields.Bool()
 
-    # Champs médicaux structurés
-    establishment_id = fields.Int(validate=validate.Range(min=1))
-    medical_service_id = fields.Int(validate=validate.Range(min=1))
+    # Champs médicaux structurés (optionnels)
+    establishment_id = fields.Int(validate=validate.Range(min=1), allow_none=True)
+    medical_service_id = fields.Int(validate=validate.Range(min=1), allow_none=True)
 
     # Coordonnées GPS
     # ✅ Refactoring: Utilise validateurs centralisés de schemas/validators.py

@@ -174,6 +174,8 @@ class Booking(db.Model):
     doctor_name = Column(String(200))
     hospital_service = Column(String(100))
     notes_medical = Column(Text)
+    pickup_access_notes = Column(Text, nullable=True)
+    dropoff_access_notes = Column(Text, nullable=True)
     is_urgent = Column(Boolean, nullable=False, server_default=text("false"))
     time_confirmed = Column(Boolean, nullable=False, server_default=text("true"))
 
@@ -417,7 +419,14 @@ class Booking(db.Model):
                     if cli_user and cli_user.birth_date
                     else None
                 ),
+                "gender": (
+                    cli_user.gender.value
+                    if cli_user and getattr(cli_user, "gender", None)
+                    else None
+                ),
                 "contact_phone": getattr(cli, "contact_phone", None) if cli else None,
+                "phone": getattr(cli_user, "phone", None) if cli_user else None,
+                "gp_phone": getattr(cli, "gp_phone", None) if cli else None,
                 "door_code": getattr(cli, "door_code", None) if cli else None,
                 "floor": getattr(cli, "floor", None) if cli else None,
                 "access_notes": getattr(cli, "access_notes", None) if cli else None,
@@ -458,6 +467,8 @@ class Booking(db.Model):
             "doctor_name": self.doctor_name or "Non spécifié",
             "hospital_service": self.hospital_service or "Non spécifié",
             "notes_medical": self.notes_medical or "Aucune note",
+            "pickup_access_notes": getattr(self, "pickup_access_notes", None) or None,
+            "dropoff_access_notes": getattr(self, "dropoff_access_notes", None) or None,
             "wheelchair_client_has": _as_bool(self.wheelchair_client_has),
             "wheelchair_need": _as_bool(self.wheelchair_need),
             # ✅ P1-4 Phase 1.4: Standardiser timestamps en ISO 8601

@@ -25,6 +25,7 @@ import {
   AddressSuggestion,
   ClientOption,
 } from "@/types/enterpriseDispatch";
+import { sendIngestEvent } from "@/src/config/telemetry";
 
 export const getDispatchStatus = async (date?: string): Promise<DispatchStatus> => {
   const params: { date?: string } = {};
@@ -239,7 +240,7 @@ export interface SwitchToDriverResponse {
 
 export const switchToDriverToken = async (): Promise<SwitchToDriverResponse> => {
   // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'enterpriseDispatch.ts:switchToDriverToken',message:'switchToDriverToken entry',data:{url:'/auth/me/switch-to-driver'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
+  sendIngestEvent({location:'enterpriseDispatch.ts:switchToDriverToken',message:'switchToDriverToken entry',data:{url:'/auth/me/switch-to-driver'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'});
   // #endregion
   
   const response = await enterpriseApi.post<SwitchToDriverResponse>(
@@ -247,7 +248,7 @@ export const switchToDriverToken = async (): Promise<SwitchToDriverResponse> => 
   );
   
   // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'enterpriseDispatch.ts:switchToDriverToken',message:'switchToDriverToken success',data:{hasToken:!!response.data.token,hasRefreshToken:!!response.data.refresh_token,status:response.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
+  sendIngestEvent({location:'enterpriseDispatch.ts:switchToDriverToken',message:'switchToDriverToken success',data:{hasToken:!!response.data.token,hasRefreshToken:!!response.data.refresh_token,status:response.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'});
   // #endregion
   
   return response.data;

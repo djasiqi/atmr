@@ -6,6 +6,7 @@ import {
     TouchableOpacity,
     StyleSheet,
     ScrollView,
+    Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -206,11 +207,15 @@ const styles = StyleSheet.create({
         borderRadius: 24,
         width: "100%",
         maxHeight: "80%",
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.25,
-        shadowRadius: 16,
-        elevation: 10,
+        ...(Platform.OS === "web"
+            ? { boxShadow: "0 8px 24px rgba(0,0,0,0.25)" }
+            : {
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 8 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 16,
+                  elevation: 10,
+              }),
     },
     header: {
         flexDirection: "row",

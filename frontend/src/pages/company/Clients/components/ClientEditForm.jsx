@@ -3,6 +3,10 @@ import React, { useRef, useState, useEffect } from 'react';
 import styles from './ClientEditForm.module.css';
 import AddressAutocomplete from '../../../../components/common/AddressAutocomplete';
 import { parseAddressWithEstablishment } from '../../../../utils/addressParser';
+import {
+  normalizePhone,
+  getPhoneValidationError,
+} from '../../../../utils/phone';
 import ClientStaysSection from './ClientStaysSection';
 import ClientBillingPartiesSection from './ClientBillingPartiesSection';
 import ClinicBillingMappingSection from './ClinicBillingMappingSection';
@@ -59,6 +63,8 @@ const ClientEditForm = ({
   });
 
   const [error, setError] = useState(null);
+  /** Erreurs par champ (ex: phone, contact_phone, gp_phone) pour validation UI / API */
+  const [fieldErrors, setFieldErrors] = useState({ phone: null, contact_phone: null, gp_phone: null });
   const [domicileCoords, setDomicileCoords] = useState({
     lat: client.domicile_lat || client.domicile?.lat || null,
     lon: client.domicile_lon || client.domicile?.lon || null,
@@ -146,6 +152,10 @@ const ClientEditForm = ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value,
     }));
+    // Effacer l'erreur de champ quand l'utilisateur modifie un numéro de téléphone
+    if (['phone', 'contact_phone', 'gp_phone'].includes(name) && fieldErrors[name]) {
+      setFieldErrors((prev) => ({ ...prev, [name]: null }));
+    }
   };
 
   const handleDomicileAddressSelect = (item) => {
@@ -192,6 +202,28 @@ const ClientEditForm = ({
     }
 
     setError(null);
+    setFieldErrors({ phone: null, contact_phone: null, gp_phone: null });
+
+    // Normalisation et validation des numéros de téléphone avant envoi
+    const normalizedPhone = normalizePhone(formData.phone);
+    const normalizedContactPhone = normalizePhone(formData.contact_phone);
+    const normalizedGpPhone = normalizePhone(formData.gp_phone);
+
+    const phoneError = getPhoneValidationError(normalizedPhone);
+    const contactPhoneError = getPhoneValidationError(normalizedContactPhone);
+    const gpPhoneError = getPhoneValidationError(normalizedGpPhone);
+
+    if (phoneError || contactPhoneError || gpPhoneError) {
+      setFieldErrors({
+        phone: phoneError || null,
+        contact_phone: contactPhoneError || null,
+        gp_phone: gpPhoneError || null,
+      });
+      if (phoneError) setError(phoneError);
+      else if (contactPhoneError) setError(contactPhoneError);
+      else setError(gpPhoneError);
+      return;
+    }
 
     try {
       const hasSeparateBilling = formData.show_billing_info && formData.billing_address?.trim();
@@ -208,7 +240,7 @@ const ClientEditForm = ({
         residence_facility: formData.residence_facility || null,
         avs_number: formData.avs_number?.trim() || null,
         contact_email: formData.contact_email?.trim() || null,
-        contact_phone: formData.contact_phone?.trim() || null,
+        contact_phone: normalizedContactPhone,
         billing_address: billingAddress,
         billing_lat: hasSeparateBilling ? billingCoords.lat : domicileCoords.lat,
         billing_lon: hasSeparateBilling ? billingCoords.lon : domicileCoords.lon,
@@ -223,7 +255,7 @@ const ClientEditForm = ({
         floor: formData.floor?.trim() || null,
         access_notes: formData.access_notes?.trim() || null,
         gp_name: formData.gp_name?.trim() || null,
-        gp_phone: formData.gp_phone?.trim() || null,
+        gp_phone: normalizedGpPhone,
         default_billed_to_type: formData.default_billed_to_type || null,
         default_billed_to_contact: formData.default_billed_to_contact?.trim() || null,
       };
@@ -231,15 +263,34 @@ const ClientEditForm = ({
       if (!formData.is_institution) {
         payload.first_name = formData.first_name?.trim() || null;
         payload.last_name = formData.last_name?.trim() || null;
-        payload.phone = formData.phone?.trim() || null;
+        payload.phone = normalizedPhone;
         if (formData.gender?.trim()) payload.gender = formData.gender;
         if (formData.birth_date?.trim()) payload.birth_date = formData.birth_date;
       }
 
       await onSave(payload);
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Erreur lors de la sauvegarde');
-      throw err;
+      // companyService.updateClient lance err.response?.data || err → err peut être { error, error_code }
+      const errorMessage =
+        (typeof err === 'object' && err !== null && err.error) ||
+        err.response?.data?.error ||
+        err.message ||
+        'Erreur lors de la sauvegarde';
+      setError(errorMessage);
+
+      // Mapper validation_error backend vers le champ phone si le message concerne le téléphone
+      const isValidationError =
+        (typeof err === 'object' && err !== null && err.error_code === 'validation_error') ||
+        err.response?.data?.error_code === 'validation_error';
+      const msg = (typeof err === 'object' && err?.error) || err.response?.data?.error || '';
+      const isPhoneRelated =
+        typeof msg === 'string' &&
+        (msg.toLowerCase().includes('téléphone') || msg.toLowerCase().includes('phone') || msg.toLowerCase().includes('numéro'));
+      if (isValidationError && isPhoneRelated) {
+        setFieldErrors((prev) => ({ ...prev, phone: errorMessage }));
+      }
+
+      // Ne pas relancer l'erreur pour éviter "Uncaught (in promise)"
     }
   };
 
@@ -358,9 +409,16 @@ const ClientEditForm = ({
                         value={formData.contact_phone}
                         onChange={handleChange}
                         className={styles.input}
-                        placeholder="+41 22 123 45 67"
+                        placeholder="ex: +41791234567"
                         disabled={loading}
+                        aria-invalid={!!fieldErrors.contact_phone}
+                        aria-describedby={fieldErrors.contact_phone ? 'contact_phone-error' : undefined}
                       />
+                      {fieldErrors.contact_phone && (
+                        <div id="contact_phone-error" className={styles.fieldError} role="alert">
+                          {fieldErrors.contact_phone}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </>
@@ -459,9 +517,16 @@ const ClientEditForm = ({
                       value={formData.phone}
                       onChange={handleChange}
                       className={styles.input}
-                      placeholder="+41 22 123 45 67"
+                      placeholder="ex: +41791234567"
                       disabled={loading}
+                      aria-invalid={!!fieldErrors.phone}
+                      aria-describedby={fieldErrors.phone ? 'phone-error' : undefined}
                     />
+                    {fieldErrors.phone && (
+                      <div id="phone-error" className={styles.fieldError} role="alert">
+                        {fieldErrors.phone}
+                      </div>
+                    )}
                   </div>
                   <div className={styles.formRowTwo}>
                     <div className={styles.formGroup}>
@@ -486,9 +551,16 @@ const ClientEditForm = ({
                         value={formData.contact_phone}
                         onChange={handleChange}
                         className={styles.input}
-                        placeholder="+41 22 123 45 67"
+                        placeholder="ex: +41791234567"
                         disabled={loading}
+                        aria-invalid={!!fieldErrors.contact_phone}
+                        aria-describedby={fieldErrors.contact_phone ? 'contact_phone-error' : undefined}
                       />
+                      {fieldErrors.contact_phone && (
+                        <div id="contact_phone-error" className={styles.fieldError} role="alert">
+                          {fieldErrors.contact_phone}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </>
@@ -651,9 +723,16 @@ const ClientEditForm = ({
                         value={formData.gp_phone}
                         onChange={handleChange}
                         className={styles.input}
-                        placeholder="+41 22 000 00 00"
+                        placeholder="ex: +41791234567"
                         disabled={loading}
+                        aria-invalid={!!fieldErrors.gp_phone}
+                        aria-describedby={fieldErrors.gp_phone ? 'gp_phone-error' : undefined}
                       />
+                      {fieldErrors.gp_phone && (
+                        <div id="gp_phone-error" className={styles.fieldError} role="alert">
+                          {fieldErrors.gp_phone}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </>

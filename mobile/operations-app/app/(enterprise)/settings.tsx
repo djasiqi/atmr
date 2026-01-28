@@ -24,6 +24,7 @@ import {
 } from "@/services/enterpriseDispatch";
 import { secureStorage, asyncStorage } from "@/services/storage";
 import { fetchDriverProfile, invalidateInterceptorCache } from "@/services/api";
+import { sendIngestEvent } from "@/src/config/telemetry";
 
 // ✅ Palette professionnelle cohérente avec le dashboard driver
 const palette = {
@@ -64,7 +65,7 @@ export default function EnterpriseSettingsScreen() {
         if (cachedInfo) {
           console.log("[Settings] Info compte chauffeur chargée depuis le cache:", cachedInfo);
           // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'settings.tsx:checkDriverAccount', message: 'Driver account from cache', data: { hasDriverAccount: cachedInfo.has_driver_account, driverType: cachedInfo.driver_type }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' }) }).catch(() => { });
+          sendIngestEvent({ location: 'settings.tsx:checkDriverAccount', message: 'Driver account from cache', data: { hasDriverAccount: cachedInfo.has_driver_account, driverType: cachedInfo.driver_type }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' });
           // #endregion
           setDriverAccount(cachedInfo);
           setCheckingDriverAccount(false);
@@ -74,7 +75,7 @@ export default function EnterpriseSettingsScreen() {
             const freshInfo = await getMyDriverAccount();
             console.log("[Settings] Réponse getMyDriverAccount (fresh):", freshInfo);
             // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'settings.tsx:checkDriverAccount', message: 'Driver account from API', data: { hasDriverAccount: freshInfo.has_driver_account, driverType: freshInfo.driver_type }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' }) }).catch(() => { });
+            sendIngestEvent({ location: 'settings.tsx:checkDriverAccount', message: 'Driver account from API', data: { hasDriverAccount: freshInfo.has_driver_account, driverType: freshInfo.driver_type }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' });
             // #endregion
             // Mettre à jour le cache et l'état si différent
             if (JSON.stringify(cachedInfo) !== JSON.stringify(freshInfo)) {
@@ -85,7 +86,7 @@ export default function EnterpriseSettingsScreen() {
             // Si l'appel échoue, on garde le cache
             console.warn("[Settings] Impossible de rafraîchir l'info du compte chauffeur:", error);
             // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'settings.tsx:checkDriverAccount', message: 'Error refreshing driver account', data: { error: String(error) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' }) }).catch(() => { });
+            sendIngestEvent({ location: 'settings.tsx:checkDriverAccount', message: 'Error refreshing driver account', data: { error: String(error) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' });
             // #endregion
           }
           return;
@@ -96,7 +97,7 @@ export default function EnterpriseSettingsScreen() {
         const info = await getMyDriverAccount();
         console.log("[Settings] Réponse getMyDriverAccount:", info);
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'settings.tsx:checkDriverAccount', message: 'Driver account from API (no cache)', data: { hasDriverAccount: info.has_driver_account, driverType: info.driver_type }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' }) }).catch(() => { });
+        sendIngestEvent({ location: 'settings.tsx:checkDriverAccount', message: 'Driver account from API (no cache)', data: { hasDriverAccount: info.has_driver_account, driverType: info.driver_type }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' });
         // #endregion
         setDriverAccount(info);
         // Sauvegarder dans le cache
@@ -109,7 +110,7 @@ export default function EnterpriseSettingsScreen() {
           status: error?.response?.status,
         });
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'settings.tsx:checkDriverAccount', message: 'Error checking driver account', data: { error: String(error), status: error?.response?.status }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' }) }).catch(() => { });
+        sendIngestEvent({ location: 'settings.tsx:checkDriverAccount', message: 'Error checking driver account', data: { error: String(error), status: error?.response?.status }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' });
         // #endregion
         setDriverAccount({ has_driver_account: false });
         // Sauvegarder dans le cache même en cas d'erreur
@@ -124,7 +125,7 @@ export default function EnterpriseSettingsScreen() {
   // Fonction pour basculer vers le compte chauffeur
   const handleSwitchToDriver = useCallback(async () => {
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'settings.tsx:handleSwitchToDriver', message: 'handleSwitchToDriver entry', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' }) }).catch(() => { });
+    sendIngestEvent({ location: 'settings.tsx:handleSwitchToDriver', message: 'handleSwitchToDriver entry', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' });
     // #endregion
 
     setShowSwitchModal(false);
@@ -132,13 +133,13 @@ export default function EnterpriseSettingsScreen() {
     try {
       // 1. Obtenir un token driver à partir du token entreprise
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'settings.tsx:handleSwitchToDriver', message: 'Avant switchToDriverToken', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' }) }).catch(() => { });
+      sendIngestEvent({ location: 'settings.tsx:handleSwitchToDriver', message: 'Avant switchToDriverToken', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' });
       // #endregion
 
       const driverTokenResponse = await switchToDriverToken();
 
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'settings.tsx:handleSwitchToDriver', message: 'Après switchToDriverToken', data: { hasToken: !!driverTokenResponse.token, hasRefreshToken: !!driverTokenResponse.refresh_token, userPublicId: driverTokenResponse.user?.public_id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' }) }).catch(() => { });
+      sendIngestEvent({ location: 'settings.tsx:handleSwitchToDriver', message: 'Après switchToDriverToken', data: { hasToken: !!driverTokenResponse.token, hasRefreshToken: !!driverTokenResponse.refresh_token, userPublicId: driverTokenResponse.user?.public_id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' });
       // #endregion
 
       console.log("[Settings] Tokens driver reçus:", {
@@ -163,13 +164,13 @@ export default function EnterpriseSettingsScreen() {
       // 3. Basculer vers le mode driver AVANT de nettoyer l'entreprise
       // Cela garantit que le contexte auth est mis à jour avec le bon mode
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'settings.tsx:handleSwitchToDriver', message: 'Avant switchMode driver', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' }) }).catch(() => { });
+      sendIngestEvent({ location: 'settings.tsx:handleSwitchToDriver', message: 'Avant switchMode driver', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' });
       // #endregion
 
       await switchMode("driver");
 
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'settings.tsx:handleSwitchToDriver', message: 'Après switchMode driver', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' }) }).catch(() => { });
+      sendIngestEvent({ location: 'settings.tsx:handleSwitchToDriver', message: 'Après switchMode driver', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' });
       // #endregion
 
       console.log("[Settings] Mode changé vers 'driver'");
@@ -191,14 +192,14 @@ export default function EnterpriseSettingsScreen() {
       // Le système de navigation dans _layout.tsx gérera automatiquement la redirection
       // mais on force la navigation ici pour être sûr
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'settings.tsx:handleSwitchToDriver', message: 'Avant navigation mission', data: { target: '/(tabs)/mission' }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' }) }).catch(() => { });
+      sendIngestEvent({ location: 'settings.tsx:handleSwitchToDriver', message: 'Avant navigation mission', data: { target: '/(tabs)/mission' }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' });
       // #endregion
 
       router.replace("/(tabs)/mission" as any);
     } catch (error: any) {
       console.error("Erreur lors du basculement:", error);
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'settings.tsx:handleSwitchToDriver', message: 'Erreur handleSwitchToDriver', data: { error: String(error), status: error?.response?.status, errorMessage: error?.response?.data?.error }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' }) }).catch(() => { });
+      sendIngestEvent({ location: 'settings.tsx:handleSwitchToDriver', message: 'Erreur handleSwitchToDriver', data: { error: String(error), status: error?.response?.status, errorMessage: error?.response?.data?.error }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' });
       // #endregion
 
       const errorMessage =

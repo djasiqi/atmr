@@ -96,6 +96,12 @@
   font-size: 0.875rem;
 }
 
+.fieldError {
+  margin-top: 0.25rem;
+  font-size: 0.8125rem;
+  color: #991b1b;
+}
+
 /* Accordéons */
 .accordion {
   border: 1px solid #e5e7eb;

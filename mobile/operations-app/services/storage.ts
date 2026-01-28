@@ -8,16 +8,16 @@ import * as Crypto from "expo-crypto";
 import type { DriverAccountInfo } from "@/services/enterpriseDispatch";
 
 // ============ Clés de stockage sécurisé (SecureStore) ============
-// Namespaces : auth.* = tokens chauffeur ; enterprise.* = tokens entreprise ; driver.* = rememberMe (voir rememberMeStorage)
+// Driver app: driver_* uniquement pour éviter mélange avec company dashboard (autre origine).
+// Enterprise: enterprise.* pour le mode entreprise.
 const SECURE_KEYS = {
-  REFRESH_TOKEN: "auth.refresh_token",
-  ACCESS_TOKEN: "auth.access_token",
-  USER_PUBLIC_ID: "auth.user_public_id",
+  REFRESH_TOKEN: "driver_refresh_token",
+  ACCESS_TOKEN: "driver_access_token",
+  USER_PUBLIC_ID: "driver_user_public_id",
   ENTERPRISE_TOKEN: "enterprise.token",
   ENTERPRISE_REFRESH: "enterprise.refresh",
-  // Legacy (préférez driver.* via rememberMeStorage pour le flux chauffeur)
-  SAVED_EMAIL: "auth.saved_email",
-  SAVED_PASSWORD: "auth.saved_password_encrypted",
+  SAVED_EMAIL: "driver_saved_email",
+  SAVED_PASSWORD: "driver_saved_password_encrypted",
 } as const;
 
 // ============ Cache en mémoire pour optimisation des performances ============

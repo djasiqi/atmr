@@ -53,20 +53,13 @@ import {
   autoLoginWithBiometric,
   BiometricNoCredentialsError,
 } from "@/services/biometricAuth";
+import { sendIngestEvent } from "@/src/config/telemetry";
 
-// ✅ Helper pour les logs de debug (dev uniquement)
-// Évite les warnings de connexion en production
-const debugLog = (data: any) => {
+const debugLog = (data: Record<string, unknown>) => {
   if (__DEV__) {
     try {
-      fetch("http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      }).catch(() => {
-        // Ignorer silencieusement les erreurs de connexion au service de debug
-      });
-    } catch (e) {
+      sendIngestEvent(data);
+    } catch {
       // ignore
     }
   }
@@ -227,6 +220,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // ✅ P1 strict: rendre l'auth "ready" avant tout appel protégé (ex: /driver/me/profile)
       // Sinon l'intercepteur rejette avec AUTH_NOT_READY et on se retrouve avec un faux "login failed".
       notifyAuthReady();
+      // ✅ Éviter race web : attendre que le token soit lisible (SecureStore/AsyncStorage peut être asynchrone)
+      // Sinon l'intercepteur peut lire null et rejeter la requête → GET /driver/me/profile jamais envoyé.
+      for (let w = 0; w < 15; w++) {
+        const tok = await secureStorage.getAccessToken();
+        if (tok) break;
+        await new Promise((r) => setTimeout(r, 50));
+      }
       try {
         // Petit retry pour les devices lents / race condition de propagation (SecureStore/React state)
         let profile: Driver | null = null;
@@ -323,6 +323,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     let isMounted = true;
     let bootstrapStoredMode: string | null = null;
     let enterpriseRestored = false;
+    /** Session chauffeur réellement restaurée (profil chargé). Évite notifyAuthReady() en finally quand le driver n'a pas de token. */
+    let driverSessionRestored = false;
     (async () => {
       pushSessionEvent("APP_START");
       try {
@@ -346,6 +348,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           secureStorage.getEnterpriseRefreshToken(), // Enterprise refresh token
           AsyncStorage.getItem(ENTERPRISE_SESSION_KEY), // Enterprise session (données non sensibles)
         ]);
+        bootstrapStoredMode = storedMode;
         if (isDebugAuthEnabled()) {
           debugAuthLog("boot_storage", {
             has_ent_refresh: enterpriseRefreshToken ? 1 : 0,
@@ -386,6 +389,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                   setDriver(profile);
                   await asyncStorage.setDriverId(profile.id);
                   profileLoaded = true;
+                  driverSessionRestored = true;
                   // S'assurer qu'on est en mode driver
                   await storeMode("driver");
                 }
@@ -412,6 +416,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                   setDriver(profile);
                   await asyncStorage.setDriverId(profile.id);
                   profileLoaded = true;
+                  driverSessionRestored = true;
                 }
               } catch (refreshError) {
                 console.warn(
@@ -440,6 +445,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         await asyncStorage.setDriverId(profile.id);
                         await storeMode("driver");
                         profileLoaded = true;
+                        driverSessionRestored = true;
                         console.log("[useAuth] ✅ Auto-login réussi avec authentification biométrique");
                       }
                     } else {
@@ -499,6 +505,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     await asyncStorage.setDriverId(profile.id);
                     await storeMode("driver");
                     profileLoaded = true;
+                    driverSessionRestored = true;
                     console.log("[useAuth] ✅ Auto-login réussi avec authentification biométrique");
                   }
                 } else {
@@ -628,17 +635,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } finally {
         if (isMounted) {
           setInitialLoading(false);
-          // ✅ P1 : Ne pas débloquer les requêtes enterprise si la session n'a pas été restaurée
-          // Évite AUTH_NOT_READY missing_refresh_token (root cause: finally notifiait toujours)
+          // ✅ P1 : Ne notifier auth ready que si une session valide a été restaurée pour le mode actuel.
+          // Évite AUTH_NOT_READY missing_access_token (driver) et missing_refresh_token (enterprise).
           const isEnterpriseWithoutSession =
             bootstrapStoredMode === "enterprise" && !enterpriseRestored;
+          const isDriverWithoutSession =
+            (bootstrapStoredMode === "driver" || !bootstrapStoredMode) && !driverSessionRestored;
+          const shouldNotifyAuthReady =
+            !isEnterpriseWithoutSession && !isDriverWithoutSession;
           if (isDebugAuthEnabled()) {
             debugAuthLog("notify_auth_ready", {
               mode: bootstrapStoredMode ?? undefined,
               enterprise_restored: enterpriseRestored ? 1 : 0,
+              driver_session_restored: driverSessionRestored ? 1 : 0,
+              should_notify: shouldNotifyAuthReady ? 1 : 0,
             });
           }
-          if (!isEnterpriseWithoutSession) {
+          if (shouldNotifyAuthReady) {
             notifyAuthReady();
           }
         }
@@ -882,7 +895,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           // 3) Reconnect socket (resubscribe fait dans connectSocket)
           const tokenForSocket = await secureStorage.getAccessToken();
           if (tokenForSocket) {
-            connectSocket(tokenForSocket, "driver").catch(() => {});
+            connectSocket(tokenForSocket, "driver").catch(() => { });
           }
         } finally {
           pushSessionEvent(resyncOk ? "FOREGROUND_RESYNC_SUCCESS" : "FOREGROUND_RESYNC_FAIL");
@@ -1159,7 +1172,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Utile après un switchMode quand la session vient d'être créée
   const loadDriverSession = useCallback(async () => {
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useAuth.tsx:loadDriverSession', message: 'loadDriverSession entry', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'K' }) }).catch(() => { });
+    sendIngestEvent({ location: 'useAuth.tsx:loadDriverSession', message: 'loadDriverSession entry', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'K' });
     // #endregion
 
     setDriverLoading(true);
@@ -1171,7 +1184,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       ]);
 
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useAuth.tsx:loadDriverSession', message: 'loadDriverSession loaded', data: { hasToken: !!accessToken, hasRefreshToken: !!refreshToken, hasUserPublicId: !!userPublicId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'K' }) }).catch(() => { });
+      sendIngestEvent({ location: 'useAuth.tsx:loadDriverSession', message: 'loadDriverSession loaded', data: { hasToken: !!accessToken, hasRefreshToken: !!refreshToken, hasUserPublicId: !!userPublicId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'K' });
       // #endregion
 
       if (accessToken) {
@@ -1207,7 +1220,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       console.error("[useAuth] Error loading driver session:", error);
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useAuth.tsx:loadDriverSession', message: 'loadDriverSession error', data: { error: String(error) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'K' }) }).catch(() => { });
+      sendIngestEvent({ location: 'useAuth.tsx:loadDriverSession', message: 'loadDriverSession error', data: { error: String(error) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'K' });
       // #endregion
       setDriver(null);
       setDriverToken(null);
@@ -1338,7 +1351,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Utile après un switchMode quand la session vient d'être créée
   const loadEnterpriseSession = useCallback(async () => {
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useAuth.tsx:loadEnterpriseSession', message: 'loadEnterpriseSession entry', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H' }) }).catch(() => { });
+    sendIngestEvent({ location: 'useAuth.tsx:loadEnterpriseSession', message: 'loadEnterpriseSession entry', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H' });
     // #endregion
 
     setEnterpriseLoading(true);
@@ -1350,7 +1363,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       ]);
 
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useAuth.tsx:loadEnterpriseSession', message: 'loadEnterpriseSession loaded', data: { hasToken: !!enterpriseToken, hasSession: !!enterpriseSessionRaw }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H' }) }).catch(() => { });
+      sendIngestEvent({ location: 'useAuth.tsx:loadEnterpriseSession', message: 'loadEnterpriseSession loaded', data: { hasToken: !!enterpriseToken, hasSession: !!enterpriseSessionRaw }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H' });
       // #endregion
 
       if (enterpriseToken && enterpriseSessionRaw) {
@@ -1373,7 +1386,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       console.error("[useAuth] Error loading enterprise session:", error);
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useAuth.tsx:loadEnterpriseSession', message: 'loadEnterpriseSession error', data: { error: String(error) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H' }) }).catch(() => { });
+      sendIngestEvent({ location: 'useAuth.tsx:loadEnterpriseSession', message: 'loadEnterpriseSession error', data: { error: String(error) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H' });
       // #endregion
       setEnterpriseSession(null);
     } finally {

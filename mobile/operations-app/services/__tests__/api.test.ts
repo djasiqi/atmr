@@ -2,7 +2,12 @@
 // Tests d'intégration avec intercepteurs Axios
 
 import axios from 'axios';
-import { api, invalidateInterceptorCache, getInterceptorPerformanceMetrics } from '../api';
+import {
+  api,
+  invalidateInterceptorCache,
+  getInterceptorPerformanceMetrics,
+  resetAuthNotReadyDedupe,
+} from '../api';
 import { secureStorage } from '../storage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
@@ -29,6 +34,14 @@ jest.mock('expo-constants', () => ({
       extra: {},
     },
   },
+}));
+
+// Mock authSync pour les tests dedupe / waitForAuthReady (intercepteur)
+jest.mock('@/services/authSync', () => ({
+  ...jest.requireActual('@/services/authSync'),
+  waitForAuthReady: jest.fn().mockResolvedValue(undefined),
+  isAuthReadySync: jest.fn().mockReturnValue(true),
+  notifyAuthNotReady: jest.fn(),
 }));
 
 // Note: Les tests d'API intercepteurs sont simplifiés car tester les intercepteurs axios
@@ -61,9 +74,9 @@ describe('API Interceptor - Cache et performance', () => {
       jest.clearAllMocks();
       await secureStorage.clearAll();
       
-      // Mock SecureStore pour retourner le token uniquement pour la clé ACCESS_TOKEN
+      // Mock SecureStore pour retourner le token pour la clé driver (driver_access_token)
       (SecureStore.getItemAsync as jest.Mock).mockImplementation((key: string) => {
-        if (key === 'auth.access_token') {
+        if (key === 'driver_access_token') {
           return Promise.resolve(mockToken);
         }
         return Promise.resolve(null);
@@ -99,9 +112,9 @@ describe('API Interceptor - Cache et performance', () => {
       jest.clearAllMocks();
       await secureStorage.clearAll();
       
-      // Mock SecureStore pour retourner le token uniquement pour la clé ACCESS_TOKEN
+      // Mock SecureStore pour retourner le token pour la clé driver (driver_access_token)
       (SecureStore.getItemAsync as jest.Mock).mockImplementation((key: string) => {
-        if (key === 'auth.access_token') {
+        if (key === 'driver_access_token') {
           return Promise.resolve(mockToken);
         }
         return Promise.resolve(null);
@@ -121,7 +134,7 @@ describe('API Interceptor - Cache et performance', () => {
       // 3. Deuxième appel après expiration : doit relire depuis SecureStore
       (SecureStore.getItemAsync as jest.Mock).mockClear();
       (SecureStore.getItemAsync as jest.Mock).mockImplementation((key: string) => {
-        if (key === 'auth.access_token') {
+        if (key === 'driver_access_token') {
           return Promise.resolve(mockToken);
         }
         return Promise.resolve(null);
@@ -212,9 +225,9 @@ describe('API Interceptor - Cache et performance', () => {
       jest.clearAllMocks();
       await secureStorage.clearAll();
       
-      // Mock SecureStore pour retourner le token uniquement pour la clé ACCESS_TOKEN
+      // Mock SecureStore pour retourner le token pour la clé driver (driver_access_token)
       (SecureStore.getItemAsync as jest.Mock).mockImplementation((key: string) => {
-        if (key === 'auth.access_token') {
+        if (key === 'driver_access_token') {
           return Promise.resolve(mockToken);
         }
         return Promise.resolve(null);
@@ -244,9 +257,9 @@ describe('API Interceptor - Cache et performance', () => {
       jest.clearAllMocks();
       await secureStorage.clearAll();
       
-      // Mock SecureStore pour retourner le token uniquement pour la clé ACCESS_TOKEN
+      // Mock SecureStore pour retourner le token pour la clé driver (driver_access_token)
       (SecureStore.getItemAsync as jest.Mock).mockImplementation((key: string) => {
-        if (key === 'auth.access_token') {
+        if (key === 'driver_access_token') {
           return Promise.resolve(mockToken);
         }
         return Promise.resolve(null);
@@ -282,6 +295,15 @@ describe('API Interceptor - Cache et performance', () => {
       expect(metrics?.cacheMisses).toBe(0);
       expect(metrics?.totalRequests).toBe(0);
     });
+  });
+
+  describe('Auth NOT_READY dedupe (guard anti-race)', () => {
+    it('resetAuthNotReadyDedupe est exporté et invalidateInterceptorCache ne lève pas', () => {
+      expect(typeof resetAuthNotReadyDedupe).toBe('function');
+      expect(() => invalidateInterceptorCache()).not.toThrow();
+    });
+    // Les cas "missing_access_token" + silentDedupe sont couverts par authGuards.test.ts
+    // et par le flux manuel (clic En route sans token → 1 popup, pas 5).
   });
 
   describe('Intégration avec SecureStore cache', () => {

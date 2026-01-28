@@ -25,6 +25,13 @@ import { extractMedicalServiceInfo } from '../../../../utils/medicalExtract';
 import { toast } from 'sonner';
 import styles from './ManualBookingForm.module.css';
 
+/** Trim + vide → null. Réutilisable pour champs optionnels (medical_facility, hospital_service, notes_medical, etc.). */
+function cleanOptionalText(s) {
+  if (s == null) return null;
+  const t = String(s).trim();
+  return t === '' ? null : t;
+}
+
 const ensureIsoDatetimeWithSeconds = (value) => {
   if (!value || typeof value !== 'string') {
     return value;
@@ -167,6 +174,8 @@ export default function ManualBookingForm({ onSuccess }) {
   const [doctorName, setDoctorName] = useState('');
   const [hospitalService, setHospitalService] = useState(''); // restera synchronisé avec serviceName
   const [notesMedical, setNotesMedical] = useState('');
+  const [pickupAccessNotes, setPickupAccessNotes] = useState('');
+  const [dropoffAccessNotes, setDropoffAccessNotes] = useState('');
   const [wheelchairOptions, setWheelchairOptions] = useState({
     clientHasWheelchair: false,
     needWheelchair: false,
@@ -287,7 +296,7 @@ export default function ManualBookingForm({ onSuccess }) {
   // === Handlers établissement / service ===
   const handleEstablishmentTextChange = (newText) => {
     setEstablishmentText(newText);
-    // Si l'utilisateur modifie le texte, on efface l'objet sélectionné
+    // Si l'utilisateur modifie le texte ou repasse en saisie libre, on efface l’établissement et le service
     if (establishment && newText !== (establishment.label || establishment.display_name || '')) {
       setEstablishment(null);
       setServiceObj(null);
@@ -295,16 +304,24 @@ export default function ManualBookingForm({ onSuccess }) {
     }
   };
 
+  // Verrouillage : si établissement devient null (désélection / autre chemin), ne pas garder un ancien service
+  React.useEffect(() => {
+    if (!establishment) {
+      setServiceObj(null);
+      setHospitalService('');
+    }
+  }, [establishment]);
+
   const onPickEstablishment = (estab) => {
     console.log('🏥 ManualBookingForm.onPickEstablishment:', estab);
     setEstablishment(estab);
     setEstablishmentText(estab?.label || estab?.display_name || '');
 
-    // Important: Effacer le service sélectionné
+    // Toujours réinitialiser le service (sélection ou désélection → pas d’ancienne valeur gardée)
     setServiceObj(null);
     setHospitalService('');
 
-    console.log('🏥 Establishment set, ID:', estab?.id, 'Type:', typeof estab?.id);
+    if (estab) console.log('🏥 Establishment set, ID:', estab?.id, 'Type:', typeof estab?.id);
   };
 
   const onChangeService = useCallback(
@@ -910,16 +927,33 @@ export default function ManualBookingForm({ onSuccess }) {
       is_round_trip: !!isRoundTrip,
       amount: amount ? parseFloat(amount) : 0,
 
-      // Champs médicaux (compat descendante)
-      medical_facility:
+      // Champs médicaux : trim + vide → null, clé absente si null (pas de " " envoyé)
+      ...(cleanOptionalText(
         medicalFacility ||
-        establishment?.display_name ||
-        establishment?.label ||
-        establishmentText || // ✅ fallback texte libre
-        undefined,
-      hospital_service: hospitalService || serviceObj?.name || undefined,
-      doctor_name: doctorName || undefined,
-      notes_medical: notesMedical || undefined,
+          establishment?.display_name ||
+          establishment?.label ||
+          establishmentText
+      ) != null && {
+        medical_facility: cleanOptionalText(
+          medicalFacility ||
+            establishment?.display_name ||
+            establishment?.label ||
+            establishmentText
+        ),
+      }),
+      ...(cleanOptionalText(hospitalService || serviceObj?.name) != null && {
+        hospital_service: cleanOptionalText(hospitalService || serviceObj?.name),
+      }),
+      ...(cleanOptionalText(doctorName) != null && { doctor_name: cleanOptionalText(doctorName) }),
+      ...(cleanOptionalText(notesMedical) != null && {
+        notes_medical: cleanOptionalText(notesMedical),
+      }),
+      ...(cleanOptionalText(pickupAccessNotes) != null && {
+        pickup_access_notes: cleanOptionalText(pickupAccessNotes),
+      }),
+      ...(cleanOptionalText(dropoffAccessNotes) != null && {
+        dropoff_access_notes: cleanOptionalText(dropoffAccessNotes),
+      }),
       wheelchair_client_has: wheelchairOptions.clientHasWheelchair || undefined,
       wheelchair_need: wheelchairOptions.needWheelchair || undefined,
 
@@ -1552,21 +1586,35 @@ export default function ManualBookingForm({ onSuccess }) {
                 onPickEstablishment={onPickEstablishment}
                 placeholder="HUG, Clinique La Colline, Grangettes, La Tour…"
               />
+              <span className={styles.medicalFieldHint}>
+                Ex: HUG, Clinique La Colline, Grangettes, La Tour…
+              </span>
             </div>
 
-            {/* Service médical (visible seulement si établissement sélectionné) */}
-            {establishment?.id && (
-              <div className={styles.medicalFormGroup}>
-                <Label>Service / Département</Label>
+            {/* Service / Bâtiment : toujours visible — liste si établissement choisi, sinon saisie libre (ex: CHIR) */}
+            <div className={styles.medicalFormGroup}>
+              <Label>Service / Bâtiment</Label>
+              {establishment?.id ? (
                 <ServiceSelect
                   key={establishment?.id}
                   establishmentId={establishment?.id}
                   value={serviceObj}
                   onChange={onChangeService}
-                  placeholder="Ex: Urgences adultes, Cardiologie…"
+                  placeholder="Ex: CHIR, Urgences adultes, Cardiologie…"
                 />
-              </div>
-            )}
+              ) : (
+                <Input
+                  type="text"
+                  name="hospital_service"
+                  value={hospitalService}
+                  onChange={(e) => setHospitalService(e.target.value)}
+                  placeholder="Ex: CHIR, Urgences, Cardiologie…"
+                />
+              )}
+              <span className={styles.medicalFieldHint}>
+                Ex: CHIR, Urgences, Bâtiment Gustave Julliard…
+              </span>
+            </div>
 
             {/* Nom du médecin */}
             <div className={styles.medicalFormGroup}>
@@ -1592,6 +1640,36 @@ export default function ManualBookingForm({ onSuccess }) {
                 rows={3}
                 className={styles.textarea}
               />
+            </div>
+
+            {/* Instructions accès pickup (ex: restaurant, hôtel) */}
+            <div className={styles.medicalFormGroup}>
+              <Label>Instructions accès pickup (optionnel)</Label>
+              <Input
+                type="text"
+                name="pickup_access_notes"
+                value={pickupAccessNotes}
+                onChange={(e) => setPickupAccessNotes(e.target.value)}
+                placeholder="Ex: entrée arrière, sonner à…, table…, appeler avant…"
+              />
+              <span className={styles.medicalFieldHint}>
+                Pour lieu non-domicile (restaurant, hôtel…)
+              </span>
+            </div>
+
+            {/* Instructions accès destination (optionnel) */}
+            <div className={styles.medicalFormGroup}>
+              <Label>Instructions accès destination (optionnel)</Label>
+              <Input
+                type="text"
+                name="dropoff_access_notes"
+                value={dropoffAccessNotes}
+                onChange={(e) => setDropoffAccessNotes(e.target.value)}
+                placeholder="Ex: entrée B, étage 2, service…, appeler secrétariat…"
+              />
+              <span className={styles.medicalFieldHint}>
+                Pour destination non-domicile
+              </span>
             </div>
 
             {/* Options chaise roulante */}

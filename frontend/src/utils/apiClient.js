@@ -96,6 +96,38 @@ const addAuthHeader = async (cfg = {}) => {
   return cfg;
 };
 
+// ✅ Garde anti-régression dashboard company : company_dispatch/* => uniquement company_access_token (jamais driver_access_token)
+const COMPANY_ACCESS_TOKEN_KEY = 'company_access_token';
+
+apiRest.interceptors.request.use((config) => {
+  const base = config.baseURL ?? '';
+  const url = config.url ?? '';
+  const fullUrl = typeof url === 'string' && url.startsWith('http') ? url : `${base}${url}`;
+
+  if (fullUrl.includes('/company_dispatch/')) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('delays/live called', new Error().stack);
+    }
+    delete config.headers.Authorization;
+    delete config.headers.authorization;
+    if (config.headers.common) {
+      delete config.headers.common.Authorization;
+      delete config.headers.common.authorization;
+    }
+    const companyToken = localStorage.getItem(COMPANY_ACCESS_TOKEN_KEY)
+      || localStorage.getItem('company_authToken'); // fallback migration snake_case
+    if (companyToken) {
+      config.headers.Authorization = `Bearer ${companyToken}`;
+      return config;
+    }
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[company_dispatch] blocked: missing company_access_token', { url: fullUrl });
+    }
+    return Promise.reject(new Error('Missing company_access_token for company_dispatch'));
+  }
+  return config;
+});
+
 apiRest.interceptors.request.use(addAuthHeader);
 apiSocket.interceptors.request.use(addAuthHeader);
 
@@ -117,12 +149,27 @@ const processQueue = (error, token = null) => {
 };
 
 export const cleanLocalSession = () => {
-  // ✅ P1-1: Ne plus stocker tokens dans localStorage
-  // localStorage.removeItem('authToken'); // ❌ Déprécié
-  // localStorage.removeItem('refreshToken'); // ❌ Déprécié
   localStorage.removeItem('user');
   localStorage.removeItem('public_id');
-  // Les cookies httpOnly sont supprimés automatiquement par le backend lors du logout
+  localStorage.removeItem('authToken');
+  localStorage.removeItem('refreshToken');
+  // Séparation company / driver (snake_case + ancien camelCase pendant migration)
+  localStorage.removeItem('company_user');
+  localStorage.removeItem('company_public_id');
+  localStorage.removeItem('company_access_token');
+  localStorage.removeItem('company_refresh_token');
+  localStorage.removeItem('company_authToken');
+  localStorage.removeItem('company_refreshToken');
+  localStorage.removeItem('driver_user');
+  localStorage.removeItem('driver_public_id');
+  localStorage.removeItem('driver_access_token');
+  localStorage.removeItem('driver_refresh_token');
+  localStorage.removeItem('driver_authToken');
+  localStorage.removeItem('driver_refreshToken');
+  if (apiRest.defaults?.headers?.common) {
+    delete apiRest.defaults.headers.common.Authorization;
+    delete apiRest.defaults.headers.common.authorization;
+  }
 };
 
 export const logoutUser = async (options = { redirect: true }) => {

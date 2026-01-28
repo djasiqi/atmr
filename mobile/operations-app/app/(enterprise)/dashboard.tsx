@@ -31,6 +31,7 @@ import { useThrottledCallback } from "@/hooks/useDebouncedCallback";
 import { isCompletedStatus } from "@/utils/bookingStatus";
 import { isPickupSentinel } from "@/utils/urgentTime";
 import { createShadow } from "@/styles/shadowStyles";
+import { sendIngestEvent } from "@/src/config/telemetry";
 import {
   getDispatchRides,
   getDispatchStatus,
@@ -460,7 +461,7 @@ export default function EnterpriseDashboardScreen() {
 
     // #region agent log
     try {
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'dashboard.tsx:filteredRides', message: 'All rides before filtering', data: { total_rides: sortedManualRides.length, rides_sample: sortedManualRides.slice(0, 3).map(r => ({ id: r.id, status: r.status, status_type: typeof r.status, driver_name: r.driver?.name })) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'H1' }) }).catch(() => { });
+      sendIngestEvent({ location: 'dashboard.tsx:filteredRides', message: 'All rides before filtering', data: { total_rides: sortedManualRides.length, rides_sample: sortedManualRides.slice(0, 3).map(r => ({ id: r.id, status: r.status, status_type: typeof r.status, driver_name: r.driver?.name })) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'H1' });
     } catch { }
     // #endregion
 
@@ -471,7 +472,7 @@ export default function EnterpriseDashboardScreen() {
         counts.pending++;
         // #region agent log
         try {
-          fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'dashboard.tsx:pendingCount', message: 'Found PENDING ride', data: { ride_id: ride.id, status: ride.status, status_normalized: status }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'H1' }) }).catch(() => { });
+          sendIngestEvent({ location: 'dashboard.tsx:pendingCount', message: 'Found PENDING ride', data: { ride_id: ride.id, status: ride.status, status_normalized: status }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'H1' });
         } catch { }
         // #endregion
       }
@@ -508,7 +509,7 @@ export default function EnterpriseDashboardScreen() {
     if (rideFilter === "pending") {
       // #region agent log
       try {
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'dashboard.tsx:pendingFilter', message: 'Applying PENDING filter', data: { total_before_filter: sortedManualRides.length, pending_count: counts.pending }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'H3' }) }).catch(() => { });
+        sendIngestEvent({ location: 'dashboard.tsx:pendingFilter', message: 'Applying PENDING filter', data: { total_before_filter: sortedManualRides.length, pending_count: counts.pending }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'H3' });
       } catch { }
       // #endregion
       // ✅ Filtre pour afficher les courses PENDING ou avec transfert PENDING
@@ -548,7 +549,7 @@ export default function EnterpriseDashboardScreen() {
 
     // #region agent log
     try {
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'dashboard.tsx:filterResult', message: 'Filter result', data: { filter: rideFilter, filtered_count: filtered.length, counts: counts }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'H3' }) }).catch(() => { });
+      sendIngestEvent({ location: 'dashboard.tsx:filterResult', message: 'Filter result', data: { filter: rideFilter, filtered_count: filtered.length, counts: counts }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'H3' });
     } catch { }
     // #endregion
 
@@ -638,7 +639,7 @@ export default function EnterpriseDashboardScreen() {
 
           // #region agent log
           try {
-            fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'dashboard.tsx:611', message: 'Ride processing', data: { rideId: ride.id, status: ride.status, normalizedStatus: normalizedStatus, isCompleted: isCompleted, hasTransfer: !!ride.transfer, transferStatus: ride.transfer?.status, isReceiver: ride.transfer?.is_receiver }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run3', hypothesisId: 'H1-H2-H3' }) }).catch(() => { });
+            sendIngestEvent({ location: 'dashboard.tsx:611', message: 'Ride processing', data: { rideId: ride.id, status: ride.status, normalizedStatus: normalizedStatus, isCompleted: isCompleted, hasTransfer: !!ride.transfer, transferStatus: ride.transfer?.status, isReceiver: ride.transfer?.is_receiver }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run3', hypothesisId: 'H1-H2-H3' });
           } catch { }
           // #endregion
 
@@ -681,7 +682,7 @@ export default function EnterpriseDashboardScreen() {
           // #region agent log - Debug transfer roles
           if (ride.transfer?.status === "PENDING") {
             try {
-              fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'dashboard.tsx:663', message: 'Transfer roles check', data: { rideId: ride.id, transferId: ride.transfer?.id, transferStatus: ride.transfer?.status, is_sender: ride.transfer?.is_sender, is_receiver: ride.transfer?.is_receiver, isPendingTransferSender: isPendingTransferSender, isPendingTransferReceiver: isPendingTransferReceiver }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run13-roles', hypothesisId: 'ROLES' }) }).catch(() => { });
+              sendIngestEvent({ location: 'dashboard.tsx:663', message: 'Transfer roles check', data: { rideId: ride.id, transferId: ride.transfer?.id, transferStatus: ride.transfer?.status, is_sender: ride.transfer?.is_sender, is_receiver: ride.transfer?.is_receiver, isPendingTransferSender: isPendingTransferSender, isPendingTransferReceiver: isPendingTransferReceiver }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run13-roles', hypothesisId: 'ROLES' });
             } catch { }
           }
           // #endregion
@@ -724,7 +725,7 @@ export default function EnterpriseDashboardScreen() {
                         : () => handleUrgentDelay(ride.id); // 🚨 Marquer urgent (sentinel 00:00 uniquement)
                   // #region agent log
                   try {
-                    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'dashboard.tsx:697-onQuickAction', message: 'onQuickAction computed', data: { rideId: ride.id, transferId: ride.transfer?.id, hasValue: !!value, isCompleted: isCompleted, canManageRide: canManageRide, isPendingTransferReceiver: isPendingTransferReceiver }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run12-final', hypothesisId: 'H1-FIX' }) }).catch(() => { });
+                    sendIngestEvent({ location: 'dashboard.tsx:697-onQuickAction', message: 'onQuickAction computed', data: { rideId: ride.id, transferId: ride.transfer?.id, hasValue: !!value, isCompleted: isCompleted, canManageRide: canManageRide, isPendingTransferReceiver: isPendingTransferReceiver }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run12-final', hypothesisId: 'H1-FIX' });
                   } catch { }
                   // #endregion
                   return value;
@@ -739,7 +740,7 @@ export default function EnterpriseDashboardScreen() {
                         : () => rideActions.handleOpenAssignModal(ride); // 👤 Assigner un chauffeur
                   // #region agent log
                   try {
-                    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'dashboard.tsx:708-onPrimaryAction', message: 'onPrimaryAction computed', data: { rideId: ride.id, transferId: ride.transfer?.id, hasValue: !!value, isCompleted: isCompleted, canManageRide: canManageRide, isPendingTransferReceiver: isPendingTransferReceiver }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run12-final', hypothesisId: 'H1-FIX' }) }).catch(() => { });
+                    sendIngestEvent({ location: 'dashboard.tsx:708-onPrimaryAction', message: 'onPrimaryAction computed', data: { rideId: ride.id, transferId: ride.transfer?.id, hasValue: !!value, isCompleted: isCompleted, canManageRide: canManageRide, isPendingTransferReceiver: isPendingTransferReceiver }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run12-final', hypothesisId: 'H1-FIX' });
                   } catch { }
                   // #endregion
                   return value;
@@ -769,7 +770,7 @@ export default function EnterpriseDashboardScreen() {
                 ) : undefined,
               }}
               // #region agent log
-              {...(() => { try { fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'dashboard.tsx:679', message: 'RideSnippetCard props', data: { rideId: ride.id, hasOnQuickAction: !!(isCompleted || !canManageRide ? undefined : isPendingTransferReceiver ? () => { } : () => { }), hasOnPrimaryAction: !!(isCompleted || !canManageRide ? undefined : isPendingTransferReceiver ? () => { } : () => { }), quickIcon: isPendingTransferReceiver ? "close-circle-outline" : undefined, primaryIcon: isPendingTransferReceiver ? "checkmark-circle-outline" : undefined }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run3', hypothesisId: 'H4' }) }).catch(() => { }); } catch { } return {}; })()}
+              {...(() => { try { sendIngestEvent({ location: 'dashboard.tsx:679', message: 'RideSnippetCard props', data: { rideId: ride.id, hasOnQuickAction: !!(isCompleted || !canManageRide ? undefined : isPendingTransferReceiver ? () => { } : () => { }), hasOnPrimaryAction: !!(isCompleted || !canManageRide ? undefined : isPendingTransferReceiver ? () => { } : () => { }), quickIcon: isPendingTransferReceiver ? "close-circle-outline" : undefined, primaryIcon: isPendingTransferReceiver ? "checkmark-circle-outline" : undefined }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run3', hypothesisId: 'H4' }); } catch { } return {}; })()}
               // #endregion
               expanded={expandedRideId === ride.id}
               onToggle={() => {

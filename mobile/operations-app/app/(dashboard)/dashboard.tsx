@@ -36,6 +36,7 @@ import { Loader } from '@/components/ui/Loader';
 import MissionCard from '@/components/dashboard/MissionCard';
 import StatusSwitch from '@/components/dashboard/StatusSwitch';
 import ConfirmCompletionModal from '@/components/dashboard/ConfirmCompletionModal';
+import { getCallablePhone } from '@/utils/phone';
 
 export default function DashboardScreen() {
   const { driver, refreshProfile } = useAuth();
@@ -195,10 +196,18 @@ export default function DashboardScreen() {
           </ThemedText>
           <MissionCard
             mission={currentMission}
-            onCall={() =>
-              // ✅ P1-4 Phase 3.1: Utiliser client.contact_phone au lieu de client_phone
-              Linking.openURL(`tel:${currentMission.client?.contact_phone || currentMission.client_phone || ''}`)
-            }
+            callablePhone={getCallablePhone(currentMission)}
+            onCall={() => {
+              const phone = getCallablePhone(currentMission);
+              if (phone) {
+                if (Platform.OS === "web") {
+                  (window as any).open(`tel:${phone}`);
+                  Alert.alert("Appel", "Ouverture de l'appel… Si rien ne se passe, aucun logiciel d'appel n'est peut-être configuré sur cet appareil.");
+                } else {
+                  Linking.openURL(`tel:${phone}`);
+                }
+              }
+            }}
             onNavigate={() => {
               // ✅ Normaliser le statut en majuscules pour correspondre au backend
               const normalizedStatus = currentMission.status?.toUpperCase();
@@ -226,6 +235,18 @@ export default function DashboardScreen() {
           <MissionCard
             key={trip.id}
             mission={trip}
+            callablePhone={getCallablePhone(trip)}
+            onCall={() => {
+              const phone = getCallablePhone(trip);
+              if (phone) {
+                if (Platform.OS === "web") {
+                  (window as any).open(`tel:${phone}`);
+                  Alert.alert("Appel", "Ouverture de l'appel… Si rien ne se passe, aucun logiciel d'appel n'est peut-être configuré sur cet appareil.");
+                } else {
+                  Linking.openURL(`tel:${phone}`);
+                }
+              }
+            }}
             onNavigate={() => {
               // ✅ Même logique pour les prochaines missions
               const normalizedStatus = trip.status?.toUpperCase();
