@@ -98,15 +98,23 @@ def notify_booking_update(driver_id: int, booking: Booking) -> None:
 
 
 # ---------- 4) WebSocket - annulation de mission ----------
-def notify_booking_cancelled(driver_id: int, booking_id: int) -> None:
+def notify_booking_cancelled(
+    driver_id: int,
+    booking_id: int,
+    *,
+    booking_data: Dict[str, Any] | None = None,
+) -> None:
     """Notifie un chauffeur de l'annulation d'une mission.
 
     Fan-out hybride:
     1. Socket.IO (foreground)
-    2. Push notification (background)
+    2. Push notification (background) - template "Course • Annulée" + Client • heure
     """
-    # ✅ Utiliser le service centralisé de fan-out
-    fanout_booking_cancelled(driver_id=driver_id, booking_id=booking_id)
+    fanout_booking_cancelled(
+        driver_id=driver_id,
+        booking_id=booking_id,
+        booking_data=booking_data,
+    )
 
 
 def notify_booking_assigned(booking: Booking) -> None:

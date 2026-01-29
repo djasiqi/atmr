@@ -1141,9 +1141,11 @@ Route de Chevrens 145, 1247 Anières"
                     onChange={handleChange}
                     onBlur={handleBlur}
                     rows={3}
-                    placeholder="Emmenez Moi Sàrl - CHE-123.456.789 - Genève, Suisse"
+                    placeholder="En votre aimable règlement net sous {payment_terms_days} {jours} avec nos remerciements anticipés. En cas de retard de paiement, des frais de rappel d'un montant de CHF {overdue_fee} vous seront facturés, conformément à nos conditions générales."
                   />
-                  <small className={styles.hint}>Affiché sur toutes les factures PDF</small>
+                  <small className={styles.hint}>
+                    Affiché sur toutes les factures PDF. Placeholders : {'{payment_terms_days}'}, {'{overdue_fee}'}, {'{jours}'} (valeurs depuis Paramètres de paiement)
+                  </small>
                 </div>
 
                 <div className={styles.formGroup}>

@@ -24,6 +24,28 @@ from models import (
 from models.enums import BookingStatus, ClientType, InvoiceStatus, UserRole
 
 
+def get_db_dialect(db) -> str:
+    """Retourne le nom du dialecte SQLAlchemy (postgresql, sqlite, etc.)."""
+    try:
+        bind = db.session.get_bind()
+        return bind.dialect.name if bind else "unknown"
+    except Exception:
+        return "unknown"
+
+
+@pytest.fixture
+def requires_postgresql(db):
+    """Skip si le dialecte n'est pas PostgreSQL. Pour tests d'intégration Postgres-only."""
+    dialect = get_db_dialect(db)
+    if dialect != "postgresql":
+        msg = (
+            f"PostgreSQL required for this integration test (current dialect: {dialect}). "
+            + "Run: docker compose -f docker-compose.test.yml up -d postgres_test && "
+            + "DATABASE_URL=postgresql://test:test@localhost:5433/atmr_test pytest ..."
+        )
+        pytest.skip(msg)
+
+
 @pytest.fixture
 def test_company(db, sample_user):
     """Entreprise de test avec toutes les données nécessaires."""
@@ -77,14 +99,13 @@ def test_client(db, test_company):
     unique_suffix = str(uuid.uuid4())[:8]
 
     # Créer un User d'abord (requis pour Client)
-    user = User(
-        public_id=str(uuid.uuid4()),
-        username=f"client_{unique_suffix}",
-        email=f"client_{unique_suffix}@test.ch",
-        role=UserRole.CLIENT,
-        first_name=f"Test{unique_suffix}",
-        last_name="Client",
-    )
+    user = User()
+    user.public_id = str(uuid.uuid4())
+    user.username = f"client_{unique_suffix}"
+    user.email = f"client_{unique_suffix}@test.ch"
+    user.role = UserRole.CLIENT
+    user.first_name = f"Test{unique_suffix}"
+    user.last_name = "Client"
     from ext import bcrypt
 
     user.password = bcrypt.generate_password_hash("password123").decode("utf-8")
@@ -114,13 +135,12 @@ def test_driver(db, test_company):
     unique_suffix = str(uuid.uuid4())[:8]
 
     # Créer un User d'abord (requis pour Driver)
-    user = User(
-        username=f"driver_{unique_suffix}",
-        email=f"driver_{unique_suffix}@test.ch",
-        role=UserRole.driver,
-        first_name=f"Test{unique_suffix}",
-        last_name="Driver",
-    )
+    user = User()
+    user.username = f"driver_{unique_suffix}"
+    user.email = f"driver_{unique_suffix}@test.ch"
+    user.role = UserRole.driver
+    user.first_name = f"Test{unique_suffix}"
+    user.last_name = "Driver"
     from ext import bcrypt
 
     user.password = bcrypt.generate_password_hash("password123").decode("utf-8")

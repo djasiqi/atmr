@@ -121,23 +121,39 @@ def handle_booking_updated(event: dict[str, Any]) -> None:
                 booking_data = {}
             booking_data.setdefault("id", int(getattr(booking, "id", booking_id)))
             booking_data["booking_id"] = int(getattr(booking, "id", booking_id))
-            booking_data["driver_id"] = int(getattr(booking, "driver_id", driver_id) or driver_id)
-            booking_data["company_id"] = int(getattr(booking, "company_id", event.get("company_id") or 0) or 0)
-            status_raw = getattr(getattr(booking, "status", None), "value", getattr(booking, "status", None))
-            booking_data["status"] = (str(status_raw).lower() if status_raw is not None else None)
+            booking_data["driver_id"] = int(
+                getattr(booking, "driver_id", driver_id) or driver_id
+            )
+            booking_data["company_id"] = int(
+                getattr(booking, "company_id", event.get("company_id") or 0) or 0
+            )
+            status_raw = getattr(
+                getattr(booking, "status", None),
+                "value",
+                getattr(booking, "status", None),
+            )
+            booking_data["status"] = (
+                str(status_raw).lower() if status_raw is not None else None
+            )
             booking_data["actor_role"] = actor_role
             booking_data["actor_id"] = actor_id
             booking_data["changes"] = event.get("changes")
 
-            company_id = int(getattr(booking, "company_id", event.get("company_id") or 0) or 0)
+            company_id = int(
+                getattr(booking, "company_id", event.get("company_id") or 0) or 0
+            )
             status_val = booking_data.get("status")  # pour P0: detecter driver progress
 
             # ✅ P0: Si le chauffeur est l'initiateur OU si le statut indique une action chauffeur
             # (en_route / in_progress / completed / return_completed), on notifie UNIQUEMENT
             # l'entreprise. Jamais de push au chauffeur pour ses propres actions.
             is_driver_actor = (
-                (actor_role == "driver" and actor_id is not None and int(actor_id) == int(driver_id))
-                or (str(status_val or "").lower() in {"en_route", "in_progress", "completed", "return_completed"})
+                actor_role == "driver"
+                and actor_id is not None
+                and int(actor_id) == int(driver_id)
+            ) or (
+                str(status_val or "").lower()
+                in {"en_route", "in_progress", "completed", "return_completed"}
             )
             if is_driver_actor:
                 if company_id:
@@ -219,9 +235,23 @@ def handle_booking_cancelled(event: dict[str, Any]) -> None:
         return
 
     try:
+        from ext import db
+        from models import Booking
         from services.notifications.core import notify_booking_cancelled
 
-        notify_booking_cancelled(int(driver_id), int(booking_id))
+        booking_data = None
+        with suppress(Exception):
+            db.session.rollback()
+        booking = db.session.get(Booking, int(booking_id))
+        if booking and hasattr(booking, "to_dict"):
+            with suppress(Exception):
+                booking_data = booking.to_dict()
+
+        notify_booking_cancelled(
+            int(driver_id),
+            int(booking_id),
+            booking_data=booking_data,
+        )
         logger.debug(
             "[EventBus] Notified driver %s about booking cancellation %s",
             driver_id,

@@ -448,8 +448,8 @@ class PartnerInvoiceService:
         with filepath.open("wb") as f:
             f.write(pdf_content)
 
-        # URL dynamique depuis config
-        pdf_base_url = current_app.config.get("PDF_BASE_URL", "http://localhost:5000")
+        # URL dynamique depuis config (127.0.0.1 en dev évite IPv6 localhost + ERR_CONNECTION_RESET)
+        pdf_base_url = current_app.config.get("PDF_BASE_URL", "http://127.0.0.1:5000")
         uploads_base = current_app.config.get("UPLOADS_PUBLIC_BASE", "/uploads")
 
         pdf_url = f"{pdf_base_url}{uploads_base}/invoices/{filename}"
@@ -510,9 +510,7 @@ class PartnerInvoiceService:
                 + "Le PDF sera généré lors de la création de la facture."
             ) from e
 
-    def mark_as_sent(
-        self, partner_invoice_id: int, company_id: int
-    ) -> PartnerInvoice:
+    def mark_as_sent(self, partner_invoice_id: int, company_id: int) -> PartnerInvoice:
         """Marque une facture partenaire comme envoyée (workflow Brouillon → Envoyée).
 
         Args:

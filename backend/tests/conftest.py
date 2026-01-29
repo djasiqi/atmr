@@ -73,6 +73,12 @@ os.environ["PDF_BASE_URL"] = "http://localhost:5000"  # Valeur factice pour test
 os.environ.setdefault(
     "TEST_DATABASE_URL", "postgresql://atmr:atmr@localhost:5432/atmr_test"
 )
+# ✅ Tests d'intégration : forcer Postgres par défaut (évite SQLite quand DATABASE_URL absent)
+# Default 5433 = port docker-compose.test.yml (postgres_test) pour éviter confusion 5432 vs 5433
+os.environ.setdefault(
+    "DATABASE_URL",
+    os.getenv("DATABASE_URL_TEST") or "postgresql://test:test@localhost:5433/atmr_test",
+)
 # Désactiver la doc RESTX pour éviter les conflits d'endpoint /specs en tests
 os.environ["API_DOCS"] = "off"
 # Désactiver l'API legacy pendant les tests pour éviter conflits RestX
@@ -135,9 +141,12 @@ def app() -> Flask:
     # Évite les problèmes d'enums, contraintes nommées, et JSONB
     # Les tests utilisent des savepoints (transactions nested)
     # donc pas de risque pour les données
-    # Workflow utilise test:test@localhost:5432/atmr_test
-    database_url = os.getenv(
-        "DATABASE_URL", "postgresql://test:test@localhost:5432/atmr_test"
+    # Default 5433 = port docker-compose.test.yml (postgres_test)
+    # DATABASE_URL_TEST prioritaire si défini
+    database_url = (
+        os.getenv("DATABASE_URL_TEST")
+        or os.getenv("DATABASE_URL")
+        or "postgresql://test:test@localhost:5433/atmr_test"
     )
 
     app.config.update(

@@ -9,6 +9,8 @@
 export interface DeepLinkValidationResult {
   valid: boolean;
   type?: string;
+  /** Sous-type pour formats complexes (ex: "message" | "thread" pour chat) */
+  subType?: string;
   id?: number;
   error?: string;
 }
@@ -62,21 +64,28 @@ export function validateDeepLink(url: string): DeepLinkValidationResult {
   const listMatch = path.match(/^([a-z]+)$/i);
 
   let type: string | undefined;
+  let subType: string | undefined;
   let idStr: string | undefined;
 
   if (simpleMatch) {
     // Format: booking/123
     [, type, idStr] = simpleMatch;
   } else if (complexMatch) {
-    // Format: chat/message/456 ou dispatch/run/789
-    const [, mainType, subType, id] = complexMatch;
-    // Pour les formats complexes, on retourne le type principal et l'ID
+    // Format: chat/message/456, chat/thread/789, dispatch/run/123
+    const [, mainType, sub, id] = complexMatch;
     type = mainType;
+    subType = sub?.toLowerCase();
     idStr = id;
   } else if (listMatch) {
     // Format: bookings (sans ID)
     [, type] = listMatch;
     // Pas d'ID pour les listes
+    idStr = undefined;
+  } else if (/^chat(\/(thread|message)(\/.+)?)?$/i.test(path)) {
+    // Garde robustesse: chat/thread/team, chat/thread/abc, chat/thread, chat/message malformé
+    // → fallback atmr://chat (évite routes cassées sur payload ancien/malformé)
+    type = "chat";
+    subType = undefined;
     idStr = undefined;
   } else {
     return {
@@ -105,6 +114,10 @@ export function validateDeepLink(url: string): DeepLinkValidationResult {
   // Valider et parser l'ID
   const id = parseInt(idStr, 10);
   if (isNaN(id) || id <= 0 || !Number.isInteger(id)) {
+    // Garde robustesse chat: tid "team" ou non numérique → fallback atmr://chat
+    if (type === "chat") {
+      return { valid: true, type: "chat" };
+    }
     return {
       valid: false,
       error: `ID invalide: '${idStr}'. Doit être un entier positif`,
@@ -123,6 +136,7 @@ export function validateDeepLink(url: string): DeepLinkValidationResult {
   return {
     valid: true,
     type: type.toLowerCase(),
+    ...(subType && { subType }),
     id,
   };
 }

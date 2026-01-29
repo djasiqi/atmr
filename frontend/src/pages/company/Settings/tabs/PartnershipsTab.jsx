@@ -4,6 +4,7 @@ import styles from '../CompanySettings.module.css';
 import partnershipStyles from './PartnershipsTab.module.css';
 import apiClient from '../../../../utils/apiClient';
 import { showSuccess, showError } from '../../../../utils/toast';
+import { ensurePdfUrlWorksInDev } from '../../../../utils/pdfUrlFallback';
 import KPICards from './components/KPICards';
 import StatementGenerationForm from './components/StatementGenerationForm';
 
@@ -301,8 +302,8 @@ const PartnershipsTab = () => {
 
       const pdfUrl = response.data?.data?.pdf_url;
       if (pdfUrl) {
-        // Ouvrir le PDF dans un nouvel onglet
-        window.open(pdfUrl, '_blank');
+        // Ouvrir le PDF dans un nouvel onglet (fallback localhost→127.0.0.1 en dev)
+        window.open(ensurePdfUrlWorksInDev(pdfUrl), '_blank');
         showSuccess('Décompte généré avec succès');
         setShowStatementModal(false);
         setStatementPartnership(null);

@@ -14,6 +14,7 @@ def uploads_dir(app):
     # avec un répertoire temporaire pour ce module.
     with tempfile.TemporaryDirectory() as tmpdir:
         app.config["UPLOADS_DIR"] = tmpdir
+        app.config["UPLOAD_FOLDER"] = tmpdir
         uploads_dir = Path(tmpdir)
         uploads_dir.mkdir(parents=True, exist_ok=True)
 
@@ -126,3 +127,24 @@ class TestPathTraversalProtection:
         response = client.get("/uploads/")
         # Flask peut rediriger ou retourner 404
         assert response.status_code in (404, 405)
+
+    def test_invoices_pdf_200(self, client, uploads_dir):
+        """Test que /uploads/invoices/<file>.pdf retourne 200 avec Content-Type PDF."""
+        invoices_dir = uploads_dir / "invoices"
+        invoices_dir.mkdir(parents=True, exist_ok=True)
+        dummy_pdf = invoices_dir / "invoice_test_20260101_120000.pdf"
+        dummy_pdf.write_bytes(b"%PDF-1.4 dummy content")
+
+        response = client.get("/uploads/invoices/invoice_test_20260101_120000.pdf")
+        assert response.status_code == 200
+        assert response.headers.get("Content-Type") == "application/pdf"
+        assert "inline" in response.headers.get("Content-Disposition", "")
+        assert "invoice_test_20260101_120000.pdf" in response.headers.get(
+            "Content-Disposition", ""
+        )
+        assert b"%PDF" in response.data
+
+    def test_invoices_pdf_404_if_absent(self, client, uploads_dir):
+        """Test que /uploads/invoices/<absent>.pdf retourne 404."""
+        response = client.get("/uploads/invoices/nonexistent_invoice_999.pdf")
+        assert response.status_code == 404

@@ -33,6 +33,7 @@ export function getGroupForNotificationType(
       return NotificationGroup.MISSIONS;
 
     case "message":
+    case "chat_message":
     case "team_chat_message":
       return NotificationGroup.MESSAGES;
 

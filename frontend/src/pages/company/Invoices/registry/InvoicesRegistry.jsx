@@ -478,7 +478,7 @@ const InvoicesRegistry = () => {
                       onRegeneratePdf={() => handleRegeneratePdf(invoice.id)}
                       onCancel={() => handleCancelInvoice(invoice.id)}
                       onDuplicate={() => handleDuplicateInvoice(invoice.id)}
-                      onViewPdf={() => window.open(invoice.pdf_url, '_blank')}
+                      onViewPdf={(url) => window.open(url, '_blank')}
                     />
                   </td>
                 </tr>

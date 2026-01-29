@@ -2,7 +2,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { getCompanySocket } from '../../../../services/companySocket';
+import 'leaflet.markercluster';
+import 'leaflet.markercluster/dist/MarkerCluster.css';
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
+import { getCompanySocket, joinCompanyRoom } from '../../../../services/companySocket';
+import { fetchCompanyDriverLocations } from '../../../../services/companyService';
 import useCompanyData from '../../../../hooks/useCompanyData';
 
 // Icône Leaflet par défaut (corrige le bug d'icône manquante)
@@ -14,24 +18,25 @@ L.Icon.Default.mergeOptions({
 });
 
 const defaultCenter = [46.8182, 8.2275]; // CH
+const ENABLE_CLUSTERING = process.env.REACT_APP_ENABLE_DRIVER_CLUSTERING === 'true';
 
 // ---- Couleurs par statut (pour CircleMarker, pas d’icône = pas de bug Leaflet default icon) ----
 const STATUS_COLORS = {
-  available: '#00796b',
-  busy: '#ff9800',
-  offline: '#9e9e9e',
+  available: '#22c55e',   // vert
+  busy: '#1976d2',       // bleu
+  offline: '#9e9e9e',    // gris
   emergency: '#f44336',
 };
 
 /** Crée un CircleMarker pour un chauffeur (évite le bug d’icône Leaflet manquante). */
-const createDriverCircleMarker = (latlng, status = 'available') => {
-  const color = STATUS_COLORS[status] ?? STATUS_COLORS.available;
+const createDriverCircleMarker = (latlng, status = 'available', isStale = false) => {
+  const color = isStale ? '#9e9e9e' : (STATUS_COLORS[status] ?? STATUS_COLORS.available);
   return L.circleMarker(latlng, {
     radius: 8,
     fillColor: color,
     color: '#fff',
     weight: 2,
-    fillOpacity: 1,
+    fillOpacity: isStale ? 0.7 : 1,
   });
 };
 
@@ -77,22 +82,45 @@ const getDriverStatus = (driver) => {
   return 'available';
 };
 
-// Créer un tooltip stylé
-const createStyledTooltip = (driver) => {
-  const status = getDriverStatus(driver);
+/** Texte "il y a Xs" ou "Signal inconnu" pour tooltip. Frontend lit is_stale du backend (pas de seuil local). */
+const formatLastSeen = (lastSeenSeconds) => {
+  if (lastSeenSeconds == null || lastSeenSeconds < 0) return 'Dernier signal inconnu';
+  if (lastSeenSeconds < 60) return `il y a ${lastSeenSeconds} s`;
+  if (lastSeenSeconds < 3600) {
+    const m = Math.floor(lastSeenSeconds / 60);
+    return m === 1 ? 'il y a 1 min' : `il y a ${m} min`;
+  }
+  return '> 1 h';
+};
+
+// Créer un tooltip stylé (spec: "Prénom Nom — Disponible" / "En course (client X)" / "Hors-ligne (dernier signal: …)")
+const createStyledTooltip = (driver, opts = {}) => {
+  const { lastSeenSeconds, isStale, status: statusOverride, clientShort } = opts;
+  const status = statusOverride ?? getDriverStatus(driver);
   const statusText = {
     available: 'Disponible',
-    busy: 'En course',
-    offline: 'Hors ligne',
+    busy: clientShort ? `En course (${clientShort})` : 'En course',
+    offline: lastSeenSeconds != null || isStale
+      ? `Hors-ligne (dernier signal: ${formatLastSeen(lastSeenSeconds)})`
+      : 'Hors-ligne',
     emergency: 'Urgence',
   };
 
   const statusColors = {
-    available: '#00796b',
-    busy: '#ff9800',
+    available: '#22c55e',
+    busy: '#1976d2',
     offline: '#9e9e9e',
     emergency: '#f44336',
   };
+
+  const lastSeenLine = (lastSeenSeconds != null || isStale) && status !== 'offline'
+    ? `<div style="font-size: 10px; color: ${isStale ? '#9e9e9e' : statusColors[status]}; margin-top: 2px;">${formatLastSeen(lastSeenSeconds)}</div>`
+    : '';
+
+  const displayName = driver.full_name ||
+    (driver.first_name || driver.last_name
+      ? `${driver.first_name || ''} ${driver.last_name || ''}`.trim()
+      : driver.username || `Chauffeur ${driver.id}`);
 
   return `
     <div style="
@@ -112,32 +140,9 @@ const createStyledTooltip = (driver) => {
         font-size: 12px;
         line-height: 1.2;
       ">
-        ${driver.full_name ||
-          (driver.first_name || driver.last_name
-            ? `${driver.first_name || ''} ${driver.last_name || ''}`.trim()
-            : driver.username || `Chauffeur ${driver.id}`)}
+        ${displayName} — ${statusText[status]}
       </div>
-      <div style="
-        font-size: 10px;
-        color: ${statusColors[status]};
-        font-weight: 500;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 3px;
-        line-height: 1;
-      ">
-        <span>${
-          status === 'available'
-            ? '🟢'
-            : status === 'busy'
-              ? '🟡'
-              : status === 'offline'
-                ? '⚫'
-                : '🔴'
-        }</span>
-        ${statusText[status]}
-      </div>
+      ${lastSeenLine}
     </div>
   `;
 };
@@ -151,9 +156,12 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
   const mapElRef = useRef(null);
   const markersRef = useRef({}); // { [driverId]: L.Layer (CircleMarker) }
   const hasAutoFittedRef = useRef(false); // fitBounds une seule fois au premier marker
+  const lastLocationsRef = useRef({}); // { [driverId]: loc } — dernière réponse REST pour status/client_short
+  const clusterGroupRef = useRef(null); // L.markerClusterGroup si ENABLE_CLUSTERING
   const [searchQuery, setSearchQuery] = useState('');
   const [mapReady, setMapReady] = useState(false);
   const [mapDebugInfo, setMapDebugInfo] = useState(null); // dev only
+  const [showNoGpsBanner, setShowNoGpsBanner] = useState(false);
   const { driver: staticDrivers, company } = useCompanyData();
 
   // Utiliser les drivers passés en props si disponibles, sinon ceux de useCompanyData
@@ -165,6 +173,17 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
     : allDrivers;
 
   // petits helpers pour éviter d'appeler Leaflet sur une map détruite
+  const addMarkerToLayer = (m) => {
+    const cg = clusterGroupRef.current;
+    if (cg) cg.addLayer(m);
+    else getMap()?.addLayer(m);
+  };
+  const removeMarkerFromLayer = (m) => {
+    const cg = clusterGroupRef.current;
+    const map = getMap();
+    if (cg) cg.removeLayer(m);
+    else if (map) map.removeLayer(m);
+  };
   const getMap = () => {
     const m = mapRef.current;
     // ✅ CORRECTION: Vérifier que la carte est complètement initialisée
@@ -205,15 +224,15 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
   // Init carte Leaflet
   useEffect(() => {
     if (mapRef.current) {
-      console.log('[DriverLiveMap] ⚠️ Carte déjà initialisée, skip');
+      if (MAP_DEBUG) console.log('[DriverLiveMap] ⚠️ Carte déjà initialisée, skip');
       return; // évite double init hors StrictMode
     }
     if (!mapElRef.current) {
-      console.log('[DriverLiveMap] ❌ mapElRef.current is null');
+      if (MAP_DEBUG) console.log('[DriverLiveMap] ❌ mapElRef.current is null');
       return;
     }
 
-    console.log('[DriverLiveMap] 🗺️ Initialisation de la carte Leaflet...', {
+    if (MAP_DEBUG) console.log('[DriverLiveMap] 🗺️ Initialisation de la carte Leaflet...', {
       element: mapElRef.current,
       dimensions: {
         width: mapElRef.current.offsetWidth,
@@ -229,7 +248,7 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
         scrollWheelZoom: true,
       });
 
-      console.log('[DriverLiveMap] ✅ Carte Leaflet créée');
+      if (MAP_DEBUG) console.log('[DriverLiveMap] ✅ Carte Leaflet créée');
 
       const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
@@ -250,6 +269,36 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
 
       tileLayer.addTo(map);
 
+      // Clustering chauffeurs (feature flag, fallback sans cluster si indispo)
+      if (ENABLE_CLUSTERING && typeof L.markerClusterGroup === 'function') {
+        try {
+          const clusterGroup = L.markerClusterGroup({
+            disableClusteringAtZoom: 16,
+            maxClusterRadius: 40,
+            showCoverageOnHover: false,
+            spiderfyOnMaxZoom: true,
+            iconCreateFunction: (cluster) => {
+              const count = cluster.getChildCount();
+              return L.divIcon({
+                html: `<span style="
+                  display: flex; align-items: center; justify-content: center;
+                  width: 36px; height: 36px; border-radius: 50%;
+                  background: #374151; color: #fff; font-weight: 600; font-size: 12px;
+                  border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                ">${count}</span>`,
+                className: 'driver-cluster-icon',
+                iconSize: [36, 36],
+              });
+            },
+          });
+          clusterGroup.addTo(map);
+          clusterGroupRef.current = clusterGroup;
+        } catch (e) {
+          console.warn('[DriverLiveMap] Clustering indisponible, fallback sans cluster:', e);
+          clusterGroupRef.current = null;
+        }
+      }
+
       // ✅ CORRECTION: S'assurer que la carte est complètement initialisée avant invalidateSize
       // Vérifier que _mapPane existe avant d'appeler invalidateSize
       const checkAndInvalidateSize = () => {
@@ -257,7 +306,7 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
         if (map && map._mapPane && map._mapPane._leaflet_id !== undefined) {
           try {
             map.invalidateSize();
-            console.log('[DriverLiveMap] 🔄 Carte redimensionnée');
+            if (MAP_DEBUG) console.log('[DriverLiveMap] 🔄 Carte redimensionnée');
           } catch (error) {
             console.warn('[DriverLiveMap] ⚠️ Erreur lors du redimensionnement:', error);
           }
@@ -272,13 +321,14 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
 
       mapRef.current = map;
       setMapReady(true);
-      console.log('[DriverLiveMap] ✅ Carte initialisée avec succès');
+      if (MAP_DEBUG) console.log('[DriverLiveMap] ✅ Carte initialisée avec succès');
     } catch (error) {
       console.error('[DriverLiveMap] ❌ Erreur initialisation carte:', error);
     }
 
     return () => {
       setMapReady(false);
+      clusterGroupRef.current = null;
       try {
         if (mapRef.current) {
           mapRef.current.remove();
@@ -301,7 +351,8 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
       if (!ll) return; // ignore si pas de coords valides
 
       const status = getDriverStatus(d);
-      const m = createDriverCircleMarker(ll, status).addTo(map);
+      const m = createDriverCircleMarker(ll, status);
+      addMarkerToLayer(m);
 
       // Logique intelligente 4 directions : haut/bas ET gauche/droite
       const updateTooltipDirection = () => {
@@ -353,9 +404,9 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
     Object.keys(markersRef.current).forEach((driverId) => {
       if (!driverIds.has(Number(driverId))) {
         const marker = markersRef.current[driverId];
-        if (marker && map) {
+        if (marker) {
           try {
-            map.removeLayer(marker);
+            removeMarkerFromLayer(marker);
           } catch {}
         }
         delete markersRef.current[driverId];
@@ -381,6 +432,137 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drivers]);
+
+  // Rejoindre la room entreprise au chargement (pour socket + currentCompanyId)
+  useEffect(() => {
+    if (company?.id) {
+      joinCompanyRoom(company.id).catch(() => {});
+    }
+  }, [company?.id]);
+
+  // REST: polling des positions (fallback si socket vide ou indisponible)
+  // Pause si onglet invisible (visibility API)
+  const POLL_INTERVAL_MS = 5000;
+  useEffect(() => {
+    if (!company?.id) return;
+    let cancelled = false;
+    let pollCount = 0;
+    const devLogOnce = { logged: false };
+    let intervalId = null;
+
+    const poll = async () => {
+      if (cancelled) return;
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      try {
+        const locations = await fetchCompanyDriverLocations();
+        if (cancelled) return;
+        const map = getMap();
+        if (!map || !Array.isArray(locations) || locations.length === 0) {
+          if (MAP_DEBUG && locations.length === 0 && pollCount === 1 && !devLogOnce.logged) {
+            devLogOnce.logged = true;
+            console.log('[DriverLiveMap] REST: 0 locations reçues (poll #1)');
+          }
+          return;
+        }
+        pollCount += 1;
+        const locMap = {};
+        locations.forEach((loc) => {
+          const id = loc.driver_id ?? loc.id;
+          if (id) locMap[id] = loc;
+        });
+        lastLocationsRef.current = locMap;
+        locations.forEach((loc) => {
+          const id = loc.driver_id ?? loc.id;
+          const lat = loc.lat ?? loc.latitude;
+          const lon = loc.lon ?? loc.longitude;
+          const { center: ll } = normaliseCoords(lat, lon);
+          if (!id || !ll) return;
+          const fullDriver = allDrivers.find((d) => d.id === id) || {
+            id,
+            first_name: loc.first_name,
+            is_active: true,
+          };
+          // Backend = source de vérité pour status (available|busy|offline)
+          const status = loc.status ?? getDriverStatus(fullDriver);
+          // Frontend lit is_stale du backend (pas de seuil local, cohérence 90s côté API)
+          const isStale = loc.is_stale === true;
+          const lastSeenSeconds = loc.last_seen_seconds;
+          const tooltipOpts = {
+            lastSeenSeconds,
+            isStale,
+            status,
+            clientShort: loc.client_short,
+          };
+          if (!markersRef.current[id]) {
+            const m = createDriverCircleMarker(ll, status, isStale);
+            addMarkerToLayer(m);
+            m.bindTooltip(createStyledTooltip(fullDriver, tooltipOpts), {
+              permanent: true,
+              direction: 'top',
+              offset: [0, -20],
+              className: 'custom-driver-tooltip',
+            }).openTooltip();
+            markersRef.current[id] = m;
+            if (!hasAutoFittedRef.current) {
+              fitBoundsToMarkers(14);
+              hasAutoFittedRef.current = true;
+            }
+          } else {
+            const m = markersRef.current[id];
+            m.setLatLng(ll);
+            m.setStyle({
+              fillColor: isStale ? '#9e9e9e' : (STATUS_COLORS[status] ?? STATUS_COLORS.available),
+              fillOpacity: isStale ? 0.7 : 1,
+            });
+            m.unbindTooltip();
+            m.bindTooltip(createStyledTooltip(fullDriver, tooltipOpts), {
+              permanent: true,
+              direction: 'top',
+              offset: [0, -20],
+              className: 'custom-driver-tooltip',
+            }).openTooltip();
+          }
+        });
+        if (MAP_DEBUG && pollCount === 1 && !devLogOnce.logged) {
+          devLogOnce.logged = true;
+          console.log('[DriverLiveMap] REST: count=', locations.length, 'sample=', locations[0] ? { id: locations[0].driver_id, lat: locations[0].latitude ?? locations[0].lat, lon: locations[0].longitude ?? locations[0].lon } : null);
+        }
+      } catch (e) {
+        if (!cancelled && MAP_DEBUG) console.warn('[DriverLiveMap] REST poll error:', e);
+      }
+    };
+
+    const startPolling = () => {
+      if (intervalId) return;
+      poll();
+      intervalId = setInterval(poll, POLL_INTERVAL_MS);
+    };
+    const stopPolling = () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+      startPolling();
+    }
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        startPolling();
+      } else {
+        stopPolling();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      stopPolling();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [company?.id]);
 
   // Socket: écouter les mises à jour live
   useEffect(() => {
@@ -462,8 +644,10 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
           first_name: firstName,
           is_active: true,
         };
-        const status = getDriverStatus(fullDriver);
-        const m = createDriverCircleMarker(ll, status).addTo(map);
+        const lastLoc = lastLocationsRef.current[id];
+        const status = data.status ?? lastLoc?.status ?? getDriverStatus(fullDriver);
+        const m = createDriverCircleMarker(ll, status);
+        addMarkerToLayer(m);
 
         const updateTooltipDirection = () => {
           const bounds = map.getBounds();
@@ -482,7 +666,12 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
             offset = direction === 'left' ? [-10, 0] : [10, 0];
           }
           m.unbindTooltip();
-          m.bindTooltip(createStyledTooltip(fullDriver), {
+          m.bindTooltip(createStyledTooltip(fullDriver, {
+            status,
+            clientShort: data.client_short ?? lastLoc?.client_short,
+            lastSeenSeconds: data.last_seen_seconds ?? lastLoc?.last_seen_seconds,
+            isStale: (data.is_stale ?? lastLoc?.is_stale) === true,
+          }), {
             permanent: true,
             direction,
             offset,
@@ -494,6 +683,7 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
         map.on('moveend zoomend', updateTooltipDirection);
 
         markersRef.current[id] = m;
+        setShowNoGpsBanner(false);
 
         // fitBounds une seule fois au premier marker valide (évite zooms agressifs à chaque update GPS)
         if (wasEmpty && !hasAutoFittedRef.current) {
@@ -509,6 +699,13 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
           first_name: firstName,
           is_active: true,
         };
+        const lastLoc = lastLocationsRef.current[id];
+        const status = data.status ?? lastLoc?.status ?? getDriverStatus(fullDriver);
+        const isStale = (data.is_stale ?? lastLoc?.is_stale) === true;
+        marker.setStyle({
+          fillColor: isStale ? '#9e9e9e' : (STATUS_COLORS[status] ?? STATUS_COLORS.available),
+          fillOpacity: isStale ? 0.7 : 1,
+        });
 
         const bounds = map.getBounds();
         const center = bounds.getCenter();
@@ -523,7 +720,12 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
 
         marker.unbindTooltip();
         marker
-          .bindTooltip(createStyledTooltip(fullDriver), {
+          .bindTooltip(createStyledTooltip(fullDriver, {
+            status,
+            clientShort: data.client_short ?? lastLoc?.client_short,
+            lastSeenSeconds: data.last_seen_seconds ?? lastLoc?.last_seen_seconds,
+            isStale: data.is_stale ?? lastLoc?.is_stale,
+          }), {
             permanent: true,
             direction,
             offset,
@@ -595,21 +797,37 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
         const isActive = visibleCount > 0;
 
         container.innerHTML = `
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <span style="
-              width: 8px;
-              height: 8px;
-              border-radius: 50%;
-              background: ${isActive ? '#00c853' : '#9e9e9e'};
-              display: inline-block;
-              ${isActive ? 'animation: pulse 2s infinite;' : ''}
-            "></span>
-            <div style="line-height: 1.4;">
-              <div style="font-weight: 600; color: #00796b;">
-                <span class="driver-count">${visibleCount}</span> / ${totalCount} GPS actifs
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                background: ${isActive ? '#00c853' : '#9e9e9e'};
+                display: inline-block;
+                ${isActive ? 'animation: pulse 2s infinite;' : ''}
+              "></span>
+              <div style="line-height: 1.4;">
+                <div style="font-weight: 600; color: #00796b;">
+                  <span class="driver-count">${visibleCount}</span> / ${totalCount} GPS actifs
+                </div>
+                ${visibleCount === 0 && totalCount > 0 ? '<div style="font-size: 10px; color: #f57c00;">⚠️ Aucun chauffeur localisé</div>' : ''}
+                ${visibleCount === 0 && totalCount === 0 ? '<div style="font-size: 10px; color: #9e9e9e;">Aucun chauffeur</div>' : ''}
               </div>
-              ${visibleCount === 0 && totalCount > 0 ? '<div style="font-size: 10px; color: #f57c00;">⚠️ Aucun chauffeur localisé</div>' : ''}
-              ${visibleCount === 0 && totalCount === 0 ? '<div style="font-size: 10px; color: #9e9e9e;">Aucun chauffeur</div>' : ''}
+            </div>
+            <div class="driver-legend" style="display: flex; flex-direction: column; gap: 4px; font-size: 10px; color: #334155;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="width: 8px; height: 8px; border-radius: 50%; background: #22c55e; border: 1px solid #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.2);"></span>
+                <span>Disponible</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="width: 8px; height: 8px; border-radius: 50%; background: #1976d2; border: 1px solid #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.2);"></span>
+                <span>En course</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="width: 8px; height: 8px; border-radius: 50%; background: #9e9e9e; border: 1px solid #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.2);"></span>
+                <span>Hors-ligne</span>
+              </div>
             </div>
           </div>
         `;
@@ -809,6 +1027,28 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
           }}
         >
           🗺️ Initialisation de la carte...
+        </div>
+      )}
+      {mapReady && showNoGpsBanner && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 8,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            padding: '8px 16px',
+            background: 'rgba(245, 124, 0, 0.95)',
+            color: '#fff',
+            borderRadius: 8,
+            fontSize: 12,
+            fontWeight: 500,
+            zIndex: 1000,
+            boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+            textAlign: 'center',
+            maxWidth: '90%',
+          }}
+        >
+          Aucune position reçue. Vérifiez que les chauffeurs ont activé le GPS et l'app en ligne.
         </div>
       )}
       {mapReady && (

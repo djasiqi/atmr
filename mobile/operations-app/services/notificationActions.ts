@@ -165,6 +165,7 @@ export function getCategoryForNotificationType(
       return NotificationCategory.MISSION_URGENT;
 
     case "message":
+    case "chat_message":
     case "team_chat_message":
       return NotificationCategory.MESSAGE_RECEIVED;
 

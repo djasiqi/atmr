@@ -2294,6 +2294,202 @@ class CompleteReservation(Resource):
 # ======================================================
 
 
+# Seuil stale: > 90s = signal ancien (griser marker côté frontend)
+STALE_THRESHOLD_SEC = 90
+
+# Throttle log "no driver loc in Redis" : 1 fois / 10 min par company
+_NO_DRIVER_LOC_LOG_LAST: dict[int, float] = {}
+_NO_DRIVER_LOC_LOG_INTERVAL_SEC = 600
+
+
+@companies_ns.route("/me/drivers/locations")
+class CompanyDriversLocations(Resource):
+    """Positions GPS des chauffeurs (Redis pipeline + DB fallback). Pour la carte live."""
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from datetime import UTC, datetime
+
+        from models import Driver
+        from ext import redis_client
+
+        company, err, code = _get_current_company_via_use_case()
+        if err:
+            return err, code
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
+        drivers = Driver.query.filter_by(company_id=cid).all()
+        if not drivers:
+            return {"locations": []}, 200
+
+        # 1) Pipeline Redis (batch) - évite N round-trips
+        redis_results = []
+        redis_ok = False
+        if redis_client:
+            try:
+                pipe = redis_client.pipeline()
+                for driver in drivers:
+                    pipe.hgetall(f"driver:{driver.id}:loc")
+                redis_results = pipe.execute()
+                redis_ok = True
+            except (ConnectionError, OSError, TimeoutError) as e:
+                logger.debug(
+                    "[drivers/locations] Redis pipeline failed: %s",
+                    type(e).__name__,
+                )
+                redis_results = [None] * len(drivers)
+            except Exception:
+                redis_results = [None] * len(drivers)
+
+        # 2) Batch query: bookings actifs par driver (ASSIGNED/EN_ROUTE/IN_PROGRESS) - pas de N+1
+        from models import Booking
+        from models.base import _as_bool
+
+        driver_ids = [d.id for d in drivers]
+        active_bookings_map: dict[int, dict[str, Any]] = {}
+        if driver_ids:
+            active_statuses = (
+                BookingStatus.ASSIGNED.value,
+                BookingStatus.EN_ROUTE.value,
+                BookingStatus.IN_PROGRESS.value,
+            )
+            active_bookings = (
+                Booking.query.filter(
+                    Booking.driver_id.in_(driver_ids),
+                    Booking.status.in_(active_statuses),
+                )
+                .with_entities(
+                    Booking.driver_id,
+                    Booking.id,
+                    Booking.pickup_location,
+                    Booking.dropoff_location,
+                )
+                .all()
+            )
+            _MAX_LOCATION_STR_LEN = 30
+            for b in active_bookings:
+                driver_id_val = getattr(b, "driver_id", None)
+                if driver_id_val and driver_id_val not in active_bookings_map:
+                    pickup = getattr(b, "pickup_location", None) or ""
+                    dropoff = getattr(b, "dropoff_location", None) or ""
+                    pickup_str = str(pickup)
+                    dropoff_str = str(dropoff)
+                    client_short = (
+                        (pickup[:_MAX_LOCATION_STR_LEN] + "…")
+                        if len(pickup_str) > _MAX_LOCATION_STR_LEN
+                        else pickup
+                    )
+                    active_bookings_map[driver_id_val] = {
+                        "current_booking_id": getattr(b, "id", None),
+                        "client_short": client_short
+                        or (
+                            dropoff[:_MAX_LOCATION_STR_LEN] + "…"
+                            if len(dropoff_str) > _MAX_LOCATION_STR_LEN
+                            else dropoff
+                        ),
+                    }
+
+        now = datetime.now(UTC)
+        locations = []
+        for i, driver in enumerate(drivers):
+            lat, lon, ts = None, None, None
+            h = redis_results[i] if i < len(redis_results) else None
+            if h:
+                loc_data = {}
+                for k, v in h.items():
+                    try:
+                        loc_data[k.decode()] = v.decode()
+                    except Exception:
+                        loc_data[k.decode()] = v
+                for kf in ("lat", "lon", "speed", "heading", "accuracy"):
+                    if kf in loc_data:
+                        with suppress(Exception):
+                            loc_data[kf] = float(loc_data[kf])
+                lat = loc_data.get("lat")
+                lon = loc_data.get("lon")
+                ts = loc_data.get("ts")
+
+            # Fallback DB si Redis vide
+            if lat is None and getattr(driver, "latitude", None) is not None:
+                lat = float(driver.latitude)
+                lon = float(driver.longitude)
+                ts = None
+
+            if lat is None or lon is None:
+                continue
+
+            # last_seen_seconds + is_stale
+            last_seen_seconds = None
+            is_stale = True
+            if ts:
+                try:
+                    ts_dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                    delta = (now - ts_dt).total_seconds()
+                    last_seen_seconds = int(delta)
+                    is_stale = delta > STALE_THRESHOLD_SEC
+                except Exception:
+                    pass
+
+            # status: available | busy | offline (backend = source de vérité)
+            is_active = _as_bool(getattr(driver, "is_active", True))
+            active_booking = active_bookings_map.get(driver.id, {})
+            has_active_booking = bool(active_booking.get("current_booking_id"))
+
+            if not is_active or is_stale:
+                status = "offline"
+            elif has_active_booking:
+                status = "busy"
+            else:
+                status = "available"
+
+            first_name = getattr(getattr(driver, "user", None), "first_name", None)
+            loc_item = {
+                "driver_id": driver.id,
+                "id": driver.id,
+                "latitude": float(lat),
+                "longitude": float(lon),
+                "lat": float(lat),
+                "lon": float(lon),
+                "first_name": first_name,
+                "timestamp": ts,
+                "last_seen_seconds": last_seen_seconds,
+                "is_stale": is_stale,
+                "status": status,
+            }
+            if has_active_booking:
+                loc_item["current_booking_id"] = active_booking.get(
+                    "current_booking_id"
+                )
+                loc_item["client_short"] = active_booking.get("client_short", "")
+            locations.append(loc_item)
+
+        # Log WARN 1 fois / 10 min si Redis OK mais 0 loc pour tous les chauffeurs
+        if redis_ok and cid and len(drivers) > 0 and len(locations) == 0:
+            import time as _time
+
+            now_ts = _time.monotonic()
+            last = _NO_DRIVER_LOC_LOG_LAST.get(cid, 0)
+            if now_ts - last >= _NO_DRIVER_LOC_LOG_INTERVAL_SEC:
+                _NO_DRIVER_LOC_LOG_LAST[cid] = now_ts
+                logger.warning(
+                    "No driver loc in Redis for company_id=%s (drivers_count=%d)",
+                    cid,
+                    len(drivers),
+                )
+
+        return {"locations": locations}, 200
+
+
 @companies_ns.route("/me/drivers")
 class CompanyDriversList(Resource):
     @jwt_required()

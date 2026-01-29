@@ -236,6 +236,20 @@ export const fetchCompanyDriver = async () => {
   }
 };
 
+/** Positions GPS des chauffeurs (Redis + DB). Pour la carte live. */
+export const fetchCompanyDriverLocations = async () => {
+  try {
+    const { data } = await apiClient.get('/companies/me/drivers/locations');
+    return Array.isArray(data?.locations) ? data.locations : [];
+  } catch (e) {
+    const status = e?.response?.status;
+    if (status !== 403 && status !== 404) {
+      console.error('fetchCompanyDriverLocations failed:', e?.response?.data || e);
+    }
+    return [];
+  }
+};
+
 /**
  * Crée un nouveau chauffeur (Utilisateur + Profil Chauffeur).
  * (nécessaire pour CompanyDriver.jsx)

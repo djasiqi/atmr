@@ -22,6 +22,7 @@ Flask-Bcrypt>=1.0.0
 # ========== Server & Workers ==========
 gunicorn>=21.0.0
 eventlet>=0.39.0
+gevent>=24.0.0
 waitress>=3.0.0
 greenlet>=3.0.0
 simple-websocket>=1.1.0

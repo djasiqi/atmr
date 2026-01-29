@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import styles from './InvoiceRowActions.module.css';
+import { ensurePdfUrlWorksInDev } from '../../../../../utils/pdfUrlFallback';
 import {
   canSendInvoice,
   canAddPayment,
@@ -86,7 +87,7 @@ const InvoiceRowActions = ({
       key: 'viewInitial',
       label: 'Voir facture initiale',
       icon: '📄',
-      onClick: onViewPdf,
+      onClick: () => onViewPdf(ensurePdfUrlWorksInDev(invoice.pdf_url)),
       className: styles.actionBtnSecondary,
       show: !!invoice.pdf_url,
     },
@@ -99,7 +100,7 @@ const InvoiceRowActions = ({
       icon: '🔔',
       onClick: () => {
         if (latestReminder?.pdf_url) {
-          window.open(latestReminder.pdf_url, '_blank');
+          window.open(ensurePdfUrlWorksInDev(latestReminder.pdf_url), '_blank');
         }
       },
       className: styles.actionBtnSecondary,

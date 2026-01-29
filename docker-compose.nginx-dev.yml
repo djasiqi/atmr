@@ -1,0 +1,27 @@
+# Override pour dev local : nginx sur port 5000 sert /uploads/ directement
+# Évite ERR_CONNECTION_RESET avec Gunicorn+eventlet sur les PDFs.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.nginx-dev.yml up -d
+#
+# ⚠️ IMPORTANT: Si vous arrêtez avec ce fichier, utilisez le MÊME fichier pour down:
+#    docker compose -f docker-compose.yml -f docker-compose.nginx-dev.yml down --remove-orphans
+# Sinon atmr-nginx-1 reste orphelin et bloque le port 5000 pour le prochain "docker compose up -d"
+
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./nginx/nginx-dev.conf:/etc/nginx/nginx.conf:ro
+      - ./backend/uploads:/usr/share/nginx/uploads:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - default
+
+  api:
+    ports: [] # Ne plus exposer 5000 - nginx prend le relais
+    expose:
+      - "5000"

@@ -2,18 +2,22 @@
 const { createProxyMiddleware } = require('http-proxy-middleware');
 
 // ✅ Résoudre l'URL du backend depuis les variables d'environnement
+// IMPORTANT: Utiliser 127.0.0.1 (IPv4) et jamais localhost — évite 504/ERR_CONNECTION_RESET (IPv6 + Docker Windows)
 const getBackendUrl = () => {
   const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || process.env.REACT_APP_API_URL;
   if (apiBaseUrl) {
     try {
       const url = new URL(apiBaseUrl);
-      return url.origin;
+      // Forcer 127.0.0.1 si c'est localhost (évite IPv6)
+      const host = url.hostname === 'localhost' ? '127.0.0.1' : url.hostname;
+      const port = url.port || '5000';
+      return `${url.protocol}//${host}:${port}`;
     } catch (e) {
       console.error('Invalid REACT_APP_API_BASE_URL:', apiBaseUrl, e);
     }
   }
   
-  // Fallback pour développement uniquement
+  // Fallback pour développement — 127.0.0.1 obligatoire (pas localhost)
   const isProduction = process.env.NODE_ENV === 'production';
   if (isProduction) {
     console.warn(
@@ -346,16 +350,12 @@ module.exports = function (app) {
       onError: (err, req, res) => {
         // ✅ Gestion d'erreur améliorée pour 504 Gateway Timeout
         console.error(`[API V1] Proxy error for ${req.method} ${req.url}:`, err.message);
-        if (err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT') {
-          res.status(503).json({
-            error: 'Service temporairement indisponible',
-            message: 'Le serveur backend n\'est pas accessible. Vérifiez qu\'il est démarré sur le port 5000.',
-            code: err.code,
-          });
-        } else {
-          res.status(504).json({
-            error: 'Gateway Timeout',
-            message: 'Le serveur backend n\'a pas répondu dans les délais impartis.',
+        if (res && !res.headersSent) {
+          const isRefused = err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT';
+          res.status(isRefused ? 503 : 504).json({
+            error: isRefused ? 'Service temporairement indisponible' : 'Gateway Timeout',
+            message: `Backend (${BACKEND_URL}) non accessible. ` +
+              'Vérifiez: 1) docker compose up -d  2) docker compose ps (api doit être healthy)  3) curl http://127.0.0.1:5000/health',
             code: err.code,
           });
         }
@@ -410,18 +410,12 @@ module.exports = function (app) {
         console.log(`[API] ${req.method} ${req.url} -> ${proxyRes.statusCode}`);
       },
       onError: (err, req, res) => {
-        // ✅ Gestion d'erreur améliorée pour 504 Gateway Timeout
         console.error(`[API] Proxy error for ${req.method} ${req.url}:`, err.message);
-        if (err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT') {
-          res.status(503).json({
-            error: 'Service temporairement indisponible',
-            message: 'Le serveur backend n\'est pas accessible. Vérifiez qu\'il est démarré sur le port 5000.',
-            code: err.code,
-          });
-        } else {
-          res.status(504).json({
-            error: 'Gateway Timeout',
-            message: 'Le serveur backend n\'a pas répondu dans les délais impartis.',
+        if (res && !res.headersSent) {
+          const isRefused = err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT';
+          res.status(isRefused ? 503 : 504).json({
+            error: isRefused ? 'Service temporairement indisponible' : 'Gateway Timeout',
+            message: `Backend (${BACKEND_URL}) non accessible. Vérifiez: docker compose up -d`,
             code: err.code,
           });
         }
@@ -430,5 +424,6 @@ module.exports = function (app) {
   );
 
   console.log('✅ Tous les proxies configurés !');
+  console.log(`📡 Backend cible: ${BACKEND_URL} (si 504: vérifier "docker compose ps" et "curl ${BACKEND_URL}/health")`);
   console.log('📋 Routes: /socket.io, /uploads, /api');
 };

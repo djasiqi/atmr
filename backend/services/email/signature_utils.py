@@ -40,9 +40,7 @@ def _get_logo_file_path(logo_url: str | None) -> Path | None:
         try:
             from flask import current_app
 
-            uploads_dir = Path(
-                current_app.config.get("UPLOAD_FOLDER", "/app/uploads")
-            )
+            uploads_dir = Path(current_app.config.get("UPLOAD_FOLDER", "/app/uploads"))
             # Nettoyer le chemin : /uploads/company_logos/logo.png -> company_logos/logo.png
             logo_url_clean = logo_url.lstrip("/")
             if logo_url_clean.startswith("uploads/"):
@@ -127,22 +125,26 @@ def _make_logo_url_absolute(logo_url: str | None) -> str | None:
     if logo_url.startswith("/"):
         # Utiliser PUBLIC_BASE_URL ou APP_BASE_URL depuis la config
         try:
-            base_url = current_app.config.get("PUBLIC_BASE_URL") or current_app.config.get(
-                "APP_BASE_URL"
-            ) or current_app.config.get("PDF_BASE_URL", "http://localhost:5000")
+            base_url = (
+                current_app.config.get("PUBLIC_BASE_URL")
+                or current_app.config.get("APP_BASE_URL")
+                or current_app.config.get("PDF_BASE_URL", "http://127.0.0.1:5000")
+            )
             # S'assurer que base_url ne se termine pas par /
             base_url = base_url.rstrip("/")
             return f"{base_url}{logo_url}"
         except RuntimeError:
             # Hors contexte Flask (tests), utiliser une valeur par défaut
-            return f"http://localhost:5000{logo_url}"
+            return f"http://127.0.0.1:5000{logo_url}"
 
     # Si ni absolue ni relative, retourner telle quelle (peut être un chemin relatif sans /)
     return logo_url
 
 
 def render_signature_html_template(
-    template_str: str, company: Any, billing_settings: Any | None = None  # noqa: ARG001
+    template_str: str,
+    company: Any,
+    billing_settings: Any | None = None,  # noqa: ARG001
 ) -> str:
     """Render un template HTML de signature avec variables whitelistées.
 
@@ -231,7 +233,9 @@ def render_signature_html_template(
 
     # Sécurité supplémentaire: supprimer les balises dangereuses
     # (même si auto-escape est activé, on supprime <script> et <iframe> par précaution)
-    rendered = re.sub(r"<script[^>]*>.*?</script>", "", rendered, flags=re.IGNORECASE | re.DOTALL)
+    rendered = re.sub(
+        r"<script[^>]*>.*?</script>", "", rendered, flags=re.IGNORECASE | re.DOTALL
+    )
     rendered = re.sub(
         r"<iframe[^>]*>.*?</iframe>", "", rendered, flags=re.IGNORECASE | re.DOTALL
     )
@@ -298,7 +302,11 @@ def generate_signature_html_from_form(
         value_stripped = value.strip()
         if not value_stripped:
             return None
-        return value_stripped[:max_length] if len(value_stripped) > max_length else value_stripped
+        return (
+            value_stripped[:max_length]
+            if len(value_stripped) > max_length
+            else value_stripped
+        )
 
     def normalize_email(email_val: str | None) -> str | None:
         """Normalise et valide un email (strip + vérifie présence de @)."""
@@ -347,7 +355,9 @@ def generate_signature_html_from_form(
     # Construire la colonne gauche
     left_col_parts = []
     if name:
-        left_col_parts.append(f'<strong style="font-size: 12px;">{html.escape(name)}</strong>')
+        left_col_parts.append(
+            f'<strong style="font-size: 12px;">{html.escape(name)}</strong>'
+        )
     if title:
         left_col_parts.append(html.escape(title))
     if company:
@@ -369,17 +379,23 @@ def generate_signature_html_from_form(
     # Email (mailto link) - email est déjà validé et normalisé
     if email:
         email_escaped = html.escape(email)
-        right_col_parts.append(f'<a href="mailto:{html.escape(email)}" style="color: #1b4b7a; text-decoration: none;">{email_escaped}</a>')
+        right_col_parts.append(
+            f'<a href="mailto:{html.escape(email)}" style="color: #1b4b7a; text-decoration: none;">{email_escaped}</a>'
+        )
 
     # Website (link) - website est déjà normalisé (strip), on ajoute https:// si absent
     if website:
         website_clean = website
-        if not website_clean.startswith("http://") and not website_clean.startswith("https://"):
+        if not website_clean.startswith("http://") and not website_clean.startswith(
+            "https://"
+        ):
             website_clean = f"https://{website_clean}"
         # Pour l'affichage, on enlève le protocole
         website_display = website.replace("https://", "").replace("http://", "")
         website_escaped = html.escape(website_display)
-        right_col_parts.append(f'<a href="{html.escape(website_clean)}" style="color: #1b4b7a; text-decoration: none;">{website_escaped}</a>')
+        right_col_parts.append(
+            f'<a href="{html.escape(website_clean)}" style="color: #1b4b7a; text-decoration: none;">{website_escaped}</a>'
+        )
 
     # Adresse
     address_parts = []
@@ -499,12 +515,16 @@ def inject_signature_into_html(  # noqa: PLR0911
 
     if not billing_settings:
         if EMAIL_SIGNATURE_DEBUG:
-            logger.info("[EMAIL_SIGNATURE_DEBUG] inject_signature: pas de billing_settings, retour html inchangé")
+            logger.info(
+                "[EMAIL_SIGNATURE_DEBUG] inject_signature: pas de billing_settings, retour html inchangé"
+            )
         return (html_content, None)
 
     # Déterminer le mode (depuis billing_settings si non fourni)
     if signature_mode is None:
-        signature_mode = getattr(billing_settings, "email_signature_mode", "form") or "form"
+        signature_mode = (
+            getattr(billing_settings, "email_signature_mode", "form") or "form"
+        )
 
     signature_html = None
 
@@ -515,10 +535,14 @@ def inject_signature_into_html(  # noqa: PLR0911
         signature_title = getattr(billing_settings, "signature_title", None)
         signature_company = getattr(billing_settings, "signature_company", None)
         signature_phone_main = getattr(billing_settings, "signature_phone_main", None)
-        signature_phone_mobile = getattr(billing_settings, "signature_phone_mobile", None)
+        signature_phone_mobile = getattr(
+            billing_settings, "signature_phone_mobile", None
+        )
         signature_email = getattr(billing_settings, "signature_email", None)
         signature_website = getattr(billing_settings, "signature_website", None)
-        signature_address_line = getattr(billing_settings, "signature_address_line", None)
+        signature_address_line = getattr(
+            billing_settings, "signature_address_line", None
+        )
         signature_zip = getattr(billing_settings, "signature_zip", None)
         signature_city = getattr(billing_settings, "signature_city", None)
 
@@ -537,18 +561,26 @@ def inject_signature_into_html(  # noqa: PLR0911
             city=signature_city,
             company_obj=company,  # Pour récupérer logo_url automatiquement
         )
-        if not signature_html or not signature_html.strip() or signature_html.strip() == "&nbsp;":
+        if (
+            not signature_html
+            or not signature_html.strip()
+            or signature_html.strip() == "&nbsp;"
+        ):
             # Si aucun champ rempli, fallback sur texte si disponible
             signature_text = getattr(billing_settings, "email_signature_text", None)
             if signature_text:
                 signature_mode = "text"
             else:
                 if EMAIL_SIGNATURE_DEBUG:
-                    logger.info("[EMAIL_SIGNATURE_DEBUG] inject_signature: signature form vide, retour html inchangé")
+                    logger.info(
+                        "[EMAIL_SIGNATURE_DEBUG] inject_signature: signature form vide, retour html inchangé"
+                    )
                 return (html_content, None)
 
     elif signature_mode == "html":
-        signature_html_template = getattr(billing_settings, "email_signature_html_template", None)
+        signature_html_template = getattr(
+            billing_settings, "email_signature_html_template", None
+        )
         signature_text = getattr(billing_settings, "email_signature_text", None)
 
         if not signature_html_template:
@@ -557,7 +589,9 @@ def inject_signature_into_html(  # noqa: PLR0911
                 signature_mode = "text"
             else:
                 if EMAIL_SIGNATURE_DEBUG:
-                    logger.info("[EMAIL_SIGNATURE_DEBUG] inject_signature: template HTML vide, retour html inchangé")
+                    logger.info(
+                        "[EMAIL_SIGNATURE_DEBUG] inject_signature: template HTML vide, retour html inchangé"
+                    )
                 return (html_content, None)
         elif not company:
             # Fallback sur texte si company manquante
@@ -565,7 +599,9 @@ def inject_signature_into_html(  # noqa: PLR0911
                 signature_mode = "text"
             else:
                 if EMAIL_SIGNATURE_DEBUG:
-                    logger.info("[EMAIL_SIGNATURE_DEBUG] inject_signature: company manquante, retour html inchangé")
+                    logger.info(
+                        "[EMAIL_SIGNATURE_DEBUG] inject_signature: company manquante, retour html inchangé"
+                    )
                 return (html_content, None)
         else:
             # Render le template HTML (signature_html_template est garanti non-None ici)
@@ -579,7 +615,9 @@ def inject_signature_into_html(  # noqa: PLR0911
                     signature_mode = "text"
                 else:
                     if EMAIL_SIGNATURE_DEBUG:
-                        logger.info("[EMAIL_SIGNATURE_DEBUG] inject_signature: render template échoué, retour html inchangé")
+                        logger.info(
+                            "[EMAIL_SIGNATURE_DEBUG] inject_signature: render template échoué, retour html inchangé"
+                        )
                     return (html_content, None)
 
     if signature_mode == "text":
@@ -591,7 +629,9 @@ def inject_signature_into_html(  # noqa: PLR0911
 
     if not signature_html or not signature_html.strip():
         if EMAIL_SIGNATURE_DEBUG:
-            logger.info("[EMAIL_SIGNATURE_DEBUG] inject_signature: signature_html vide, retour html inchangé")
+            logger.info(
+                "[EMAIL_SIGNATURE_DEBUG] inject_signature: signature_html vide, retour html inchangé"
+            )
         return (html_content, None)
 
     # Récupérer les infos du logo pour attachement inline
@@ -602,8 +642,12 @@ def inject_signature_into_html(  # noqa: PLR0911
             logo_url_absolute = _make_logo_url_absolute(company.logo_url)
             if logo_url_absolute:
                 if cache_bust is not None:
-                    logo_url_absolute = f"{logo_url_absolute.rstrip('?')}?v={cache_bust}"
-                signature_html = signature_html.replace("cid:company_logo", logo_url_absolute)
+                    logo_url_absolute = (
+                        f"{logo_url_absolute.rstrip('?')}?v={cache_bust}"
+                    )
+                signature_html = signature_html.replace(
+                    "cid:company_logo", logo_url_absolute
+                )
                 if EMAIL_SIGNATURE_DEBUG:
                     logger.info(
                         "[EMAIL_SIGNATURE_DEBUG] inject_signature: logo_mode=url, url absolue finale=%s",
@@ -627,7 +671,9 @@ def inject_signature_into_html(  # noqa: PLR0911
                                 "[EMAIL_SIGNATURE_DEBUG] inject_signature: logo bytes vides, fallback URL absolue - %s",
                                 logo_url_absolute,
                             )
-                        signature_html = signature_html.replace("cid:company_logo", logo_url_absolute)
+                        signature_html = signature_html.replace(
+                            "cid:company_logo", logo_url_absolute
+                        )
                 # SVG guard: Outlook ne supporte pas bien les SVG inline
                 elif mime_type == "image/svg+xml":
                     logger.warning(
@@ -641,7 +687,9 @@ def inject_signature_into_html(  # noqa: PLR0911
                                 "[EMAIL_SIGNATURE_DEBUG] inject_signature: logo SVG fallback URL absolue - %s",
                                 logo_url_absolute,
                             )
-                        signature_html = signature_html.replace("cid:company_logo", logo_url_absolute)
+                        signature_html = signature_html.replace(
+                            "cid:company_logo", logo_url_absolute
+                        )
                 else:
                     # CID strict: exactement "company_logo" pour Outlook (sans chevrons)
                     logo_info = {
@@ -651,8 +699,12 @@ def inject_signature_into_html(  # noqa: PLR0911
                         "filename": f"logo{Path(company.logo_url).suffix or '.png'}",
                     }
                     if EMAIL_SIGNATURE_DEBUG:
-                        img_src_match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', signature_html)
-                        html_img_src = img_src_match.group(1) if img_src_match else "NON TROUVÉ"
+                        img_src_match = re.search(
+                            r'<img[^>]+src=["\']([^"\']+)["\']', signature_html
+                        )
+                        html_img_src = (
+                            img_src_match.group(1) if img_src_match else "NON TROUVÉ"
+                        )
                         logger.info(
                             (
                                 "[EMAIL_SIGNATURE_DEBUG] inject_signature: logo inline disponible - "
@@ -678,16 +730,22 @@ def inject_signature_into_html(  # noqa: PLR0911
                             "[EMAIL_SIGNATURE_DEBUG] inject_signature: logo fallback URL absolue (fichier non trouvé ou erreur) - %s",
                             logo_url_absolute,
                         )
-                    signature_html = signature_html.replace("cid:company_logo", logo_url_absolute)
+                    signature_html = signature_html.replace(
+                        "cid:company_logo", logo_url_absolute
+                    )
 
     # Séparateur propre (—)
     separator = "<br><br>—<br>"
 
     # Injecter AVANT </body>
     if "</body>" in html_content:
-        html_content = html_content.replace("</body>", f"{separator}{signature_html}</body>")
+        html_content = html_content.replace(
+            "</body>", f"{separator}{signature_html}</body>"
+        )
     elif "</html>" in html_content:
-        html_content = html_content.replace("</html>", f"{separator}{signature_html}</html>")
+        html_content = html_content.replace(
+            "</html>", f"{separator}{signature_html}</html>"
+        )
     else:
         html_content = f"{html_content}{separator}{signature_html}"
 

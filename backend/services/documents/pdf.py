@@ -26,6 +26,108 @@ TEMPLATE_VERSION = "unified_v1"
 PERF_WARNING_ROWS_THRESHOLD = 40
 PERF_WARNING_MS_THRESHOLD = 1500
 
+# --- Zone destinataire compatible enveloppe C5 à fenêtre ---
+# Standard pratique: bloc adresse ~45mm haut, ~20mm du haut, ~20mm du bord gauche.
+# Ajuster X/Y si besoin (ex: DEST_ADDR_X_MM +6 à +12 pour décalage droite).
+# 85mm par défaut (fenêtres C5 parfois étroites) — augmenter si validation physique.
+# 18mm = décalage -7mm vs 25mm pour visibilité complète dans fenêtre C5 (ne pas toucher au reste).
+DEST_ADDR_X_MM = 18.0  # Position X depuis bord gauche (mm) — zone fenêtre C5
+DEST_ADDR_Y_MM = (
+    20.0  # Position Y depuis bord haut (mm) — converti en canvas (origine bas)
+)
+DEST_ADDR_MAX_WIDTH_MM = 85.0  # Largeur max wrapping (zone fenêtre C5, safe par défaut)
+DEST_ADDR_LINE_HEIGHT_MM = 4.0  # Interligne (mm)
+DEST_ADDR_ZONE_HEIGHT_MM = 45.0  # Hauteur zone fenêtre C5
+
+
+def _compute_c5_zone_canvas_coords(
+    _page_w: float, page_h: float
+) -> tuple[float, float, float, float]:
+    """Calcule les coordonnées canvas pour la zone fenêtre C5.
+
+    ReportLab : origine en bas gauche. DEST_ADDR_Y_MM = « depuis le haut ».
+    Conversion : rect_bottom = page_h - y_from_top - zone_height.
+
+    Returns:
+        (x_pt, rect_bottom_pt, zone_w_pt, zone_h_pt)
+    """
+    from reportlab.lib.units import mm
+
+    x_pt = DEST_ADDR_X_MM * mm
+    zone_w_pt = DEST_ADDR_MAX_WIDTH_MM * mm
+    zone_h_pt = DEST_ADDR_ZONE_HEIGHT_MM * mm
+    y_from_top_pt = DEST_ADDR_Y_MM * mm
+    rect_bottom_pt = page_h - y_from_top_pt - zone_h_pt
+    return (x_pt, rect_bottom_pt, zone_w_pt, zone_h_pt)
+
+
+def _on_first_page_debug_envelope(canvas: Any, doc: Any) -> None:
+    """Dessine un rectangle guide « fenêtre enveloppe C5 » si PDF_DEBUG_ENVELOPE=1.
+
+    DEV uniquement : rectangle rouge + repères mm pour vérifier le positionnement.
+    Jamais activé par défaut en prod (opt-in explicite via env).
+    """
+    import os
+
+    if os.environ.get("PDF_DEBUG_ENVELOPE") != "1":
+        return
+    from reportlab.lib import colors
+
+    page_w, page_h = doc.pagesize
+    x_pt, rect_bottom, zone_w_pt, zone_h_pt = _compute_c5_zone_canvas_coords(
+        page_w, page_h
+    )
+
+    canvas.saveState()
+    canvas.setStrokeColor(colors.red)
+    canvas.setLineWidth(0.5)
+    canvas.rect(x_pt, rect_bottom, zone_w_pt, zone_h_pt, stroke=1, fill=0)
+    canvas.setFont("Helvetica", 6)
+    canvas.setFillColor(colors.red)
+    canvas.drawString(
+        x_pt, rect_bottom - 8, f"C5 window {DEST_ADDR_X_MM:.0f}x{DEST_ADDR_Y_MM:.0f}mm"
+    )
+    canvas.restoreState()
+
+
+def _make_legal_footer_page_callback(
+    footer_message: str,
+    mention: str | None,
+    centered_style: Any,
+) -> Any:
+    """Crée un callback pour dessiner le pied de page légal en bas de page (zone fixe).
+
+    Le pied de page est dessiné dans la marge inférieure, pas dans le flux du contenu.
+    """
+
+    def _draw_footer(canvas: Any, doc: Any) -> None:
+        from reportlab.lib.units import cm
+
+        from reportlab.platypus import Paragraph
+
+        canvas.saveState()
+        page_w = doc.pagesize[0]
+        avail_width = page_w - 2 * cm
+        y_pos = 1.2 * cm
+
+        if footer_message:
+            p = Paragraph(footer_message, centered_style)
+            w, h = p.wrap(avail_width, 150)
+            p.drawOn(canvas, (page_w - w) / 2, y_pos)
+            y_pos += h + 6
+
+        if mention:
+            p2 = Paragraph(
+                f'<font size="8" color="grey">{mention}</font>',
+                centered_style,
+            )
+            w2, _ = p2.wrap(avail_width, 50)
+            p2.drawOn(canvas, (page_w - w2) / 2, y_pos)
+
+        canvas.restoreState()
+
+    return _draw_footer
+
 
 def _normalize_address_for_comparison(address: str) -> str:
     """Normalise une adresse pour la comparaison (détection aller-retour).
@@ -763,6 +865,29 @@ def _sanitize_legal_footer_for_iban(footer: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
+def _resolve_legal_footer_placeholders(
+    footer: str,
+    payment_terms_days: int,
+    overdue_fee: str | float | Decimal,
+    jours_text: str,
+) -> str:
+    """Remplace les placeholders dans legal_footer par les valeurs des paramètres de paiement.
+
+    Placeholders supportés :
+    - {payment_terms_days} : délai en jours (ex: 10)
+    - {overdue_fee} : frais de retard formatés (ex: 15.00)
+    - {jours} : "jours" ou "jour" selon payment_terms_days
+    """
+    if not footer:
+        return ""
+    fee_str = f"{float(overdue_fee):.2f}" if overdue_fee else "15.00"
+    return (
+        footer.replace("{payment_terms_days}", str(payment_terms_days))
+        .replace("{overdue_fee}", fee_str)
+        .replace("{jours}", jours_text)
+    )
+
+
 def _load_logo_ratio_safe(  # noqa: PLR0911
     logo_path: Path | None, max_width_pt: float
 ) -> tuple[Any, float, float]:
@@ -779,7 +904,8 @@ def _load_logo_ratio_safe(  # noqa: PLR0911
         return (None, 0.0, 0.0)
     try:
         if Path(logo_path).suffix.lower() == ".svg":
-            from svglib.svglib import (                svg2rlg,
+            from svglib.svglib import (
+                svg2rlg,
             )
 
             drawing = svg2rlg(str(logo_path))
@@ -794,6 +920,7 @@ def _load_logo_ratio_safe(  # noqa: PLR0911
             return (drawing, max_width_pt, oh * scale)
         from reportlab.lib.utils import ImageReader
         from reportlab.platypus import Image
+
         ir = ImageReader(str(logo_path))
         iw, ih = ir.getSize()
         if iw <= 0:
@@ -882,6 +1009,123 @@ def _get_billed_to(invoice: "Invoice") -> tuple[str, str]:
         raw = client.user.address
     raw = _sanitize_billed_to_address(name, raw)
     return (name, _format_billed_to_three_lines(raw or "Adresse non renseignée"))
+
+
+def _wrap_line_by_words(line: str, max_chars: int = 90) -> str:
+    """Wrap une ligne trop longue par mots, sans couper brutalement.
+
+    max_chars: approximation ~3 chars/mm à 10pt pour zone C5 (~90mm).
+    Fallback quand font metrics indisponibles.
+    """
+    if not line or len(line) <= max_chars:
+        return line
+    words = line.split()
+    result: list[str] = []
+    current: list[str] = []
+    current_len = 0
+    for w in words:
+        need = len(w) + (1 if current else 0)
+        if current_len + need > max_chars and current:
+            result.append(" ".join(current))
+            current = [w]
+            current_len = len(w)
+        else:
+            current.append(w)
+            current_len += need
+    if current:
+        result.append(" ".join(current))
+    return "\n".join(result)
+
+
+def _wrap_line_by_width(
+    line: str,
+    font_name: str,
+    font_size: float,
+    max_width_pt: float,
+) -> list[str]:
+    """Wrap une ligne selon la largeur réelle (stringWidth / simpleSplit).
+
+    Priorité : font metrics ReportLab. Fallback : max_chars si police non mesurable.
+    """
+    if not line or not line.strip():
+        return []
+    try:
+        from reportlab.lib.utils import simpleSplit
+
+        lines = simpleSplit(line, font_name, font_size, max_width_pt)
+        return list(lines) if lines else [line]
+    except Exception:
+        max_chars = max(30, int(max_width_pt / 2.5))  # ~2.5 pt/char à 10pt
+        wrapped = _wrap_line_by_words(line, max_chars=max_chars)
+        return [ln for ln in wrapped.split("\n") if ln]
+
+
+def _build_recipient_block_flowable(
+    invoice: "Invoice",
+    normal_style: Any,
+) -> tuple[Any | None, list[str]]:
+    """Construit le flowable pour le bloc destinataire compatible zone C5.
+
+    Zone fenêtre : uniquement nom + adresse (pas de label « Facturé à : »).
+    - Filtre les lignes vides (no data => no UI).
+    - Wrap via stringWidth/simpleSplit (font metrics ReportLab).
+    - Ne dessine rien si aucune ligne utile.
+
+    Returns:
+        (Paragraph ou None, recipient_lines pour tests).
+    """
+    from reportlab.lib.units import mm
+
+    name, addr = _get_billed_to(invoice)
+    lines: list[str] = []
+    if name and str(name).strip():
+        lines.append(str(name).strip())
+    if addr:
+        for part in (
+            str(addr).replace("<br/>", "\n").replace("<br />", "\n").split("\n")
+        ):
+            p = part.strip()
+            if p:
+                lines.append(p)
+    # No data => no UI : ne rien afficher si aucune ligne utile
+    if not lines:
+        return (None, [])
+
+    font_name = getattr(normal_style, "fontName", "Helvetica") or "Helvetica"
+    font_size = getattr(normal_style, "fontSize", 10) or 10
+    max_width_pt = DEST_ADDR_MAX_WIDTH_MM * mm
+    max_lines = max(1, int(DEST_ADDR_ZONE_HEIGHT_MM / DEST_ADDR_LINE_HEIGHT_MM))
+    max_chars_fallback = max(30, int(DEST_ADDR_MAX_WIDTH_MM * 3))
+
+    visual_lines: list[str] = []
+    for line in lines:
+        wrapped = _wrap_line_by_width(line, font_name, font_size, max_width_pt)
+        visual_lines.extend(wrapped)
+
+    if len(visual_lines) > max_lines:
+        visual_lines = visual_lines[:max_lines]
+        last = visual_lines[-1]
+        if len(last) + 1 > max_chars_fallback:
+            truncated = last[: max_chars_fallback - 1]
+            last = (
+                truncated.rsplit(" ", 1)[0] + "…"
+                if " " in truncated
+                else truncated + "…"
+            )
+        else:
+            last = last + "…"
+        visual_lines[-1] = last
+
+    # Zone fenêtre : pas de label « Facturé à : », uniquement destinataire
+    parts: list[str] = []
+    for vl in visual_lines:
+        parts.append(vl)
+        parts.append("<br/>")
+    text = "".join(parts).rstrip("<br/>")
+    from reportlab.platypus import Paragraph
+
+    para = Paragraph(text, normal_style)
+    return (para, lines)
 
 
 def _build_s2_table(
@@ -1109,6 +1353,7 @@ def _build_totals_table(
     """
     from reportlab.lib.units import cm
     from reportlab.platypus import Table, TableStyle
+
     subtotal = float(invoice.subtotal_amount)
     vat_total = float(invoice.vat_total_amount)
     total = float(invoice.total_amount)
@@ -1127,7 +1372,9 @@ def _build_totals_table(
         final_total = float(reminder_total_due)
         reminder_fee_float = float(reminder_fee) if reminder_fee is not None else 0.0
         principal_float = (
-            float(reminder_principal) if reminder_principal is not None else (final_total - reminder_fee_float)
+            float(reminder_principal)
+            if reminder_principal is not None
+            else (final_total - reminder_fee_float)
         )
     else:
         final_total = total
@@ -1138,7 +1385,9 @@ def _build_totals_table(
     total_amt = f"CHF {final_total:.2f}" if is_s2 else f"{final_total:.2f}"
 
     reminder_fee_label = (
-        f"Frais de rappel N°{reminder_level} :" if is_reminder and reminder_level else "Frais de rappel :"
+        f"Frais de rappel N°{reminder_level} :"
+        if is_reminder and reminder_level
+        else "Frais de rappel :"
     )
     reminder_fee_amt = f"CHF {reminder_fee_float:.2f}"
     principal_amt = f"CHF {principal_float:.2f}"
@@ -1344,7 +1593,11 @@ class PDFService:
         from models.enums import InvoiceStatus
 
         # ✅ PROTECTION: Vérifier si la facture est "verrouillée" (déjà envoyée/payée)
-        locked_statuses = {InvoiceStatus.SENT, InvoiceStatus.PARTIALLY_PAID, InvoiceStatus.PAID}
+        locked_statuses = {
+            InvoiceStatus.SENT,
+            InvoiceStatus.PARTIALLY_PAID,
+            InvoiceStatus.PAID,
+        }
         if invoice.status in locked_statuses:
             app_logger.warning(
                 (
@@ -1488,9 +1741,9 @@ class PDFService:
             with filepath.open("wb") as f:
                 f.write(pdf_bytes)
 
-            # ✅ URL dynamique depuis config
+            # ✅ URL dynamique depuis config (127.0.0.1 en dev évite IPv6 localhost + ERR_CONNECTION_RESET)
             pdf_base_url = current_app.config.get(
-                "PDF_BASE_URL", "http://localhost:5000"
+                "PDF_BASE_URL", "http://127.0.0.1:5000"
             )
             uploads_base = current_app.config.get("UPLOADS_PUBLIC_BASE", "/uploads")
 
@@ -1522,6 +1775,7 @@ class PDFService:
             - Le PDF est stocké dans reminder.pdf_url, pas invoice.pdf_url
         """
         import os
+
         REMINDER_DEBUG = os.getenv("REMINDER_DEBUG", "0") == "1"
 
         # ✅ Capturer l'état initial pour vérification (même si REMINDER_DEBUG est False)
@@ -1574,11 +1828,15 @@ class PDFService:
             if reminder:
                 reminder_fee = reminder.reminder_fee_amount or Decimal("0.00")
                 reminder_total_due = reminder.total_due or invoice.total_amount
-                reminder_principal = reminder.principal_amount or (reminder_total_due - reminder_fee)
+                reminder_principal = reminder.principal_amount or (
+                    reminder_total_due - reminder_fee
+                )
             elif invoice.reminder_fee_amount:
                 reminder_fee = invoice.reminder_fee_amount
                 reminder_total_due = invoice.balance_due
-                reminder_principal = (invoice.balance_due or Decimal("0")) - (invoice.reminder_fee_amount or Decimal("0"))
+                reminder_principal = (invoice.balance_due or Decimal("0")) - (
+                    invoice.reminder_fee_amount or Decimal("0")
+                )
 
             if REMINDER_DEBUG:
                 app_logger.info(
@@ -1651,15 +1909,24 @@ class PDFService:
             # IMPORTANT: Ce PDF est distinct de invoice.pdf_url (facture initiale)
             # Format: reminder_{invoice_number}_L{level}_{reminder_id}.pdf
             # L'ID du reminder garantit l'unicité même en cas de création simultanée
-            reminder_id = reminder.id if reminder and hasattr(reminder, "id") and reminder.id else None
+            reminder_id = (
+                reminder.id
+                if reminder and hasattr(reminder, "id") and reminder.id
+                else None
+            )
             if reminder_id:
                 # Utiliser l'ID du reminder pour garantir l'unicité
-                filename = f"reminder_{invoice.invoice_number}_L{level}_{reminder_id}.pdf"
+                filename = (
+                    f"reminder_{invoice.invoice_number}_L{level}_{reminder_id}.pdf"
+                )
             else:
                 # Fallback: utiliser timestamp + UUID si reminder_id n'est pas disponible
                 import uuid
+
                 unique_suffix = f"{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
-                filename = f"reminder_{invoice.invoice_number}_L{level}_{unique_suffix}.pdf"
+                filename = (
+                    f"reminder_{invoice.invoice_number}_L{level}_{unique_suffix}.pdf"
+                )
                 app_logger.warning(
                     (
                         "[PDF] reminder_id non disponible pour facture %s, niveau %s. "
@@ -1674,9 +1941,9 @@ class PDFService:
             with filepath.open("wb") as f:
                 f.write(pdf_bytes)
 
-            # ✅ URL dynamique
+            # ✅ URL dynamique (127.0.0.1 en dev évite IPv6 localhost + ERR_CONNECTION_RESET)
             pdf_base_url = current_app.config.get(
-                "PDF_BASE_URL", "http://localhost:5000"
+                "PDF_BASE_URL", "http://127.0.0.1:5000"
             )
             uploads_base = current_app.config.get("UPLOADS_PUBLIC_BASE", "/uploads")
             pdf_url = f"{pdf_base_url}{uploads_base}/invoices/{filename}"
@@ -1685,9 +1952,15 @@ class PDFService:
             if REMINDER_DEBUG:
                 invoice_after = {
                     "pdf_url": invoice.pdf_url,
-                    "total_amount": float(invoice.total_amount) if invoice.total_amount else 0,
-                    "balance_due": float(invoice.balance_due) if invoice.balance_due else 0,
-                    "due_date": invoice.due_date.isoformat() if invoice.due_date else None,
+                    "total_amount": float(invoice.total_amount)
+                    if invoice.total_amount
+                    else 0,
+                    "balance_due": float(invoice.balance_due)
+                    if invoice.balance_due
+                    else 0,
+                    "due_date": invoice.due_date.isoformat()
+                    if invoice.due_date
+                    else None,
                 }
                 app_logger.info(
                     (
@@ -1713,7 +1986,11 @@ class PDFService:
                         invoice_after["pdf_url"],
                     )
 
-            app_logger.info("PDF de rappel généré: %s (facture initiale inchangée: %s)", pdf_url, invoice.pdf_url)
+            app_logger.info(
+                "PDF de rappel généré: %s (facture initiale inchangée: %s)",
+                pdf_url,
+                invoice.pdf_url,
+            )
             return pdf_url
 
         except Exception as e:
@@ -1760,10 +2037,16 @@ class PDFService:
             template_variant = billing_settings.pdf_template_variant.lower()
 
         if template_variant == "minimal":
-            return self._create_minimal_invoice_pdf(invoice, billing_settings, reminder_ctx)
+            return self._create_minimal_invoice_pdf(
+                invoice, billing_settings, reminder_ctx
+            )
         if template_variant == "detailed":
-            return self._create_detailed_invoice_pdf(invoice, billing_settings, reminder_ctx)
-        return self._create_standard_invoice_pdf(invoice, billing_settings, reminder_ctx)
+            return self._create_detailed_invoice_pdf(
+                invoice, billing_settings, reminder_ctx
+            )
+        return self._create_standard_invoice_pdf(
+            invoice, billing_settings, reminder_ctx
+        )
 
     def _create_standard_invoice_pdf(
         self,
@@ -1793,7 +2076,7 @@ class PDFService:
             ParagraphStyle,
             getSampleStyleSheet,
         )
-        from reportlab.lib.units import cm
+        from reportlab.lib.units import cm, mm
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import (
             TTFont,
@@ -1828,7 +2111,7 @@ class PDFService:
             buffer,
             pagesize=A4,
             topMargin=2 * cm,
-            bottomMargin=2 * cm,
+            bottomMargin=2.5 * cm,  # Réserve espace pour pied de page légal
             leftMargin=2 * cm,
             rightMargin=2 * cm,
         )
@@ -1946,21 +2229,35 @@ class PDFService:
             else:
                 vat_status_text = f"TVA {billing_settings.vat_rate or 7.7}% incluse"
 
-        # === LOGO ET COORDONNÉES ENTREPRISE (GAUCHE) ===
+        # === EN-TÊTE : ENTREPRISE (gauche) | DESTINATAIRE (droite) — convention comptable ---
+        recipient_para, _ = _build_recipient_block_flowable(invoice, normal_style)
+        recipient_top_padding_mm = 25.0  # destinataire légèrement plus bas
+        recipient_left_padding_mm = 15.0  # déplace le bloc destinataire vers la droite (pas d'espace volé à l'expéditeur)
+        dest_width_pt = DEST_ADDR_MAX_WIDTH_MM * mm
+        page_width_pt = doc.pagesize[0]
+        usable_width_pt = page_width_pt - doc.leftMargin - doc.rightMargin
+        company_width_pt = (
+            usable_width_pt - dest_width_pt
+        )  # expéditeur garde toute sa largeur
+
+        company_info_left = f"""
+        {company_name}<br/>
+        {company_address}<br/>
+        Email facturation : {company_email}<br/>
+        Téléphone : {company_phone}<br/>
+        IDE/UID : {company_uid}<br/>
+        {vat_status_text}
+        """
+        company_para = Paragraph(company_info_left, normal_style)
+
+        left_cell_content: list[Any] = []  # Entreprise (expéditeur) — à gauche
         if logo_img:
-            # Vérifier si c'est un drawing (SVG converti) en vérifiant
-            # la présence d'attributs spécifiques
-            # Les drawings de svglib ont des attributs width, height
-            # et une méthode scale
             is_drawing = (
                 hasattr(logo_img, "width")
                 and hasattr(logo_img, "height")
                 and hasattr(logo_img, "scale")
             )
-
             if is_drawing:
-                # Pour les drawings SVG, créer un tableau pour l'alignement
-                # Table et TableStyle sont déjà importés plus haut
                 logo_table = Table([[logo_img]], colWidths=[logo_width])
                 logo_table.setStyle(
                     TableStyle(
@@ -1974,11 +2271,9 @@ class PDFService:
                         ]
                     )
                 )
-                story.append(logo_table)
+                left_cell_content.append(logo_table)
             else:
-                # Pour les images standard (PNG, JPG), utiliser un Paragraph
-                from reportlab.lib.styles import (                    ParagraphStyle,
-                )
+                from reportlab.lib.styles import ParagraphStyle
 
                 logo_style = ParagraphStyle(
                     "LogoStyle",
@@ -1988,7 +2283,6 @@ class PDFService:
                     rightIndent=0,
                     spaceAfter=8,
                 )
-                # Créer un Paragraph avec le logo
                 logo_para = Paragraph(
                     (
                         f'<img src="{logo_path}" width="{logo_width}" '
@@ -1996,38 +2290,117 @@ class PDFService:
                     ),
                     logo_style,
                 )
-                story.append(logo_para)
+                left_cell_content.append(logo_para)
+        left_cell_content.append(company_para)
 
-        # Coordonnées entreprise alignées à gauche
-        company_info_left = f"""
-        {company_name}<br/>
-        {company_address}<br/>
-        Email facturation : {company_email}<br/>
-        Téléphone : {company_phone}<br/>
-        IDE/UID : {company_uid}<br/>
-        {vat_status_text}
-        """
+        if recipient_para is not None:
+            label_style = ParagraphStyle(
+                "DestLabel",
+                parent=normal_style,
+                fontSize=8,
+                spaceAfter=2,
+            )
+            label_para = Paragraph("<b>Facturé à :</b>", label_style)
+            recipient_block = Table(
+                [[label_para], [recipient_para]],
+                colWidths=[dest_width_pt],
+            )
+            recipient_block.setStyle(
+                TableStyle(
+                    [
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                    ]
+                )
+            )
+            # Convention comptable : entreprise (expéditeur) à gauche, destinataire (client) à droite
+            # 2 colonnes : pas de spacer (évite de condenser l'expéditeur). LEFTPADDING déplace le destinataire à droite.
+            header_table = Table(
+                [[left_cell_content, recipient_block]],
+                colWidths=[company_width_pt, dest_width_pt],
+            )
+            header_table.setStyle(
+                TableStyle(
+                    [
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                        ("LEFTPADDING", (0, 0), (0, -1), 0),
+                        ("RIGHTPADDING", (0, 0), (0, -1), 6),
+                        (
+                            "LEFTPADDING",
+                            (1, 0),
+                            (1, -1),
+                            recipient_left_padding_mm * mm,
+                        ),
+                        ("RIGHTPADDING", (1, 0), (1, -1), 0),
+                        ("TOPPADDING", (1, 0), (1, -1), recipient_top_padding_mm * mm),
+                    ]
+                )
+            )
+            story.append(header_table)
+        else:
+            if logo_img:
+                is_drawing = (
+                    hasattr(logo_img, "width")
+                    and hasattr(logo_img, "height")
+                    and hasattr(logo_img, "scale")
+                )
+                if is_drawing:
+                    logo_table = Table([[logo_img]], colWidths=[logo_width])
+                    logo_table.setStyle(
+                        TableStyle(
+                            [
+                                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                            ]
+                        )
+                    )
+                    story.append(logo_table)
+                else:
+                    from reportlab.lib.styles import ParagraphStyle
 
-        story.append(Paragraph(company_info_left, normal_style))
-        story.append(Spacer(1, 20))
-
-        # === INFORMATIONS CLIENT OU INSTITUTION (DROITE) ===
-        billed_to_name, billed_to_address = _get_billed_to(invoice)
-        billed_to_info_right = f"""
-        <para align="right">
-        <b>Facturé à :</b><br/>
-        {billed_to_name}<br/>
-        {billed_to_address}
-        </para>
-        """
-        story.append(Paragraph(billed_to_info_right, normal_style))
+                    logo_style = ParagraphStyle(
+                        "LogoStyle",
+                        parent=styles["Normal"],
+                        alignment=TA_LEFT,
+                        leftIndent=0,
+                        rightIndent=0,
+                        spaceAfter=8,
+                    )
+                    logo_para = Paragraph(
+                        (
+                            f'<img src="{logo_path}" width="{logo_width}" '
+                            f'height="{logo_height}"/>'
+                        ),
+                        logo_style,
+                    )
+                    story.append(logo_para)
+            story.append(company_para)
         story.append(Spacer(1, 20))
 
         # === BANDEAU RAPPEL (si mode rappel) ===
         display_reminder_level = reminder_ctx.get("display_reminder_level")
         if display_reminder_level:
             bandeau = Table(
-                [[Paragraph(f"<b>{display_reminder_level}</b>", ParagraphStyle("Bandeau", parent=styles["Normal"], fontSize=14, fontName=font_name_bold, alignment=TA_CENTER, textColor=colors.HexColor("#8B0000")))]],
+                [
+                    [
+                        Paragraph(
+                            f"<b>{display_reminder_level}</b>",
+                            ParagraphStyle(
+                                "Bandeau",
+                                parent=styles["Normal"],
+                                fontSize=14,
+                                fontName=font_name_bold,
+                                alignment=TA_CENTER,
+                                textColor=colors.HexColor("#8B0000"),
+                            ),
+                        )
+                    ]
+                ],
                 colWidths=[17 * cm],
             )
             bandeau.setStyle(
@@ -2046,7 +2419,11 @@ class PDFService:
             story.append(Spacer(1, 12))
 
         # === INFORMATIONS FACTURE (GAUCHE) ===
-        echeance_label = "Date d'échéance initiale :" if reminder_ctx.get("is_reminder") else "Date d'échéance :"
+        echeance_label = (
+            "Date d'échéance initiale :"
+            if reminder_ctx.get("is_reminder")
+            else "Date d'échéance :"
+        )
         invoice_info_left = f"""
         <b>Numéro de facture :</b> {invoice.invoice_number}<br/>
         <b>Date d'émission :</b> {invoice.issued_at.strftime("%d.%m.%Y")}<br/>
@@ -2225,13 +2602,15 @@ class PDFService:
                 "Des frais de rappel ont été ajoutés conformément à nos conditions générales."
             )
             if iban_value:
-                footer_message = (
-                    f"{footer_message} Paiement par virement bancaire : IBAN : {iban_value}"
-                )
+                footer_message = f"{footer_message} Paiement par virement bancaire : IBAN : {iban_value}"
         elif billing_settings and billing_settings.legal_footer:
-            footer_message = _sanitize_legal_footer_for_iban(
-                billing_settings.legal_footer
+            raw_footer = _resolve_legal_footer_placeholders(
+                billing_settings.legal_footer,
+                payment_terms_days,
+                overdue_fee,
+                jours_text,
             )
+            footer_message = _sanitize_legal_footer_for_iban(raw_footer)
         else:
             base = (
                 f"En votre aimable règlement net sous {payment_terms_days} "
@@ -2250,24 +2629,22 @@ class PDFService:
                     "PDF (standard): IBAN non affiché (absent ou illisible, ex. erreur déchiffrement)."
                 )
 
-        story.append(Spacer(1, 20))  # Espace avant le pied de page
-        story.append(Paragraph(footer_message, centered_style))
-
+        # Pied de page légal : dessiné en zone fixe (marge inférieure), pas dans le flux
+        mention = None
         if display_reminder_level:
-            mention = (
-                f"Document généré automatiquement – facture initiale n° {invoice.invoice_number} inchangée."
-            )
-            story.append(Spacer(1, 8))
-            story.append(
-                Paragraph(
-                    f'<font size="8" color="grey">{mention}</font>',
-                    centered_style,
-                )
-            )
+            mention = f"Document généré automatiquement – facture initiale n° {invoice.invoice_number} inchangée."
+        footer_cb = _make_legal_footer_page_callback(
+            footer_message, mention, centered_style
+        )
+
+        def _on_first_page(canvas: Any, doc: Any) -> None:
+            footer_cb(canvas, doc)
+            _on_first_page_debug_envelope(canvas, doc)
 
         # === QR-BILL SUISSE OFFICIEL SUR PAGE SÉPARÉE ===
         # Forcer une nouvelle page pour le QR-Bill (toujours après la facture)
-        from reportlab.platypus import (            PageBreak,
+        from reportlab.platypus import (
+            PageBreak,
         )
 
         story.append(PageBreak())
@@ -2292,7 +2669,8 @@ class PDFService:
                     drawing.scale(12 * cm / drawing.width, 6 * cm / drawing.height)
 
                     # Centrer le QR-Bill avec un tableau
-                    from reportlab.platypus import (                        Table,
+                    from reportlab.platypus import (
+                        Table,
                         TableStyle,
                     )
 
@@ -2329,8 +2707,8 @@ class PDFService:
             app_logger.warning("Impossible de générer le QR-Bill: %s", e)
             story.append(Paragraph("QR-Bill non disponible", normal_style))
 
-        # Générer le PDF
-        doc.build(story)
+        # Générer le PDF (pied de page légal en zone fixe via onFirstPage)
+        doc.build(story, onFirstPage=_on_first_page)
 
         # Retourner le contenu et le nombre de lignes
         buffer.seek(0)
@@ -2364,7 +2742,7 @@ class PDFService:
             ParagraphStyle,
             getSampleStyleSheet,
         )
-        from reportlab.lib.units import cm
+        from reportlab.lib.units import cm, mm
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import (
             TTFont,
@@ -2393,7 +2771,7 @@ class PDFService:
             buffer,
             pagesize=A4,
             topMargin=1.5 * cm,
-            bottomMargin=1.5 * cm,
+            bottomMargin=2.5 * cm,  # Réserve espace pour pied de page légal
             leftMargin=1.5 * cm,
             rightMargin=1.5 * cm,
         )
@@ -2421,39 +2799,72 @@ class PDFService:
         story = []
         company = invoice.company
 
-        # === EN-TÊTE SIMPLIFIÉ (SANS LOGO) ===
+        # === EN-TÊTE SIMPLIFIÉ (SANS LOGO) : ENTREPRISE (gauche) | DESTINATAIRE (droite) ===
         company_name = company.name or "[Nom entreprise non configuré]"
         company_address = self._get_company_address_for_pdf(company)
         company_info = f"{company_name}<br/>{company_address}"
-        story.append(Paragraph(company_info, normal_style))
-        story.append(Spacer(1, 15))
+        company_para_min = Paragraph(company_info, normal_style)
 
-        # === INFORMATIONS CLIENT (SIMPLIFIÉES) ===
-        if getattr(invoice, "billing_party_id", None):
-            from models import BillingParty as BillingPartyModel
+        recipient_para_min, _ = _build_recipient_block_flowable(invoice, normal_style)
+        recipient_top_padding_mm_min = 25.0  # destinataire légèrement plus bas
+        recipient_left_padding_mm_min = (
+            15.0  # déplace destinataire à droite (pas d'espace volé à l'expéditeur)
+        )
+        dest_width_pt_min = DEST_ADDR_MAX_WIDTH_MM * mm
+        usable_width_pt_min = doc.pagesize[0] - doc.leftMargin - doc.rightMargin
+        company_width_pt_min = usable_width_pt_min - dest_width_pt_min
 
-            bp = BillingPartyModel.query.get(invoice.billing_party_id)
-            billed_to_name = bp.display_name if bp and bp.display_name else "Payeur"
-        elif (
-            invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id
-        ):
-            from models import Client as ClientModel
-
-            institution = ClientModel.query.get(invoice.bill_to_client_id)
-            if institution and institution.is_institution:
-                billed_to_name = institution.institution_name or "Institution"
-            else:
-                billed_to_name = "Institution"
-        else:
-            client = invoice.client
-            billed_to_name = (
-                f"{client.user.first_name or ''} {client.user.last_name or ''}".strip()
-                or client.user.username
-                or "Client"
+        if recipient_para_min is not None:
+            label_style_min = ParagraphStyle(
+                "DestLabelMin",
+                parent=normal_style,
+                fontSize=8,
+                spaceAfter=2,
             )
-
-        billed_to_info = f"<b>Facturé à :</b> {billed_to_name}"
-        story.append(Paragraph(billed_to_info, normal_style))
+            label_para_min = Paragraph("<b>Facturé à :</b>", label_style_min)
+            recipient_block_min = Table(
+                [[label_para_min], [recipient_para_min]],
+                colWidths=[dest_width_pt_min],
+            )
+            recipient_block_min.setStyle(
+                TableStyle(
+                    [
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                    ]
+                )
+            )
+            # Convention comptable : entreprise à gauche, destinataire à droite. 2 colonnes, LEFTPADDING déplace destinataire.
+            header_table_min = Table(
+                [[company_para_min, recipient_block_min]],
+                colWidths=[company_width_pt_min, dest_width_pt_min],
+            )
+            header_table_min.setStyle(
+                TableStyle(
+                    [
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                        ("LEFTPADDING", (0, 0), (0, -1), 0),
+                        ("RIGHTPADDING", (0, 0), (0, -1), 6),
+                        (
+                            "LEFTPADDING",
+                            (1, 0),
+                            (1, -1),
+                            recipient_left_padding_mm_min * mm,
+                        ),
+                        ("RIGHTPADDING", (1, 0), (1, -1), 0),
+                        (
+                            "TOPPADDING",
+                            (1, 0),
+                            (1, -1),
+                            recipient_top_padding_mm_min * mm,
+                        ),
+                    ]
+                )
+            )
+            story.append(header_table_min)
+        else:
+            story.append(company_para_min)
         story.append(Spacer(1, 10))
 
         # === Contexte rappel (défini avant Numéro de facture / Facture) ===
@@ -2463,7 +2874,21 @@ class PDFService:
         # === BANDEAU RAPPEL (si mode rappel) ===
         if display_reminder_level:
             bandeau = Table(
-                [[Paragraph(f"<b>{display_reminder_level}</b>", ParagraphStyle("BandeauM", parent=styles["Normal"], fontSize=14, fontName="Helvetica-Bold", alignment=TA_CENTER, textColor=colors.HexColor("#8B0000")))]],
+                [
+                    [
+                        Paragraph(
+                            f"<b>{display_reminder_level}</b>",
+                            ParagraphStyle(
+                                "BandeauM",
+                                parent=styles["Normal"],
+                                fontSize=14,
+                                fontName="Helvetica-Bold",
+                                alignment=TA_CENTER,
+                                textColor=colors.HexColor("#8B0000"),
+                            ),
+                        )
+                    ]
+                ],
                 colWidths=[17 * cm],
             )
             bandeau.setStyle(
@@ -2594,12 +3019,19 @@ class PDFService:
 
         # === TOTAL SIMPLIFIÉ ===
         # ✅ Mode rappel : mini-table (Sous-total facture + Frais + TOTAL)
-        if is_reminder and reminder_ctx.get("reminder_fee") is not None and reminder_ctx.get("reminder_total_due") is not None and reminder_ctx.get("reminder_principal") is not None:
+        if (
+            is_reminder
+            and reminder_ctx.get("reminder_fee") is not None
+            and reminder_ctx.get("reminder_total_due") is not None
+            and reminder_ctx.get("reminder_principal") is not None
+        ):
             principal_float = float(reminder_ctx["reminder_principal"])
             reminder_fee_float = float(reminder_ctx["reminder_fee"])
             final_total = float(reminder_ctx["reminder_total_due"])
             level = reminder_ctx.get("reminder_level")
-            reminder_fee_label = f"Frais de rappel N°{level} :" if level else "Frais de rappel :"
+            reminder_fee_label = (
+                f"Frais de rappel N°{level} :" if level else "Frais de rappel :"
+            )
             total_data = [
                 ["Montant facture initiale :", f"CHF {principal_float:.2f}"],
                 [reminder_fee_label, f"CHF {reminder_fee_float:.2f}"],
@@ -2628,6 +3060,14 @@ class PDFService:
         story.append(Spacer(1, 20))
 
         # === PIED DE PAGE SIMPLIFIÉ ===
+        payment_terms_days = 10
+        if billing_settings and billing_settings.payment_terms_days:
+            payment_terms_days = int(billing_settings.payment_terms_days)
+        overdue_fee = Decimal("15.00")
+        if billing_settings and billing_settings.overdue_fee:
+            overdue_fee = billing_settings.overdue_fee
+        jours_text = "jours" if payment_terms_days > 1 else "jour"
+
         if is_reminder:
             footer_message = (
                 "Sauf erreur de notre part, cette facture est restée impayée à ce jour. "
@@ -2635,14 +3075,20 @@ class PDFService:
                 "Des frais de rappel ont été ajoutés conformément à nos conditions générales."
             )
             iban_value_min = (
-                billing_settings.iban if billing_settings and billing_settings.iban else None
+                billing_settings.iban
+                if billing_settings and billing_settings.iban
+                else None
             )
             if iban_value_min:
                 footer_message += f" IBAN: {iban_value_min}"
         elif billing_settings and billing_settings.legal_footer:
-            footer_message = _sanitize_legal_footer_for_iban(
-                billing_settings.legal_footer
+            raw_footer = _resolve_legal_footer_placeholders(
+                billing_settings.legal_footer,
+                payment_terms_days,
+                overdue_fee,
+                jours_text,
             )
+            footer_message = _sanitize_legal_footer_for_iban(raw_footer)
         else:
             iban_value_min = (
                 billing_settings.iban
@@ -2657,19 +3103,17 @@ class PDFService:
                     "PDF (minimal): IBAN non affiché (absent ou illisible, ex. erreur déchiffrement)."
                 )
 
-        story.append(Paragraph(footer_message, centered_style))
-
+        # Pied de page légal : dessiné en zone fixe (marge inférieure)
+        mention = None
         if is_reminder:
-            mention = (
-                f"Document généré automatiquement – facture initiale n° {invoice.invoice_number} inchangée."
-            )
-            story.append(Spacer(1, 8))
-            story.append(
-                Paragraph(
-                    f'<font size="8" color="grey">{mention}</font>',
-                    centered_style,
-                )
-            )
+            mention = f"Document généré automatiquement – facture initiale n° {invoice.invoice_number} inchangée."
+        footer_cb_min = _make_legal_footer_page_callback(
+            footer_message, mention, centered_style
+        )
+
+        def _on_first_page_min(canvas: Any, doc: Any) -> None:
+            footer_cb_min(canvas, doc)
+            _on_first_page_debug_envelope(canvas, doc)
 
         # === QR-BILL (SIMPLIFIÉ) ===
         story.append(PageBreak())
@@ -2699,7 +3143,7 @@ class PDFService:
         except Exception as e:
             app_logger.warning("Impossible de générer le QR-Bill: %s", e)
 
-        doc.build(story)
+        doc.build(story, onFirstPage=_on_first_page_min)
         buffer.seek(0)
         return buffer.getvalue()
 
@@ -2729,7 +3173,7 @@ class PDFService:
             ParagraphStyle,
             getSampleStyleSheet,
         )
-        from reportlab.lib.units import cm
+        from reportlab.lib.units import cm, mm
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import (
             TTFont,
@@ -2765,7 +3209,7 @@ class PDFService:
             buffer,
             pagesize=A4,
             topMargin=2 * cm,
-            bottomMargin=2 * cm,
+            bottomMargin=2.5 * cm,  # Réserve espace pour pied de page légal
             leftMargin=2 * cm,
             rightMargin=2 * cm,
         )
@@ -2851,6 +3295,43 @@ class PDFService:
             except Exception:
                 pass
 
+        # === EN-TÊTE DETAILED : ENTREPRISE (gauche) | DESTINATAIRE (droite) ===
+        recipient_para, _ = _build_recipient_block_flowable(invoice, normal_style)
+        recipient_top_padding_mm = 25.0  # destinataire légèrement plus bas
+        recipient_left_padding_mm = (
+            15.0  # déplace destinataire à droite (pas d'espace volé à l'expéditeur)
+        )
+        dest_width_pt = DEST_ADDR_MAX_WIDTH_MM * mm
+        usable_width_pt = doc.pagesize[0] - doc.leftMargin - doc.rightMargin
+        company_width_pt = usable_width_pt - dest_width_pt
+
+        company_name = company.name or "[Nom entreprise non configuré]"
+        company_address = self._get_company_address_for_pdf(company)
+        company_phone = company.contact_phone or "[Téléphone non configuré]"
+        company_email = (
+            company.billing_email or company.contact_email or "[Email non configuré]"
+        )
+        company_uid = company.uid_ide or "[IDE/UID non configuré]"
+
+        vat_status_text = "Non assujetti à la TVA"
+        if billing_settings and billing_settings.vat_applicable:
+            vat_number = billing_settings.vat_number or ""
+            if vat_number:
+                vat_status_text = f"N° TVA : {vat_number}"
+            else:
+                vat_status_text = f"TVA {billing_settings.vat_rate or 7.7}% incluse"
+
+        company_info_detailed = f"""
+        <b>{company_name}</b><br/>
+        {company_address}<br/>
+        Téléphone: {company_phone}<br/>
+        Email: {company_email}<br/>
+        IDE/UID: {company_uid}<br/>
+        {vat_status_text}
+        """
+        company_para = Paragraph(company_info_detailed, normal_style)
+
+        left_cell_content_d: list[Any] = []  # Entreprise (expéditeur) — à gauche
         if logo_img:
             is_drawing = (
                 hasattr(logo_img, "width")
@@ -2868,7 +3349,7 @@ class PDFService:
                         ]
                     )
                 )
-                story.append(logo_table)
+                left_cell_content_d.append(logo_table)
             else:
                 logo_style = ParagraphStyle(
                     "LogoStyle",
@@ -2885,35 +3366,90 @@ class PDFService:
                     ),
                     logo_style,
                 )
-                story.append(logo_para)
+                left_cell_content_d.append(logo_para)
+        left_cell_content_d.append(company_para)
 
-        # === INFORMATIONS ENTREPRISE DÉTAILLÉES ===
-        company_name = company.name or "[Nom entreprise non configuré]"
-        company_address = self._get_company_address_for_pdf(company)
-        company_phone = company.contact_phone or "[Téléphone non configuré]"
-        company_email = (
-            company.billing_email or company.contact_email or "[Email non configuré]"
-        )
-        company_uid = company.uid_ide or "[IDE/UID non configuré]"
-
-        # ✅ Statut TVA (conformité facturation suisse)
-        vat_status_text = "Non assujetti à la TVA"
-        if billing_settings and billing_settings.vat_applicable:
-            vat_number = billing_settings.vat_number or ""
-            if vat_number:
-                vat_status_text = f"N° TVA : {vat_number}"
-            else:
-                vat_status_text = f"TVA {billing_settings.vat_rate or 7.7}% incluse"
-
-        company_info_detailed = f"""
-        <b>{company_name}</b><br/>
-        {company_address}<br/>
-        Téléphone: {company_phone}<br/>
-        Email: {company_email}<br/>
-        IDE/UID: {company_uid}<br/>
-        {vat_status_text}
-        """
-        story.append(Paragraph(company_info_detailed, normal_style))
+        if recipient_para is not None:
+            label_style_d = ParagraphStyle(
+                "DestLabelD",
+                parent=normal_style,
+                fontSize=8,
+                spaceAfter=2,
+            )
+            label_para_d = Paragraph("<b>Facturé à :</b>", label_style_d)
+            recipient_block_d = Table(
+                [[label_para_d], [recipient_para]],
+                colWidths=[dest_width_pt],
+            )
+            recipient_block_d.setStyle(
+                TableStyle(
+                    [
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                    ]
+                )
+            )
+            # Convention comptable : entreprise à gauche, destinataire à droite. 2 colonnes, LEFTPADDING déplace destinataire.
+            header_table_d = Table(
+                [[left_cell_content_d, recipient_block_d]],
+                colWidths=[company_width_pt, dest_width_pt],
+            )
+            header_table_d.setStyle(
+                TableStyle(
+                    [
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                        ("LEFTPADDING", (0, 0), (0, -1), 0),
+                        ("RIGHTPADDING", (0, 0), (0, -1), 6),
+                        (
+                            "LEFTPADDING",
+                            (1, 0),
+                            (1, -1),
+                            recipient_left_padding_mm * mm,
+                        ),
+                        ("RIGHTPADDING", (1, 0), (1, -1), 0),
+                        ("TOPPADDING", (1, 0), (1, -1), recipient_top_padding_mm * mm),
+                    ]
+                )
+            )
+            story.append(header_table_d)
+        else:
+            if logo_img:
+                is_drawing = (
+                    hasattr(logo_img, "width")
+                    and hasattr(logo_img, "height")
+                    and hasattr(logo_img, "scale")
+                )
+                if is_drawing:
+                    logo_table = Table([[logo_img]], colWidths=[logo_width])
+                    logo_table.setStyle(
+                        TableStyle(
+                            [
+                                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                            ]
+                        )
+                    )
+                    story.append(logo_table)
+                else:
+                    logo_style = ParagraphStyle(
+                        "LogoStyle",
+                        parent=styles["Normal"],
+                        alignment=TA_LEFT,
+                        leftIndent=0,
+                        rightIndent=0,
+                        spaceAfter=8,
+                    )
+                    logo_para = Paragraph(
+                        (
+                            f'<img src="{logo_path}" width="{logo_width}" '
+                            f'height="{logo_height}"/>'
+                        ),
+                        logo_style,
+                    )
+                    story.append(logo_para)
+            story.append(company_para)
         story.append(Spacer(1, 20))
 
         # ✅ Déterminer si c'est une facture S2 (pour le formatage)
@@ -2928,23 +3464,25 @@ class PDFService:
             strategy_value = None
         is_s2 = strategy_value == "s2_clinic_monthly"
 
-        # === INFORMATIONS CLIENT DÉTAILLÉES ===
-        billed_to_name, billed_to_address_formatted = _get_billed_to(invoice)
-        billed_to_info_detailed = f"""
-        <para align="right">
-        <b>Facturé à :</b><br/>
-        {billed_to_name}<br/>
-        {billed_to_address_formatted}
-        </para>
-        """
-        story.append(Paragraph(billed_to_info_detailed, normal_style))
-        story.append(Spacer(1, 20))
-
         # === BANDEAU RAPPEL (si mode rappel) ===
         display_reminder_level = reminder_ctx.get("display_reminder_level")
         if display_reminder_level:
             bandeau = Table(
-                [[Paragraph(f"<b>{display_reminder_level}</b>", ParagraphStyle("BandeauD", parent=styles["Normal"], fontSize=14, fontName=font_name_bold, alignment=TA_CENTER, textColor=colors.HexColor("#8B0000")))]],
+                [
+                    [
+                        Paragraph(
+                            f"<b>{display_reminder_level}</b>",
+                            ParagraphStyle(
+                                "BandeauD",
+                                parent=styles["Normal"],
+                                fontSize=14,
+                                fontName=font_name_bold,
+                                alignment=TA_CENTER,
+                                textColor=colors.HexColor("#8B0000"),
+                            ),
+                        )
+                    ]
+                ],
                 colWidths=[17 * cm],
             )
             bandeau.setStyle(
@@ -2969,7 +3507,11 @@ class PDFService:
             else str(invoice.status)
         )
         period_str = f"{invoice.period_month:02d}.{invoice.period_year}"
-        echeance_label = "Date d'échéance initiale :" if reminder_ctx.get("is_reminder") else "Date d'échéance :"
+        echeance_label = (
+            "Date d'échéance initiale :"
+            if reminder_ctx.get("is_reminder")
+            else "Date d'échéance :"
+        )
 
         invoice_info_detailed = f"""
         <b>Numéro de facture :</b> {invoice.invoice_number}<br/>
@@ -3117,11 +3659,17 @@ class PDFService:
                 "Des frais de rappel ont été ajoutés conformément à nos conditions générales."
             )
             if iban_value:
-                footer_message += f" Paiement par virement bancaire : IBAN : {iban_value}"
+                footer_message += (
+                    f" Paiement par virement bancaire : IBAN : {iban_value}"
+                )
         elif billing_settings and billing_settings.legal_footer:
-            footer_message = _sanitize_legal_footer_for_iban(
-                billing_settings.legal_footer
+            raw_footer = _resolve_legal_footer_placeholders(
+                billing_settings.legal_footer,
+                payment_terms_days,
+                overdue_fee,
+                jours_text,
             )
+            footer_message = _sanitize_legal_footer_for_iban(raw_footer)
             if iban_value and "IBAN" not in footer_message:
                 footer_message += (
                     f"<br/>Paiement par virement bancaire : IBAN : {iban_value}"
@@ -3144,20 +3692,17 @@ class PDFService:
                 f"{payment_info}"
             )
 
-        story.append(Spacer(1, 20))
-        story.append(Paragraph(footer_message, centered_style))
-
+        # Pied de page légal : dessiné en zone fixe (marge inférieure)
+        mention = None
         if display_reminder_level:
-            mention = (
-                f"Document généré automatiquement – facture initiale n° {invoice.invoice_number} inchangée."
-            )
-            story.append(Spacer(1, 8))
-            story.append(
-                Paragraph(
-                    f'<font size="8" color="grey">{mention}</font>',
-                    centered_style,
-                )
-            )
+            mention = f"Document généré automatiquement – facture initiale n° {invoice.invoice_number} inchangée."
+        footer_cb_det = _make_legal_footer_page_callback(
+            footer_message, mention, centered_style
+        )
+
+        def _on_first_page_det(canvas: Any, doc: Any) -> None:
+            footer_cb_det(canvas, doc)
+            _on_first_page_debug_envelope(canvas, doc)
 
         # === QR-BILL ===
         story.append(PageBreak())
@@ -3187,7 +3732,7 @@ class PDFService:
         except Exception as e:
             app_logger.warning("Impossible de générer le QR-Bill: %s", e)
 
-        doc.build(story)
+        doc.build(story, onFirstPage=_on_first_page_det)
         buffer.seek(0)
         # ✅ Calculer nb_rows depuis consolidated_lines (après regroupement aller/retour)
         nb_rows = len(consolidated_lines) if consolidated_lines else 0
@@ -3934,8 +4479,8 @@ class PDFService:
                 )
                 # Ne pas bloquer si le QR-bill échoue
 
-        # Générer le PDF
-        doc.build(story)
+        # Générer le PDF (onFirstPage pour mode debug PDF_DEBUG_ENVELOPE=1)
+        doc.build(story, onFirstPage=_on_first_page_debug_envelope)
 
         # Retourner le contenu et le nombre de lignes
         # Note: Les rappels n'ont pas de tableau de transports, donc nb_rows = 0

@@ -7,15 +7,15 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from flask import current_app  # pyright: ignore[reportMissingImports]
-from reportlab.lib import colors  # pyright: ignore[reportMissingModuleSource]
-from reportlab.lib.pagesizes import A4  # pyright: ignore[reportMissingModuleSource]
-from reportlab.lib.styles import (  # pyright: ignore[reportMissingModuleSource]
+from flask import current_app
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import (
     ParagraphStyle,
     getSampleStyleSheet,
 )
-from reportlab.lib.units import cm  # pyright: ignore[reportMissingModuleSource]
-from reportlab.platypus import (  # pyright: ignore[reportMissingModuleSource]
+from reportlab.lib.units import cm
+from reportlab.platypus import (
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -679,8 +679,8 @@ class PartnershipStatementService:
         # Générer le PDF
         doc.build(story)
 
-        # Retourner l'URL
-        pdf_base_url = current_app.config.get("PDF_BASE_URL", "http://localhost:5000")
+        # Retourner l'URL (127.0.0.1 en dev évite IPv6 localhost + ERR_CONNECTION_RESET)
+        pdf_base_url = current_app.config.get("PDF_BASE_URL", "http://127.0.0.1:5000")
         uploads_base = current_app.config.get("UPLOADS_PUBLIC_BASE", "/uploads")
         pdf_url = f"{pdf_base_url}{uploads_base}/statements/{filename}"
 

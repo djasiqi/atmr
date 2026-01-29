@@ -15,7 +15,15 @@ from schemas.socket_events import EVENT_VERSION, SocketEvent
 from services.events.night_mode import should_send_night_notification
 from services.notifications.push import send_push_message
 from services.notifications.push_message_builder import (
+    CHANGE_TYPE_ADDRESS_CHANGE,
+    CHANGE_TYPE_CANCEL,
+    CHANGE_TYPE_TIME_CHANGE,
+    CHAT_TYPE_DIRECT,
     EVENT_ASSIGNED,
+    _extract_time_hhmm,
+    build_chat_push,
+    build_push_for_company_to_driver,
+    build_push_for_driver_to_company,
     build_push_message,
 )
 from services.realtime.socketio import (
@@ -570,13 +578,10 @@ def fanout_booking_updated(
     *,
     send_push: bool = True,
 ) -> None:
-    """Fan-out hybride pour une mise à jour de mission.
+    """Fan-out hybride pour une mise à jour de mission (Company→Driver).
 
-    Args:
-        driver_id: ID du chauffeur
-        booking_id: ID de la mission
-        booking_data: Données de la mission (optionnel)
-        send_push: Si True, envoie aussi une push notification (défaut: True)
+    Templates: assign, time_change, address_change, cancel.
+    Anti-spam: collapse_key, dedupe_key, throttle.
     """
     # 1. Socket.IO (foreground)
     try:
@@ -589,132 +594,91 @@ def fanout_booking_updated(
             driver_id,
         )
 
-    # 2. Push notification (background) - conditionnelle
+    # 2. Push notification (background) - templates centralisés
     if send_push:
-        # ✅ Si on a un diff, construire un message "pro" basé sur ce qui a changé
-        changes = None
-        try:
-            changes = (booking_data or {}).get("changes")
-        except Exception:
-            changes = None
+        ctx = booking_data or {"id": booking_id}
+        changes = ctx.get("changes")
+        status_raw = ctx.get("status")
+        status = (
+            str(getattr(status_raw, "value", status_raw)).lower()
+            if status_raw is not None
+            else None
+        )
 
-        ISO_TS_LEN_FOR_TIME = 16
-        HHMM_LEN = 5
-        MAX_CHANGE_ITEMS = 2
+        # Détecter change_type (priorité: Annulée > Horaire > Adresse > Statut)
+        # Cas "statut inchangé mais info modifiée": si EN_ROUTE + modif heure/adresse,
+        # on utilise time_change/address_change (pas status) → dedupe_key inclut event_type.
+        change_type = "status"
+        old_time: str | None = None
+        new_time: str | None = None
+        address_change_type: str | None = None
+        new_address_short: str | None = None
 
-        def _fmt_time(v: object) -> str | None:
-            if v is None:
-                return None
-            try:
-                s = str(v)
-                # ✅ Format pro: HH:mm si ISO / date-time string
-                if "T" in s and len(s) >= ISO_TS_LEN_FOR_TIME:
-                    hhmm = s.replace("Z", "")[11:16]
-                    return hhmm if len(hhmm) == HHMM_LEN else None
-                return s
-            except Exception:
-                return None
+        if status in {"canceled", "cancelled"}:
+            change_type = CHANGE_TYPE_CANCEL
+        elif isinstance(changes, dict):
+            if "scheduled_time" in changes:
+                ch = changes.get("scheduled_time")
+                if isinstance(ch, dict):
+                    old_time = _extract_time_hhmm(ch.get("from"))
+                    new_time = _extract_time_hhmm(ch.get("to"))
+                change_type = CHANGE_TYPE_TIME_CHANGE
+            elif "pickup_location" in changes or "dropoff_location" in changes:
+                ch_p = changes.get("pickup_location")
+                ch_d = changes.get("dropoff_location")
+                if isinstance(ch_p, dict) and ch_p.get("to"):
+                    address_change_type = "pickup"
+                    new_address_short = str(ch_p.get("to", ""))[:40]
+                elif isinstance(ch_d, dict) and ch_d.get("to"):
+                    address_change_type = "dropoff"
+                    new_address_short = str(ch_d.get("to", ""))[:40]
+                if not address_change_type and ch_p:
+                    address_change_type = "pickup"
+                elif not address_change_type and ch_d:
+                    address_change_type = "dropoff"
+                change_type = CHANGE_TYPE_ADDRESS_CHANGE
 
-        def _change_line(field: str, label: str) -> str | None:
-            if not isinstance(changes, dict):
-                return None
-            item = changes.get(field)
-            if not isinstance(item, dict):
-                return None
-            old = item.get("from")
-            new = item.get("to")
-            line: str | None = None
+        discrete = _get_recipient_discreet_mode(driver_id=driver_id)
+        msg = build_push_for_company_to_driver(
+            ctx,
+            change_type=change_type,
+            status=status,
+            old_time=old_time,
+            new_time=new_time,
+            address_change_type=address_change_type,
+            new_address_short=new_address_short,
+            discrete_mode=discrete,
+        )
 
-            if field == "scheduled_time":
-                old_s = _fmt_time(old)
-                new_s = _fmt_time(new)
-                if old_s and new_s and old_s != new_s:
-                    line = f"{label} : {old_s} → {new_s}"
-            else:
-                # texte
-                old_s = (str(old).strip() if old is not None else "")[:60]
-                new_s = (str(new).strip() if new is not None else "")[:60]
-                if old_s and new_s and old_s != new_s:
-                    line = f"{label} : {old_s} → {new_s}"
-                elif not old_s and new_s:
-                    line = f"{label} : {new_s}"
+        # Anti-spam: dedup + throttle
+        from services.notifications.dedup_throttle import check_dedup_and_throttle
 
-            return line
-
-        lines: list[str] = []
-        for field, label in (
-            ("scheduled_time", "Horaire"),
-            ("pickup_location", "Départ"),
-            ("dropoff_location", "Destination"),
-            ("notes", "Info"),
-        ):
-            line = _change_line(field, label)
-            if line:
-                lines.append(line)
-
-        # ✅ Limiter à 2 changements max + suffixe "+N autres modifications"
-        suffix = ""
-        if len(lines) > MAX_CHANGE_ITEMS:
-            remaining = len(lines) - MAX_CHANGE_ITEMS
-            suffix = (
-                f" • +{remaining} autre modification"
-                if remaining == 1
-                else f" • +{remaining} autres modifications"
+        skip, reason = check_dedup_and_throttle(
+            "driver",
+            driver_id,
+            msg["dedupe_key"],
+            f"booking_{booking_id}",
+            msg.get("throttle_seconds", 8),
+            1,
+        )
+        if skip:
+            app_logger.info(
+                "[event_fanout] Push skipped (driver %s): %s",
+                driver_id,
+                reason,
             )
-            lines = lines[:MAX_CHANGE_ITEMS]
+            return
 
-        if lines:
-            _send_push_to_driver(
-                driver_id=driver_id,
-                title="Course mise à jour",
-                body=f"Course #{booking_id} — " + " • ".join(lines) + suffix,
-                data={
-                    "type": "booking_updated",
-                    "booking_id": booking_id,
-                    "deepLink": f"atmr://booking/{booking_id}",
-                    "changes": changes,
-                },
-            )
-        else:
-            status_raw = None
-            try:
-                status_val = (booking_data or {}).get("status")
-                status_raw = (
-                    str(getattr(status_val, "value", status_val)) if status_val else None
-                )
-            except Exception:
-                status_raw = None
-            status = status_raw.lower() if isinstance(status_raw, str) else None
+        data = dict(msg["data"])
+        data["collapse_key"] = msg["collapse_key"]
+        data["dedupe_key"] = msg["dedupe_key"]
 
-            status_label_map = {
-                "assigned": "Assignée",
-                "en_route": "En route",
-                "in_progress": "À bord",
-                "completed": "Terminée",
-                "return_completed": "Retour terminé",
-                "canceled": "Annulée",
-                "cancelled": "Annulée",
-            }
-            status_label = status_label_map.get(status) if status else None
-
-            _send_push_to_driver(
-                driver_id=driver_id,
-                title="Course mise à jour",
-                body=(
-                    f"Course #{booking_id} : "
-                    + (
-                        f"statut « {status_label} »."
-                        if status_label
-                        else "détails mis à jour."
-                    )
-                ),
-                data={
-                    "type": "booking_updated",
-                    "booking_id": booking_id,
-                    "deepLink": f"atmr://booking/{booking_id}",
-                    "status": status,
-                },
-            )
+        _send_push_to_driver(
+            driver_id=driver_id,
+            title=msg["title"],
+            body=msg["body"],
+            data=data,
+        )
 
 
 def fanout_booking_updated_to_company(
@@ -724,10 +688,10 @@ def fanout_booking_updated_to_company(
     *,
     send_push: bool = True,
 ) -> None:
-    """Fan-out hybride pour une mise à jour de mission côté entreprise.
+    """Fan-out hybride pour une mise à jour de mission (Driver→Company).
 
-    Objectif: permettre à l'app entreprise de recevoir les changements de statut
-    (ex: EN_ROUTE / IN_PROGRESS / COMPLETED) même quand le chauffeur est l'initiateur.
+    Template: "Course • {STATUT_LABEL}" + "Chauffeur → Client" + trajet.
+    Anti-spam: collapse_key, dedupe_key, throttle.
     """
     # 1. Socket.IO (foreground)
     try:
@@ -740,137 +704,71 @@ def fanout_booking_updated_to_company(
             company_id,
         )
 
-    # 2. Push notification (background) - optionnelle
+    # 2. Push notification (background) - template Driver→Company
     if send_push:
-        changes = None
-        try:
-            changes = (booking_data or {}).get("changes")
-        except Exception:
-            changes = None
-
-        ISO_TS_LEN_FOR_TIME = 16
-        HHMM_LEN = 5
-        MAX_CHANGE_ITEMS = 2
-
-        def _fmt_time(v: object) -> str | None:
-            if v is None:
-                return None
-            try:
-                s = str(v)
-                if "T" in s and len(s) >= ISO_TS_LEN_FOR_TIME:
-                    hhmm = s.replace("Z", "")[11:16]
-                    return hhmm if len(hhmm) == HHMM_LEN else None
-                return s
-            except Exception:
-                return None
-
-        def _change_line(field: str, label: str) -> str | None:
-            if not isinstance(changes, dict):
-                return None
-            item = changes.get(field)
-            if not isinstance(item, dict):
-                return None
-            old = item.get("from")
-            new = item.get("to")
-            line: str | None = None
-            if field == "scheduled_time":
-                old_s = _fmt_time(old)
-                new_s = _fmt_time(new)
-                if old_s and new_s and old_s != new_s:
-                    line = f"{label} : {old_s} → {new_s}"
-            else:
-                old_s = (str(old).strip() if old is not None else "")[:60]
-                new_s = (str(new).strip() if new is not None else "")[:60]
-                if old_s and new_s and old_s != new_s:
-                    line = f"{label} : {old_s} → {new_s}"
-                elif not old_s and new_s:
-                    line = f"{label} : {new_s}"
-            return line
-
-        lines: list[str] = []
-        for field, label in (
-            ("scheduled_time", "Horaire"),
-            ("pickup_location", "Départ"),
-            ("dropoff_location", "Destination"),
-            ("notes", "Info"),
-        ):
-            line = _change_line(field, label)
-            if line:
-                lines.append(line)
-
-        suffix = ""
-        if len(lines) > MAX_CHANGE_ITEMS:
-            remaining = len(lines) - MAX_CHANGE_ITEMS
-            suffix = (
-                f" • +{remaining} autre modification"
-                if remaining == 1
-                else f" • +{remaining} autres modifications"
-            )
-            lines = lines[:MAX_CHANGE_ITEMS]
-
-        if lines:
-            _send_push_to_company(
-                company_id=company_id,
-                title="Course mise à jour",
-                body=f"Course #{booking_id} — " + " • ".join(lines) + suffix,
-                data={
-                    "type": "booking_updated",
-                    "booking_id": booking_id,
-                    "deepLink": f"atmr://booking/{booking_id}",
-                    "changes": changes,
-                },
-            )
-        else:
+        ctx = booking_data or {"id": booking_id}
+        status_raw = ctx.get("status")
+        if status_raw is None:
             status = None
-            try:
-                status_val = (booking_data or {}).get("status")
-                status = (
-                    str(getattr(status_val, "value", status_val)) if status_val else None
-                )
-            except Exception:
-                status = None
+        elif hasattr(status_raw, "value"):
+            status = str(status_raw.value).lower()
+        else:
+            status = str(status_raw).lower()
 
-            status_lower = status.lower() if isinstance(status, str) else None
-            status_label_map = {
-                "assigned": "Assignée",
-                "en_route": "En route",
-                "in_progress": "À bord",
-                "completed": "Terminée",
-                "return_completed": "Retour terminé",
-                "canceled": "Annulée",
-                "cancelled": "Annulée",
-            }
-            status_label = status_label_map.get(status_lower) if status_lower else None
+        discrete = _get_recipient_discreet_mode(company_id=company_id)
+        msg = build_push_for_driver_to_company(
+            ctx,
+            status=status,
+            discrete_mode=discrete,
+        )
 
-            _send_push_to_company(
-                company_id=company_id,
-                title="Course mise à jour",
-                body=(
-                    f"Course #{booking_id} : "
-                    + (
-                        f"statut « {status_label} »."
-                        if status_label
-                        else "détails mis à jour."
-                    )
-                ),
-                data={
-                    "type": "booking_updated",
-                    "booking_id": booking_id,
-                    "deepLink": f"atmr://booking/{booking_id}",
-                    "status": status_lower,
-                },
+        # Anti-spam: dedup + throttle
+        from services.notifications.dedup_throttle import check_dedup_and_throttle
+
+        skip, reason = check_dedup_and_throttle(
+            "company",
+            company_id,
+            msg["dedupe_key"],
+            f"booking_{booking_id}",
+            msg.get("throttle_seconds", 8),
+            1,
+        )
+        if skip:
+            app_logger.info(
+                "[event_fanout] Push skipped (company %s): %s",
+                company_id,
+                reason,
             )
+            return
+
+        data = dict(msg["data"])
+        data["collapse_key"] = msg["collapse_key"]
+        data["dedupe_key"] = msg["dedupe_key"]
+        data["channelId"] = _get_notification_channel(
+            data.get("type", "booking_updated")
+        )
+        thread_id = _get_notification_thread_id(data.get("type", "booking_updated"))
+        if thread_id:
+            data["threadId"] = thread_id
+            data["group"] = thread_id
+
+        _send_push_to_company(
+            company_id=company_id,
+            title=msg["title"],
+            body=msg["body"],
+            data=data,
+        )
 
 
 def fanout_booking_cancelled(
     driver_id: int,
     booking_id: int,
+    *,
+    booking_data: Dict[str, Any] | None = None,
 ) -> None:
     """Fan-out hybride pour une mission annulée.
 
-    Args:
-        driver_id: ID du chauffeur
-        booking_id: ID de la mission
+    Template: "Course • Annulée" + "Client • heure" (jamais d'ID visible).
     """
     # 1. Socket.IO (foreground)
     try:
@@ -883,16 +781,23 @@ def fanout_booking_cancelled(
             driver_id,
         )
 
-    # 2. Push notification (background)
+    # 2. Push notification (background) - template Company→Driver cancel
+    ctx = booking_data or {"id": booking_id}
+    discrete = _get_recipient_discreet_mode(driver_id=driver_id)
+    msg = build_push_for_company_to_driver(
+        ctx,
+        change_type=CHANGE_TYPE_CANCEL,
+        status="cancelled",
+        discrete_mode=discrete,
+    )
+    data = dict(msg["data"])
+    data["collapse_key"] = msg["collapse_key"]
+    data["dedupe_key"] = msg["dedupe_key"]
     _send_push_to_driver(
         driver_id=driver_id,
-        title="Course annulée",
-        body=f"La course #{booking_id} a été annulée.",
-        data={
-            "type": "booking_cancelled",
-            "booking_id": booking_id,
-            "deepLink": "atmr://bookings",
-        },
+        title=msg["title"],
+        body=msg["body"],
+        data=data,
     )
 
 
@@ -902,30 +807,57 @@ def fanout_message_new(
     sender_name: str,
     message_preview: str,
     company_id: int | None = None,
+    *,
+    chat_type: str = CHAT_TYPE_DIRECT,
+    thread_id: int | None = None,
 ) -> None:
-    """Fan-out hybride pour un nouveau message.
+    """Fan-out hybride pour un nouveau message (messagerie équipe/direct).
 
-    Args:
-        driver_id: ID du chauffeur destinataire
-        message_id: ID du message
-        sender_name: Nom de l'expéditeur
-        message_preview: Aperçu du message
-        company_id: ID de l'entreprise (optionnel)
+    Templates: Équipe • X (team) ou X (direct). Anti-spam: collapse_key, dedupe_key, throttle.
     """
-    # Note: Socket.IO est déjà émis dans chat.py, on ne fait que la push ici
-    # Si besoin, on pourrait aussi émettre Socket.IO depuis ici
+    tid = thread_id or company_id or 0
+    msg = build_chat_push(
+        chat_type=chat_type,
+        sender_name=sender_name,
+        message_preview=message_preview,
+        message_id=message_id,
+        thread_id=tid,
+        company_id=company_id,
+        recipient_role="driver",
+    )
 
-    # Push notification (background)
+    from services.notifications.dedup_throttle import check_dedup_and_throttle
+
+    skip, reason = check_dedup_and_throttle(
+        "driver",
+        driver_id,
+        msg["dedupe_key"],
+        f"chat_{tid}",
+        msg.get("throttle_seconds", 3),
+        1,
+    )
+    if skip:
+        app_logger.info(
+            "[event_fanout] Chat push skipped (driver %s): %s",
+            driver_id,
+            reason,
+        )
+        return
+
+    data = dict(msg["data"])
+    data["collapse_key"] = msg["collapse_key"]
+    data["dedupe_key"] = msg["dedupe_key"]
+    data["channelId"] = _get_notification_channel("message")
+    thread_id_val = _get_notification_thread_id("message")
+    if thread_id_val:
+        data["threadId"] = thread_id_val
+        data["group"] = thread_id_val
+
     _send_push_to_driver(
         driver_id=driver_id,
-        title=f"Nouveau message — {sender_name}",
-        body=message_preview,
-        data={
-            "type": "message",
-            "message_id": message_id,
-            "company_id": company_id,
-            "deepLink": f"atmr://chat/message/{message_id}",
-        },
+        title=msg["title"],
+        body=msg["body"],
+        data=data,
     )
 
 

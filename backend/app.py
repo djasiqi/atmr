@@ -48,11 +48,11 @@ import sentry_sdk
 from dotenv import load_dotenv
 from flask import (
     Flask,
+    Response,
     current_app,
     jsonify,
     make_response,
     request,
-    send_from_directory,
 )
 from flask_cors import CORS
 from flask_talisman import Talisman
@@ -965,10 +965,12 @@ def create_app(config_name: str | None = None):
             return jsonify({"error": "Connection closed"}), 499
         raise e
 
-    # 3) Uploads
-    uploads_root = Path(app.root_path, "uploads")
+    # 3) Uploads — chemin absolu pour dev local + Docker (évite ERR_CONNECTION_RESET)
+    uploads_root = Path(app.root_path, "uploads").resolve()
     uploads_root.mkdir(parents=True, exist_ok=True)
-    app.config.setdefault("UPLOADS_DIR", uploads_root)
+    (uploads_root / "invoices").mkdir(parents=True, exist_ok=True)
+    app.config.setdefault("UPLOADS_DIR", str(uploads_root))
+    app.config.setdefault("UPLOAD_FOLDER", str(uploads_root))
     app.config.setdefault("UPLOADS_PUBLIC_BASE", "/uploads")
 
     @app.route("/uploads/<path:filename>", methods=["GET", "OPTIONS"])
@@ -1029,29 +1031,54 @@ def create_app(config_name: str | None = None):
             )
             raise NotFound
 
-        directory = str(base)
-        fname = str(candidate.relative_to(base)).replace("\\", "/")
+        app.logger.info("Serving upload file: %s -> %s", filename, candidate)
 
-        app.logger.debug("Serving upload file: %s -> %s", filename, candidate)
+        # Contournement Gunicorn+eventlet : send_from_directory provoque ERR_CONNECTION_RESET
+        # sur les fichiers (streaming incompatible). Lecture en mémoire + Response évite le bug.
+        mimetypes_map = {
+            ".pdf": "application/pdf",
+            ".svg": "image/svg+xml",
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".gif": "image/gif",
+            ".webp": "image/webp",
+        }
+        ext = Path(filename).suffix.lower()
+        mimetype = mimetypes_map.get(ext)
+        if mimetype is None:
+            import mimetypes as _mt
 
-        # Servir le fichier avec les en-têtes appropriés pour les images
-        # send_from_directory définit automatiquement le Content-Type correct
-        response = send_from_directory(directory, fname, conditional=True)
+            guessed, _ = _mt.guess_type(filename) or (None, None)
+            mimetype = guessed or "application/octet-stream"
 
-        # Ajouter les en-têtes CORS pour permettre l'accès depuis le frontend
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        inline_extensions = {".pdf", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp"}
+        disposition = "inline" if ext in inline_extensions else "attachment"
 
-        # S'assurer que le Content-Type est correct pour les images SVG
-        # (send_from_directory peut ne pas le détecter correctement)
-        if filename.lower().endswith(".svg"):
-            response.headers["Content-Type"] = "image/svg+xml"
+        try:
+            data = candidate.read_bytes()
+            app.logger.info("[UPLOADS] AFTER read_bytes len=%s", len(data))
+        except OSError as e:
+            app.logger.exception(
+                "Erreur lecture fichier upload: %s (errno=%s)",
+                candidate,
+                getattr(e, "errno", None),
+            )
+            raise NotFound from e
 
-        # Ajouter un header Cache-Control pour les images
-        response.headers["Cache-Control"] = "public, max-age=3600"
-
-        return response
+        # Content-Length explicite : évite ERR_CONNECTION_RESET avec certains clients/proxies
+        return Response(
+            data,
+            mimetype=mimetype,
+            headers={
+                "Content-Length": str(len(data)),
+                "Content-Disposition": f'{disposition}; filename="{candidate.name}"',
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type",
+                "Cache-Control": "public, max-age=3600",
+            },
+        )
 
     # 4) Sécurité (CSP)
     # ✅ FIX: Désactiver HTTPS en mode testing pour éviter
@@ -1401,9 +1428,18 @@ def create_app(config_name: str | None = None):
             "runId": "run1",
             "hypothesisId": "H1_H4",
         }
-        app.logger.info("[DEBUG] after_request %s %s origin=%s has_acao=%s origin_in_cors=%s", request.method, request.path, origin, has_acao, origin_in_cors)
+        app.logger.info(
+            "[DEBUG] after_request %s %s origin=%s has_acao=%s origin_in_cors=%s",
+            request.method,
+            request.path,
+            origin,
+            has_acao,
+            origin_in_cors,
+        )
         try:
-            _p = Path(os.getenv("DEBUG_LOG_PATH", r"c:\Users\jasiq\atmr\.cursor\debug.log"))
+            _p = Path(
+                os.getenv("DEBUG_LOG_PATH", r"c:\Users\jasiq\atmr\.cursor\debug.log")
+            )
             _p.parent.mkdir(parents=True, exist_ok=True)
             with _p.open("a", encoding="utf-8") as _f:
                 _f.write(__import__("json").dumps(_debug_log) + "\n")
@@ -1452,11 +1488,30 @@ def create_app(config_name: str | None = None):
             if "Origin" not in _vary:
                 resp.headers["Vary"] = (_vary + ", Origin").strip(", ")
             # #region agent log — H1: preuve CORS ajouté
-            app.logger.info("[DEBUG] CORS added for %s %s", request.method, request.path)
+            app.logger.info(
+                "[DEBUG] CORS added for %s %s", request.method, request.path
+            )
             try:
-                _p2 = Path(os.getenv("DEBUG_LOG_PATH", r"c:\Users\jasiq\atmr\.cursor\debug.log"))
+                _p2 = Path(
+                    os.getenv(
+                        "DEBUG_LOG_PATH", r"c:\Users\jasiq\atmr\.cursor\debug.log"
+                    )
+                )
                 with _p2.open("a", encoding="utf-8") as _f2:
-                    _f2.write(__import__("json").dumps({"location": "app.py:after_request", "message": "cors_added", "data": {"method": request.method, "path": request.path}, "hypothesisId": "H1"}) + "\n")
+                    _f2.write(
+                        __import__("json").dumps(
+                            {
+                                "location": "app.py:after_request",
+                                "message": "cors_added",
+                                "data": {
+                                    "method": request.method,
+                                    "path": request.path,
+                                },
+                                "hypothesisId": "H1",
+                            }
+                        )
+                        + "\n"
+                    )
             except Exception:
                 pass
             # #endregion
@@ -1475,10 +1530,31 @@ def create_app(config_name: str | None = None):
         """Gère les requêtes OPTIONS preflight pour CORS (avant Flask-CORS)."""
         # #region agent log — H2: preuve que la requête a atteint le backend
         if request.path.startswith("/api/v1/"):
-            _req_log = {"location": "app.py:before_request", "message": "request_received", "data": {"method": request.method, "path": request.path, "origin": request.headers.get("Origin")}, "timestamp": __import__("time", fromlist=[]).time() * 1000, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H2"}
-            app.logger.info("[DEBUG] request_received %s %s origin=%s", request.method, request.path, request.headers.get("Origin"))
+            _req_log = {
+                "location": "app.py:before_request",
+                "message": "request_received",
+                "data": {
+                    "method": request.method,
+                    "path": request.path,
+                    "origin": request.headers.get("Origin"),
+                },
+                "timestamp": __import__("time", fromlist=[]).time() * 1000,
+                "sessionId": "debug-session",
+                "runId": "run1",
+                "hypothesisId": "H2",
+            }
+            app.logger.info(
+                "[DEBUG] request_received %s %s origin=%s",
+                request.method,
+                request.path,
+                request.headers.get("Origin"),
+            )
             try:
-                _rp = Path(os.getenv("DEBUG_LOG_PATH", r"c:\Users\jasiq\atmr\.cursor\debug.log"))
+                _rp = Path(
+                    os.getenv(
+                        "DEBUG_LOG_PATH", r"c:\Users\jasiq\atmr\.cursor\debug.log"
+                    )
+                )
                 _rp.parent.mkdir(parents=True, exist_ok=True)
                 with _rp.open("a", encoding="utf-8") as _rf:
                     _rf.write(__import__("json").dumps(_req_log) + "\n")
@@ -2094,7 +2170,11 @@ def create_app(config_name: str | None = None):
 
         # --- Compat: endpoints companies les plus utilisés
         # (évite 404 si RESTX rate) ---
-        from routes.companies import CompanyDriversList, CompanyMe
+        from routes.companies import (
+            CompanyDriversList,
+            CompanyDriversLocations,
+            CompanyMe,
+        )
 
         @app.route("/api/companies/me", methods=["GET", "PUT", "OPTIONS"])
         def _compat_companies_me():  # pyright: ignore[reportUnusedFunction]
@@ -2126,6 +2206,12 @@ def create_app(config_name: str | None = None):
                 return make_response("", 204)
             return CompanyDriversList().get()
 
+        @app.route("/api/companies/me/drivers/locations", methods=["GET", "OPTIONS"])
+        def _compat_companies_me_drivers_locations():  # pyright: ignore[reportUnusedFunction]
+            if request.method == "OPTIONS":
+                return make_response("", 204)
+            return CompanyDriversLocations().get()
+
         @app.route(
             "/api/v<int:version>/companies/me/drivers", methods=["GET", "OPTIONS"]
         )
@@ -2135,6 +2221,17 @@ def create_app(config_name: str | None = None):
             if request.method == "OPTIONS":
                 return make_response("", 204)
             return CompanyDriversList().get()
+
+        @app.route(
+            "/api/v<int:version>/companies/me/drivers/locations",
+            methods=["GET", "OPTIONS"],
+        )
+        def _compat_companies_me_drivers_locations_v(  # pyright: ignore[reportUnusedFunction]
+            version: int,  # noqa: ARG001
+        ):
+            if request.method == "OPTIONS":
+                return make_response("", 204)
+            return CompanyDriversLocations().get()
 
         # Note: L'endpoint /health est défini plus bas,
         # après l'initialisation de Talisman

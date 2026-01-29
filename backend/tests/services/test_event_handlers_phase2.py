@@ -235,12 +235,13 @@ class TestBookingCancelledHandler:
         }
 
         with patch(
-            "services.notification_service.notify_booking_cancelled"
+            "services.events.handlers.booking_handlers.notify_booking_cancelled"
         ) as mock_notify:
             handle_booking_cancelled(event)
 
             # Vérifier que notify_booking_cancelled a été appelé
-            mock_notify.assert_called_once_with(456, 123)
+            mock_notify.assert_called_once()
+            assert mock_notify.call_args[0] == (456, 123)
 
     def test_handle_booking_cancelled_missing_fields(self):
         """Test que handle_booking_cancelled gère les champs manquants."""

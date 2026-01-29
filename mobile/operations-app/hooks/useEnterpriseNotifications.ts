@@ -163,111 +163,86 @@ export const useEnterpriseNotifications = () => {
       }
     };
 
-    // Handler pour nouvelle course
+    // Handler pour nouvelle course (jamais d'ID visible)
     const handleNewBooking = (data: any) => {
       console.log("📦 Nouvelle course reçue:", data);
+      const clientName = data.client_name || data.client_display_name || "Client";
+      const timeShort = data.time_formatted || (data.scheduled_time ? String(data.scheduled_time).slice(11, 16) : "");
+      const body = timeShort ? `${clientName} • ${timeShort}` : clientName;
       sendNotification(
-        "Nouvelle course",
-        data.booking_id
-          ? `Course #${data.booking_id} — une nouvelle course est disponible.`
-          : "Une nouvelle course est disponible.",
-        { type: "new_booking", bookingId: data.booking_id, ...data },
+        "Nouvelle course • Assignée",
+        body,
+        { type: "new_booking", booking_id: data.booking_id ?? data.id, ...data },
         true
       );
     };
 
-    // Handler pour course mise à jour
+    // Handler pour course mise à jour (Driver→Company: chauffeur change statut)
+    // Format: "Course • {STATUT}" + "Chauffeur → Client" + trajet (jamais d'ID visible)
     const handleBookingUpdated = (data: any) => {
       console.log("🔄 Course mise à jour:", data);
-      const statusMessages: Record<string, string> = {
-        assigned: "assignée",
-        en_route: "en route",
-        in_progress: "à bord",
-        completed: "terminée",
-        cancelled: "annulée",
-        canceled: "annulée",
+      const statusLabels: Record<string, string> = {
+        assigned: "Assignée",
+        en_route: "En route",
+        in_progress: "À bord",
+        completed: "Terminée",
+        return_completed: "Retour terminé",
+        cancelled: "Annulée",
+        canceled: "Annulée",
       };
       const status = String(data.status || "").toLowerCase();
-      const statusMessage = statusMessages[status] || "mise à jour";
-      
-      const changes = data?.changes;
-      const parts: string[] = [];
-      const add = (s?: string) => {
-        if (s) parts.push(s);
-      };
-      const fmtHHmm = (v: any): string | null => {
-        if (!v) return null;
-        const s = String(v);
-        if (s.includes("T") && s.length >= 16) {
-          const hhmm = s.replace("Z", "").slice(11, 16);
-          return hhmm.length === 5 ? hhmm : null;
-        }
-        return null;
-      };
+      const statusLabel = statusLabels[status] || "Mise à jour";
 
-      const short = (v: any, maxLen = 32): string | null => {
-        if (v == null) return null;
-        const s = String(v).replace(/\s+/g, " ").trim();
-        if (!s) return null;
-        return s.length > maxLen ? `${s.slice(0, maxLen - 1)}…` : s;
+      const driverName =
+        data.driver?.full_name ||
+        [data.driver?.first_name, data.driver?.last_name].filter(Boolean).join(" ") ||
+        "Chauffeur";
+      const clientName = data.client_name || data.client_display_name || "Client";
+      const shorten = (v: string, max = 32) => (v.length > max ? v.slice(0, max - 1) + "…" : v);
+      const pickupShort =
+        data.pickup_short || (data.pickup_location ? shorten(String(data.pickup_location).split(",")[0].trim(), 32) : null);
+      const dropoffShort =
+        data.dropoff_short || (data.dropoff_location ? shorten(String(data.dropoff_location).split(",")[0].trim(), 32) : null);
+
+      const formatRouteLine = (p: string, d: string, maxTotal = 65) => {
+        const combined = `${p} → ${d}`;
+        if (combined.length <= maxTotal) return combined;
+        const maxEach = Math.floor((maxTotal - 3) / 2);
+        return `${p.length > maxEach ? p.slice(0, maxEach - 1) + "…" : p} → ${d.length > maxEach ? d.slice(0, maxEach - 1) + "…" : d}`;
       };
 
-      const timeFrom = changes?.scheduled_time?.from;
-      const timeTo = changes?.scheduled_time?.to;
-      const hhmmFrom = fmtHHmm(timeFrom);
-      const hhmmTo = fmtHHmm(timeTo);
-      if (hhmmFrom && hhmmTo && hhmmFrom !== hhmmTo) {
-        add(`Horaire : ${hhmmFrom} → ${hhmmTo}`);
-      }
-
-      const pFrom = short(changes?.pickup_location?.from);
-      const pTo = short(changes?.pickup_location?.to);
-      if (pFrom && pTo && pFrom !== pTo) add(`Départ : ${pFrom} → ${pTo}`);
-      else if (pTo && !pFrom) add(`Départ : ${pTo}`);
-
-      const dFrom = short(changes?.dropoff_location?.from);
-      const dTo = short(changes?.dropoff_location?.to);
-      if (dFrom && dTo && dFrom !== dTo) add(`Destination : ${dFrom} → ${dTo}`);
-      else if (dTo && !dFrom) add(`Destination : ${dTo}`);
-
-      if (changes?.notes) add("Info : mise à jour");
-
-      // ✅ Pro: limiter à 2 changements + "+N autres modifications"
-      const maxItems = 2;
-      const head = parts.slice(0, maxItems);
-      const remaining = parts.length - head.length;
-      const summary =
-        head.join(" • ") +
-        (remaining > 0
-          ? remaining === 1
-            ? " • +1 autre modification"
-            : ` • +${remaining} autres modifications`
-          : "");
+      const title = `Course • ${statusLabel}`;
+      const bodyLines = [`${driverName} → ${clientName}`];
+      if (pickupShort && dropoffShort) {
+        bodyLines.push(formatRouteLine(pickupShort, dropoffShort));
+      } else if (pickupShort) bodyLines.push(pickupShort);
+      else if (dropoffShort) bodyLines.push(dropoffShort);
+      const body = bodyLines.join("\n");
 
       sendNotification(
-        "Course mise à jour",
-        data.booking_id
-          ? `Course #${data.booking_id} — ${summary || statusMessage}.`
-          : `Une course a été ${summary || statusMessage}.`,
-        { type: "booking_updated", bookingId: data.booking_id, status: data.status, ...data },
+        title,
+        body,
+        { type: "booking_updated", booking_id: data.booking_id ?? data.id, status: data.status, ...data },
         true
       );
     };
 
-    // Handler pour course annulée
+    // Handler pour course annulée (jamais d'ID visible)
     const handleBookingCancelled = (data: any) => {
       console.log("❌ Course annulée:", data);
+      const clientName = data.client_name || data.client_display_name || "Client";
+      const timeShort = data.time_formatted || (data.scheduled_time ? String(data.scheduled_time).slice(11, 16) : "");
+      const body = timeShort ? `${clientName} • ${timeShort}` : clientName;
       sendNotification(
-        "Course annulée",
-        data.booking_id ? `La course #${data.booking_id} a été annulée.` : "Une course a été annulée.",
-        { type: "booking_cancelled", bookingId: data.booking_id, ...data },
+        "Course • Annulée",
+        body,
+        { type: "booking_cancelled", booking_id: data.booking_id ?? data.id, ...data },
         true
       );
     };
 
-    // Handler pour message de chat
+    // Handler pour message de chat (Équipe • Sender, preview 90 chars, collapse/dedupe)
     const handleChatMessage = (message: any) => {
-      // Ne pas envoyer de notification si c'est notre propre message
       if (message.sender_id === enterpriseSession?.user?.id) {
         return;
       }
@@ -275,15 +250,32 @@ export const useEnterpriseNotifications = () => {
       console.log("💬 Nouveau message de chat:", message);
       const role = String(message.sender_role || "").toLowerCase();
       const roleLabel = role === "company" ? "Entreprise" : role === "driver" ? "Chauffeur" : "Équipe";
-      const senderName = message.sender_name ? `${roleLabel} — ${message.sender_name}` : roleLabel;
-      const messagePreview = message.content
-        ? message.content.substring(0, 50) + (message.content.length > 50 ? "..." : "")
-        : "Nouveau message";
+      const senderName = message.sender_name || message.sender_first_name || roleLabel || "Message";
+
+      const normalizePreview = (content: string | null | undefined, maxLen = 90): string => {
+        if (!content || typeof content !== "string") return "Nouveau message";
+        let s = content.trim().replace(/\r?\n/g, " ").replace(/\s+/g, " ");
+        if (!s) return "Nouveau message";
+        return s.length > maxLen ? s.slice(0, maxLen - 1) + "…" : s;
+      };
+      const messagePreview = normalizePreview(message.content);
+
+      const title = `Équipe • ${senderName}`;
+      const threadId = String(message.company_id ?? "team");
 
       sendNotification(
-        "Nouveau message",
+        title,
         messagePreview,
-        { type: "chat_message", messageId: message.id, ...message },
+        {
+          type: "chat_message",
+          message_id: message.id,
+          messageId: message.id,
+          thread_id: threadId,
+          company_id: message.company_id,
+          sender_name: senderName,
+          deepLink: "atmr://enterprise/chat",
+          ...message,
+        },
         true
       );
     };

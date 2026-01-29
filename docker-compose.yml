@@ -65,7 +65,7 @@ services:
     command: >
       gunicorn wsgi:app
       --bind 0.0.0.0:5000
-      --worker-class eventlet
+      --worker-class ${GUNICORN_WORKER_CLASS:-eventlet}
       --workers ${GUNICORN_WORKERS:-1}
       --timeout 120
       --access-logfile -
@@ -82,6 +82,7 @@ services:
       - DATABASE_URL=postgresql+psycopg://atmr:atmr@postgres:5432/atmr
       - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY:-AIzaSyBjQWCgiGpLJsrp_jmSDC1reBeqgerA7uE}
       - SOCKETIO_ASYNC_MODE=${SOCKETIO_ASYNC_MODE:-eventlet}
+      - GUNICORN_WORKER_CLASS=${GUNICORN_WORKER_CLASS:-eventlet}
       - SIO_DISABLE_UPGRADES=false
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
@@ -96,7 +97,7 @@ services:
       - FLASK_ENV=${FLASK_ENV:-development}
       - FLASK_APP=app.py
       - TZ=Europe/Zurich
-      - PDF_BASE_URL=${PDF_BASE_URL:-http://localhost:5000}
+      - PDF_BASE_URL=${PDF_BASE_URL:-http://127.0.0.1:5000}
       - UPLOADS_PUBLIC_BASE=${UPLOADS_PUBLIC_BASE:-/uploads}
       - API_DOCS=${API_DOCS:-off}
       - API_LEGACY_ENABLED=${API_LEGACY_ENABLED:-false}
@@ -122,6 +123,8 @@ services:
       - CHAOS_DB_READ_ONLY=${CHAOS_DB_READ_ONLY:-false}
     volumes:
       - ./backend:/app
+      # Volume explicite pour uploads (PDFs, logos) — évite ERR_CONNECTION_RESET
+      - ./backend/uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -183,7 +186,7 @@ services:
       - FLASK_CONFIG=${FLASK_CONFIG:-development}
       - FLASK_ENV=${FLASK_ENV:-development}
       - FLASK_APP=app.py
-      - PDF_BASE_URL=${PDF_BASE_URL:-http://localhost:5000}
+      - PDF_BASE_URL=${PDF_BASE_URL:-http://127.0.0.1:5000}
       - TZ=Europe/Zurich
       # Sécurité - Clé de chiffrement (doit être dans backend/.env)
       - APP_ENCRYPTION_KEY_B64=${APP_ENCRYPTION_KEY_B64}
@@ -260,7 +263,7 @@ services:
       - DISPATCH_AUTORUN_ENABLED=${DISPATCH_AUTORUN_ENABLED:-true}
       - FLASK_CONFIG=${FLASK_CONFIG:-development}
       - FLASK_ENV=${FLASK_ENV:-development}
-      - PDF_BASE_URL=${PDF_BASE_URL:-http://localhost:5000}
+      - PDF_BASE_URL=${PDF_BASE_URL:-http://127.0.0.1:5000}
       - TZ=Europe/Zurich
       # Sécurité - Clé de chiffrement (doit être dans backend/.env)
       - APP_ENCRYPTION_KEY_B64=${APP_ENCRYPTION_KEY_B64}

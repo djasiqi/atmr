@@ -7,13 +7,22 @@ endpoints d'entreprises et partenariats.
 
 from __future__ import annotations
 
+import os
 import uuid
 
 import pytest
 
-from models import Client, Company
+from models import Booking, Client, Company
 from models.enums import ClientType
 from tests.integration.helpers import assert_response_json, assert_response_status
+
+# Skip driver_locations tests si SQLite (PostgreSQL requis pour ces tests d'intégration)
+_skip_if_sqlite = pytest.mark.skipif(
+    "sqlite" in (os.getenv("DATABASE_URL") or "").lower(),
+    reason="PostgreSQL required for driver_locations integration tests. "
+    "Run: docker compose -f docker-compose.test.yml up -d postgres_test && "
+    "DATABASE_URL=postgresql://test:test@localhost:5433/atmr_test pytest ...",
+)
 
 
 @pytest.mark.integration
@@ -97,6 +106,135 @@ class TestCompaniesIntegration:
             # Vérifier la structure de la réponse
             assert isinstance(data, (dict, list))
 
+    @pytest.mark.postgresql
+    @_skip_if_sqlite
+    def test_get_driver_locations_returns_locations(
+        self, authenticated_client, test_company, test_driver, requires_postgresql
+    ):
+        """Test GET /companies/me/drivers/locations - positions GPS chauffeurs."""
+        if not all([test_company, test_driver]):
+            pytest.skip("Required fixtures missing")
+
+        url = "/api/v1/companies/me/drivers/locations"
+        response = authenticated_client.get(url)
+        assert response.status_code == 200
+        data = assert_response_json(response)
+        assert "locations" in data
+        assert isinstance(data["locations"], list)
+        for loc in data["locations"]:
+            assert "driver_id" in loc
+            assert "latitude" in loc
+            assert "longitude" in loc
+            assert "is_stale" in loc
+            assert "last_seen_seconds" in loc
+
+    @pytest.mark.postgresql
+    @_skip_if_sqlite
+    def test_get_driver_locations_includes_status_and_booking(
+        self, authenticated_client, test_company, test_driver, db, requires_postgresql
+    ):
+        """Test que chaque location inclut status et current_booking_id si busy."""
+        if not all([test_company, test_driver]):
+            pytest.skip("Required fixtures missing")
+
+        # Donner une position au chauffeur (fallback DB)
+        test_driver.latitude = 46.2044
+        test_driver.longitude = 6.1432
+        db.session.flush()
+        db.session.commit()
+
+        url = "/api/v1/companies/me/drivers/locations"
+        response = authenticated_client.get(url)
+        assert response.status_code == 200
+        data = assert_response_json(response)
+        assert "locations" in data
+        locations = data["locations"]
+        for loc in locations:
+            assert "status" in loc
+            assert loc["status"] in ("available", "busy", "offline")
+            if loc["status"] == "busy":
+                assert "current_booking_id" in loc
+
+    @pytest.mark.postgresql
+    @_skip_if_sqlite
+    def test_offline_when_stale_or_missing(
+        self, authenticated_client, test_company, test_driver, db, requires_postgresql
+    ):
+        """Test que status=offline quand is_stale ou driver désactivé."""
+        if not all([test_company, test_driver]):
+            pytest.skip("Required fixtures missing")
+
+        test_driver.latitude = 46.2044
+        test_driver.longitude = 6.1432
+        test_driver.is_active = False
+        db.session.flush()
+        db.session.commit()
+
+        url = "/api/v1/companies/me/drivers/locations"
+        response = authenticated_client.get(url)
+        assert response.status_code == 200
+        data = assert_response_json(response)
+        locations = data["locations"]
+        for loc in locations:
+            if loc["driver_id"] == test_driver.id:
+                assert loc["status"] == "offline"
+                break
+
+    @pytest.mark.postgresql
+    @_skip_if_sqlite
+    def test_busy_when_active_booking(
+        self,
+        authenticated_client,
+        test_company,
+        test_driver,
+        test_client,
+        db,
+        requires_postgresql,
+    ):
+        """Test que status=busy quand chauffeur a une course ASSIGNED/EN_ROUTE/IN_PROGRESS."""
+        from datetime import UTC, datetime, timedelta
+        from decimal import Decimal
+
+        from models.enums import BookingStatus
+
+        if not all([test_company, test_driver, test_client]):
+            pytest.skip("Required fixtures missing")
+
+        test_driver.latitude = 46.2044
+        test_driver.longitude = 6.1432
+        db.session.flush()
+
+        booking = Booking()
+        booking.user_id = test_client.user_id
+        booking.company_id = test_company.id
+        booking.client_id = test_client.id
+        booking.customer_name = "Test Client"
+        booking.pickup_location = "Rue Test 1"
+        booking.dropoff_location = "Rue Test 2"
+        booking.scheduled_time = datetime.now(UTC) + timedelta(hours=1)
+        booking.status = BookingStatus.IN_PROGRESS
+        booking.driver_id = test_driver.id
+        booking.amount = Decimal("50.00")
+        booking.vat_rate = Decimal("7.70")
+        db.session.add(booking)
+        db.session.flush()
+        db.session.commit()
+
+        url = "/api/v1/companies/me/drivers/locations"
+        response = authenticated_client.get(url)
+        assert response.status_code == 200
+        data = assert_response_json(response)
+        locations = data["locations"]
+        busy_found = False
+        for loc in locations:
+            if loc["driver_id"] == test_driver.id:
+                assert loc["status"] == "busy"
+                assert "current_booking_id" in loc
+                assert loc["current_booking_id"] == booking.id
+                busy_found = True
+                break
+        assert busy_found, "Driver with active booking should appear as busy"
+
     def test_search_companies_returns_match(
         self, authenticated_client, test_company, db
     ):
@@ -128,9 +266,7 @@ class TestCompaniesIntegration:
 class TestPartnershipsIntegration:
     """Tests d'intégration pour POST /partnerships et GET /companies/me/partnerships."""
 
-    def test_get_me_partnerships_returns_200(
-        self, authenticated_client, test_company
-    ):
+    def test_get_me_partnerships_returns_200(self, authenticated_client, test_company):
         """GET /companies/me/partnerships renvoie 200 (pas 400) même sans partenariats."""
         if not test_company:
             pytest.skip("test_company required")
@@ -145,9 +281,7 @@ class TestPartnershipsIntegration:
         assert "data" in data
         assert isinstance(data["data"], list)
 
-    def test_create_partnership_success(
-        self, authenticated_client, test_company, db
-    ):
+    def test_create_partnership_success(self, authenticated_client, test_company, db):
         """POST /partnerships avec partner_company_id valide renvoie 201."""
         if not test_company:
             pytest.skip("test_company required")
@@ -166,9 +300,7 @@ class TestPartnershipsIntegration:
             "default_partner_tariff_percent": 90,
             "payment_terms_days": 30,
         }
-        response = authenticated_client.post(
-            "/api/v1/partnerships", json=payload
-        )
+        response = authenticated_client.post("/api/v1/partnerships", json=payload)
         assert response.status_code == 201
         data = response.get_json()
         assert data is not None

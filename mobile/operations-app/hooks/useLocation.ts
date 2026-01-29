@@ -24,8 +24,11 @@ let backgroundInitRunning = false;
 
 // ✅ PERF: Configuration batching pour économiser batterie
 const BATCH_SIZE = 3;  // Buffer de 3-5 positions avant envoi
-const BATCH_INTERVAL_MS = 10000;  // Flush toutes les 10s (réduit de 15s)
-const HEARTBEAT_INTERVAL_MS = 30000;  // Heartbeat GPS toutes les 30s même si immobile
+// Config via env: EXPO_PUBLIC_GPS_FAST_MS=5000, MEDIUM_MS=10000, SLOW_MS=20000
+const BATCH_INTERVAL_MS =
+  parseInt(process.env.EXPO_PUBLIC_GPS_MEDIUM_MS ?? "10000", 10) || 10000;
+const HEARTBEAT_INTERVAL_MS =
+  parseInt(process.env.EXPO_PUBLIC_GPS_SLOW_MS ?? "30000", 10) || 30000;
 
 // ✅ P2: Bug #6 - Retry automatique avec backoff exponentiel
 const MAX_RETRY_ATTEMPTS = 5;

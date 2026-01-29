@@ -42,6 +42,7 @@ LAT_THRESHOLD = 90
 LON_THRESHOLD = 180
 MAX_MESSAGE_LENGTH = 1000
 MESSAGE_PREVIEW_LENGTH = 50
+MAX_PUSH_PREVIEW_LEN = 90  # longueur max preview pour push notification
 # ✅ errno pour "Bad file descriptor" - survient lors de déconnexions brutales
 ERRNO_BAD_FILE_DESCRIPTOR = 9
 
@@ -911,7 +912,9 @@ def init_chat_socket(socketio: SocketIO):
                     )
 
                 ws_metrics.on_error("token_expired")
-                raise SocketConnectionRefusedError("TOKEN_EXPIRED", {"retry_after": 5}) from None
+                raise SocketConnectionRefusedError(
+                    "TOKEN_EXPIRED", {"retry_after": 5}
+                ) from None
             except jwt_exceptions.InvalidAudienceError:
                 logger.info(
                     "socket_connect_error",
@@ -1596,29 +1599,44 @@ def init_chat_socket(socketio: SocketIO):
                         if driver:
                             # Préparer le preview du message
                             # ✅ Notification pro: identifier clairement l'émetteur (Entreprise / Chauffeur)
-                            sender_label = "Entreprise" if user.role == UserRole.company else "Chauffeur"
+                            sender_label = (
+                                "Entreprise"
+                                if user.role == UserRole.company
+                                else "Chauffeur"
+                            )
                             sender_display = sender_label
                             try:
                                 # Entreprise: utiliser le nom de l'entreprise si dispo
                                 if user.role == UserRole.company and company_obj:
                                     company_name = getattr(company_obj, "name", None)
                                     if company_name:
-                                        sender_display = f"{sender_label} {company_name}"
+                                        sender_display = (
+                                            f"{sender_label} {company_name}"
+                                        )
                                 else:
-                                    first_name = getattr(user, "first_name", None) or None
+                                    first_name = (
+                                        getattr(user, "first_name", None) or None
+                                    )
                                     if first_name:
                                         sender_display = f"{sender_label} {first_name}"
                             except Exception:
                                 sender_display = sender_label
-                            message_preview = (
-                                content[:MESSAGE_PREVIEW_LENGTH]
-                                if content
-                                else "Nouveau message"
-                            )
-                            if content and len(content) > MESSAGE_PREVIEW_LENGTH:
-                                message_preview += "..."
+                            # ✅ Preview normalisé (trim, \n→espace, max 90 chars)
+                            message_preview = content[:90].strip() if content else ""
+                            message_preview = message_preview.replace(
+                                "\n", " "
+                            ).replace("\r", " ")
+                            while "  " in message_preview:
+                                message_preview = message_preview.replace("  ", " ")
+                            message_preview = message_preview.strip()
+                            if not message_preview:
+                                message_preview = "Nouveau message"
+                            elif len(message_preview) > MAX_PUSH_PREVIEW_LEN:
+                                message_preview = (
+                                    message_preview[: MAX_PUSH_PREVIEW_LEN - 1] + "…"
+                                )
 
-                            # ✅ Utiliser fanout_message_new pour fan-out centralisé
+                            # ✅ Utiliser fanout_message_new (templates + anti-spam)
                             from services.events.fanout import fanout_message_new
 
                             fanout_message_new(
@@ -1627,6 +1645,8 @@ def init_chat_socket(socketio: SocketIO):
                                 sender_name=sender_display,
                                 message_preview=message_preview,
                                 company_id=company_id,
+                                chat_type="direct",
+                                thread_id=company_id,
                             )
                             logger.info(
                                 "[chat] Push notification queued for driver %s (message %s)",
@@ -2306,7 +2326,9 @@ def init_chat_socket(socketio: SocketIO):
 
                     # Vérifier si batch déjà traité
                     if redis_client.exists(processed_key):
-                        batch_ids = cast(set[bytes], redis_client.smembers(processed_key))
+                        batch_ids = cast(
+                            set[bytes], redis_client.smembers(processed_key)
+                        )
                         if batch_id.encode() in batch_ids:
                             logger.info(
                                 "⚠️ [Déduplication] Batch déjà traité: driver=%s, batch_id=%s",

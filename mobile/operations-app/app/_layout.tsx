@@ -119,10 +119,22 @@ function RootNav() {
         // Navigate to trips list
         console.log("📍 Navigating to trips list");
         router.push("/(tabs)/trips" as any);
-      } else if (route === "chat" && id) {
-        // Navigate to chat (le format chat/message/{id} est validé comme chat/{id})
-        console.log("📍 Navigating to chat with message:", id);
-        router.push(`/(tabs)/chat?messageId=${id}` as any);
+      } else if (route === "chat") {
+        // Navigate to chat: chat/message/{id} | chat/thread/{id} | chat
+        const subType = validation.subType;
+        if (id && subType === "message") {
+          console.log("📍 Navigating to chat with message:", id);
+          router.push(`/(tabs)/chat?messageId=${id}` as any);
+        } else if (id && subType === "thread") {
+          console.log("📍 Navigating to chat with thread:", id);
+          router.push(`/(tabs)/chat?threadId=${id}` as any);
+        } else if (id) {
+          // Fallback rétrocompatible: chat/123 → messageId
+          router.push(`/(tabs)/chat?messageId=${id}` as any);
+        } else {
+          console.log("📍 Navigating to chat");
+          router.push("/(tabs)/chat" as any);
+        }
       } else if (route === "dispatch" && id) {
         // Navigate to schedule/dispatch (le format dispatch/run/{id} est validé comme dispatch/{id})
         console.log("📍 Navigating to schedule with dispatch run:", id);

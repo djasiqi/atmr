@@ -247,15 +247,28 @@ class Config:
     WITH_RL = os.getenv("WITH_RL", "false").lower() in ("true", "1", "yes")
 
     # ✅ URLs dynamiques pour PDFs/uploads
-    PDF_BASE_URL: str = os.getenv("PDF_BASE_URL", "http://localhost:5000")
+    # PDF_PUBLIC_BASE_URL = URL écrite dans les PDFs (utilisée par le navigateur)
+    # - Dev local Windows/Docker: http://127.0.0.1:5000 (évite IPv6 localhost + ERR_CONNECTION_RESET)
+    # - Docker interne: http://backend:5000 (si backend s'appelle lui-même)
+    # - Prod: https://api.lirie.ch (ou domaine configuré)
+    # ⚠️ Pas de fallback "localhost" — source unique de vérité via env var
+    PDF_PUBLIC_BASE_URL: str = os.getenv("PDF_PUBLIC_BASE_URL") or os.getenv(
+        "PDF_BASE_URL", "http://127.0.0.1:5000"
+    )
+    # Alias pour rétrocompatibilité
+    PDF_BASE_URL: str = PDF_PUBLIC_BASE_URL
     UPLOADS_PUBLIC_BASE = os.getenv("UPLOADS_PUBLIC_BASE", "/uploads")
     # URL publique de base pour les emails (logos en mode URL). Priorité: PUBLIC_BASE_URL > PDF_BASE_URL
     # Prod-grade: PUBLIC_BASE_URL doit pointer vers le domaine public (pas localhost).
     # /uploads/company_logos/... doit être accessible sans auth avec Content-Type image/*.
-    PUBLIC_BASE_URL: str = os.getenv("PUBLIC_BASE_URL") or os.getenv("PDF_BASE_URL", "http://localhost:5000")
+    PUBLIC_BASE_URL: str = os.getenv("PUBLIC_BASE_URL") or os.getenv(
+        "PDF_BASE_URL", "http://127.0.0.1:5000"
+    )
     # Mode envoi email factures/rappels: brevo_api (URL logo) | brevo_smtp (CID MIME multipart/related)
     # SMTP: BREVO_SMTP_PASSWORD obligatoire (pas de fallback API_KEY). Port 587 sortant + DKIM/SPF.
-    EMAIL_PROVIDER_MODE: str = (os.getenv("EMAIL_PROVIDER_MODE", "brevo_api") or "brevo_api").strip().lower()
+    EMAIL_PROVIDER_MODE: str = (
+        (os.getenv("EMAIL_PROVIDER_MODE", "brevo_api") or "brevo_api").strip().lower()
+    )
 
     # --- Rate Limiting Configuration ---
     # ✅ Configuration adaptative selon l'environnement
@@ -431,8 +444,11 @@ class DevelopmentConfig(Config):
     COOKIE_SECURE = False  # HTTP en dev
     COOKIE_SAME_SITE = "Lax"  # Plus permissif en dev
 
-    # Dev: PDFs accessibles en local
-    PDF_BASE_URL = os.getenv("PDF_BASE_URL", "http://localhost:5000")
+    # Dev: PDFs accessibles en local — 127.0.0.1 évite IPv6 localhost + ERR_CONNECTION_RESET
+    PDF_PUBLIC_BASE_URL = os.getenv("PDF_PUBLIC_BASE_URL") or os.getenv(
+        "PDF_BASE_URL", "http://127.0.0.1:5000"
+    )
+    PDF_BASE_URL = PDF_PUBLIC_BASE_URL
     UPLOADS_PUBLIC_BASE = "/uploads"
 
     # ✅ Phase 1 N+1: Profilage activé par défaut en développement
@@ -603,8 +619,8 @@ class ProductionConfig(Config):
         PDF_BASE_URL = _pdf_base_url
     else:
         # Pour les autres environnements, utiliser une valeur par défaut
-        # si non définie
-        PDF_BASE_URL = _pdf_base_url or "http://localhost:5000"
+        # si non définie — 127.0.0.1 en dev (évite IPv6 localhost)
+        PDF_BASE_URL = _pdf_base_url or "http://127.0.0.1:5000"
 
     # ✅ Prod: Validation SOCKETIO_CORS_ORIGINS en production
     # En production, SOCKETIO_CORS_ORIGINS doit être défini, non vide,

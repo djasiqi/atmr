@@ -26,8 +26,11 @@ export class AdaptiveLocationTracker {
 
   // Seuils de vitesse (m/s)
   private readonly SPEED_THRESHOLD_MOVING = 1.0; // 3.6 km/h
-  private readonly INTERVAL_MOVING_MS = 5000; // 5s en mouvement
-  private readonly INTERVAL_STATIONARY_MS = 30000; // 30s immobile
+  // Config via env: EXPO_PUBLIC_GPS_FAST_MS=5000, EXPO_PUBLIC_GPS_SLOW_MS=30000
+  private readonly INTERVAL_MOVING_MS =
+    parseInt(process.env.EXPO_PUBLIC_GPS_FAST_MS ?? "5000", 10) || 5000;
+  private readonly INTERVAL_STATIONARY_MS =
+    parseInt(process.env.EXPO_PUBLIC_GPS_SLOW_MS ?? "30000", 10) || 30000;
   private readonly INTERVAL_BATTERY_LOW_MS = 60000; // 60s si batterie < 20%
 
   /**
