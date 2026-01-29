@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import styles from './InvoicesRegistry.module.css';
 import {
   fetchInvoices,
@@ -24,6 +24,7 @@ import useUrlSearchSync from '../../../../hooks/useUrlSearchSync';
 
 const InvoicesRegistry = () => {
   const { company } = useCompanyData();
+  const { public_id: routePublicId } = useParams();
   const navigate = useNavigate();
   const searchInputRef = useRef(null);
   const { initialSearch, shouldFocus, consumeFocus, initialized } = useUrlSearchSync();
@@ -254,8 +255,9 @@ const InvoicesRegistry = () => {
   };
 
   const handleOpenSettings = () => {
-    if (company?.public_id) {
-      navigate(`/dashboard/company/${company.public_id}/settings#billing`);
+    const companyId = company?.public_id ?? routePublicId;
+    if (companyId) {
+      navigate(`/dashboard/company/${companyId}/settings#billing`);
     }
   };
 

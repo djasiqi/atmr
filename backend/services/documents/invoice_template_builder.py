@@ -190,6 +190,16 @@ class InvoiceTemplateBuilder:
             logger.error("Erreur extraction données facture: %s", e)
             return None
 
+    def _name_with_uppercase_last_name(self, name: str) -> str:
+        """Met le nom de famille (dernier mot) en majuscules pour le bloc « Facturé à »."""
+        if not name or not str(name).strip():
+            return name
+        parts = name.strip().split()
+        if not parts:
+            return name
+        parts[-1] = parts[-1].upper()
+        return " ".join(parts)
+
     def _format_client_name(self, client) -> str:
         """Formate le nom du client.
 
@@ -197,13 +207,15 @@ class InvoiceTemplateBuilder:
             client: Instance de Client
 
         Returns:
-            str: Nom formaté
+            str: Nom formaté (nom de famille en majuscules)
         """
         if hasattr(client, "user") and client.user:
             first_name = client.user.first_name or ""
-            last_name = client.user.last_name or ""
+            last_name = (client.user.last_name or "").upper()
             full_name = f"{first_name} {last_name}".strip()
-            return full_name or client.user.username or "Client"
+            return self._name_with_uppercase_last_name(
+                full_name or client.user.username or "Client"
+            )
         return "Client"
 
     def _format_client_address(self, client) -> str:
@@ -311,7 +323,10 @@ class InvoiceTemplateBuilder:
                 if ext:
                     contact_lines.append(f"Référence : {ext}")
                 if contact_lines:
-                    return name, f"{addr_html}<br/>{'<br/>'.join(contact_lines)}"
+                    return (
+                        name,
+                        f"{addr_html}<br/>{'<br/>'.join(contact_lines)}",
+                    )
                 return name, addr_html
         except Exception:
             pass
@@ -406,7 +421,9 @@ class InvoiceTemplateBuilder:
                                 getattr(user, "username", None) or "N/A"
                             )
                         else:
-                            patient_name = getattr(cli, "institution_name", None) or "N/A"
+                            patient_name = (
+                                getattr(cli, "institution_name", None) or "N/A"
+                            )
                     else:
                         patient_name = (
                             getattr(booking, "customer_full_name", None)

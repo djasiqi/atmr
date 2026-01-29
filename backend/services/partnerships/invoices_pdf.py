@@ -1,5 +1,4 @@
 # services/partner_invoice_pdf_service.py
-# ruff: noqa: I001
 """Service pour générer les PDFs des factures partenaires."""
 
 import logging
@@ -8,16 +7,16 @@ from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
 
-from qrbill import QRBill  # pyright: ignore[reportMissingModuleSource]
-from reportlab.lib import colors  # pyright: ignore[reportMissingModuleSource]
-from reportlab.lib.enums import TA_CENTER, TA_LEFT  # pyright: ignore[reportMissingModuleSource]
-from reportlab.lib.pagesizes import A4  # pyright: ignore[reportMissingModuleSource]
-from reportlab.lib.styles import (  # pyright: ignore[reportMissingModuleSource]
+from qrbill import QRBill
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import (
     ParagraphStyle,
     getSampleStyleSheet,
 )
-from reportlab.lib.units import cm  # pyright: ignore[reportMissingModuleSource]
-from reportlab.platypus import (  # pyright: ignore[reportMissingModuleSource]
+from reportlab.lib.units import cm
+from reportlab.platypus import (
     PageBreak,
     Paragraph,
     SimpleDocTemplate,
@@ -29,6 +28,11 @@ from reportlab.platypus import (  # pyright: ignore[reportMissingModuleSource]
 from models import CompanyBillingSettings
 from models.booking_transfer import BookingTransfer
 from models.partner_invoice import PartnerInvoice
+from services.documents.pdf import (
+    QR_BILL_SPACER_PT,
+    _make_qr_bill_table,
+    _svg_content_to_drawing,
+)
 
 # Constantes pour éviter les valeurs magiques
 MIN_ADDRESS_PARTS = 2
@@ -485,7 +489,7 @@ def generate_partner_invoice_pdf_content(
 
     # === QR-BILL SUISSE OFFICIEL SUR PAGE SÉPARÉE ===
     story.append(PageBreak())
-    story.append(Spacer(1, 545))
+    story.append(Spacer(1, QR_BILL_SPACER_PT))
 
     try:
         # Récupérer les paramètres de facturation de l'entreprise émettrice
@@ -555,33 +559,11 @@ def generate_partner_invoice_pdf_content(
                 # Nettoyer le fichier temporaire
                 Path(temp_svg.name).unlink()
 
-            # Convertir SVG en drawing ReportLab
-            from svglib.svglib import svg2rlg  # pyright: ignore[reportMissingImports]
-
-            drawing = svg2rlg(BytesIO(svg_content.encode("utf-8")))
+            # Convertir SVG en drawing ReportLab (svg2rlg n'accepte que path, pas BytesIO)
+            drawing = _svg_content_to_drawing(svg_content)
 
             if drawing:
-                drawing.width = 12 * cm
-                drawing.height = 6 * cm
-                if drawing.width > 0 and drawing.height > 0:
-                    drawing.scale(12 * cm / drawing.width, 6 * cm / drawing.height)
-
-                qr_table = Table([[drawing, ""]], colWidths=[6 * cm, 12 * cm])
-                qr_table.setStyle(
-                    TableStyle(
-                        [
-                            ("ALIGN", (0, 0), (0, 0), "LEFT"),
-                            ("ALIGN", (1, 0), (1, 0), "LEFT"),
-                            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                            ("BACKGROUND", (0, 0), (-1, -1), colors.white),
-                            ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                            ("TOPPADDING", (0, 0), (-1, -1), 0),
-                            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-                        ]
-                    )
-                )
-                story.append(qr_table)
+                story.append(_make_qr_bill_table(drawing))
             else:
                 story.append(Paragraph("QR-Bill non disponible", normal_style))
     except Exception as e:

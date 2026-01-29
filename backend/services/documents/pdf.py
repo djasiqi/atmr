@@ -18,6 +18,7 @@ from services.documents.qrbill import QRBillService
 LEVEL_ONE = 1
 LEVEL_THRESHOLD = 2
 MAX_PATIENT_NAME_LENGTH = 18
+MONTHS_PER_YEAR = 12
 
 app_logger = logging.getLogger("pdf_service")
 
@@ -38,6 +39,138 @@ DEST_ADDR_Y_MM = (
 DEST_ADDR_MAX_WIDTH_MM = 85.0  # Largeur max wrapping (zone fenêtre C5, safe par défaut)
 DEST_ADDR_LINE_HEIGHT_MM = 4.0  # Interligne (mm)
 DEST_ADDR_ZONE_HEIGHT_MM = 45.0  # Hauteur zone fenêtre C5
+
+# Espacement pour pousser le QR-Bill en bas de sa page (A4 - margins - QR height)
+# Formule: spacer_max = usable_height - QR_height - overhead
+#   marge bas 0.5cm: usable=771pt, QR+overhead~292pt → spacer_safe≈475
+# Source unique : utilisé par pdf.py et partnerships/invoices_pdf.py
+QR_BILL_SPACER_PT = 478
+
+# Dimensions du QR-Bill (12x6 cm standard suisse) — source unique pour tous les PDF
+QR_BILL_WIDTH_CM = 12.0
+QR_BILL_HEIGHT_CM = 6.0
+QR_BILL_TABLE_COL_WIDTHS_CM = (6.0, 12.0)  # (colonne QR, colonne vide)
+
+# Zoom : facteur d'échelle (1.0 = 100%, 1.1 = agrandir 10%, 0.9 = rétrécir 10%)
+# 1.57 = compromis pour spacer 435 (1.6 débordait à 435)
+QR_BILL_SCALE_FACTOR = 1.6
+
+# Positionnement horizontal : décalage gauche/droite (mm)
+# > 0 = décaler vers la droite, < 0 = décaler vers la gauche
+QR_BILL_LEFT_PADDING_MM = -5.0
+
+# Marge bas page QR-Bill (pas de pied de page légal) — QR-Bill au maximum en bas
+# 0.5 cm = spacer 475 avec scale 1.6 (maximum descente sans débordement)
+QR_BILL_PAGE_BOTTOM_MARGIN_CM = 0.5
+
+
+def _make_invoice_doc_with_qrbill_page(
+    buffer: Any,
+    top_margin_cm: float,
+    bottom_margin_cm: float,
+    left_margin_cm: float,
+    right_margin_cm: float,
+    on_first_page: Any,
+    on_later_pages: Any = None,
+) -> Any:
+    """Crée un DocTemplate avec une page QR-Bill dédiée (marge bas 0.5 cm, pas de pied légal).
+
+    Les pages de contenu gardent bottom_margin_cm (ex: 2.5 cm pour pied de page).
+    La page QR-Bill utilise QR_BILL_PAGE_BOTTOM_MARGIN_CM (0.5 cm).
+    """
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import cm
+    from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate
+    from reportlab.platypus.doctemplate import _doNothing
+
+    if on_later_pages is None:
+        on_later_pages = _doNothing
+
+    doc = BaseDocTemplate(
+        buffer,
+        pagesize=A4,
+        topMargin=top_margin_cm * cm,
+        bottomMargin=bottom_margin_cm * cm,
+        leftMargin=left_margin_cm * cm,
+        rightMargin=right_margin_cm * cm,
+    )
+    doc._calc()
+
+    # Frame pages contenu (marge bas standard)
+    frame_content = Frame(
+        doc.leftMargin,
+        bottom_margin_cm * cm,
+        doc.width,
+        A4[1] - doc.topMargin - bottom_margin_cm * cm,
+        id="normal",
+    )
+    # Frame page QR-Bill (marge bas 0.5 cm, pas de pied légal)
+    qrbill_bottom = QR_BILL_PAGE_BOTTOM_MARGIN_CM * cm
+    frame_qrbill = Frame(
+        doc.leftMargin,
+        qrbill_bottom,
+        doc.width,
+        A4[1] - doc.topMargin - qrbill_bottom,
+        id="qrbill",
+    )
+
+    doc.addPageTemplates(
+        [
+            PageTemplate(id="First", frames=frame_content, onPage=on_first_page),
+            PageTemplate(id="Later", frames=frame_content, onPage=on_later_pages),
+            PageTemplate(id="QRBill", frames=frame_qrbill),
+        ]
+    )
+
+    # Basculer vers Later après la première page (comportement SimpleDocTemplate)
+    def _handle_page_begin():
+        doc._handle_pageBegin()
+        if doc.page == 1:
+            doc._handle_nextPageTemplate("Later")
+
+    doc.handle_pageBegin = _handle_page_begin
+    return doc
+
+
+def _make_qr_bill_table(drawing: Any) -> Any:
+    """Crée un tableau ReportLab pour afficher le QR-Bill (dimensions et style unifiés).
+
+    Utilisé par pdf.py et partnerships/invoices_pdf.py.
+    """
+    from reportlab.lib import colors
+    from reportlab.lib.units import cm, mm
+    from reportlab.platypus import Table, TableStyle
+
+    w_pt = QR_BILL_WIDTH_CM * cm * QR_BILL_SCALE_FACTOR
+    h_pt = QR_BILL_HEIGHT_CM * cm * QR_BILL_SCALE_FACTOR
+    orig_w, orig_h = drawing.width, drawing.height
+    drawing.width = w_pt
+    drawing.height = h_pt
+    if orig_w > 0 and orig_h > 0:
+        drawing.scale(w_pt / orig_w, h_pt / orig_h)
+
+    col_widths = [
+        QR_BILL_TABLE_COL_WIDTHS_CM[0] * cm,
+        QR_BILL_TABLE_COL_WIDTHS_CM[1] * cm,
+    ]
+    qr_table = Table([[drawing, ""]], colWidths=col_widths)
+    left_pad_pt = QR_BILL_LEFT_PADDING_MM * mm
+    qr_table.setStyle(
+        TableStyle(
+            [
+                ("ALIGN", (0, 0), (0, 0), "LEFT"),
+                ("ALIGN", (1, 0), (1, 0), "LEFT"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+                ("LEFTPADDING", (0, 0), (0, 0), left_pad_pt),
+                ("LEFTPADDING", (1, 0), (1, 0), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+    return qr_table
 
 
 def _compute_c5_zone_canvas_coords(
@@ -172,28 +305,26 @@ def _normalize_address_for_comparison(address: str) -> str:
     return normalized.strip()
 
 
-def _short_label_for_transport(address: str, max_len: int = 25) -> str:
-    """Produit un libellé court pour 'A' ou 'B' dans 'A ↔ B' / 'A → B'.
+def _short_label_for_transport(address: str) -> str:
+    """Produit un libellé pour 'A' ou 'B' dans 'A ↔ B' / 'A → B'.
 
     - Prend la première partie avant virgule si présente, sinon tout.
-    - Tronque à max_len avec '...' si nécessaire.
+    - Pas de troncature : le Paragraph wrap automatiquement sur plusieurs lignes.
     """
     if not address:
         return ""
     s = address.strip()
     if "," in s:
         s = s.split(",")[0].strip()
-    if len(s) <= max_len:
-        return s
-    return s[: max_len - 3] + "..."
+    return s
 
 
-def _short_detail_label(address: str, max_len: int = 15) -> str:
-    """Libellé très court pour la ligne détail A/R (ex. 'Courbes', 'HUG').
+def _short_detail_label(address: str) -> str:
+    """Libellé pour la ligne détail A/R (ex. 'Courbes', 'HUG').
 
     - Avant virgule si présent.
     - Si " des ", " de ", " du " : prend la partie après (ex. "Chemin des Courbes" → "Courbes").
-    - Tronque à max_len si besoin.
+    - Pas de troncature : le Paragraph wrap automatiquement sur plusieurs lignes.
     """
     if not address or not address.strip():
         return ""
@@ -206,9 +337,7 @@ def _short_detail_label(address: str, max_len: int = 15) -> str:
             if part:
                 s = part
             break
-    if len(s) <= max_len:
-        return s
-    return s[: max_len - 3] + "..."
+    return s
 
 
 def _svg_content_to_drawing(svg_content: str | bytes) -> Any:
@@ -264,11 +393,8 @@ def _format_patient_name_s2(patient_name: str) -> str:
 
 # Constantes pour la détection d'aller-retour
 _MIN_ITEMS_FOR_ROUND_TRIP = 2
-_MAX_TRANSPORT_DISPLAY_LENGTH = 55
-_TRANSPORT_DISPLAY_TRUNCATE_LENGTH = 52
-# A/R : réserver place pour " ↔ [A/R]" (~10 car) pour qu'il reste sur la 1ère ligne
-_MAX_TRANSPORT_DISPLAY_LENGTH_AR = 42
-_TRANSPORT_DISPLAY_TRUNCATE_LENGTH_AR = 39
+# Colonne Transport : pas de limite de caractères — le Paragraph wrap automatiquement
+# sur plusieurs lignes selon transport_w (11.5 cm).
 # Tolérance pour les montants (delta acceptable en CHF)
 _AMOUNT_TOLERANCE_CHF = Decimal("5.00")
 # Fenêtre temporelle maximale pour un aller-retour (en heures)
@@ -934,6 +1060,17 @@ def _load_logo_ratio_safe(  # noqa: PLR0911
         return (None, 0.0, 0.0)
 
 
+def _name_with_uppercase_last_name(name: str) -> str:
+    """Met le nom de famille (dernier mot) en majuscules pour le bloc « Facturé à »."""
+    if not name or not str(name).strip():
+        return name
+    parts = name.strip().split()
+    if not parts:
+        return name
+    parts[-1] = parts[-1].upper()
+    return " ".join(parts)
+
+
 def _get_billed_to(invoice: "Invoice") -> tuple[str, str]:
     """Retourne (nom, adresse formatée) pour le bloc « Facturé à »."""
     if getattr(invoice, "billing_party_id", None):
@@ -941,7 +1078,7 @@ def _get_billed_to(invoice: "Invoice") -> tuple[str, str]:
 
         bp = BillingPartyModel.query.get(invoice.billing_party_id)
         if bp:
-            name = bp.display_name or "Payeur"
+            name = _name_with_uppercase_last_name(bp.display_name or "Payeur")
             raw = bp.billing_address or "Adresse non renseignée"
             raw = _sanitize_billed_to_address(name, raw)
             return (
@@ -953,7 +1090,7 @@ def _get_billed_to(invoice: "Invoice") -> tuple[str, str]:
             getattr(invoice, "billing_party_id", None),
             getattr(invoice, "id", None),
         )
-        return ("Payeur", "Adresse non renseignée")
+        return (_name_with_uppercase_last_name("Payeur"), "Adresse non renseignée")
     if invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id:
         from models import Client as ClientModel
 
@@ -964,7 +1101,9 @@ def _get_billed_to(invoice: "Invoice") -> tuple[str, str]:
                 getattr(invoice, "id", None),
                 getattr(invoice, "bill_to_client_id", None),
             )
-            name = institution.institution_name or "Institution"
+            name = _name_with_uppercase_last_name(
+                institution.institution_name or "Institution"
+            )
             raw = institution.billing_address or "Adresse non renseignée"
             raw = _sanitize_billed_to_address(name, raw)
             return (
@@ -976,7 +1115,10 @@ def _get_billed_to(invoice: "Invoice") -> tuple[str, str]:
             getattr(invoice, "bill_to_client_id", None),
             getattr(invoice, "id", None),
         )
-        return ("Institution", "Adresse non renseignée")
+        return (
+            _name_with_uppercase_last_name("Institution"),
+            "Adresse non renseignée",
+        )
     app_logger.info(
         "[PDF] Fallback client bénéficiaire utilisé (invoice_id=%s, client_id=%s).",
         getattr(invoice, "id", None),
@@ -984,7 +1126,7 @@ def _get_billed_to(invoice: "Invoice") -> tuple[str, str]:
     )
     client = invoice.client
     name = (
-        f"{client.user.first_name or ''} {client.user.last_name or ''}".strip()
+        f"{client.user.first_name or ''} {(client.user.last_name or '').upper()}".strip()
         or client.user.username
         or "Client"
     )
@@ -1008,7 +1150,10 @@ def _get_billed_to(invoice: "Invoice") -> tuple[str, str]:
     ):
         raw = client.user.address
     raw = _sanitize_billed_to_address(name, raw)
-    return (name, _format_billed_to_three_lines(raw or "Adresse non renseignée"))
+    return (
+        _name_with_uppercase_last_name(name),
+        _format_billed_to_three_lines(raw or "Adresse non renseignée"),
+    )
 
 
 def _wrap_line_by_words(line: str, max_chars: int = 90) -> str:
@@ -1133,7 +1278,6 @@ def _build_s2_table(
     font_name: str,
     font_name_bold: str,
     s2_main_style: Any,
-    s2_detail_style: Any,
     *,
     include_non_ride: bool = False,
     available_width_pt: float | None = None,
@@ -1265,25 +1409,17 @@ def _build_s2_table(
         )
         if is_ar:
             base = item.get("transport_display", "")
-            if len(base) > _MAX_TRANSPORT_DISPLAY_LENGTH_AR:
-                base = base[:_TRANSPORT_DISPLAY_TRUNCATE_LENGTH_AR] + "..."
             main_text = (
                 f"{base}&nbsp;<font color='#aaaaaa' size='8'>↔</font>&nbsp;[A/R]"
             )
-            ad = item.get("aller_detail_short") or item.get("aller_detail", "")
-            rd = item.get("retour_detail_short") or item.get("retour_detail", "")
-            detail_text = f"Aller : {ad} • Retour : {rd}"
             para_main = Paragraph(f"<b>{main_text}</b>", s2_main_style)
-            para_detail = Paragraph(detail_text, s2_detail_style)
-            transport_cell = [para_main, para_detail]
+            transport_cell = para_main
             amount_cell = Paragraph(
                 f'<para align="right"><b>{amount_val}</b></para>',
                 s2_main_style,
             )
         else:
             transport = item.get("transport_display", "")
-            if len(transport) > _MAX_TRANSPORT_DISPLAY_LENGTH:
-                transport = transport[:_TRANSPORT_DISPLAY_TRUNCATE_LENGTH] + "..."
             transport_cell = Paragraph(transport, s2_main_style)
             amount_cell = Paragraph(
                 f'<para align="right">{amount_val}</para>',
@@ -1298,14 +1434,16 @@ def _build_s2_table(
                 amount = f"{Decimal(amt):.2f}"
                 table_data.append(["", "", line.description[:30], amount])
 
+    # Date et Client inchangés (éviter décalage gauche). Montant réduit pour donner
+    # plus d'espace à Transport à droite, sans déplacer les colonnes de gauche.
     date_w = 2 * cm
     patient_w = 3 * cm
-    amount_w = 2.5 * cm
+    amount_w = 2 * cm
     if available_width_pt is not None and available_width_pt > 0:
         rest = available_width_pt - (date_w + patient_w + amount_w)
         transport_w = max(rest, 1 * cm)
     else:
-        transport_w = 9.9 * cm
+        transport_w = 11.5 * cm
     col_widths = [date_w, patient_w, transport_w, amount_w]
 
     tbl = Table(table_data, colWidths=col_widths, repeatRows=1)
@@ -1320,8 +1458,9 @@ def _build_s2_table(
         ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.black),
         ("FONTNAME", (0, 1), (-1, -1), font_name),
         ("BOTTOMPADDING", (0, 1), (-1, -1), 1),
-        ("TOPPADDING", (0, 1), (-1, -1), 1),
-        ("LEFTPADDING", (0, 0), (-1, -1), 1),
+        ("TOPPADDING", (0, 1), (-1, -1), 2),
+        ("LEFTPADDING", (0, 0), (0, -1), 0),  # Colonne Date : alignement marge gauche
+        ("LEFTPADDING", (1, 0), (-1, -1), 1),
         ("RIGHTPADDING", (0, 0), (-1, -1), 1),
         ("LEFTPADDING", (2, 0), (2, -1), 1),
         ("RIGHTPADDING", (2, 0), (2, -1), 10),
@@ -2083,7 +2222,6 @@ class PDFService:
         )
         from reportlab.platypus import (
             Paragraph,
-            SimpleDocTemplate,
             Spacer,
             Table,
             TableStyle,
@@ -2107,19 +2245,11 @@ class PDFService:
             font_name_bold = "Helvetica-Bold"
 
         buffer = BytesIO()
-        doc = SimpleDocTemplate(
-            buffer,
-            pagesize=A4,
-            topMargin=2 * cm,
-            bottomMargin=2.5 * cm,  # Réserve espace pour pied de page légal
-            leftMargin=2 * cm,
-            rightMargin=2 * cm,
-        )
 
         # Styles basés sur le design de référence
         styles = getSampleStyleSheet()
 
-        # Style pour le texte normal
+        # Style pour le texte normal (leftIndent=0 pour alignement marge gauche)
         normal_style = ParagraphStyle(
             "Normal",
             parent=styles["Normal"],
@@ -2128,6 +2258,9 @@ class PDFService:
             alignment=TA_LEFT,
             spaceAfter=6,
             fontName=font_name,
+            leftIndent=0,
+            rightIndent=0,
+            firstLineIndent=0,
         )
 
         # Style pour le texte centré (pied de page)
@@ -2146,17 +2279,6 @@ class PDFService:
             fontSize=9,
             leading=9.5,
             textColor=colors.black,
-            alignment=TA_LEFT,
-            spaceBefore=0,
-            spaceAfter=0,
-            fontName=font_name,
-        )
-        s2_detail_style = ParagraphStyle(
-            "S2Detail",
-            parent=styles["Normal"],
-            fontSize=7,
-            leading=8,
-            textColor=colors.grey,
             alignment=TA_LEFT,
             spaceBefore=0,
             spaceAfter=0,
@@ -2219,9 +2341,8 @@ class PDFService:
             company.billing_email or company.contact_email or "[Email non configuré]"
         )
         company_uid = company.uid_ide or "[IDE/UID non configuré]"
-
-        # ✅ Statut TVA (conformité facturation suisse)
-        vat_status_text = "Non assujetti à la TVA"
+        # ✅ Statut TVA : afficher uniquement si assujetti (pas de mention si non assujetti)
+        vat_status_text = ""
         if billing_settings and billing_settings.vat_applicable:
             vat_number = billing_settings.vat_number or ""
             if vat_number:
@@ -2234,19 +2355,19 @@ class PDFService:
         recipient_top_padding_mm = 25.0  # destinataire légèrement plus bas
         recipient_left_padding_mm = 15.0  # déplace le bloc destinataire vers la droite (pas d'espace volé à l'expéditeur)
         dest_width_pt = DEST_ADDR_MAX_WIDTH_MM * mm
-        page_width_pt = doc.pagesize[0]
-        usable_width_pt = page_width_pt - doc.leftMargin - doc.rightMargin
+        page_width_pt = A4[0]
+        usable_width_pt = page_width_pt - 2 * cm - 2 * cm
         company_width_pt = (
             usable_width_pt - dest_width_pt
         )  # expéditeur garde toute sa largeur
 
+        vat_line = f"<br/>{vat_status_text}" if vat_status_text else ""
         company_info_left = f"""
         {company_name}<br/>
         {company_address}<br/>
-        Email facturation : {company_email}<br/>
-        Téléphone : {company_phone}<br/>
-        IDE/UID : {company_uid}<br/>
-        {vat_status_text}
+        {company_email}<br/>
+        {company_phone}<br/>
+        IDE/UID : {company_uid}{vat_line}
         """
         company_para = Paragraph(company_info_left, normal_style)
 
@@ -2424,11 +2545,30 @@ class PDFService:
             if reminder_ctx.get("is_reminder")
             else "Date d'échéance :"
         )
+        _mois_fr = (
+            "janvier",
+            "février",
+            "mars",
+            "avril",
+            "mai",
+            "juin",
+            "juillet",
+            "août",
+            "septembre",
+            "octobre",
+            "novembre",
+            "décembre",
+        )
+        period_label = (
+            f"{_mois_fr[invoice.period_month - 1]} {invoice.period_year}"
+            if 1 <= invoice.period_month <= MONTHS_PER_YEAR
+            else f"{invoice.period_month:02d}.{invoice.period_year}"
+        )
         invoice_info_left = f"""
         <b>Numéro de facture :</b> {invoice.invoice_number}<br/>
         <b>Date d'émission :</b> {invoice.issued_at.strftime("%d.%m.%Y")}<br/>
         <b>{echeance_label}</b> {invoice.due_date.strftime("%d.%m.%Y")}<br/>
-        <b>Période :</b> {invoice.period_month:02d}.{invoice.period_year}
+        <b>Période de facturation :</b> {period_label}
         """
 
         story.append(Paragraph(invoice_info_left, normal_style))
@@ -2503,51 +2643,38 @@ class PDFService:
             font_name,
             font_name_bold,
             s2_main_style,
-            s2_detail_style,
             include_non_ride=False,
-            available_width_pt=doc.width,
+            available_width_pt=usable_width_pt,
         )
 
         # ✅ Utiliser toujours le tableau unifié S2
         story.append(Paragraph("<b>DÉTAIL DES TRANSPORTS</b>", normal_style))
         story.append(Spacer(1, 6))
         story.append(s2_table)
-        story.append(Spacer(1, 4))
+        story.append(Spacer(1, 2))
 
         # === TOTAL ===
         if reminder_ctx.get("is_reminder"):
             story.append(Spacer(1, 16))  # Respiration avant totaux (rappel)
         total_separator = Table([[""]], colWidths=[17 * cm])
         total_separator.setStyle(
-            TableStyle([("LINEBELOW", (0, 0), (0, 0), 1, colors.black)])
+            TableStyle(
+                [
+                    ("LINEBELOW", (0, 0), (0, 0), 1, colors.black),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ]
+            )
         )
         story.append(total_separator)
         story.append(Spacer(1, 8))
 
-        # ✅ Récapitulatif détaillé (nombre A/R, nombre allers simples, total transports)
-        # Affiché pour toutes les factures utilisant le tableau unifié
         if consolidated_lines:
-            round_trip_count = sum(
-                1 for item in consolidated_lines if item.get("is_round_trip", False)
+            note_para = Paragraph(
+                '<font size="7" color="grey">[A/R] = transport aller-retour</font>',
+                normal_style,
             )
-            one_way_count = sum(
-                1 for item in consolidated_lines if not item.get("is_round_trip", False)
-            )
-            # ✅ A/R compte pour 1 transport (pas 2)
-            total_transports = round_trip_count + one_way_count
-
-            # Récapitulatif détaillé avec micro-note
-            recap_text = (
-                f"<b>Récapitulatif</b><br/>"
-                f"- Transports aller-retour : {round_trip_count}<br/>"
-                f"- Transports aller simple : {one_way_count}<br/>"
-                f"- Total transports : {total_transports}<br/>"
-                f'<font size="7" color="grey">'
-                f"(Un aller-retour compte comme 1 transport)"
-                f"</font>"
-            )
-            recap_para = Paragraph(recap_text, normal_style)
-            story.append(recap_para)
+            story.append(note_para)
             story.append(Spacer(1, 8))
 
         # ✅ Utiliser toujours le format unifié pour les totaux (même libellé "TOTAL À FACTURER")
@@ -2641,17 +2768,28 @@ class PDFService:
             footer_cb(canvas, doc)
             _on_first_page_debug_envelope(canvas, doc)
 
+        # Doc avec page QR-Bill dédiée (marge bas 2 cm, pas de pied légal)
+        doc = _make_invoice_doc_with_qrbill_page(
+            buffer,
+            top_margin_cm=2,
+            bottom_margin_cm=2.5,  # Réserve espace pour pied de page légal
+            left_margin_cm=2,
+            right_margin_cm=2,
+            on_first_page=_on_first_page,
+        )
+
         # === QR-BILL SUISSE OFFICIEL SUR PAGE SÉPARÉE ===
-        # Forcer une nouvelle page pour le QR-Bill (toujours après la facture)
+        # Forcer une nouvelle page pour le QR-Bill (marge bas 2 cm)
         from reportlab.platypus import (
+            NextPageTemplate,
             PageBreak,
         )
 
+        story.append(NextPageTemplate("QRBill"))
         story.append(PageBreak())
 
-        # Ajouter un espacement pour pousser le QR-Bill vraiment en bas
-        # de la page QR-Bill
-        story.append(Spacer(1, 545))  # Espacement optimal pour pousser vraiment en bas
+        # Espacement pour pousser le QR-Bill en bas de sa page (doit tenir dans usable_height)
+        story.append(Spacer(1, QR_BILL_SPACER_PT))
 
         try:
             # Générer le QR-Bill suisse officiel avec la vraie bibliothèque
@@ -2659,47 +2797,9 @@ class PDFService:
             qr_bill_svg_content = qr_bill_service.generate_qr_bill_svg(invoice)
 
             if qr_bill_svg_content:
-                # Convertir le SVG directement en drawing ReportLab
                 drawing = _svg_content_to_drawing(qr_bill_svg_content)
-
                 if drawing:
-                    # Redimensionner le drawing pour qu'il s'adapte à la page
-                    drawing.width = 12 * cm
-                    drawing.height = 6 * cm
-                    drawing.scale(12 * cm / drawing.width, 6 * cm / drawing.height)
-
-                    # Centrer le QR-Bill avec un tableau
-                    from reportlab.platypus import (
-                        Table,
-                        TableStyle,
-                    )
-
-                    # Créer un tableau avec colonne vide pour vraiment aligner à gauche
-                    qr_table = Table(
-                        [[drawing, ""]], colWidths=[6 * cm, 12 * cm]
-                    )  # QR-Bill encore plus petit + colonne vide encore plus grande
-                    qr_table.setStyle(
-                        TableStyle(
-                            [
-                                ("ALIGN", (0, 0), (0, 0), "LEFT"),  # QR-Bill à gauche
-                                (
-                                    "ALIGN",
-                                    (1, 0),
-                                    (1, 0),
-                                    "LEFT",
-                                ),  # Colonne vide à droite
-                                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                                ("BACKGROUND", (0, 0), (-1, -1), colors.white),
-                                ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                                ("TOPPADDING", (0, 0), (-1, -1), 0),
-                                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-                            ]
-                        )
-                    )
-
-                    # Ajouter le QR-Bill centré au PDF sur la deuxième page
-                    story.append(qr_table)
+                    story.append(_make_qr_bill_table(drawing))
             else:
                 story.append(Paragraph("QR-Bill non disponible", normal_style))
 
@@ -2707,8 +2807,8 @@ class PDFService:
             app_logger.warning("Impossible de générer le QR-Bill: %s", e)
             story.append(Paragraph("QR-Bill non disponible", normal_style))
 
-        # Générer le PDF (pied de page légal en zone fixe via onFirstPage)
-        doc.build(story, onFirstPage=_on_first_page)
+        # Générer le PDF (callbacks dans PageTemplates)
+        doc.build(story)
 
         # Retourner le contenu et le nombre de lignes
         buffer.seek(0)
@@ -2785,6 +2885,9 @@ class PDFService:
             alignment=TA_LEFT,
             spaceAfter=4,
             fontName=font_name,
+            leftIndent=0,
+            rightIndent=0,
+            firstLineIndent=0,
         )
         centered_style = ParagraphStyle(
             "Centered",
@@ -3117,7 +3220,7 @@ class PDFService:
 
         # === QR-BILL (SIMPLIFIÉ) ===
         story.append(PageBreak())
-        story.append(Spacer(1, 545))
+        story.append(Spacer(1, QR_BILL_SPACER_PT))
 
         try:
             qr_bill_service = self.qrbill_service
@@ -3125,21 +3228,7 @@ class PDFService:
             if qr_bill_svg_content:
                 drawing = _svg_content_to_drawing(qr_bill_svg_content)
                 if drawing:
-                    drawing.width = 12 * cm
-                    drawing.height = 6 * cm
-                    drawing.scale(12 * cm / drawing.width, 6 * cm / drawing.height)
-                    qr_table = Table([[drawing, ""]], colWidths=[6 * cm, 12 * cm])
-                    qr_table.setStyle(
-                        TableStyle(
-                            [
-                                ("ALIGN", (0, 0), (0, 0), "LEFT"),
-                                ("ALIGN", (1, 0), (1, 0), "LEFT"),
-                                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                                ("BACKGROUND", (0, 0), (-1, -1), colors.white),
-                            ]
-                        )
-                    )
-                    story.append(qr_table)
+                    story.append(_make_qr_bill_table(drawing))
         except Exception as e:
             app_logger.warning("Impossible de générer le QR-Bill: %s", e)
 
@@ -3223,6 +3312,9 @@ class PDFService:
             alignment=TA_LEFT,
             spaceAfter=6,
             fontName=font_name,
+            leftIndent=0,
+            rightIndent=0,
+            firstLineIndent=0,
         )
         centered_style = ParagraphStyle(
             "Centered",
@@ -3248,17 +3340,6 @@ class PDFService:
             fontSize=9,
             leading=9.5,
             textColor=colors.black,
-            alignment=TA_LEFT,
-            spaceBefore=0,
-            spaceAfter=0,
-            fontName=font_name,
-        )
-        s2_detail_style = ParagraphStyle(
-            "S2Detail",
-            parent=styles["Normal"],
-            fontSize=7,
-            leading=8,
-            textColor=colors.grey,
             alignment=TA_LEFT,
             spaceBefore=0,
             spaceAfter=0,
@@ -3312,8 +3393,8 @@ class PDFService:
             company.billing_email or company.contact_email or "[Email non configuré]"
         )
         company_uid = company.uid_ide or "[IDE/UID non configuré]"
-
-        vat_status_text = "Non assujetti à la TVA"
+        # ✅ Statut TVA : afficher uniquement si assujetti (pas de mention si non assujetti)
+        vat_status_text = ""
         if billing_settings and billing_settings.vat_applicable:
             vat_number = billing_settings.vat_number or ""
             if vat_number:
@@ -3321,13 +3402,13 @@ class PDFService:
             else:
                 vat_status_text = f"TVA {billing_settings.vat_rate or 7.7}% incluse"
 
+        vat_line_d = f"<br/>{vat_status_text}" if vat_status_text else ""
         company_info_detailed = f"""
         <b>{company_name}</b><br/>
         {company_address}<br/>
-        Téléphone: {company_phone}<br/>
-        Email: {company_email}<br/>
-        IDE/UID: {company_uid}<br/>
-        {vat_status_text}
+        {company_phone}<br/>
+        {company_email}<br/>
+        IDE/UID: {company_uid}{vat_line_d}
         """
         company_para = Paragraph(company_info_detailed, normal_style)
 
@@ -3506,7 +3587,25 @@ class PDFService:
             if hasattr(invoice.status, "value")
             else str(invoice.status)
         )
-        period_str = f"{invoice.period_month:02d}.{invoice.period_year}"
+        _mois_fr_d = (
+            "janvier",
+            "février",
+            "mars",
+            "avril",
+            "mai",
+            "juin",
+            "juillet",
+            "août",
+            "septembre",
+            "octobre",
+            "novembre",
+            "décembre",
+        )
+        period_label_d = (
+            f"{_mois_fr_d[invoice.period_month - 1]} {invoice.period_year}"
+            if 1 <= invoice.period_month <= MONTHS_PER_YEAR
+            else f"{invoice.period_month:02d}.{invoice.period_year}"
+        )
         echeance_label = (
             "Date d'échéance initiale :"
             if reminder_ctx.get("is_reminder")
@@ -3517,7 +3616,7 @@ class PDFService:
         <b>Numéro de facture :</b> {invoice.invoice_number}<br/>
         <b>Date d'émission :</b> {invoice.issued_at.strftime("%d.%m.%Y")}<br/>
         <b>{echeance_label}</b> {invoice.due_date.strftime("%d.%m.%Y")}<br/>
-        <b>Période de facturation :</b> {period_str}<br/>
+        <b>Période de facturation :</b> {period_label_d}<br/>
         <b>Statut :</b> {status_value}
         """
         story.append(Paragraph(invoice_info_detailed, normal_style))
@@ -3566,7 +3665,6 @@ class PDFService:
             font_name,
             font_name_bold,
             s2_main_style,
-            s2_detail_style,
             include_non_ride=True,
             available_width_pt=doc.width,
         )
@@ -3574,40 +3672,28 @@ class PDFService:
         story.append(Paragraph("<b>DÉTAIL DES TRANSPORTS</b>", normal_style))
         story.append(Spacer(1, 6))
         story.append(s2_table)
-        story.append(Spacer(1, 4))
+        story.append(Spacer(1, 2))
 
         # === TOTAL DÉTAILLÉ ===
         total_separator = Table([[""]], colWidths=[17 * cm])
         total_separator.setStyle(
-            TableStyle([("LINEBELOW", (0, 0), (0, 0), 1, colors.black)])
+            TableStyle(
+                [
+                    ("LINEBELOW", (0, 0), (0, 0), 1, colors.black),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ]
+            )
         )
         story.append(total_separator)
         story.append(Spacer(1, 8))
 
-        # ✅ Récapitulatif détaillé (nombre A/R, nombre allers simples, total transports)
-        # Affiché pour toutes les factures utilisant le tableau unifié
         if consolidated_lines:
-            round_trip_count = sum(
-                1 for item in consolidated_lines if item.get("is_round_trip", False)
+            note_para = Paragraph(
+                '<font size="7" color="grey">[A/R] = transport aller-retour</font>',
+                detail_style,
             )
-            one_way_count = sum(
-                1 for item in consolidated_lines if not item.get("is_round_trip", False)
-            )
-            # ✅ A/R compte pour 1 transport (pas 2)
-            total_transports = round_trip_count + one_way_count
-
-            # Récapitulatif détaillé avec micro-note
-            recap_text = (
-                f"<b>Récapitulatif</b><br/>"
-                f"- Transports aller-retour : {round_trip_count}<br/>"
-                f"- Transports aller simple : {one_way_count}<br/>"
-                f"- Total transports : {total_transports}<br/>"
-                f'<font size="7" color="grey">'
-                f"(Un aller-retour compte comme 1 transport)"
-                f"</font>"
-            )
-            recap_para = Paragraph(recap_text, detail_style)
-            story.append(recap_para)
+            story.append(note_para)
             story.append(Spacer(1, 8))
 
         # ✅ Utiliser toujours le format unifié pour les totaux (même libellé "TOTAL À FACTURER")
@@ -3706,7 +3792,7 @@ class PDFService:
 
         # === QR-BILL ===
         story.append(PageBreak())
-        story.append(Spacer(1, 545))
+        story.append(Spacer(1, QR_BILL_SPACER_PT))
 
         try:
             qr_bill_service = self.qrbill_service
@@ -3714,21 +3800,7 @@ class PDFService:
             if qr_bill_svg_content:
                 drawing = _svg_content_to_drawing(qr_bill_svg_content)
                 if drawing:
-                    drawing.width = 12 * cm
-                    drawing.height = 6 * cm
-                    drawing.scale(12 * cm / drawing.width, 6 * cm / drawing.height)
-                    qr_table = Table([[drawing, ""]], colWidths=[6 * cm, 12 * cm])
-                    qr_table.setStyle(
-                        TableStyle(
-                            [
-                                ("ALIGN", (0, 0), (0, 0), "LEFT"),
-                                ("ALIGN", (1, 0), (1, 0), "LEFT"),
-                                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                                ("BACKGROUND", (0, 0), (-1, -1), colors.white),
-                            ]
-                        )
-                    )
-                    story.append(qr_table)
+                    story.append(_make_qr_bill_table(drawing))
         except Exception as e:
             app_logger.warning("Impossible de générer le QR-Bill: %s", e)
 
@@ -4430,7 +4502,7 @@ class PDFService:
         if reminder and reminder.total_due > 0 and reminder.qr_reference:
             story.append(Spacer(1, 30))
             story.append(PageBreak())
-            story.append(Spacer(1, 545))
+            story.append(Spacer(1, QR_BILL_SPACER_PT))
 
             try:
                 # Créer une facture "virtuelle" pour le QR-bill avec le montant total
@@ -4457,21 +4529,7 @@ class PDFService:
                 if qr_bill_svg_content:
                     drawing = _svg_content_to_drawing(qr_bill_svg_content)
                     if drawing:
-                        drawing.width = 12 * cm
-                        drawing.height = 6 * cm
-                        drawing.scale(12 * cm / drawing.width, 6 * cm / drawing.height)
-                        qr_table = Table([[drawing, ""]], colWidths=[6 * cm, 12 * cm])
-                        qr_table.setStyle(
-                            TableStyle(
-                                [
-                                    ("ALIGN", (0, 0), (0, 0), "LEFT"),
-                                    ("ALIGN", (1, 0), (1, 0), "LEFT"),
-                                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                                    ("BACKGROUND", (0, 0), (-1, -1), colors.white),
-                                ]
-                            )
-                        )
-                        story.append(qr_table)
+                        story.append(_make_qr_bill_table(drawing))
                         app_logger.info("QR-bill ajouté au PDF de rappel consolidé")
             except Exception as e:
                 app_logger.warning(

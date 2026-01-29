@@ -22,8 +22,32 @@ from services.documents.pdf import (  # noqa: I001
     DEST_ADDR_ZONE_HEIGHT_MM,
     _build_recipient_block_flowable,
     _compute_c5_zone_canvas_coords,
+    _name_with_uppercase_last_name,
     _wrap_line_by_words,
 )
+
+
+class TestNameWithUppercaseLastName:
+    """Tests du formatage nom de famille en majuscules."""
+
+    def test_last_name_uppercase(self):
+        """Drin Jasiqi → Drin JASIQI."""
+        assert _name_with_uppercase_last_name("Drin Jasiqi") == "Drin JASIQI"
+
+    def test_single_word_uppercase(self):
+        """Mot unique → tout en majuscules."""
+        assert _name_with_uppercase_last_name("Client") == "CLIENT"
+
+    def test_empty_unchanged(self):
+        """Chaîne vide ou None reste inchangé."""
+        assert _name_with_uppercase_last_name("") == ""
+        assert _name_with_uppercase_last_name(None) is None
+
+    def test_three_words_last_uppercase(self):
+        """Jean-Pierre Dupont → Jean-Pierre DUPONT."""
+        assert (
+            _name_with_uppercase_last_name("Jean-Pierre Dupont") == "Jean-Pierre DUPONT"
+        )
 
 
 class TestWrapLineByWords:

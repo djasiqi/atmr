@@ -350,6 +350,7 @@ class InvoicesList(Resource):
         with_reminders = args.get("with_reminders") in ("1", "true", "True", "on")
         page = args.get("page", default=1, type=int)
         per_page = args.get("per_page", default=20, type=int)
+        per_page = min(max(1, per_page), 100)  # Pas d'option "Toutes" (9999)
 
         # ✅ Utilisation du repository pour la requête avec filtres dynamiques
         from repositories.invoice_repository import InvoiceRepository
@@ -493,54 +494,40 @@ class InvoicesList(Resource):
                 )
             )
 
-        # Créer une sous-requête pour obtenir les IDs paginés (sans doublons)
-        # IMPORTANT: PostgreSQL exige que les colonnes ORDER BY soient dans le
-        # SELECT avec DISTINCT
-        # On sélectionne id et issued_at, on trie, puis on ne garde que id dans
-        # la sous-requête externe
-        # Note: Si issued_at est NULL, il sera trié en dernier (NULLS LAST par
-        # défaut en PostgreSQL)
+        # Créer une sous-requête pour obtenir TOUS les IDs (sans doublons)
+        # On charge toutes les factures normales pour les fusionner avec les
+        # factures partenaires, puis paginer sur la liste combinée (cohérence
+        # 20/50/100 par page).
         ids_subquery = (
             pagination_query.with_entities(Invoice.id, Invoice.issued_at)
             .distinct()
             .order_by(desc(Invoice.issued_at).nulls_last())
             .subquery()
         )
-
-        # Paginer sur les IDs
-        ids_pagination = db.session.query(ids_subquery.c.id).paginate(
-            page=page, per_page=per_page, error_out=False
+        all_regular_id_rows = (
+            db.session.query(ids_subquery.c.id)
+            .order_by(desc(ids_subquery.c.issued_at).nulls_last())
+            .all()
         )
-        paginated_ids = [row[0] for row in ids_pagination.items]
+        all_regular_ids = [row[0] for row in all_regular_id_rows]
 
-        # Charger les objets complets avec les relations pour les IDs paginés
-        # IMPORTANT: Utiliser subqueryload au lieu de joinedload pour les
-        # relations one-to-many pour éviter les doublons qui faussent la
-        # pagination
-        if paginated_ids:
+        # Charger les objets complets avec les relations pour TOUS les IDs
+        if all_regular_ids:
             from sqlalchemy.orm import subqueryload
 
             query = (
                 Invoice.query.options(
                     joinedload(Invoice.client).joinedload(Client.user),
                     joinedload(Invoice.bill_to_client).joinedload(Client.user),
-                    subqueryload(
-                        Invoice.lines
-                    ),  # Utiliser subqueryload pour one-to-many
-                    subqueryload(
-                        Invoice.payments
-                    ),  # Utiliser subqueryload pour one-to-many
+                    subqueryload(Invoice.lines),
+                    subqueryload(Invoice.payments),
                 )
-                .filter(Invoice.id.in_(paginated_ids))
+                .filter(Invoice.id.in_(all_regular_ids))
                 .order_by(desc(Invoice.issued_at).nulls_last())
             )
-
+            items = query.all()
         else:
-            # Aucun ID trouvé, créer une query vide
-            query = Invoice.query.filter(Invoice.id.in_([]))
-
-        # Charger les objets complets
-        items = query.all() if paginated_ids else []
+            items = []
 
         # Créer un objet de pagination manuel pour compatibilité avec le reste du code
         class PaginationObject:
@@ -557,9 +544,6 @@ class InvoicesList(Resource):
                 self.has_prev = page > 1
                 self.next_num = page + 1 if self.has_next else None
                 self.prev_num = page - 1 if self.has_prev else None
-
-        # Calculer le total pour la pagination (utiliser ids_pagination.total qui est déjà calculé)
-        total_count = ids_pagination.total if paginated_ids else 0
 
         result_invoices = [inv.to_dict() for inv in items]
 
@@ -1316,10 +1300,12 @@ class EligibleClients(Resource):
             db.session.query(
                 Booking.client_id.label("client_id"),
                 func.count(Booking.id).label("unbilled_count"),
-                func.coalesce(func.sum(Booking.amount), 0).label("unbilled_total_amount"),
-                func.max(func.coalesce(Booking.completed_at, Booking.scheduled_time)).label(
-                    "last_ride_at"
+                func.coalesce(func.sum(Booking.amount), 0).label(
+                    "unbilled_total_amount"
                 ),
+                func.max(
+                    func.coalesce(Booking.completed_at, Booking.scheduled_time)
+                ).label("last_ride_at"),
             )
             .outerjoin(InvoiceLine, Booking.invoice_line_id == InvoiceLine.id)
             .outerjoin(Invoice, InvoiceLine.invoice_id == Invoice.id)
@@ -1450,8 +1436,14 @@ class ClinicMonthlyTotals(Resource):
     @role_required(["ADMIN", "COMPANY"])
     @invoices_ns.param("year", "Année (ex: 2025)", type="integer", required=True)
     @invoices_ns.param("month", "Mois (1-12)", type="integer", required=True)
-    @invoices_ns.param("clinic_company_id", "ID de la clinique", type="integer", required=True)
-    @invoices_ns.param("include_client_ids", "IDs clients à inclure (optionnel, séparés par virgule)", type="string")
+    @invoices_ns.param(
+        "clinic_company_id", "ID de la clinique", type="integer", required=True
+    )
+    @invoices_ns.param(
+        "include_client_ids",
+        "IDs clients à inclure (optionnel, séparés par virgule)",
+        type="string",
+    )
     def get(self, company_id: int):  # noqa: PLR0911
         """Récupère les totaux des transports éligibles pour une facture clinique mensuelle.
 
@@ -1475,7 +1467,9 @@ class ClinicMonthlyTotals(Resource):
             except (ValueError, TypeError, OverflowError):
                 cid = None
             except Exception:
-                logger.debug("Unexpected error converting company.id to int: %s", cid_obj)
+                logger.debug(
+                    "Unexpected error converting company.id to int: %s", cid_obj
+                )
                 cid = None
             if cid != company_id:
                 return APIErrorHandler.handle_permission_error(
@@ -1499,7 +1493,11 @@ class ClinicMonthlyTotals(Resource):
             include_client_ids = None
             if include_client_ids_param:
                 try:
-                    include_client_ids = [int(x.strip()) for x in include_client_ids_param.split(",") if x.strip()]
+                    include_client_ids = [
+                        int(x.strip())
+                        for x in include_client_ids_param.split(",")
+                        if x.strip()
+                    ]
                 except (ValueError, TypeError):
                     include_client_ids = None
 
@@ -1540,12 +1538,16 @@ class ClinicMonthlyTotals(Resource):
 
             # Appliquer le filtre include_client_ids si fourni
             if include_client_ids:
-                eligible_query = eligible_query.filter(Booking.client_id.in_(include_client_ids))
+                eligible_query = eligible_query.filter(
+                    Booking.client_id.in_(include_client_ids)
+                )
 
             # Calculer les totaux des transports éligibles
             eligible_bookings = eligible_query.all()
             total_eligible = len(eligible_bookings)
-            total_amount_eligible = sum(safe_amount(b.amount) for b in eligible_bookings)
+            total_amount_eligible = sum(
+                safe_amount(b.amount) for b in eligible_bookings
+            )
 
             # eligible_client_ids : liste plate de client_id (DISTINCT), pour exclusions
             stmt = (
@@ -1587,14 +1589,18 @@ class ClinicMonthlyTotals(Resource):
                 )
                 excluded_bookings = excluded_query.all()
                 total_excluded = len(excluded_bookings)
-                total_amount_excluded = sum(safe_amount(b.amount) for b in excluded_bookings)
+                total_amount_excluded = sum(
+                    safe_amount(b.amount) for b in excluded_bookings
+                )
             elif eligible_client_ids:
                 excluded_query = excluded_query.filter(
                     Booking.client_id.in_(eligible_client_ids)
                 )
                 excluded_bookings = excluded_query.all()
                 total_excluded = len(excluded_bookings)
-                total_amount_excluded = sum(safe_amount(b.amount) for b in excluded_bookings)
+                total_amount_excluded = sum(
+                    safe_amount(b.amount) for b in excluded_bookings
+                )
             else:
                 # Aucune requête exclusions : excluded_bookings reste []
                 pass
@@ -1618,36 +1624,48 @@ class ClinicMonthlyTotals(Resource):
             # Retourner aussi les détails des transports exclus pour affichage
             excluded_details = []
             for booking in excluded_bookings:
-                excluded_details.append({
-                    "id": booking.id,
-                    "date": booking.scheduled_time.isoformat() if booking.scheduled_time else None,
-                    "scheduled_time": booking.scheduled_time.isoformat() if booking.scheduled_time else None,  # ✅ Alias pour compatibilité frontend
-                    "pickup_location": booking.pickup_location,
-                    "pickup_address": booking.pickup_location,  # ✅ Alias pour compatibilité frontend
-                    "dropoff_location": booking.dropoff_location,
-                    "dropoff_address": booking.dropoff_location,  # ✅ Alias pour compatibilité frontend
-                    "customer_name": booking.customer_name,
-                    "client_name": booking.customer_name,  # ✅ Alias pour compatibilité frontend
-                    "amount": float(booking.amount or 0),
-                    "billed_to_type": booking.billed_to_type,
-                    "billed_to_company_id": booking.billed_to_company_id,
-                    "billing_source": booking.billing_source.value if booking.billing_source else None,
-                    "status": booking.status.value if booking.status else None,
-                    # ✅ Ajouter invoice_line_id et billing_review_status pour safety rules S2
-                    "invoice_line_id": booking.invoice_line_id,
-                    # ✅ Normaliser billing_review_status en lowercase pour cohérence frontend
-                    "billing_review_status": (
-                        booking.billing_review_status.value.lower() if booking.billing_review_status else None
-                    ),
-                })
+                excluded_details.append(
+                    {
+                        "id": booking.id,
+                        "date": booking.scheduled_time.isoformat()
+                        if booking.scheduled_time
+                        else None,
+                        "scheduled_time": booking.scheduled_time.isoformat()
+                        if booking.scheduled_time
+                        else None,  # ✅ Alias pour compatibilité frontend
+                        "pickup_location": booking.pickup_location,
+                        "pickup_address": booking.pickup_location,  # ✅ Alias pour compatibilité frontend
+                        "dropoff_location": booking.dropoff_location,
+                        "dropoff_address": booking.dropoff_location,  # ✅ Alias pour compatibilité frontend
+                        "customer_name": booking.customer_name,
+                        "client_name": booking.customer_name,  # ✅ Alias pour compatibilité frontend
+                        "amount": float(booking.amount or 0),
+                        "billed_to_type": booking.billed_to_type,
+                        "billed_to_company_id": booking.billed_to_company_id,
+                        "billing_source": booking.billing_source.value
+                        if booking.billing_source
+                        else None,
+                        "status": booking.status.value if booking.status else None,
+                        # ✅ Ajouter invoice_line_id et billing_review_status pour safety rules S2
+                        "invoice_line_id": booking.invoice_line_id,
+                        # ✅ Normaliser billing_review_status en lowercase pour cohérence frontend
+                        "billing_review_status": (
+                            booking.billing_review_status.value.lower()
+                            if booking.billing_review_status
+                            else None
+                        ),
+                    }
+                )
 
-            return success_response(data={
-                "total_eligible": total_eligible,
-                "total_amount_eligible": total_amount_eligible,
-                "total_excluded": total_excluded,
-                "total_amount_excluded": total_amount_excluded,
-                "excluded_bookings": excluded_details,  # ✅ Détails des transports exclus
-            })
+            return success_response(
+                data={
+                    "total_eligible": total_eligible,
+                    "total_amount_eligible": total_amount_eligible,
+                    "total_excluded": total_excluded,
+                    "total_amount_excluded": total_amount_excluded,
+                    "excluded_bookings": excluded_details,  # ✅ Détails des transports exclus
+                }
+            )
 
         except (OperationalError, DBAPIError) as e:
             logger.error(
@@ -1774,7 +1792,9 @@ class GenerateInvoice(Resource):
                     # ✅ S2: Si erreur 409 (déjà générée), retourner l'invoice_id existante pour UX
                     HTTP_409_CONFLICT = 409
                     if invoice_result.status_code == HTTP_409_CONFLICT:
-                        result = invoice_result.error or {"error": "Facture déjà générée"}
+                        result = invoice_result.error or {
+                            "error": "Facture déjà générée"
+                        }
                         status_code = HTTP_409_CONFLICT
                     else:
                         result, status_code = (
@@ -2265,9 +2285,7 @@ class SendInvoice(Resource):
                 return success_response(
                     data={
                         "invoice_id": invoice_id,
-                        "sent_at": (
-                            pi.sent_at.isoformat() if pi.sent_at else None
-                        ),
+                        "sent_at": (pi.sent_at.isoformat() if pi.sent_at else None),
                         "send_method": "paper",
                     },
                     message="Facture marquée comme envoyée (courrier papier)",
@@ -2277,9 +2295,7 @@ class SendInvoice(Resource):
             from repositories.invoice_repository import InvoiceRepository
 
             invoice_repo = InvoiceRepository()
-            invoice = invoice_repo.find_model_by_id_and_company(
-                invoice_id, company_id
-            )
+            invoice = invoice_repo.find_model_by_id_and_company(invoice_id, company_id)
             if not invoice:
                 return APIErrorHandler.handle_not_found(
                     "Facture",
@@ -2660,7 +2676,9 @@ class InvoicePayments(Resource):
             principal_payment_amount = amount
             reminder_fee_payment_amount = Decimal("0.00")
 
-            if open_reminder and abs(float(amount) - float(open_reminder.total_due)) < float(AMOUNT_TOLERANCE):
+            if open_reminder and abs(
+                float(amount) - float(open_reminder.total_due)
+            ) < float(AMOUNT_TOLERANCE):
                 # ✅ Paiement correspond au total du rappel consolidé → ventilation automatique
                 logger.info(
                     "Paiement pour rappel consolidé détecté: reminder_id=%s, total_due=%s, amount=%s",
@@ -2833,6 +2851,7 @@ class InvoiceReminders(Resource):
                 # La facture initiale (invoice.pdf_url) reste INTACTE
 
                 import os
+
                 REMINDER_DEBUG = os.getenv("REMINDER_DEBUG", "0") == "1"
 
                 if REMINDER_DEBUG:
@@ -3089,7 +3108,11 @@ class RegenerateInvoicePdf(Resource):
             # ✅ PROTECTION IMMUTABILITÉ: Vérifier si la facture est "verrouillée"
             from models.enums import InvoiceStatus
 
-            locked_statuses = {InvoiceStatus.SENT, InvoiceStatus.PARTIALLY_PAID, InvoiceStatus.PAID}
+            locked_statuses = {
+                InvoiceStatus.SENT,
+                InvoiceStatus.PARTIALLY_PAID,
+                InvoiceStatus.PAID,
+            }
             if invoice.status in locked_statuses:
                 logger.warning(
                     (
@@ -3770,7 +3793,9 @@ class UnbilledReservations(Resource):
                         "invoice_line_id": r.invoice_line_id,
                         # ✅ Normaliser billing_review_status en lowercase pour cohérence frontend
                         "billing_review_status": (
-                            r.billing_review_status.value.lower() if r.billing_review_status else None
+                            r.billing_review_status.value.lower()
+                            if r.billing_review_status
+                            else None
                         ),
                     }
                     for r in reservations
@@ -4795,10 +4820,12 @@ class ExportPaymentsCSV(Resource):
                 db.session.query(InvoicePayment)
                 .join(Invoice, InvoicePayment.invoice_id == Invoice.id)
                 .options(
-                    joinedload(InvoicePayment.invoice).joinedload(Invoice.client).joinedload(
-                        Client.user
+                    joinedload(InvoicePayment.invoice)
+                    .joinedload(Invoice.client)
+                    .joinedload(Client.user),
+                    joinedload(InvoicePayment.invoice).joinedload(
+                        Invoice.billed_to_company
                     ),
-                    joinedload(InvoicePayment.invoice).joinedload(Invoice.billed_to_company),
                 )
                 .filter(Invoice.company_id == company_id)
                 .filter(Invoice.status != InvoiceStatus.CANCELLED)
@@ -4904,7 +4931,8 @@ class ExportPaymentsCSV(Resource):
                 # Type : Client (S1) ou Clinique (S2)
                 invoice_type = (
                     "Clinique"
-                    if invoice.billing_strategy == InvoiceBillingStrategy.S2_CLINIC_MONTHLY
+                    if invoice.billing_strategy
+                    == InvoiceBillingStrategy.S2_CLINIC_MONTHLY
                     else "Client"
                 )
 
@@ -4915,7 +4943,9 @@ class ExportPaymentsCSV(Resource):
                 row = [
                     paid_date,
                     invoice_number,
-                    client_name.replace(";", ","),  # Remplacer ; par , pour éviter les problèmes
+                    client_name.replace(
+                        ";", ","
+                    ),  # Remplacer ; par , pour éviter les problèmes
                     amount,
                     payment_method,
                     reference.replace(";", ","),
@@ -4943,7 +4973,9 @@ class ExportPaymentsCSV(Resource):
             return response
 
         except ValueError as e:
-            return APIErrorHandler.handle_validation_error(str(e), logger_instance=logger)
+            return APIErrorHandler.handle_validation_error(
+                str(e), logger_instance=logger
+            )
         except Exception as e:
             logger.exception("Erreur lors de l'export CSV des paiements")
             return APIErrorHandler.handle_exception(e, logger)

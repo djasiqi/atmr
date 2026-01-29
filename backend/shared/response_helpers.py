@@ -122,13 +122,16 @@ def paginated_response(
             }
         )
     """
+    pages = (total + per_page - 1) // per_page if total > 0 else 0
     response: dict[str, Any] = {
         "data": items,
         "pagination": {
             "total": total,
             "page": page,
             "per_page": per_page,
-            "pages": (total + per_page - 1) // per_page if total > 0 else 0,
+            "pages": pages,
+            "has_next": page < pages,
+            "has_prev": page > 1,
         },
     }
     if message:
