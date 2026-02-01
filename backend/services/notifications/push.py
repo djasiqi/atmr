@@ -211,43 +211,9 @@ def _check_duplicate_notification(  # ✅ CORRECTIF: Simple underscore = publiqu
         return False  # Fail-open en cas d'erreur
 
 
-def __invalidate_push_token(driver_id: int) -> None:  # pyright: ignore[reportUnusedFunction]
-    """Invalide le push token d'un driver dans la base de données.
-
-    Appelé automatiquement quand Expo détecte un token invalide/expiré.
-
-    Args:
-        driver_id: ID du driver dont le token doit être invalidé
-    """
-    try:
-        from ext import db
-        from models import Driver
-
-        driver = db.session.get(Driver, driver_id)
-        if driver and driver.push_token:
-            old_token_preview = (
-                driver.push_token[:TOKEN_DISPLAY_LENGTH]
-                if len(driver.push_token) > TOKEN_DISPLAY_LENGTH
-                else driver.push_token
-            )
-            driver.push_token = None
-            db.session.commit()
-            app_logger.info(
-                "[push] Token invalidé pour driver %s (token: %s...)",
-                driver_id,
-                old_token_preview,
-            )
-        else:
-            app_logger.debug(
-                "[push] Driver %s n'a pas de token à invalider",
-                driver_id,
-            )
-    except Exception:
-        app_logger.exception(
-            "[push] Erreur lors de l'invalidation du token pour driver %s",
-            driver_id,
-        )
-        # Ne pas propager l'erreur car c'est une opération de nettoyage non-critique
+# Push token invalidation is handled via DeviceToken.is_active = False
+# (see services/events/fanout.py and tasks/notification_tasks.py).
+# No legacy invalidation path (driver.push_token) — DeviceToken is the source of truth.
 
 
 def send_push_message(
@@ -326,20 +292,44 @@ def send_push_message(
         )
 
     # ✅ AMÉLIORATION: Déterminer la priorité selon le type de notification
+    # P0: priority "high" pour missions → affichage quand app killed (Android Doze)
     priority = (
         "high"
-        if notification_type in ["urgent_alert", "booking", "booking_cancelled"]
+        if notification_type
+        in ["urgent_alert", "booking", "booking_assigned", "booking_cancelled"]
         else "default"
     )
 
-    message = {
+    # P0: channelId à la RACINE du message Expo (pas seulement dans data)
+    # Si channelId dans data mais pas à la racine, l'OS Android peut ne pas afficher
+    # quand l'app est killed (Expo docs: channelId = champ racine Android-only)
+    data_dict = data or {}
+    channel_id = data_dict.get("channelId", "missions")
+    trace_id = data_dict.get("trace_id")
+
+    message: Dict[str, Any] = {
         "to": token,
         "sound": "default",
         "title": title,
         "body": body,
-        "data": data or {},
-        "priority": priority,  # high, default, or normal
+        "data": data_dict,
+        "priority": priority,
     }
+    # Android: channelId à la racine pour affichage quand app killed
+    if channel_id:
+        message["channelId"] = channel_id
+
+    # P2: Proof log — payload sanitized (sans token) pour diagnostic app killed
+    app_logger.info(
+        "[push] PUSH_PROOF payload (sanitized) title=%r body_len=%d priority=%s channelId=%s trace_id=%s",
+        title[:50] if title else "",
+        len(body or ""),
+        priority,
+        channel_id,
+        trace_id or "-",
+        extra={"correlation_id": correlation_id},
+    )
+
     result: Dict[str, Any] = {"ok": False, "error": "Unknown error"}
     try:
         resp = requests.post(
@@ -358,32 +348,36 @@ def send_push_message(
                 result = {"ok": True, "data": response_data.get("data")}
                 _record_push_success()  # ✅ Enregistrer succès pour circuit breaker
 
-                # ✅ INSTRUMENTATION: Provider Response ID (Expo ticket IDs)
+                # ✅ P2: PUSH_PROOF ticket — pour diagnostic app killed (corrélation receipts)
                 for ticket in response_data["data"]:
+                    tid = ticket.get("id")
                     app_logger.info(
-                        "[push] Expo Push ticket",
-                        extra={
-                            "correlation_id": correlation_id,
-                            "expo_ticket_id": ticket.get("id"),
-                            "status": ticket.get("status"),
-                        },
+                        "[push] PUSH_PROOF ticket status=ok id=%s correlation_id=%s → fetch receipt: python -m scripts.fetch_expo_receipts %s",
+                        tid,
+                        correlation_id,
+                        tid or "",
+                        extra={"correlation_id": correlation_id, "expo_ticket_id": tid},
                     )
             else:
                 # Au moins un ticket a échoué
                 errors = []
                 token_is_invalid = False
                 for ticket in response_data["data"]:
-                    # ✅ INSTRUMENTATION: Provider Response ID même en cas d'erreur
-                    app_logger.info(
-                        "[push] Expo Push ticket",
-                        extra={
-                            "correlation_id": correlation_id,
-                            "expo_ticket_id": ticket.get("id"),
-                            "status": ticket.get("status"),
-                        },
+                    tid = ticket.get("id")
+                    tstatus = ticket.get("status")
+                    tmsg = ticket.get("message", "")
+                    tdetails = ticket.get("details", {}) or {}
+                    # ✅ P2: PUSH_PROOF ticket — erreur immédiate (pas besoin receipt)
+                    app_logger.warning(
+                        "[push] PUSH_PROOF ticket status=error id=%s message=%s details=%s correlation_id=%s",
+                        tid,
+                        tmsg,
+                        tdetails.get("error", "-"),
+                        correlation_id,
+                        extra={"correlation_id": correlation_id, "expo_ticket_id": tid},
                     )
 
-                    if ticket.get("status") != "ok":
+                    if tstatus != "ok":
                         error_msg = ticket.get("message", "Unknown error")
                         error_type = ticket.get("details", {}).get("error")
                         errors.append(error_msg)

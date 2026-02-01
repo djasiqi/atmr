@@ -1,5 +1,31 @@
 export type ApiKind = "driver" | "enterprise" | "enterpriseStandard";
 
+/**
+ * Erreur stable pour rejet de la queue après échec refresh (session invalide).
+ * Utilisée par processQueue pour éviter retry spam et erreurs incohérentes.
+ */
+export class AuthInvalidError extends Error {
+  public readonly code = "AUTH_INVALID" as const;
+  public readonly route: "driver" | "enterprise";
+  public readonly reason: string;
+
+  constructor(params: { route: "driver" | "enterprise"; reason: string }) {
+    super(`AUTH_INVALID: ${params.route}:${params.reason}`);
+    this.name = "AuthInvalidError";
+    this.route = params.route;
+    this.reason = params.reason;
+  }
+}
+
+export function isAuthInvalidError(error: unknown): error is AuthInvalidError {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as any).name === "AuthInvalidError" &&
+    (error as any).code === "AUTH_INVALID"
+  );
+}
+
 export class AuthNotReadyError extends Error {
   public readonly code = "AUTH_NOT_READY" as const;
   public readonly kind: ApiKind;

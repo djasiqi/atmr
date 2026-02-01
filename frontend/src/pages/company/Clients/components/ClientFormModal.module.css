@@ -1,28 +1,235 @@
 /* ============================================================
    📝 STYLES PARTAGÉS - NewClientModal & EditClientModal
    ============================================================
-   Styles communs pour les formulaires de création et d'édition
-   de clients. Utilise les tokens de design globaux.
+   Design system aligné sur ManualBookingForm : inputs 44px,
+   focus ring, cards, footer sticky, accordéons modernes.
    ============================================================ */
 
-/* Form - ✅ Espacement réduit pour plus de compacité */
+/* Variables locales — alignées ManualBookingForm */
+.formWrapper {
+  --input-height: 44px;
+  --input-border: 1px solid #e2e8f0;
+  --input-focus-ring: 0 0 0 2px rgba(15, 118, 110, 0.2);
+  --spacing-xs: 8px;
+  --spacing-sm: 12px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --footer-height: 96px;
+}
+
+/* Form wrapper — même structure que ManualBookingForm */
+.formWrapper {
+  width: 100%;
+  background: #ffffff;
+  padding: var(--spacing-lg) var(--spacing-lg) 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden !important; /* override modal-content > * overflow-y:auto */
+}
+
+/* Form — padding-bottom uniquement */
 .form {
-  padding: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding-bottom: var(--spacing-lg);
+  overflow: hidden;
+}
+
+/* Header — même design que ManualBookingForm modalHeader */
+.modalHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.modalHeaderContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.modalTitle {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 4px 0;
+}
+
+.modalSubtitle {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.modalClose {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.modalClose:hover {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.modalClose:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.3);
+}
+
+/* Grille format 3x4 : gauche (form) | droite (résumé) — SINGLE SCROLL, pas de double scroll */
+.formScrollBody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 12px 4px;
+  padding-bottom: calc(var(--footer-height) + 16px);
+  background: #f8fafc;
+}
+
+/* P1.C Scrollbar discrète — webkit uniquement dans formScrollBody */
+.formScrollBody::-webkit-scrollbar {
+  width: 6px;
+}
+.formScrollBody::-webkit-scrollbar-track {
+  background: transparent;
+}
+.formScrollBody::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+.formScrollBody::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+@media (min-width: 1200px) {
+  .formScrollBody {
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 20px 8px;
+  }
+  .columnLeft {
+    grid-column: 1 / 3;
+  }
+  .columnRight {
+    grid-column: 3;
+  }
+}
+
+/* P0.2 Hardening mobile — footer plus haut, densité réduite, single scroll */
+@media (max-width: 900px) {
+  .formWrapper {
+    --footer-height: 132px;
+  }
+  .formScrollBody {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding-bottom: calc(var(--footer-height) + 16px);
+  }
+  .columnLeft,
+  .columnRight {
+    grid-column: auto;
+  }
+  .columnLeft {
+    gap: 10px;
+    padding: 12px;
+  }
+  .columnRight {
+    padding-top: 12px;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .columnLeft .formGroup {
+    gap: 8px;
+  }
+  .accordionHeader {
+    padding: 10px 12px;
+  }
+  .accordionStack {
+    gap: 10px;
+  }
+  .footerBody {
+    flex-direction: column;
+    gap: 10px;
+    align-items: stretch;
+  }
+  .footerRight .submitButton {
+    width: 100%;
+  }
+}
+
+.columnLeft,
+.columnRight {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+  min-height: 0;
+}
+
+/* Pas de overflow-y ici — le scroll est UNIQUEMENT sur formScrollBody */
+.columnLeft {
+  background: transparent;
+  padding: 16px;
+}
+
+.columnRight {
+  align-self: start;
+  padding-top: 16px;
+  padding-left: 16px;
+  padding-right: 16px;
+  min-width: 0;
+  gap: var(--spacing-sm);
 }
 
 .section {
-  margin-bottom: var(--spacing-lg);
+  margin-bottom: var(--spacing-md);
 }
 
 .section:last-of-type {
-  margin-bottom: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
+}
+
+/* P0.4 Accordéons — harmonica SaaS, card headers, collapse réel, animation */
+.accordionStack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .accordion {
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-md);
-  margin-bottom: var(--spacing-md);
-  background: var(--bg-secondary);
+  margin-bottom: 0;
+}
+
+.accordionStack .accordion {
+  margin-bottom: 0;
+}
+
+.accordionStack .accordion:last-of-type {
+  margin-bottom: 0;
 }
 
 .accordionHeader {
@@ -31,26 +238,193 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-sm);
-  padding: var(--spacing-sm);
-  background: transparent;
-  border: none;
+  padding: 12px 14px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
   cursor: pointer;
   text-align: left;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+  font-family: inherit;
+}
+
+.accordionHeader:hover {
+  background: #f8fafc;
+}
+
+.accordionHeader:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.35);
+}
+
+.accordionHeader[aria-expanded='true'] {
+  background: #f8fafc;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.accordionHeader[aria-expanded='false'] .accordionIcon {
+  transform: rotate(-90deg);
+}
+
+.accordionHeader[aria-expanded='true'] .accordionIcon {
+  transform: rotate(0deg);
+}
+
+.accordionTitleGroup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .accordionTitle {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.accordionOptionalBadge {
+  font-size: 0.65rem;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #94a3b8;
 }
 
 .accordionIcon {
   font-size: 1rem;
-  color: var(--text-tertiary);
+  color: #94a3b8;
+  transition: transform 180ms ease;
+  display: inline-block;
 }
 
+/* IMPORTANT: collapse réel — grid-template-rows 0fr en closed, pas de padding/border visible */
 .accordionContent {
-  padding: 0 var(--spacing-sm) var(--spacing-sm) var(--spacing-sm);
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  overflow: hidden;
+  transition: grid-template-rows 180ms ease, opacity 180ms ease;
+  background: #fff;
+  border-left: 1px solid #e2e8f0;
+  border-right: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+  border-radius: 0 0 12px 12px;
+}
+
+.accordionContentInner {
+  overflow: hidden;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 18px;
+  background: #ffffff;
+}
+
+/* OPEN */
+.accordionContent[data-state='open'] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+/* CLOSED: zéro espace — pas de padding/border visible */
+.accordionContent[data-state='closed'] .accordionContentInner {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.accordionContent[data-state='closed'] {
+  border-width: 0;
+  margin-top: 0;
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+
+/* Mobile: réduire densité (P1.B — padding 10–12px) */
+@media (max-width: 900px) {
+  .accordionHeader {
+    padding: 10px 12px;
+  }
+  .accordion {
+    margin-bottom: 12px;
+  }
+  .accordionContentInner {
+    padding: 12px;
+  }
+  .columnLeft {
+    gap: 10px;
+  }
+}
+
+/* Checkbox rows (Client actif, hospitalisation, curateur) — selectable row card */
+.checkboxRow {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Variante compacte — moins de hauteur verticale */
+.checkboxRowCompact {
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+.checkboxRowCompact .checkboxLabel input[type='checkbox'] {
+  margin-top: 0;
+  margin-bottom: 0;
+  align-self: center;
+  flex-shrink: 0;
+}
+
+.checkboxRowCompact .checkboxText {
+  gap: 0;
+}
+
+.checkboxRowCompact .checkboxText small {
+  font-size: 0.7rem;
+  line-height: 1.3;
+}
+
+.checkboxRow:last-child {
+  margin-bottom: 0;
+}
+
+.checkboxRow:hover {
+  background: #f8fafc;
+}
+
+.checkboxRow:focus-within {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.2);
+}
+
+.checkboxRow .checkboxLabel {
+  border: none;
+  padding: 0;
+  background: transparent;
+  min-height: auto;
+  align-items: center;
+}
+
+.checkboxRow .checkboxLabel input[type='checkbox'] {
+  margin-top: 0;
+}
+
+.checkboxRow .checkboxLabel:hover {
+  background: transparent;
+}
+
+.checkboxRow .checkboxLabel:focus-within {
+  box-shadow: none;
 }
 
 .sectionTitle {
@@ -99,113 +473,262 @@
   text-align: right;
 }
 
-/* Form groups - Utilise le pattern .form-group des styles globaux */
+/* Form groups — P0.5 densité réduite, gap 16-20px */
 .formGroup {
-  margin-bottom: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
+}
+
+.formGroup:last-child {
+  margin-bottom: 0;
 }
 
 .formRow {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-md);
+  gap: var(--spacing-md);
+  margin-bottom: 16px;
 }
 
-/* ✅ Utilise le pattern .form-label des styles globaux */
+.formRow:last-child {
+  margin-bottom: 0;
+}
+
+/* Un seul enfant dans formRow → pleine largeur */
+.formRow .formGroup:only-child {
+  grid-column: 1 / -1;
+}
+
+/* Format 3x4 responsive : 3 colonnes large, 2 tablette, 1 mobile */
+@media (min-width: 1200px) {
+  .formRow {
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 20px;
+  }
+}
+
+@media (max-width: 639px) {
+  .formRow {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-sm);
+  }
+}
+
+/* Date de naissance | Numéro AVS — 2 colonnes, pleine largeur */
+.formRowTwo {
+  grid-template-columns: 1fr 1fr;
+  width: 100%;
+}
+.formRowTwo .formGroup {
+  min-width: 0;
+}
+.formRowTwo .input,
+.formRowTwo .textarea {
+  min-width: 0;
+}
+@media (max-width: 639px) {
+  .formRowTwo {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Civilité | Prénom | Nom — civilité plus étroite pour laisser place aux noms */
+.formRowIdentity {
+  grid-template-columns: minmax(120px, 0.5fr) 1fr 1fr;
+}
+@media (max-width: 1199px) {
+  .formRowIdentity {
+    grid-template-columns: minmax(100px, 0.5fr) 1fr;
+  }
+}
+@media (max-width: 639px) {
+  .formRowIdentity {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Labels — même style que ManualBookingForm */
 .label {
   display: block;
   margin-bottom: var(--spacing-xs);
-  font-weight: var(--font-weight-medium);
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: #0f766e;
+  font-size: 0.8125rem;
 }
 
-/* ✅ Utilise le pattern .form-input / .form-textarea des styles globaux */
+/* P0.3 Inputs — 44px, border #e2e8f0, radius 10-12px, focus ring 2px */
 .input,
-.textarea {
+.textarea,
+.select {
   width: 100%;
-  padding: var(--spacing-sm);
-  border: 1px solid var(--border-secondary);
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
-  transition: var(--transition-fast);
+  height: var(--input-height);
+  min-height: var(--input-height);
+  padding: 0 var(--spacing-md);
+  border: var(--input-border);
+  border-radius: 10px;
+  font-size: 0.9rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
   font-family: var(--font-family-base);
+  background: #ffffff;
+  color: #1e293b;
+  box-sizing: border-box;
+}
+
+.input:hover,
+.textarea:hover,
+.select:hover {
+  border-color: #cbd5e1;
 }
 
 .input:focus,
-.textarea:focus {
+.input:focus-visible,
+.textarea:focus,
+.textarea:focus-visible,
+.select:focus,
+.select:focus-visible {
   outline: none;
-  border-color: var(--brand-primary);
-  box-shadow: 0 0 0 3px var(--brand-primary-lightest);
+  border-color: #0f766e;
+  box-shadow: var(--input-focus-ring);
 }
 
 .input:disabled,
-.textarea:disabled {
-  background: var(--bg-tertiary);
-  color: var(--text-disabled);
+.textarea:disabled,
+.select:disabled {
+  background: #f8fafc;
+  color: #94a3b8;
   cursor: not-allowed;
 }
 
-/* Input read-only (champs auto-remplis) */
+/* P0.3 Readonly — bg #f8fafc, text muted, cursor default */
 .input[readonly] {
-  background: var(--bg-tertiary);
+  background: #f8fafc !important;
+  color: #64748b;
   cursor: default;
 }
 
 .textarea {
+  height: auto;
+  min-height: 90px;
+  padding: var(--spacing-sm) var(--spacing-md);
   resize: vertical;
-  min-height: 80px;
+}
+
+/* Select (civilité, etc.) — harmoniser avec inputs */
+select.input {
+  appearance: auto;
+  cursor: pointer;
+}
+
+.accordionContentInner .formGroup,
+.accordionContentInner .formRow {
+  margin-bottom: 0;
+}
+
+.accordionContentInner .formRow {
+  gap: var(--spacing-md);
 }
 
 .hint {
   display: block;
   margin-top: var(--spacing-xs);
-  color: var(--text-tertiary);
-  font-size: var(--font-size-xs);
+  color: #94a3b8;
+  font-size: 0.75rem;
 }
 
-/* Checkbox group */
+/* Hint pleine largeur — une seule ligne */
+.hintFullWidth {
+  display: block;
+  width: 100%;
+  margin-top: var(--spacing-xs);
+  color: #94a3b8;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  .hintFullWidth {
+    white-space: normal;
+  }
+}
+
+/* P1 Checkboxes — uniform hit area, alignement, spacing */
 .checkboxGroup {
   margin-bottom: var(--spacing-sm);
+}
+
+.checkboxGroup:last-child {
+  margin-bottom: 0;
+}
+
+/* Variante compacte — moins de hauteur verticale */
+.checkboxGroupCompact .checkboxLabel {
+  padding: 8px 12px;
+  min-height: 36px;
+  align-items: center;
+}
+.checkboxGroupCompact .checkboxLabel input[type='checkbox'] {
+  margin-top: 0;
+  margin-bottom: 0;
+  align-self: center;
+  flex-shrink: 0;
+}
+.checkboxGroupCompact .checkboxText {
+  gap: 0;
+}
+.checkboxGroupCompact .checkboxText small {
+  font-size: 0.7rem;
+  line-height: 1.3;
 }
 
 .checkboxLabel {
   display: flex;
   align-items: flex-start;
-  gap: var(--spacing-sm);
+  gap: 12px;
   cursor: pointer;
-  padding: var(--spacing-sm);
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-md);
-  transition: var(--transition-fast);
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  transition: background 0.2s ease, border-color 0.2s ease;
+  background: #ffffff;
+  min-height: 44px;
+  box-sizing: border-box;
 }
 
 .checkboxLabel:hover {
-  background: var(--bg-secondary);
-  border-color: var(--border-secondary);
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.checkboxLabel:focus-within {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.2);
 }
 
 .checkboxLabel input[type='checkbox'] {
-  margin-top: 2px;
+  margin-top: 3px;
   width: 18px;
   height: 18px;
+  min-width: 18px;
   cursor: pointer;
+  accent-color: #0f766e;
 }
 
 .checkboxText {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
 }
 
 .checkboxText strong {
-  font-size: var(--font-size-sm);
-  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1e293b;
 }
 
 .checkboxText small {
-  font-size: var(--font-size-xs);
-  color: var(--text-secondary);
+  font-size: 0.75rem;
+  color: #64748b;
+  line-height: 1.4;
 }
 
 /* Error - ✅ Utilise les couleurs de danger globales */
@@ -219,12 +742,17 @@
   font-size: var(--font-size-sm);
 }
 
+/* P1 SummaryCard — style "confirm", labels muted, valeurs en gras */
 .summaryCard {
-  border: 1px dashed var(--border-secondary);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-sm);
-  background: var(--bg-secondary);
-  margin-bottom: var(--spacing-md);
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: var(--spacing-md);
+  background: #f8fafc;
+  margin-bottom: 0;
+  margin-top: 0;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .summaryRow {
@@ -232,7 +760,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-xs);
+  margin-bottom: var(--spacing-sm);
 }
 
 .summaryRow:last-child {
@@ -240,32 +768,221 @@
 }
 
 .summaryLabel {
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  color: var(--text-tertiary);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #94a3b8;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  flex-shrink: 0;
 }
 
 .summaryValue {
-  font-size: var(--font-size-sm);
-  color: var(--text-primary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #1e293b;
   text-align: right;
   word-break: break-word;
 }
 
-/* ⚠️ ACTIONS SUPPRIMÉES
-   Les boutons utilisent les classes globales .btn depuis le JSX.
-   Voir modal-footer (globals.css) et .btn (components.css)
-*/
+/* P1 "Adresse non renseignée" — couleur neutre (pas rouge) */
+.summaryValue.summaryValueEmpty {
+  font-weight: 500;
+  color: #94a3b8;
+}
 
-/* Responsive - ✅ Utilise les breakpoints globaux */
-@media (max-width: 640px) {
-  .form {
-    padding: var(--spacing-sm);
+.summaryCardTitle {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  margin: 0 0 var(--spacing-sm) 0;
+  color: #94a3b8;
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid #e2e8f0;
+}
+
+/* Hospitalisation — carte à droite sous le résumé */
+.hospitalizationCard {
+  margin-top: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: var(--spacing-md);
+  background: #ffffff;
+}
+
+.hospitalizationCardTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  margin: 0 0 var(--spacing-sm) 0;
+  color: #1e293b;
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.hospitalizationForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-md);
+}
+
+.hospitalizationCard .formGroup,
+.hospitalizationCard .formRow {
+  margin-bottom: 0;
+}
+
+/* Bouton CTA principal — même design que ManualBookingForm submitButton */
+.submitButton {
+  padding: 12px 24px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #00796b 0%, #00695c 100%);
+  color: white;
+  border: none;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 121, 107, 0.25);
+  position: relative;
+  overflow: hidden;
+}
+
+.submitButton::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.submitButton:hover::before {
+  left: 100%;
+}
+
+.submitButton:hover:not(:disabled) {
+  background: linear-gradient(135deg, #00695c 0%, #005c50 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 121, 107, 0.4);
+}
+
+.submitButton:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(0, 121, 107, 0.3);
+}
+
+.submitButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #94a3b8;
+  box-shadow: none;
+}
+
+/* P0.2 Footer sticky — fond, border-top, shadow, boutons alignés */
+.footerActions {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 16px calc(-1 * var(--spacing-lg)) 0;
+  padding: 12px var(--spacing-lg) var(--spacing-lg);
+  border-top: 1px solid #e2e8f0;
+  background: #ffffff;
+  box-shadow: 0 -10px 30px rgba(15, 23, 42, 0.08);
+  z-index: 20;
+  min-height: var(--footer-height);
+}
+
+@supports ((-webkit-backdrop-filter: blur(8px)) or (backdrop-filter: blur(8px))) {
+  .footerActions {
+    background: rgba(255, 255, 255, 0.88);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
   }
+}
 
-  .formRow {
-    grid-template-columns: 1fr;
+.footerSummary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #475569;
+  min-height: 20px;
+}
+
+.footerSummaryText {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.footerBody {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.footerLeft {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.footerRight {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.footerCancel {
+  padding: 10px 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: transparent;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.footerCancel:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+}
+
+.footerCancel:focus-visible {
+  outline: none;
+  border-color: #0f766e;
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.2);
+}
+
+@media (max-width: 640px) {
+  .formWrapper {
+    padding: var(--spacing-sm) var(--spacing-sm) 0;
+  }
+  .footerActions {
+    margin-left: calc(-1 * var(--spacing-sm));
+    margin-right: calc(-1 * var(--spacing-sm));
+    padding-left: var(--spacing-sm);
+    padding-right: var(--spacing-sm);
   }
 }

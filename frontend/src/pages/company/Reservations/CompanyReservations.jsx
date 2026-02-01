@@ -23,6 +23,7 @@ import TopClients from './components/TopClients';
 import ReservationModals from '../../../components/reservations/ReservationModals';
 import TransferBookingModal from '../../../components/reservations/TransferBookingModal';
 import { toast } from 'sonner';
+import { isCompletedStatus } from '../../../utils/reservationStatusUtils';
 import styles from './CompanyReservations.module.css';
 
 const CompanyReservations = () => {
@@ -34,7 +35,7 @@ const CompanyReservations = () => {
   const [selectedDay, setSelectedDay] = useState('all'); // Par défaut : toutes les dates
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter] = useState('all');
   const [sortOrder, setSortOrder] = useState('desc'); // Par défaut : ordre décroissant (plus récent d'abord)
   const [currentPage, setCurrentPage] = useState(1);
   const [reservationsPerPage, setReservationsPerPage] = useState(25); // Nombre de réservations par page
@@ -71,12 +72,6 @@ const CompanyReservations = () => {
     }
   }, [selectedDay, viewMode]);
 
-  // ✅ Fonction helper pour vérifier si une réservation est terminée (cohérent avec OverviewCards)
-  const isCompletedStatus = useCallback((status) => {
-    const normStatus = String(status || '').toLowerCase();
-    return ['completed', 'return_completed', 'done', 'finished'].includes(normStatus);
-  }, []);
-
   // Calculer les statistiques
   const calculateStats = useCallback((reservationsData) => {
     const newStats = {
@@ -92,7 +87,7 @@ const CompanyReservations = () => {
         .reduce((sum, r) => sum + (Number(r.amount) || 0), 0),
     };
     setStats(newStats);
-  }, [isCompletedStatus]);
+  }, []);
 
   // Chargement des réservations avec calculs des statistiques et alertes
   const loadReservations = useCallback(async () => {
@@ -103,7 +98,7 @@ const CompanyReservations = () => {
       const apiParam = selectedDay === 'all' || isDateRange ? null : selectedDay;
       const [startDate, endDate] = isDateRange ? selectedDay.split(':') : [null, null];
 
-      const data = await fetchCompanyReservationsPaginated({
+      const params = {
         date: apiParam,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
@@ -111,14 +106,30 @@ const CompanyReservations = () => {
         perPage: reservationsPerPage,
         status: statusFilter !== 'all' ? statusFilter : undefined,
         tab: activeTab !== 'all' ? activeTab : undefined,
-        search: searchTerm || undefined,
+        search: searchTerm ? searchTerm.trim() || undefined : undefined,
         sortOrder,
         excludeCanceled: activeTab === 'all' && statusFilter !== 'canceled',
-      });
+      };
+
+      if (process.env.REACT_APP_DEBUG_FILTERS === 'true') {
+        // eslint-disable-next-line no-console
+        console.debug('[Reservations] loadReservations params:', params);
+      }
+
+      const data = await fetchCompanyReservationsPaginated(params);
 
       const reservationsData = Array.isArray(data?.reservations)
         ? data.reservations
         : [];
+
+      if (process.env.REACT_APP_DEBUG_FILTERS === 'true') {
+        // eslint-disable-next-line no-console
+        console.debug('[Reservations] API response:', {
+          total: data?.total,
+          count: reservationsData.length,
+          sample: reservationsData[0]?.client_name,
+        });
+      }
 
       setReservations(reservationsData);
       setTotalReservations(data?.total ?? reservationsData.length);
@@ -494,8 +505,6 @@ const CompanyReservations = () => {
               setSelectedDay={setSelectedDay}
               searchTerm={searchTerm}
               setSearchTerm={setSearchTerm}
-              statusFilter={statusFilter}
-              setStatusFilter={setStatusFilter}
               sortOrder={sortOrder}
               setSortOrder={setSortOrder}
               searchInputRef={searchInputRef}

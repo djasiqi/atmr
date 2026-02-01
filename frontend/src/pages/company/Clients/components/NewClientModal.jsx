@@ -38,15 +38,13 @@ const NewClientModal = ({ onClose, onSave }) => {
   const [error, setError] = useState(null);
   const [showBillingInfo, setShowBillingInfo] = useState(false);
   const [showAdvancedBilling, setShowAdvancedBilling] = useState(false);
-  const [showHospitalization, setShowHospitalization] = useState(false);
-  const [showCurator, setShowCurator] = useState(false);
   const [createdClient, setCreatedClient] = useState(null);
 
+  /* Harmonica : un seul accordéon ouvert à la fois (identity | contact | residence | billing) */
+  const [openAccordion, setOpenAccordion] = useState('identity');
+
+  /* Hospitalisation et Curateur : sections conditionnelles, état séparé */
   const [expandedSections, setExpandedSections] = useState({
-    identity: true,
-    contact: true,
-    residence: false,
-    billing: false,
     hospitalization: false,
     curator: false,
   });
@@ -62,7 +60,7 @@ const NewClientModal = ({ onClose, onSave }) => {
 
   const [stayData, setStayData] = useState({
     company_id: '',
-    start_date: '',
+    start_date: new Date().toISOString().split('T')[0],
     end_date: '',
     notes: '',
   });
@@ -89,6 +87,14 @@ const NewClientModal = ({ onClose, onSave }) => {
     }));
   };
 
+  const toggleAccordion = (key) => {
+    setOpenAccordion((prev) => (prev === key ? null : key));
+  };
+
+  if (process.env.NODE_ENV === 'development') {
+    console.debug('[accordion] openAccordion=', openAccordion);
+  }
+
   const toggleSection = (section) => {
     setExpandedSections((prev) => ({
       ...prev,
@@ -98,8 +104,6 @@ const NewClientModal = ({ onClose, onSave }) => {
 
   useEffect(() => {
     if (!formData.is_institution) return;
-    setShowHospitalization(false);
-    setShowCurator(false);
     setStayData({
       company_id: '',
       start_date: '',
@@ -117,7 +121,7 @@ const NewClientModal = ({ onClose, onSave }) => {
   }, [formData.is_institution]);
 
   useEffect(() => {
-    if (!showHospitalization || clinics.length > 0) return;
+    if (formData.is_institution || clinics.length > 0) return;
     const loadClinics = async () => {
       try {
         setLoadingClinics(true);
@@ -142,10 +146,10 @@ const NewClientModal = ({ onClose, onSave }) => {
       }
     };
     loadClinics();
-  }, [showHospitalization, clinics.length]);
+  }, [formData.is_institution, clinics.length]);
 
   useEffect(() => {
-    if (!showCurator || billingParties.length > 0) return;
+    if (!expandedSections.curator || billingParties.length > 0) return;
     const loadBillingParties = async () => {
       try {
         setLoadingBillingParties(true);
@@ -158,23 +162,12 @@ const NewClientModal = ({ onClose, onSave }) => {
       }
     };
     loadBillingParties();
-  }, [showCurator, billingParties.length]);
+  }, [expandedSections.curator, billingParties.length]);
 
+  /* P0: Forcer "Identité" ouvert au montage (fix remount / parent key change) */
   useEffect(() => {
-    if (!showHospitalization) return;
-    setExpandedSections((prev) => ({
-      ...prev,
-      hospitalization: true,
-    }));
-  }, [showHospitalization]);
-
-  useEffect(() => {
-    if (!showCurator) return;
-    setExpandedSections((prev) => ({
-      ...prev,
-      curator: true,
-    }));
-  }, [showCurator]);
+    setOpenAccordion('identity');
+  }, []);
 
   // Gérer la sélection d'adresse de domicile via autocomplete
   const handleDomicileAddressSelect = (item) => {
@@ -272,21 +265,11 @@ const NewClientModal = ({ onClose, onSave }) => {
       return;
     }
 
-    if (showHospitalization) {
-      if (!stayData.company_id) {
-        setError('Merci de sélectionner une clinique pour l’hospitalisation');
-        return;
-      }
-      if (!stayData.start_date) {
-        setError('Merci de renseigner la date de début d’hospitalisation');
-        return;
-      }
-    }
-
-    if (showCurator && !billingPartyData.billing_party_id) {
-      setError('Merci de sélectionner un tiers payeur pour le curateur');
+    if (stayData.company_id && !stayData.start_date) {
+      setError("Merci de renseigner la date de début d'hospitalisation");
       return;
     }
+
 
     setLoading(true);
 
@@ -382,7 +365,7 @@ const NewClientModal = ({ onClose, onSave }) => {
         }
       });
 
-      if (showHospitalization) {
+      if (stayData.company_id) {
         payload.hospitalization = {
           company_id: stayData.company_id,
           start_date: stayData.start_date,
@@ -391,7 +374,7 @@ const NewClientModal = ({ onClose, onSave }) => {
         };
       }
 
-      if (showCurator) {
+      if (billingPartyData.billing_party_id) {
         payload.billing_party_link = {
           billing_party_id: billingPartyData.billing_party_id,
           role: billingPartyData.role || null,
@@ -427,36 +410,62 @@ const NewClientModal = ({ onClose, onSave }) => {
     (party) => String(party.id) === String(billingPartyData.billing_party_id)
   );
 
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content modal-xl" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2 className="modal-title">
-            {formData.is_institution ? 'Nouvelle institution' : 'Nouveau client'}
-          </h2>
-          <button className="modal-close" onClick={onClose}>
-            ✕
-          </button>
-        </div>
+  const footerSummaryText =
+    formData.is_institution
+      ? formData.institution_name || 'Institution non renseignée'
+      : `${formData.first_name} ${formData.last_name}`.trim() || 'Client non renseigné';
 
-        <form onSubmit={handleSubmit} className={styles.form}>
+  return (
+    <div className="modal-overlay modal-client" onClick={onClose}>
+      <div className="modal-content modal-xl" onClick={(e) => e.stopPropagation()}>
+        <div className={styles.formWrapper}>
+          <div className={styles.modalHeader}>
+            <div className={styles.modalHeaderContent}>
+              <h2 className={styles.modalTitle}>
+                {formData.is_institution ? 'Nouvelle institution' : 'Nouveau client'}
+              </h2>
+              <p className={styles.modalSubtitle}>
+                Renseignez l&apos;identité, l&apos;adresse et les informations de facturation.
+              </p>
+            </div>
+            <button
+              type="button"
+              className={styles.modalClose}
+              onClick={onClose}
+              aria-label="Fermer"
+            >
+              ✕
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className={styles.form}>
           {error && <div className={styles.error}>{error}</div>}
 
+          <div className={styles.formScrollBody}>
+            <div className={styles.columnLeft}>
+          <div className={styles.accordionStack}>
           {/* 1) Identité */}
           <div className={styles.accordion}>
             <button
               type="button"
               className={styles.accordionHeader}
-              onClick={() => toggleSection('identity')}
+              onClick={() => toggleAccordion('identity')}
+              aria-expanded={openAccordion === 'identity'}
+              aria-controls="accordion-identity"
+              id="accordion-identity-trigger"
             >
               <span className={styles.accordionTitle}>📋 Identité du client</span>
-              <span className={styles.accordionIcon}>
-                {expandedSections.identity ? '▾' : '▸'}
-              </span>
+              <span className={styles.accordionIcon} aria-hidden="true">▾</span>
             </button>
-            {expandedSections.identity && (
-              <div className={styles.accordionContent}>
-                <div className={styles.checkboxGroup}>
+            <div
+              className={styles.accordionContent}
+              id="accordion-identity"
+              role="region"
+              aria-labelledby="accordion-identity-trigger"
+              data-state={openAccordion === 'identity' ? 'open' : 'closed'}
+            >
+              <div className={styles.accordionContentInner}>
+                <div className={`${styles.checkboxGroup} ${styles.checkboxGroupCompact}`}>
                   <label className={styles.checkboxLabel}>
                     <input
                       type="checkbox"
@@ -500,7 +509,26 @@ const NewClientModal = ({ onClose, onSave }) => {
                   </p>
                 )}
 
-                <div className={styles.formRow}>
+                <div className={`${styles.formRow} ${styles.formRowIdentity}`}>
+                  <div className={styles.formGroup}>
+                    <label htmlFor="gender" className={styles.label}>
+                      Civilité *
+                    </label>
+                    <select
+                      id="gender"
+                      name="gender"
+                      value={formData.gender}
+                      onChange={handleChange}
+                      className={styles.input}
+                      required
+                      disabled={loading}
+                    >
+                      <option value="">-- Sélectionnez --</option>
+                      <option value="male">Monsieur</option>
+                      <option value="female">Madame</option>
+                    </select>
+                  </div>
+
                   <div className={styles.formGroup}>
                     <label htmlFor="first_name" className={styles.label}>
                       Prénom *
@@ -534,26 +562,23 @@ const NewClientModal = ({ onClose, onSave }) => {
                   </div>
                 </div>
 
-                <div className={styles.formRow}>
-                  <div className={styles.formGroup}>
-                    <label htmlFor="gender" className={styles.label}>
-                      Civilité *
-                    </label>
-                    <select
-                      id="gender"
-                      name="gender"
-                      value={formData.gender}
-                      onChange={handleChange}
-                      className={styles.input}
-                      required
-                      disabled={loading}
-                    >
-                      <option value="">-- Sélectionnez --</option>
-                      <option value="male">Monsieur</option>
-                      <option value="female">Madame</option>
-                    </select>
-                  </div>
-
+                <div className={`${styles.formRow} ${styles.formRowTwo}`}>
+                  {!formData.is_institution && (
+                    <div className={styles.formGroup}>
+                      <label htmlFor="birth_date" className={styles.label}>
+                        Date de naissance
+                      </label>
+                      <input
+                        type="date"
+                        id="birth_date"
+                        name="birth_date"
+                        value={formData.birth_date}
+                        onChange={handleChange}
+                        className={styles.input}
+                        disabled={loading}
+                      />
+                    </div>
+                  )}
                   <div className={styles.formGroup}>
                     <label htmlFor="avs_number" className={styles.label}>
                       Numéro AVS
@@ -570,25 +595,8 @@ const NewClientModal = ({ onClose, onSave }) => {
                     />
                   </div>
                 </div>
-
-                {!formData.is_institution && (
-                  <div className={styles.formGroup}>
-                    <label htmlFor="birth_date" className={styles.label}>
-                      Date de naissance
-                    </label>
-                    <input
-                      type="date"
-                      id="birth_date"
-                      name="birth_date"
-                      value={formData.birth_date}
-                      onChange={handleChange}
-                      className={styles.input}
-                      disabled={loading}
-                    />
-                  </div>
-                )}
               </div>
-            )}
+            </div>
           </div>
 
           {/* 2) Contact & domicile */}
@@ -596,15 +604,24 @@ const NewClientModal = ({ onClose, onSave }) => {
             <button
               type="button"
               className={styles.accordionHeader}
-              onClick={() => toggleSection('contact')}
+              onClick={() => toggleAccordion('contact')}
+              aria-expanded={openAccordion === 'contact'}
+              aria-controls="accordion-contact"
+              id="accordion-contact-trigger"
             >
               <span className={styles.accordionTitle}>📞 Contact & domicile</span>
-              <span className={styles.accordionIcon}>
-                {expandedSections.contact ? '▾' : '▸'}
-              </span>
+              <span className={styles.accordionIcon} aria-hidden="true">▾</span>
             </button>
-            {expandedSections.contact && (
-              <div className={styles.accordionContent}>
+            <div
+              className={styles.accordionContent}
+              id="accordion-contact"
+              role="region"
+              aria-labelledby="accordion-contact-trigger"
+              aria-hidden={openAccordion !== 'contact'}
+              inert={openAccordion !== 'contact' ? 'inert' : undefined}
+              data-state={openAccordion === 'contact' ? 'open' : 'closed'}
+            >
+              <div className={styles.accordionContentInner}>
                 <div className={styles.formGroup}>
                   <label htmlFor="phone" className={styles.label}>
                     Téléphone
@@ -780,7 +797,7 @@ const NewClientModal = ({ onClose, onSave }) => {
                   </div>
                 </div>
               </div>
-            )}
+            </div>
           </div>
 
           {/* 3) Établissement de résidence */}
@@ -788,15 +805,24 @@ const NewClientModal = ({ onClose, onSave }) => {
             <button
               type="button"
               className={styles.accordionHeader}
-              onClick={() => toggleSection('residence')}
+              onClick={() => toggleAccordion('residence')}
+              aria-expanded={openAccordion === 'residence'}
+              aria-controls="accordion-residence"
+              id="accordion-residence-trigger"
             >
               <span className={styles.accordionTitle}>🏠 Établissement de résidence</span>
-              <span className={styles.accordionIcon}>
-                {expandedSections.residence ? '▾' : '▸'}
-              </span>
+              <span className={styles.accordionIcon} aria-hidden="true">▾</span>
             </button>
-            {expandedSections.residence && (
-              <div className={styles.accordionContent}>
+            <div
+              className={styles.accordionContent}
+              id="accordion-residence"
+              role="region"
+              aria-labelledby="accordion-residence-trigger"
+              aria-hidden={openAccordion !== 'residence'}
+              inert={openAccordion !== 'residence' ? 'inert' : undefined}
+              data-state={openAccordion === 'residence' ? 'open' : 'closed'}
+            >
+              <div className={styles.accordionContentInner}>
                 <div className={styles.formGroup}>
                   <label htmlFor="residence_facility" className={styles.label}>
                     Établissement de résidence (EMS, foyer, etc.)
@@ -816,7 +842,7 @@ const NewClientModal = ({ onClose, onSave }) => {
                   </small>
                 </div>
               </div>
-            )}
+            </div>
           </div>
 
           {/* 4) Facturation */}
@@ -824,16 +850,25 @@ const NewClientModal = ({ onClose, onSave }) => {
             <button
               type="button"
               className={styles.accordionHeader}
-              onClick={() => toggleSection('billing')}
+              onClick={() => toggleAccordion('billing')}
+              aria-expanded={openAccordion === 'billing'}
+              aria-controls="accordion-billing"
+              id="accordion-billing-trigger"
             >
               <span className={styles.accordionTitle}>💰 Facturation</span>
-              <span className={styles.accordionIcon}>
-                {expandedSections.billing ? '▾' : '▸'}
-              </span>
+              <span className={styles.accordionIcon} aria-hidden="true">▾</span>
             </button>
-            {expandedSections.billing && (
-              <div className={styles.accordionContent}>
-                <div className={styles.checkboxGroup}>
+            <div
+              className={styles.accordionContent}
+              id="accordion-billing"
+              role="region"
+              aria-labelledby="accordion-billing-trigger"
+              aria-hidden={openAccordion !== 'billing'}
+              inert={openAccordion !== 'billing' ? 'inert' : undefined}
+              data-state={openAccordion === 'billing' ? 'open' : 'closed'}
+            >
+              <div className={styles.accordionContentInner}>
+                <div className={`${styles.checkboxGroup} ${styles.checkboxGroupCompact}`}>
                   <label className={styles.checkboxLabel}>
                     <input
                       type="checkbox"
@@ -908,7 +943,7 @@ const NewClientModal = ({ onClose, onSave }) => {
                   </div>
                 )}
 
-                <div className={styles.checkboxGroup}>
+                <div className={`${styles.checkboxGroup} ${styles.checkboxGroupCompact}`}>
                   <label className={styles.checkboxLabel}>
                     <input
                       type="checkbox"
@@ -983,187 +1018,35 @@ const NewClientModal = ({ onClose, onSave }) => {
                   />
                 </div>
               </div>
-            )}
-          </div>
-
-          {/* Statut */}
-          <div className={styles.section}>
-            <div className={styles.checkboxGroup}>
-              <label className={styles.checkboxLabel}>
-                <input
-                  type="checkbox"
-                  name="is_active"
-                  checked={formData.is_active}
-                  onChange={handleChange}
-                  disabled={loading}
-                />
-                <span className={styles.checkboxText}>
-                  <strong>Client actif</strong>
-                  <small>Les clients inactifs n&apos;apparaissent pas dans les sélections</small>
-                </span>
-              </label>
             </div>
           </div>
 
-          {/* Options de création */}
+          </div>
+
+          {/* 6) Curateur / Tiers payeur — toujours visible quand client privé */}
           {!formData.is_institution && (
-            <div className={styles.section}>
-              <div className={styles.checkboxGroup}>
-                <label className={styles.checkboxLabel}>
-                  <input
-                    type="checkbox"
-                    checked={showHospitalization}
-                    onChange={(e) => {
-                      setShowHospitalization(e.target.checked);
-                      if (e.target.checked && !stayData.start_date) {
-                        setStayData((prev) => ({
-                          ...prev,
-                          start_date: new Date().toISOString().split('T')[0],
-                        }));
-                      }
-                    }}
-                    disabled={loading}
-                  />
-                  <span className={styles.checkboxText}>
-                    <strong>🏥 Ajouter une hospitalisation maintenant</strong>
-                    <small>Sélectionner une clinique et des dates de séjour</small>
-                  </span>
-                </label>
-              </div>
-
-              <div className={styles.checkboxGroup}>
-                <label className={styles.checkboxLabel}>
-                  <input
-                    type="checkbox"
-                    checked={showCurator}
-                    onChange={(e) => setShowCurator(e.target.checked)}
-                    disabled={loading}
-                  />
-                  <span className={styles.checkboxText}>
-                    <strong>💼 Ajouter un curateur / tiers payeur</strong>
-                    <small>Définir le payeur et le contact curateur</small>
-                  </span>
-                </label>
-              </div>
-            </div>
-          )}
-
-          {/* 5) Hospitalisation */}
-          {!formData.is_institution && showHospitalization && (
-            <div className={styles.accordion}>
-              <button
-                type="button"
-                className={styles.accordionHeader}
-                onClick={() => toggleSection('hospitalization')}
-              >
-                <span className={styles.accordionTitle}>🏥 Hospitalisation (optionnel)</span>
-                <span className={styles.accordionIcon}>
-                  {expandedSections.hospitalization ? '▾' : '▸'}
-                </span>
-              </button>
-              {expandedSections.hospitalization && (
-                <div className={styles.accordionContent}>
-                  <div className={styles.formGroup}>
-                    <label htmlFor="stay_company_id" className={styles.label}>
-                      Clinique / Établissement *
-                    </label>
-                    <select
-                      id="stay_company_id"
-                      value={stayData.company_id}
-                      onChange={(e) =>
-                        setStayData((prev) => ({ ...prev, company_id: e.target.value }))
-                      }
-                      className={styles.input}
-                      disabled={loading || loadingClinics}
-                      required={showHospitalization}
-                    >
-                      <option value="">
-                        {loadingClinics
-                          ? 'Chargement des cliniques...'
-                          : '-- Sélectionnez une clinique --'}
-                      </option>
-                      {clinics.map((clinic) => (
-                        <option key={clinic.id} value={clinic.id}>
-                          {clinic.name}
-                        </option>
-                      ))}
-                    </select>
-                    {!loadingClinics && clinics.length === 0 && (
-                      <small className={styles.hint}>
-                        ⚠️ Aucune clinique disponible (vérifier les mappings cliniques).
-                      </small>
-                    )}
-                  </div>
-
-                  <div className={styles.formRow}>
-                    <div className={styles.formGroup}>
-                      <label htmlFor="stay_start_date" className={styles.label}>
-                        Date de début *
-                      </label>
-                      <input
-                        type="date"
-                        id="stay_start_date"
-                        value={stayData.start_date}
-                        onChange={(e) =>
-                          setStayData((prev) => ({ ...prev, start_date: e.target.value }))
-                        }
-                        className={styles.input}
-                        disabled={loading}
-                      />
-                    </div>
-
-                    <div className={styles.formGroup}>
-                      <label htmlFor="stay_end_date" className={styles.label}>
-                        Date de fin (optionnel)
-                      </label>
-                      <input
-                        type="date"
-                        id="stay_end_date"
-                        value={stayData.end_date}
-                        onChange={(e) =>
-                          setStayData((prev) => ({ ...prev, end_date: e.target.value }))
-                        }
-                        className={styles.input}
-                        disabled={loading}
-                      />
-                    </div>
-                  </div>
-
-                  <div className={styles.formGroup}>
-                    <label htmlFor="stay_notes" className={styles.label}>
-                      Notes (optionnel)
-                    </label>
-                    <textarea
-                      id="stay_notes"
-                      value={stayData.notes}
-                      onChange={(e) =>
-                        setStayData((prev) => ({ ...prev, notes: e.target.value }))
-                      }
-                      className={styles.textarea}
-                      placeholder="Informations complémentaires sur le séjour..."
-                      disabled={loading}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* 6) Curateur / Tiers payeur */}
-          {!formData.is_institution && showCurator && (
             <div className={styles.accordion}>
               <button
                 type="button"
                 className={styles.accordionHeader}
                 onClick={() => toggleSection('curator')}
+                aria-expanded={expandedSections.curator}
+                aria-controls="accordion-curator"
+                id="accordion-curator-trigger"
               >
                 <span className={styles.accordionTitle}>💼 Curateur / tiers payeur</span>
-                <span className={styles.accordionIcon}>
-                  {expandedSections.curator ? '▾' : '▸'}
-                </span>
+                <span className={styles.accordionIcon} aria-hidden="true">▾</span>
               </button>
-              {expandedSections.curator && (
-                <div className={styles.accordionContent}>
+              <div
+                className={styles.accordionContent}
+                id="accordion-curator"
+                role="region"
+                aria-labelledby="accordion-curator-trigger"
+                aria-hidden={!expandedSections.curator}
+                inert={!expandedSections.curator ? 'inert' : undefined}
+                data-state={expandedSections.curator ? 'open' : 'closed'}
+              >
+                <div className={styles.accordionContentInner}>
                   <div className={styles.formGroup}>
                     <label htmlFor="billing_party_id" className={styles.label}>
                       Tiers payeur *
@@ -1179,7 +1062,6 @@ const NewClientModal = ({ onClose, onSave }) => {
                       }
                       className={styles.input}
                       disabled={loading || loadingBillingParties}
-                      required={showCurator}
                     >
                       <option value="">
                         {loadingBillingParties
@@ -1201,49 +1083,47 @@ const NewClientModal = ({ onClose, onSave }) => {
                     )}
                   </div>
 
-                  <div className={styles.formRow}>
-                    <div className={styles.formGroup}>
-                      <label htmlFor="billing_party_role" className={styles.label}>
-                        Rôle (optionnel)
-                      </label>
+                  <div className={styles.formGroup}>
+                    <label htmlFor="billing_party_role" className={styles.label}>
+                      Rôle
+                    </label>
+                    <input
+                      type="text"
+                      id="billing_party_role"
+                      value={billingPartyData.role}
+                      onChange={(e) =>
+                        setBillingPartyData((prev) => ({ ...prev, role: e.target.value }))
+                      }
+                      className={styles.input}
+                      placeholder="Ex: curateur principal"
+                      disabled={loading}
+                    />
+                  </div>
+
+                  <div className={`${styles.checkboxRow} ${styles.checkboxRowCompact}`}>
+                    <label className={styles.checkboxLabel}>
                       <input
-                        type="text"
-                        id="billing_party_role"
-                        value={billingPartyData.role}
+                        type="checkbox"
+                        checked={billingPartyData.is_default}
                         onChange={(e) =>
-                          setBillingPartyData((prev) => ({ ...prev, role: e.target.value }))
+                          setBillingPartyData((prev) => ({
+                            ...prev,
+                            is_default: e.target.checked,
+                          }))
                         }
-                        className={styles.input}
-                        placeholder="Ex: curateur principal"
                         disabled={loading}
                       />
-                    </div>
-
-                    <div className={styles.formGroup}>
-                      <label className={styles.checkboxLabel}>
-                        <input
-                          type="checkbox"
-                          checked={billingPartyData.is_default}
-                          onChange={(e) =>
-                            setBillingPartyData((prev) => ({
-                              ...prev,
-                              is_default: e.target.checked,
-                            }))
-                          }
-                          disabled={loading}
-                        />
-                        <span className={styles.checkboxText}>
-                          <strong>Définir comme payeur par défaut</strong>
-                          <small>Ce payeur sera utilisé automatiquement</small>
-                        </span>
-                      </label>
-                    </div>
+                      <span className={styles.checkboxText}>
+                        <strong>Définir comme payeur par défaut</strong>
+                        <small>Ce payeur sera utilisé automatiquement pour ce client</small>
+                      </span>
+                    </label>
                   </div>
 
                   <div className={styles.formRow}>
                     <div className={styles.formGroup}>
                       <label htmlFor="curator_name" className={styles.label}>
-                        Curateur (optionnel)
+                        Curateur
                       </label>
                       <input
                         type="text"
@@ -1259,14 +1139,11 @@ const NewClientModal = ({ onClose, onSave }) => {
                         placeholder="Ex: Curateur A"
                         disabled={loading}
                       />
-                      <small className={styles.hint}>
-                        Contact spécifique à ce client (ne modifie pas le tiers payeur)
-                      </small>
                     </div>
 
                     <div className={styles.formGroup}>
                       <label htmlFor="curator_email" className={styles.label}>
-                        Email du curateur (optionnel)
+                        Email du curateur
                       </label>
                       <input
                         type="email"
@@ -1283,99 +1160,225 @@ const NewClientModal = ({ onClose, onSave }) => {
                         disabled={loading}
                       />
                     </div>
-                  </div>
 
-                  <div className={styles.formGroup}>
-                    <label htmlFor="curator_phone" className={styles.label}>
-                      Téléphone du curateur (optionnel)
-                    </label>
-                    <input
-                      type="tel"
-                      id="curator_phone"
-                      value={billingPartyData.contact_phone}
-                      onChange={(e) =>
-                        setBillingPartyData((prev) => ({
-                          ...prev,
-                          contact_phone: e.target.value,
-                        }))
-                      }
-                      className={styles.input}
-                      placeholder="+41 22 000 00 00"
-                      disabled={loading}
-                    />
+                    <div className={styles.formGroup}>
+                      <label htmlFor="curator_phone" className={styles.label}>
+                        Téléphone du curateur
+                      </label>
+                      <input
+                        type="tel"
+                        id="curator_phone"
+                        value={billingPartyData.contact_phone}
+                        onChange={(e) =>
+                          setBillingPartyData((prev) => ({
+                            ...prev,
+                            contact_phone: e.target.value,
+                          }))
+                        }
+                        className={styles.input}
+                        placeholder="+41 22 000 00 00"
+                        disabled={loading}
+                      />
+                    </div>
+                  </div>
+                  <small className={styles.hintFullWidth}>
+                    Contact spécifique à ce client (ne modifie pas le tiers payeur)
+                  </small>
+                </div>
+              </div>
+            </div>
+          )}
+
+            </div>
+
+            {/* Colonne droite : résumé — même design que medicalSection */}
+            <div className={styles.columnRight}>
+              <div className={styles.summaryCard}>
+                <h3 className={styles.summaryCardTitle}>📋 Résumé</h3>
+                <div className={styles.summaryRow}>
+                  <span className={styles.summaryLabel}>Client</span>
+                  <span
+                    className={`${styles.summaryValue} ${
+                      !(formData.is_institution ? formData.institution_name : `${formData.first_name} ${formData.last_name}`.trim())
+                        ? styles.summaryValueEmpty
+                        : ''
+                    }`}
+                  >
+                    {formData.is_institution
+                      ? formData.institution_name || 'Client non renseigné'
+                      : `${formData.first_name} ${formData.last_name}`.trim() || 'Client non renseigné'}
+                  </span>
+                </div>
+                <div className={styles.summaryRow}>
+                  <span className={styles.summaryLabel}>Adresse</span>
+                  <span
+                    className={`${styles.summaryValue} ${
+                      !(formData.domicile_address || formData.address) ? styles.summaryValueEmpty : ''
+                    }`}
+                  >
+                    {formData.domicile_address || formData.address || 'Adresse non renseignée'}
+                  </span>
+                </div>
+                <div className={styles.summaryRow}>
+                  <span className={styles.summaryLabel}>Facturation</span>
+                  <span
+                    className={`${styles.summaryValue} ${
+                      !(showBillingInfo ? formData.billing_address : formData.domicile_address || formData.address)
+                        ? styles.summaryValueEmpty
+                        : ''
+                    }`}
+                  >
+                    {showBillingInfo && formData.billing_address
+                      ? formData.billing_address
+                      : formData.domicile_address || formData.address || 'Adresse non renseignée'}
+                  </span>
+                </div>
+                {stayData.company_id && (
+                  <div className={styles.summaryRow}>
+                    <span className={styles.summaryLabel}>Hospitalisation</span>
+                    <span
+                      className={`${styles.summaryValue} ${!selectedClinic ? styles.summaryValueEmpty : ''}`}
+                    >
+                      {selectedClinic
+                        ? `${selectedClinic.name} • ${stayData.start_date || 'date à définir'}`
+                        : 'Clinique à définir'}
+                    </span>
+                  </div>
+                )}
+                {billingPartyData.billing_party_id && (
+                  <div className={styles.summaryRow}>
+                    <span className={styles.summaryLabel}>Curateur</span>
+                    <span
+                      className={`${styles.summaryValue} ${!selectedBillingParty ? styles.summaryValueEmpty : ''}`}
+                    >
+                      {selectedBillingParty
+                        ? selectedBillingParty.display_name
+                        : 'Tiers payeur à définir'}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Hospitalisation — à droite, sous le résumé (client privé uniquement) */}
+              {!formData.is_institution && (
+                <div className={styles.hospitalizationCard}>
+                  <h3 className={styles.hospitalizationCardTitle}>🏥 Hospitalisation</h3>
+                  <div className={styles.hospitalizationForm}>
+                      <div className={styles.formGroup}>
+                        <label htmlFor="stay_company_id" className={styles.label}>
+                          Clinique / Établissement *
+                        </label>
+                        <select
+                          id="stay_company_id"
+                          value={stayData.company_id}
+                          onChange={(e) =>
+                            setStayData((prev) => ({ ...prev, company_id: e.target.value }))
+                          }
+                          className={styles.input}
+                          disabled={loading || loadingClinics}
+                        >
+                          <option value="">
+                            {loadingClinics
+                              ? 'Chargement des cliniques...'
+                              : '-- Sélectionnez une clinique --'}
+                          </option>
+                          {clinics.map((clinic) => (
+                            <option key={clinic.id} value={clinic.id}>
+                              {clinic.name}
+                            </option>
+                          ))}
+                        </select>
+                        {!loadingClinics && clinics.length === 0 && (
+                          <small className={styles.hint}>
+                            ⚠️ Aucune clinique disponible (vérifier les mappings cliniques).
+                          </small>
+                        )}
+                      </div>
+
+                      <div className={`${styles.formRow} ${styles.formRowTwo}`}>
+                        <div className={styles.formGroup}>
+                          <label htmlFor="stay_start_date" className={styles.label}>
+                            Date de début *
+                          </label>
+                          <input
+                            type="date"
+                            id="stay_start_date"
+                            value={stayData.start_date}
+                            onChange={(e) =>
+                              setStayData((prev) => ({ ...prev, start_date: e.target.value }))
+                            }
+                            className={styles.input}
+                            disabled={loading}
+                          />
+                        </div>
+
+                        <div className={styles.formGroup}>
+                          <label htmlFor="stay_end_date" className={styles.label}>
+                            Date de fin
+                          </label>
+                          <input
+                            type="date"
+                            id="stay_end_date"
+                            value={stayData.end_date}
+                            onChange={(e) =>
+                              setStayData((prev) => ({ ...prev, end_date: e.target.value }))
+                            }
+                            className={styles.input}
+                            disabled={loading}
+                          />
+                        </div>
+                      </div>
+
+                      <div className={styles.formGroup}>
+                        <label htmlFor="stay_notes" className={styles.label}>
+                          Notes
+                        </label>
+                        <textarea
+                          id="stay_notes"
+                          value={stayData.notes}
+                          onChange={(e) =>
+                            setStayData((prev) => ({ ...prev, notes: e.target.value }))
+                          }
+                          className={styles.textarea}
+                          placeholder="Informations complémentaires sur le séjour..."
+                          disabled={loading}
+                        />
+                      </div>
                   </div>
                 </div>
               )}
             </div>
-          )}
-
-          {/* Résumé */}
-          <div className={styles.summaryCard}>
-            <div className={styles.summaryRow}>
-              <span className={styles.summaryLabel}>Client</span>
-              <span className={styles.summaryValue}>
-                {formData.is_institution
-                  ? formData.institution_name || 'Institution'
-                  : `${formData.first_name} ${formData.last_name}`.trim() || 'Client'}
-              </span>
-            </div>
-            <div className={styles.summaryRow}>
-              <span className={styles.summaryLabel}>Adresse</span>
-              <span className={styles.summaryValue}>
-                {formData.domicile_address ||
-                  formData.address ||
-                  'Adresse non renseignée'}
-              </span>
-            </div>
-            <div className={styles.summaryRow}>
-              <span className={styles.summaryLabel}>Facturation</span>
-              <span className={styles.summaryValue}>
-                {showBillingInfo && formData.billing_address
-                  ? formData.billing_address
-                  : formData.domicile_address || formData.address || 'Adresse non renseignée'}
-              </span>
-            </div>
-            {showHospitalization && (
-              <div className={styles.summaryRow}>
-                <span className={styles.summaryLabel}>Hospitalisation</span>
-                <span className={styles.summaryValue}>
-                  {selectedClinic
-                    ? `${selectedClinic.name} • ${stayData.start_date || 'date à définir'}`
-                    : 'Clinique à définir'}
-                </span>
-              </div>
-            )}
-            {showCurator && (
-              <div className={styles.summaryRow}>
-                <span className={styles.summaryLabel}>Curateur</span>
-                <span className={styles.summaryValue}>
-                  {selectedBillingParty
-                    ? selectedBillingParty.display_name
-                    : 'Tiers payeur à définir'}
-                </span>
-              </div>
-            )}
           </div>
 
-          {/* Actions */}
-          <div className="modal-footer">
-            <button
-              type="button"
-              onClick={onClose}
-              className="btn btn-secondary"
-              disabled={loading}
-            >
-              Annuler
-            </button>
-            <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading
-                ? 'Création...'
-                : createdClient
-                  ? 'Finaliser'
-                  : 'Créer le client'}
-            </button>
+          {/* Footer — même structure que ManualBookingForm */}
+          <div className={styles.footerActions}>
+            <div className={styles.footerSummary} aria-live="polite">
+              <span className={styles.footerSummaryText}>{footerSummaryText}</span>
+            </div>
+            <div className={styles.footerBody}>
+              <div className={styles.footerLeft}>
+                <button
+                  type="button"
+                  className={styles.footerCancel}
+                  onClick={onClose}
+                  disabled={loading}
+                >
+                  Annuler
+                </button>
+              </div>
+              <div className={styles.footerRight}>
+                <button type="submit" className={styles.submitButton} disabled={loading}>
+                  {loading
+                    ? '⏳ Création…'
+                    : createdClient
+                      ? 'Finaliser'
+                      : 'Créer le client'}
+                </button>
+              </div>
+            </div>
           </div>
         </form>
+        </div>
       </div>
     </div>
   );

@@ -10,34 +10,62 @@ export type PushTokens = {
   expo?: string | null;
 };
 
-// --- 1) Handler global: quoi faire en foreground ---
- Notifications.setNotificationHandler({
-   handleNotification: async (notification) => {
-     const data = notification.request.content.data || {};
-     const notificationType = data.type || "";
+/** P0.5: Mode app pour filtrer les notifs au boot (driver vs enterprise).
+ *  null = inconnu → filtre company par défaut (conservateur pour driver).
+ */
+let _notificationAppMode: "driver" | "enterprise" | null = null;
 
-     // ✅ Phase 2.6: Ne pas afficher les notifications silencieuses
-     if (notificationType === "silent_update" || data["content-available"] === 1) {
-       return {
-         shouldShowAlert: false,
-         shouldPlaySound: false,
-         shouldSetBadge: false,
-         shouldShowBanner: false,
-         shouldShowList: false,
-       };
-     }
+export function setNotificationAppMode(mode: "driver" | "enterprise" | null): void {
+  _notificationAppMode = mode;
+}
 
-     // Pour les autres notifications, afficher normalement
-     return {
-       shouldShowAlert: true,
-       shouldPlaySound: false,
-       shouldSetBadge: false,
-       // iOS (SDK 5x) :
-       shouldShowBanner: true,
-       shouldShowList: true,
-     };
-   },
- });
+// --- 1) Handler global: quoi faire en foreground (P0.5: boot-level, avant useNotifications) ---
+Notifications.setNotificationHandler({
+  handleNotification: async (notification) => {
+    const data = notification.request.content.data || {};
+    const notificationType = data.type || "";
+    const recipientRole = data.recipient_role as string | undefined;
+
+    // ✅ Phase 2.6: Ne pas afficher les notifications silencieuses
+    if (notificationType === "silent_update" || data["content-available"] === 1) {
+      return {
+        shouldShowAlert: false,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+        shouldShowBanner: false,
+        shouldShowList: false,
+      };
+    }
+
+    // P0.5: Filtrer recipient_role=company quand on est en mode driver (ou inconnu = conservateur)
+    if (recipientRole === "company" && _notificationAppMode !== "enterprise") {
+      if (__DEV__) {
+        console.log("🔕 P0.5 Ignored company notification on driver app", {
+          trace_id: data.trace_id,
+          recipient_role: recipientRole,
+          app_mode: _notificationAppMode,
+        });
+      }
+      return {
+        shouldShowAlert: false,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+        shouldShowBanner: false,
+        shouldShowList: false,
+      };
+    }
+
+    // Pour les autres notifications, afficher normalement
+    return {
+      shouldShowAlert: true,
+      shouldPlaySound: false,
+      shouldSetBadge: false,
+      // iOS (SDK 5x) :
+      shouldShowBanner: true,
+      shouldShowList: true,
+    };
+  },
+});
 
 /**
  * Configure le canal Android et vérifie/obtient les permissions (iOS + Android < 13).

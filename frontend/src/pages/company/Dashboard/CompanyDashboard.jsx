@@ -63,11 +63,11 @@ const CompanyDashboard = () => {
   useDispatchStatus(socket); // Monitor dispatch status via WebSocket
 
   // Rôle utilisateur : delays/live réservé COMPANY/ADMIN — lecture company_user uniquement (évite 403 si token DRIVER)
-  const user = useCompanyAuthToken();
+  const { user, isCompanyAuthReady } = useCompanyAuthToken();
   const isCompanyOrAdmin = user && (user.isCompany || String(user.role || '').toLowerCase() === 'admin');
 
-  // Hook pour les retards dispatch (refresh toutes les 2 minutes). Désactivé si rôle DRIVER pour éviter 403.
-  const { delayCount: _delayCount, hasCriticalDelays: _hasCriticalDelays, hasDelays: _hasDelays } = useDispatchDelays(dispatchDay, 120000, !!isCompanyOrAdmin);
+  // Hook pour les retards dispatch (refresh toutes les 2 minutes). Désactivé si auth non prête ou rôle DRIVER.
+  const { delayCount: _delayCount, hasCriticalDelays: _hasCriticalDelays, hasDelays: _hasDelays } = useDispatchDelays(dispatchDay, 120000, isCompanyAuthReady && !!isCompanyOrAdmin);
 
   // ✅ Toast lorsque la connexion Socket est refusée (backend envoie AUTH_REQUIRED, TOKEN_EXPIRED, etc.)
   useEffect(() => {
@@ -798,13 +798,13 @@ const CompanyDashboard = () => {
 
         {/* Modal réservation manuelle */}
         {showBookingModal && (
-          <Modal onClose={() => setShowBookingModal(false)}>
-            <h3>Créer une réservation manuelle</h3>
+          <Modal onClose={() => setShowBookingModal(false)} size="xl" className="modal-booking">
             <ManualBookingForm
               onSuccess={(booking) => {
                 handleManualBookingSuccess(booking);
                 setShowBookingModal(false);
               }}
+              onClose={() => setShowBookingModal(false)}
             />
           </Modal>
         )}

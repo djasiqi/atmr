@@ -130,6 +130,7 @@ const BillingTab = ({ companyId }) => {
     reminder1_fee: 5,
     reminder2_fee: 10,
     reminder3_fee: 20,
+    material_delivery_price_fixed: null,
     auto_reminders_enabled: false,
     email_templates_enabled: false,
     email_sender: '',
@@ -207,6 +208,7 @@ const BillingTab = ({ companyId }) => {
           reminder1_fee: data.reminder1_fee ?? 5,
           reminder2_fee: data.reminder2_fee ?? 10,
           reminder3_fee: data.reminder3_fee ?? 20,
+          material_delivery_price_fixed: data.material_delivery_price_fixed ?? null,
           auto_reminders_enabled: data.auto_reminders_enabled || false,
           email_templates_enabled: data.email_templates_enabled || false,
           email_sender: data.email_sender ?? '',
@@ -306,6 +308,9 @@ const BillingTab = ({ companyId }) => {
         reminder1_fee: parseFloat(formData.reminder1_fee) || 0,
         reminder2_fee: parseFloat(formData.reminder2_fee) || 0,
         reminder3_fee: parseFloat(formData.reminder3_fee) || 0,
+        material_delivery_price_fixed: formData.material_delivery_price_fixed != null && formData.material_delivery_price_fixed !== ''
+          ? parseFloat(formData.material_delivery_price_fixed)
+          : null,
         overdue_fee: parseFloat(formData.overdue_fee) || 0,
         payment_terms_days: parseInt(formData.payment_terms_days, 10) || (formData.payment_terms_days === '0' ? 0 : 10),
       };
@@ -516,6 +521,27 @@ const BillingTab = ({ companyId }) => {
                   <small className={styles.hint}>
                     Montant facturé automatiquement lorsque le paiement est en retard après
                     l'échéance
+                  </small>
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label htmlFor="material_delivery_price_fixed">Prix fixe livraison (CHF)</label>
+                  <div className={styles.inputWithUnit}>
+                    <input
+                      type="number"
+                      id="material_delivery_price_fixed"
+                      name="material_delivery_price_fixed"
+                      value={form.material_delivery_price_fixed ?? ''}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      step="0.01"
+                      min="0"
+                      placeholder="Ex: 35.00"
+                    />
+                    <span className={styles.unit}>CHF</span>
+                  </div>
+                  <small className={styles.hint}>
+                    Prix fixe pour les livraisons matériel (configuré dans le formulaire de réservation)
                   </small>
                 </div>
               </div>
@@ -736,7 +762,7 @@ const BillingTab = ({ companyId }) => {
                       <textarea
                         id="invoice_message_template"
                         name="invoice_message_template"
-                        value={form.invoice_message_template}
+                        value={form.invoice_message_template ?? ''}
                         onChange={handleChange}
                         onBlur={handleBlur}
                         rows={5}
@@ -753,7 +779,7 @@ const BillingTab = ({ companyId }) => {
                       <textarea
                         id="reminder1_template"
                         name="reminder1_template"
-                        value={form.reminder1_template}
+                        value={form.reminder1_template ?? ''}
                         onChange={handleChange}
                         onBlur={handleBlur}
                         rows={4}
@@ -766,7 +792,7 @@ const BillingTab = ({ companyId }) => {
                       <textarea
                         id="reminder2_template"
                         name="reminder2_template"
-                        value={form.reminder2_template}
+                        value={form.reminder2_template ?? ''}
                         onChange={handleChange}
                         onBlur={handleBlur}
                         rows={4}
@@ -781,7 +807,7 @@ const BillingTab = ({ companyId }) => {
                       <textarea
                         id="reminder3_template"
                         name="reminder3_template"
-                        value={form.reminder3_template}
+                        value={form.reminder3_template ?? ''}
                         onChange={handleChange}
                         onBlur={handleBlur}
                         rows={4}
@@ -981,7 +1007,7 @@ const BillingTab = ({ companyId }) => {
                           <textarea
                             id="email_signature_text"
                             name="email_signature_text"
-                            value={form.email_signature_text}
+                            value={form.email_signature_text ?? ''}
                             onChange={handleChange}
                             onBlur={handleBlur}
                             rows={6}
@@ -1026,7 +1052,7 @@ Route de Chevrens 145, 1247 Anières"
                           <textarea
                             id="email_signature_html_template"
                             name="email_signature_html_template"
-                            value={form.email_signature_html_template}
+                            value={form.email_signature_html_template ?? ''}
                             onChange={handleChange}
                             onBlur={handleBlur}
                             rows={12}
@@ -1137,7 +1163,7 @@ Route de Chevrens 145, 1247 Anières"
                   <textarea
                     id="legal_footer"
                     name="legal_footer"
-                    value={form.legal_footer}
+                    value={form.legal_footer ?? ''}
                     onChange={handleChange}
                     onBlur={handleBlur}
                     rows={3}

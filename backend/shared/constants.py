@@ -145,3 +145,16 @@ class DispatchMetricsConstants:
     POOLING_WINDOW_SECONDS = 600  # 10 minutes en secondes
     MIN_VALUES_FOR_GINI = 2  # Minimum drivers pour calculer Gini
     QUALITY_THRESHOLD = 70.0  # Seuil pour activer auto-apply RL
+
+
+# ============================================================================
+# CODES D'ERREUR API (machine-readable, stables)
+# ============================================================================
+
+
+class ErrorCodes:
+    """Codes d'erreur API standardisés pour le frontend et les intégrations."""
+
+    # Livraison matériel
+    MATERIAL_DELIVERY_PRICE_NOT_CONFIGURED = "MATERIAL_DELIVERY_PRICE_NOT_CONFIGURED"
+    MATERIAL_DELIVERY_DESCRIPTION_REQUIRED = "MATERIAL_DELIVERY_DESCRIPTION_REQUIRED"

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -15,13 +15,31 @@ import Ionicons from "react-native-vector-icons/Ionicons";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader } from "@/components/ui/Loader";
 import { getLoginStyles } from "@/styles/loginStyles";
+import { consumeLogoutMarker } from "@/services/logoutMarker";
+import { SessionExpiredBanner } from "@/components/common/SessionExpiredBanner";
 
 export default function EnterpriseLoginScreen() {
   const { loginEnterprise, enterpriseLoading, setMode } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [sessionExpiredMarker, setSessionExpiredMarker] = useState<{
+    reason: string;
+    ts: number;
+  } | null>(null);
   const { styles, palette } = useMemo(() => getLoginStyles("enterprise"), []);
+
+  useEffect(() => {
+    let cancelled = false;
+    consumeLogoutMarker("enterprise").then((marker) => {
+      if (!cancelled && marker) {
+        setSessionExpiredMarker({ reason: marker.reason, ts: marker.ts });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleSubmit = async () => {
     if (!email || !password) {
@@ -70,6 +88,9 @@ export default function EnterpriseLoginScreen() {
           </View>
 
           <View style={styles.form}>
+            {sessionExpiredMarker && (
+              <SessionExpiredBanner marker={sessionExpiredMarker} />
+            )}
             <View style={styles.inputBlock}>
               <Text style={styles.label}>Email Entreprise</Text>
               <TextInput

@@ -790,6 +790,75 @@ class TestSchemaValidationE2E:
         if response.status_code != 404:
             assert ("message" in data) or ("errors" in data) or ("error" in data)
 
+    def test_material_delivery_price_not_configured(self, client, db, sample_company):
+        """✅ Test E2E livraison matériel sans prix fixe → error_code MATERIAL_DELIVERY_PRICE_NOT_CONFIGURED."""
+        from datetime import UTC, timedelta
+
+        from ext import bcrypt
+        from models import Client, User, UserRole
+        from shared.constants import ErrorCodes
+
+        # Créer un client pour cette company
+        client_user = User()
+        client_user.username = f"client_{uuid.uuid4().hex[:6]}"
+        client_user.email = f"client_{uuid.uuid4().hex[:6]}@example.com"
+        client_user.role = UserRole.client
+        client_user.public_id = str(uuid.uuid4())
+        password_hash = bcrypt.generate_password_hash("password123")
+        client_user.password = (
+            password_hash.decode("utf-8")
+            if isinstance(password_hash, bytes)
+            else password_hash
+        )
+        db.session.add(client_user)
+        db.session.flush()
+
+        test_client = Client()
+        test_client.user_id = client_user.id
+        test_client.company_id = sample_company.id
+        test_client.client_type = "PRIVATE"
+        db.session.add(test_client)
+        db.session.flush()
+
+        company_user = sample_company.user if hasattr(sample_company, "user") else None
+        if not company_user:
+            company_user = User.query.filter_by(id=sample_company.user_id).first()
+        from flask_jwt_extended import create_access_token
+
+        company_claims = {
+            "role": UserRole.company.value,
+            "company_id": sample_company.id,
+            "driver_id": None,
+            "aud": "atmr-api",
+        }
+        with client.application.app_context():
+            company_token = create_access_token(
+                identity=str(company_user.public_id), additional_claims=company_claims
+            )
+        company_headers = {"Authorization": f"Bearer {company_token}"}
+
+        # Format ISO 8601 strict (YYYY-MM-DDTHH:mm:ssZ)
+        future_dt = datetime.now(UTC) + timedelta(days=1)
+        future_time = future_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+        response = client.post(
+            "/api/v1/companies/me/reservations/manual",
+            json={
+                "client_id": test_client.id,
+                "pickup_location": "Rue de la Gare 1, 1000 Lausanne",
+                "dropoff_location": "Avenue de la Plage 10, 1000 Lausanne",
+                "scheduled_time": future_time,
+                "mission_type": "material_delivery",
+                "delivery_description": "Livraison médicament",
+            },
+            headers=company_headers,
+        )
+        assert response.status_code == 400
+        data = response.get_json() or {}
+        assert (
+            data.get("error_code") == ErrorCodes.MATERIAL_DELIVERY_PRICE_NOT_CONFIGURED
+        )
+        assert data.get("details", {}).get("field") == "material_delivery_price_fixed"
+
     def test_create_client_valid_schema_self_service(self, client, db, sample_company):
         """✅ Test E2E POST /api/companies/me/clients
         avec ClientCreateSchema valide (SELF_SERVICE)."""

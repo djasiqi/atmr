@@ -1124,6 +1124,40 @@ class TestManualBookingCreateSchema:
         result = validate_request(ManualBookingCreateSchema(), data, strict=False)
         assert result["customer_email"] == "customer@example.com"
 
+    def test_material_delivery_requires_description(self):
+        """✅ Test livraison matériel sans description → error_code MATERIAL_DELIVERY_DESCRIPTION_REQUIRED."""
+        from schemas.validation_utils import handle_validation_error
+        from shared.constants import ErrorCodes
+
+        data = {
+            "client_id": 123,
+            "pickup_location": "123 Main St",
+            "dropoff_location": "456 Oak Ave",
+            "scheduled_time": "2025-12-25T14:00:00Z",
+            "mission_type": "material_delivery",
+            "delivery_description": "",  # Vide
+        }
+        with pytest.raises(ValidationError) as exc_info:
+            validate_request(ManualBookingCreateSchema(), data, strict=False)
+        err = exc_info.value
+        # validate_request formate et inclut error_code + details
+        assert "error_code" in err.messages
+        assert (
+            err.messages["error_code"]
+            == ErrorCodes.MATERIAL_DELIVERY_DESCRIPTION_REQUIRED
+        )
+        assert "details" in err.messages
+        assert err.messages["details"]["field"] == "delivery_description"
+
+        # handle_validation_error retourne tel quel (déjà formaté)
+        response, status_code = handle_validation_error(err)
+        assert status_code == 400
+        assert (
+            response["error_code"] == ErrorCodes.MATERIAL_DELIVERY_DESCRIPTION_REQUIRED
+        )
+        assert response["details"]["field"] == "delivery_description"
+        assert "Veuillez saisir une description" in response["error"]
+
 
 class TestBillingSettingsUpdateSchema:
     """Tests pour BillingSettingsUpdateSchema."""

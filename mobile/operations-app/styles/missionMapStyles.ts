@@ -20,7 +20,7 @@ export const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
     marginHorizontal: 16,
-    marginTop: 12,
+    marginTop: 6,
     ...containerShadow,
     ...(Platform.OS === 'web' ? { width: CONTENT_WIDTH, alignSelf: 'center' as const, marginHorizontal: 0 } : {}),
   },

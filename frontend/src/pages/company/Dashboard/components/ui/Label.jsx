@@ -7,3 +7,4 @@ const Label = ({ children, htmlFor, className = '', ...props }) => (
 );
 
 export { Label };
+export default Label;

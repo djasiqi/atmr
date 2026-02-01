@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from marshmallow import (  # pyright: ignore[reportMissingImports]
+from marshmallow import (
     Schema,
     ValidationError,
     fields,
@@ -11,6 +11,9 @@ from marshmallow import (  # pyright: ignore[reportMissingImports]
 )
 
 from schemas.validation_utils import ISO8601_DATE_REGEX, ISO8601_DATETIME_REGEX
+from shared.constants import ErrorCodes
+
+DELIVERY_DESCRIPTION_MAX_LENGTH = 500
 
 
 class BookingCreateSchema(Schema):
@@ -108,6 +111,36 @@ class BookingUpdateSchema(Schema):
         allow_none=True,
     )
     notes_medical = fields.Str(validate=validate.Length(max=1000))
+
+    # ✅ Livraison matériel : permettre de corriger mission_type et delivery_description
+    mission_type = fields.Str(
+        validate=validate.OneOf(["patient_transport", "material_delivery"]),
+        allow_none=True,
+    )
+    delivery_description = fields.Str(
+        validate=validate.Length(max=DELIVERY_DESCRIPTION_MAX_LENGTH),
+        allow_none=True,
+    )
+
+    @validates_schema
+    def validate_delivery_description(self, data, **kwargs):  # noqa: ARG002
+        """Si mission_type == material_delivery (dans le payload), delivery_description requis."""
+        mission_type = (data.get("mission_type") or "").strip().lower()
+        if mission_type != "material_delivery":
+            return
+        raw = (data.get("delivery_description") or "").strip()
+        delivery_desc = " ".join(raw.split()) if raw else ""
+        if not delivery_desc:
+            raise ValidationError(
+                {
+                    "delivery_description": [
+                        "Veuillez saisir une description pour la livraison."
+                    ],
+                    "_error_code": ErrorCodes.MATERIAL_DELIVERY_DESCRIPTION_REQUIRED,
+                    "_details": {"field": "delivery_description"},
+                }
+            )
+        data["delivery_description"] = delivery_desc
 
     @validates_schema
     def validate_return_time_after_scheduled_time(self, data, **kwargs):  # noqa: ARG002

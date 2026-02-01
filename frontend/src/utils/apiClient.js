@@ -104,26 +104,24 @@ apiRest.interceptors.request.use((config) => {
   const url = config.url ?? '';
   const fullUrl = typeof url === 'string' && url.startsWith('http') ? url : `${base}${url}`;
 
-  if (fullUrl.includes('/company_dispatch/')) {
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('delays/live called', new Error().stack);
-    }
+  if (fullUrl.includes('/company_dispatch')) {
     delete config.headers.Authorization;
     delete config.headers.authorization;
     if (config.headers.common) {
       delete config.headers.common.Authorization;
       delete config.headers.common.authorization;
     }
-    const companyToken = localStorage.getItem(COMPANY_ACCESS_TOKEN_KEY)
-      || localStorage.getItem('company_authToken'); // fallback migration snake_case
+    const companyToken =
+      localStorage.getItem(COMPANY_ACCESS_TOKEN_KEY) ||
+      localStorage.getItem('company_authToken'); // fallback migration snake_case
     if (companyToken) {
       config.headers.Authorization = `Bearer ${companyToken}`;
       return config;
     }
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('[company_dispatch] blocked: missing company_access_token', { url: fullUrl });
-    }
-    return Promise.reject(new Error('Missing company_access_token for company_dispatch'));
+    // ✅ Fail fast : impossible de réintroduire le bug 401 sur company_dispatch
+    return Promise.reject(
+      new Error('Company dispatch called without company_access_token')
+    );
   }
   return config;
 });

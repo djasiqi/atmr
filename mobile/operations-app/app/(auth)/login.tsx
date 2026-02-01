@@ -24,6 +24,8 @@ import {
   clearRememberedCredentials,
   RememberMeStorageError,
 } from "@/utils/rememberMeStorage";
+import { consumeLogoutMarker } from "@/services/logoutMarker";
+import { SessionExpiredBanner } from "@/components/common/SessionExpiredBanner";
 
 export default function LoginScreen() {
   const { login, loading, setMode } = useAuth();
@@ -32,7 +34,23 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [sessionExpiredMarker, setSessionExpiredMarker] = useState<{
+    reason: string;
+    ts: number;
+  } | null>(null);
   const { styles, palette } = useMemo(() => getLoginStyles("driver"), []);
+
+  useEffect(() => {
+    let cancelled = false;
+    consumeLogoutMarker("driver").then((marker) => {
+      if (!cancelled && marker) {
+        setSessionExpiredMarker({ reason: marker.reason, ts: marker.ts });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -57,7 +75,7 @@ export default function LoginScreen() {
         }
       } catch {
         if (isMounted) setRememberMe(false);
-        void clearRememberedCredentials().catch(() => {});
+        void clearRememberedCredentials().catch(() => { });
       } finally {
         if (isMounted) setHydrated(true);
       }
@@ -124,6 +142,9 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.form}>
+            {sessionExpiredMarker && (
+              <SessionExpiredBanner marker={sessionExpiredMarker} />
+            )}
             {!hydrated && (
               <View style={{ paddingVertical: 8, alignItems: "center" }}>
                 <ActivityIndicator size="small" color={palette.secondary} />

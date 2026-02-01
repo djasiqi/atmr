@@ -42,6 +42,7 @@ from routes.api_error_models import (
     create_validation_error_model,
 )
 from routes.api_error_utils import create_error_response
+from shared.constants import ErrorCodes
 from routes.db_error_utils import format_integrity_error
 from services.partnerships.exceptions import StatsComputationError
 from services.security.idempotency import IdempotencyService
@@ -433,6 +434,14 @@ manual_booking_model = companies_ns.model(
         ),
         "occurrences": fields.Integer(
             description="Nombre d'occurrences de la récurrence"
+        ),
+        # ✅ Livraison matériel
+        "mission_type": fields.String(
+            description="patient_transport | material_delivery",
+            default="patient_transport",
+        ),
+        "delivery_description": fields.String(
+            description="Description de la livraison (requis si mission_type=material_delivery)"
         ),
     },
 )
@@ -1640,37 +1649,113 @@ class CompanyReservations(Resource):
         if exclude_canceled:
             query = query.filter(Booking.status != BookingStatus.CANCELED)
 
-        # Recherche globale
+        # Recherche globale : ID, client (prénom, nom, full_name, email, téléphone, date naissance),
+        # adresses (départ, arrivée, domicile, facturation), clinique, HUG, docteur, chauffeur,
+        # date transport (multi-formats), notes médicales, notes accès
+        # Multi-mots : "drin rue" => OR (match "drin" OU match "rue")
         if search_term:
-            like_term = f"%{search_term}%"
+            tokens = [t.strip() for t in search_term.strip().split() if t.strip()]
+            if not tokens:
+                tokens = [search_term.strip()]
             client_user = aliased(User)
             driver_user = aliased(User)
-            query = (
-                (
-                    query.outerjoin(Client, Booking.client)
-                    .outerjoin(client_user, Client.user)
-                    .outerjoin(Driver, Booking.driver)
-                    .outerjoin(driver_user, Driver.user)
-                )
-                .filter(
-                    or_(
+            billed_to_company = aliased(Company)
+            client_full_name = func.concat(
+                func.coalesce(client_user.first_name, ""),
+                " ",
+                func.coalesce(client_user.last_name, ""),
+            )
+            # Construire les conditions OR pour chaque token
+            search_conditions = []
+            for token in tokens:
+                like_term = f"%{token}%"
+                search_conditions.extend(
+                    [
                         cast(Booking.id, String).ilike(like_term),
-                        Booking.customer_name.ilike(like_term),
-                        Booking.pickup_location.ilike(like_term),
-                        Booking.dropoff_location.ilike(like_term),
-                        Client.contact_email.ilike(like_term),
-                        Client.contact_phone.ilike(like_term),
-                        client_user.first_name.ilike(like_term),
-                        client_user.last_name.ilike(like_term),
-                        cast(client_user.email, String).ilike(like_term),
-                        client_user.phone.ilike(like_term),
-                        driver_user.first_name.ilike(like_term),
-                        driver_user.last_name.ilike(like_term),
-                        driver_user.username.ilike(like_term),
-                        cast(driver_user.email, String).ilike(like_term),
-                    )
+                        func.coalesce(Booking.customer_name, "").ilike(like_term),
+                        func.coalesce(client_user.first_name, "").ilike(like_term),
+                        func.coalesce(client_user.last_name, "").ilike(like_term),
+                        client_full_name.ilike(like_term),
+                        cast(func.coalesce(client_user.email, ""), String).ilike(
+                            like_term
+                        ),
+                        func.coalesce(client_user.phone, "").ilike(like_term),
+                        cast(client_user.birth_date, String).ilike(like_term),
+                        func.to_char(client_user.birth_date, "DD.MM.YYYY").ilike(
+                            like_term
+                        ),
+                        func.to_char(client_user.birth_date, "DD/MM/YYYY").ilike(
+                            like_term
+                        ),
+                        func.coalesce(Booking.pickup_location, "").ilike(like_term),
+                        func.coalesce(Booking.dropoff_location, "").ilike(like_term),
+                        func.coalesce(Client.contact_email, "").ilike(like_term),
+                        func.coalesce(Client.contact_phone, "").ilike(like_term),
+                        func.coalesce(Client.domicile_address, "").ilike(like_term),
+                        func.coalesce(Client.domicile_zip, "").ilike(like_term),
+                        func.coalesce(Client.domicile_city, "").ilike(like_term),
+                        func.coalesce(Client.billing_address, "").ilike(like_term),
+                        func.coalesce(billed_to_company.name, "").ilike(like_term),
+                        func.coalesce(Booking.medical_facility, "").ilike(like_term),
+                        func.coalesce(Booking.hospital_service, "").ilike(like_term),
+                        func.coalesce(Booking.doctor_name, "").ilike(like_term),
+                        func.coalesce(Booking.notes_medical, "").ilike(like_term),
+                        func.coalesce(Booking.pickup_access_notes, "").ilike(like_term),
+                        func.coalesce(Booking.dropoff_access_notes, "").ilike(
+                            like_term
+                        ),
+                        func.coalesce(Booking.billed_to_contact, "").ilike(like_term),
+                        func.coalesce(driver_user.first_name, "").ilike(like_term),
+                        func.coalesce(driver_user.last_name, "").ilike(like_term),
+                        func.coalesce(driver_user.username, "").ilike(like_term),
+                        cast(func.coalesce(driver_user.email, ""), String).ilike(
+                            like_term
+                        ),
+                        func.to_char(Booking.scheduled_time, "DD.MM.YYYY").ilike(
+                            like_term
+                        ),
+                        func.to_char(Booking.scheduled_time, "YYYY-MM-DD").ilike(
+                            like_term
+                        ),
+                        func.to_char(Booking.scheduled_time, "DD/MM/YYYY").ilike(
+                            like_term
+                        ),
+                        func.to_char(Booking.scheduled_time, "DDMM").ilike(like_term),
+                        func.to_char(Booking.scheduled_time, "DDMMYYYY").ilike(
+                            like_term
+                        ),
+                        func.to_char(Booking.scheduled_time, "DD.MM").ilike(like_term),
+                        func.to_char(Booking.scheduled_time, "DD TMMonth YYYY").ilike(
+                            like_term
+                        ),
+                        func.to_char(Booking.scheduled_time, "TMMonth").ilike(
+                            like_term
+                        ),
+                    ]
                 )
+            # Sous-requête pour éviter "ORDER BY must appear in select list" avec DISTINCT
+            ids_subq = (
+                query.outerjoin(Client, Booking.client_id == Client.id)
+                .outerjoin(client_user, Client.user_id == client_user.id)
+                .outerjoin(Driver, Booking.driver_id == Driver.id)
+                .outerjoin(driver_user, Driver.user_id == driver_user.id)
+                .outerjoin(
+                    billed_to_company,
+                    Booking.billed_to_company_id == billed_to_company.id,
+                )
+                .filter(or_(*search_conditions))
+                .with_entities(Booking.id)
                 .distinct()
+                .subquery()
+            )
+            query = Booking.query.filter(Booking.id.in_(ids_subq)).filter(
+                visibility_filter
+            )
+            logger.debug(
+                "reservations search: term=%r tokens=%r company_id=%s",
+                search_term,
+                tokens,
+                company_id,
             )
 
         # Tri
@@ -1687,7 +1772,7 @@ class CompanyReservations(Resource):
             order_id,
         )
 
-        total = query.order_by(None).with_entities(Booking.id).distinct().count()
+        total = query.order_by(None).with_entities(Booking.id).count()
 
         reservations = query.offset((page - 1) * per_page).limit(per_page).all()
 
@@ -2268,6 +2353,7 @@ class CompleteReservation(Resource):
                             company_id=cast(int, booking.company_id),
                             actor_role="company",
                             actor_id=company_id,
+                            source="company_api",
                         )
                     )
                 except Exception as e:
@@ -3135,6 +3221,8 @@ class CreateManualReservation(Resource):
                 client_id,
                 logger,
             )
+        # ✅ Autoriser les clients inactifs : on peut créer des réservations pour eux
+        # (ex. client désactivé temporairement mais qui a encore des courses à effectuer)
         user = client.user
 
         # ---------- 0) Résolution du payeur
@@ -3726,25 +3814,67 @@ class CreateManualReservation(Resource):
             else:
                 display_name = full_name or (getattr(user, "username", "") or "Client")
 
-            # 💰 Utiliser le montant fourni si présent,
-            # sinon appliquer le tarif préférentiel du client
-            provided_amount = validated_data.get("amount")
-            has_provided_amount = (
-                provided_amount is not None
-                and float(provided_amount) > PREFERENTIAL_RATE_ZERO
+            # ✅ Livraison matériel : mission_type et delivery_description
+            mission_type = (
+                (validated_data.get("mission_type") or "patient_transport")
+                .strip()
+                .lower()
             )
-            amount_to_use = float(provided_amount or 0)
-            if (
-                not has_provided_amount
-                and client.preferential_rate
-                and client.preferential_rate > PREFERENTIAL_RATE_ZERO
-            ):
-                amount_to_use = float(client.preferential_rate)
+            raw_desc = (validated_data.get("delivery_description") or "").strip()
+            delivery_description = (
+                " ".join(raw_desc.split()) if raw_desc else None
+            )  # trim + collapse spaces (schema valide déjà pour livraison)
+
+            # 💰 Montant : pour livraison → prix fixe entreprise ; sinon logique existante
+            if mission_type == "material_delivery":
+                from models import CompanyBillingSettings
+
+                billing_settings = CompanyBillingSettings.query.filter_by(
+                    company_id=cid
+                ).first()
+                price_fixed = (
+                    billing_settings.material_delivery_price_fixed
+                    if billing_settings
+                    else None
+                )
+                if (
+                    not billing_settings
+                    or price_fixed is None
+                    or float(price_fixed) <= 0
+                ):
+                    return create_error_response(
+                        "Configurez le prix fixe livraison dans Paramètres > Facturation avant de créer une livraison.",
+                        status_code=400,
+                        error_code=ErrorCodes.MATERIAL_DELIVERY_PRICE_NOT_CONFIGURED,
+                        details={
+                            "field": "material_delivery_price_fixed",
+                            "booking_id": None,
+                        },
+                    )
+                amount_to_use = float(price_fixed)
                 logger.info(
-                    "💰 Tarif préférentiel appliqué pour %s: %s CHF",
-                    display_name,
+                    "📦 Livraison matériel: prix fixe %s CHF",
                     amount_to_use,
                 )
+            else:
+                # Transport patient : logique existante
+                provided_amount = validated_data.get("amount")
+                has_provided_amount = (
+                    provided_amount is not None
+                    and float(provided_amount) > PREFERENTIAL_RATE_ZERO
+                )
+                amount_to_use = float(provided_amount or 0)
+                if (
+                    not has_provided_amount
+                    and client.preferential_rate
+                    and client.preferential_rate > PREFERENTIAL_RATE_ZERO
+                ):
+                    amount_to_use = float(client.preferential_rate)
+                    logger.info(
+                        "💰 Tarif préférentiel appliqué pour %s: %s CHF",
+                        display_name,
+                        amount_to_use,
+                    )
 
             # Listes pour stocker toutes les réservations créées
             created_outbounds = []
@@ -3867,6 +3997,9 @@ class CreateManualReservation(Resource):
                     "wheelchair_client_has", False
                 )
                 outbound.wheelchair_need = validated_data.get("wheelchair_need", False)
+                # ✅ Livraison matériel
+                outbound.mission_type = mission_type
+                outbound.delivery_description = delivery_description
                 db.session.add(outbound)
                 db.session.flush()  # pour récupérer outbound.id
                 created_outbounds.append(outbound)
@@ -3892,6 +4025,8 @@ class CreateManualReservation(Resource):
                     return_booking.amount = amount_to_use  # 💰 Même tarif que l'aller
                     return_booking.company_id = cid
                     return_booking.booking_type = "manual"
+                    return_booking.mission_type = mission_type
+                    return_booking.delivery_description = delivery_description
                     # ✅ Utiliser l'utilisateur du client, pas celui de la company
                     return_booking.user_id = user.id if user else None
                     return_booking.is_round_trip = False
@@ -4140,6 +4275,13 @@ class TriggerReturnBooking(Resource):
             return_booking.user_id = booking.user_id
             return_booking.client_id = booking.client_id
             return_booking.company_id = cid
+            # ✅ Livraison matériel : copier mission_type et delivery_description de l'aller
+            return_booking.mission_type = (
+                getattr(booking, "mission_type", None) or "patient_transport"
+            )
+            return_booking.delivery_description = getattr(
+                booking, "delivery_description", None
+            )
             db.session.add(return_booking)
             action = "créé"
 

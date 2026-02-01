@@ -1,6 +1,6 @@
 """✅ Schemas Marshmallow pour validation des endpoints invoices."""
 
-from marshmallow import (  # pyright: ignore[reportMissingImports]
+from marshmallow import (
     Schema,
     fields,
     validate,
@@ -29,6 +29,12 @@ class BillingSettingsUpdateSchema(Schema):
     )
     reminder3fee = fields.Float(
         validate=validate.Range(min=0, error="reminder3fee doit être >= 0")
+    )
+    material_delivery_price_fixed = fields.Float(
+        validate=validate.Range(
+            min=0, error="material_delivery_price_fixed doit être >= 0"
+        ),
+        allow_none=True,
     )
     auto_reminders_enabled = fields.Bool()
     email_sender = fields.Str(validate=validate.Length(max=254), allow_none=True)

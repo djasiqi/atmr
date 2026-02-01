@@ -200,9 +200,7 @@ class Invoice(db.Model):
         bill_to_client_id = (
             value if key == "bill_to_client_id" else self.bill_to_client_id
         )
-        billing_party_id = (
-            value if key == "billing_party_id" else self.billing_party_id
-        )
+        billing_party_id = value if key == "billing_party_id" else self.billing_party_id
         if key == "billed_to_company_id":
             _ = value  # valeur acceptée (validation métier ailleurs)
 
@@ -386,7 +384,12 @@ class InvoiceLine(db.Model):
     invoice_id: Mapped[int] = mapped_column(ForeignKey("invoices.id"), nullable=False)
 
     type: Mapped[InvoiceLineType] = mapped_column(
-        SAEnum(InvoiceLineType, name="invoice_line_type"), nullable=False
+        SAEnum(
+            InvoiceLineType,
+            name="invoice_line_type",
+            values_callable=lambda x: [e.value for e in x],
+        ),
+        nullable=False,
     )
     description: Mapped[str] = mapped_column(String(500), nullable=False)
     qty: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=1)
@@ -585,6 +588,10 @@ class CompanyBillingSettings(db.Model):
     reminder3_fee: Mapped[Decimal | None] = mapped_column(
         Numeric(10, 2), nullable=True, default=0
     )
+    # ✅ Prix fixe livraison matériel (CHF) - configuré par entreprise
+    material_delivery_price_fixed: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 2), nullable=True, default=None
+    )
     vat_applicable = Column(Boolean, nullable=False, default=True)
     vat_rate: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2), nullable=True, default=Decimal("7.7")
@@ -666,19 +673,41 @@ class CompanyBillingSettings(db.Model):
     )  # "text", "form" ou "html"
     email_signature_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Mode "form": champs normalisés (génération auto du HTML)
-    signature_name: Mapped[str | None] = mapped_column(String(200), nullable=True)  # Nom complet
-    signature_title: Mapped[str | None] = mapped_column(String(200), nullable=True)  # Titre (ex: "Associé gérant")
-    signature_company: Mapped[str | None] = mapped_column(String(200), nullable=True)  # Société
-    signature_phone_main: Mapped[str | None] = mapped_column(String(50), nullable=True)  # Téléphone principal
-    signature_phone_mobile: Mapped[str | None] = mapped_column(String(50), nullable=True)  # Téléphone mobile
-    signature_email: Mapped[str | None] = mapped_column(String(200), nullable=True)  # Email
-    signature_website: Mapped[str | None] = mapped_column(String(200), nullable=True)  # Site web
-    signature_address_line: Mapped[str | None] = mapped_column(String(200), nullable=True)  # Ligne adresse
-    signature_zip: Mapped[str | None] = mapped_column(String(10), nullable=True)  # Code postal
-    signature_city: Mapped[str | None] = mapped_column(String(100), nullable=True)  # Ville
+    signature_name: Mapped[str | None] = mapped_column(
+        String(200), nullable=True
+    )  # Nom complet
+    signature_title: Mapped[str | None] = mapped_column(
+        String(200), nullable=True
+    )  # Titre (ex: "Associé gérant")
+    signature_company: Mapped[str | None] = mapped_column(
+        String(200), nullable=True
+    )  # Société
+    signature_phone_main: Mapped[str | None] = mapped_column(
+        String(50), nullable=True
+    )  # Téléphone principal
+    signature_phone_mobile: Mapped[str | None] = mapped_column(
+        String(50), nullable=True
+    )  # Téléphone mobile
+    signature_email: Mapped[str | None] = mapped_column(
+        String(200), nullable=True
+    )  # Email
+    signature_website: Mapped[str | None] = mapped_column(
+        String(200), nullable=True
+    )  # Site web
+    signature_address_line: Mapped[str | None] = mapped_column(
+        String(200), nullable=True
+    )  # Ligne adresse
+    signature_zip: Mapped[str | None] = mapped_column(
+        String(10), nullable=True
+    )  # Code postal
+    signature_city: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )  # Ville
     # Note: signature_logo_url supprimé - on utilise maintenant company.logo_url automatiquement
     # Mode "html": template personnalisé
-    email_signature_html_template: Mapped[str | None] = mapped_column(Text, nullable=True)
+    email_signature_html_template: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )
 
     # Pied de page légal
     legal_footer: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -708,6 +737,9 @@ class CompanyBillingSettings(db.Model):
             else None,
             "reminder3_fee": float(self.reminder3_fee)
             if self.reminder3_fee is not None
+            else None,
+            "material_delivery_price_fixed": float(self.material_delivery_price_fixed)
+            if self.material_delivery_price_fixed is not None
             else None,
             "reminder_schedule_days": self.reminder_schedule_days,
             "auto_reminders_enabled": self.auto_reminders_enabled,

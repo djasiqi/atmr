@@ -141,6 +141,33 @@ def send_push_notification_task(  # noqa: PLR0911
                     len(device_tokens),
                 )
 
+                # P0.4: Recipient proof logging (DEBUG_NOTIF_ROUTING)
+                try:
+                    from services.notifications.token_audit import (
+                        _token_hash,
+                        log_push_recipient_proof,
+                    )
+
+                    token_hashes = [_token_hash(dt.token) for dt in device_tokens if dt.token]
+                    log_push_recipient_proof(
+                        trace_id=data.get("trace_id") if data else None,
+                        booking_id=data.get("booking_id") if data else None,
+                        status=data.get("status") if data else None,
+                        recipient_role="driver",
+                        recipient_id=driver_id,
+                        token_count=len(device_tokens),
+                        token_hashes=token_hashes,
+                        collapse_key=data.get("collapse_key") if data else None,
+                        dedupe_key=data.get("dedupe_key") if data else None,
+                        routing_version=data.get("routing_version") if data else None,
+                        routing_decision=data.get("routing_decision") if data else None,
+                        source=data.get("source") if data else None,
+                        actor_role=data.get("actor_role") if data else None,
+                        actor_id=data.get("actor_id") if data else None,
+                    )
+                except Exception:
+                    pass
+
                 # Envoyer à tous les devices actifs
                 success_count = 0
                 invalid_tokens = []
@@ -315,6 +342,70 @@ def send_push_notification_task(  # noqa: PLR0911
                 "error": str(e),
                 "channel": "none",
             }
+
+
+@celery.task(
+    name="tasks.notification_tasks.send_push_company_notification",
+    bind=True,
+    autoretry_for=(ConnectionError, TimeoutError),
+    retry_kwargs={"max_retries": MAX_PUSH_RETRIES, "countdown": 5},
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+    acks_late=True,
+    task_time_limit=30,
+    task_soft_time_limit=25,
+)
+def send_push_company_notification_task(
+    self,
+    company_id: int,
+    title: str,
+    body: str,
+    data: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """Envoie une notification push à l'entreprise via Celery (P1: async comme driver).
+
+    Args:
+        company_id: ID de l'entreprise
+        title: Titre de la notification
+        body: Corps du message
+        data: Données additionnelles (recipient_role, trace_id, etc.)
+
+    Returns:
+        Dict avec ok (bool) et error (str) si échec
+    """
+    import os
+
+    from celery_app import get_flask_app
+
+    if os.environ.get("DEBUG_NOTIF_ROUTING", "").lower() in ("1", "true", "yes"):
+        logger.info(
+            "[notification_task] push_company_task_started company_id=%s trace_id=%s routing_decision=%s",
+            company_id,
+            (data or {}).get("trace_id"),
+            (data or {}).get("routing_decision"),
+        )
+
+    app = get_flask_app()
+    with app.app_context():
+        try:
+            from services.events.fanout import _send_push_to_company
+
+            success = _send_push_to_company(
+                company_id=company_id,
+                title=title,
+                body=body,
+                data=data or {},
+            )
+            return {"ok": success, "company_id": company_id}
+        except (ConnectionError, TimeoutError):
+            raise
+        except Exception as e:
+            logger.exception(
+                "[notification_task] send_push_company_notification_task failed: %s",
+                e,
+            )
+            return {"ok": False, "error": str(e), "company_id": company_id}
 
 
 def _send_sms_fallback(

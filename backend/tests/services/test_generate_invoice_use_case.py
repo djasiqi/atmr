@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
+
+from sqlalchemy.exc import IntegrityError
 
 from application.invoices.generate_invoice import (
     GenerateInvoiceInput,
@@ -341,3 +343,117 @@ def test_generate_invoice_no_reservations(db) -> None:
     # Le résultat devrait être success=False avec une erreur
     # mais cela dépend aussi de Booking.query qui nécessite un contexte DB
     assert isinstance(result, GenerateInvoiceOutput)
+
+
+class _MockInvoiceLineRepositoryRaisesIntegrityError:
+    """Mock qui simule enum non migré (IntegrityError sur create)."""
+
+    def create(self, line_data: dict[str, Any]) -> None:
+        raise IntegrityError(
+            "insert",
+            {},
+            "invalid input value for enum invoice_line_type: material_delivery",
+        )
+
+
+class _MockPDFServiceRaisesKeyError:
+    """Mock qui simule mapping incomplet (KeyError sur generate_invoice_pdf)."""
+
+    def generate_invoice_pdf(self, invoice: Any) -> None:
+        raise KeyError("MATERIAL_DELIVERY")
+
+
+def test_integrity_error_enum_not_migrated_returns_400(db) -> None:
+    """IntegrityError enum non migré → 400 + INVOICE_LINE_TYPE_MIGRATION_REQUIRED."""
+    from models import Booking, Client, Company, CompanyBillingSettings, User
+    from models.enums import BookingStatus
+
+    # Setup minimal : company, client, booking pour atteindre invoice_line_repo.create
+    company_user = User(username="cu1", email="cu1@test.com")
+    client_user = User(username="c1", email="c1@test.com")
+    company = Company(name="Test Co", uid_ide="CHE-123.456.789", user=company_user)
+    client = Client(user=client_user, company=company)
+    db.session.add_all([company_user, client_user, company, client])
+    db.session.flush()
+    billing = CompanyBillingSettings(company_id=company.id)
+    db.session.add(billing)
+    db.session.commit()
+
+    booking = Booking(
+        company=company,
+        client=client,
+        user=client_user,
+        customer_name="Test",
+        pickup_location="A",
+        dropoff_location="B",
+        scheduled_time=datetime.now(UTC),
+        amount=Decimal("50"),
+        status=BookingStatus.COMPLETED,
+    )
+    db.session.add(booking)
+    db.session.commit()
+
+    uc = GenerateInvoiceUseCase(
+        invoice_line_repo=_MockInvoiceLineRepositoryRaisesIntegrityError(),
+    )
+    result = uc.execute(
+        GenerateInvoiceInput(
+            company_id=company.id,
+            client_id=client.id,
+            period_year=2025,
+            period_month=1,
+            reservation_ids=[booking.id],
+        )
+    )
+    assert result.success is False
+    assert result.status_code == 400
+    assert result.error is not None
+    assert result.error.get("error_code") == "INVOICE_LINE_TYPE_MIGRATION_REQUIRED"
+    assert result.error.get("details", {}).get("enum_type") == "invoice_line_type"
+    assert result.error.get("details", {}).get("expected_value") == "material_delivery"
+
+
+def test_key_error_mapping_incomplete_returns_400(db) -> None:
+    """KeyError mapping incomplet → 400 + UNKNOWN_LINE_TYPE."""
+    from models import Booking, Client, Company, CompanyBillingSettings, User
+    from models.enums import BookingStatus
+
+    company_user = User(username="cu2", email="cu2@test.com")
+    client_user = User(username="c2", email="c2@test.com")
+    company = Company(name="Test Co", uid_ide="CHE-456.789.012", user=company_user)
+    client = Client(user=client_user, company=company)
+    db.session.add_all([company_user, client_user, company, client])
+    db.session.flush()
+    billing = CompanyBillingSettings(company_id=company.id)
+    db.session.add(billing)
+    db.session.commit()
+
+    booking = Booking(
+        company=company,
+        client=client,
+        user=client_user,
+        customer_name="Test",
+        pickup_location="A",
+        dropoff_location="B",
+        scheduled_time=datetime.now(UTC),
+        amount=Decimal("50"),
+        status=BookingStatus.COMPLETED,
+    )
+    db.session.add(booking)
+    db.session.commit()
+
+    uc = GenerateInvoiceUseCase(pdf_service=_MockPDFServiceRaisesKeyError())
+    result = uc.execute(
+        GenerateInvoiceInput(
+            company_id=company.id,
+            client_id=client.id,
+            period_year=2025,
+            period_month=1,
+            reservation_ids=[booking.id],
+        )
+    )
+    assert result.success is False
+    assert result.status_code == 400
+    assert result.error is not None
+    assert result.error.get("error_code") == "UNKNOWN_LINE_TYPE"
+    assert result.error.get("details", {}).get("line_type") == "MATERIAL_DELIVERY"

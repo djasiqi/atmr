@@ -5,3 +5,4 @@ const Input = React.forwardRef(({ className = '', ...props }, ref) => (
 ));
 
 export { Input };
+export default Input;

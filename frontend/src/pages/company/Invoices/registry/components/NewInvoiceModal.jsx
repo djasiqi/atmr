@@ -119,6 +119,8 @@ const NewInvoiceModal = ({
   const [s2Totals, setS2Totals] = useState({
     total_eligible: 0,
     total_amount_eligible: 0,
+    total_invoiced: 0,
+    total_amount_invoiced: 0,
     total_excluded: 0,
     total_amount_excluded: 0,
     excluded_bookings: [], // Liste des bookings exclus pour affichage dans l'accordéon
@@ -347,9 +349,15 @@ const NewInvoiceModal = ({
             ? Number(response.data.total_amount_excluded.toFixed(2))
             : 0;
           
+          const safeTotalInvoiced = Number.isFinite(response.data.total_invoiced) ? Math.floor(response.data.total_invoiced) : 0;
+          const safeTotalAmountInvoiced = Number.isFinite(response.data.total_amount_invoiced) && !Number.isNaN(response.data.total_amount_invoiced)
+            ? Number(response.data.total_amount_invoiced.toFixed(2))
+            : 0;
           const totals = {
             total_eligible: safeTotalEligible,
             total_amount_eligible: safeTotalAmountEligible,
+            total_invoiced: safeTotalInvoiced,
+            total_amount_invoiced: safeTotalAmountInvoiced,
             total_excluded: safeTotalExcluded,
             total_amount_excluded: safeTotalAmountExcluded,
             excluded_bookings: Array.isArray(response.data.excluded_bookings) ? response.data.excluded_bookings : [],
@@ -363,6 +371,8 @@ const NewInvoiceModal = ({
         setS2Totals({
           total_eligible: 0,
           total_amount_eligible: 0,
+          total_invoiced: 0,
+          total_amount_invoiced: 0,
           total_excluded: 0,
           total_amount_excluded: 0,
           excluded_bookings: [],
@@ -404,8 +414,10 @@ const NewInvoiceModal = ({
       const data = await invoiceService.fetchUnbilledReservations(companyId, clientId, {
         year: formData.period_year,
         month: formData.period_month,
-        // Filtrer uniquement les bookings de la clinique sélectionnée
-        billed_to_type: 'clinic', // On charge tous les bookings, on filtrera côté UI
+        billed_to_type: 'clinic',
+        // Inclure les transports déjà facturés pour afficher la vue complète (S2)
+        include_invoiced: true,
+        clinic_company_id: selectedInstitution?.clinic_company_id,
       });
 
       const bookings = Array.isArray(data?.reservations) ? data.reservations : [];
@@ -629,9 +641,15 @@ const NewInvoiceModal = ({
           ? Number(totalsResponse.data.total_amount_excluded.toFixed(2))
           : 0;
         
+        const safeTotalInvoiced = Number.isFinite(totalsResponse.data.total_invoiced) ? Math.floor(totalsResponse.data.total_invoiced) : 0;
+        const safeTotalAmountInvoiced = Number.isFinite(totalsResponse.data.total_amount_invoiced) && !Number.isNaN(totalsResponse.data.total_amount_invoiced)
+          ? Number(totalsResponse.data.total_amount_invoiced.toFixed(2))
+          : 0;
         setS2Totals({
           total_eligible: safeTotalEligible,
           total_amount_eligible: safeTotalAmountEligible,
+          total_invoiced: safeTotalInvoiced,
+          total_amount_invoiced: safeTotalAmountInvoiced,
           total_excluded: safeTotalExcluded,
           total_amount_excluded: safeTotalAmountExcluded,
           excluded_bookings: Array.isArray(totalsResponse.data.excluded_bookings) ? totalsResponse.data.excluded_bookings : [],
@@ -680,6 +698,8 @@ const NewInvoiceModal = ({
               setS2Totals({
                 total_eligible: Number.isFinite(totalsResponse.data.total_eligible) ? Math.floor(totalsResponse.data.total_eligible) : 0,
                 total_amount_eligible: Number.isFinite(totalsResponse.data.total_amount_eligible) && !Number.isNaN(totalsResponse.data.total_amount_eligible) ? Number(totalsResponse.data.total_amount_eligible.toFixed(2)) : 0,
+                total_invoiced: Number.isFinite(totalsResponse.data.total_invoiced) ? Math.floor(totalsResponse.data.total_invoiced) : 0,
+                total_amount_invoiced: Number.isFinite(totalsResponse.data.total_amount_invoiced) && !Number.isNaN(totalsResponse.data.total_amount_invoiced) ? Number(totalsResponse.data.total_amount_invoiced.toFixed(2)) : 0,
                 total_excluded: Number.isFinite(totalsResponse.data.total_excluded) ? Math.floor(totalsResponse.data.total_excluded) : 0,
                 total_amount_excluded: Number.isFinite(totalsResponse.data.total_amount_excluded) && !Number.isNaN(totalsResponse.data.total_amount_excluded) ? Number(totalsResponse.data.total_amount_excluded.toFixed(2)) : 0,
                 excluded_bookings: Array.isArray(totalsResponse.data.excluded_bookings) ? totalsResponse.data.excluded_bookings : [],
@@ -1585,37 +1605,53 @@ const NewInvoiceModal = ({
 
             // ✅ Gérer l'erreur "déjà générée" (409) avec option d'ouvrir la facture existante
             if (result?.error || result?.status === 409 || (result?.response?.status === 409)) {
-              const errorData = result?.error || result?.data?.error || result?.response?.data?.error || {};
-              const existingInvoiceId = errorData.existing_invoice_id;
-              const existingInvoiceNumber = errorData.existing_invoice_number || 'N/A';
-              
+              // Backend retourne { error, existing_invoice_id, existing_invoice_number } dans response.data
+              const errorData = result?.data || result?.response?.data || (typeof result?.error === 'object' ? result.error : null) || {};
+              const errorDataObj = typeof errorData === 'object' ? errorData : {};
+              const existingInvoiceId = errorDataObj.existing_invoice_id;
+              const existingInvoiceNumber = errorDataObj.existing_invoice_number || 'N/A';
+              const errorMsg = typeof errorDataObj.error === 'string' ? errorDataObj.error : 'Facture déjà générée';
+
               if (existingInvoiceId) {
                 // ✅ UX: Proposer d'ouvrir la facture existante
                 const openExisting = window.confirm(
-                  `${errorData.error || 'Facture déjà générée'}\n\n` +
+                  `${errorMsg}\n\n` +
                   `Souhaitez-vous ouvrir la facture existante ?`
                 );
                 if (openExisting) {
-                  // ✅ Ouvrir la facture existante : naviguer vers le registre avec recherche
-                  // Fallback: utiliser le listing avec search=invoice_number
-                  if (company?.public_id) {
-                    // Naviguer vers le registre des factures avec recherche
-                    navigate(
-                      `/dashboard/company/${company.public_id}/invoices/clients?search=${encodeURIComponent(existingInvoiceNumber)}&focusSearch=1`
-                    );
-                    onClose(); // Fermer le modal
-                  } else {
-                    // Fallback si public_id non disponible
-                    setError(
-                      `Facture déjà générée (${existingInvoiceNumber}). ` +
-                      `ID: ${existingInvoiceId}. Veuillez utiliser le registre des factures pour l'ouvrir.`
-                    );
-                  }
+                  const openPdfAndNavigate = async () => {
+                    try {
+                      const res = await invoiceService.getInvoice(companyId, existingInvoiceId);
+                      const inv = res?.data ?? res;
+                      if (inv?.pdf_url) {
+                        window.open(inv.pdf_url, '_blank');
+                      }
+                    } catch (e) {
+                      // Ignorer si la récupération échoue
+                    }
+                    if (company?.public_id) {
+                      const params = new URLSearchParams({
+                        search: existingInvoiceNumber,
+                        focusSearch: '1',
+                        invoice_id: String(existingInvoiceId),
+                      });
+                      navigate(
+                        `/dashboard/company/${company.public_id}/invoices/clients?${params.toString()}`
+                      );
+                      onClose();
+                    } else {
+                      setError(
+                        `Facture déjà générée (${existingInvoiceNumber}). ` +
+                        `ID: ${existingInvoiceId}. Veuillez utiliser le registre des factures pour l'ouvrir.`
+                      );
+                    }
+                  };
+                  openPdfAndNavigate();
                 } else {
-                  setError(errorData.error || 'Facture déjà générée');
+                  setError(errorMsg);
                 }
               } else {
-                setError(errorData.error || 'Erreur lors de la génération de la facture');
+                setError(errorMsg);
               }
               setLoading(false);
               return;
@@ -1637,46 +1673,71 @@ const NewInvoiceModal = ({
             setLoading(false);
             return;
           } catch (err) {
-            // ✅ Logger l'erreur complète pour le debug
-            console.error('❌ [NewInvoiceModal] Erreur lors de la génération de facture clinique mensuelle:', {
-              error: err,
-              message: err?.message,
-              response: err?.response,
-              responseData: err?.response?.data,
-              status: err?.response?.status,
-              statusText: err?.response?.statusText,
+            const status = err?.response?.status;
+            const url = err?.config?.url;
+            const method = err?.config?.method;
+            const requestData = err?.config?.data;
+            const responseData = err?.response?.data;
+
+            console.error('[NewInvoiceModal] generate invoice (clinic_monthly) failed', {
+              status,
+              url,
+              method,
+              requestData,
+              responseData,
             });
-            
+
+            if (typeof responseData === 'string') {
+              console.error('[NewInvoiceModal] responseData (string)', responseData.slice(0, 2000));
+            }
+
             // Gérer les erreurs HTTP (409, 400, 422, etc.)
             if (err?.response?.status === 409) {
-              const errorData = err?.response?.data?.error || {};
+              // response.data = { error, existing_invoice_id, existing_invoice_number }
+              const errorData = err?.response?.data || {};
               const existingInvoiceId = errorData.existing_invoice_id;
               const existingInvoiceNumber = errorData.existing_invoice_number || 'N/A';
-              
+              const errorMsg = typeof errorData.error === 'string' ? errorData.error : 'Facture déjà générée';
+
               if (existingInvoiceId) {
                 const openExisting = window.confirm(
-                  `${errorData.error || 'Facture déjà générée'}\n\n` +
+                  `${errorMsg}\n\n` +
                   `Souhaitez-vous ouvrir la facture existante ?`
                 );
                 if (openExisting) {
-                  // ✅ Ouvrir la facture existante : naviguer vers le registre avec recherche
-                  if (company?.public_id) {
-                    navigate(
-                      `/dashboard/company/${company.public_id}/invoices/clients?search=${encodeURIComponent(existingInvoiceNumber)}&focusSearch=1`
-                    );
-                    onClose(); // Fermer le modal
-                  } else {
-                    // Fallback si public_id non disponible
-                    setError(
-                      `Facture déjà générée (${existingInvoiceNumber}). ` +
-                      `ID: ${existingInvoiceId}. Veuillez utiliser le registre des factures pour l'ouvrir.`
-                    );
-                  }
+                  // ✅ Ouvrir le PDF directement si disponible, puis naviguer vers le registre
+                  const openPdfAndNavigate = async () => {
+                    try {
+                      const invoiceDetail = await invoiceService.getInvoice(companyId, existingInvoiceId);
+                      if (invoiceDetail?.pdf_url) {
+                        window.open(invoiceDetail.pdf_url, '_blank');
+                      }
+                    } catch (e) {
+                      // Ignorer si la récupération échoue, on navigue quand même
+                    }
+                    if (company?.public_id) {
+                      const params = new URLSearchParams({
+                        search: existingInvoiceNumber,
+                        focusSearch: '1',
+                        invoice_id: String(existingInvoiceId),
+                      });
+                      navigate(
+                        `/dashboard/company/${company.public_id}/invoices/clients?${params.toString()}`
+                      );
+                      onClose();
+                    } else {
+                      setError(
+                        `Facture déjà générée (${existingInvoiceNumber}). ` +
+                        `ID: ${existingInvoiceId}. Veuillez utiliser le registre des factures pour l'ouvrir.`
+                      );
+                    }
+                  };
+                  openPdfAndNavigate();
                 } else {
-                  setError(errorData.error || 'Facture déjà générée');
+                  setError(errorMsg);
                 }
               } else {
-                setError(errorData.error || 'Facture déjà générée');
+                setError(errorMsg);
               }
             } else if (err?.response?.status === 422) {
               // ✅ Erreur 422: Aucun transport éligible
@@ -1920,17 +1981,24 @@ const NewInvoiceModal = ({
         }, 2000);
       }
     } catch (err) {
-      // ✅ Logger l'erreur complète pour le debug
-      console.error('❌ [NewInvoiceModal] Erreur lors de la génération de la facture:', {
-        error: err,
-        message: err?.message,
-        response: err?.response,
-        responseData: err?.response?.data,
-        status: err?.response?.status,
-        statusText: err?.response?.statusText,
-        stack: err?.stack,
+      const status = err?.response?.status;
+      const url = err?.config?.url;
+      const method = err?.config?.method;
+      const requestData = err?.config?.data;
+      const responseData = err?.response?.data;
+
+      console.error('[NewInvoiceModal] generate invoice failed', {
+        status,
+        url,
+        method,
+        requestData,
+        responseData,
       });
-      
+
+      if (typeof responseData === 'string') {
+        console.error('[NewInvoiceModal] responseData (string)', responseData.slice(0, 2000));
+      }
+
       const errorMessage = formatApiError(err) || 'Erreur lors de la génération de la facture';
       setError(errorMessage);
       
@@ -2330,6 +2398,9 @@ const NewInvoiceModal = ({
                                   // Compter les transports cliniques vs patients pour ce patient
                                   const patientBookingsCount = bookings.filter((b) => b.billed_to_type === 'patient').length;
                                   const totalBookingsCount = bookings.length;
+                                  const invoicedFromBookings = bookings.filter((b) => b.invoiced === true).length;
+                                  const totalDisplay = totalBookingsCount > 0 ? totalBookingsCount : (client.unbilled_count || 0) + (client.invoiced_count || 0);
+                                  const invoicedDisplay = totalBookingsCount > 0 ? invoicedFromBookings : (client.invoiced_count || 0);
                                   
                                   return (
                                     <div key={client.id} style={{ 
@@ -2344,7 +2415,8 @@ const NewInvoiceModal = ({
                                             {clientName}
                                           </span>
                                           <span style={{ fontSize: '12px', color: '#6b7280' }}>
-                                            ({totalBookingsCount > 0 ? totalBookingsCount : client.unbilled_count || 0} transport{totalBookingsCount > 1 || (totalBookingsCount === 0 && (client.unbilled_count || 0) > 1) ? 's' : ''})
+                                            ({totalDisplay} transport{totalDisplay > 1 ? 's' : ''}
+                                            {invoicedDisplay > 0 ? ` • ${invoicedDisplay} déjà facturé${invoicedDisplay > 1 ? 's' : ''}` : ''})
                                           </span>
                                           {totalBookingsCount > 0 && (
                                             <span style={{ 
@@ -2416,7 +2488,7 @@ const NewInvoiceModal = ({
                                                   ? String(booking.billing_review_status).toLowerCase() 
                                                   : null;
                                                 const isLocked = normalizedReviewStatus === 'locked';
-                                                const isInvoiced = booking.invoice_line_id != null && booking.invoice_line_id !== undefined;
+                                                const isInvoiced = booking.invoiced === true || (booking.invoice_line_id != null && booking.invoice_line_id !== undefined);
                                                 const isNoClinic = isPatientBilling && !clinicCompanyId;
                                                 const isNotModifiable = isLocked || isInvoiced || isNoClinic;
                                                 
@@ -2464,10 +2536,11 @@ const NewInvoiceModal = ({
                                                 return (
                                                   <div key={booking.id} style={{
                                                     padding: '6px 10px',
-                                                    background: '#fff',
+                                                    background: isInvoiced ? '#f1f5f9' : '#fff',
                                                     border: '1px solid #e5e7eb',
                                                     borderRadius: '4px',
-                                                    fontSize: '12px'
+                                                    fontSize: '12px',
+                                                    opacity: isInvoiced ? 0.9 : 1
                                                   }}>
                                                     {!isConfirming ? (
                                                       // ✅ Affichage ultra compact (1 ligne: date + pickup→dropoff + montant, switch à droite)
@@ -2717,7 +2790,7 @@ const NewInvoiceModal = ({
                                     </div>
                                   );
                                 })}
-                              {clients.filter((client) => (client.unbilled_count || 0) === 0).length > 0 && (
+                              {clients.filter((client) => (client.unbilled_count || 0) === 0 && (client.invoiced_count || 0) === 0).length > 0 && (
                                 <div style={{ 
                                   padding: '8px 12px', 
                                   background: '#f9fafb', 
@@ -2727,7 +2800,7 @@ const NewInvoiceModal = ({
                                   color: '#6b7280',
                                   fontStyle: 'italic'
                                 }}>
-                                  {clients.filter((client) => (client.unbilled_count || 0) === 0).length} patient{clients.filter((client) => (client.unbilled_count || 0) === 0).length > 1 ? 's' : ''} avec 0 transport clinique {clients.filter((client) => (client.unbilled_count || 0) === 0).length > 1 ? 'sont' : 'est'} exclu{clients.filter((client) => (client.unbilled_count || 0) === 0).length > 1 ? 's' : ''} de cette facture
+                                  {clients.filter((client) => (client.unbilled_count || 0) === 0 && (client.invoiced_count || 0) === 0).length} patient{clients.filter((client) => (client.unbilled_count || 0) === 0 && (client.invoiced_count || 0) === 0).length > 1 ? 's' : ''} avec 0 transport clinique {clients.filter((client) => (client.unbilled_count || 0) === 0 && (client.invoiced_count || 0) === 0).length > 1 ? 'sont' : 'est'} exclu{clients.filter((client) => (client.unbilled_count || 0) === 0 && (client.invoiced_count || 0) === 0).length > 1 ? 's' : ''} de cette facture
                                 </div>
                               )}
                             </div>
@@ -3328,7 +3401,9 @@ const NewInvoiceModal = ({
                         </span>
                       ) : (
                         <span className={styles.stickyFooterTotal}>
-                          1 facture clinique • {s2Totals.total_eligible} transport{s2Totals.total_eligible > 1 ? 's' : ''} inclus • Total <strong>{formatCurrencyCHF(s2Totals.total_amount_eligible)}</strong>
+                          1 facture clinique • {s2Totals.total_eligible} transport{s2Totals.total_eligible > 1 ? 's' : ''} à facturer
+                          {s2Totals.total_invoiced > 0 ? ` (${s2Totals.total_invoiced} déjà facturés)` : ''}
+                          {' • Total '}<strong>{formatCurrencyCHF(s2Totals.total_amount_eligible)}</strong>
                         </span>
                       )}
                     </>

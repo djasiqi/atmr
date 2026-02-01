@@ -37,8 +37,8 @@ export const useDispatchDelays = (date = null, refreshInterval = 0, enabled = tr
       const currentDate = getDate();
       const response = await getLiveDelays(currentDate);
 
-      setDelays(response.delays || []);
-      setSummary(response.summary || null);
+      setDelays(response?.delays || []);
+      setSummary(response?.summary ?? null);
     } catch (err) {
       // Ne pas logger les erreurs 403/404/401 comme des erreurs critiques (permissions manquantes)
       const status = err?.response?.status;

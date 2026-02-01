@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import AsyncSelect from 'react-select/async';
+import Async from 'react-select/async';
 import { listServicesByEstab } from '../../services/companyService';
 
 export default function ServiceSelect({
@@ -8,6 +8,7 @@ export default function ServiceSelect({
   onChange,
   placeholder = 'Choisir le service…',
   clearOnEstablishmentChange = true,
+  inputId,
 }) {
   const cacheRef = useRef(new Map());
   const [key, setKey] = useState(0); // Force re-render
@@ -84,8 +85,9 @@ export default function ServiceSelect({
     : null;
 
   return (
-    <AsyncSelect
+    <Async
       key={key} // Force re-render quand établissement change
+      inputId={inputId}
       cacheOptions
       loadOptions={loadOptions}
       defaultOptions={!!establishmentId} // Ne charge pas si pas d'établissement

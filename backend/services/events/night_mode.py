@@ -90,7 +90,14 @@ def should_send_night_notification(
     # 2. Missions : bloquer la nuit (protection du sommeil)
     # Les chauffeurs peuvent toujours voir leurs missions via l'API même la nuit
     # mais les notifications push sont bloquées pour préserver le sommeil
-    mission_types = ["booking", "booking_updated", "booking_cancelled", "delay"]
+    mission_types = [
+        "booking",
+        "booking_assigned",
+        "booking_updated",
+        "booking_cancelled",
+        "booking_reassigned",
+        "delay",
+    ]
     if notification_type in mission_types:
         # ✅ Protection du sommeil : bloquer toutes les notifications de missions la nuit
         # Exception : si le chauffeur est disponible (is_available), cela signifie qu'il

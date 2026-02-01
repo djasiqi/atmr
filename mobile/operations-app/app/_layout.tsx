@@ -3,11 +3,16 @@ import React, { useEffect, useRef } from "react";
 import { Slot, useSegments, useRouter } from "expo-router";
 import * as Linking from "expo-linking";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
+import * as Notifications from "expo-notifications";
 import {
   configureNotifications,
   initNotifications,
+  setNotificationAppMode,
 } from "@/services/notification";
-import { setupNotificationChannels } from "@/services/notificationChannels";
+import {
+  logKillModeReadiness,
+  setupNotificationChannels,
+} from "@/services/notificationChannels";
 import { setupNotificationActions } from "@/services/notificationActions";
 import { useNotificationActions } from "@/hooks/useNotificationActions";
 import { Platform, View, Text, ActivityIndicator, StyleSheet } from "react-native";
@@ -19,6 +24,14 @@ import {
   stopAdaptiveLocationTracking,
 } from "@/services/locationTracker";
 import { validateDeepLink } from "@/services/deepLinkHandler";
+import { initNetworkStateCache } from "@/services/networkState";
+import { initLogContext } from "@/services/logContext";
+import { OfflineBanner } from "@/components/common/OfflineBanner";
+
+// P0.2.C — Init cache réseau pour logs (corrélation logout ↔ offline)
+initNetworkStateCache();
+// P2.2 — Init log context (device_id hash pour corrélation multi-tenant)
+initLogContext();
 // Version check - gestion des mises à jour obligatoires/recommandées
 import { VersionProvider, useVersion } from "@/contexts/VersionContext";
 import { UpdateRequiredScreen } from "@/components/version/UpdateRequiredScreen";
@@ -80,6 +93,21 @@ function RootNav() {
 
   // Version check - récupération du statut de mise à jour
   const { status: updateStatus, isLoading: versionLoading } = useVersion();
+
+  // P0.5: Mettre à jour le mode notif dès que l'auth est connue (handler boot-level)
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    const mode =
+      isEnterpriseAuthenticated
+        ? "enterprise"
+        : isDriverAuthenticated
+          ? "driver"
+          : null;
+    setNotificationAppMode(mode);
+    if (__DEV__ && mode) {
+      console.log("🚨 P0.5 setNotificationAppMode:", mode);
+    }
+  }, [isDriverAuthenticated, isEnterpriseAuthenticated]);
 
   const segments = useSegments();
   const router = useRouter();
@@ -252,6 +280,9 @@ function RootNav() {
 
         // ✅ Configurer les canaux Android (Phase 1 - Quick Wins)
         await setupNotificationChannels();
+
+        // P0.6: Log unique KILL-MODE readiness (permissions + channel + device)
+        await logKillModeReadiness();
 
         // ✅ Configurer les actions directes (Phase 2 - Enrichissement)
         await setupNotificationActions();
@@ -467,6 +498,7 @@ function RootNav() {
 
   return (
     <>
+      <OfflineBanner />
       <Slot />
       {/* Modal de mise à jour recommandée (non bloquante) */}
       {updateStatus === "UPDATE_RECOMMENDED" && <UpdateRecommendedModal />}

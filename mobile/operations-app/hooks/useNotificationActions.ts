@@ -5,7 +5,9 @@ import { router } from "expo-router";
 import { Alert } from "react-native";
 
 import { api } from "@/services/api";
+import { enterpriseStandardApi } from "@/services/enterpriseStandardApi";
 import { NotificationActionId } from "@/services/notificationActions";
+import { useAuth } from "@/hooks/useAuth";
 import {
   trackNotificationOpened,
   trackNotificationActionClicked,
@@ -16,6 +18,9 @@ import {
  */
 export function useNotificationActions() {
   const responseListener = useRef<Notifications.Subscription | null>(null);
+  const { mode, enterpriseSession } = useAuth();
+  const modeRef = useRef({ mode, enterpriseSession });
+  modeRef.current = { mode, enterpriseSession };
 
   useEffect(() => {
     // Écouter les réponses aux actions
@@ -256,7 +261,7 @@ export function useNotificationActions() {
   }
 
   /**
-   * Marquer un message comme lu
+   * Marquer un message comme lu (mode-aware : enterprise vs driver)
    */
   async function handleMarkMessageRead(data: any): Promise<void> {
     const messageId = data?.message_id;
@@ -269,8 +274,13 @@ export function useNotificationActions() {
     try {
       console.log(`✓ Marquer message ${messageId} comme lu...`);
 
-      // Appel API pour marquer le message comme lu
-      await api.post(`/messages/${messageId}/read`, {
+      const { mode, enterpriseSession } = modeRef.current;
+      // Politique : mode=enterprise + session valide → enterpriseStandardApi ; sinon → api (driver).
+      // Si mode=enterprise mais enterpriseSession=null (état transitoire), fallback driver explicite.
+      const isEnterprise = mode === "enterprise" && !!enterpriseSession;
+      const client = isEnterprise ? enterpriseStandardApi : api;
+
+      await client.post(`/messages/${messageId}/read`, {
         quick_action: true,
       });
 

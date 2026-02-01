@@ -49,13 +49,11 @@ jest.mock('components/common/ServiceSelect', () => {
   };
 });
 
+let lastClientSelectProps = null;
 jest.mock('react-select/async-creatable', () => {
-  return function MockAsyncCreatableSelect({
-    onChange,
-    onCreateOption,
-    placeholder,
-    defaultOptions,
-  }) {
+  return function MockAsyncCreatableSelect(props) {
+    lastClientSelectProps = props;
+    const { onChange, onCreateOption, placeholder, defaultOptions = [] } = props;
     return (
       <div data-testid="client-select">
         <select
@@ -120,6 +118,7 @@ describe('ManualBookingForm', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    lastClientSelectProps = null;
     searchClients.mockResolvedValue(mockClients);
     apiClient.get.mockResolvedValue({
       data: { duration: 1200, distance: 15000 }, // 20 min, 15 km
@@ -166,7 +165,7 @@ describe('ManualBookingForm', () => {
   it('devrait activer les champs aller-retour', async () => {
     render(<ManualBookingForm onSuccess={jest.fn()} />, { wrapper: createWrapper() });
 
-    const roundTripCheckbox = await screen.findByLabelText(/Trajet aller-retour/i);
+    const roundTripCheckbox = await screen.findByRole('button', { name: /Trajet AR/i });
     fireEvent.click(roundTripCheckbox);
 
     await waitFor(() => {
@@ -177,7 +176,7 @@ describe('ManualBookingForm', () => {
   it('devrait activer la récurrence', async () => {
     render(<ManualBookingForm onSuccess={jest.fn()} />, { wrapper: createWrapper() });
 
-    const recurringCheckbox = await screen.findByLabelText(/Réservation récurrente/i);
+    const recurringCheckbox = await screen.findByRole('button', { name: /Récurrente/i });
     fireEvent.click(recurringCheckbox);
 
     expect(await screen.findByText(/Type de récurrence/i)).toBeInTheDocument();
@@ -207,5 +206,56 @@ describe('ManualBookingForm', () => {
 
     expect(await screen.findByLabelText(/Le client est en chaise roulante/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Prendre une chaise roulante/i)).toBeInTheDocument();
+  });
+
+  /* P0.1: tests anti-régression — footer sticky + formWrapper */
+  it('devrait rendre le footer sticky et le formWrapper', async () => {
+    render(<ManualBookingForm onSuccess={jest.fn()} />, { wrapper: createWrapper() });
+
+    const wrapper = await screen.findByTestId('manual-booking-form-wrapper');
+    const footer = await screen.findByTestId('footer-actions-sticky');
+
+    expect(wrapper).toBeInTheDocument();
+    expect(footer).toBeInTheDocument();
+  });
+
+  it('devrait passer menuPortalTarget et styles.menuPortal au Select client', async () => {
+    render(<ManualBookingForm onSuccess={jest.fn()} />, { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(lastClientSelectProps).not.toBeNull();
+    });
+
+    expect(lastClientSelectProps.menuPortalTarget).toBe(document.body);
+    expect(lastClientSelectProps.styles).toBeDefined();
+    expect(typeof lastClientSelectProps.styles.menuPortal).toBe('function');
+  });
+
+  /* P2.1: badges footer selon états */
+  it('devrait afficher le badge AR quand aller-retour activé', async () => {
+    render(<ManualBookingForm onSuccess={jest.fn()} />, { wrapper: createWrapper() });
+
+    const roundTripBtn = await screen.findByRole('button', { name: /Trajet AR/i });
+    fireEvent.click(roundTripBtn);
+
+    expect(screen.getByText('AR')).toBeInTheDocument();
+  });
+
+  it('devrait afficher le badge Récurrente quand récurrence activée', async () => {
+    render(<ManualBookingForm onSuccess={jest.fn()} />, { wrapper: createWrapper() });
+
+    const recurringBtn = await screen.findByRole('button', { name: /Récurrente/i });
+    fireEvent.click(recurringBtn);
+
+    expect(screen.getByText('Récurrente')).toBeInTheDocument();
+  });
+
+  it('devrait afficher le badge Livraison quand livraison matériel activée', async () => {
+    render(<ManualBookingForm onSuccess={jest.fn()} />, { wrapper: createWrapper() });
+
+    const deliveryBtn = await screen.findByRole('button', { name: /Livraison matériel/i });
+    fireEvent.click(deliveryBtn);
+
+    expect(screen.getByText('Livraison')).toBeInTheDocument();
   });
 });

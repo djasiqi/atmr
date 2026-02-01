@@ -19,7 +19,11 @@ const EditReservationModal = ({ isOpen, onClose, reservation, onConfirm }) => {
   const [medicalFacility, setMedicalFacility] = useState('');
   const [doctorName, setDoctorName] = useState('');
   const [notesMedical, setNotesMedical] = useState('');
+  const [deliveryDescription, setDeliveryDescription] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const isMaterialDelivery =
+    (reservation?.mission_type || 'patient_transport') === 'material_delivery';
 
   // Initialiser les valeurs depuis la réservation
   useEffect(() => {
@@ -136,6 +140,12 @@ const EditReservationModal = ({ isOpen, onClose, reservation, onConfirm }) => {
 
     if (!pickupLoc || !dropoffLoc || !scheduledDate || !scheduledTime) {
       alert('Veuillez remplir tous les champs obligatoires');
+      return;
+    }
+
+    // Livraison matériel : description obligatoire
+    if (isMaterialDelivery && !(deliveryDescription || '').trim()) {
+      alert('Veuillez saisir la description de la livraison');
       return;
     }
 
@@ -315,6 +325,27 @@ const EditReservationModal = ({ isOpen, onClose, reservation, onConfirm }) => {
           />
         </div>
 
+        {isMaterialDelivery && (
+          <div className={styles.formGroup}>
+            <label htmlFor="delivery-description" className={styles.label}>
+              Description de la livraison <span>*</span>
+            </label>
+            <input
+              type="text"
+              id="delivery-description"
+              className={styles.input}
+              value={deliveryDescription}
+              onChange={(e) => setDeliveryDescription(e.target.value)}
+              placeholder="Ex: Livraison médicament, Oxygène, Documents…"
+              required
+              disabled={loading}
+            />
+            <small className={styles.hint}>
+              Requis pour les livraisons matériel (facturation)
+            </small>
+          </div>
+        )}
+
         <div className={styles.buttonGroup}>
           <Button variant="secondary" onClick={onClose} disabled={loading}>
             Annuler
@@ -323,7 +354,13 @@ const EditReservationModal = ({ isOpen, onClose, reservation, onConfirm }) => {
             variant="primary"
             onClick={handleConfirm}
             loading={loading}
-            disabled={!pickupLocation || !dropoffLocation || !scheduledDate || !scheduledTime}
+            disabled={
+              !pickupLocation ||
+              !dropoffLocation ||
+              !scheduledDate ||
+              !scheduledTime ||
+              (isMaterialDelivery && !(deliveryDescription || '').trim())
+            }
           >
             Enregistrer les modifications
           </Button>

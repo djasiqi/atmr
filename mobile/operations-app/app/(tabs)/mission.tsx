@@ -497,11 +497,13 @@ export default function MissionScreen() {
           <MissionMap
             location={location}
             destination={nextDestination}
+            contentWidth={contentWidth}
+            mapHeight={mapHeight}
           />
         )}
 
         {displayMissions.length > 0 ? (
-          <View style={{ paddingHorizontal: horizontalPadding, paddingTop: 16 }}>
+          <View style={{ paddingHorizontal: horizontalPadding, paddingTop: 4 }}>
             {displayMissions.map((displayMission, index) => {
               const { mission, missionNumber, groupInfo } = displayMission;
               const previousMission = index > 0 ? displayMissions[index - 1] : null;
@@ -521,6 +523,7 @@ export default function MissionScreen() {
                     />
                   )}
                   <MissionCard
+                    contentWidth={contentWidth}
                     mission={{
                       ...mission,
                       // Utiliser la durée dynamique si disponible, sinon la durée statique

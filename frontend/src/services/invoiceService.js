@@ -348,12 +348,15 @@ export const invoiceService = {
   },
 
   // NOUVEAU: Récupérer les réservations non encore facturées d'un client
+  // Si include_invoiced=1 et clinic_company_id fournis (contexte S2), inclut aussi les transports déjà facturés
   async fetchUnbilledReservations(companyId, clientId, filters = {}) {
     const params = new URLSearchParams();
 
     if (filters.year) params.append('year', filters.year);
     if (filters.month) params.append('month', filters.month);
     if (filters.billed_to_type) params.append('billed_to_type', filters.billed_to_type);
+    if (filters.include_invoiced) params.append('include_invoiced', '1');
+    if (filters.clinic_company_id) params.append('clinic_company_id', filters.clinic_company_id);
 
     const response = await apiClient.get(
       `${API_BASE}/invoices/companies/${companyId}/clients/${clientId}/unbilled-reservations?${params}`
@@ -501,6 +504,7 @@ export const getDaysOverdue = (invoice) => {
 // Export des fonctions principales pour compatibilité
 export const {
   fetchInvoices,
+  getInvoice,
   generateInvoice,
   sendInvoice,
   sendInvoiceByEmail,

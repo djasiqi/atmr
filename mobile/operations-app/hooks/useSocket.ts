@@ -3,12 +3,17 @@ import { useEffect, useRef, useState } from "react";
 import { connectSocket, getSocket } from "@/services/socket";
 import * as Notifications from "expo-notifications";
 import { secureStorage } from "@/services/storage";
+import { useAuth } from "@/hooks/useAuth";
 import type { Socket } from "socket.io-client";
 
 export const useSocket = (
   onNewBooking?: (data: any) => void,
   onTeamMessage?: (msg: any) => void
 ): Socket | null => {
+  const { driver } = useAuth();
+  const driverIdRef = useRef<number | undefined>(driver?.id);
+  driverIdRef.current = driver?.id;
+
   console.log("🔵 [useSocket] Hook exécuté (mount ou update)", {
     timestamp: new Date().toISOString(),
     hasOnNewBooking: !!onNewBooking,
@@ -135,6 +140,29 @@ export const useSocket = (
           status: data?.status,
           timestamp: new Date().toISOString()
         }));
+
+        // P0.5: Ne pas créer de notif locale si le chauffeur est l'acteur (self-notification)
+        // Le driver reçoit booking_updated via company_room (il est dans les 2 rooms),
+        // mais il ne doit pas voir une notif pour une action qu'il vient de faire.
+        const actorRole = data?.actor_role as string | undefined;
+        const actorId = data?.actor_id as number | undefined;
+        const myDriverId = driverIdRef.current;
+        if (
+          actorRole === "driver" &&
+          actorId !== undefined &&
+          myDriverId !== undefined &&
+          actorId === myDriverId
+        ) {
+          if (__DEV__) {
+            console.log("🔕 P0.5 useSocket: skip local notification (actor=driver self)", {
+              booking_id: data?.id,
+              actor_id: actorId,
+            });
+          }
+          onNewBooking?.(data);
+          return;
+        }
+
         try {
           const bookingId = data?.booking_id ?? data?.id;
           const status = String(data?.status || "").toLowerCase();

@@ -1713,9 +1713,15 @@ class MobileDispatchRides(Resource):
             booking.is_round_trip = bool(payload.get("is_return", False))
             booking.pickup_location = payload["pickup_address"]
             booking.dropoff_location = payload["dropoff_address"]
-            booking.amount = (
-                float(payload.get("amount", 0)) if payload.get("amount") else None
-            )
+            # amount NOT NULL : défaut AMOUNT_MINIMUM si non fourni ou invalide (mobile peut omettre)
+            from models.booking import AMOUNT_MINIMUM
+
+            raw_amount = payload.get("amount")
+            try:
+                amount_val = float(raw_amount) if raw_amount not in (None, "") else None
+            except (TypeError, ValueError):
+                amount_val = None
+            booking.amount = amount_val if amount_val is not None and amount_val >= AMOUNT_MINIMUM else AMOUNT_MINIMUM
             booking.status = BookingStatus.ACCEPTED
             booking.company_id = company_id
             booking.booking_type = "manual"
@@ -3660,6 +3666,7 @@ class MobileUpdateRide(Resource):
                         company_id=company_id,
                         actor_role="company",
                         actor_id=company_id,
+                        source="company_api",
                         changes=changes,
                     )
                 )

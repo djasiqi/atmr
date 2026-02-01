@@ -29,6 +29,9 @@ export default function EstablishmentSelect({
   minChars = 2,
   limit = 8,
   disabled = false,
+  inputClassName,
+  inputId,
+  name = 'establishment',
 }) {
   const [q, setQ] = React.useState(value || '');
   const [items, setItems] = React.useState([]);
@@ -164,6 +167,8 @@ export default function EstablishmentSelect({
     >
       <div className="relative">
         <input
+          id={inputId}
+          name={name}
           value={q}
           disabled={disabled}
           onChange={(e) => {
@@ -180,7 +185,10 @@ export default function EstablishmentSelect({
             open && activeIndex >= 0 ? `${listboxId}-opt-${activeIndex}` : undefined
           }
           placeholder={placeholder}
-          className={`w-full border rounded px-3 py-2 pr-9 ${disabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+          className={
+            inputClassName ||
+            `w-full border rounded px-3 py-2 pr-9 ${disabled ? 'bg-gray-100 cursor-not-allowed' : ''}`
+          }
           autoComplete="off"
         />
       </div>

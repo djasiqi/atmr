@@ -4,6 +4,7 @@ from marshmallow import (
     Schema,
     fields,
     validate,
+    validates_schema,
 )
 
 from schemas.validation_utils import (
@@ -14,6 +15,9 @@ from schemas.validation_utils import (
     USERNAME_VALIDATOR,
 )
 from schemas.validators import validate_latitude, validate_longitude
+from shared.constants import ErrorCodes
+
+DELIVERY_DESCRIPTION_MAX_LENGTH = 500
 
 
 class ManualBookingCreateSchema(Schema):
@@ -92,6 +96,16 @@ class ManualBookingCreateSchema(Schema):
     dropoff_lat = fields.Float(validate=validate_latitude)
     dropoff_lon = fields.Float(validate=validate_longitude)
 
+    # ✅ Livraison matériel
+    mission_type = fields.Str(
+        load_default="patient_transport",
+        validate=validate.OneOf(["patient_transport", "material_delivery"]),
+    )
+    delivery_description = fields.Str(
+        validate=validate.Length(max=DELIVERY_DESCRIPTION_MAX_LENGTH),
+        allow_none=True,
+    )
+
     # Récurrence
     is_recurring = fields.Bool(load_default=False)
     recurrence_type = fields.Str(
@@ -104,6 +118,37 @@ class ManualBookingCreateSchema(Schema):
         validate=validate.Regexp(ISO8601_DATE_REGEX), allow_none=True
     )
     occurrences = fields.Int(validate=validate.Range(min=1), allow_none=True)
+
+    @validates_schema
+    def validate_delivery_description(self, data, **_kwargs):
+        """Si mission_type == material_delivery, delivery_description est requis.
+        Normalisation : trim + collapse espaces multiples, max 500 caractères."""
+        mission_type = (data.get("mission_type") or "patient_transport").strip().lower()
+        raw = (data.get("delivery_description") or "").strip()
+        delivery_desc = " ".join(raw.split()) if raw else ""  # collapse spaces
+        if mission_type == "material_delivery":
+            if not delivery_desc:
+                from marshmallow import ValidationError
+
+                msg = "Veuillez saisir une description pour la livraison (ex. médicament, oxygène)."
+                raise ValidationError(
+                    {
+                        "delivery_description": [msg],
+                        "_error_code": ErrorCodes.MATERIAL_DELIVERY_DESCRIPTION_REQUIRED,
+                        "_details": {
+                            "field": "delivery_description",
+                            "booking_id": None,
+                        },
+                    }
+                )
+            if len(delivery_desc) > DELIVERY_DESCRIPTION_MAX_LENGTH:
+                from marshmallow import ValidationError
+
+                raise ValidationError(
+                    f"delivery_description : maximum {DELIVERY_DESCRIPTION_MAX_LENGTH} caractères.",
+                    field_name="delivery_description",
+                )
+            data["delivery_description"] = delivery_desc
 
     class Meta:
         unknown = "INCLUDE"  # Permettre des champs supplémentaires pour compatibilité

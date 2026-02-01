@@ -36,6 +36,21 @@ const getCivilityLabel = (gender: string | undefined | null): string | null => {
 
 const normNotes = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
 
+/** Livraison matériel : mission_type === material_delivery (case-insensitive, tirets/espaces normalisés) */
+const isMaterialDelivery = (m: Mission | null): boolean => {
+  const missionType = String(m?.mission_type ?? "patient_transport")
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  return missionType === "material_delivery";
+};
+
+/** Description livraison (fallback si absente : null, "", espaces) */
+const getDeliveryDescriptionDisplay = (m: Mission | null): string | null => {
+  if (!isMaterialDelivery(m)) return null;
+  const desc = (m?.delivery_description ?? "").trim();
+  return desc || "Livraison (description manquante)";
+};
+
 /** Retourne le texte des notes (dédupliqué / superset / concat) ou null si vide. Robuste : pas de "—". */
 function getNotesDisplay(
   notes: string | undefined | null,
@@ -260,6 +275,7 @@ const MissionCard: MissionCardType = ({
 
   // ✅ P0-1: Normaliser le statut pour les comparaisons
   const normalizedStatus = normalizeBookingStatus(status) as BookingStatus;
+  const isDelivery = isMaterialDelivery(mission);
 
   const getCurrentDestination = (): string => {
     if (!mission) return "";
@@ -293,7 +309,7 @@ const MissionCard: MissionCardType = ({
         </View>
       )}
 
-      {/* 1. MissionCardHeader : civilité (Madame/Monsieur) + identité client + statut */}
+      {/* 1. MissionCardHeader : civilité + identité + badges (type + statut) */}
       <View style={[styles.headerRowEnhanced, isCompact && styles.headerRowCompact]}>
         <View style={styles.headerClientWrap}>
           {(() => {
@@ -317,10 +333,27 @@ const MissionCard: MissionCardType = ({
             </Text>
           )}
         </View>
-        <View style={styles.statusBadgeContainer}>
-          <Text style={styles.statusBadgeText}>{formatStatus(status ?? "")}</Text>
+        <View style={styles.headerBadgesWrap}>
+          {isDelivery && (
+            <View style={[styles.statusBadgeContainer, styles.deliveryTypeBadge]}>
+              <Text style={styles.deliveryTypeBadgeText}>🚚 Livraison</Text>
+            </View>
+          )}
+          <View style={styles.statusBadgeContainer}>
+            <Text style={styles.statusBadgeText}>{formatStatus(status ?? "")}</Text>
+          </View>
         </View>
       </View>
+
+      {/* 1b. Ligne description livraison (si material_delivery) */}
+      {isDelivery && getDeliveryDescriptionDisplay(mission) && (
+        <View style={[styles.deliveryDescRow, isCompact && styles.deliveryDescRowCompact]}>
+          <Text style={styles.deliveryDescLabel}>📦 Livraison — </Text>
+          <Text style={styles.deliveryDescText} numberOfLines={1} ellipsizeMode="tail">
+            {getDeliveryDescriptionDisplay(mission)}
+          </Text>
+        </View>
+      )}
 
       {/* 2. MissionTimingBlock : départ prévu / arrivée estimée (si données) */}
       {(getEstimatedArrival != null || getEstimatedArrivalDropoff != null) && (() => {
@@ -342,7 +375,9 @@ const MissionCard: MissionCardType = ({
           arrivalTime != null;
         const minutesRounded =
           secondsToTarget != null ? formatDurationMinutes(secondsToTarget) : null;
-        const arrivalLabel = isAfterPickup ? "Arrivée à destination" : "Arrivée estimée";
+        const arrivalLabel = isDelivery
+          ? (isAfterPickup ? "Arrivée au point de dépôt" : "Arrivée au point de retrait")
+          : (isAfterPickup ? "Arrivée à destination" : "Arrivée estimée");
         let arrivalValueStr: string;
         if (!arrivalAvailable) {
           arrivalValueStr = "indisponible";
@@ -411,13 +446,15 @@ const MissionCard: MissionCardType = ({
             <View style={[styles.routeRowCompact, styles.routeRowCompactLast]}>
               <Ionicons name="location-outline" size={16} color={palette.accent} />
               <Text style={styles.routeAddressCompact} numberOfLines={1} ellipsizeMode="tail">
-                Départ : {formatAddressFallback(mission.pickup_location)}
+                {isDelivery ? "Point de retrait : " : "Départ : "}
+                {formatAddressFallback(mission.pickup_location)}
               </Text>
             </View>
             <View style={styles.routeRowCompact}>
               <Ionicons name="flag-outline" size={16} color={palette.accent} />
               <Text style={styles.routeAddressCompact} numberOfLines={1} ellipsizeMode="tail">
-                Destination : {formatAddressFallback(mission.dropoff_location)}
+                {isDelivery ? "Point de dépôt : " : "Destination : "}
+                {formatAddressFallback(mission.dropoff_location)}
               </Text>
             </View>
           </>
@@ -428,7 +465,7 @@ const MissionCard: MissionCardType = ({
                 <Ionicons name="location-outline" size={18} color={palette.accent} />
               </View>
               <View style={styles.routeContentWrap}>
-                <Text style={styles.routeLabel}>Départ</Text>
+                <Text style={styles.routeLabel}>{isDelivery ? "Point de retrait" : "Départ"}</Text>
                 <Text style={styles.routeAddress} numberOfLines={2} ellipsizeMode="tail">
                   {formatAddressFallback(mission.pickup_location)}
                 </Text>
@@ -439,7 +476,7 @@ const MissionCard: MissionCardType = ({
                 <Ionicons name="flag-outline" size={18} color={palette.accent} />
               </View>
               <View style={styles.routeContentWrap}>
-                <Text style={styles.routeLabel}>Destination</Text>
+                <Text style={styles.routeLabel}>{isDelivery ? "Point de dépôt" : "Destination"}</Text>
                 <Text style={styles.routeAddress} numberOfLines={2} ellipsizeMode="tail">
                   {formatAddressFallback(mission.dropoff_location)}
                 </Text>
@@ -454,7 +491,7 @@ const MissionCard: MissionCardType = ({
         {normalizedStatus !== "IN_PROGRESS" && (() => {
           const hints = getPickupHints(mission);
           if (hints.length === 0) return null;
-          const title = "À l'arrivée au point de départ";
+          const title = isDelivery ? "À l'arrivée au point de retrait" : "À l'arrivée au point de départ";
           const displayHints = isCompact ? hints.slice(0, 3) : hints;
           const hasMoreHints = isCompact && hints.length > 3;
           return (
@@ -513,7 +550,7 @@ const MissionCard: MissionCardType = ({
         {normalizedStatus === "IN_PROGRESS" && (() => {
           const hints = getDropoffHints(mission);
           if (hints.length === 0) return null;
-          const title = "À l'arrivée à destination";
+          const title = isDelivery ? "À l'arrivée au point de dépôt" : "À l'arrivée à destination";
           const displayHints = isCompact ? hints.slice(0, 3) : hints;
           const hasMoreHints = isCompact && hints.length > 3;
           return (
@@ -679,8 +716,10 @@ const MissionCard: MissionCardType = ({
             style={styles.actionItemEnhanced}
             disabled={isUpdatingStatus}
           >
-            <Ionicons name="person" size={18} color="white" />
-            <Text style={styles.actionLabel}>À bord</Text>
+            <Ionicons name={isDelivery ? "cube-outline" : "person"} size={18} color="white" />
+            <Text style={styles.actionLabel}>
+              {isDelivery ? "Colis récupéré" : "À bord"}
+            </Text>
           </TouchableOpacity>
         )}
 
@@ -784,15 +823,30 @@ const MissionCard: MissionCardType = ({
                   })()}
                 </View>
 
+                {/* Livraison (si material_delivery) */}
+                {isMaterialDelivery(mission) && (
+                  <View style={styles.detailsSheetSection}>
+                    <Text style={styles.detailsSheetSectionTitle}>Livraison</Text>
+                    <Text style={styles.detailsSheetLine}>
+                      <Text style={styles.detailsSheetLineLabel}>Contenu : </Text>
+                      {getDeliveryDescriptionDisplay(mission) ?? "—"}
+                    </Text>
+                  </View>
+                )}
+
                 {/* Adresses */}
                 <View style={styles.detailsSheetSection}>
                   <Text style={styles.detailsSheetSectionTitle}>Adresses</Text>
                   <Text style={styles.detailsSheetLine}>
-                    <Text style={styles.detailsSheetLineLabel}>Prise en charge : </Text>
+                    <Text style={styles.detailsSheetLineLabel}>
+                      {isMaterialDelivery(mission) ? "Point de retrait : " : "Prise en charge : "}
+                    </Text>
                     {formatAddressFallback(mission.pickup_location)}
                   </Text>
                   <Text style={styles.detailsSheetLine}>
-                    <Text style={styles.detailsSheetLineLabel}>Destination : </Text>
+                    <Text style={styles.detailsSheetLineLabel}>
+                      {isMaterialDelivery(mission) ? "Point de dépôt : " : "Destination : "}
+                    </Text>
                     {formatAddressFallback(mission.dropoff_location)}
                   </Text>
                 </View>

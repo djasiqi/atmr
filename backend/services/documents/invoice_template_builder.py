@@ -388,7 +388,10 @@ class InvoiceTemplateBuilder:
 
         for line in invoice.lines:
             # Filtrer les lignes de type RIDE seulement
-            if line.type != InvoiceLineType.RIDE:
+            if line.type not in (
+                InvoiceLineType.RIDE,
+                InvoiceLineType.MATERIAL_DELIVERY,
+            ):
                 continue
 
             booking = line.booking if hasattr(line, "booking") else None

@@ -7,7 +7,6 @@ import {
   FaUser,
   FaUsers,
   FaFileInvoice,
-  FaCheckCircle,
   FaCog,
   FaChartLine,
   FaChartBar,
@@ -86,11 +85,6 @@ const CompanySidebar = () => {
       icon: FaFileInvoice,
       label: 'Facturation par Client',
       to: `/dashboard/company/${public_id}/invoices/clients`,
-    },
-    {
-      icon: FaCheckCircle,
-      label: 'Contrôle Facturation',
-      to: `/dashboard/company/${public_id}/billing-review`,
     },
     {
       icon: FaChartLine,

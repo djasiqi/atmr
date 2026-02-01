@@ -6,16 +6,18 @@ sur une période donnée, avec support des exceptions (include/exclude clients).
 
 from __future__ import annotations  # noqa: I001
 
+# pyright: reportUnusedImport=false, reportUnusedVariable=false, reportGeneralTypeIssues=false
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, cast
 
-from sqlalchemy import and_
+from sqlalchemy import and_, exists, or_
 from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
 
 from ext import db
+from shared.constants import ErrorCodes
 from infrastructure.invoices.invoice_calculator import (
     InvoiceCalculator,
     round_to_5_cents,
@@ -24,7 +26,7 @@ from infrastructure.invoices.invoice_description_builder import (
     InvoiceDescriptionBuilder,
 )
 from infrastructure.invoices.invoice_number_generator import InvoiceNumberGenerator
-from models import Booking, Invoice, InvoiceLineType, InvoiceStatus
+from models import Booking, ClientStay, Invoice, InvoiceLineType, InvoiceStatus
 from models.enums import InvoiceBillingStrategy
 from repositories.booking_repository import BookingRepository
 from repositories.client_repository import ClientRepository
@@ -41,6 +43,7 @@ logger = logging.getLogger(__name__)
 
 PERIOD_MONTH_THRESHOLD = 12
 HTTP_409_CONFLICT = 409  # HTTP Conflict (déjà générée)
+MAX_BOOKING_IDS_SHOWN = 10  # Limite le nombre d'IDs affichés dans les messages d'erreur
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,7 +164,9 @@ class GenerateClinicMonthlyInvoiceUseCase:
                     )
                 # Vérifier que tous les IDs sont des entiers uniques
                 try:
-                    include_ids = [int(client_id) for client_id in input_data.include_client_ids]
+                    include_ids = [
+                        int(client_id) for client_id in input_data.include_client_ids
+                    ]
                     if len(include_ids) != len(set(include_ids)):
                         msg = "include_client_ids contient des doublons"
                         logger.warning(msg)
@@ -200,7 +205,9 @@ class GenerateClinicMonthlyInvoiceUseCase:
                     )
                 # Vérifier que tous les IDs sont des entiers uniques
                 try:
-                    exclude_ids = [int(client_id) for client_id in input_data.exclude_client_ids]
+                    exclude_ids = [
+                        int(client_id) for client_id in input_data.exclude_client_ids
+                    ]
                     if len(exclude_ids) != len(set(exclude_ids)):
                         msg = "exclude_client_ids contient des doublons"
                         logger.warning(msg)
@@ -227,24 +234,36 @@ class GenerateClinicMonthlyInvoiceUseCase:
                         status_code=400,
                     )
 
-            # 2. Vérifier l'anti-doublon: une seule facture S2 par (company_id, clinic_company_id, year, month)
-            # ✅ Check SELECT avant INSERT (optimisation)
-            existing_invoice = Invoice.query.filter(
+            # 2. Vérifier l'anti-doublon: une seule facture S2 DRAFT par (company_id, clinic_company_id, year, month)
+            # ✅ Si une facture DRAFT existe → 409 (compléter celle-ci d'abord)
+            # ✅ Si une facture SENT/PAID existe → autoriser une facture complémentaire
+            existing_draft_invoice = Invoice.query.filter(
                 and_(
                     Invoice.company_id == input_data.company_id,
                     Invoice.billed_to_company_id == input_data.clinic_company_id,
                     Invoice.period_year == input_data.period_year,
                     Invoice.period_month == input_data.period_month,
-                    Invoice.billing_strategy == InvoiceBillingStrategy.S2_CLINIC_MONTHLY,
-                    Invoice.status != InvoiceStatus.CANCELLED,
+                    Invoice.billing_strategy
+                    == InvoiceBillingStrategy.S2_CLINIC_MONTHLY,
+                    Invoice.status == InvoiceStatus.DRAFT,
                 )
             ).first()
 
-            if existing_invoice:
-                # ✅ UX: Retourner l'ID de la facture existante pour permettre l'ouverture
+            if existing_draft_invoice:
+                # ✅ UX: Retourner l'ID de la facture brouillon existante pour permettre l'ouverture
                 month_names = [
-                    "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
-                    "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+                    "Janvier",
+                    "Février",
+                    "Mars",
+                    "Avril",
+                    "Mai",
+                    "Juin",
+                    "Juillet",
+                    "Août",
+                    "Septembre",
+                    "Octobre",
+                    "Novembre",
+                    "Décembre",
                 ]
                 month_name = (
                     month_names[input_data.period_month - 1]
@@ -252,31 +271,31 @@ class GenerateClinicMonthlyInvoiceUseCase:
                     else str(input_data.period_month)
                 )
                 msg = (
-                    f"Facture clinique mensuelle (S2) déjà générée pour {month_name} {input_data.period_year}. "
-                    f"Numéro: {existing_invoice.invoice_number}"
+                    f"Une facture clinique mensuelle (S2) en brouillon existe déjà pour {month_name} {input_data.period_year}. "
+                    f"Numéro: {existing_draft_invoice.invoice_number}. "
+                    f"Complétez-la ou annulez-la avant d'en créer une nouvelle."
                 )
-                # ✅ Log INFO erreur 409: existing_invoice_id, existing_invoice_number
                 logger.info(
                     (
-                        "⚠️ S2 invoice 409 conflict: company_id=%s, clinic_company_id=%s, "
+                        "⚠️ S2 invoice 409 conflict (draft exists): company_id=%s, clinic_company_id=%s, "
                         "period=%s-%02d, existing_invoice_id=%s, existing_invoice_number=%s"
                     ),
                     input_data.company_id,
                     input_data.clinic_company_id,
                     input_data.period_year,
                     input_data.period_month,
-                    existing_invoice.id,
-                    existing_invoice.invoice_number,
+                    existing_draft_invoice.id,
+                    existing_draft_invoice.invoice_number,
                 )
                 logger.warning(msg)
                 return GenerateClinicMonthlyInvoiceOutput(
                     success=False,
                     error={
                         "error": msg,
-                        "existing_invoice_id": existing_invoice.id,
-                        "existing_invoice_number": existing_invoice.invoice_number,
+                        "existing_invoice_id": existing_draft_invoice.id,
+                        "existing_invoice_number": existing_draft_invoice.invoice_number,
                     },
-                    status_code=HTTP_409_CONFLICT,  # ✅ 409 Conflict pour "déjà générée"
+                    status_code=HTTP_409_CONFLICT,  # ✅ 409 Conflict pour "brouillon existant"
                 )
 
             # 2. Récupérer les paramètres de facturation
@@ -305,27 +324,40 @@ class GenerateClinicMonthlyInvoiceUseCase:
 
             # 4. Récupérer toutes les réservations éligibles du mois
             # pour clinic_company_id, billed_to_type='clinic', invoice_line_id is null
-            start_date = datetime(
-                input_data.period_year, input_data.period_month, 1
-            )
+            start_date = datetime(input_data.period_year, input_data.period_month, 1)
             end_date = (
                 datetime(input_data.period_year + 1, 1, 1)
                 if input_data.period_month == PERIOD_MONTH_THRESHOLD
-                else datetime(
-                    input_data.period_year, input_data.period_month + 1, 1
-                )
+                else datetime(input_data.period_year, input_data.period_month + 1, 1)
             )
 
             # ✅ 4. Récupérer toutes les réservations éligibles du mois
             # Scope strict: billed_to_type='clinic', clinic_company_id match, invoice_line_id null, status target_statuses
             # ✅ Scope strict: billed_to_type='clinic' suffit (exclut automatiquement les overrides patient)
             # Le critère réel = billed_to_type == 'clinic' (pas besoin de vérifier billing_source)
-            target_statuses = ["COMPLETED", "RETURN_COMPLETED"]
+            # Inclut COMPLETED, RETURN_COMPLETED et CANCELED avec amount > 0 UNIQUEMENT si client hospitalisé
+            # (annulation dernière minute facturée à la clinique ; sinon facturée au patient)
+            stay_overlaps_booking = exists().where(
+                ClientStay.client_id == Booking.client_id,
+                ClientStay.company_id == input_data.clinic_company_id,
+                ClientStay.status == "active",
+                ClientStay.start_date <= Booking.scheduled_time,
+                or_(
+                    ClientStay.end_date.is_(None),
+                    ClientStay.end_date >= Booking.scheduled_time,
+                ),
+            )
             query = Booking.query.filter(
                 Booking.company_id == input_data.company_id,
                 Booking.billed_to_company_id == input_data.clinic_company_id,
-                Booking.billed_to_type == "clinic",  # ✅ Strict: uniquement facturation clinique (exclut automatiquement les overrides patient)
-                Booking.status.in_(target_statuses),  # ✅ Même liste que S1
+                Booking.billed_to_type
+                == "clinic",  # ✅ Strict: uniquement facturation clinique (exclut automatiquement les overrides patient)
+                or_(
+                    Booking.status.in_(["COMPLETED", "RETURN_COMPLETED"]),
+                    (Booking.status == "CANCELED")
+                    & (Booking.amount > 0)
+                    & stay_overlaps_booking,
+                ),
                 Booking.invoice_line_id.is_(None),  # ✅ Pas encore facturé
                 Booking.scheduled_time >= start_date,
                 Booking.scheduled_time < end_date,
@@ -333,17 +365,68 @@ class GenerateClinicMonthlyInvoiceUseCase:
 
             # Appliquer les filtres include/exclude (priorité: include > exclude)
             if input_data.include_client_ids:
-                query = query.filter(Booking.client_id.in_(input_data.include_client_ids))
+                query = query.filter(
+                    Booking.client_id.in_(input_data.include_client_ids)
+                )
             elif input_data.exclude_client_ids:
-                query = query.filter(~Booking.client_id.in_(input_data.exclude_client_ids))
+                query = query.filter(
+                    ~Booking.client_id.in_(input_data.exclude_client_ids)
+                )
 
             reservations = query.order_by(Booking.scheduled_time.asc()).all()
+
+            # ✅ Pré-vérification : livraisons matériel sans description
+            missing_desc_ids = [
+                r.id
+                for r in reservations
+                if (getattr(r, "mission_type", None) or "patient_transport")
+                == "material_delivery"
+                and not (getattr(r, "delivery_description", None) or "").strip()
+            ]
+            if missing_desc_ids:
+                msg = (
+                    "Certaines livraisons matériel n'ont pas de description. "
+                    "Veuillez renseigner le champ « Description de la livraison » "
+                    f"pour les réservations #{', #'.join(map(str, missing_desc_ids[:MAX_BOOKING_IDS_SHOWN]))}"
+                    + (
+                        f" (et {len(missing_desc_ids) - MAX_BOOKING_IDS_SHOWN} autres)"
+                        if len(missing_desc_ids) > MAX_BOOKING_IDS_SHOWN
+                        else ""
+                    )
+                    + " avant de générer la facture."
+                )
+                logger.warning(
+                    "Livraisons matériel sans description: booking_ids=%s",
+                    missing_desc_ids,
+                )
+                return GenerateClinicMonthlyInvoiceOutput(
+                    success=False,
+                    error={
+                        "error": msg,
+                        "error_code": ErrorCodes.MATERIAL_DELIVERY_DESCRIPTION_REQUIRED,
+                        "details": {
+                            "field": "delivery_description",
+                            "booking_ids": missing_desc_ids,
+                        },
+                    },
+                    status_code=400,
+                )
 
             # ✅ Gérer le cas "0 lignes" avec message clair (422 Unprocessable Entity)
             if not reservations:
                 month_names = [
-                    "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
-                    "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+                    "Janvier",
+                    "Février",
+                    "Mars",
+                    "Avril",
+                    "Mai",
+                    "Juin",
+                    "Juillet",
+                    "Août",
+                    "Septembre",
+                    "Octobre",
+                    "Novembre",
+                    "Décembre",
                 ]
                 month_name = (
                     month_names[input_data.period_month - 1]
@@ -469,7 +552,9 @@ class GenerateClinicMonthlyInvoiceUseCase:
 
             # ✅ Assert final: vérifier que billed_to_company_id est bien défini avant création
             if invoice_data["billed_to_company_id"] is None:
-                msg = "Erreur interne: billed_to_company_id est null pour une facture S2"
+                msg = (
+                    "Erreur interne: billed_to_company_id est null pour une facture S2"
+                )
                 logger.error(msg)
                 return GenerateClinicMonthlyInvoiceOutput(
                     success=False,
@@ -514,14 +599,25 @@ class GenerateClinicMonthlyInvoiceUseCase:
                         Invoice.billed_to_company_id == input_data.clinic_company_id,
                         Invoice.period_year == input_data.period_year,
                         Invoice.period_month == input_data.period_month,
-                        Invoice.billing_strategy == InvoiceBillingStrategy.S2_CLINIC_MONTHLY,
+                        Invoice.billing_strategy
+                        == InvoiceBillingStrategy.S2_CLINIC_MONTHLY,
                         Invoice.status != InvoiceStatus.CANCELLED,
                     )
                 ).first()
                 if existing_invoice:
                     month_names = [
-                        "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
-                        "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+                        "Janvier",
+                        "Février",
+                        "Mars",
+                        "Avril",
+                        "Mai",
+                        "Juin",
+                        "Juillet",
+                        "Août",
+                        "Septembre",
+                        "Octobre",
+                        "Novembre",
+                        "Décembre",
                     ]
                     month_name = (
                         month_names[input_data.period_month - 1]
@@ -568,9 +664,58 @@ class GenerateClinicMonthlyInvoiceUseCase:
             vat_breakdown: dict[str, dict[str, Decimal]] = {}
 
             # ✅ Cache pour les noms de patients (snapshot au moment de la génération)
-            client_cache: dict[int, dict[str, Any]] = {}  # {client_id: {"name": str, "id": int}}
+            client_cache: dict[
+                int, dict[str, Any]
+            ] = {}  # {client_id: {"name": str, "id": int}}
 
             for reservation in reservations:
+                # ✅ Livraison matériel : utiliser prix fixe entreprise
+                mission_type = (
+                    getattr(reservation, "mission_type", None) or "patient_transport"
+                )
+                if mission_type == "material_delivery":
+                    fixed_price = billing_settings_dto.material_delivery_price_fixed
+                    if fixed_price is None or fixed_price <= 0:
+                        msg = (
+                            f"Impossible de facturer : configurez le prix fixe livraison "
+                            f"dans Paramètres > Facturation (réservation #{reservation.id})."
+                        )
+                        logger.error(msg)
+                        return GenerateClinicMonthlyInvoiceOutput(
+                            success=False,
+                            error={
+                                "error": msg,
+                                "error_code": ErrorCodes.MATERIAL_DELIVERY_PRICE_NOT_CONFIGURED,
+                                "details": {
+                                    "field": "material_delivery_price_fixed",
+                                    "booking_id": str(reservation.id),
+                                },
+                            },
+                            status_code=400,
+                        )
+                    base_amount = Decimal(str(fixed_price)).quantize(two_places)
+                else:
+                    base_amount = Decimal(str(reservation.amount or 0)).quantize(
+                        two_places
+                    )
+                override = overrides_map.get(reservation.id)
+                # Override montant : uniquement pour transport patient (pas livraison)
+                if (
+                    mission_type != "material_delivery"
+                    and override
+                    and "amount" in override
+                    and override["amount"] is not None
+                ):
+                    try:
+                        base_amount = Decimal(str(override["amount"])).quantize(
+                            two_places, rounding=ROUND_HALF_UP
+                        )
+                    except (InvalidOperation, ValueError, TypeError):
+                        logger.warning(
+                            "Montant override invalide pour réservation %s",
+                            reservation.id,
+                        )
+
                 # ✅ Récupérer le nom du patient (snapshot pour traçabilité juridique)
                 # Format standardisé: "NOM Prénom" pour cohérence PDF
                 if reservation.client_id not in client_cache:
@@ -585,13 +730,18 @@ class GenerateClinicMonthlyInvoiceUseCase:
                         last_name = (client.user.last_name or "").strip()
                         if last_name and first_name:
                             # Format: "NOM Prénom" (nom en majuscules, prénom capitalisé)
-                            patient_name = f"{last_name.upper()} {first_name.capitalize()}".strip()
+                            patient_name = (
+                                f"{last_name.upper()} {first_name.capitalize()}".strip()
+                            )
                         elif last_name:
                             patient_name = last_name.upper()
                         elif first_name:
                             patient_name = first_name.capitalize()
                         else:
-                            patient_name = client.user.username or f"Client #{reservation.client_id}"
+                            patient_name = (
+                                client.user.username
+                                or f"Client #{reservation.client_id}"
+                            )
                         patient_id = client.id
                     if not patient_name:
                         patient_name = f"Client #{reservation.client_id}"
@@ -604,19 +754,6 @@ class GenerateClinicMonthlyInvoiceUseCase:
                 patient_info = client_cache[reservation.client_id]
                 patient_name = patient_info["name"]
                 patient_id = patient_info["id"]
-
-                base_amount = Decimal(str(reservation.amount or 0)).quantize(two_places)
-                override = overrides_map.get(reservation.id)
-                if override and "amount" in override and override["amount"] is not None:
-                    try:
-                        base_amount = Decimal(str(override["amount"])).quantize(
-                            two_places, rounding=ROUND_HALF_UP
-                        )
-                    except (InvalidOperation, ValueError, TypeError):
-                        logger.warning(
-                            "Montant override invalide pour réservation %s",
-                            reservation.id,
-                        )
 
                 # Déterminer le taux de TVA pour cette ligne
                 line_vat_rate = Decimal("0")
@@ -641,18 +778,29 @@ class GenerateClinicMonthlyInvoiceUseCase:
                     base_amount, line_vat_rate
                 )
 
-                # Construire la description avec le nom du patient (S2)
+                # Construire la description
+                is_delivery = mission_type == "material_delivery"
+                delivery_desc = (
+                    getattr(reservation, "delivery_description", None) or None
+                )
                 description = self.description_builder.build_description(
                     pickup_location=reservation.pickup_location or "",
                     dropoff_location=reservation.dropoff_location or "",
-                    patient_name=patient_name,  # ✅ S2: toujours inclure le patient_name
-                    bill_to_client_id=None,  # S2 utilise billed_to_company_id
+                    patient_name=patient_name if not is_delivery else None,
+                    bill_to_client_id=None,
+                    is_material_delivery=is_delivery,
+                    delivery_description=delivery_desc,
                 )
 
                 # ✅ Créer la ligne avec métadonnées patient (snapshot juridique)
+                line_type = (
+                    InvoiceLineType.MATERIAL_DELIVERY
+                    if is_delivery
+                    else InvoiceLineType.RIDE
+                )
                 line_data = {
                     "invoice_id": invoice.id,
-                    "type": InvoiceLineType.RIDE,
+                    "type": line_type,
                     "description": description,
                     "qty": Decimal("1"),
                     "unit_price": base_amount,
@@ -750,8 +898,35 @@ class GenerateClinicMonthlyInvoiceUseCase:
                 success=True, invoice_id=invoice.id, invoice=invoice
             )
 
-        except (OperationalError, DBAPIError, IntegrityError) as e:
+        except (OperationalError, DBAPIError) as e:
             db.session.rollback()
+            err_msg = str(e).lower()
+            orig = getattr(e, "orig", None)
+            pgcode = getattr(orig, "pgcode", None) if orig else None
+            is_enum_error = pgcode == "22P02" or (
+                "invalid input value for enum" in err_msg
+                and "invoice_line_type" in err_msg
+            )
+            if is_enum_error:
+                logger.error(
+                    "Enum invoice_line_type non à jour (migration manquante?): %s",
+                    str(e),
+                )
+                return GenerateClinicMonthlyInvoiceOutput(
+                    success=False,
+                    error={
+                        "error": (
+                            "Configuration base de données incomplète. "
+                            "Exécutez les migrations (alembic upgrade head)."
+                        ),
+                        "error_code": "INVOICE_LINE_TYPE_MIGRATION_REQUIRED",
+                        "details": {
+                            "enum_type": "invoice_line_type",
+                            "expected_value": "material_delivery",
+                        },
+                    },
+                    status_code=400,
+                )
             logger.error(
                 "Erreur DB lors de la génération de la facture clinique mensuelle (DB error: %s): %s",
                 type(e).__name__,
@@ -761,6 +936,77 @@ class GenerateClinicMonthlyInvoiceUseCase:
                 success=False,
                 error={"error": "Erreur de base de données"},
                 status_code=500,
+            )
+        except IntegrityError as e:
+            db.session.rollback()
+            err_msg = str(e).lower()
+            if "ck_booking_material_delivery_description" in err_msg:
+                logger.warning(
+                    "Livraison matériel sans description (CHECK constraint): %s",
+                    str(e),
+                )
+                return GenerateClinicMonthlyInvoiceOutput(
+                    success=False,
+                    error={
+                        "error": (
+                            "Une livraison matériel doit avoir une description. "
+                            "Veuillez renseigner le champ « Description de la livraison »."
+                        ),
+                        "error_code": ErrorCodes.MATERIAL_DELIVERY_DESCRIPTION_REQUIRED,
+                        "details": {"field": "delivery_description"},
+                    },
+                    status_code=400,
+                )
+            if (
+                "invoice_line_type" in err_msg
+                and "invalid input value for enum" in err_msg
+            ):
+                logger.error(
+                    "Enum invoice_line_type non à jour (migration manquante?): %s",
+                    str(e),
+                )
+                return GenerateClinicMonthlyInvoiceOutput(
+                    success=False,
+                    error={
+                        "error": (
+                            "Configuration base de données incomplète. "
+                            "Exécutez les migrations (alembic upgrade head)."
+                        ),
+                        "error_code": "INVOICE_LINE_TYPE_MIGRATION_REQUIRED",
+                        "details": {
+                            "enum_type": "invoice_line_type",
+                            "expected_value": "material_delivery",
+                        },
+                    },
+                    status_code=400,
+                )
+            logger.error(
+                "Erreur d'intégrité DB lors de la génération de la facture clinique mensuelle: %s",
+                str(e),
+            )
+            return GenerateClinicMonthlyInvoiceOutput(
+                success=False,
+                error={"error": "Erreur de base de données"},
+                status_code=500,
+            )
+        except (KeyError, AttributeError) as e:
+            db.session.rollback()
+            logger.warning(
+                "Erreur de mapping/template (KeyError/AttributeError): %s", e
+            )
+            details: dict[str, str | int | None] = {}
+            if isinstance(e, KeyError) and e.args:
+                details["line_type"] = str(e.args[0])
+            elif isinstance(e, AttributeError) and e.args:
+                details["attribute"] = str(e.args[0])
+            return GenerateClinicMonthlyInvoiceOutput(
+                success=False,
+                error={
+                    "error": "Erreur de configuration (type de ligne non supporté)",
+                    "error_code": "UNKNOWN_LINE_TYPE",
+                    "details": details if details else None,
+                },
+                status_code=400,
             )
         except ValueError as e:
             db.session.rollback()

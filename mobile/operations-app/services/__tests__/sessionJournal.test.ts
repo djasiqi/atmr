@@ -12,12 +12,13 @@ import {
   setConnectionStateSuffix,
   getConnectionStateSuffix,
   subscribeSessionJournal,
+  _testingReset,
   SESSION_JOURNAL_KEYS,
 } from "../sessionJournal";
 
 jest.mock("@react-native-async-storage/async-storage", () => ({
   getItem: jest.fn(),
-  setItem: jest.fn(),
+  setItem: jest.fn().mockResolvedValue(undefined),
   removeItem: jest.fn(),
   multiRemove: jest.fn(),
 }));
@@ -25,7 +26,10 @@ jest.mock("@react-native-async-storage/async-storage", () => ({
 describe("sessionJournal", () => {
   beforeEach(() => {
     jest.useFakeTimers();
-    setConnectionStateSuffix(null);
+    _testingReset();
+    if (typeof localStorage !== "undefined") {
+      localStorage.clear();
+    }
   });
 
   afterEach(() => {

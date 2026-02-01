@@ -38,7 +38,7 @@ import {
 } from "@/services/enterpriseDispatch";
 import { DispatchMessage } from "@/types/enterpriseDispatch";
 import { Message } from "@/services/api";
-import api from "@/services/api";
+import { enterpriseStandardApi } from "@/services/enterpriseStandardApi";
 
 import MessageBubble from "@/components/chat/MessageBubble";
 import DateSeparator from "@/components/chat/DateSeparator";
@@ -223,7 +223,7 @@ export default function EnterpriseChatScreen() {
           name: "image.jpg",
         } as any);
 
-        const uploadRes = await api.post("/messages/upload", formData, {
+        const uploadRes = await enterpriseStandardApi.post("/messages/upload", formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
 
@@ -272,7 +272,7 @@ export default function EnterpriseChatScreen() {
           name: filename,
         } as any);
 
-        const uploadRes = await api.post("/messages/upload", formData, {
+        const uploadRes = await enterpriseStandardApi.post("/messages/upload", formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
 

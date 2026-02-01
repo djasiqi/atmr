@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState, useDeferredValue, useTransition, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import apiClient from '../../utils/apiClient';
-// Using apiClient instead of fetch to properly handle HTTPS redirects
+import acStyles from './AddressAutocomplete.module.css';
 
 export default function AddressAutocomplete({
   name,
@@ -14,6 +14,8 @@ export default function AddressAutocomplete({
   debounceMs = 250,
   bias, // { lat, lon } optionnel – par défaut centre Genève
   maxResults = 8,
+  inputClassName,
+  inputId,
   ...restProps
 }) {
   const [query, setQuery] = useState(value || '');
@@ -32,6 +34,8 @@ export default function AddressAutocomplete({
   const wrapRef = useRef(null);
   const inputRef = useRef(null);
   const dropdownRef = useRef(null);
+  const rafIdRef = useRef(null);
+  const pendingRef = useRef(false);
 
   // Biais géographique (Genève par défaut)
   const BIAS = bias || { lat: 46.2044, lon: 6.1432 };
@@ -537,92 +541,93 @@ export default function AddressAutocomplete({
   const listboxId = `${name || 'address'}-ac-listbox`;
   const activeId = highlight >= 0 ? `${name || 'address'}-ac-option-${highlight}` : undefined;
 
-  // Calculer la position du dropdown en position fixed pour éviter d'être coupé par overflow
+  // Calculer la position du dropdown en position fixed — 1 recalcul max par frame (RAF scheduler)
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
+
+  const scheduleUpdate = useCallback(() => {
+    if (pendingRef.current) return;
+    pendingRef.current = true;
+    if (rafIdRef.current != null) cancelAnimationFrame(rafIdRef.current);
+    rafIdRef.current = requestAnimationFrame(() => {
+      pendingRef.current = false;
+      rafIdRef.current = null;
+      if (!inputRef.current) return;
+      const rect = inputRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + 2,
+        left: rect.left,
+        width: rect.width,
+      });
+    });
+  }, []);
+
+  const isScrollable = useCallback((el, style) => {
+    const vals = ['auto', 'scroll', 'overlay'];
+    return (
+      el.scrollHeight > el.clientHeight ||
+      vals.includes(style.overflow) ||
+      vals.includes(style.overflowY) ||
+      vals.includes(style.overflowX)
+    );
+  }, []);
 
   useEffect(() => {
     if (open && inputRef.current) {
-      const updatePosition = () => {
-        if (!inputRef.current) return;
-        const rect = inputRef.current.getBoundingClientRect();
-        // Pour position: fixed, getBoundingClientRect() donne les coordonnées par rapport au viewport
-        // Ces coordonnées sont exactement ce dont nous avons besoin pour position: fixed
-        const newPosition = {
-          top: rect.bottom + 2, // Juste en dessous de l'input avec 2px d'espacement
-          left: rect.left, // Aligné à gauche de l'input
-          width: rect.width, // Exactement la même largeur que l'input
-        };
-        setDropdownPosition(newPosition);
-      };
-      
-      // Mettre à jour immédiatement
-      updatePosition();
-      
-      // Mettre à jour après le prochain frame pour s'assurer que le DOM est prêt
+      scheduleUpdate();
       const rafId1 = requestAnimationFrame(() => {
-        updatePosition();
-        // Double RAF pour s'assurer que tout est bien rendu (surtout dans les accordéons)
-        requestAnimationFrame(() => {
-          updatePosition();
-        });
+        requestAnimationFrame(scheduleUpdate);
       });
-      
-      // Petit délai supplémentaire pour les cas où le rendu prend plus de temps
-      const timeoutId = setTimeout(() => {
-        updatePosition();
-      }, 50);
-      
-      // Écouter les événements de scroll et resize
-      window.addEventListener('scroll', updatePosition, true);
-      window.addEventListener('resize', updatePosition);
-      
-      // ResizeObserver pour détecter les changements de taille de l'input (ex: accordion qui s'ouvre)
+      const timeoutId = setTimeout(scheduleUpdate, 50);
+
+      window.addEventListener('scroll', scheduleUpdate, true);
+      window.addEventListener('resize', scheduleUpdate);
+
       let resizeObserver = null;
       if (window.ResizeObserver && inputRef.current) {
-        resizeObserver = new ResizeObserver(() => {
-          updatePosition();
-        });
+        resizeObserver = new ResizeObserver(scheduleUpdate);
         resizeObserver.observe(inputRef.current);
       }
-      
-      // Écouter aussi les scrolls dans les conteneurs parents (form, accordionContent, etc.)
+
+      const vv = typeof window !== 'undefined' && window.visualViewport;
+      if (vv) {
+        vv.addEventListener('resize', scheduleUpdate);
+        vv.addEventListener('scroll', scheduleUpdate);
+      }
+
       const scrollContainers = [];
       let parent = inputRef.current.parentElement;
       while (parent && parent !== document.body) {
         const style = window.getComputedStyle(parent);
-        if (parent.scrollHeight > parent.clientHeight || 
-            style.overflow === 'auto' || 
-            style.overflowY === 'auto' ||
-            style.overflow === 'scroll' ||
-            style.overflowY === 'scroll') {
-          parent.addEventListener('scroll', updatePosition, true);
+        if (isScrollable(parent, style)) {
+          parent.addEventListener('scroll', scheduleUpdate, true);
           scrollContainers.push(parent);
         }
         parent = parent.parentElement;
       }
-      
+
       return () => {
         cancelAnimationFrame(rafId1);
         clearTimeout(timeoutId);
-        window.removeEventListener('scroll', updatePosition, true);
-        window.removeEventListener('resize', updatePosition);
-        if (resizeObserver) {
-          resizeObserver.disconnect();
+        if (rafIdRef.current != null) cancelAnimationFrame(rafIdRef.current);
+        window.removeEventListener('scroll', scheduleUpdate, true);
+        window.removeEventListener('resize', scheduleUpdate);
+        if (vv) {
+          vv.removeEventListener('resize', scheduleUpdate);
+          vv.removeEventListener('scroll', scheduleUpdate);
         }
-        scrollContainers.forEach((container) => {
-          container.removeEventListener('scroll', updatePosition, true);
-        });
+        if (resizeObserver) resizeObserver.disconnect();
+        scrollContainers.forEach((c) => c.removeEventListener('scroll', scheduleUpdate, true));
       };
     } else if (!open) {
-      // Réinitialiser quand fermé
       setDropdownPosition({ top: 0, left: 0, width: 0 });
     }
-  }, [open, items.length]); // Recalculer quand le dropdown s'ouvre ou que les résultats arrivent
+  }, [open, items.length, scheduleUpdate, isScrollable]);
 
   return (
-    <div ref={wrapRef} style={{ position: 'relative', width: '100%', zIndex: 1 }}>
+    <div ref={wrapRef} className={acStyles.wrapper}>
       <input
         ref={inputRef}
+        id={inputId}
         type="text"
         name={name}
         value={query}
@@ -638,20 +643,14 @@ export default function AddressAutocomplete({
         }}
         placeholder={placeholder}
         autoComplete="off"
-        role="combobox" // ✅ combobox, plus textbox implicite
+        role="combobox"
         aria-autocomplete="list"
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listboxId : undefined}
         aria-activedescendant={open ? activeId : undefined}
+        className={inputClassName || acStyles.input}
         {...restProps}
-        style={{
-          width: '100%',
-          border: '1px solid #e6e6e6',
-          borderRadius: 8,
-          padding: '10px 12px',
-          outline: 'none',
-        }}
       />
 
       {open &&
@@ -679,7 +678,7 @@ export default function AddressAutocomplete({
                 top: `${top}px`,
                 left: `${left}px`,
                 width: `${width}px`,
-                zIndex: 1060, /* Au-dessus du drawer (1050) et du modal backdrop (1040) */
+                zIndex: 10000, /* P0: Au-dessus du footer sticky (20) et du modal backdrop */
                 background: '#fff',
                 border: '1px solid #e6e6e6',
                 borderTop: 'none',

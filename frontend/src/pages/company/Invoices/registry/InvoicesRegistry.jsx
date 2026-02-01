@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import styles from './InvoicesRegistry.module.css';
 import {
   fetchInvoices,
+  getInvoice,
   sendInvoiceByEmail,
   markInvoiceAsSent,
   sendReminderByEmail,
@@ -26,8 +27,10 @@ const InvoicesRegistry = () => {
   const { company } = useCompanyData();
   const { public_id: routePublicId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const searchInputRef = useRef(null);
   const { initialSearch, shouldFocus, consumeFocus, initialized } = useUrlSearchSync();
+  const urlInvoiceId = searchParams.get('invoice_id');
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -106,6 +109,29 @@ const InvoicesRegistry = () => {
       consumeFocus();
     }
   }, [initialized, initialSearch, shouldFocus, consumeFocus, filters.q]);
+
+  // ✅ Si invoice_id dans l'URL et facture absente de la liste, la charger et l'afficher
+  useEffect(() => {
+    if (!urlInvoiceId || !company?.id || loading) return;
+    const invoiceId = parseInt(urlInvoiceId, 10);
+    if (Number.isNaN(invoiceId)) return;
+
+    const fetchAndPrependIfMissing = async () => {
+      try {
+        const res = await getInvoice(company.id, invoiceId);
+        const inv = res?.data ?? res;
+        if (inv?.id) {
+          setInvoices((prev) => {
+            if (prev.some((i) => i.id === invoiceId)) return prev;
+            return [inv, ...prev];
+          });
+        }
+      } catch (e) {
+        // Ignorer si la facture n'existe pas ou n'est pas accessible
+      }
+    };
+    fetchAndPrependIfMissing();
+  }, [urlInvoiceId, company?.id, loading]);
 
   // Handlers
   const handleFilterChange = (newFilters) => {

@@ -36,6 +36,7 @@ import { Loader } from "@/components/ui/Loader";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { profileStyles } from "@/styles/profileStyles";
+import { PushDebugCard } from "@/components/common/PushDebugCard";
 
 // Import direct de l'image par défaut
 import DefaultDriver from "../../assets/images/default-driver.png";
@@ -531,6 +532,9 @@ export default function ProfileScreen() {
             </Text>
           </View>
         )}
+
+        {/* P0: Push Debug Card — état complet pour diagnostic app kill */}
+        <PushDebugCard />
 
         {/* Espacement final */}
         <View style={profileStyles.bottomSpacing} />

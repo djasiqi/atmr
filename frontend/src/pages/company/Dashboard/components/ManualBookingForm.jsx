@@ -12,8 +12,8 @@ import {
   createClientStay,
   linkClientBillingParty,
 } from '../../../../services/companyService';
-import { Input } from './ui/Input';
-import { Label } from './ui/Label';
+import Input from './ui/Input';
+import Label from './ui/Label';
 import AddressAutocomplete from '../../../../components/common/AddressAutocomplete';
 import apiClient from '../../../../utils/apiClient';
 
@@ -22,6 +22,7 @@ import EstablishmentSelect from '../../../../components/common/EstablishmentSele
 import ServiceSelect from '../../../../components/common/ServiceSelect';
 
 import { extractMedicalServiceInfo } from '../../../../utils/medicalExtract';
+import { shortAddress } from './formatAddress';
 import { toast } from 'sonner';
 import styles from './ManualBookingForm.module.css';
 
@@ -122,8 +123,16 @@ const combineDateAndTime = (dateStr, timeStr) => {
   return result;
 };
 
-export default function ManualBookingForm({ onSuccess }) {
+export default function ManualBookingForm({ onSuccess, onClose }) {
   const queryClient = useQueryClient();
+
+  // Swap pickup ↔ dropoff
+  const handleSwapAddresses = () => {
+    setPickupLocation(dropoffLocation);
+    setDropoffLocation(pickupLocation);
+    setPickupCoords(dropoffCoords);
+    setDropoffCoords(pickupCoords);
+  };
 
   // --- Établissement (objet choisi) + champ texte (saisie en cours)
   const [establishment, setEstablishment] = React.useState(null); // { id, label?, display_name?, address, ... }
@@ -162,6 +171,10 @@ export default function ManualBookingForm({ onSuccess }) {
     }
   }, [isRoundTrip, scheduledTime, returnDate]);
 
+  // --- Livraison matériel
+  const [isMaterialDelivery, setIsMaterialDelivery] = useState(false);
+  const [deliveryDescription, setDeliveryDescription] = useState('');
+
   // --- Récurrence
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceType, setRecurrenceType] = useState('weekly'); // daily, weekly, custom
@@ -180,6 +193,7 @@ export default function ManualBookingForm({ onSuccess }) {
     clientHasWheelchair: false,
     needWheelchair: false,
   });
+
 
   const buildClinicAddress = (clinic) => {
     if (!clinic) return '';
@@ -292,6 +306,32 @@ export default function ManualBookingForm({ onSuccess }) {
       d.getHours()
     )}:${pad(d.getMinutes())}`;
   })();
+
+  // Préréglages date/heure : "maintenant + 30 min", "+ 1h", "demain 9h"
+  const applyDateTimePreset = (preset) => {
+    const pad = (n) => String(n).padStart(2, '0');
+    const now = new Date();
+    let target;
+    switch (preset) {
+      case 'now30':
+        target = new Date(now.getTime() + 30 * 60 * 1000);
+        break;
+      case 'now1h':
+        target = new Date(now.getTime() + 60 * 60 * 1000);
+        break;
+      case 'tomorrow9':
+        target = new Date(now);
+        target.setDate(target.getDate() + 1);
+        target.setHours(9, 0, 0, 0);
+        break;
+      default:
+        return;
+    }
+    const value = `${target.getFullYear()}-${pad(target.getMonth() + 1)}-${pad(
+      target.getDate()
+    )}T${pad(target.getHours())}:${pad(target.getMinutes())}`;
+    setScheduledTime(value);
+  };
 
   // === Handlers établissement / service ===
   const handleEstablishmentTextChange = (newText) => {
@@ -723,6 +763,55 @@ export default function ManualBookingForm({ onSuccess }) {
     if (notes !== value) setNotesMedical(notes);
   }
 
+  // P2.1: Résumé enrichi — confirm bar (summaryText + badges séparés)
+  const buildFooterSummary = () => {
+    const badges = [];
+    if (isRoundTrip) badges.push('AR');
+    if (isRecurring) badges.push('Récurrente');
+    if (isMaterialDelivery) badges.push('Livraison');
+
+    if (isMaterialDelivery) {
+      const desc = deliveryDescription?.trim();
+      const descShort = desc && desc.length > 40 ? desc.slice(0, 39) + '…' : desc;
+      const routeLabel = descShort
+        ? `Livraison · ${descShort}`
+        : 'Livraison · Description manquante';
+      return {
+        summaryText: routeLabel,
+        summaryBadges: badges,
+      };
+    }
+    if (!selectedClient) {
+      return { summaryText: 'Client non sélectionné', summaryBadges: badges };
+    }
+    if (!scheduledTime) {
+      return { summaryText: 'Date/heure manquante', summaryBadges: badges };
+    }
+    if (!pickupLocation || !dropoffLocation) {
+      return { summaryText: 'Trajet incomplet', summaryBadges: badges };
+    }
+    const client = selectedClient?.label || 'Client';
+    let dateStr = '—';
+    try {
+      const d = new Date(scheduledTime);
+      dateStr = d.toLocaleDateString('fr-CH', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      /* ignore */
+    }
+    const pickup = shortAddress(pickupLocation) || '…';
+    const dropoff = shortAddress(dropoffLocation) || '…';
+    const routeLabel = `${pickup} → ${dropoff}`;
+    const summaryText = `${client} · ${dateStr} · ${routeLabel}`;
+    return { summaryText, summaryBadges: badges };
+  };
+
+  const footerSummary = buildFooterSummary();
+
   // === Mutations API ===
   // Gestion de la création de client
   const handleSaveNewClient = async (clientData, { existingClient } = {}) => {
@@ -905,9 +994,15 @@ export default function ManualBookingForm({ onSuccess }) {
       return;
     }
 
-    // Vérifier que le montant est défini
-    if (!amount || parseFloat(amount) <= 0) {
+    // Montant : obligatoire pour transport patient, ignoré pour livraison matériel
+    if (!isMaterialDelivery && (!amount || parseFloat(amount) <= 0)) {
       toast.error('Veuillez saisir un montant valide pour la course');
+      return;
+    }
+
+    // Livraison matériel : description obligatoire
+    if (isMaterialDelivery && !deliveryDescription?.trim()) {
+      toast.error('Veuillez saisir la description de la livraison');
       return;
     }
 
@@ -925,7 +1020,11 @@ export default function ManualBookingForm({ onSuccess }) {
       dropoff_lon: dropoffCoords.lon ?? undefined,
       scheduled_time: ensureIsoDatetimeWithSeconds(scheduledTime),
       is_round_trip: !!isRoundTrip,
-      amount: amount ? parseFloat(amount) : 0,
+      amount: isMaterialDelivery ? undefined : (amount ? parseFloat(amount) : 0),
+      ...(isMaterialDelivery && {
+        mission_type: 'material_delivery',
+        delivery_description: (deliveryDescription || '').trim() || null,
+      }),
 
       // Champs médicaux : trim + vide → null, clé absente si null (pas de " " envoyé)
       ...(cleanOptionalText(
@@ -1031,14 +1130,22 @@ export default function ManualBookingForm({ onSuccess }) {
   };
 
   return (
-    <div className={styles.formWrapper}>
+    <div className={styles.formWrapper} data-testid="manual-booking-form-wrapper">
+      <div className={styles.modalHeader}>
+        <h2 className={styles.modalTitle}>Créer une réservation</h2>
+        <p className={styles.modalSubtitle}>
+          Renseignez le trajet, puis ajoutez les détails si nécessaire.
+        </p>
+      </div>
       <form onSubmit={handleSubmit} className={styles.form}>
-        {/* COLONNE GAUCHE */}
-        <div className={styles.columnLeft}>
+        <div className={styles.formScrollBody}>
+          {/* COLONNE GAUCHE */}
+          <div className={styles.columnLeft}>
           {/* Client */}
           <div className={styles.formGroup}>
-            <Label>Client *</Label>
+            <Label htmlFor="client-select">Client *</Label>
             <AsyncCreatableSelect
+              inputId="client-select"
               cacheOptions
               defaultOptions={defaultClientOptions}
               loadOptions={loadClientOptions}
@@ -1050,6 +1157,24 @@ export default function ManualBookingForm({ onSuccess }) {
               value={selectedClient}
               placeholder="Rechercher un client…"
               formatCreateLabel={(i) => `➕ Créer "${i}"`}
+              formatOptionLabel={(option) => {
+                if (option.__isNew__) return option.label;
+                const c = option.raw || option;
+                const label = option.label || '';
+                const phone = c?.phone || c?.contact_phone || '';
+                const metaParts = [];
+                if (c?.is_institution) metaParts.push('🏥 Institution');
+                if (phone) metaParts.push(phone);
+                const metaText = metaParts.join(' · ');
+                return (
+                  <div className={styles.clientOption}>
+                    <span className={styles.clientOptionLabel}>{label}</span>
+                    {metaText && (
+                      <span className={styles.clientOptionMeta}>{metaText}</span>
+                    )}
+                  </div>
+                );
+              }}
               noOptionsMessage={({ inputValue }) =>
                 inputValue
                   ? `Aucun client trouvé pour "${inputValue}"`
@@ -1058,40 +1183,41 @@ export default function ManualBookingForm({ onSuccess }) {
               loadingMessage={() => '🔍 Recherche en cours...'}
               menuPortalTarget={typeof window !== 'undefined' ? document.body : null}
               menuPosition="fixed"
+              styles={{ menuPortal: (base) => ({ ...base, zIndex: 10000 }) }}
               classNamePrefix="react-select"
             />
             
             {/* 🏥 Afficher info séjour actif et case override */}
             {activeStay && activeStay.clinic && (
-              <div style={{ marginTop: '12px', padding: '12px', background: '#f0f9ff', border: '1px solid #0ea5e9', borderRadius: '8px' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '18px' }}>🏥</span>
-                  <div style={{ flex: 1 }}>
-                    <strong style={{ display: 'block', marginBottom: '4px' }}>
+              <div className={styles.activeStayCard}>
+                <div className={styles.activeStayRow}>
+                  <span className={styles.activeStayIcon}>🏥</span>
+                  <div className={styles.activeStayContent}>
+                    <strong className={styles.activeStayTitle}>
                       Client hospitalisé à {activeStay.clinic.name}
                     </strong>
-                    <small style={{ color: '#64748b', fontSize: '0.85rem' }}>
+                    <small className={styles.activeStayMeta}>
                       Adresse de départ: {buildClinicAddress(activeStay.clinic) || activeStay.clinic.address || ''}
                       {activeStay.clinic.preferential_rate && (
-                        <span style={{ display: 'block', marginTop: '4px', color: '#059669', fontWeight: '500' }}>
+                        <span className={styles.activeStayRate}>
                           💰 Tarif préférentiel: {activeStay.clinic.preferential_rate.toFixed(2)} CHF
                         </span>
                       )}
                     </small>
                   </div>
                 </div>
-                <div style={{ marginTop: '8px' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem' }}>
+                <div className={styles.activeStayOverride}>
+                  <label className={styles.activeStayLabel}>
                     <input
                       type="checkbox"
                       checked={billToPatient}
                       onChange={(e) => setBillToPatient(e.target.checked)}
-                      style={{ cursor: 'pointer' }}
+                      className={styles.checkbox}
                     />
                     <span>Facturation patient (override)</span>
                   </label>
                   {billToPatient && (
-                    <small style={{ display: 'block', marginTop: '4px', color: '#dc2626', fontSize: '0.8rem' }}>
+                    <small className={styles.activeStayWarning}>
                       ⚠️ La facturation sera adressée au client (le départ reste la clinique)
                     </small>
                   )}
@@ -1100,37 +1226,37 @@ export default function ManualBookingForm({ onSuccess }) {
             )}
           </div>
 
-          {/* Lieu de prise en charge */}
+          {/* Lieu de prise en charge + Swap + Destination — P0: id/htmlFor a11y */}
           <div className={styles.formGroup}>
-            <Label>Lieu de prise en charge *</Label>
-            <AddressAutocomplete
-              name="pickup_location"
-              value={pickupLocation}
-              onChange={(e) => {
-                setPickupLocation(e.target.value);
-                setPickupCoords({ lat: null, lon: null });
-              }}
-              onSelect={(item) => {
-                console.log('📍 [Pickup] Item sélectionné:', item);
-                const address = item.label || item.address || '';
-                setPickupLocation(address);
-                setPickupCoords({
-                  lat: item.lat ?? null,
-                  lon: item.lon ?? null,
-                });
-                console.log(`📍 [Pickup] Adresse: ${address}, GPS: ${item.lat}, ${item.lon}`);
-              }}
-              placeholder="Saisir ou choisir l'adresse"
-              required
-            />
-          </div>
-
-          {/* Lieu de destination */}
-          <div className={styles.formGroup}>
-            <Label>Lieu de destination *</Label>
-            <AddressAutocomplete
-              name="dropoff_location"
-              value={dropoffLocation}
+            <div className={styles.addressesRow}>
+              <div className={styles.addressesFields}>
+                <Label htmlFor="pickup_location">Lieu de prise en charge *</Label>
+                <AddressAutocomplete
+                name="pickup_location"
+                inputId="pickup_location"
+                value={pickupLocation}
+                onChange={(e) => {
+                  setPickupLocation(e.target.value);
+                  setPickupCoords({ lat: null, lon: null });
+                }}
+                onSelect={(item) => {
+                  console.log('📍 [Pickup] Item sélectionné:', item);
+                  const address = item.label || item.address || '';
+                  setPickupLocation(address);
+                  setPickupCoords({
+                    lat: item.lat ?? null,
+                    lon: item.lon ?? null,
+                  });
+                  console.log(`📍 [Pickup] Adresse: ${address}, GPS: ${item.lat}, ${item.lon}`);
+                }}
+                placeholder="Saisir ou choisir l'adresse"
+                required
+              />
+                <Label htmlFor="dropoff_location">Lieu de destination *</Label>
+                <AddressAutocomplete
+                name="dropoff_location"
+                inputId="dropoff_location"
+                value={dropoffLocation}
               onChange={(e) => {
                 setDropoffLocation(e.target.value);
                 setDropoffCoords({ lat: null, lon: null });
@@ -1363,32 +1489,113 @@ export default function ManualBookingForm({ onSuccess }) {
               }}
               placeholder="Saisir ou choisir l'adresse"
             />
+              </div>
+              <button
+                type="button"
+                className={styles.swapButton}
+                onClick={handleSwapAddresses}
+                title="Inverser pickup/destination"
+                aria-label="Inverser le lieu de prise en charge et la destination"
+              >
+                ↕
+              </button>
+            </div>
           </div>
 
           {/* Date & heure */}
           <div className={styles.formGroup}>
-            <Label>Date &amp; heure *</Label>
-            <Input
-              type="datetime-local"
-              name="scheduled_time"
-              value={scheduledTime}
-              onChange={(e) => setScheduledTime(e.target.value)}
-              required
-              min={minLocalDatetime}
-            />
-
-            <div className={styles.checkboxGroup}>
-              <input
-                type="checkbox"
-                id="roundtrip"
-                checked={isRoundTrip}
-                onChange={(e) => setIsRoundTrip(e.target.checked)}
-                className={styles.checkbox}
+            <Label htmlFor="scheduled_time">Date &amp; heure *</Label>
+            <div className={styles.dateTimeRow}>
+              <Input
+                id="scheduled_time"
+                type="datetime-local"
+                name="scheduled_time"
+                value={scheduledTime}
+                onChange={(e) => setScheduledTime(e.target.value)}
+                required
+                min={minLocalDatetime}
               />
-              <Label htmlFor="roundtrip" className={styles.checkboxLabel}>
-                Trajet aller-retour
-              </Label>
+              <div className={styles.datePresets}>
+                <button
+                  type="button"
+                  className={styles.datePresetBtn}
+                  onClick={() => applyDateTimePreset('now30')}
+                  title="Dans 30 minutes"
+                  aria-label="Définir la date à dans 30 minutes"
+                >
+                  +30 min
+                </button>
+                <button
+                  type="button"
+                  className={styles.datePresetBtn}
+                  onClick={() => applyDateTimePreset('now1h')}
+                  title="Dans 1 heure"
+                  aria-label="Définir la date à dans 1 heure"
+                >
+                  +1h
+                </button>
+                <button
+                  type="button"
+                  className={styles.datePresetBtn}
+                  onClick={() => applyDateTimePreset('tomorrow9')}
+                  title="Demain à 9h"
+                  aria-label="Définir la date à demain 9h"
+                >
+                  Demain 9h
+                </button>
+              </div>
             </div>
+
+            <div className={styles.chipsRow}>
+              <button
+                type="button"
+                className={`${styles.chip} ${isRoundTrip ? styles.isActive : ''}`}
+                onClick={() => setIsRoundTrip(!isRoundTrip)}
+                aria-pressed={isRoundTrip}
+              >
+                ⇄ Trajet AR
+              </button>
+              <button
+                type="button"
+                className={`${styles.chip} ${isRecurring ? styles.isActive : ''}`}
+                onClick={() => setIsRecurring(!isRecurring)}
+                aria-pressed={isRecurring}
+              >
+                🔄 Récurrente
+              </button>
+              <button
+                type="button"
+                className={`${styles.chip} ${isMaterialDelivery ? styles.isActive : ''}`}
+                onClick={() => {
+                  const next = !isMaterialDelivery;
+                  setIsMaterialDelivery(next);
+                  if (!next) setDeliveryDescription('');
+                  if (next && amount && parseFloat(amount) > 0) {
+                    toast.info('Montant ignoré pour les livraisons (prix fixe appliqué).');
+                  }
+                }}
+                aria-pressed={isMaterialDelivery}
+              >
+                📦 Livraison
+              </button>
+            </div>
+
+            {isMaterialDelivery && (
+              <div className={`${styles.formGroup} ${styles.deliveryDescriptionGroup}`}>
+                <Label>Description de la livraison *</Label>
+                <Input
+                  type="text"
+                  name="delivery_description"
+                  value={deliveryDescription}
+                  onChange={(e) => setDeliveryDescription(e.target.value)}
+                  placeholder="Ex: Livraison médicament, Oxygène, Documents…"
+                  required={isMaterialDelivery}
+                />
+                <span className={styles.medicalFieldHint}>
+                  Ex: Livraison médicament, Oxygène, Documents
+                </span>
+              </div>
+            )}
 
             {isRoundTrip && (
               <div className={styles.returnTimeGroup}>
@@ -1401,7 +1608,7 @@ export default function ManualBookingForm({ onSuccess }) {
                   placeholder="Date du retour"
                 />
 
-                <Label style={{ marginTop: '12px' }}>Heure de retour (optionnel)</Label>
+                <Label className={styles.returnTimeLabel}>Heure de retour (optionnel)</Label>
                 <Input
                   type="time"
                   name="return_time"
@@ -1409,32 +1616,11 @@ export default function ManualBookingForm({ onSuccess }) {
                   onChange={(e) => setReturnTime(e.target.value)}
                   placeholder="Laisser vide pour « ⏱️ »"
                 />
-                <small
-                  style={{
-                    color: '#64748b',
-                    fontSize: '0.85rem',
-                    marginTop: '4px',
-                    display: 'block',
-                  }}
-                >
+                <small className={styles.returnTimeHint}>
                   💡 Si l'heure n'est pas définie, elle pourra être planifiée plus tard
                 </small>
               </div>
             )}
-
-            {/* Récurrence */}
-            <div className={styles.checkboxGroup}>
-              <input
-                type="checkbox"
-                id="recurring"
-                checked={isRecurring}
-                onChange={(e) => setIsRecurring(e.target.checked)}
-                className={styles.checkbox}
-              />
-              <Label htmlFor="recurring" className={styles.checkboxLabel}>
-                🔄 Réservation récurrente
-              </Label>
-            </div>
 
             {isRecurring && (
               <div className={styles.recurrenceConfig}>
@@ -1547,22 +1733,31 @@ export default function ManualBookingForm({ onSuccess }) {
             )}
           </div>
 
-          {/* Montant */}
+          {/* Montant (masqué pour livraison : prix fixe entreprise) */}
           <div className={styles.formGroup}>
             <div className={styles.amountLabel}>
-              <Label>Montant (optionnel)</Label>
+              <Label htmlFor="amount">
+                Montant {isMaterialDelivery ? '(ignoré pour livraison)' : '(optionnel)'}
+              </Label>
               {amount && parseFloat(amount) > 0 && (
                 <span className={styles.preferentialBadge}>💰 Tarif préférentiel</span>
               )}
             </div>
             <Input
+              id="amount"
               type="number"
               name="amount"
               step="0.01"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="Ex: 45.00"
+              disabled={isMaterialDelivery}
             />
+            {isMaterialDelivery && (
+              <span className={styles.amountHint}>
+                Montant géré automatiquement pour les livraisons matériel.
+              </span>
+            )}
             {estimatedDuration && (
               <div className={styles.estimatedDurationBadge}>
                 ⏱️ Durée estimée : <strong>{estimatedDuration} min</strong>
@@ -1571,32 +1766,31 @@ export default function ManualBookingForm({ onSuccess }) {
           </div>
         </div>
 
-        {/* COLONNE DROITE - Informations médicales */}
+        {/* COLONNE DROITE - Informations médicales (section secondaire) */}
         <div className={styles.columnRight}>
-          {/* Section médicale (optionnelle) */}
           <div className={styles.medicalSection}>
-            <h3 className={styles.medicalSectionTitle}>🏥 Informations médicales (optionnel)</h3>
+            <h3 className={styles.medicalSectionTitle}>🏥 Informations médicales</h3>
 
             {/* Établissement médical */}
             <div className={styles.medicalFormGroup}>
-              <Label>Établissement médical</Label>
+              <Label htmlFor="establishment-select">Établissement</Label>
               <EstablishmentSelect
+                inputId="establishment-select"
                 value={establishmentText}
                 onChange={handleEstablishmentTextChange}
                 onPickEstablishment={onPickEstablishment}
                 placeholder="HUG, Clinique La Colline, Grangettes, La Tour…"
+                inputClassName={styles.input}
               />
-              <span className={styles.medicalFieldHint}>
-                Ex: HUG, Clinique La Colline, Grangettes, La Tour…
-              </span>
             </div>
 
-            {/* Service / Bâtiment : toujours visible — liste si établissement choisi, sinon saisie libre (ex: CHIR) */}
+            {/* Service / Bâtiment */}
             <div className={styles.medicalFormGroup}>
-              <Label>Service / Bâtiment</Label>
+              <Label htmlFor="hospital_service">Service / Bât.</Label>
               {establishment?.id ? (
                 <ServiceSelect
                   key={establishment?.id}
+                  inputId="hospital_service"
                   establishmentId={establishment?.id}
                   value={serviceObj}
                   onChange={onChangeService}
@@ -1604,6 +1798,7 @@ export default function ManualBookingForm({ onSuccess }) {
                 />
               ) : (
                 <Input
+                  id="hospital_service"
                   type="text"
                   name="hospital_service"
                   value={hospitalService}
@@ -1611,15 +1806,13 @@ export default function ManualBookingForm({ onSuccess }) {
                   placeholder="Ex: CHIR, Urgences, Cardiologie…"
                 />
               )}
-              <span className={styles.medicalFieldHint}>
-                Ex: CHIR, Urgences, Bâtiment Gustave Julliard…
-              </span>
             </div>
 
             {/* Nom du médecin */}
             <div className={styles.medicalFormGroup}>
-              <Label>Nom du médecin</Label>
+              <Label htmlFor="doctor_name">Médecin</Label>
               <Input
+                id="doctor_name"
                 type="text"
                 name="doctor_name"
                 value={doctorName}
@@ -1630,102 +1823,125 @@ export default function ManualBookingForm({ onSuccess }) {
 
             {/* Notes médicales */}
             <div className={styles.medicalFormGroup}>
-              <Label>Notes médicales</Label>
+              <Label htmlFor="notes_medical">Notes</Label>
               <textarea
+                id="notes_medical"
                 name="notes_medical"
                 value={notesMedical}
                 onChange={(e) => setNotesMedical(e.target.value)}
                 onBlur={handleNotesMedicalBlur}
                 placeholder="Instructions particulières, bâtiment, étage…"
-                rows={3}
-                className={styles.textarea}
+                rows={2}
+                className={`${styles.textarea} ${styles.textareaCompact}`}
               />
             </div>
 
-            {/* Instructions accès pickup (ex: restaurant, hôtel) */}
+            {/* Instructions accès pickup */}
             <div className={styles.medicalFormGroup}>
-              <Label>Instructions accès pickup (optionnel)</Label>
+              <Label htmlFor="pickup_access_notes">Accès pickup</Label>
               <Input
+                id="pickup_access_notes"
                 type="text"
                 name="pickup_access_notes"
                 value={pickupAccessNotes}
                 onChange={(e) => setPickupAccessNotes(e.target.value)}
                 placeholder="Ex: entrée arrière, sonner à…, table…, appeler avant…"
               />
-              <span className={styles.medicalFieldHint}>
-                Pour lieu non-domicile (restaurant, hôtel…)
-              </span>
             </div>
 
-            {/* Instructions accès destination (optionnel) */}
+            {/* Instructions accès destination */}
             <div className={styles.medicalFormGroup}>
-              <Label>Instructions accès destination (optionnel)</Label>
+              <Label htmlFor="dropoff_access_notes">Accès destination</Label>
               <Input
+                id="dropoff_access_notes"
                 type="text"
                 name="dropoff_access_notes"
                 value={dropoffAccessNotes}
                 onChange={(e) => setDropoffAccessNotes(e.target.value)}
                 placeholder="Ex: entrée B, étage 2, service…, appeler secrétariat…"
               />
-              <span className={styles.medicalFieldHint}>
-                Pour destination non-domicile
-              </span>
             </div>
 
             {/* Options chaise roulante */}
             <div className={styles.medicalFormGroup}>
-              <Label>Options chaise roulante</Label>
-
-              <div className={styles.checkboxGroup}>
-                <input
-                  type="checkbox"
-                  id="clientHasWheelchair"
-                  checked={wheelchairOptions.clientHasWheelchair}
-                  onChange={(e) =>
-                    setWheelchairOptions({
-                      clientHasWheelchair: e.target.checked,
-                      needWheelchair: e.target.checked ? false : wheelchairOptions.needWheelchair,
-                    })
-                  }
-                  className={styles.checkbox}
-                />
-                <Label htmlFor="clientHasWheelchair" className={styles.checkboxLabel}>
-                  ♿ Le client est en chaise roulante
-                </Label>
-              </div>
-
-              <div className={styles.checkboxGroup}>
-                <input
-                  type="checkbox"
-                  id="needWheelchair"
-                  checked={wheelchairOptions.needWheelchair}
-                  onChange={(e) =>
-                    setWheelchairOptions({
-                      needWheelchair: e.target.checked,
-                      clientHasWheelchair: e.target.checked
-                        ? false
-                        : wheelchairOptions.clientHasWheelchair,
-                    })
-                  }
-                  className={styles.checkbox}
-                />
-                <Label htmlFor="needWheelchair" className={styles.checkboxLabel}>
-                  🏥 Prendre une chaise roulante
-                </Label>
+              <Label htmlFor="clientHasWheelchair">Chaise roulante</Label>
+              <div className={styles.checkboxRowInline}>
+                <div className={styles.checkboxGroup}>
+                  <input
+                    type="checkbox"
+                    id="clientHasWheelchair"
+                    checked={wheelchairOptions.clientHasWheelchair}
+                    onChange={(e) =>
+                      setWheelchairOptions({
+                        clientHasWheelchair: e.target.checked,
+                        needWheelchair: e.target.checked ? false : wheelchairOptions.needWheelchair,
+                      })
+                    }
+                    className={styles.checkbox}
+                  />
+                  <Label htmlFor="clientHasWheelchair" className={styles.checkboxLabel}>
+                    ♿ En chaise
+                  </Label>
+                </div>
+                <div className={styles.checkboxGroup}>
+                  <input
+                    type="checkbox"
+                    id="needWheelchair"
+                    checked={wheelchairOptions.needWheelchair}
+                    onChange={(e) =>
+                      setWheelchairOptions({
+                        needWheelchair: e.target.checked,
+                        clientHasWheelchair: e.target.checked
+                          ? false
+                          : wheelchairOptions.clientHasWheelchair,
+                      })
+                    }
+                    className={styles.checkbox}
+                  />
+                  <Label htmlFor="needWheelchair" className={styles.checkboxLabel}>
+                    🏥 Prendre
+                  </Label>
+                </div>
               </div>
             </div>
           </div>
         </div>
+        </div>
 
-        {/* BOUTON DE SOUMISSION - Sur toute la largeur */}
-        <button
-          type="submit"
-          className={styles.submitButton}
-          disabled={bookingMutation.isLoading}
-          onClick={() => console.log('[ManualBookingForm] submit button clicked')}
-        >
-          {bookingMutation.isLoading ? '⏳ Création…' : 'Créer la réservation'}
-        </button>
+        {/* Footer fixe en bas : résumé + Annuler à gauche, CTA à droite */}
+        <div className={styles.footerActions} data-testid="footer-actions-sticky">
+          <div className={styles.footerSummary} aria-live="polite">
+            <span className={styles.footerSummaryText}>{footerSummary.summaryText}</span>
+            <span className={styles.footerSummaryBadges}>
+              {footerSummary.summaryBadges.map((badge) => (
+                <span key={badge} className={styles.summaryBadge}>
+                  {badge}
+                </span>
+              ))}
+            </span>
+          </div>
+          <div className={styles.footerBody}>
+            <div className={styles.footerLeft}>
+              {onClose && (
+                <button type="button" className={styles.footerCancel} onClick={onClose}>
+                  Annuler
+                </button>
+              )}
+            </div>
+            <div className={styles.footerRight}>
+              <button
+                type="submit"
+                className={styles.submitButton}
+                disabled={
+                  bookingMutation.isLoading ||
+                  (isMaterialDelivery && !deliveryDescription?.trim())
+                }
+              >
+                {bookingMutation.isLoading ? '⏳ Création…' : 'Créer la réservation'}
+              </button>
+            </div>
+          </div>
+        </div>
       </form>
 
       {showClientModal && (

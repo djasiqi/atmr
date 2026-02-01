@@ -71,10 +71,12 @@ class InvoiceStatus(str, PyEnum):
 
 
 class InvoiceLineType(str, PyEnum):
-    RIDE = "ride"
-    LATE_FEE = "late_fee"
-    REMINDER_FEE = "reminder_fee"
-    CUSTOM = "custom"
+    # Valeurs alignées sur PostgreSQL (enum invoice_line_type)
+    RIDE = "RIDE"
+    MATERIAL_DELIVERY = "material_delivery"  # Livraison matériel (ajouté en minuscules)
+    LATE_FEE = "LATE_FEE"
+    REMINDER_FEE = "REMINDER_FEE"
+    CUSTOM = "CUSTOM"
 
     @classmethod
     def choices(cls):

@@ -22,6 +22,8 @@ class _BookingLike(Protocol):
     doctor_name: Any
     notes_medical: Any
     amount: Any
+    mission_type: Any
+    delivery_description: Any
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,6 +109,13 @@ class UpdateCompanyReservationUseCase:
         if "amount" in validated_data:
             booking.amount = validated_data["amount"]
             updated_fields.append("amount")
+        # ✅ Livraison matériel : permettre de corriger mission_type et delivery_description
+        if "mission_type" in validated_data:
+            booking.mission_type = validated_data["mission_type"]
+            updated_fields.append("mission_type")
+        if "delivery_description" in validated_data:
+            booking.delivery_description = validated_data["delivery_description"]
+            updated_fields.append("delivery_description")
 
         if not updated_fields:
             return UpdateCompanyReservationResult(

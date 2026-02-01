@@ -170,6 +170,8 @@ services:
         "4",
         "--max-tasks-per-child",
         "100",
+        "-Q",
+        "default,notifications,realtime,dlq",
       ]
     env_file:
       - backend/.env

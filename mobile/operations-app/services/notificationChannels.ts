@@ -8,6 +8,8 @@ import { Platform } from "react-native";
 export enum NotificationChannel {
   CRITICAL = "critical",
   MISSIONS = "missions",
+  /** H2: Canal debug pour contourner channel legacy (missions créé en DEFAULT/LOW) */
+  MISSIONS_V2 = "missions_v2",
   MESSAGES = "messages",
   INFO = "info",
 }
@@ -52,6 +54,16 @@ const CHANNEL_CONFIGS: ChannelConfig[] = [
     vibrationPattern: [0, 250, 250, 250], // Double vibration
     enableLights: true,
     lightColor: "#2196F3", // Bleu
+  },
+  {
+    id: NotificationChannel.MISSIONS_V2,
+    name: "🚗 Missions (v2)",
+    description: "Canal debug HIGH — contourne channel legacy missions",
+    importance: Notifications.AndroidImportance.HIGH,
+    sound: "default",
+    vibrationPattern: [0, 250, 250, 250],
+    enableLights: true,
+    lightColor: "#2196F3",
   },
   {
     id: NotificationChannel.MESSAGES,
@@ -101,12 +113,199 @@ export async function setupNotificationChannels(): Promise<void> {
           Notifications.AndroidNotificationVisibility.PUBLIC,
       });
 
-      console.log(`✅ Canal "${config.name}" créé`);
+      // P2: Proof log — canal créé (diagnostic app killed)
+      console.log(`🔔 PUSH_PROOF channel created: ${config.id} (${config.name})`);
     }
 
     console.log("🎉 Tous les canaux configurés avec succès");
   } catch (error) {
     console.error("❌ Erreur lors de la configuration des canaux:", error);
+  }
+}
+
+/** P0-A: Audit existence + importance + sound/vibration pour missions et missions_v2 */
+export interface ChannelAuditResult {
+  exists: boolean;
+  importance: string;
+  isHigh: boolean;
+  hasSound: boolean;
+  hasVibration: boolean;
+}
+
+async function auditChannelsForKillMode(): Promise<{
+  missions: ChannelAuditResult;
+  missions_v2: ChannelAuditResult;
+}> {
+  const empty: ChannelAuditResult = {
+    exists: false,
+    importance: "?",
+    isHigh: false,
+    hasSound: false,
+    hasVibration: false,
+  };
+  const result = {
+    missions: { ...empty },
+    missions_v2: { ...empty },
+  };
+
+  if (Platform.OS !== "android") return result;
+
+  const auditOne = async (
+    channelId: string
+  ): Promise<ChannelAuditResult> => {
+    try {
+      const ch = await Notifications.getNotificationChannelAsync(channelId);
+      if (!ch) return empty;
+      const raw = ch as unknown as Record<string, unknown>;
+      const imp = raw.importance ?? (ch as any).importance ?? "?";
+      const isHigh =
+        imp === Notifications.AndroidImportance.HIGH ||
+        imp === 4 ||
+        imp === "high";
+      const vib = raw.vibrationPattern ?? (ch as any).vibrationPattern;
+      const hasVibration = Array.isArray(vib) ? vib.length > 0 : true;
+      const hasSound = raw.sound != null || (ch as any).sound != null;
+      return {
+        exists: true,
+        importance: String(imp),
+        isHigh,
+        hasSound: !!hasSound,
+        hasVibration: !!hasVibration,
+      };
+    } catch {
+      return empty;
+    }
+  };
+
+  result.missions = await auditOne(NotificationChannel.MISSIONS);
+  result.missions_v2 = await auditOne(NotificationChannel.MISSIONS_V2);
+
+  // P0-A: Logs individuels pour diagnostic (existence + importance + sound/vibration)
+  console.log(
+    `🔔 PUSH_PROOF channel audit: missions exists=${result.missions.exists} importance=${result.missions.importance} isHigh=${result.missions.isHigh} sound=${result.missions.hasSound} vibration=${result.missions.hasVibration}`
+  );
+  console.log(
+    `🔔 PUSH_PROOF channel audit: missions_v2 exists=${result.missions_v2.exists} importance=${result.missions_v2.importance} isHigh=${result.missions_v2.isHigh} sound=${result.missions_v2.hasSound} vibration=${result.missions_v2.hasVibration}`
+  );
+
+  if (!result.missions_v2.exists) {
+    console.warn(
+      "🔔 PUSH_PROOF missions_v2 NON CRÉÉ — ouvrir l'app une fois pour créer le canal avant test app kill"
+    );
+  }
+
+  return result;
+}
+
+/** P0-B: Log unique "1 ligne" KILL-MODE readiness au boot */
+export async function logKillModeReadiness(): Promise<void> {
+  if (Platform.OS !== "android") return;
+
+  try {
+    const perm = await Notifications.getPermissionsAsync();
+    const granted = perm.status === "granted";
+    console.log(
+      `🔔 PUSH_PROOF permissions: status=${perm.status} granted=${granted} canAskAgain=${perm.canAskAgain ?? "?"}`
+    );
+    const channels = await auditChannelsForKillMode();
+
+    let manufacturer = "?";
+    let model = "?";
+    let androidVersion: number | string = "?";
+    try {
+      const Device = await import("expo-device");
+      manufacturer = (Device as any).manufacturer ?? "?";
+      model = (Device as any).modelName ?? (Device as any).modelId ?? "?";
+      androidVersion = Platform.Version ?? "?";
+    } catch {
+      // ignore
+    }
+
+    const permOk = perm.status === "granted";
+    const m2Exists = channels.missions_v2.exists;
+    const m2High = channels.missions_v2.isHigh;
+    const m1High = channels.missions.isHigh;
+
+    let ready = "✓";
+    if (!permOk) ready = "permission denied";
+    else if (!m2Exists)
+      ready = "missions_v2 non créé (ouvrir app une fois)";
+    else if (!m2High) ready = "missions_v2 importance≠HIGH";
+    else if (!m1High) ready = "missions legacy (missions_v2 OK)";
+
+    console.log(
+      `🔔 KILL-MODE readiness: ${ready} | permissions=${perm.status} ` +
+        `missions=${channels.missions.exists ? (channels.missions.isHigh ? "HIGH" : "legacy") : "absent"} ` +
+        `missions_v2=${channels.missions_v2.exists ? (channels.missions_v2.isHigh ? "HIGH" : "low") : "absent"} ` +
+        `android=${androidVersion} device=${manufacturer}/${model}`
+    );
+  } catch (e) {
+    console.warn("🔔 KILL-MODE readiness: impossible de vérifier", e);
+  }
+}
+
+/** État complet pour Push Debug Card (dev-only) */
+export interface KillModeState {
+  platform: string;
+  androidVersion: string | number;
+  permissions: { status: string; granted: boolean };
+  missions: ChannelAuditResult;
+  missions_v2: ChannelAuditResult;
+  manufacturer: string;
+  model: string;
+  ready: string;
+  appOwnership: string;
+}
+
+/** P0-B: Récupère l'état complet pour la Push Debug Card */
+export async function getKillModeState(): Promise<KillModeState | null> {
+  if (Platform.OS !== "android") return null;
+
+  try {
+    const perm = await Notifications.getPermissionsAsync();
+    const channels = await auditChannelsForKillMode();
+
+    let manufacturer = "?";
+    let model = "?";
+    let androidVersion: string | number = "?";
+    let appOwnership = "?";
+    try {
+      const Device = await import("expo-device");
+      const Constants = await import("expo-constants").then((m) => m.default);
+      manufacturer = (Device as any).manufacturer ?? "?";
+      model = (Device as any).modelName ?? (Device as any).modelId ?? "?";
+      androidVersion = Platform.Version ?? "?";
+      appOwnership = Constants.appOwnership ?? "?";
+    } catch {
+      // ignore
+    }
+
+    const permOk = perm.status === "granted";
+    const m2Exists = channels.missions_v2.exists;
+    const m2High = channels.missions_v2.isHigh;
+    const m1High = channels.missions.isHigh;
+
+    let ready = "✓";
+    if (!permOk) ready = "permission denied";
+    else if (!m2Exists)
+      ready = "missions_v2 non créé (ouvrir app une fois)";
+    else if (!m2High) ready = "missions_v2 importance≠HIGH";
+    else if (!m1High) ready = "missions legacy (missions_v2 OK)";
+
+    return {
+      platform: Platform.OS,
+      androidVersion,
+      permissions: { status: perm.status, granted: permOk },
+      missions: channels.missions,
+      missions_v2: channels.missions_v2,
+      manufacturer,
+      model,
+      ready,
+      appOwnership,
+    };
+  } catch (e) {
+    console.warn("🔔 getKillModeState: impossible de récupérer", e);
+    return null;
   }
 }
 

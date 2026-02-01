@@ -41,6 +41,9 @@ billing_settings_model = settings_ns.model(
         "reminder1_fee": fields.Float(description="Frais 1er rappel"),
         "reminder2_fee": fields.Float(description="Frais 2e rappel"),
         "reminder3_fee": fields.Float(description="Frais 3e rappel"),
+        "material_delivery_price_fixed": fields.Float(
+            description="Prix fixe livraison matériel (CHF)", allow_null=True
+        ),
         "reminder_schedule_days": fields.Raw(description="Planning des rappels"),
         "auto_reminders_enabled": fields.Boolean(
             description="Rappels automatiques activés"
@@ -58,18 +61,30 @@ billing_settings_model = settings_ns.model(
         "email_signature_mode": fields.String(
             description="Mode signature email: 'form', 'text' ou 'html'", default="form"
         ),
-        "email_signature_text": fields.String(description="Signature email (mode texte)"),
+        "email_signature_text": fields.String(
+            description="Signature email (mode texte)"
+        ),
         "signature_name": fields.String(description="Nom complet (mode form)"),
-        "signature_title": fields.String(description="Titre (mode form, ex: 'Associé gérant')"),
+        "signature_title": fields.String(
+            description="Titre (mode form, ex: 'Associé gérant')"
+        ),
         "signature_company": fields.String(description="Société (mode form)"),
-        "signature_phone_main": fields.String(description="Téléphone principal (mode form)"),
-        "signature_phone_mobile": fields.String(description="Téléphone mobile (mode form)"),
+        "signature_phone_main": fields.String(
+            description="Téléphone principal (mode form)"
+        ),
+        "signature_phone_mobile": fields.String(
+            description="Téléphone mobile (mode form)"
+        ),
         "signature_email": fields.String(description="Email (mode form)"),
         "signature_website": fields.String(description="Site web (mode form)"),
-        "signature_address_line": fields.String(description="Ligne adresse (mode form)"),
+        "signature_address_line": fields.String(
+            description="Ligne adresse (mode form)"
+        ),
         "signature_zip": fields.String(description="Code postal (mode form)"),
         "signature_city": fields.String(description="Ville (mode form)"),
-        "signature_logo_url": fields.String(description="URL logo (mode form, optionnel)"),
+        "signature_logo_url": fields.String(
+            description="URL logo (mode form, optionnel)"
+        ),
         "email_signature_html_template": fields.String(
             description="Template HTML signature (mode HTML, variables: name, phone, email, address, logo_url)"
         ),
@@ -306,6 +321,7 @@ class BillingSettings(Resource):
         # ✅ Récupérer directement le modèle SQLAlchemy (pas via repository qui retourne un DTO)
         try:
             import os
+
             BILLING_DEBUG = os.getenv("BILLING_DEBUG", "0") == "1"
 
             billing = CompanyBillingSettings.query.filter_by(
@@ -482,6 +498,7 @@ class BillingSettings(Resource):
             # ✅ CORRECTION: Traiter iban/qr_iban/esr_ref_base séparément
             # car ce sont des @hybrid_property et setattr peut ne pas fonctionner correctement
             import os
+
             BILLING_DEBUG = os.getenv("BILLING_DEBUG", "0") == "1"
 
             # Gestion spéciale pour les champs bancaires (hybrid_property)
@@ -547,6 +564,7 @@ class BillingSettings(Resource):
                 "reminder1_fee",
                 "reminder2_fee",
                 "reminder3_fee",
+                "material_delivery_price_fixed",
                 "reminder_schedule_days",
                 "auto_reminders_enabled",
                 "email_sender",
@@ -580,6 +598,7 @@ class BillingSettings(Resource):
                     # Gérer les valeurs None/empty pour les champs optionnels
                     if value is None or value == "":
                         if field in [
+                            "material_delivery_price_fixed",
                             "email_sender",
                             "invoice_message_template",
                             "reminder1_template",
@@ -601,6 +620,21 @@ class BillingSettings(Resource):
                             "legal_footer",
                         ]:
                             setattr(billing, field, None)
+                        continue
+                    # Conversion spéciale pour material_delivery_price_fixed (Decimal, >= 0)
+                    if field == "material_delivery_price_fixed":
+                        from decimal import Decimal, InvalidOperation
+
+                        try:
+                            parsed = float(value)
+                            if parsed < 0:
+                                billing.material_delivery_price_fixed = None
+                            else:
+                                billing.material_delivery_price_fixed = Decimal(
+                                    str(parsed)
+                                ).quantize(Decimal("0.01"))
+                        except (ValueError, TypeError, InvalidOperation):
+                            billing.material_delivery_price_fixed = None
                         continue
                     # Conversion spéciale pour reminder_schedule_days
                     # (doit être un dict)
@@ -655,6 +689,7 @@ class BillingSettings(Resource):
             # Log avant commit avec vérification de détection de changement SQLAlchemy
             if BILLING_DEBUG:
                 from sqlalchemy.orm.attributes import flag_modified
+
                 is_modified = db.session.is_modified(billing, include_collections=False)
                 dirty = billing in db.session.dirty
                 logger.info(
@@ -941,7 +976,9 @@ class ClinicBillingMappings(Resource):
                 "Clinique (company) introuvable", logger_instance=logger
             )
 
-        bp = BillingParty.query.filter_by(id=billing_party_id, company_id=company.id).first()
+        bp = BillingParty.query.filter_by(
+            id=billing_party_id, company_id=company.id
+        ).first()
         if not bp:
             return APIErrorHandler.handle_validation_error(
                 "BillingParty introuvable ou n'appartient pas à l'entreprise",
@@ -1100,7 +1137,9 @@ class BillingParties(Resource):
             db.session.commit()
         except ValueError as e:
             db.session.rollback()
-            return APIErrorHandler.handle_validation_error(str(e), logger_instance=logger)
+            return APIErrorHandler.handle_validation_error(
+                str(e), logger_instance=logger
+            )
         except Exception as e:
             db.session.rollback()
             logger.error("[Settings] Error creating BillingParty: %s", e)
@@ -1152,7 +1191,9 @@ class BillingPartyById(Resource):
             if display_name is not None:
                 bp.display_name = display_name.strip() if display_name else None
             if billing_address is not None:
-                bp.billing_address = billing_address.strip() if billing_address else None
+                bp.billing_address = (
+                    billing_address.strip() if billing_address else None
+                )
             if contact_email is not None:
                 bp.contact_email = contact_email.strip() if contact_email else None
             if contact_phone is not None:
@@ -1163,7 +1204,9 @@ class BillingPartyById(Resource):
             db.session.commit()
         except ValueError as e:
             db.session.rollback()
-            return APIErrorHandler.handle_validation_error(str(e), logger_instance=logger)
+            return APIErrorHandler.handle_validation_error(
+                str(e), logger_instance=logger
+            )
         except Exception as e:
             db.session.rollback()
             logger.error("[Settings] Error updating BillingParty: %s", e)

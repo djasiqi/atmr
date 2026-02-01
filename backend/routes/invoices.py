@@ -13,7 +13,7 @@ from flask_restx import (
     fields,
     reqparse,
 )
-from sqlalchemy import func, or_, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
 from sqlalchemy.orm import joinedload
 
@@ -48,7 +48,13 @@ from models import (
     User,
     db,
 )
-from models.enums import BookingStatus, ClientType, InvoiceStatus, PaymentMethod
+from models.enums import (
+    BookingStatus,
+    ClientType,
+    InvoiceBillingStrategy,
+    InvoiceStatus,
+    PaymentMethod,
+)
 from routes.api_error_models import (
     create_api_error_model,
     create_not_found_error_model,
@@ -209,6 +215,12 @@ billing_settings_model = invoices_ns.model(
             allow_null=True,
             minimum=0,
             description="Frais rappel 3 (>= 0)",
+        ),
+        "material_delivery_price_fixed": fields.Float(
+            required=False,
+            allow_null=True,
+            minimum=0,
+            description="Prix fixe livraison matériel (CHF)",
         ),
         "reminder_schedule_days": fields.Raw(
             required=False, description="Planification des rappels (liste de jours)"
@@ -1064,6 +1076,7 @@ class CompanyBillingSettingsResource(Resource):
                 "reminder1fee",
                 "reminder2fee",
                 "reminder3fee",
+                "material_delivery_price_fixed",
             ]:
                 if field in validated_data:
                     value = validated_data[field]
@@ -1325,6 +1338,7 @@ class EligibleClients(Resource):
         )
 
         # Facturation directe au client : uniquement les transports à facturer au patient
+        # (même règle pour transports et livraisons : non hospitalisé → patient, hospitalisé → clinique sauf override)
         if billed_to_type == "patient":
             unbilled_query = unbilled_query.filter(Booking.billed_to_type == "patient")
 
@@ -1354,6 +1368,8 @@ class EligibleClients(Resource):
         # Note: Les courses transférées ont toujours company_id = entreprise propriétaire,
         # donc elles sont incluses automatiquement dans cette requête
 
+        # Inclure clients actifs ET inactifs ayant des réservations non facturées
+        # (un client inactif peut avoir des courses passées à facturer)
         query = (
             db.session.query(
                 Client,
@@ -1366,7 +1382,6 @@ class EligibleClients(Resource):
             .filter(
                 Client.company_id == company_id,
                 Client.is_institution.is_(False),
-                Client.is_active.is_(True),
                 Client.client_type != ClientType.SELF_SERVICE,
             )
         )
@@ -1405,16 +1420,120 @@ class EligibleClients(Resource):
         )
 
         clients = []
+        seen_client_ids = set()
         for client, unbilled_count, unbilled_total_amount, last_ride_at in results:
             payload = client.serialize
             payload["unbilled_count"] = int(unbilled_count or 0)
-            # HT ; string "125.00" pour éviter imprécisions float (SUM Numeric/Decimal)
+            payload["invoiced_count"] = 0
             raw = float(unbilled_total_amount or 0)
             payload["unbilled_total_amount"] = f"{round(raw, 2):.2f}"
+            payload["invoiced_total_amount"] = "0.00"
             payload["last_ride_at"] = (
                 last_ride_at.isoformat() if isinstance(last_ride_at, datetime) else None
             )
             clients.append(payload)
+            seen_client_ids.add(client.id)
+
+        # ✅ S2: Inclure les clients avec transports DÉJÀ FACTURÉS (invoiced) pour cette clinique+période
+        # Sinon, après génération partielle (ex: 3/5 clients), les 3 facturés disparaissent de la liste
+        if (
+            clinic_company_id
+            and period_year
+            and period_month
+            and billed_to_type != "patient"
+        ):
+            start_date = datetime(period_year, period_month, 1)
+            if period_month == period_month_threshold:
+                end_date = datetime(period_year + 1, 1, 1)
+            else:
+                end_date = datetime(period_year, period_month + 1, 1)
+
+            invoiced_subq = (
+                db.session.query(
+                    Booking.client_id.label("client_id"),
+                    func.count(Booking.id).label("invoiced_count"),
+                    func.coalesce(func.sum(Booking.amount), 0).label(
+                        "invoiced_total_amount"
+                    ),
+                    func.max(
+                        func.coalesce(Booking.completed_at, Booking.scheduled_time)
+                    ).label("last_ride_at"),
+                )
+                .join(InvoiceLine, Booking.invoice_line_id == InvoiceLine.id)
+                .join(Invoice, InvoiceLine.invoice_id == Invoice.id)
+                .filter(
+                    Booking.company_id == company_id,
+                    Booking.billed_to_type == "clinic",
+                    Booking.billed_to_company_id == clinic_company_id,
+                    Invoice.billed_to_company_id == clinic_company_id,
+                    Invoice.period_year == period_year,
+                    Invoice.period_month == period_month,
+                    Invoice.billing_strategy == InvoiceBillingStrategy.S2_CLINIC_MONTHLY,
+                    Invoice.status != InvoiceStatus.CANCELLED,
+                    Booking.scheduled_time >= start_date,
+                    Booking.scheduled_time < end_date,
+                )
+                .group_by(Booking.client_id)
+                .subquery()
+            )
+
+            stay_query = db.session.query(ClientStay.client_id).filter(
+                ClientStay.company_id == clinic_company_id,
+                ClientStay.status == "active",
+            )
+            stay_query = stay_query.filter(
+                ClientStay.start_date <= end_date,
+                (ClientStay.end_date.is_(None)) | (ClientStay.end_date >= start_date),
+            )
+            stay_subq = stay_query.distinct().subquery()
+
+            invoiced_query = (
+                db.session.query(
+                    Client,
+                    invoiced_subq.c.invoiced_count,
+                    invoiced_subq.c.invoiced_total_amount,
+                    invoiced_subq.c.last_ride_at,
+                )
+                .join(invoiced_subq, Client.id == invoiced_subq.c.client_id)
+                .join(stay_subq, Client.id == stay_subq.c.client_id)
+                .options(joinedload(Client.user))
+                .filter(
+                    Client.company_id == company_id,
+                    Client.is_institution.is_(False),
+                    Client.client_type != ClientType.SELF_SERVICE,
+                )
+            )
+            if seen_client_ids:
+                invoiced_query = invoiced_query.filter(
+                    ~Client.id.in_(seen_client_ids)
+                )
+            if search:
+                pattern = f"%{search.lower()}%"
+                invoiced_query = invoiced_query.join(User, Client.user).filter(
+                    or_(
+                        func.lower(User.first_name).like(pattern),
+                        func.lower(User.last_name).like(pattern),
+                        func.lower(User.email).like(pattern),
+                    )
+                )
+            invoiced_results = invoiced_query.order_by(
+                invoiced_subq.c.last_ride_at.desc()
+            ).limit(max(1, limit - len(clients))).all()
+
+            for client, inv_count, inv_total, last_ride_at in invoiced_results:
+                payload = client.serialize
+                payload["unbilled_count"] = 0
+                payload["invoiced_count"] = int(inv_count or 0)
+                payload["unbilled_total_amount"] = "0.00"
+                raw = float(inv_total or 0)
+                payload["invoiced_total_amount"] = f"{round(raw, 2):.2f}"
+                payload["last_ride_at"] = (
+                    last_ride_at.isoformat()
+                    if isinstance(last_ride_at, datetime)
+                    else None
+                )
+                clients.append(payload)
+                seen_client_ids.add(client.id)
 
         # Log pour debug
         logger.info(
@@ -1513,7 +1632,19 @@ class ClinicMonthlyTotals(Resource):
                 BookingStatus.RETURN_COMPLETED.value,
             ]
             # Règle métier : eligible (clinique) et excluded (patient) partagent le même périmètre
-            # (status COMPLETED/RETURN_COMPLETED, période [start_date, end_date)) pour cohérence S2.
+            # Inclut COMPLETED, RETURN_COMPLETED et CANCELED avec amount > 0 UNIQUEMENT si client
+            # hospitalisé (annulation dernière minute facturée à la clinique ; sinon au patient)
+            # (période [start_date, end_date)) pour cohérence S2.
+            stay_overlaps_booking = exists().where(
+                ClientStay.client_id == Booking.client_id,
+                ClientStay.company_id == clinic_company_id,
+                ClientStay.status == "active",
+                ClientStay.start_date <= Booking.scheduled_time,
+                or_(
+                    ClientStay.end_date.is_(None),
+                    ClientStay.end_date >= Booking.scheduled_time,
+                ),
+            )
 
             # ✅ Hardening: safe Number(amount||0) pour éviter NaN
             def safe_amount(amount):
@@ -1525,12 +1656,18 @@ class ClinicMonthlyTotals(Resource):
                 except (ValueError, TypeError):
                     return 0.0
 
-            # ✅ Transports éligibles (billed_to_type='clinic') - filtre strict
+            # ✅ Transports éligibles (billed_to_type='clinic') - inclut annulations facturables
+            # uniquement si client hospitalisé à la clinique au moment de la course
             eligible_query = Booking.query.filter(
                 Booking.company_id == company_id,
                 Booking.billed_to_company_id == clinic_company_id,
                 Booking.billed_to_type == "clinic",
-                Booking.status.in_(target_statuses),
+                or_(
+                    Booking.status.in_(target_statuses),
+                    (Booking.status == BookingStatus.CANCELED.value)
+                    & (Booking.amount > 0)
+                    & stay_overlaps_booking,
+                ),
                 Booking.invoice_line_id.is_(None),
                 Booking.scheduled_time >= start_date,
                 Booking.scheduled_time < end_date,
@@ -1542,11 +1679,35 @@ class ClinicMonthlyTotals(Resource):
                     Booking.client_id.in_(include_client_ids)
                 )
 
-            # Calculer les totaux des transports éligibles
+            # Calculer les totaux des transports éligibles (non facturés)
             eligible_bookings = eligible_query.all()
             total_eligible = len(eligible_bookings)
             total_amount_eligible = sum(
                 safe_amount(b.amount) for b in eligible_bookings
+            )
+
+            # ✅ Totaux des transports DÉJÀ FACTURÉS (dans une facture S2 pour cette clinique+période)
+            # Permet d'afficher la vue complète : X à facturer + Y déjà facturés
+            invoiced_query = (
+                Booking.query.join(InvoiceLine, Booking.invoice_line_id == InvoiceLine.id)
+                .join(Invoice, InvoiceLine.invoice_id == Invoice.id)
+                .filter(
+                    Booking.company_id == company_id,
+                    Booking.billed_to_company_id == clinic_company_id,
+                    Booking.billed_to_type == "clinic",
+                    Invoice.billed_to_company_id == clinic_company_id,
+                    Invoice.period_year == period_year,
+                    Invoice.period_month == period_month,
+                    Invoice.billing_strategy == InvoiceBillingStrategy.S2_CLINIC_MONTHLY,
+                    Invoice.status != InvoiceStatus.CANCELLED,
+                    Booking.scheduled_time >= start_date,
+                    Booking.scheduled_time < end_date,
+                )
+            )
+            invoiced_bookings = invoiced_query.all()
+            total_invoiced = len(invoiced_bookings)
+            total_amount_invoiced = sum(
+                safe_amount(b.amount) for b in invoiced_bookings
             )
 
             # eligible_client_ids : liste plate de client_id (DISTINCT), pour exclusions
@@ -1556,7 +1717,12 @@ class ClinicMonthlyTotals(Resource):
                     Booking.company_id == company_id,
                     Booking.billed_to_company_id == clinic_company_id,
                     Booking.billed_to_type == "clinic",
-                    Booking.status.in_(target_statuses),
+                    or_(
+                        Booking.status.in_(target_statuses),
+                        (Booking.status == BookingStatus.CANCELED.value)
+                        & (Booking.amount > 0)
+                        & stay_overlaps_booking,
+                    ),
                     Booking.invoice_line_id.is_(None),
                     Booking.scheduled_time >= start_date,
                     Booking.scheduled_time < end_date,
@@ -1661,6 +1827,8 @@ class ClinicMonthlyTotals(Resource):
                 data={
                     "total_eligible": total_eligible,
                     "total_amount_eligible": total_amount_eligible,
+                    "total_invoiced": total_invoiced,
+                    "total_amount_invoiced": total_amount_invoiced,
                     "total_excluded": total_excluded,
                     "total_amount_excluded": total_amount_excluded,
                     "excluded_bookings": excluded_details,  # ✅ Détails des transports exclus
@@ -3692,6 +3860,12 @@ class UnbilledReservations(Resource):
             period_year = request.args.get("year", type=int)
             period_month = request.args.get("month", type=int)
             billed_to_filter = request.args.get("billed_to_type", type=str)
+            clinic_company_id = request.args.get("clinic_company_id", type=int)
+            include_invoiced = request.args.get("include_invoiced", "").lower() in (
+                "1",
+                "true",
+                "on",
+            )
 
             # ✅ Utilisation du repository pour la requête avec filtres dynamiques
             from repositories.booking_repository import BookingRepository
@@ -3718,99 +3892,113 @@ class UnbilledReservations(Resource):
                 period_month=period_month,
             )
 
-            # 🔍 LOG : Compter AVANT filtre billed_to_type
-            count_before_filter = len(reservations)
-            logger.warning(
-                "🔍 [Unbilled] Avant filtre billed_to_type: %s bookings trouvés",
-                count_before_filter,
-            )
-
-            # ⚠️ NE PAS filtrer par billed_to_type :
-            # on veut TOUS les transports non facturés du client
-            # Même si le type de facturation ne correspond pas, on affiche tout
-            # Le dispatcher pourra choisir ce qu'il veut facturer
-            # if billed_to_filter and billed_to_filter in [
-            #     'patient', 'clinic', 'insurance'
-            # ]:
-            #     reservations = [r for r in reservations if r.billed_to_type == billed_to_filter]
-            #     logger.warning(
-            #         "🔍 [Unbilled] Filtre appliqué: billed_to_type=%s",
-            #         billed_to_filter
-            #     )
-
-            # 🔍 LOG : Afficher les résultats trouvés
-            logger.warning(
-                "🔍 [Unbilled] FINAL: Trouvé %s réservations non facturées",
-                len(reservations),
-            )
-            for r in reservations:
-                logger.warning(
-                    (
-                        "   - Booking #%s: %s, %s, status=%s, "
-                        "billed_to_type=%s billed_to_company_id=%s billing_party_id=%s "
-                        "invoice_line_id=%s"
-                    ),
-                    r.id,
-                    r.customer_name,
-                    r.scheduled_time,
-                    r.status,
-                    r.billed_to_type,
-                    getattr(r, "billed_to_company_id", None),
-                    getattr(r, "billing_party_id", None),
-                    r.invoice_line_id,
+            # ✅ S2: Inclure les transports DÉJÀ FACTURÉS pour cette clinique+période
+            # (contexte facture clinique mensuelle : afficher la vue complète)
+            invoiced_reservations = []
+            if (
+                include_invoiced
+                and clinic_company_id
+                and period_year
+                and period_month
+            ):
+                start_date = datetime(period_year, period_month, 1)
+                if period_month == PERIOD_MONTH_THRESHOLD:
+                    end_date = datetime(period_year + 1, 1, 1)
+                else:
+                    end_date = datetime(period_year, period_month + 1, 1)
+                invoiced_reservations = (
+                    Booking.query.join(
+                        InvoiceLine, Booking.invoice_line_id == InvoiceLine.id
+                    )
+                    .join(Invoice, InvoiceLine.invoice_id == Invoice.id)
+                    .filter(
+                        Booking.company_id == company_id,
+                        Booking.client_id == client_id,
+                        Booking.billed_to_type == "clinic",
+                        Booking.billed_to_company_id == clinic_company_id,
+                        Invoice.billed_to_company_id == clinic_company_id,
+                        Invoice.period_year == period_year,
+                        Invoice.period_month == period_month,
+                        Invoice.billing_strategy
+                        == InvoiceBillingStrategy.S2_CLINIC_MONTHLY,
+                        Invoice.status != InvoiceStatus.CANCELLED,
+                        Booking.scheduled_time >= start_date,
+                        Booking.scheduled_time < end_date,
+                    )
+                    .order_by(Booking.scheduled_time.asc())
+                    .all()
                 )
 
+            # Combiner unbilled + invoiced, trier par date
+            all_reservations = [
+                (r, False) for r in reservations
+            ] + [
+                (r, True) for r in invoiced_reservations
+            ]
+            all_reservations.sort(
+                key=lambda x: x[0].scheduled_time or datetime.min.replace(tzinfo=None)
+            )
+
+            def _to_reservation_dict(r, invoiced_flag):
+                return {
+                    "id": r.id,
+                    "date": r.scheduled_time.isoformat()
+                    if r.scheduled_time
+                    else None,
+                    "scheduled_time": r.scheduled_time.isoformat()
+                    if r.scheduled_time
+                    else None,
+                    "pickup_location": r.pickup_location,
+                    "pickup_address": r.pickup_location,
+                    "dropoff_location": r.dropoff_location,
+                    "dropoff_address": r.dropoff_location,
+                    "amount": float(r.amount or 0),
+                    "billed_to_type": r.billed_to_type,
+                    "billed_to_company_id": r.billed_to_company_id,
+                    "billed_to_contact": r.billed_to_contact,
+                    "customer_name": r.customer_name,
+                    "status": r.status.value,
+                    "is_urgent": r.is_urgent or False,
+                    "is_return": r.is_return or False,
+                    "medical_facility": r.medical_facility,
+                    "billing_source": (
+                        r.billing_source.value if r.billing_source else None
+                    ),
+                    "billing_source_ref": r.billing_source_ref,
+                    "invoice_line_id": r.invoice_line_id,
+                    "billing_review_status": (
+                        r.billing_review_status.value.lower()
+                        if r.billing_review_status
+                        else None
+                    ),
+                    "invoiced": invoiced_flag,
+                }
+
+            reservations_out = [
+                _to_reservation_dict(r, inv) for r, inv in all_reservations
+            ]
+
             return {
-                "reservations": [
-                    {
-                        "id": r.id,
-                        "date": r.scheduled_time.isoformat()
-                        if r.scheduled_time
-                        else None,
-                        "scheduled_time": r.scheduled_time.isoformat()
-                        if r.scheduled_time
-                        else None,  # ✅ Alias pour compatibilité frontend
-                        "pickup_location": r.pickup_location,
-                        "pickup_address": r.pickup_location,  # ✅ Alias pour compatibilité frontend
-                        "dropoff_location": r.dropoff_location,
-                        "dropoff_address": r.dropoff_location,  # ✅ Alias pour compatibilité frontend
-                        "amount": float(r.amount or 0),
-                        "billed_to_type": r.billed_to_type,
-                        "billed_to_company_id": r.billed_to_company_id,
-                        "billed_to_contact": r.billed_to_contact,
-                        "customer_name": r.customer_name,
-                        "status": r.status.value,
-                        "is_urgent": r.is_urgent or False,
-                        "is_return": r.is_return or False,
-                        "medical_facility": r.medical_facility,
-                        # ✅ Ajouter billing_source et billing_source_ref pour traçabilité
-                        # Note: billing_source est un enum str, .value retourne la valeur snake_case
-                        "billing_source": (
-                            r.billing_source.value if r.billing_source else None
-                        ),
-                        "billing_source_ref": r.billing_source_ref,
-                        # ✅ Ajouter invoice_line_id et billing_review_status pour le modal S2
-                        "invoice_line_id": r.invoice_line_id,
-                        # ✅ Normaliser billing_review_status en lowercase pour cohérence frontend
-                        "billing_review_status": (
-                            r.billing_review_status.value.lower()
-                            if r.billing_review_status
-                            else None
-                        ),
-                    }
-                    for r in reservations
-                ],
-                "total_amount": sum(float(r.amount or 0) for r in reservations),
-                "count": len(reservations),
+                "reservations": reservations_out,
+                "total_amount": sum(
+                    float(r.amount or 0) for r, _ in all_reservations
+                ),
+                "count": len(all_reservations),
                 "summary_by_type": {
                     "patient": sum(
-                        1 for r in reservations if bool(r.billed_to_type == "patient")
+                        1
+                        for r, _ in all_reservations
+                        if bool(r.billed_to_type == "patient")
                     ),
                     "clinic": sum(
-                        1 for r in reservations if bool(r.billed_to_type == "clinic")
+                        1
+                        for r, _ in all_reservations
+                        if bool(r.billed_to_type == "clinic")
                     ),
                     "insurance": sum(
-                        1 for r in reservations if bool(r.billed_to_type == "insurance")
+                        1
+                        for r, _ in all_reservations
+                        if bool(r.billed_to_type == "insurance")
                     ),
                 },
             }

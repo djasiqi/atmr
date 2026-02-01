@@ -4,17 +4,46 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
-import { baseURL, getAssignedTrips, getCompanyMessages, type Booking, type Message } from "./api";
+import { baseURL, getAssignedTrips, getCompanyMessages, refreshDriverTokenSingleflight, type Booking, type Message } from "./api";
 import { resolveBookingConflicts, resolveMessageConflicts, type Conflict } from "./conflictResolution";
 import { getSessionDiagHeaderValue, pushSessionEvent, setConnectionStateSuffix } from "./sessionJournal";
 import type { SessionEvent } from "./sessionJournal";
+import { getNetworkStateSnapshot } from "./networkState";
+import { extractAuthStatus } from "./socketAuthUtils";
+import { secureStorage } from "./storage";
+import { logAuthEvent } from "./authLogging";
 
-type SocketRole = "driver" | "enterprise";
+/** Rôle socket stable — source unique de vérité (éviter strings magiques). */
+export type SocketRole = "driver" | "enterprise";
 
 /** P0.3+ État connexion socket pour UI (ONLINE / RECONNECTING / OFFLINE). Jamais de logout sur disconnect. */
 export type ConnectionState = "ONLINE" | "RECONNECTING" | "OFFLINE";
 let connectionState: ConnectionState = "OFFLINE";
 let explicitDisconnect = false;
+
+/** P2.1.1 — Backoff + limite tentatives pour connect_error 401/403 (driver) */
+const MAX_DRIVER_AUTH_REFRESH_ATTEMPTS = 5;
+let driverConnectErrorAuthAttempts = 0;
+let driverConnectErrorAuthBackoffMs = 2000;
+/** P2.1.1b — Anti-concurrence : une seule tentative manuelle en vol. */
+let manualReconnectInProgress = false;
+/** P2.1.1b — Après 5 échecs : UI peut afficher "Connexion temps réel indisponible". */
+let authRecoveryExhausted = false;
+
+/** P2.1.2 — Enterprise : après 10 tentatives auto, Socket.IO stoppe → bouton Reconnecter. */
+let reconnectExhausted = false;
+
+export function getAuthRecoveryExhausted(): boolean {
+  return authRecoveryExhausted;
+}
+
+export function getReconnectExhausted(): boolean {
+  return reconnectExhausted;
+}
+
+export function getSocketRole(): SocketRole | null {
+  return socketRole;
+}
 
 // ✅ EventEmitter simple pour notifier les composants du resync
 class SimpleEventEmitter {
@@ -55,6 +84,56 @@ const bookingEmitter = new SimpleEventEmitter();
 
 // ✅ EventEmitter pour les événements de messages (team_chat_message)
 const messageEmitter = new SimpleEventEmitter();
+
+/** P2.1.2b — État socket pour UI (subscribe au lieu de polling). */
+export type SocketStatusPayload = {
+  role: SocketRole | null;
+  connectionState: ConnectionState;
+  reconnectExhausted: boolean;
+  authRecoveryExhausted: boolean;
+};
+
+type SocketStatusListener = (payload: SocketStatusPayload) => void;
+const socketStatusListeners = new Set<SocketStatusListener>();
+
+function getSocketStatusPayload(): SocketStatusPayload {
+  return {
+    role: socketRole,
+    connectionState,
+    reconnectExhausted,
+    authRecoveryExhausted,
+  };
+}
+
+/** Shallow hash pour dedupe — n'émettre que si l'état a changé. */
+function payloadHash(p: SocketStatusPayload): string {
+  return `${p.role}|${p.connectionState}|${p.reconnectExhausted}|${p.authRecoveryExhausted}`;
+}
+let lastEmittedHash: string | null = null;
+
+function emitSocketStatusChange() {
+  const payload = getSocketStatusPayload();
+  const hash = payloadHash(payload);
+  if (hash === lastEmittedHash) return;
+  lastEmittedHash = hash;
+  // Itérer sur copie pour éviter reentrancy (ex: listener appelle reconnectSocketManually)
+  const copy = Array.from(socketStatusListeners);
+  copy.forEach((cb) => {
+    try {
+      cb(payload);
+    } catch (e) {
+      console.warn("[socket] SocketStatus listener error:", e);
+    }
+  });
+}
+
+export function subscribeSocketStatus(listener: SocketStatusListener): () => void {
+  socketStatusListeners.add(listener);
+  listener(getSocketStatusPayload());
+  return () => {
+    socketStatusListeners.delete(listener); // Idempotent : delete 2× safe
+  };
+}
 
 // ✅ Set pour déduplication des event_id (persistant entre reconnexions)
 const seenEventIds = new Set<string>();
@@ -214,9 +293,9 @@ function buildOptions(
   role: SocketRole = "driver",
   extras?: SocketAuthExtras
 ) {
-  // ✅ Jitter anti-storm: ajouter variation aléatoire pour éviter reconnexions simultanées
-  const jitterDelay = Math.random() * 1000; // 0-1000ms
-  const jitterMax = Math.random() * 2000; // 0-2000ms
+  // ✅ P2.1.3: Jitter anti-storm (0–2000ms) pour éviter thundering herd
+  const jitterDelay = Math.random() * 2000; // 0–2000ms
+  const jitterMax = Math.random() * 2000; // 0–2000ms
   // ✅ P0.3: driver = retry infini; enterprise = 10 tentatives
   const reconnectionAttempts = role === "driver" ? Infinity : 10;
   const auth: Record<string, unknown> = { token };
@@ -289,6 +368,7 @@ export async function connectSocket(
   if (IS_DEV) enableSocketIODebug();
 
   socketRole = role;
+  emitSocketStatusChange();
 
   // ✅ Setup centralized booking event listeners
   function setupBookingListeners(s: Socket | null) {
@@ -417,6 +497,7 @@ export async function connectSocket(
     pushSessionEvent("SOCKET_CONNECTING");
     setConnectionStateSuffix("RECONN");
     connectionState = "RECONNECTING";
+    emitSocketStatusChange();
   }
 
   // ✅ R1: device_id + session_diag dans socket.auth pour corrélation backend (connect/disconnect)
@@ -450,12 +531,28 @@ export async function connectSocket(
       console.log(`[connectSocket] ✅ Socket créé:`, socket ? `id=${socket.id || 'pending'}` : 'NULL');
 
       socket.on("connect", async () => {
+        // ✅ P2.1.1: Reset backoff après connexion réussie
+        if (socketRole === "driver") {
+          driverConnectErrorAuthAttempts = 0;
+          driverConnectErrorAuthBackoffMs = 2000;
+          authRecoveryExhausted = false;
+        }
+        // ✅ P2.1.2: Reset reconnectExhausted après connexion réussie (enterprise)
+        if (socketRole === "enterprise") {
+          reconnectExhausted = false;
+        }
         // ✅ P0.3: SessionEvents + état UI (ONLINE / RECONN / OFF) — jamais de logout sur disconnect
         if (socketRole === "driver") {
           connectionState = "ONLINE";
           setConnectionStateSuffix("ONLINE");
           pushSessionEvent("SOCKET_CONNECTED");
+        } else if (socketRole === "enterprise") {
+          connectionState = "ONLINE";
+          setConnectionStateSuffix("ONLINE");
+          pushSessionEvent("SOCKET_CONNECTED");
         }
+        logAuthEvent("SOCKET_CONNECT", { role: socketRole, outcome: "success" });
+        emitSocketStatusChange();
         // ✅ Logs structurés
         console.log(JSON.stringify({
           event: "socket_connect",
@@ -761,7 +858,16 @@ export async function connectSocket(
                 event: "network_online",
                 timestamp: new Date().toISOString()
               }));
-              // Socket.IO reconnecte automatiquement
+              // Reconnecter explicitement (Socket.IO ne le fait pas toujours après disconnect manuel)
+              try {
+                currentSocket?.connect();
+              } catch (e) {
+                console.warn(JSON.stringify({
+                  event: "network_online_reconnect_failed",
+                  error: e instanceof Error ? e.message : String(e),
+                  timestamp: new Date().toISOString()
+                }));
+              }
             }
           });
         }
@@ -770,12 +876,18 @@ export async function connectSocket(
       });
 
       socket.on("disconnect", (reason) => {
+        logAuthEvent("SOCKET_DISCONNECT", {
+          role: socketRole,
+          reason: String(reason),
+          explicit: explicitDisconnect,
+        });
         // ✅ P0.3: SessionEvents — jamais de logout sur disconnect
         if (socketRole === "driver") {
           pushSessionEvent(("SOCKET_DISCONNECTED:" + String(reason)) as SessionEvent);
           if (!explicitDisconnect) {
             connectionState = "RECONNECTING";
             setConnectionStateSuffix("RECONN");
+            emitSocketStatusChange();
           }
         }
         // ✅ Logs structurés
@@ -801,10 +913,40 @@ export async function connectSocket(
         }
       });
 
-      // ✅ P0.3: reconnect_attempt (Manager socket.io) — SessionEvent pour observabilité
+      // ✅ P0.3 + P2.1.2: reconnect_attempt (Manager) — SessionEvent + fallback enterprise exhausted
+      let enterpriseReconnectAttemptCount = 0;
+      const ENTERPRISE_MAX_ATTEMPTS = 10;
       (socket as any).io?.on?.("reconnect_attempt", (n: number) => {
         if (socketRole === "driver") {
           pushSessionEvent(("SOCKET_RECONNECT_ATTEMPT:" + n) as SessionEvent);
+        }
+        if (socketRole === "enterprise") {
+          enterpriseReconnectAttemptCount = n;
+          if (n >= ENTERPRISE_MAX_ATTEMPTS && !(socket?.connected)) {
+            if (!reconnectExhausted) {
+              logAuthEvent("SOCKET_RECONNECT_EXHAUSTED", { role: "enterprise" });
+            }
+            reconnectExhausted = true;
+            pushSessionEvent("SOCKET_RECONNECT_FAILED");
+            emitSocketStatusChange();
+          }
+        }
+      });
+
+      // ✅ P2.1.2: reconnect_failed (Manager) — enterprise : 10 tentatives épuisées → bouton Reconnecter
+      (socket as any).io?.on?.("reconnect_failed", () => {
+        if (socketRole === "enterprise") {
+          if (!reconnectExhausted) {
+            logAuthEvent("SOCKET_RECONNECT_EXHAUSTED", { role: "enterprise" });
+          }
+          reconnectExhausted = true;
+          pushSessionEvent("SOCKET_RECONNECT_FAILED");
+          console.log(JSON.stringify({
+            event: "socket_reconnect_failed",
+            role: "enterprise",
+            reconnectExhausted: true,
+            timestamp: new Date().toISOString()
+          }));
         }
       });
 
@@ -815,6 +957,12 @@ export async function connectSocket(
           connectionState = "ONLINE";
           setConnectionStateSuffix("ONLINE");
         }
+        // ✅ P2.1.2: Reset reconnectExhausted après reconnexion réussie (enterprise)
+        if (socketRole === "enterprise") {
+          reconnectExhausted = false;
+          enterpriseReconnectAttemptCount = 0;
+        }
+        emitSocketStatusChange();
         // ✅ Logs structurés
         console.log(JSON.stringify({
           event: "socket_reconnect",
@@ -846,22 +994,29 @@ export async function connectSocket(
 
       socket.on("connect_error", (err: any) => {
         const errorMsg = (err?.message || String(err)).slice(0, 200);
+        const authStatus = extractAuthStatus(err);
+        logAuthEvent("SOCKET_CONNECT_ERROR", {
+          role: socketRole,
+          message_truncated: errorMsg,
+          ...(authStatus != null ? { status: authStatus } : {}),
+        });
         if (socketRole === "driver") {
           pushSessionEvent(("SOCKET_CONNECT_ERROR:" + errorMsg) as SessionEvent);
           setConnectionStateSuffix("RECONN");
           connectionState = "RECONNECTING";
+          emitSocketStatusChange();
         }
-        const isRateLimit = errorMsg.includes("rate limit") || 
+        const isRateLimit = errorMsg.includes("rate limit") ||
                            errorMsg.includes("Trop de tentatives") ||
                            errorMsg.includes("retry_after");
-        
+
         console.error(JSON.stringify({
           event: "socket_connect_error",
           error: errorMsg,
           is_rate_limit: isRateLimit,
           timestamp: new Date().toISOString()
         }));
-        
+
         // ✅ Si rate limit, désactiver reconnexion automatique pour éviter boucle
         if (isRateLimit && socket && socket.io) {
           console.warn(JSON.stringify({
@@ -881,7 +1036,71 @@ export async function connectSocket(
             }
           }, 30000);
         }
-        
+
+        // ✅ P2.1.1: connect_error 401/403 → refresh singleflight + reconnect (driver, sans logout)
+        const network = getNetworkStateSnapshot();
+        const isOnline = network?.isConnected !== false;
+        // Garde offline : ne pas tenter refresh si réseau down (battery drain)
+        const isDriverAuthError =
+          socketRole === "driver" &&
+          (authStatus === 401 || authStatus === 403) &&
+          isOnline &&
+          driverConnectErrorAuthAttempts < MAX_DRIVER_AUTH_REFRESH_ATTEMPTS &&
+          !manualReconnectInProgress;
+
+        if (isDriverAuthError && socket && socket.io) {
+          manualReconnectInProgress = true;
+          driverConnectErrorAuthAttempts++;
+          const wasReconnection = (socket.io.opts as any).reconnection;
+          (socket.io.opts as any).reconnection = false;
+          const backoffMs = Math.min(driverConnectErrorAuthBackoffMs, 60000);
+          driverConnectErrorAuthBackoffMs = Math.min(driverConnectErrorAuthBackoffMs * 2, 60000);
+
+          pushSessionEvent("SOCKET_AUTH_REFRESH_ATTEMPT");
+          pushSessionEvent(`SOCKET_RECONNECT_BACKOFF:${backoffMs}` as SessionEvent);
+
+          setTimeout(async () => {
+            try {
+              const newToken = await refreshDriverTokenSingleflight();
+              pushSessionEvent("SOCKET_AUTH_REFRESH_SUCCESS");
+              if (socket?.auth && typeof socket.auth === "object") {
+                (socket.auth as Record<string, unknown>).token = newToken;
+              }
+              if (!socket?.connected) {
+                socket?.connect();
+              }
+            } catch (refreshErr: unknown) {
+              const refreshStatus = (refreshErr as { response?: { status?: number } })?.response?.status;
+              const isAuthInvalid = (refreshErr as { reason?: string })?.reason?.includes("refresh_rejected");
+              if (refreshStatus === 401 || refreshStatus === 403 || isAuthInvalid) {
+                connectPromise = null;
+                reject(refreshErr);
+              } else {
+                connectPromise = null;
+                reject(err);
+              }
+            } finally {
+              manualReconnectInProgress = false;
+              if (driverConnectErrorAuthAttempts >= MAX_DRIVER_AUTH_REFRESH_ATTEMPTS) {
+                if (!authRecoveryExhausted) {
+                  logAuthEvent("SOCKET_AUTH_RECOVERY_EXHAUSTED", { role: "driver" });
+                }
+                authRecoveryExhausted = true;
+                pushSessionEvent("SOCKET_AUTH_RECOVERY_EXHAUSTED");
+                emitSocketStatusChange();
+                if (socket?.io) {
+                  (socket.io.opts as any).reconnection = wasReconnection ?? true;
+                }
+              } else {
+                if (socket?.io) {
+                  (socket.io.opts as any).reconnection = wasReconnection ?? true;
+                }
+              }
+            }
+          }, backoffMs);
+          return;
+        }
+
         connectPromise = null;
         reject(err);
       });
@@ -1122,12 +1341,41 @@ export function disconnectSocket() {
     socketRole = null;
     connectPromise = null;
     lastHeartbeat = Date.now();
+    reconnectExhausted = false; // P2.1.2: reset on explicit disconnect
   }
 }
 
 /** P0.3: État connexion pour l'UI (ONLINE / RECONNECTING / OFFLINE). OFFLINE = logout explicite ou jamais connecté. */
 export function getConnectionState(): ConnectionState {
   return connectionState;
+}
+
+/** P2.1.2: Reconnexion manuelle après reconnect_failed (enterprise) ou authRecoveryExhausted (driver). */
+export async function reconnectSocketManually(role: SocketRole): Promise<Socket | null> {
+  let token: string | null = null;
+  if (role === "driver") {
+    token = await secureStorage.getAccessToken();
+  } else {
+    token = await secureStorage.getEnterpriseToken();
+  }
+  if (!token) {
+    console.warn(JSON.stringify({
+      event: "reconnect_socket_manual_no_token",
+      role,
+      timestamp: new Date().toISOString()
+    }));
+    return null;
+  }
+  // Réinitialiser flags avant tentative
+  if (role === "enterprise") {
+    reconnectExhausted = false;
+  } else {
+    authRecoveryExhausted = false;
+  }
+  connectionState = "RECONNECTING";
+  setConnectionStateSuffix("RECONN");
+  emitSocketStatusChange();
+  return connectSocket(token, role);
 }
 
 // ✅ Heartbeat métier : envoie métadonnées métier toutes les 60s

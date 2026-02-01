@@ -9,8 +9,8 @@ const WIDTH_LG = 1024;
 const CONTENT_MAX_PHONE = 400;
 const CONTENT_MAX_TABLET = 520;
 const CONTENT_MAX_DESKTOP = 600;
-const HORIZONTAL_PADDING = 20;
-const MAP_HEIGHT_PHONE = 180;
+const HORIZONTAL_PADDING = 16;
+const MAP_HEIGHT_PHONE = 150;
 const MAP_HEIGHT_TABLET = 260;
 const MAP_HEIGHT_MAX = 320;
 
@@ -35,7 +35,7 @@ export function useMissionLayout(): MissionLayout {
   const { width, height } = useWindowDimensions();
 
   return useMemo(() => {
-    const horizontalPadding = Math.max(16, Math.min(HORIZONTAL_PADDING, width * 0.05));
+    const horizontalPadding = Math.max(12, Math.min(HORIZONTAL_PADDING, width * 0.05));
     const isTablet = width >= WIDTH_MD;
     const isLargeScreen = width >= WIDTH_LG;
 

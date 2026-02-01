@@ -385,6 +385,7 @@ class UpdateDriverBookingStatusUseCase:
                         company_id=booking.company_id,
                         actor_role="driver",
                         actor_id=cmd.driver_id,
+                        source="driver_api",
                     )
                 )
             except Exception as e:

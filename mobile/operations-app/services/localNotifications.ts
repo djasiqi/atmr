@@ -78,6 +78,29 @@ export async function scheduleMissionReminder(
         ? `${booking.pickup_location} → ${booking.dropoff_location}`
         : booking.pickup_location;
 
+    // Format trigger valide pour expo-notifications (évite "trigger object invalid")
+    const secondsFromNow = Math.max(
+      1,
+      Math.floor((reminderTime.getTime() - Date.now()) / 1000)
+    );
+    const trigger =
+      secondsFromNow <= 60 * 60 * 24
+        ? ({
+            type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+            seconds: secondsFromNow,
+            repeats: false,
+            ...(Platform.OS === "android" && {
+              channelId: NotificationChannel.MISSIONS,
+            }),
+          } as Notifications.TimeIntervalTriggerInput)
+        : ({
+            type: Notifications.SchedulableTriggerInputTypes.DATE,
+            date: reminderTime,
+            ...(Platform.OS === "android" && {
+              channelId: NotificationChannel.MISSIONS,
+            }),
+          } as Notifications.DateTriggerInput);
+
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
         title:
@@ -99,7 +122,7 @@ export async function scheduleMissionReminder(
           channelId: NotificationChannel.MISSIONS,
         }),
       },
-      trigger: { date: reminderTime } as any,
+      trigger,
     });
 
     // Sauvegarder le mapping

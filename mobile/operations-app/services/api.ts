@@ -4,11 +4,14 @@ import { Platform } from "react-native";
 import axios, { isAxiosError } from "axios";
 import { secureStorage, asyncStorage } from "./storage";
 import {
+  AuthInvalidError,
   AuthNotReadyError,
   isPublicEndpoint,
   reportAuthNotReadyMetric,
 } from "@/services/authGuards";
+import { logAuthEvent, beginRefreshCycle } from "@/services/authLogging";
 import { notifyAuthNotReady, isAuthReadySync } from "@/services/authSync";
+import { invokeForceLogoutDriver } from "@/services/authController";
 import {
   getSessionDiagHeaderValue,
   pushSessionEvent,
@@ -57,11 +60,11 @@ const ENV_PORT = process.env.EXPO_PUBLIC_BACKEND_PORT;
 const PORT = ENV_PORT || expoExtra.backendPort || "5000";
 
 // En développement, forcer l'utilisation de getDevHost() pour éviter de pointer vers la production
-// Surtout important sur le web où on doit utiliser localhost
+// Surtout important sur le web où on doit utiliser l'hôte local
 const getDevBaseURL = () => {
   if (Platform.OS === 'web') {
-    // Sur le web, toujours utiliser localhost en développement
-    return `http://localhost:${PORT}`;
+    // Sur le web : utiliser 127.0.0.1 (évite les problèmes IPv6/localhost sur Windows + Docker)
+    return `http://127.0.0.1:${PORT}`;
   }
   // Sur mobile, utiliser getDevHost() pour détecter l'IP locale
   return `http://${getDevHost()}:${PORT}`;
@@ -523,6 +526,11 @@ api.interceptors.request.use(
           reason: "missing_access_token",
           url: config.url,
         });
+        logAuthEvent("AUTH_ACCESS_ABSENT", {
+          kind: "driver",
+          reason: "missing_access_token",
+          url: config.url?.slice(0, 100),
+        });
       }
       throw new AuthNotReadyError({
         kind: "driver",
@@ -647,15 +655,21 @@ api.interceptors.response.use(
       // Ne pas déconnecter pour erreurs réseau temporaires
       if (refreshStatus === 401 || refreshStatus === 403) {
         pushSessionEvent("REFRESH_FAIL");
+        logAuthEvent("AUTH_REFRESH_FAIL", {
+          route: "driver",
+          status: refreshStatus,
+          refresh_attempted: true,
+          outcome: "logout",
+          source: "refresh_endpoint",
+        });
         console.error(
           `[API Interceptor] ❌ Refresh token échoué (${refreshStatus}):`,
           error.response?.data || error.message
         );
-        await secureStorage.clearAll();
-        await asyncStorage.clearAuth();
-        invalidateInterceptorCache();
-        notifyAuthNotReady();
-        return Promise.reject(error);
+        const reason = refreshStatus === 401 ? "refresh_rejected_401" : "refresh_rejected_403";
+        processQueue(new AuthInvalidError({ route: "driver", reason }), null);
+        await invokeForceLogoutDriver(reason);
+        return Promise.reject(new AuthInvalidError({ route: "driver", reason }));
       } else if (isNetworkError) {
         // Erreur réseau → ne pas déconnecter, juste rejeter
         console.warn(
@@ -679,6 +693,12 @@ api.interceptors.response.use(
       // ✅ P0.2: Si déjà en train de refresh, attendre le même (singleflight) puis rejouer
       if (isRefreshing) {
         pushSessionEvent("REFRESH_WAIT");
+        logAuthEvent("AUTH_401_HANDLING", {
+          route: "driver",
+          refresh_attempted: true,
+          outcome: "wait_inflight",
+          queue_count: failedQueue.length + 1,
+        });
         if (__DEV__) {
           console.log(
             `[API Interceptor] REFRESH_WAIT — requête en file (refresh_inflight_count=${failedQueue.length + 1})`
@@ -698,10 +718,13 @@ api.interceptors.response.use(
       originalRequest._retry = true;
       isRefreshing = true;
       pushSessionEvent("REFRESH_START");
+      const refreshCycleId = beginRefreshCycle("driver");
+      logAuthEvent("AUTH_REFRESH_START", { route: "driver", trigger: "api_401", refresh_cycle_id: refreshCycleId });
 
       try {
         const newAccessToken = await refreshDriverTokenSingleflight();
         pushSessionEvent("REFRESH_SUCCESS");
+        logAuthEvent("AUTH_REFRESH_SUCCESS", { route: "driver" });
         if (__DEV__) {
           console.log(
             `[API Interceptor] Token refreshed, cache updated. New token cached.`
@@ -737,22 +760,29 @@ api.interceptors.response.use(
             "[API Interceptor] 🚫 Refresh token expiré/invalide (401). Déconnexion forcée."
           );
 
-          processQueue(refreshError, null);
-          await secureStorage.clearAll();
-          await asyncStorage.clearAuth();
-          invalidateInterceptorCache();
-          notifyAuthNotReady();
-          return Promise.reject(refreshError);
+          const reason = "refresh_rejected_401";
+          processQueue(new AuthInvalidError({ route: "driver", reason }), null);
+          await invokeForceLogoutDriver(reason);
+          return Promise.reject(new AuthInvalidError({ route: "driver", reason }));
         } else if (isNetworkError) {
-          // Erreur réseau temporaire → ne pas déconnecter, juste rejeter l'erreur
-          // L'utilisateur reste connecté et pourra réessayer plus tard
+          logAuthEvent("AUTH_REFRESH_FAIL", {
+            route: "driver",
+            status: "network",
+            refresh_attempted: true,
+            outcome: "retry_later",
+          });
           console.warn(
             "[API Interceptor] ⚠️ Erreur réseau lors du refresh token. Utilisateur reste connecté. La requête originale échouera mais l'utilisateur ne sera pas déconnecté."
           );
           processQueue(refreshError, null);
           return Promise.reject(refreshError);
         } else {
-          // Autres erreurs (500, etc.) → ne pas déconnecter non plus
+          logAuthEvent("AUTH_REFRESH_FAIL", {
+            route: "driver",
+            status: refreshStatus ?? "unknown",
+            refresh_attempted: true,
+            outcome: "retry_later",
+          });
           console.warn(
             `[API Interceptor] ⚠️ Erreur serveur lors du refresh token (status: ${refreshStatus}). Utilisateur reste connecté.`
           );
@@ -1391,6 +1421,10 @@ export type Booking = {
   pickup_lon?: number;
   dropoff_lat?: number;
   dropoff_lon?: number;
+  /** Type de mission : patient_transport | material_delivery */
+  mission_type?: "patient_transport" | "material_delivery";
+  /** Description de la livraison (requis si mission_type === material_delivery) */
+  delivery_description?: string | null;
   [key: string]: any;
 };
 

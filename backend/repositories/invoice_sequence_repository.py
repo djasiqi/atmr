@@ -101,6 +101,9 @@ class InvoiceSequenceRepository:
     def increment_sequence(self, sequence_id: int) -> InvoiceSequenceDTO:
         """Incrémente la séquence et retourne la nouvelle valeur.
 
+        Utilise SELECT ... FOR UPDATE pour éviter les conditions de concurrence
+        où deux requêtes obtiendraient le même numéro de facture.
+
         Args:
             sequence_id: ID de la séquence
 
@@ -112,7 +115,10 @@ class InvoiceSequenceRepository:
         """
         from ext import db
 
-        sequence = InvoiceSequence.query.get(sequence_id)
+        # ✅ Verrouiller la ligne pour éviter les doublons de numéro (race condition)
+        sequence = (
+            InvoiceSequence.query.filter_by(id=sequence_id).with_for_update().first()
+        )
         if not sequence:
             msg = f"Séquence {sequence_id} non trouvée"
             raise ValueError(msg)

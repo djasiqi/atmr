@@ -5,11 +5,11 @@ Fournit des helpers pour valider les entrées et retourner des erreurs structur�
 
 from typing import Any, Dict, cast
 
-from marshmallow import (  # pyright: ignore[reportMissingImports]
+from marshmallow import (
     Schema,
     ValidationError,
 )
-from marshmallow.validate import Length  # pyright: ignore[reportMissingImports]
+from marshmallow.validate import Length
 
 
 def validate_request(
@@ -51,6 +51,9 @@ def _format_validation_errors(errors: Dict[str, Any]) -> Dict[str, Any]:
         }
     }
 
+    Si _error_code et _details sont présents (ex: MATERIAL_DELIVERY_DESCRIPTION_REQUIRED),
+    ajoute error, error_code, details pour harmoniser avec les erreurs API (A, C).
+
     Args:
         errors: Messages d'erreur bruts de Marshmallow
 
@@ -61,6 +64,22 @@ def _format_validation_errors(errors: Dict[str, Any]) -> Dict[str, Any]:
         "message": "Erreur de validation des données",
         "errors": {},
     }
+
+    # Harmonisation B : error_code + details (contrat unifié avec A, C)
+    error_code = errors.get("_error_code")
+    details = errors.get("_details")
+    if error_code and isinstance(details, dict):
+        first_field = next(
+            (k for k in errors if not k.startswith("_")),
+            None,
+        )
+        first_msg = ""
+        if first_field:
+            msgs = errors[first_field]
+            first_msg = msgs[0] if isinstance(msgs, list) and msgs else str(msgs)
+        formatted["error"] = first_msg or "Erreur de validation"
+        formatted["error_code"] = error_code
+        formatted["details"] = details
 
     for field, messages in errors.items():
         # ⚡ Ignorer les clés spéciales de Marshmallow (_schema, _nested, etc.)
@@ -194,8 +213,11 @@ def handle_validation_error(error: ValidationError):
     Returns:
         Tuple (response_json, status_code) pour Flask
     """
-    formatted = _format_validation_errors(cast(Dict[str, Any], error.messages))
-    # Retourner un dict brut pour laisser Flask-RESTX sérialiser correctement
+    messages = cast(Dict[str, Any], error.messages)
+    # Déjà formaté par validate_request (error_code présent) → retourner tel quel
+    if "error_code" in messages:
+        return messages, 400
+    formatted = _format_validation_errors(messages)
     return formatted, 400
 
 

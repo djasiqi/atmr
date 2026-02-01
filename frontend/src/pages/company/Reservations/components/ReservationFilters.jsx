@@ -6,8 +6,6 @@ const ReservationFilters = ({
   setSelectedDay,
   searchTerm,
   setSearchTerm,
-  statusFilter,
-  setStatusFilter,
   sortOrder,
   setSortOrder,
   searchInputRef,
@@ -16,26 +14,21 @@ const ReservationFilters = ({
   const [startDate, setStartDate] = React.useState('');
   const [endDate, setEndDate] = React.useState('');
 
-  // Fonction pour réinitialiser tous les filtres
-  const handleResetFilters = () => {
-    setSelectedDay('all');
-    setDateMode('all');
-    setStartDate('');
-    setEndDate('');
-    setSearchTerm('');
-    setStatusFilter('all');
-    setSortOrder('desc');
-  };
-
-  // Vérifier si des filtres sont actifs
-  const hasActiveFilters =
-    selectedDay !== 'all' ||
-    dateMode !== 'all' ||
-    startDate !== '' ||
-    endDate !== '' ||
-    searchTerm !== '' ||
-    statusFilter !== 'all' ||
-    sortOrder !== 'desc';
+  // Sync dateMode avec selectedDay quand le parent change (ex: reset)
+  React.useEffect(() => {
+    if (selectedDay === 'all') {
+      setDateMode('all');
+      setStartDate('');
+      setEndDate('');
+    } else if (selectedDay && selectedDay.includes(':')) {
+      const [s, e] = selectedDay.split(':');
+      setDateMode('range');
+      setStartDate(s || '');
+      setEndDate(e || '');
+    } else if (selectedDay) {
+      setDateMode('single');
+    }
+  }, [selectedDay]);
 
   // Gérer le changement de mode de date
   const handleDateModeChange = (mode) => {
@@ -62,17 +55,31 @@ const ReservationFilters = ({
 
   return (
     <>
-      <div className={styles.filtersHeader}>
-        <h3>🔍 Filtres et Recherche</h3>
-        {hasActiveFilters && (
-          <button
-            onClick={handleResetFilters}
-            className={styles.resetButton}
-            title="Réinitialiser tous les filtres"
-          >
-            ✖ Réinitialiser
-          </button>
-        )}
+      <div className={styles.filters}>
+        <div className={styles.searchBox}>
+          <label className={styles.searchLabel}>🔍 Recherche globale</label>
+          <div className={styles.searchContainer}>
+            <input
+              type="text"
+              placeholder="ID, prénom, nom, adresse (rue, restaurant...), clinique, HUG, docteur, date (13.01, 13/01, 13 janvier)..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className={styles.searchInput}
+              ref={searchInputRef}
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className={styles.clearSearchButton}
+                title="Effacer la recherche"
+              >
+                ✖
+              </button>
+            )}
+          </div>
+        </div>
+
       </div>
 
       <div className={styles.filtersRow}>
@@ -136,47 +143,6 @@ const ReservationFilters = ({
               </div>
             )}
           </div>
-        </div>
-
-        <div className={styles.filterGroup}>
-          <label>🔍 Recherche globale</label>
-          <div className={styles.searchContainer}>
-            <input
-              type="text"
-              placeholder="ID, client, email, téléphone, adresse, chauffeur..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className={styles.searchInput}
-              ref={searchInputRef}
-            />
-            {searchTerm && (
-              <button
-                type="button"
-                onClick={() => setSearchTerm('')}
-                className={styles.clearSearchButton}
-                title="Effacer la recherche"
-              >
-                ✖
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className={styles.filterGroup}>
-          <label>📊 Statut</label>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className={styles.selectInput}
-          >
-            <option value="all">Tous les statuts</option>
-            <option value="pending">⏳ En attente</option>
-            <option value="accepted">✅ Acceptée</option>
-            <option value="assigned">👤 Assignée</option>
-            <option value="in_progress">🚗 En cours</option>
-            <option value="completed">✔️ Terminée</option>
-            <option value="canceled">❌ Annulée</option>
-          </select>
         </div>
 
         <div className={styles.filterGroup}>

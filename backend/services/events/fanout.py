@@ -7,6 +7,8 @@ et garantir la cohérence entre Socket.IO (foreground) et Push notifications (ba
 
 from __future__ import annotations
 
+import os
+import re
 from datetime import datetime
 from typing import Any, Dict
 
@@ -53,6 +55,7 @@ def _get_notification_channel(notification_type: str) -> str:
     Correspond aux canaux définis côté mobile:
     - critical: Urgences, accidents
     - missions: Missions, retards
+    - missions_v2: H2 — canal debug pour contourner channel legacy (PUSH_PROOF=1)
     - messages: Chat, communications
     - info: Stats, informations générales
     """
@@ -61,8 +64,10 @@ def _get_notification_channel(notification_type: str) -> str:
         "accident": "critical",
         "emergency": "critical",
         "booking": "missions",
+        "booking_assigned": "missions",
         "booking_updated": "missions",
         "booking_cancelled": "missions",
+        "booking_reassigned": "missions",
         "delay": "missions",
         "message": "messages",
         "team_chat_message": "messages",
@@ -71,7 +76,22 @@ def _get_notification_channel(notification_type: str) -> str:
         "info": "info",
     }
 
-    return channel_mapping.get(notification_type, "missions")
+    base = channel_mapping.get(notification_type, "missions")
+
+    # H2: Channel version bump — missions_v2 pour contourner channel legacy
+    # (Android ne met pas à jour un channel déjà créé en DEFAULT/LOW)
+    # Fallback auto en dev/staging ; PUSH_PROOF=1 en prod (feature flag)
+    if base == "missions":
+        push_proof = os.environ.get("PUSH_PROOF", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+        flask_env = os.environ.get("FLASK_ENV", "").strip().lower()
+        if push_proof or flask_env in ("development", "staging"):
+            return "missions_v2"
+
+    return base
 
 
 def _get_notification_category(notification_type: str) -> str | None:
@@ -125,6 +145,62 @@ def _get_notification_thread_id(notification_type: str) -> str | None:
     }
 
     return thread_mapping.get(notification_type)
+
+
+def _log_push_fanout(
+    *,
+    event_type: str,
+    booking_id: int,
+    actor_role: str | None,
+    driver_id_target: int,
+    company_id_target: int,
+) -> None:
+    """Log structuré PUSH_FANOUT avant envoi pour traçabilité.
+
+    Args:
+        event_type: Type d'événement (booking_assigned, booking_updated, etc.)
+        booking_id: ID de la mission
+        actor_role: Rôle de l'initiateur (driver, dispatcher, system)
+        driver_id_target: ID chauffeur cible (0 si push company uniquement)
+        company_id_target: ID entreprise cible (0 si push driver uniquement)
+    """
+    driver_tokens_count = 0
+    company_tokens_count = 0
+    company_user_id_target = 0
+    try:
+        if driver_id_target:
+            from models import DeviceToken
+
+            driver_tokens_count = DeviceToken.query.filter_by(
+                driver_id=driver_id_target,
+                is_active=True,
+            ).count()
+        if company_id_target:
+            from models import Company, User
+
+            company = Company.query.get(company_id_target)
+            if company:
+                company_user_id_target = int(company.user_id or 0)
+                company_user = (
+                    User.query.get(company.user_id) if company.user_id else None
+                )
+                company_tokens_count = (
+                    1
+                    if company_user and getattr(company_user, "push_token", None)
+                    else 0
+                )
+    except Exception:
+        pass  # Ne pas faire échouer le fanout si le log échoue
+    app_logger.info(
+        "PUSH_FANOUT event_type=%s booking_id=%s actor_role=%s driver_id_target=%s company_user_id_target=%s driver_tokens_count=%s company_tokens_count=%s",
+        event_type,
+        booking_id,
+        actor_role or "",
+        driver_id_target,
+        company_user_id_target,
+        driver_tokens_count,
+        company_tokens_count,
+    )
 
 
 def _get_recipient_discreet_mode(
@@ -184,6 +260,14 @@ def _send_push_to_driver(
     """
     success = False
     try:
+        # ✅ Garde dur "assigned driver only" : empêcher broadcast accidentel
+        if not driver_id or driver_id <= 0:
+            app_logger.warning(
+                "PUSH_FANOUT_ABORT driver_id_missing driver_id=%s (invalid/falsy)",
+                driver_id,
+            )
+            return False
+
         # ✅ AMÉLIORATION: Vérifier la déduplication avant d'envoyer
         notification_type = data.get("type", "unknown") if data else "unknown"
 
@@ -301,7 +385,8 @@ def _send_push_to_driver(
                         error_msg,
                     )
 
-                    # ✅ CORRECTIF #3: Invalider ce token spécifique (pas tous les tokens du driver)
+                    # Push token invalidation: DeviceToken.is_active is the source of truth.
+                    # (No legacy driver.push_token invalidation — see push.py docstring.)
                     if result.get("token_invalid"):
                         device_token.is_active = False
                         db.session.commit()
@@ -385,11 +470,61 @@ def _send_push_to_company(
             else:
                 push_token = getattr(company_user, "push_token", None)
                 if not push_token:
+                    app_logger.warning(
+                        "PUSH_COMPANY_TOKEN_MISSING company_id=%s company_user_id_target=%s",
+                        company_id,
+                        company.user_id,
+                    )
                     app_logger.debug(
                         "[event_fanout] Company user %s has no push_token, push skipped",
                         company.user_id,
                     )
                 else:
+                    # P0.4: Recipient proof logging (DEBUG_NOTIF_ROUTING)
+                    from services.notifications.token_audit import (
+                        _token_hash,
+                        check_token_collision,
+                        log_push_recipient_proof,
+                    )
+
+                    token_hash = _token_hash(push_token)
+                    log_push_recipient_proof(
+                        trace_id=data.get("trace_id"),
+                        booking_id=data.get("booking_id"),
+                        status=data.get("status"),
+                        recipient_role="company",
+                        recipient_id=company.user_id or company_id,
+                        token_count=1,
+                        token_hashes=[token_hash],
+                        collapse_key=data.get("collapse_key"),
+                        dedupe_key=data.get("dedupe_key"),
+                        routing_version=data.get("routing_version"),
+                        routing_decision=data.get("routing_decision"),
+                        source=data.get("source"),
+                        actor_role=data.get("actor_role"),
+                        actor_id=data.get("actor_id"),
+                    )
+                    # P0.4: Détection collision token (driver vs company)
+                    driver_id_from_booking = data.get("driver_id")
+                    if driver_id_from_booking:
+                        from models import DeviceToken
+
+                        driver_tokens = [
+                            dt.token
+                            for dt in DeviceToken.query.filter_by(
+                                driver_id=int(driver_id_from_booking),
+                                is_active=True,
+                            ).all()
+                            if dt.token
+                        ]
+                        check_token_collision(
+                            driver_tokens=driver_tokens,
+                            company_token=push_token,
+                            driver_id=int(driver_id_from_booking),
+                            company_user_id=company.user_id,
+                            trace_id=data.get("trace_id"),
+                        )
+
                     result = send_push_message(
                         token=push_token,
                         title=title,
@@ -415,12 +550,13 @@ def _send_push_to_company(
             type(e).__name__,
             e,
         )
-    except (ConnectionError, OSError) as e:
+    except (ConnectionError, OSError, TimeoutError) as e:
         app_logger.error(
             "[event_fanout] Push failed (network error: %s): %s",
             type(e).__name__,
             e,
         )
+        raise  # P1: Propager pour que Celery task puisse retry
     except Exception:
         app_logger.exception("[event_fanout] Push failed")
 
@@ -506,6 +642,13 @@ def fanout_booking_assigned_to_driver(
         push_ctx.get("pickup_location") or push_ctx.get("pickup_address") or "-",
     )
 
+    _log_push_fanout(
+        event_type="booking_assigned",
+        booking_id=booking_id,
+        actor_role="dispatcher",
+        driver_id_target=driver_id,
+        company_id_target=0,
+    )
     result = _send_push_to_driver(
         driver_id=driver_id,
         title=msg["title"],
@@ -563,11 +706,20 @@ def fanout_booking_assigned_to_company(
         "company",
         discrete_mode=discrete,
     )
-    _send_push_to_company(
+    if os.environ.get("DEBUG_NOTIF_ROUTING", "").lower() in ("1", "true", "yes"):
+        app_logger.info(
+            "[event_fanout] push_company_enqueued company_id=%s event=booking_assigned",
+            company_id,
+        )
+    from tasks.notification_tasks import send_push_company_notification_task
+
+    data = dict(msg["data"])
+    data["recipient_role"] = "company"
+    send_push_company_notification_task.delay(
         company_id=company_id,
         title=msg["title"],
         body=msg["body"],
-        data=msg["data"],
+        data=data,
     )
 
 
@@ -577,12 +729,23 @@ def fanout_booking_updated(
     booking_data: Dict[str, Any] | None = None,
     *,
     send_push: bool = True,
+    exclude_driver_id: int | None = None,
 ) -> None:
     """Fan-out hybride pour une mise à jour de mission (Company→Driver).
 
     Templates: assign, time_change, address_change, cancel.
     Anti-spam: collapse_key, dedupe_key, throttle.
+
+    Args:
+        exclude_driver_id: Si driver_id == exclude_driver_id, skip socket+push (actor).
     """
+    if exclude_driver_id is not None and int(driver_id) == int(exclude_driver_id):
+        app_logger.debug(
+            "[event_fanout] fanout_booking_updated skipped (exclude_actor driver_id=%s)",
+            driver_id,
+        )
+        return
+
     # 1. Socket.IO (foreground)
     try:
         base_data: Dict[str, Any] = booking_data or {"id": booking_id}
@@ -672,7 +835,29 @@ def fanout_booking_updated(
         data = dict(msg["data"])
         data["collapse_key"] = msg["collapse_key"]
         data["dedupe_key"] = msg["dedupe_key"]
+        data["routing_version"] = 2
+        data["routing_decision"] = "driver_only"
+        data["recipient_role"] = "driver"
+        if ctx.get("trace_id"):
+            data["trace_id"] = ctx["trace_id"]
+        if ctx.get("actor_role") is not None:
+            data["actor_role"] = ctx["actor_role"]
+        if ctx.get("actor_id") is not None:
+            data["actor_id"] = ctx["actor_id"]
 
+        _log_push_fanout(
+            event_type="booking_updated",
+            booking_id=booking_id,
+            actor_role=ctx.get("actor_role"),
+            driver_id_target=driver_id,
+            company_id_target=0,
+        )
+        if os.environ.get("DEBUG_NOTIF_ROUTING", "").lower() in ("1", "true", "yes"):
+            app_logger.info(
+                "[event_fanout] PUSH_DRIVER collapse_key=%s dedupe_key=%s routing_decision=driver_only",
+                msg["collapse_key"],
+                msg.get("dedupe_key"),
+            )
         _send_push_to_driver(
             driver_id=driver_id,
             title=msg["title"],
@@ -723,15 +908,24 @@ def fanout_booking_updated_to_company(
         )
 
         # Anti-spam: dedup + throttle
+        # ✅ P0: Scope par status pour permettre en_route, in_progress, completed, etc.
+        # (max=1 sur booking_{id} bloquait toutes les pushes après la première)
         from services.notifications.dedup_throttle import check_dedup_and_throttle
+
+        # Normaliser status pour scope Redis : [\s-]+ → _, strip
+        raw = (status or "misc").lower()
+        status_slug = re.sub(r"[\s\-]+", "_", raw).strip("_") or "misc"
+        throttle_scope = f"booking_{booking_id}:status_{status_slug}"
+        throttle_window = 60  # 60s pour absorber retries sans bloquer status successifs
+        throttle_max = 2  # 2 par status/window (anti-spam burst, laisse passer l'info)
 
         skip, reason = check_dedup_and_throttle(
             "company",
             company_id,
             msg["dedupe_key"],
-            f"booking_{booking_id}",
-            msg.get("throttle_seconds", 8),
-            1,
+            throttle_scope,
+            throttle_window,
+            throttle_max,
         )
         if skip:
             app_logger.info(
@@ -744,6 +938,15 @@ def fanout_booking_updated_to_company(
         data = dict(msg["data"])
         data["collapse_key"] = msg["collapse_key"]
         data["dedupe_key"] = msg["dedupe_key"]
+        data["routing_version"] = 2
+        data["routing_decision"] = "company_only"
+        data["recipient_role"] = "company"
+        if ctx.get("trace_id"):
+            data["trace_id"] = ctx["trace_id"]
+        if ctx.get("actor_role") is not None:
+            data["actor_role"] = ctx["actor_role"]
+        if ctx.get("actor_id") is not None:
+            data["actor_id"] = ctx["actor_id"]
         data["channelId"] = _get_notification_channel(
             data.get("type", "booking_updated")
         )
@@ -752,7 +955,25 @@ def fanout_booking_updated_to_company(
             data["threadId"] = thread_id
             data["group"] = thread_id
 
-        _send_push_to_company(
+        _log_push_fanout(
+            event_type="booking_updated",
+            booking_id=booking_id,
+            actor_role=ctx.get("actor_role"),
+            driver_id_target=0,
+            company_id_target=company_id,
+        )
+        if os.environ.get("DEBUG_NOTIF_ROUTING", "").lower() in ("1", "true", "yes"):
+            app_logger.info(
+                "[event_fanout] push_company_enqueued company_id=%s trace_id=%s routing_decision=%s collapse_key=%s dedupe_key=%s",
+                company_id,
+                data.get("trace_id"),
+                data.get("routing_decision"),
+                msg.get("collapse_key"),
+                msg.get("dedupe_key"),
+            )
+        from tasks.notification_tasks import send_push_company_notification_task
+
+        send_push_company_notification_task.delay(
             company_id=company_id,
             title=msg["title"],
             body=msg["body"],
@@ -977,15 +1198,23 @@ def fanout_dispatch_run_completed(
             company_id,
         )
 
-    # 2. Push notification (background) - conditionnelle
+    # 2. Push notification (background) - conditionnelle (P1: async via Celery)
     is_urgent = assignments_count > urgent_threshold
     if send_push_if_urgent and is_urgent:
-        _send_push_to_company(
+        if os.environ.get("DEBUG_NOTIF_ROUTING", "").lower() in ("1", "true", "yes"):
+            app_logger.info(
+                "[event_fanout] push_company_enqueued company_id=%s event=dispatch_completed",
+                company_id,
+            )
+        from tasks.notification_tasks import send_push_company_notification_task
+
+        send_push_company_notification_task.delay(
             company_id=company_id,
             title="Dispatch terminé",
             body=f"Dispatch #{dispatch_run_id} terminé : {assignments_count} assignations",
             data={
                 "type": "dispatch_completed",
+                "recipient_role": "company",
                 "dispatch_run_id": str(dispatch_run_id),
                 "assignments_count": int(assignments_count),
                 "date": date_str,
@@ -1039,7 +1268,7 @@ def fanout_urgent_alert(
         )
 
     # 2. Push notification (background) - pour company et driver
-    push_data: Dict[str, Any] = {
+    push_data_base: Dict[str, Any] = {
         "type": "urgent_alert",
         "alert_id": str(alert_id),
         "alert_type": alert_type,
@@ -1049,21 +1278,30 @@ def fanout_urgent_alert(
         "deepLink": f"atmr://alerts/{alert_id}",
     }
 
-    # Push pour company
-    _send_push_to_company(
+    # Push pour company (P1: async via Celery)
+    if os.environ.get("DEBUG_NOTIF_ROUTING", "").lower() in ("1", "true", "yes"):
+        app_logger.info(
+            "[event_fanout] push_company_enqueued company_id=%s event=urgent_alert",
+            company_id,
+        )
+    from tasks.notification_tasks import send_push_company_notification_task
+
+    company_push_data = {**push_data_base, "recipient_role": "company"}
+    send_push_company_notification_task.delay(
         company_id=company_id,
         title=f"Alerte urgente: {alert_type}",
         body=message,
-        data=push_data,
+        data=company_push_data,
     )
 
     # Push pour driver si spécifié
     if driver_id:
+        driver_push_data = {**push_data_base, "recipient_role": "driver"}
         _send_push_to_driver(
             driver_id=driver_id,
             title=f"Alerte urgente: {alert_type}",
             body=message,
-            data=push_data,
+            data=driver_push_data,
         )
 
 

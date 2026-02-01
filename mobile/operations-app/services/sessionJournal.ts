@@ -35,7 +35,12 @@ export type SessionEvent =
   | "DEVICE_ID_ERROR" /** R3: device_id non créé (storage), socket continue sans extras, pas de logout */
   | `SOCKET_DISCONNECTED:${string}`
   | `SOCKET_RECONNECT_ATTEMPT:${number}`
-  | `SOCKET_CONNECT_ERROR:${string}`;
+  | `SOCKET_CONNECT_ERROR:${string}`
+  | "SOCKET_AUTH_REFRESH_ATTEMPT"
+  | "SOCKET_AUTH_REFRESH_SUCCESS"
+  | `SOCKET_RECONNECT_BACKOFF:${number}`
+  | "SOCKET_AUTH_RECOVERY_EXHAUSTED"
+  | "SOCKET_RECONNECT_FAILED"; /** P2.1.2: enterprise 10 tentatives épuisées */
 
 export const SESSION_JOURNAL_KEYS = {
   LAST_EVENT: "session_journal_last_event",
@@ -123,6 +128,13 @@ export function setConnectionStateSuffix(s: "ONLINE" | "RECONN" | "OFF" | null):
 }
 export function getConnectionStateSuffix(): "ONLINE" | "RECONN" | "OFF" | null {
   return connectionStateSuffix;
+}
+
+/** Reset pour tests uniquement (évite fuite d'état entre tests). */
+export function _testingReset(): void {
+  lastEvent = null;
+  lastAt = 0;
+  connectionStateSuffix = null;
 }
 
 /**

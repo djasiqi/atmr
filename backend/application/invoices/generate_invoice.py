@@ -16,6 +16,7 @@ from typing import Any, cast
 from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
 
 from ext import db
+from shared.constants import ErrorCodes
 from infrastructure.invoices.invoice_calculator import (
     InvoiceCalculator,
     round_to_5_cents,
@@ -44,6 +45,7 @@ from services.documents.qrbill import QRBillService
 logger = logging.getLogger(__name__)
 
 PERIOD_MONTH_THRESHOLD = 12
+MAX_BOOKING_IDS_SHOWN = 10  # Limite le nombre d'IDs affichés dans les messages d'erreur
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,7 +149,9 @@ class GenerateInvoiceUseCase:
         self.description_builder = description_builder or InvoiceDescriptionBuilder()
         self.pdf_service = pdf_service or PDFService()
 
-    def execute(self, input_data: GenerateInvoiceInput) -> GenerateInvoiceOutput:
+    def execute(  # noqa: PLR0911
+        self, input_data: GenerateInvoiceInput
+    ) -> GenerateInvoiceOutput:
         """Génère une nouvelle facture pour un client et une période.
 
         Args:
@@ -365,6 +369,43 @@ class GenerateInvoiceUseCase:
                 msg = "Aucune réservation trouvée pour cette période"
                 raise ValueError(msg)
 
+            # ✅ Pré-vérification : livraisons matériel sans description
+            missing_desc_ids = [
+                r.id
+                for r in reservations
+                if (getattr(r, "mission_type", None) or "patient_transport")
+                == "material_delivery"
+                and not (getattr(r, "delivery_description", None) or "").strip()
+            ]
+            if missing_desc_ids:
+                msg = (
+                    "Certaines livraisons matériel n'ont pas de description. "
+                    "Veuillez renseigner le champ « Description de la livraison » "
+                    f"pour les réservations #{', #'.join(map(str, missing_desc_ids[:MAX_BOOKING_IDS_SHOWN]))}"
+                    + (
+                        f" (et {len(missing_desc_ids) - MAX_BOOKING_IDS_SHOWN} autres)"
+                        if len(missing_desc_ids) > MAX_BOOKING_IDS_SHOWN
+                        else ""
+                    )
+                    + " avant de générer la facture."
+                )
+                logger.warning(
+                    "Livraisons matériel sans description: booking_ids=%s",
+                    missing_desc_ids,
+                )
+                return GenerateInvoiceOutput(
+                    success=False,
+                    error={
+                        "error": msg,
+                        "error_code": ErrorCodes.MATERIAL_DELIVERY_DESCRIPTION_REQUIRED,
+                        "details": {
+                            "field": "delivery_description",
+                            "booking_ids": missing_desc_ids,
+                        },
+                    },
+                    status_code=400,
+                )
+
             # ✅ P2.2: Résoudre automatiquement le payeur selon la date (séjour actif + payeur par défaut)
             from models.enums import BillingReviewStatus
             from services.billing.client_stay_resolver import (
@@ -391,17 +432,23 @@ class GenerateInvoiceUseCase:
                     current_billing_party_id = getattr(r, "billing_party_id", None)
 
                     # Si pas de payeur explicite, utiliser la résolution automatique
-                    if current_billed_to_type == "patient" and not current_billing_party_id:
+                    if (
+                        current_billed_to_type == "patient"
+                        and not current_billing_party_id
+                    ):
                         try:
                             if payer_resolved.get("billed_to_type"):
                                 r.billed_to_type = payer_resolved["billed_to_type"]
                             if payer_resolved.get("billed_to_company_id"):
-                                r.billed_to_company_id = payer_resolved["billed_to_company_id"]
+                                r.billed_to_company_id = payer_resolved[
+                                    "billed_to_company_id"
+                                ]
                             if payer_resolved.get("billing_party_id"):
                                 r.billing_party_id = payer_resolved["billing_party_id"]
                             # ✅ P4: Renseigner billing_source et billing_source_ref pour traçabilité
                             if payer_resolved.get("billing_source"):
                                 from models.enums import BillingSource
+
                                 billing_source_str = payer_resolved["billing_source"]
                                 try:
                                     # Les valeurs retournées sont déjà en snake_case (comme l'enum)
@@ -414,7 +461,9 @@ class GenerateInvoiceUseCase:
                                         e,
                                     )
                             if payer_resolved.get("billing_source_ref"):
-                                r.billing_source_ref = payer_resolved["billing_source_ref"]
+                                r.billing_source_ref = payer_resolved[
+                                    "billing_source_ref"
+                                ]
                             logger.info(
                                 (
                                     "[GenerateInvoice] Booking %s: payeur résolu automatiquement "
@@ -575,10 +624,11 @@ class GenerateInvoiceUseCase:
                 }
             # ✅ S2: Déterminer si c'est une facture S2 (clinique mensuelle multi-patients)
             # S2 = clinic_company_id fourni ET plusieurs clients différents dans les bookings
-            unique_client_ids = {r.client_id for r in reservations if hasattr(r, "client_id")}
+            unique_client_ids = {
+                r.client_id for r in reservations if hasattr(r, "client_id")
+            }
             is_s2 = (
-                input_data.clinic_company_id is not None
-                and len(unique_client_ids) > 1
+                input_data.clinic_company_id is not None and len(unique_client_ids) > 1
             )
 
             invoice_data = {
@@ -588,7 +638,8 @@ class GenerateInvoiceUseCase:
                 "billing_party_id": billing_party_id,
                 "billed_to_company_id": input_data.clinic_company_id,
                 "billing_strategy": (
-                    InvoiceBillingStrategy.S2_CLINIC_MONTHLY if is_s2
+                    InvoiceBillingStrategy.S2_CLINIC_MONTHLY
+                    if is_s2
                     else InvoiceBillingStrategy.S1_PATIENT
                 ),
                 "period_month": input_data.period_month,
@@ -618,9 +669,43 @@ class GenerateInvoiceUseCase:
             vat_breakdown: dict[str, dict[str, Decimal]] = {}
 
             for reservation in reservations:
-                base_amount = Decimal(str(reservation.amount or 0)).quantize(two_places)
+                # ✅ Livraison matériel : utiliser prix fixe entreprise
+                mission_type = (
+                    getattr(reservation, "mission_type", None) or "patient_transport"
+                )
+                if mission_type == "material_delivery":
+                    fixed_price = billing_settings_dto.material_delivery_price_fixed
+                    if fixed_price is None or fixed_price <= 0:
+                        msg = (
+                            f"Impossible de facturer : configurez le prix fixe livraison "
+                            f"dans Paramètres > Facturation (réservation #{reservation.id})."
+                        )
+                        logger.error(msg)
+                        return GenerateInvoiceOutput(
+                            success=False,
+                            error={
+                                "error": msg,
+                                "error_code": ErrorCodes.MATERIAL_DELIVERY_PRICE_NOT_CONFIGURED,
+                                "details": {
+                                    "field": "material_delivery_price_fixed",
+                                    "booking_id": str(reservation.id),
+                                },
+                            },
+                            status_code=400,
+                        )
+                    base_amount = Decimal(str(fixed_price)).quantize(two_places)
+                else:
+                    base_amount = Decimal(str(reservation.amount or 0)).quantize(
+                        two_places
+                    )
                 override = overrides_map.get(reservation.id)
-                if override and "amount" in override and override["amount"] is not None:
+                # Override montant : uniquement pour transport patient (pas livraison)
+                if (
+                    mission_type != "material_delivery"
+                    and override
+                    and "amount" in override
+                    and override["amount"] is not None
+                ):
                     try:
                         base_amount = Decimal(str(override["amount"])).quantize(
                             two_places, rounding=ROUND_HALF_UP
@@ -659,6 +744,10 @@ class GenerateInvoiceUseCase:
                 )
 
                 # Construire la description
+                is_delivery = mission_type == "material_delivery"
+                delivery_desc = (
+                    getattr(reservation, "delivery_description", None) or None
+                )
                 description = self.description_builder.build_description(
                     pickup_location=reservation.pickup_location or "",
                     dropoff_location=reservation.dropoff_location or "",
@@ -668,14 +757,24 @@ class GenerateInvoiceUseCase:
                         or input_data.clinic_company_id
                         or input_data.billing_party_id
                     )
+                    and not is_delivery
                     else None,
-                    bill_to_client_id=input_data.bill_to_client_id,
+                    bill_to_client_id=input_data.bill_to_client_id
+                    if not is_delivery
+                    else None,
+                    is_material_delivery=is_delivery,
+                    delivery_description=delivery_desc,
                 )
 
                 # Créer la ligne
+                line_type = (
+                    InvoiceLineType.MATERIAL_DELIVERY
+                    if is_delivery
+                    else InvoiceLineType.RIDE
+                )
                 line_data = {
                     "invoice_id": invoice.id,
-                    "type": InvoiceLineType.RIDE,
+                    "type": line_type,
                     "description": description,
                     "qty": Decimal("1"),
                     "unit_price": base_amount,
@@ -783,8 +882,37 @@ class GenerateInvoiceUseCase:
                 success=True, invoice_id=invoice.id, invoice=invoice
             )
 
-        except (OperationalError, DBAPIError, IntegrityError) as e:
+        except (OperationalError, DBAPIError) as e:
             db.session.rollback()
+            err_msg = str(e).lower()
+            orig = getattr(e, "orig", None)
+            pgcode = getattr(orig, "pgcode", None) if orig else None
+            # DataError (invalid enum) : pgcode 22P02 ou "invalid input value for enum"
+            # Ne pas confondre avec CHECK constraint (ck_booking_material_delivery_description)
+            is_enum_error = pgcode == "22P02" or (
+                "invalid input value for enum" in err_msg
+                and "invoice_line_type" in err_msg
+            )
+            if is_enum_error:
+                logger.error(
+                    "Enum invoice_line_type non à jour (migration manquante?): %s",
+                    str(e),
+                )
+                return GenerateInvoiceOutput(
+                    success=False,
+                    error={
+                        "error": (
+                            "Configuration base de données incomplète. "
+                            "Exécutez les migrations (alembic upgrade head)."
+                        ),
+                        "error_code": "INVOICE_LINE_TYPE_MIGRATION_REQUIRED",
+                        "details": {
+                            "enum_type": "invoice_line_type",
+                            "expected_value": "material_delivery",
+                        },
+                    },
+                    status_code=400,
+                )
             logger.error(
                 "Erreur DB lors de la génération de la facture (DB error: %s): %s",
                 type(e).__name__,
@@ -794,6 +922,79 @@ class GenerateInvoiceUseCase:
                 success=False,
                 error={"error": "Erreur de base de données"},
                 status_code=500,
+            )
+        except IntegrityError as e:
+            db.session.rollback()
+            err_msg = str(e).lower()
+            # CHECK constraint : livraison sans description (priorité sur enum)
+            if "ck_booking_material_delivery_description" in err_msg:
+                logger.warning(
+                    "Livraison matériel sans description (CHECK constraint): %s",
+                    str(e),
+                )
+                return GenerateInvoiceOutput(
+                    success=False,
+                    error={
+                        "error": (
+                            "Une livraison matériel doit avoir une description. "
+                            "Veuillez renseigner le champ « Description de la livraison »."
+                        ),
+                        "error_code": ErrorCodes.MATERIAL_DELIVERY_DESCRIPTION_REQUIRED,
+                        "details": {"field": "delivery_description"},
+                    },
+                    status_code=400,
+                )
+            # Enum non migré (ex: material_delivery absent de invoice_line_type)
+            if (
+                "invoice_line_type" in err_msg
+                and "invalid input value for enum" in err_msg
+            ):
+                logger.error(
+                    "Enum invoice_line_type non à jour (migration manquante?): %s",
+                    str(e),
+                )
+                return GenerateInvoiceOutput(
+                    success=False,
+                    error={
+                        "error": (
+                            "Configuration base de données incomplète. "
+                            "Exécutez les migrations (alembic upgrade head)."
+                        ),
+                        "error_code": "INVOICE_LINE_TYPE_MIGRATION_REQUIRED",
+                        "details": {
+                            "enum_type": "invoice_line_type",
+                            "expected_value": "material_delivery",
+                        },
+                    },
+                    status_code=400,
+                )
+            logger.error(
+                "Erreur d'intégrité DB lors de la génération de la facture: %s",
+                str(e),
+            )
+            return GenerateInvoiceOutput(
+                success=False,
+                error={"error": "Erreur de base de données"},
+                status_code=500,
+            )
+        except (KeyError, AttributeError) as e:
+            db.session.rollback()
+            logger.warning(
+                "Erreur de mapping/template (KeyError/AttributeError): %s", e
+            )
+            details: dict[str, str | int | None] = {}
+            if isinstance(e, KeyError) and e.args:
+                details["line_type"] = str(e.args[0])
+            elif isinstance(e, AttributeError) and e.args:
+                details["attribute"] = str(e.args[0])
+            return GenerateInvoiceOutput(
+                success=False,
+                error={
+                    "error": "Erreur de configuration (type de ligne non supporté)",
+                    "error_code": "UNKNOWN_LINE_TYPE",
+                    "details": details if details else None,
+                },
+                status_code=400,
             )
         except ValueError as e:
             db.session.rollback()

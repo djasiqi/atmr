@@ -111,6 +111,14 @@ class Booking(db.Model):
     dropoff_location: Mapped[str] = mapped_column(String(200), nullable=False)
     booking_type = Column(String(200), nullable=False, server_default="standard")
 
+    # ✅ Livraison matériel : type de mission (transport patient vs livraison)
+    mission_type = Column(
+        String(50), nullable=False, server_default="patient_transport"
+    )  # "patient_transport" | "material_delivery"
+    delivery_description = Column(
+        Text, nullable=True
+    )  # Requis si mission_type == "material_delivery"
+
     scheduled_time: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=False), nullable=True
     )
@@ -521,6 +529,9 @@ class Booking(db.Model):
             "patient_name": _as_str(self.customer_name),
             # ✅ Informations du transfert actif (si existe)
             "active_transfer": self._get_active_transfer_info(),
+            # ✅ Livraison matériel
+            "mission_type": getattr(self, "mission_type", None) or "patient_transport",
+            "delivery_description": getattr(self, "delivery_description", None) or None,
         }
 
     def _is_transferred(self) -> bool:

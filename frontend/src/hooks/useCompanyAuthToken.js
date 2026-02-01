@@ -56,22 +56,16 @@ const useCompanyAuthToken = () => {
         setUser(null);
       }
     } else if (storedUser) {
-      const role = String(storedUser.role || '').toLowerCase();
-      setUser({
-        ...storedUser,
-        isCompany: role === 'company',
-        isDriver: role === 'driver',
-        isClient: role === 'client',
-        companyId: storedUser.company_id,
-        userId: storedUser.id,
-        public_id: storedUser.public_id,
-      });
+      // ✅ Garde P0 : Ne pas retourner user sans token valide.
+      // company_dispatch/* exige company_access_token — sans token → 401 systématique.
+      // Retourner null évite les appels prématurés / mauvais timing.
+      setUser(null);
     } else {
       setUser(null);
     }
   }, []);
 
-  return user;
+  return { user, isCompanyAuthReady: !!user };
 };
 
 export default useCompanyAuthToken;

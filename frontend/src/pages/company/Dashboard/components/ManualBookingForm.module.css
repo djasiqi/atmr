@@ -1,18 +1,96 @@
-/* ManualBookingForm.module.css - Style moderne et élégant */
+/* ManualBookingForm.module.css - Design pro SaaS */
+
+/* Variables locales */
+.formWrapper {
+  --input-height: 44px;
+  --input-border: 1px solid #e2e8f0;
+  --input-focus-ring: 0 0 0 2px rgba(0, 121, 107, 0.2);
+  --spacing-xs: 8px;
+  --spacing-sm: 12px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  /* P0: hauteur footer sticky pour padding anti-chevauchement */
+  --footer-height: 96px;
+}
 
 .formWrapper {
   width: 100%;
-  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
-  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
-  padding: var(--spacing-xl) var(--spacing-2xl) var(--spacing-2xl) var(--spacing-2xl);
+  background: #ffffff;
+  padding: var(--spacing-lg) var(--spacing-lg) 0 var(--spacing-lg);
   margin: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding-bottom: var(--spacing-lg);
+}
+
+.formScrollBody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--spacing-2xl);
-  align-items: start;
+  /* Format 3x4 responsive : 3 colonnes large, colonne médicale plus large */
+  grid-template-columns: 1.5fr 1fr;
+  gap: 24px 32px;
+  /* P0 définitif: sur-protection anti-chevauchement footer sticky (mobile, zoom, police) */
+  padding-bottom: 20px;
+}
+
+/* Large desktop : 3 colonnes (gauche 2, droite 1 — colonne médicale plus large) */
+@media (min-width: 1200px) {
+  .formScrollBody {
+    grid-template-columns: 1fr 1fr 1.3fr;
+    gap: 24px 28px;
+  }
+  .columnLeft {
+    grid-column: 1 / 3;
+  }
+  .columnRight {
+    grid-column: 3;
+  }
+}
+
+@media (max-width: 900px) {
+  .formScrollBody {
+    grid-template-columns: 1fr;
+  }
+  .columnLeft,
+  .columnRight {
+    grid-column: auto;
+  }
+  /* P0.1: footer plus haut sur mobile (résumé 2 lignes, boutons wrap) */
+  .formWrapper {
+    --footer-height: 132px;
+  }
+  /* Colonne gauche mobile : densité lisible, min 8px entre groupes */
+  .columnLeft {
+    gap: 8px;
+  }
+  .columnLeft .formGroup {
+    gap: 8px;
+  }
+  .columnLeft .addressesRow {
+    gap: 8px;
+  }
+  .columnLeft .dateTimeRow {
+    gap: 8px;
+  }
+  .columnLeft .datePresets {
+    gap: 8px;
+  }
+  .columnLeft .chipsRow {
+    margin-top: 8px;
+    gap: 8px;
+  }
 }
 
 .columnLeft,
@@ -20,6 +98,20 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-lg);
+}
+
+/* Colonne gauche : densité réduite (client, adresses, date, chips, montant) */
+.columnLeft {
+  gap: 12px;
+}
+
+.columnLeft .formGroup {
+  gap: 8px;
+}
+
+.columnLeft .formGroup :global(.form-label),
+.columnLeft .formGroup .label {
+  margin-bottom: 0;
 }
 
 .formGroup {
@@ -44,31 +136,51 @@
   font-weight: var(--font-weight-bold);
 }
 
-/* Uniformisation de TOUS les champs de saisie */
+/* Uniformisation de TOUS les champs de saisie - Design pro */
 .input,
 .textarea {
   width: 100%;
+  height: var(--input-height);
+  min-height: var(--input-height);
+  padding: 0 var(--spacing-md);
+  border: var(--input-border);
+  border-radius: 10px;
+  font-size: 0.9rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  background: #ffffff;
+  color: #1e293b;
+  font-weight: 500;
+  box-sizing: border-box;
+}
+
+.textarea {
+  height: auto;
+  min-height: 90px;
   padding: var(--spacing-sm) var(--spacing-md);
-  border: 2px solid var(--border-secondary);
-  border-radius: var(--radius-lg);
-  font-size: var(--font-sm);
-  transition: var(--transition-base);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-weight: var(--font-weight-medium);
+  resize: vertical;
 }
 
 .input:hover,
 .textarea:hover {
-  border-color: var(--border-hover);
+  border-color: #cbd5e1;
 }
 
 .input:focus,
-.textarea:focus {
+.input:focus-visible,
+.textarea:focus,
+.textarea:focus-visible {
   outline: none;
-  border-color: var(--brand-primary);
-  box-shadow: var(--focus-ring);
-  background: var(--bg-primary);
+  border-color: #00796b;
+  box-shadow: var(--input-focus-ring);
+  background: #ffffff;
+}
+
+/* P0.1: disabled state clair (montant livraison) */
+.input:disabled,
+.textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: #f8fafc;
 }
 
 .input::placeholder,
@@ -82,6 +194,11 @@
   min-height: 90px;
   font-family: var(--font-family-base);
   line-height: 1.6;
+}
+
+/* Textarea compact — hauteur réduite (notes médicales) */
+.textareaCompact {
+  min-height: 50px;
 }
 
 /* Uniformisation des champs globaux (AddressAutocomplete, EstablishmentSelect, etc.) */
@@ -109,13 +226,24 @@
 }
 
 .formGroup :global(input:not([type='checkbox']):focus),
+.formGroup :global(input:not([type='checkbox']):focus-visible),
 .formGroup :global(textarea:focus),
+.formGroup :global(textarea:focus-visible),
 .medicalFormGroup :global(input:not([type='checkbox']):focus),
-.medicalFormGroup :global(textarea:focus) {
+.medicalFormGroup :global(input:not([type='checkbox']):focus-visible),
+.medicalFormGroup :global(textarea:focus),
+.medicalFormGroup :global(textarea:focus-visible) {
   outline: none !important;
   border-color: #00796b !important;
   box-shadow: 0 0 0 4px rgba(0, 121, 107, 0.1) !important;
   background: #f8fffe !important;
+}
+
+.formGroup :global(input:not([type='checkbox']):disabled),
+.medicalFormGroup :global(input:not([type='checkbox']):disabled) {
+  opacity: 0.6 !important;
+  cursor: not-allowed !important;
+  background: #f8fafc !important;
 }
 
 /* Fix pour AddressAutocomplete et EstablishmentSelect */
@@ -142,42 +270,58 @@
   opacity: 1 !important;
 }
 
-/* Section médicale */
+/* Section médicale - condensée */
 .medicalSection {
   margin-top: 0;
-  padding: 20px;
-  background: linear-gradient(135deg, #f0fdfa 0%, #ffffff 100%);
+  padding: 10px 12px;
+  background: #f8fafc;
   border-radius: 12px;
-  border: 2px solid #d1fae5;
-  box-shadow: 0 2px 8px rgba(0, 121, 107, 0.05);
+  border: 1px solid #e2e8f0;
 }
 
 .medicalSectionTitle {
-  font-size: 1rem;
-  font-weight: 700;
-  margin-bottom: 18px;
-  color: #00796b;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding-bottom: 12px;
-  border-bottom: 2px solid #e0f2fe;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+  color: #94a3b8;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.optionalBadge {
+  font-size: 0.65rem;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #94a3b8;
 }
 
 .medicalFormGroup {
-  margin-bottom: 16px;
+  margin-bottom: 6px;
 }
 
 .medicalFormGroup:last-child {
   margin-bottom: 0;
 }
 
+.medicalFormGroup :global(input:not([type='checkbox'])),
+.medicalFormGroup :global(textarea) {
+  padding: 8px 12px !important;
+  font-size: 0.85rem !important;
+}
+
+.medicalFormGroup :global(.form-label) {
+  margin-bottom: 2px !important;
+  font-size: 0.8rem !important;
+}
+
 .medicalFieldHint {
   display: block;
-  font-size: 12px;
-  color: #64748b;
-  margin-top: 4px;
-  line-height: 1.4;
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 2px;
+  line-height: 1.3;
 }
 
 /* Styles pour les checkboxes dans la section médicale */
@@ -205,6 +349,30 @@
   color: #1e293b;
 }
 
+/* Options chaise roulante — toujours sur une ligne horizontale */
+.checkboxRowInline {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 10px;
+  margin-top: 6px;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+.checkboxRowInline .checkboxGroup {
+  margin-top: 0;
+  margin-bottom: 0;
+  flex: 1 1 0;
+  min-width: 0;
+}
+.checkboxRowInline .checkboxLabel {
+  white-space: normal;
+  overflow-wrap: break-word;
+  min-width: 0;
+}
+
 /* Styles pour les options de chaise roulante */
 .wheelchairOptions {
   display: flex;
@@ -223,6 +391,66 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.columnLeft .dateTimeGroup {
+  gap: 8px;
+}
+
+.dateTimeRow {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.columnLeft .dateTimeRow {
+  gap: 6px;
+}
+
+.datePresets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.columnLeft .datePresets {
+  gap: 6px;
+}
+
+.datePresetBtn {
+  padding: 6px 12px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  background: white;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.datePresetBtn:hover {
+  border-color: #00796b;
+  background: #f0fdfa;
+  color: #00796b;
+}
+
+/* Client option (react-select formatOptionLabel) */
+.clientOption {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.clientOptionLabel {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.clientOptionMeta {
+  font-size: 0.75rem;
+  color: #64748b;
+  font-weight: 400;
 }
 
 .checkboxGroup {
@@ -431,23 +659,24 @@
   color: #0369a1;
 }
 
-/* Bouton de soumission */
+/* Bouton de soumission — min-width: 0 pour éviter overflow */
 .submitButton {
-  grid-column: 1 / -1;
-  padding: 16px 32px;
+  padding: 12px 24px;
   border-radius: 12px;
   background: linear-gradient(135deg, #00796b 0%, #00695c 100%);
   color: white;
   border: none;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 700;
   cursor: pointer;
-  margin-top: 12px;
   transition: all 0.3s ease;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
   box-shadow: 0 4px 12px rgba(0, 121, 107, 0.25);
   position: relative;
   overflow: hidden;
@@ -506,7 +735,8 @@
   border-color: #cbd5e1 !important;
 }
 
-.formGroup :global(.react-select__control--is-focused) {
+.formGroup :global(.react-select__control--is-focused),
+.formGroup :global(.react-select__control:focus-visible) {
   outline: none !important;
   border-color: #00796b !important;
   box-shadow: 0 0 0 4px rgba(0, 121, 107, 0.1) !important;
@@ -652,14 +882,11 @@
    MENU DÉROULANT - React-Select (Clients)
    ======================== */
 
-/* Portal du menu */
-:global(.react-select__menu-portal) {
-  z-index: 99999 !important;
-}
+/* P0.1: z-index via styles.menuPortal dans le JSX (menuPortalTarget + zIndex: 10000)
+   Pas de règle globale pour éviter conflits avec autres modals/tooltips. */
 
-/* Menu principal */
+/* Menu principal (styles visuels uniquement, z-index géré par menuPortal) */
 :global(.react-select__menu) {
-  z-index: 99999 !important;
   background: white !important;
   border: 2px solid #00796b !important;
   border-radius: 12px !important;
@@ -938,15 +1165,355 @@
   outline-color: transparent !important;
 }
 
+/* ========================
+   Header premium
+   ======================== */
+.modalHeader {
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.modalTitle {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 4px 0;
+}
+
+.modalSubtitle {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ========================
+   Chips options
+   ======================== */
+.chipsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* P2.1: Chips — micro-interaction hover/active */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 2px solid #e2e8f0;
+  border-radius: 999px;
+  background: white;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.chip:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+  transform: translateY(-1px);
+}
+
+/* P1: focus ring visible (clavier / accessibilité) */
+.chip:focus-visible {
+  outline: none;
+  border-color: #00796b;
+  box-shadow: 0 0 0 2px rgba(0, 121, 107, 0.3);
+}
+
+.chip.isActive {
+  border-color: #00796b;
+  background: #f0fdfa;
+  color: #00796b;
+}
+
+.chip.isActive:hover {
+  border-color: #0f766e;
+  background: #ccfbf1;
+  transform: translateY(-1px);
+}
+
+.chip:active {
+  transform: translateY(0);
+}
+
+/* ========================
+   Bouton swap adresses
+   ======================== */
+.addressesRow {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.addressesFields {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.columnLeft .addressesRow {
+  gap: 10px;
+}
+
+.columnLeft .addressesFields {
+  gap: 6px;
+}
+
+/* P2.1: Swap — à droite, centré verticalement */
+.swapButton {
+  align-self: center;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 2px solid #e2e8f0;
+  border-radius: 50%;
+  background: white;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.swapButton:hover {
+  border-color: #00796b;
+  background: #f0fdfa;
+  color: #00796b;
+  transform: rotate(180deg);
+  box-shadow: 0 0 0 3px rgba(0, 121, 107, 0.15);
+}
+
+.swapButton:focus-visible {
+  outline: none;
+  border-color: #00796b;
+  box-shadow: 0 0 0 3px rgba(0, 121, 107, 0.25);
+}
+
+/* ========================
+   Footer sticky + résumé
+   ======================== */
+.footerActions {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 16px calc(-1 * var(--spacing-lg)) 0;
+  padding: 12px var(--spacing-lg) var(--spacing-lg);
+  border-top: 1px solid #e2e8f0;
+  /* P0: fallback backdrop-filter — fond opaque par défaut pour navigateurs sans blur */
+  background: #ffffff;
+  box-shadow: 0 -10px 30px rgba(15, 23, 42, 0.08);
+  z-index: 20;
+  /* P0.1: min-height pour éviter overlap quand footer wrap sur 2 lignes */
+  min-height: var(--footer-height);
+}
+
+@supports ((-webkit-backdrop-filter: blur(8px)) or (backdrop-filter: blur(8px))) {
+  .footerActions {
+    background: rgba(255, 255, 255, 0.88);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
+}
+
+/* P2.1: Confirm bar — flex text + badges */
+.footerSummary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #475569;
+  min-height: 20px;
+}
+
+.footerSummaryText {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.footerSummaryBadges {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.summaryBadge {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+  white-space: nowrap;
+}
+
+.footerBody {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.footerLeft {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.footerRight {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.footerCancel {
+  padding: 10px 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: transparent;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.footerCancel:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+}
+
+.amountHint {
+  display: block;
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-top: 6px;
+}
+
+/* Bloc séjour actif (client hospitalisé) */
+.activeStayCard {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f0f9ff;
+  border: 1px solid #0ea5e9;
+  border-radius: 8px;
+}
+
+.activeStayRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.activeStayIcon {
+  font-size: 18px;
+}
+
+.activeStayContent {
+  flex: 1;
+}
+
+.activeStayTitle {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.activeStayMeta {
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.activeStayRate {
+  display: block;
+  margin-top: 4px;
+  color: #059669;
+  font-weight: 500;
+}
+
+.activeStayOverride {
+  margin-top: 8px;
+}
+
+.activeStayLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.activeStayWarning {
+  display: block;
+  margin-top: 4px;
+  color: #dc2626;
+  font-size: 0.8rem;
+}
+
+.deliveryDescriptionGroup {
+  margin-top: 12px;
+}
+
+.returnTimeLabel {
+  margin-top: 12px;
+}
+
+.returnTimeHint {
+  color: #64748b;
+  font-size: 0.85rem;
+  margin-top: 4px;
+  display: block;
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
-  .form {
-    grid-template-columns: 1fr;
+  .formScrollBody {
     gap: 20px;
   }
 
-  .submitButton {
-    grid-column: 1;
+  .footerBody {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .footerRight {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .footerRight .submitButton {
+    width: 100%;
+  }
+
+  .footerSummaryText {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 }
 

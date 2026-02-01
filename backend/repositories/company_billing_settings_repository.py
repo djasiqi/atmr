@@ -25,6 +25,7 @@ class CompanyBillingSettingsDTO:
     vat_label: str | None
     vat_number: str | None
     payment_terms_days: int
+    material_delivery_price_fixed: Decimal | None
 
 
 class CompanyBillingSettingsRepositoryPort(Protocol):
@@ -57,6 +58,9 @@ class CompanyBillingSettingsRepository:
             vat_label=settings.vat_label,
             vat_number=settings.vat_number,
             payment_terms_days=settings.payment_terms_days or 30,
+            material_delivery_price_fixed=getattr(
+                settings, "material_delivery_price_fixed", None
+            ),
         )
 
     def find_or_create(self, company_id: int) -> CompanyBillingSettingsDTO:

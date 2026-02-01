@@ -39,7 +39,6 @@ const CompanyDriver = lazy(() => import('./pages/company/Driver/CompanyDriver'))
 const CompanyDriverPlanning = lazy(() => import('./pages/company/Driver/CompanyDriverPlanning'));
 const CompanyInvoices = lazy(() => import('./pages/company/Invoices/CompanyInvoices'));
 const ClientInvoices = lazy(() => import('./pages/company/Invoices/ClientInvoices'));
-const BillingReviewPage = lazy(() => import('./pages/company/BillingReview/BillingReviewPage')); // ✅ P5: Contrôle facturation
 const CompanyPlanning = lazy(() => import('./pages/company/Planning/CompanyPlanning'));
 const CompanySettings = lazy(() => import('./pages/company/Settings/CompanySettings'));
 const CompanyClients = lazy(() => import('./pages/company/Clients/CompanyClients'));
@@ -391,14 +390,6 @@ const App = () => {
               element={
                 <ProtectedRoute allowedRoles={['company']}>
                   <ClientInvoices />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/dashboard/company/:public_id/billing-review"
-              element={
-                <ProtectedRoute allowedRoles={['company']}>
-                  <BillingReviewPage />
                 </ProtectedRoute>
               }
             />

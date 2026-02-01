@@ -65,6 +65,8 @@ class BookingUpdatedEvent(DomainEvent):
     # recevoir une notif pour un statut qu'il vient lui-même de changer).
     actor_role: str | None = None  # "driver" | "company" | "system" | None
     actor_id: int | None = None
+    # P0.2: Source stable pour fallback quand actor_role manquant (job, import, migration).
+    source: str | None = None  # "driver_api" | "company_api" | "system"
     # Diff partiel pour générer des notifications "pro" basées sur ce qui a changé.
     # Exemple:
     # {

@@ -2,7 +2,15 @@
 // Tests unitaires pour le cache en mémoire (TTL, invalidation)
 
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { secureStorage } from '../storage';
+import {
+  DRIVER_AUTH_KEYS,
+  ENTERPRISE_AUTH_KEYS,
+} from '../storage/keys';
+
+const ACCESS_KEY = DRIVER_AUTH_KEYS.secure[1]; // driver_access_token
+const REFRESH_KEY = DRIVER_AUTH_KEYS.secure[0]; // driver_refresh_token
 
 // Mock expo-secure-store
 jest.mock('expo-secure-store', () => ({
@@ -99,7 +107,7 @@ describe('secureStorage - Cache en mémoire', () => {
       
       // Mock SecureStore pour retourner les tokens uniquement pour la clé ACCESS_TOKEN
       (SecureStore.getItemAsync as jest.Mock).mockImplementation((key: string) => {
-        if (key === 'auth.access_token') {
+        if (key === ACCESS_KEY) {
           return Promise.resolve(oldToken);
         }
         return Promise.resolve(null);
@@ -130,7 +138,7 @@ describe('secureStorage - Cache en mémoire', () => {
       
       // Mock SecureStore pour retourner le token uniquement pour la clé ACCESS_TOKEN
       (SecureStore.getItemAsync as jest.Mock).mockImplementation((key: string) => {
-        if (key === 'auth.access_token') {
+        if (key === ACCESS_KEY) {
           return Promise.resolve(mockToken);
         }
         return Promise.resolve(null);
@@ -149,7 +157,7 @@ describe('secureStorage - Cache en mémoire', () => {
       // Note: removeAccessToken() nettoie le cache en mémoire (cachedAccessToken = null)
       // Donc getAccessToken() doit lire depuis SecureStore qui retourne null après la suppression
       (SecureStore.getItemAsync as jest.Mock).mockImplementation((key: string) => {
-        if (key === 'auth.access_token') {
+        if (key === ACCESS_KEY) {
           return Promise.resolve(null); // Après suppression, SecureStore retourne null
         }
         return Promise.resolve(null);
@@ -170,7 +178,7 @@ describe('secureStorage - Cache en mémoire', () => {
       
       // Mock SecureStore pour retourner le token uniquement pour la clé ACCESS_TOKEN
       (SecureStore.getItemAsync as jest.Mock).mockImplementation((key: string) => {
-        if (key === 'auth.access_token') {
+        if (key === ACCESS_KEY) {
           return Promise.resolve(mockToken);
         }
         return Promise.resolve(null);
@@ -189,7 +197,7 @@ describe('secureStorage - Cache en mémoire', () => {
       // Note: clearAll() nettoie tous les caches en mémoire
       // Donc getAccessToken() doit lire depuis SecureStore qui retourne null après la suppression
       (SecureStore.getItemAsync as jest.Mock).mockImplementation((key: string) => {
-        if (key === 'auth.access_token') {
+        if (key === ACCESS_KEY) {
           return Promise.resolve(null); // Après clearAll, SecureStore retourne null
         }
         return Promise.resolve(null);
@@ -212,7 +220,7 @@ describe('secureStorage - Cache en mémoire', () => {
       
       // Mock SecureStore pour retourner le token uniquement pour la clé REFRESH_TOKEN
       (SecureStore.getItemAsync as jest.Mock).mockImplementation((key: string) => {
-        if (key === 'auth.refresh_token') {
+        if (key === REFRESH_KEY) {
           return Promise.resolve(mockToken);
         }
         return Promise.resolve(null);
@@ -241,7 +249,7 @@ describe('secureStorage - Cache en mémoire', () => {
       
       // 1. Premier appel : met en cache
       (SecureStore.getItemAsync as jest.Mock).mockImplementation((key: string) => {
-        if (key === 'auth.refresh_token') {
+        if (key === REFRESH_KEY) {
           return Promise.resolve(mockToken);
         }
         return Promise.resolve(null);
@@ -257,7 +265,7 @@ describe('secureStorage - Cache en mémoire', () => {
       // Réinitialiser le mock pour compter les appels
       (SecureStore.getItemAsync as jest.Mock).mockClear();
       (SecureStore.getItemAsync as jest.Mock).mockImplementation((key: string) => {
-        if (key === 'auth.refresh_token') {
+        if (key === REFRESH_KEY) {
           return Promise.resolve(mockToken);
         }
         return Promise.resolve(null);
@@ -278,7 +286,7 @@ describe('secureStorage - Cache en mémoire', () => {
       
       // Mock SecureStore pour retourner les tokens uniquement pour la clé REFRESH_TOKEN
       (SecureStore.getItemAsync as jest.Mock).mockImplementation((key: string) => {
-        if (key === 'auth.refresh_token') {
+        if (key === REFRESH_KEY) {
           return Promise.resolve(oldToken);
         }
         return Promise.resolve(null);
@@ -309,7 +317,7 @@ describe('secureStorage - Cache en mémoire', () => {
       
       // Mock SecureStore pour retourner le token uniquement pour la clé REFRESH_TOKEN
       (SecureStore.getItemAsync as jest.Mock).mockImplementation((key: string) => {
-        if (key === 'auth.refresh_token') {
+        if (key === REFRESH_KEY) {
           return Promise.resolve(mockToken);
         }
         return Promise.resolve(null);
@@ -328,7 +336,7 @@ describe('secureStorage - Cache en mémoire', () => {
       // Note: removeRefreshToken() nettoie le cache en mémoire (cachedRefreshToken = null)
       // Donc getRefreshToken() doit lire depuis SecureStore qui retourne null après la suppression
       (SecureStore.getItemAsync as jest.Mock).mockImplementation((key: string) => {
-        if (key === 'auth.refresh_token') {
+        if (key === REFRESH_KEY) {
           return Promise.resolve(null); // Après suppression, SecureStore retourne null
         }
         return Promise.resolve(null);
@@ -352,7 +360,7 @@ describe('secureStorage - Cache en mémoire', () => {
       
       // Mock SecureStore pour retourner le token uniquement pour la clé ACCESS_TOKEN
       (SecureStore.getItemAsync as jest.Mock).mockImplementation((key: string) => {
-        if (key === 'auth.access_token') {
+        if (key === ACCESS_KEY) {
           return Promise.resolve(mockToken);
         }
         return Promise.resolve(null);
@@ -430,7 +438,7 @@ describe('secureStorage - Cache en mémoire', () => {
       
       // Mock SecureStore pour retourner le token uniquement pour la clé ACCESS_TOKEN
       (SecureStore.getItemAsync as jest.Mock).mockImplementation((key: string) => {
-        if (key === 'auth.access_token') {
+        if (key === ACCESS_KEY) {
           return Promise.resolve(mockToken);
         }
         // Pour toutes les autres clés (refresh_token, etc.), retourner null
@@ -465,6 +473,36 @@ describe('secureStorage - Cache en mémoire', () => {
       // Seulement 1 lecture SecureStore (le premier), les autres utilisent le cache
       // Le mock ne devrait pas être appelé car le cache est utilisé
       expect(SecureStore.getItemAsync).not.toHaveBeenCalled(); // Cache hits
+    });
+  });
+
+  describe('P1.A — Anti-régression clearAuthOnly', () => {
+    it('clearDriverAuthOnly doit appeler SecureStore/AsyncStorage avec les clés exactes', async () => {
+      await secureStorage.clearDriverAuthOnly();
+
+      expect(SecureStore.deleteItemAsync).toHaveBeenCalledTimes(DRIVER_AUTH_KEYS.secure.length);
+      DRIVER_AUTH_KEYS.secure.forEach((key) => {
+        expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith(key);
+      });
+
+      expect(AsyncStorage.multiRemove).toHaveBeenCalledTimes(1);
+      const asyncKeys = (AsyncStorage.multiRemove as jest.Mock).mock.calls[0][0];
+      expect(asyncKeys).toEqual(expect.arrayContaining([...DRIVER_AUTH_KEYS.async]));
+      expect(asyncKeys).toHaveLength(DRIVER_AUTH_KEYS.async.length);
+    });
+
+    it('clearEnterpriseAuthOnly doit appeler SecureStore/AsyncStorage avec les clés exactes', async () => {
+      await secureStorage.clearEnterpriseAuthOnly();
+
+      expect(SecureStore.deleteItemAsync).toHaveBeenCalledTimes(ENTERPRISE_AUTH_KEYS.secure.length);
+      ENTERPRISE_AUTH_KEYS.secure.forEach((key) => {
+        expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith(key);
+      });
+
+      expect(AsyncStorage.multiRemove).toHaveBeenCalledTimes(1);
+      const asyncKeys = (AsyncStorage.multiRemove as jest.Mock).mock.calls[0][0];
+      expect(asyncKeys).toEqual(expect.arrayContaining([...ENTERPRISE_AUTH_KEYS.async]));
+      expect(asyncKeys).toHaveLength(ENTERPRISE_AUTH_KEYS.async.length);
     });
   });
 });

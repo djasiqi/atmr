@@ -8,6 +8,7 @@ import { IconSymbol } from "@/components/ui/IconSymbol";
 import { tabBarStyles } from "@/styles/tabBarStyles";
 import { EnterpriseProvider } from "@/context/EnterpriseContext";
 import { EnterpriseHeader } from "@/components/enterprise/EnterpriseHeader";
+import { EnterpriseReconnectBanner } from "@/components/common/EnterpriseReconnectBanner";
 import { useAuth } from "@/hooks/useAuth";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 
@@ -25,6 +26,7 @@ export default function EnterpriseLayout() {
     <EnterpriseProvider initialMode={initialMode}>
       <StatusBar style="dark" />
       <View style={styles.container}>
+        <EnterpriseReconnectBanner />
         <Tabs
           screenOptions={{
             header: () => <EnterpriseHeader />,

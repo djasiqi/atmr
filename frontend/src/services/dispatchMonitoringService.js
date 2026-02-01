@@ -4,7 +4,32 @@
  * Interactions avec les endpoints de retards et d'optimisation
  */
 
+import axios from 'axios';
 import apiClient from '../utils/apiClient';
+
+/**
+ * Log Axios "riche" pour diagnostic (status, url, responseData).
+ * Permet d'identifier 401/403, 404, 500, CORS, timeout, mauvais client.
+ */
+function logAxiosError(prefix, err) {
+  if (!axios.isAxiosError(err)) {
+    console.error(prefix, err);
+    return;
+  }
+  const status = err.response?.status;
+  const data = err.response?.data;
+  const url = err.config?.baseURL
+    ? `${err.config.baseURL}${err.config.url ?? ''}`
+    : err.config?.url;
+  console.error(prefix, {
+    message: err.message,
+    code: err.code,
+    status,
+    url,
+    method: err.config?.method,
+    responseData: data,
+  });
+}
 
 /**
  * Récupère les retards pour une date donnée
@@ -23,12 +48,35 @@ export const getDelays = async (date) => {
   }
 };
 
+const COMPANY_ACCESS_TOKEN_KEY = 'company_access_token';
+
+/**
+ * Vérifie si company_access_token est disponible (requis pour /company_dispatch/*).
+ * @returns {boolean}
+ */
+const hasCompanyAccessToken = () =>
+  !!(
+    typeof localStorage !== 'undefined' &&
+    (localStorage.getItem(COMPANY_ACCESS_TOKEN_KEY) ||
+      localStorage.getItem('company_authToken'))
+  );
+
+let _warnedNoToken = false;
+
 /**
  * Récupère les retards en temps réel avec recalcul des ETAs
  * @param {string} date - Date au format YYYY-MM-DD
  * @returns {Promise} Retards temps réel avec suggestions et impacts cascade
  */
 export const getLiveDelays = async (date) => {
+  if (!hasCompanyAccessToken()) {
+    if (process.env.NODE_ENV === 'development' && !_warnedNoToken) {
+      _warnedNoToken = true;
+      console.warn('[delays/live] skipped — no company_access_token');
+    }
+    return null;
+  }
+
   try {
     const response = await apiClient.get('/company_dispatch/delays/live', {
       params: { date },
@@ -43,7 +91,7 @@ export const getLiveDelays = async (date) => {
 
     // Ne logger que les vraies erreurs (pas les 401 en cours de refresh)
     if (error?.response?.status !== 401) {
-      console.error('[DispatchMonitoring] Error fetching live delays:', error);
+      logAxiosError('[delays/live] failed', error);
     } else {
       console.debug('[DispatchMonitoring] 401 error, refresh token will be attempted');
     }

@@ -60,13 +60,17 @@ export const styles = StyleSheet.create({
   // ——— 1. MissionCardHeader : identité client + statut ———
   headerRowEnhanced: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
     marginBottom: spacing.l,
   },
   headerClientWrap: {
     flex: 1,
+    flexBasis: 0,
+    minWidth: 120,
     marginRight: spacing.m,
+    overflow: "visible",
   },
   clientCivility: {
     fontSize: 12,
@@ -86,12 +90,21 @@ export const styles = StyleSheet.create({
     marginTop: spacing.s,
     color: palette.secondary,
   },
+  headerBadgesWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.s,
+    flexWrap: "wrap",
+    flexShrink: 1,
+    minWidth: 0,
+    marginLeft: "auto",
+  },
   statusBadgeContainer: {
     backgroundColor: "rgba(10,127,89,0.12)",
     paddingVertical: spacing.s,
     paddingHorizontal: spacing.m,
     borderRadius: radius.m,
-    minWidth: 90,
+    minWidth: 70,
     alignItems: "center",
     borderWidth: 1,
     borderColor: "rgba(10,127,89,0.2)",
@@ -101,6 +114,45 @@ export const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     letterSpacing: 0.2,
+  },
+  /** Badge type mission : Livraison (couleur distincte) */
+  deliveryTypeBadge: {
+    backgroundColor: "rgba(245,158,11,0.15)",
+    borderColor: "rgba(245,158,11,0.35)",
+  },
+  deliveryTypeBadgeText: {
+    color: "#B45309",
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
+  /** Ligne description livraison (sous le header) */
+  deliveryDescRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: spacing.m,
+    paddingVertical: spacing.s,
+    paddingHorizontal: spacing.m,
+    backgroundColor: "rgba(245,158,11,0.06)",
+    borderRadius: radius.m,
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.15)",
+  },
+  deliveryDescRowCompact: {
+    marginBottom: spacing.s,
+    paddingVertical: spacing.s,
+    paddingHorizontal: spacing.m,
+  },
+  deliveryDescLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#B45309",
+  },
+  deliveryDescText: {
+    fontSize: 13,
+    color: palette.text,
+    flex: 1,
+    flexShrink: 1,
   },
 
   // ——— 2. MissionTimingBlock : départ / arrivée estimée ———
@@ -404,6 +456,7 @@ export const styles = StyleSheet.create({
   containerCompact: {
     paddingVertical: spacing.l,
     paddingHorizontal: spacing.l,
+    marginTop: spacing.s,
   },
   headerRowCompact: {
     marginBottom: 10,

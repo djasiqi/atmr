@@ -6,6 +6,10 @@ import { debugAuthLog, isDebugAuthEnabled } from "@/services/authDebug";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Crypto from "expo-crypto";
 import type { DriverAccountInfo } from "@/services/enterpriseDispatch";
+import {
+  DRIVER_AUTH_KEYS,
+  ENTERPRISE_AUTH_KEYS,
+} from "./storage/keys";
 
 // ============ Clés de stockage sécurisé (SecureStore) ============
 // Driver app: driver_* uniquement pour éviter mélange avec company dashboard (autre origine).
@@ -265,23 +269,76 @@ export const secureStorage = {
   },
 
   /**
-   * Nettoie tout le stockage sécurisé (refresh_token, access_token, user_public_id)
-   * ⚡ Optimisation : Nettoie également tous les caches en mémoire
+   * P1.A — Nettoie uniquement les clés auth chauffeur (SecureStore + AsyncStorage).
+   * Ne touche pas aux tokens Enterprise, device_id, remember me, etc.
    */
-  async clearAll(): Promise<void> {
+  async clearDriverAuthOnly(): Promise<void> {
     await Promise.all([
-      SecureStore.deleteItemAsync(SECURE_KEYS.REFRESH_TOKEN),
-      SecureStore.deleteItemAsync(SECURE_KEYS.ACCESS_TOKEN),
-      SecureStore.deleteItemAsync(SECURE_KEYS.USER_PUBLIC_ID),
+      ...DRIVER_AUTH_KEYS.secure.map((k) => SecureStore.deleteItemAsync(k)),
+      AsyncStorage.multiRemove([...DRIVER_AUTH_KEYS.async]),
     ]);
 
-    // Nettoyer tous les caches en mémoire
     cachedAccessToken = null;
     tokenCacheTime = 0;
     cachedRefreshToken = null;
     refreshTokenCacheTime = 0;
 
-    // ⚡ Phase 4 : Réinitialiser les métriques
+    if (__DEV__) {
+      accessTokenCacheHitCount = 0;
+      accessTokenCacheMissCount = 0;
+      accessTokenTotalReadTime = 0;
+      accessTokenReadCount = 0;
+      refreshTokenCacheHitCount = 0;
+      refreshTokenCacheMissCount = 0;
+      refreshTokenTotalReadTime = 0;
+      refreshTokenReadCount = 0;
+    }
+  },
+
+  /**
+   * P1.A — Nettoie uniquement les clés auth entreprise (SecureStore + AsyncStorage).
+   * Ne touche pas aux tokens chauffeur, device_id, etc.
+   */
+  async clearEnterpriseAuthOnly(): Promise<void> {
+    await Promise.all([
+      ...ENTERPRISE_AUTH_KEYS.secure.map((k) => SecureStore.deleteItemAsync(k)),
+      AsyncStorage.multiRemove([...ENTERPRISE_AUTH_KEYS.async]),
+    ]);
+
+    cachedEnterpriseToken = null;
+    enterpriseTokenCacheTime = 0;
+    cachedEnterpriseRefreshToken = null;
+    enterpriseRefreshTokenCacheTime = 0;
+  },
+
+  /**
+   * Nettoie tout le stockage auth (driver + enterprise).
+   * ⚠️ Réservé aux tests / dev / factory reset. En prod : no-op pour éviter effacement accidentel.
+   */
+  async clearAll(): Promise<void> {
+    if (!__DEV__) {
+      console.warn(
+        "[Storage] clearAll() bloqué en production — utiliser clearDriverAuthOnly/clearEnterpriseAuthOnly"
+      );
+      return;
+    }
+    await Promise.all([
+      SecureStore.deleteItemAsync(SECURE_KEYS.REFRESH_TOKEN),
+      SecureStore.deleteItemAsync(SECURE_KEYS.ACCESS_TOKEN),
+      SecureStore.deleteItemAsync(SECURE_KEYS.USER_PUBLIC_ID),
+      SecureStore.deleteItemAsync(SECURE_KEYS.ENTERPRISE_TOKEN),
+      SecureStore.deleteItemAsync(SECURE_KEYS.ENTERPRISE_REFRESH),
+    ]);
+
+    cachedAccessToken = null;
+    tokenCacheTime = 0;
+    cachedRefreshToken = null;
+    refreshTokenCacheTime = 0;
+    cachedEnterpriseToken = null;
+    enterpriseTokenCacheTime = 0;
+    cachedEnterpriseRefreshToken = null;
+    enterpriseRefreshTokenCacheTime = 0;
+
     if (__DEV__) {
       accessTokenCacheHitCount = 0;
       accessTokenCacheMissCount = 0;

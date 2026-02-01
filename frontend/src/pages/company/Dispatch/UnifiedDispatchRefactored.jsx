@@ -146,7 +146,7 @@ const UnifiedDispatchRefactored = () => {
   });
 
   // Rôle utilisateur : delays/live réservé COMPANY/ADMIN — lecture company_user uniquement (évite 403 si token DRIVER)
-  const user = useCompanyAuthToken();
+  const { user, isCompanyAuthReady } = useCompanyAuthToken();
   const isCompanyOrAdmin = user && (user.isCompany || String(user.role || '').toLowerCase() === 'admin');
 
   // Hooks personnalisés
@@ -157,7 +157,7 @@ const UnifiedDispatchRefactored = () => {
     error: dispatchesError,
     loadDispatches,
   } = useDispatchData(date, dispatchMode);
-  const { delays, summary: _summary, loadDelays } = useLiveDelays(date, !!isCompanyOrAdmin);
+  const { delays, summary: _summary, loadDelays } = useLiveDelays(date, isCompanyAuthReady && !!isCompanyOrAdmin);
 
   // 🆕 Ref pour compter les assignations réelles (mis à jour après chargement)
   // Utiliser une ref plutôt qu'un état pour éviter les re-renders inutiles

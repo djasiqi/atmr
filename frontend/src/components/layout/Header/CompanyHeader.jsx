@@ -4,6 +4,7 @@ import { Link, useParams, useLocation } from 'react-router-dom';
 import styles from './CompanyHeader.module.css';
 
 import useCompanyData from '../../../hooks/useCompanyData';
+import useCompanyAuthToken from '../../../hooks/useCompanyAuthToken';
 import useDispatchDelays from '../../../hooks/useDispatchDelays';
 import { logoutUser } from '../../../utils/apiClient';
 import resolveLogoUrl from '../../../utils/resolveLogoUrl';
@@ -59,8 +60,9 @@ const CompanyHeader = () => {
 
   const homeHref = routePublicId ? `/dashboard/company/${routePublicId}` : '/dashboard/company';
 
-  // 🆕 Hook pour les retards (refresh toutes les 2 minutes)
-  const { delayCount, hasCriticalDelays } = useDispatchDelays(null, 120000);
+  // 🆕 Hook pour les retards (refresh toutes les 2 minutes). Désactivé si auth company non prête.
+  const { isCompanyAuthReady } = useCompanyAuthToken();
+  const { delayCount, hasCriticalDelays } = useDispatchDelays(null, 120000, isCompanyAuthReady);
 
   return (
     <header className={styles.header} role="banner">

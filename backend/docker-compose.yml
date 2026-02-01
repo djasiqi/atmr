@@ -57,7 +57,7 @@ services:
   celery-worker:
     image: docker.io/djasiqi/atmr-backend:latest
     env_file: .env.production
-    command: celery -A celery_app.celery worker --loglevel=INFO --concurrency=4
+    command: celery -A celery_app.celery worker --loglevel=INFO --concurrency=4 -Q default,notifications,realtime,dlq
     depends_on:
       - redis
       - postgres

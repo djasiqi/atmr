@@ -9,7 +9,9 @@ import Constants from "expo-constants";
 import * as Sentry from "@sentry/react-native";
 import { waitForAuthReady } from "@/services/authSync";
 import { secureStorage, asyncStorage } from "@/services/storage";
-import { AuthNotReadyError, isPublicEndpoint } from "@/services/authGuards";
+import { AuthInvalidError, AuthNotReadyError, isPublicEndpoint } from "@/services/authGuards";
+import { invokeForceLogoutEnterprise } from "@/services/authController";
+import { logAuthEvent, beginRefreshCycle } from "@/services/authLogging";
 import { debugAuthLog, isDebugAuthEnabled } from "@/services/authDebug";
 import { sendIngestEvent } from "@/src/config/telemetry";
 
@@ -386,12 +388,9 @@ export const invalidateEnterpriseInterceptorCache = () => {
   }
 };
 
+/** P1.A — Nettoie uniquement les clés auth entreprise (SecureStore + AsyncStorage). */
 const clearEnterpriseStorage = async () => {
-  // ✅ CORRECTION : Utiliser SecureStore pour les tokens
-  await secureStorage.clearEnterpriseTokens();
-  // Garder AsyncStorage uniquement pour la session complète (données non sensibles)
-  await AsyncStorage.removeItem(ENTERPRISE_SESSION_KEY);
-  // ⚡ CORRECTION : Invalider le cache interceptor
+  await secureStorage.clearEnterpriseAuthOnly();
   invalidateEnterpriseInterceptorCache();
 };
 
@@ -549,6 +548,12 @@ export const refreshEnterpriseTokenSingleflight = async (
     const refreshToken =
       overrideRefreshToken || (await secureStorage.getEnterpriseRefreshToken());
     if (!refreshToken) {
+      logAuthEvent("AUTH_REFRESH_FAIL", {
+        route: "enterprise",
+        reason: "missing_refresh_token",
+        refresh_attempted: false,
+        outcome: "abort",
+      });
       throw new AuthNotReadyError({
         kind: "enterprise",
         reason: "missing_refresh_token",
@@ -556,6 +561,8 @@ export const refreshEnterpriseTokenSingleflight = async (
       });
     }
 
+    const refreshCycleId = beginRefreshCycle("enterprise");
+    logAuthEvent("AUTH_REFRESH_START", { route: "enterprise", refresh_cycle_id: refreshCycleId });
     const response = await axios.post<EnterpriseTokenPayload>(
       `${baseURL}/auth/refresh`,
       { refresh_token: refreshToken },
@@ -633,14 +640,20 @@ const refreshAccessToken = async (): Promise<string | null | undefined> => {
         // (401 = refresh token expiré/invalide, 403 = compte désactivé)
         // Ne pas supprimer pour erreurs réseau temporaires ou erreurs serveur
         if (refreshStatus === 401 || refreshStatus === 403) {
-          // Token expiré ou compte désactivé → supprimer les tokens
+          logAuthEvent("AUTH_REFRESH_FAIL", {
+            route: "enterprise",
+            status: refreshStatus,
+            refresh_attempted: true,
+            outcome: "logout",
+          });
           const errorMessage = errorData?.error || `Refresh token invalide (${refreshStatus})`;
           console.error(
             `[ENT Refresh] ❌ Refresh token échoué (${refreshStatus}): ${errorMessage}. Suppression des tokens.`
           );
-          await clearEnterpriseStorage();
-          processQueue(error, null);
-          throw error;
+          const reason = refreshStatus === 401 ? "refresh_rejected_401" : "refresh_rejected_403";
+          processQueue(new AuthInvalidError({ route: "enterprise", reason }), null);
+          await invokeForceLogoutEnterprise(reason);
+          throw new AuthInvalidError({ route: "enterprise", reason });
         } else if (isNetworkError) {
           // Erreur réseau temporaire → ne pas supprimer les tokens
           console.warn(
@@ -756,6 +769,11 @@ enterpriseApi.interceptors.request.use(
               });
             }
             if (!refreshToken) {
+              logAuthEvent("AUTH_ACCESS_ABSENT", {
+                kind: "enterprise",
+                reason: "missing_refresh_token",
+                url: config.url?.slice(0, 100),
+              });
               if (__DEV__) {
                 console.warn(
                   "[ENT] AUTH_NOT_READY (missing_refresh_token) - requête bloquée:",
@@ -894,6 +912,13 @@ enterpriseApi.interceptors.response.use(
 
       // ✅ 401 = refresh token expiré/invalide, 403 = refus côté refresh → déconnecter
       if (refreshStatus === 401 || refreshStatus === 403) {
+        logAuthEvent("AUTH_REFRESH_FAIL", {
+          route: "enterprise",
+          status: refreshStatus,
+          refresh_attempted: true,
+          outcome: "logout",
+          source: "refresh_endpoint",
+        });
         const errorMessage =
           errorData?.error || `Refresh token invalide (${refreshStatus})`;
         console.error(
@@ -910,8 +935,10 @@ enterpriseApi.interceptors.response.use(
           });
         }
 
-        await clearEnterpriseStorage();
-        return Promise.reject(error);
+        const reason = refreshStatus === 401 ? "refresh_rejected_401" : "refresh_rejected_403";
+        processQueue(new AuthInvalidError({ route: "enterprise", reason }), null);
+        await invokeForceLogoutEnterprise(reason);
+        return Promise.reject(new AuthInvalidError({ route: "enterprise", reason }));
       }
       // Autres erreurs (réseau, etc.) → ne pas déconnecter
       return Promise.reject(error);
@@ -960,11 +987,16 @@ enterpriseApi.interceptors.response.use(
         
         // ✅ Distinguer les types d'erreurs (comme Driver API)
         if (refreshStatus === 401) {
-          // Refresh token expiré/invalide → déconnecter
+          logAuthEvent("AUTH_REFRESH_FAIL", {
+            route: "enterprise",
+            status: 401,
+            refresh_attempted: true,
+            outcome: "logout",
+          });
           console.error(
             `[ENT Interceptor] ❌ Refresh échoué (${refreshStatus}). Déconnexion forcée.`
           );
-          await clearEnterpriseStorage();
+          await invokeForceLogoutEnterprise("refresh_rejected_401");
           return Promise.reject(refreshError);
         } else if (isNetworkError) {
           // Erreur réseau temporaire → ne pas déconnecter

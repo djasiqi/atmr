@@ -41,6 +41,9 @@ class InvoiceDescriptionBuilder:
         dropoff_location: str,
         patient_name: str | None = None,
         bill_to_client_id: int | None = None,
+        *,
+        is_material_delivery: bool = False,
+        delivery_description: str | None = None,
     ) -> str:
         """Construit la description d'une ligne de facture.
 
@@ -49,10 +52,15 @@ class InvoiceDescriptionBuilder:
             dropoff_location: Lieu de dépose
             patient_name: Nom du patient (optionnel, pour facturation tierce)
             bill_to_client_id: ID du client payeur (optionnel, pour facturation tierce)
+            is_material_delivery: True si livraison matériel
+            delivery_description: Description de la livraison (ex: Livraison médicament)
 
         Returns:
             Description formatée
         """
+        if is_material_delivery and delivery_description:
+            # Livraison : "Livraison medicament - Clinique -> Domicile"
+            return f"Livraison – {delivery_description} – {pickup_location} → {dropoff_location}"
         if bill_to_client_id and patient_name:
             # Facturation tierce : inclure le nom du patient
             return f"Trajet pour {patient_name}: {pickup_location} → {dropoff_location}"

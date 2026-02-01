@@ -83,10 +83,9 @@ def handle_booking_created(event: dict[str, Any]) -> None:
 def handle_booking_updated(event: dict[str, Any]) -> None:
     """Handler pour BookingUpdatedEvent.
 
-    Actions:
-    - Notifie le driver via SocketIO (mise à jour de booking) si l'update ne vient
-      pas de lui (éviter les "self-notifications")
-    - Notifie l'entreprise via SocketIO + Push quand l'update vient du chauffeur
+    Routage centralisé via compute_notification_targets (exclude_actor).
+    - actor=driver: company only (socket+push), driver NEVER push
+    - actor=company: driver (socket+push), company socket
     """
     booking_id = event.get("booking_id")
     driver_id = event.get("driver_id")
@@ -106,6 +105,9 @@ def handle_booking_updated(event: dict[str, Any]) -> None:
         from services.events.fanout import (
             fanout_booking_updated,
             fanout_booking_updated_to_company,
+        )
+        from services.notifications.notification_targets import (
+            compute_notification_targets,
         )
 
         # Récupérer le booking pour la notification
@@ -132,71 +134,73 @@ def handle_booking_updated(event: dict[str, Any]) -> None:
                 "value",
                 getattr(booking, "status", None),
             )
-            booking_data["status"] = (
+            status_val = (
                 str(status_raw).lower() if status_raw is not None else None
             )
+            booking_data["status"] = status_val
             booking_data["actor_role"] = actor_role
             booking_data["actor_id"] = actor_id
             booking_data["changes"] = event.get("changes")
+            # P0.4: trace_id end-to-end (event_id = UUID unique par événement)
+            booking_data["trace_id"] = event.get("event_id") or event.get("trace_id")
 
             company_id = int(
                 getattr(booking, "company_id", event.get("company_id") or 0) or 0
             )
-            status_val = booking_data.get("status")  # pour P0: detecter driver progress
 
-            # ✅ P0: Si le chauffeur est l'initiateur OU si le statut indique une action chauffeur
-            # (en_route / in_progress / completed / return_completed), on notifie UNIQUEMENT
-            # l'entreprise. Jamais de push au chauffeur pour ses propres actions.
-            is_driver_actor = (
-                actor_role == "driver"
-                and actor_id is not None
-                and int(actor_id) == int(driver_id)
-            ) or (
-                str(status_val or "").lower()
-                in {"en_route", "in_progress", "completed", "return_completed"}
-            )
-            if is_driver_actor:
-                if company_id:
-                    fanout_booking_updated_to_company(
-                        company_id=company_id,
-                        booking_id=int(booking_id),
-                        booking_data=booking_data,
-                        send_push=True,
-                    )
-                logger.debug(
-                    "[EventBus] BookingUpdatedEvent from driver / driver progress -> company only (no push driver), booking %s",
-                    booking_id,
-                )
-                return
-
-            # Sinon: on notifie le chauffeur (et on garde l'entreprise à jour via Socket.IO)
-            changes = event.get("changes") or {}
-            changes_keys = set(changes.keys()) if isinstance(changes, dict) else set()
-            should_send_push = bool(
-                changes_keys.intersection(
-                    {"scheduled_time", "pickup_location", "dropoff_location", "notes"}
-                )
-            ) or booking_data.get("status") in {"cancelled", "canceled"}
-
-            fanout_booking_updated(
+            # ✅ P0: Routage centralisé (exclude_actor) + source pour fallback
+            targets = compute_notification_targets(
                 driver_id=int(driver_id),
-                booking_id=int(booking_id),
-                booking_data=booking_data,
-                send_push=should_send_push,
+                company_id=company_id,
+                actor_role=actor_role,
+                actor_id=int(actor_id) if actor_id is not None else None,
+                status=status_val,
+                source=event.get("source"),
             )
-            if company_id:
+
+            # Company: socket + push selon targets
+            if targets.notify_company_socket or targets.notify_company_push:
                 fanout_booking_updated_to_company(
                     company_id=company_id,
                     booking_id=int(booking_id),
                     booking_data=booking_data,
-                    # ✅ si on envoie une notif au chauffeur pour un changement important,
-                    # on envoie aussi une notif entreprise (multi-device).
-                    send_push=should_send_push,
+                    send_push=targets.notify_company_push,
                 )
+
+            # Driver: socket + push selon targets (skip si exclude_driver_id)
+            if (targets.notify_driver_socket or targets.notify_driver_push) and (
+                targets.exclude_driver_id is None
+                or int(driver_id) != int(targets.exclude_driver_id)
+            ):
+                changes = event.get("changes") or {}
+                changes_keys = set(changes.keys()) if isinstance(changes, dict) else set()
+                driver_push = targets.notify_driver_push and (
+                    bool(
+                        changes_keys.intersection(
+                            {
+                                "scheduled_time",
+                                "pickup_location",
+                                "dropoff_location",
+                                "notes",
+                            }
+                        )
+                    )
+                    or status_val in {"cancelled", "canceled"}
+                )
+                fanout_booking_updated(
+                    driver_id=int(driver_id),
+                    booking_id=int(booking_id),
+                    booking_data=booking_data,
+                    send_push=driver_push,
+                    exclude_driver_id=targets.exclude_driver_id,
+                )
+
             logger.debug(
-                "[EventBus] Notified driver %s about booking update %s (actor_role=%s)",
-                driver_id,
-                booking_id,
+                "[EventBus] BookingUpdatedEvent routed: driver_socket=%s driver_push=%s company_socket=%s company_push=%s (actor_role=%s)",
+                targets.notify_driver_socket,
+                targets.notify_driver_push,
+                targets.notify_company_socket,
+                targets.notify_company_push,
                 actor_role,
             )
     except (ValueError, TypeError) as e:

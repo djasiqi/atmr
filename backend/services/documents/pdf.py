@@ -546,6 +546,8 @@ def _detect_and_group_round_trips(
     # ✅ ÉTAPE 2: Heuristique pour les items non appariés explicitement
     # Grouper par (patient_id, date_jour) pour les items restants
     groups: dict[tuple[int, str], list[dict[str, Any]]] = defaultdict(list)
+    # Items sans patient_id/date (ex: livraison matériel) : ne pas les perdre
+    standalone_items: list[dict[str, Any]] = []
 
     for idx, item in enumerate(invoice_lines_with_bookings):
         if idx in used_by_explicit:
@@ -555,25 +557,15 @@ def _detect_and_group_round_trips(
         date = item.get("date")
 
         if not patient_id or not date:
-            # Pas de regroupement possible, garder tel quel
+            # Pas de regroupement possible, garder tel quel (ne pas perdre la ligne)
             item["is_round_trip"] = False
             item["transport_type"] = "Aller"
-            continue
-
-        # Date à la journée (sans heure)
-        date_key = (
-            date.strftime("%Y-%m-%d") if isinstance(date, datetime) else str(date)[:10]
-        )
-        groups[(patient_id, date_key)].append(item)
-
-    consolidated_lines = []
-
-    for (_patient_id, _date_key), items in groups.items():
-        if len(items) < _MIN_ITEMS_FOR_ROUND_TRIP:
-            # Pas assez d'items pour un A/R, garder tel quel
-            for item in items:
-                item["is_round_trip"] = False
-                item["transport_type"] = "Aller"
+            line = item.get("line")
+            if line and line.type == InvoiceLineType.MATERIAL_DELIVERY:
+                item["transport_display"] = (
+                    line.description[:80] if line.description else "Livraison"
+                )
+            else:
                 pickup = item.get("pickup", "")
                 dropoff = item.get("dropoff", "")
                 if pickup and dropoff:
@@ -584,6 +576,41 @@ def _detect_and_group_round_trips(
                     item["transport_display"] = (
                         f"{pickup} → {dropoff}" if pickup or dropoff else ""
                     )
+            item["earliest_scheduled"] = item.get("date")
+            standalone_items.append(item)
+            continue
+
+        # Date à la journée (sans heure)
+        date_key = (
+            date.strftime("%Y-%m-%d") if isinstance(date, datetime) else str(date)[:10]
+        )
+        groups[(patient_id, date_key)].append(item)
+
+    consolidated_lines: list[dict[str, Any]] = []
+
+    for (_patient_id, _date_key), items in groups.items():
+        if len(items) < _MIN_ITEMS_FOR_ROUND_TRIP:
+            # Pas assez d'items pour un A/R, garder tel quel
+            for item in items:
+                item["is_round_trip"] = False
+                item["transport_type"] = "Aller"
+                line = item.get("line")
+                # ✅ Livraison matériel : utiliser la description complète
+                if line and line.type == InvoiceLineType.MATERIAL_DELIVERY:
+                    item["transport_display"] = (
+                        line.description[:80] if line.description else "Livraison"
+                    )
+                else:
+                    pickup = item.get("pickup", "")
+                    dropoff = item.get("dropoff", "")
+                    if pickup and dropoff:
+                        short_a = _short_label_for_transport(pickup)
+                        short_b = _short_label_for_transport(dropoff)
+                        item["transport_display"] = f"{short_a} → {short_b}"
+                    else:
+                        item["transport_display"] = (
+                            f"{pickup} → {dropoff}" if pickup or dropoff else ""
+                        )
                 item["earliest_scheduled"] = item.get("date")
                 consolidated_lines.append(item)
             continue
@@ -785,28 +812,42 @@ def _detect_and_group_round_trips(
                 item = pair["item"]
                 item["is_round_trip"] = False
                 item["transport_type"] = "Aller"
-                short_a = _short_label_for_transport(pair["pickup_orig"])
-                short_b = _short_label_for_transport(pair["dropoff_orig"])
-                item["transport_display"] = f"{short_a} → {short_b}"
+                line = item.get("line")
+                if line and line.type == InvoiceLineType.MATERIAL_DELIVERY:
+                    item["transport_display"] = (
+                        line.description[:80] if line.description else "Livraison"
+                    )
+                else:
+                    short_a = _short_label_for_transport(pair["pickup_orig"])
+                    short_b = _short_label_for_transport(pair["dropoff_orig"])
+                    item["transport_display"] = f"{short_a} → {short_b}"
                 item["earliest_scheduled"] = item.get("date")
                 consolidated_lines.append(item)
 
-    # ✅ Combiner les résultats explicites et heuristiques
-    return consolidated_explicit + consolidated_lines
+    # ✅ Combiner les résultats explicites, heuristiques et items standalone (sans patient/date)
+    # L'ordre final est assuré par _sort_consolidated_lines_for_s2 : tri par (date, patient, heure)
+    # → les standalone avec date sont intercalés, ceux sans date en fin de facture
+    return consolidated_explicit + consolidated_lines + standalone_items
 
 
 def _sort_consolidated_lines_for_s2(
     consolidated_lines: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Tri stable pour les lignes S2: date puis patient puis earliest_scheduled."""
+    """Tri stable pour les lignes S2: date puis patient puis earliest_scheduled.
+
+    Les lignes sans date (ex: standalone edge case) sont mises en fin de facture
+    pour éviter des lignes "sans date" en tête qui perturberaient la lecture.
+    """
     from datetime import datetime as dt
+
+    _SENTINEL_NO_DATE = "9999-12-31"  # Trie après toutes les dates réelles
 
     def sort_key(row: dict[str, Any]) -> tuple[str, str, str]:
         d = row.get("date")
         date_key = (
             d.strftime("%Y-%m-%d")
             if d and isinstance(d, dt)
-            else (str(d)[:10] if d else "")
+            else (str(d)[:10] if d else _SENTINEL_NO_DATE)
         )
         patient = (row.get("patient_name") or "").strip()
         earliest = row.get("earliest_scheduled")
@@ -1317,7 +1358,14 @@ def _build_s2_table(
 
     lines_with_bookings: list[dict[str, Any]] = []
     for line in invoice.lines:
-        if line.type != InvoiceLineType.RIDE or not line.reservation_id:
+        if (
+            line.type
+            not in (
+                InvoiceLineType.RIDE,
+                InvoiceLineType.MATERIAL_DELIVERY,
+            )
+            or not line.reservation_id
+        ):
             continue
         booking = Booking.query.get(line.reservation_id)
         if not booking:
@@ -1429,7 +1477,11 @@ def _build_s2_table(
 
     if include_non_ride:
         for line in invoice.lines:
-            if line.type != InvoiceLineType.RIDE:
+            # LATE_FEE, REMINDER_FEE, CUSTOM (pas RIDE ni MATERIAL_DELIVERY)
+            if line.type not in (
+                InvoiceLineType.RIDE,
+                InvoiceLineType.MATERIAL_DELIVERY,
+            ):
                 amt = line.line_total if line.line_total is not None else Decimal("0")
                 amount = f"{Decimal(amt):.2f}"
                 table_data.append(["", "", line.description[:30], amount])
@@ -3045,7 +3097,14 @@ class PDFService:
         )
 
         for line in invoice.lines:
-            if line.type == InvoiceLineType.RIDE and line.reservation_id:
+            if (
+                line.type
+                in (
+                    InvoiceLineType.RIDE,
+                    InvoiceLineType.MATERIAL_DELIVERY,
+                )
+                and line.reservation_id
+            ):
                 from models import Booking
 
                 booking = Booking.query.get(line.reservation_id)
