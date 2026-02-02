@@ -764,6 +764,7 @@ class GenerateInvoiceUseCase:
                     else None,
                     is_material_delivery=is_delivery,
                     delivery_description=delivery_desc,
+                    is_cancelled=(getattr(reservation, "status", None) == "CANCELED"),
                 )
 
                 # Créer la ligne

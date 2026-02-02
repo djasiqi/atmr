@@ -17,6 +17,8 @@ class InvoiceDescriptionBuilderPort(Protocol):
         dropoff_location: str,
         patient_name: str | None = None,
         bill_to_client_id: int | None = None,
+        *,
+        is_cancelled: bool = False,
     ) -> str:
         """Construit la description d'une ligne de facture.
 
@@ -44,6 +46,7 @@ class InvoiceDescriptionBuilder:
         *,
         is_material_delivery: bool = False,
         delivery_description: str | None = None,
+        is_cancelled: bool = False,
     ) -> str:
         """Construit la description d'une ligne de facture.
 
@@ -54,15 +57,17 @@ class InvoiceDescriptionBuilder:
             bill_to_client_id: ID du client payeur (optionnel, pour facturation tierce)
             is_material_delivery: True si livraison matériel
             delivery_description: Description de la livraison (ex: Livraison médicament)
+            is_cancelled: True si transport annulé (mention "Annulation" préfixée)
 
         Returns:
             Description formatée
         """
+        prefix = "Annulation – " if is_cancelled else ""
         if is_material_delivery and delivery_description:
             # Livraison : "Livraison medicament - Clinique -> Domicile"
-            return f"Livraison – {delivery_description} – {pickup_location} → {dropoff_location}"
+            return f"{prefix}Livraison – {delivery_description} – {pickup_location} → {dropoff_location}"
         if bill_to_client_id and patient_name:
             # Facturation tierce : inclure le nom du patient
-            return f"Trajet pour {patient_name}: {pickup_location} → {dropoff_location}"
+            return f"{prefix}Trajet pour {patient_name}: {pickup_location} → {dropoff_location}"
         # Facturation directe : description simple
-        return f"Trajet {pickup_location} → {dropoff_location}"
+        return f"{prefix}Trajet {pickup_location} → {dropoff_location}"

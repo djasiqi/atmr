@@ -347,6 +347,13 @@ class GenerateClinicMonthlyInvoiceUseCase:
                     ClientStay.end_date >= Booking.scheduled_time,
                 ),
             )
+            # ✅ Annulations : uniquement l'aller facturé (pas le retour)
+            canceled_condition = (
+                (Booking.status == "CANCELED")
+                & (Booking.amount > 0)
+                & stay_overlaps_booking
+                & (Booking.is_return == False)  # noqa: E712 — SQLAlchemy column comparison
+            )
             query = Booking.query.filter(
                 Booking.company_id == input_data.company_id,
                 Booking.billed_to_company_id == input_data.clinic_company_id,
@@ -354,9 +361,7 @@ class GenerateClinicMonthlyInvoiceUseCase:
                 == "clinic",  # ✅ Strict: uniquement facturation clinique (exclut automatiquement les overrides patient)
                 or_(
                     Booking.status.in_(["COMPLETED", "RETURN_COMPLETED"]),
-                    (Booking.status == "CANCELED")
-                    & (Booking.amount > 0)
-                    & stay_overlaps_booking,
+                    canceled_condition,
                 ),
                 Booking.invoice_line_id.is_(None),  # ✅ Pas encore facturé
                 Booking.scheduled_time >= start_date,
@@ -790,6 +795,7 @@ class GenerateClinicMonthlyInvoiceUseCase:
                     bill_to_client_id=None,
                     is_material_delivery=is_delivery,
                     delivery_description=delivery_desc,
+                    is_cancelled=(getattr(reservation, "status", None) == "CANCELED"),
                 )
 
                 # ✅ Créer la ligne avec métadonnées patient (snapshot juridique)

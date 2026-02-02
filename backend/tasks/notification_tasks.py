@@ -14,7 +14,8 @@ from __future__ import annotations
 import logging
 from typing import Any, ClassVar, Dict
 
-from celery import Task  # type: ignore[import-untyped]
+from celery import Task
+from typing_extensions import override
 
 from celery_app import celery
 
@@ -38,7 +39,8 @@ class NotificationTask(Task):
     retry_backoff_max: ClassVar[int] = 600  # 10 minutes max
     retry_jitter: ClassVar[bool] = True
 
-    def on_failure(self, exc, task_id, _args, kwargs, einfo):
+    @override
+    def on_failure(self, exc, task_id, args, kwargs, einfo):
         """Appelé quand la task échoue après tous les retries.
 
         Envoie la notification en DLQ pour traitement manuel.
@@ -357,7 +359,7 @@ def send_push_notification_task(  # noqa: PLR0911
     task_soft_time_limit=25,
 )
 def send_push_company_notification_task(
-    self,
+    _self,
     company_id: int,
     title: str,
     body: str,
@@ -389,9 +391,11 @@ def send_push_company_notification_task(
     app = get_flask_app()
     with app.app_context():
         try:
-            from services.events.fanout import _send_push_to_company
+            from services.notifications.company_push import (
+                send_push_to_company_sync,
+            )
 
-            success = _send_push_to_company(
+            success = send_push_to_company_sync(
                 company_id=company_id,
                 title=title,
                 body=body,

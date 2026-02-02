@@ -1309,6 +1309,32 @@ class EligibleClients(Resource):
         # - L'entreprise exécutante (executing_company_id) peut facturer l'entreprise propriétaire
         # Ici, on cherche les clients avec courses où l'entreprise est propriétaire
         # ✅ Unbilled = pas de ligne facture OU ligne liée à une facture annulée (récupération après annulation)
+        target_statuses = [
+            BookingStatus.COMPLETED.value,
+            BookingStatus.RETURN_COMPLETED.value,
+        ]
+        status_filter = Booking.status.in_(target_statuses)
+
+        # S2 / facturation clinique : inclure aussi les annulations éligibles (aller uniquement, client hospitalisé)
+        if clinic_company_id and billed_to_type != "patient":
+            stay_overlaps = exists().where(
+                ClientStay.client_id == Booking.client_id,
+                ClientStay.company_id == clinic_company_id,
+                ClientStay.status == "active",
+                ClientStay.start_date <= Booking.scheduled_time,
+                or_(
+                    ClientStay.end_date.is_(None),
+                    ClientStay.end_date >= Booking.scheduled_time,
+                ),
+            )
+            canceled_eligible = (
+                (Booking.status == BookingStatus.CANCELED.value)
+                & (Booking.amount > 0)
+                & stay_overlaps
+                & (Booking.is_return == False)  # noqa: E712 — SQLAlchemy column comparison
+            )
+            status_filter = or_(Booking.status.in_(target_statuses), canceled_eligible)
+
         unbilled_query = (
             db.session.query(
                 Booking.client_id.label("client_id"),
@@ -1324,12 +1350,7 @@ class EligibleClients(Resource):
             .outerjoin(Invoice, InvoiceLine.invoice_id == Invoice.id)
             .filter(
                 Booking.company_id == company_id,  # Entreprise propriétaire
-                Booking.status.in_(
-                    [
-                        BookingStatus.COMPLETED.value,
-                        BookingStatus.RETURN_COMPLETED.value,
-                    ]
-                ),
+                status_filter,
                 or_(
                     Booking.invoice_line_id.is_(None),
                     Invoice.status == InvoiceStatus.CANCELLED,
@@ -1658,15 +1679,20 @@ class ClinicMonthlyTotals(Resource):
 
             # ✅ Transports éligibles (billed_to_type='clinic') - inclut annulations facturables
             # uniquement si client hospitalisé à la clinique au moment de la course
+            # ✅ Annulations : uniquement l'aller facturé (pas le retour)
+            canceled_eligible = (
+                (Booking.status == BookingStatus.CANCELED.value)
+                & (Booking.amount > 0)
+                & stay_overlaps_booking
+                & (Booking.is_return == False)  # noqa: E712 — SQLAlchemy column comparison
+            )
             eligible_query = Booking.query.filter(
                 Booking.company_id == company_id,
                 Booking.billed_to_company_id == clinic_company_id,
                 Booking.billed_to_type == "clinic",
                 or_(
                     Booking.status.in_(target_statuses),
-                    (Booking.status == BookingStatus.CANCELED.value)
-                    & (Booking.amount > 0)
-                    & stay_overlaps_booking,
+                    canceled_eligible,
                 ),
                 Booking.invoice_line_id.is_(None),
                 Booking.scheduled_time >= start_date,
@@ -1719,9 +1745,7 @@ class ClinicMonthlyTotals(Resource):
                     Booking.billed_to_type == "clinic",
                     or_(
                         Booking.status.in_(target_statuses),
-                        (Booking.status == BookingStatus.CANCELED.value)
-                        & (Booking.amount > 0)
-                        & stay_overlaps_booking,
+                        canceled_eligible,
                     ),
                     Booking.invoice_line_id.is_(None),
                     Booking.scheduled_time >= start_date,

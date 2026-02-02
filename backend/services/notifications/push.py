@@ -57,6 +57,16 @@ CIRCUIT_BREAKER_COOLDOWN = 60  # Cooldown de 60 secondes avant de réessayer
 DEDUP_WINDOW = 300  # ✅ CORRECTIF: Fenêtre de déduplication de 5 minutes (300s) pour couvrir retries Celery
 
 
+def _safe_int(val: Any) -> int:
+    """Convertit une valeur Redis (bytes|str|None) en int pour le circuit breaker."""
+    if val is None or val == 0:
+        return 0
+    try:
+        return int(val)
+    except (TypeError, ValueError):
+        return 0
+
+
 def _check_circuit_breaker() -> tuple[bool, str | None]:
     """Vérifie si le circuit breaker est ouvert (trop d'échecs Expo Push).
 
@@ -83,12 +93,12 @@ def _check_circuit_breaker() -> tuple[bool, str | None]:
             return True, f"Circuit breaker ouvert (réessai dans {ttl}s)"
 
         # ✅ CORRECTIF #5: Séparer erreurs réseau des tokens invalides
-        failure_count = redis_client.get(failure_count_key) or 0
-        token_invalid_count = redis_client.get(token_invalid_count_key) or 0
+        failure_count = _safe_int(redis_client.get(failure_count_key))
+        token_invalid_count = _safe_int(redis_client.get(token_invalid_count_key))
 
         # Ne compter que les erreurs réseau pour le circuit breaker
         # Les tokens invalides ne doivent pas bloquer tous les envois
-        network_failures = int(failure_count) - int(token_invalid_count)
+        network_failures = failure_count - token_invalid_count
 
         if network_failures >= CIRCUIT_BREAKER_THRESHOLD:
             redis_client.setex(circuit_key, CIRCUIT_BREAKER_COOLDOWN, "1")
