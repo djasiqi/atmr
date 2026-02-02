@@ -1,5 +1,6 @@
 import contextlib
 import logging
+import uuid
 from collections import defaultdict
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -306,10 +307,21 @@ def _normalize_address_for_comparison(address: str) -> str:
 
 
 def _is_booking_cancelled(booking: Any) -> bool:
-    """Vérifie si un booking est annulé (status CANCELED)."""
+    """Vérifie si un booking est annulé (status CANCELED / CANCELLED).
+
+    Gère enum (BookingStatus.CANCELED) et str pour robustesse.
+    Accepte les deux orthographes (US: CANCELED, UK: CANCELLED).
+    """
     if not booking:
         return False
-    return (str(getattr(booking, "status", "") or "").upper() == "CANCELED")
+    status_raw = getattr(booking, "status", None)
+    if status_raw is None:
+        return False
+    # Enum: utiliser .value si disponible, sinon str()
+    status_str = (
+        getattr(status_raw, "value", None) or str(status_raw) or ""
+    )
+    return status_str.upper().strip() in {"CANCELED", "CANCELLED"}
 
 
 def _short_label_for_transport(address: str) -> str:
@@ -1791,18 +1803,30 @@ class PDFService:
         """
         return self.template_builder.extract_invoice_data(invoice)
 
-    def generate_invoice_pdf(self, invoice):
+    def generate_invoice_pdf(self, invoice, *, force_regenerate: bool = False):
         """Génère le PDF d'une facture.
+
+        Args:
+            invoice: La facture pour laquelle générer le PDF
+            force_regenerate: Si True, régénère même si pdf_url existe déjà
+                (utilisé par l'endpoint regenerate-pdf)
 
         ⚠️ PROTECTION IMMUTABILITÉ:
         Ne modifie JAMAIS invoice.pdf_url si:
         - invoice.status est SENT, PARTIALLY_PAID, ou PAID (facture verrouillée)
-        - invoice.pdf_url existe déjà (PDF déjà généré)
-
-        Cette protection évite les régressions où un "regenerate" en prod
-        écraserait un PDF déjà envoyé au client.
+        - invoice.pdf_url existe déjà ET force_regenerate=False
         """
         from models.enums import InvoiceStatus
+
+        # ✅ Garde-fou 2: Log explicite pour diagnostic (invoice_id, force_regenerate, action)
+        invoice_id = getattr(invoice, "id", None)
+        has_existing_pdf_url = bool(getattr(invoice, "pdf_url", None))
+        app_logger.info(
+            "[PDF] generate_invoice_pdf entry: invoice_id=%s, force_regenerate=%s, has_existing_pdf_url=%s",
+            invoice_id,
+            force_regenerate,
+            has_existing_pdf_url,
+        )
 
         # ✅ PROTECTION: Vérifier si la facture est "verrouillée" (déjà envoyée/payée)
         locked_statuses = {
@@ -1812,10 +1836,7 @@ class PDFService:
         }
         if invoice.status in locked_statuses:
             app_logger.warning(
-                (
-                    "[PDF PROTECTION] Tentative de régénération PDF pour facture verrouillée: "
-                    "invoice_id=%s, status=%s, pdf_url=%s. PDF non modifié."
-                ),
+                "[PDF PROTECTION] Tentative de régénération PDF pour facture verrouillée: invoice_id=%s, status=%s, pdf_url=%s. Action=SKIP_LOCKED",
                 invoice.id,
                 invoice.status.value,
                 invoice.pdf_url,
@@ -1823,20 +1844,19 @@ class PDFService:
             # Retourner le PDF existant si disponible, sinon None
             return invoice.pdf_url if invoice.pdf_url else None
 
-        # ✅ PROTECTION: Si un PDF existe déjà, ne pas l'écraser (sauf si explicitement demandé)
-        # Note: Cette protection peut être contournée via un flag explicite si nécessaire
-        # Pour l'instant, on protège par défaut
-        if invoice.pdf_url:
+        # ✅ Si un PDF existe déjà et qu'on ne force pas la régénération, retourner l'existant
+        if invoice.pdf_url and not force_regenerate:
             app_logger.info(
-                (
-                    "[PDF PROTECTION] Facture %s a déjà un PDF (%s). "
-                    "Pour forcer la régénération, utiliser un flag explicite."
-                ),
+                "[PDF] Facture %s a déjà un PDF (%s). Action=SKIP_REUSE_EXISTING",
                 invoice.id,
                 invoice.pdf_url,
             )
-            # Retourner le PDF existant
             return invoice.pdf_url
+
+        app_logger.info(
+            "[PDF] Facture %s: régénération demandée. Action=REGENERATE",
+            invoice.id,
+        )
 
         try:
             # Charger la facture avec toutes les relations
@@ -1943,10 +1963,11 @@ class PDFService:
                 )
 
             # Sauvegarder le fichier
-            filename = (
-                f"invoice_{invoice.invoice_number}_"
-                f"{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.pdf"
-            )
+            # ✅ Garde-fou 1: Quand force_regenerate=True, inclure un UUID pour garantir
+            # une URL unique (évite cache/proxy qui resservirait l'ancien fichier)
+            ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+            unique_suffix = f"{ts}_{uuid.uuid4().hex[:8]}" if force_regenerate else ts
+            filename = f"invoice_{invoice.invoice_number}_{unique_suffix}.pdf"
             filepath = Path(self.invoices_dir, filename)
 
             pdf_bytes: bytes = pdf_content if isinstance(pdf_content, bytes) else b""
@@ -1961,7 +1982,12 @@ class PDFService:
 
             pdf_url = f"{pdf_base_url}{uploads_base}/invoices/{filename}"
 
-            app_logger.info("PDF de facture généré: %s", pdf_url)
+            app_logger.info(
+                "[PDF] PDF written to: invoice_id=%s, filename=%s, pdf_url=%s",
+                invoice.id,
+                filename,
+                pdf_url,
+            )
             return pdf_url
 
         except Exception as e:

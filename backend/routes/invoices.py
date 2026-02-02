@@ -3325,9 +3325,9 @@ class RegenerateInvoicePdf(Resource):
                     logger_instance=logger,
                 ), 400
 
-            # ✅ DDD: Régénérer le PDF via use case
+            # ✅ DDD: Régénérer le PDF via use case (force_regenerate=True pour écraser l'ancien)
             uc = GenerateInvoicePdfUseCase()
-            pdf_result = uc.execute(invoice=invoice)
+            pdf_result = uc.execute(invoice=invoice, force_regenerate=True)
 
             if pdf_result.ok and pdf_result.pdf_url:
                 # ✅ Régénération : remplacer l'URL par le nouveau PDF (c'est le but de l'endpoint)

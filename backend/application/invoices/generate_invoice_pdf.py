@@ -26,11 +26,14 @@ class GenerateInvoicePdfUseCase:
     La logique métier devrait être migrée progressivement ici.
     """
 
-    def execute(self, *, invoice: Any) -> GenerateInvoicePdfResult:
+    def execute(
+        self, *, invoice: Any, force_regenerate: bool = False
+    ) -> GenerateInvoicePdfResult:
         """Génère le PDF d'une facture.
 
         Args:
             invoice: La facture pour laquelle générer le PDF
+            force_regenerate: Si True, régénère même si un PDF existe déjà
 
         Returns:
             GenerateInvoicePdfResult avec l'URL du PDF généré
@@ -40,7 +43,9 @@ class GenerateInvoicePdfUseCase:
 
         try:
             pdf_service = PDFService()
-            pdf_url = pdf_service.generate_invoice_pdf(invoice)
+            pdf_url = pdf_service.generate_invoice_pdf(
+                invoice, force_regenerate=force_regenerate
+            )
             if pdf_url:
                 return GenerateInvoicePdfResult(ok=True, pdf_url=pdf_url)
             return GenerateInvoicePdfResult(
