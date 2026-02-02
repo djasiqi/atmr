@@ -119,6 +119,137 @@ class QRBillService:
 
         return result
 
+    def _parse_address_for_qrbill(self, address: str) -> tuple[str, str, str]:
+        """Parse une adresse pour QR-bill en séparant rue, code postal et ville."""
+        if not address:
+            return ("", "1200", "Genève")
+        parts = [p.strip() for p in address.replace("\n", ",").split(",")]
+        # Format "Rue, Numéro, CP, Ville" ou "Rue Numéro, CP Ville"
+        if len(parts) >= MIN_ADDRESS_PARTS_CITY:
+            street = f"{parts[0]}, {parts[1]}" if len(parts) > 1 else parts[0]
+            return (street, parts[2], parts[3])
+        if len(parts) >= MIN_ADDRESS_PARTS_POSTAL:
+            # "Rue, CP Ville" ou "Rue Numéro, CP, Ville"
+            street = parts[0]
+            pcode_city = parts[1].strip().split()
+            if len(pcode_city) >= 2:
+                return (street, pcode_city[0], " ".join(pcode_city[1:]))
+            return (street, parts[1], parts[2] if len(parts) > 2 else "Genève")
+        if len(parts) >= MIN_ADDRESS_PARTS:
+            last_part = parts[-1].strip().split()
+            if len(last_part) >= MIN_ADDRESS_PARTS:
+                return (parts[0], last_part[0], " ".join(last_part[1:]))
+        return (address, "1200", "Genève")
+
+    def _get_debtor_info(self, invoice) -> dict:
+        """Résout le débiteur (Payable par) pour le QR-bill."""
+        client = invoice.client
+
+        # S2 facture clinique mensuelle : débiteur = clinique
+        strategy_val = (
+            getattr(invoice.billing_strategy, "value", None)
+            if invoice.billing_strategy
+            else None
+        ) or str(getattr(invoice, "billing_strategy", "") or "")
+        if strategy_val == "s2_clinic_monthly" and getattr(
+            invoice, "billed_to_company_id", None
+        ):
+            debtor_name = "Clinique"
+            debtor_street = "Adresse non renseignée"
+            debtor_pcode = "1200"
+            debtor_city = "Genève"
+
+            bp = getattr(invoice, "billing_party", None)
+            if bp is not None:
+                debtor_name = (getattr(bp, "display_name", None) or "Clinique").strip()
+                addr = (getattr(bp, "billing_address", None) or "").strip()
+                if addr:
+                    debtor_street, debtor_pcode, debtor_city = (
+                        self._parse_address_for_qrbill(addr)
+                    )
+            else:
+                clinic = getattr(invoice, "billed_to_company", None)
+                if clinic is not None:
+                    debtor_name = (getattr(clinic, "name", None) or "Clinique").strip()
+                    line1 = (getattr(clinic, "domicile_address_line1", None) or "").strip()
+                    line2 = (getattr(clinic, "domicile_address_line2", None) or "").strip()
+                    debtor_street = f"{line1} {line2}".strip() or "Adresse non renseignée"
+                    debtor_pcode = getattr(clinic, "domicile_zip", None) or "1200"
+                    debtor_city = getattr(clinic, "domicile_city", None) or "Genève"
+
+            return {
+                "name": debtor_name,
+                "street": debtor_street,
+                "pcode": debtor_pcode,
+                "city": debtor_city,
+                "country": "CH",
+            }
+
+        # Facturation tierce : institution (bill_to_client_id)
+        if (
+            invoice.bill_to_client_id
+            and invoice.bill_to_client_id != invoice.client_id
+        ):
+            from models import Client as ClientModel
+
+            institution = ClientModel.query.get(invoice.bill_to_client_id)
+            if institution and institution.is_institution:
+                debtor_name = institution.institution_name or "Institution"
+                debtor_street = (
+                    institution.billing_address
+                    or institution.contact_address
+                    or "Adresse non renseignée"
+                )
+            else:
+                debtor_name = "Institution"
+                debtor_street = "Adresse non renseignée"
+            return {
+                "name": debtor_name,
+                "street": debtor_street,
+                "pcode": "1200",
+                "city": "Genève",
+                "country": "CH",
+            }
+
+        # Facturation directe : client
+        debtor_name = (
+            (
+                f"{client.user.first_name or ''} {client.user.last_name or ''}"
+            ).strip()
+            or client.user.username
+            or "Client"
+        )
+        debtor_street = "Adresse non renseignée"
+        debtor_pcode = "1200"
+        debtor_city = "Genève"
+        if hasattr(client, "domicile_address") and client.domicile_address:
+            debtor_street = client.domicile_address
+            if hasattr(client, "domicile_zip") and client.domicile_zip:
+                debtor_pcode = client.domicile_zip
+            if hasattr(client, "domicile_city") and client.domicile_city:
+                debtor_city = client.domicile_city
+        elif (
+            hasattr(client, "user")
+            and client.user
+            and hasattr(client.user, "address")
+            and client.user.address
+        ):
+            parts = [p.strip() for p in client.user.address.split(",")]
+            if len(parts) >= MIN_ADDRESS_PARTS:
+                debtor_street = f"{parts[0]}, {parts[1]}"
+            if len(parts) >= MIN_ADDRESS_PARTS_POSTAL:
+                debtor_pcode = parts[2]
+            if len(parts) >= MIN_ADDRESS_PARTS_CITY:
+                debtor_city = parts[3]
+
+        return {
+            "name": debtor_name,
+            "street": debtor_street,
+            "pcode": debtor_pcode,
+            "city": debtor_city,
+            "country": "CH",
+        }
+
     def _get_creditor_info(self, company):
         """✅ Méthode helper pour obtenir toutes les infos du créancier (entreprise).
 
@@ -250,76 +381,9 @@ class QRBillService:
 
             # Récupérer les informations de la facture
             company = invoice.company
-            client = invoice.client
 
-            # Débiteur : Institution (si facturation tierce) ou Client
-            # (si facturation directe)
-            if (
-                invoice.bill_to_client_id
-                and invoice.bill_to_client_id != invoice.client_id
-            ):
-                # 🏥 Facturation tierce : débiteur = institution payeuse
-                from models import Client as ClientModel
-
-                institution = ClientModel.query.get(invoice.bill_to_client_id)
-
-                if institution and institution.is_institution:
-                    debtor_name = institution.institution_name or "Institution"
-                    debtor_street = (
-                        institution.billing_address
-                        or institution.contact_address
-                        or "Adresse non renseignée"
-                    )
-                    # Extraire code postal et ville de l'adresse si possible
-                    debtor_pcode = "1200"
-                    debtor_city = "Genève"
-                else:
-                    debtor_name = "Institution"
-                    debtor_street = "Adresse non renseignée"
-                    debtor_pcode = "1200"
-                    debtor_city = "Genève"
-            else:
-                # 👤 Facturation directe : débiteur = client
-                # (avec même logique que le PDF)
-                debtor_name = (
-                    (
-                        f"{client.user.first_name or ''} {client.user.last_name or ''}"
-                    ).strip()
-                    or client.user.username
-                    or "Client"
-                )
-
-                # Récupérer l'adresse avec priorités multiples
-                debtor_street = "Adresse non renseignée"
-                debtor_pcode = "1200"
-                debtor_city = "Genève"
-
-                # Priorité 1: Adresse du domicile
-                if hasattr(client, "domicile_address") and client.domicile_address:
-                    debtor_street = client.domicile_address
-                    if hasattr(client, "domicile_zip") and client.domicile_zip:
-                        debtor_pcode = client.domicile_zip
-                    if hasattr(client, "domicile_city") and client.domicile_city:
-                        debtor_city = client.domicile_city
-                # Priorité 2: Adresse de l'utilisateur
-                elif (
-                    hasattr(client, "user")
-                    and client.user
-                    and hasattr(client.user, "address")
-                    and client.user.address
-                ):
-                    full_address = client.user.address
-                    # Format: "Allée de la Pépinière, 41, 74160, Archamps, France"
-                    parts = [p.strip() for p in full_address.split(",")]
-                    if len(parts) >= MIN_ADDRESS_PARTS:
-                        # Rue + numéro
-                        debtor_street = f"{parts[0]}, {parts[1]}"
-                    if len(parts) >= MIN_ADDRESS_PARTS_POSTAL:
-                        # Code postal
-                        debtor_pcode = parts[2]
-                    if len(parts) >= MIN_ADDRESS_PARTS_CITY:
-                        # Ville
-                        debtor_city = parts[3]
+            # Débiteur : S2 clinique, institution tierce ou client direct
+            debtor_data = self._get_debtor_info(invoice)
 
             # ✅ Utiliser l'adresse de domiciliation (cohérence avec PDF)
             creditor_info = self._get_creditor_info(company)
@@ -342,13 +406,7 @@ class QRBillService:
             qr_bill = QRBill(
                 account=iban_to_use,
                 creditor=creditor_data,
-                debtor={
-                    "name": debtor_name,
-                    "street": debtor_street,
-                    "pcode": debtor_pcode,
-                    "city": debtor_city,
-                    "country": "CH",
-                },
+                debtor=debtor_data,
                 amount=str(invoice.total_amount),
                 currency="CHF",
                 reference_number=self._get_payment_reference(invoice),
@@ -392,76 +450,9 @@ class QRBillService:
 
             # Récupérer les informations de la facture
             company = invoice.company
-            client = invoice.client
 
-            # Débiteur : Institution (si facturation tierce) ou Client
-            # (si facturation directe)
-            if (
-                invoice.bill_to_client_id
-                and invoice.bill_to_client_id != invoice.client_id
-            ):
-                # 🏥 Facturation tierce : débiteur = institution payeuse
-                from models import Client as ClientModel
-
-                institution = ClientModel.query.get(invoice.bill_to_client_id)
-
-                if institution and institution.is_institution:
-                    debtor_name = institution.institution_name or "Institution"
-                    debtor_street = (
-                        institution.billing_address
-                        or institution.contact_address
-                        or "Adresse non renseignée"
-                    )
-                    # Extraire code postal et ville de l'adresse si possible
-                    debtor_pcode = "1200"
-                    debtor_city = "Genève"
-                else:
-                    debtor_name = "Institution"
-                    debtor_street = "Adresse non renseignée"
-                    debtor_pcode = "1200"
-                    debtor_city = "Genève"
-            else:
-                # 👤 Facturation directe : débiteur = client
-                # (avec même logique que le PDF)
-                debtor_name = (
-                    (
-                        f"{client.user.first_name or ''} {client.user.last_name or ''}"
-                    ).strip()
-                    or client.user.username
-                    or "Client"
-                )
-
-                # Récupérer l'adresse avec priorités multiples
-                debtor_street = "Adresse non renseignée"
-                debtor_pcode = "1200"
-                debtor_city = "Genève"
-
-                # Priorité 1: Adresse du domicile
-                if hasattr(client, "domicile_address") and client.domicile_address:
-                    debtor_street = client.domicile_address
-                    if hasattr(client, "domicile_zip") and client.domicile_zip:
-                        debtor_pcode = client.domicile_zip
-                    if hasattr(client, "domicile_city") and client.domicile_city:
-                        debtor_city = client.domicile_city
-                # Priorité 2: Adresse de l'utilisateur
-                elif (
-                    hasattr(client, "user")
-                    and client.user
-                    and hasattr(client.user, "address")
-                    and client.user.address
-                ):
-                    full_address = client.user.address
-                    # Format: "Allée de la Pépinière, 41, 74160, Archamps, France"
-                    parts = [p.strip() for p in full_address.split(",")]
-                    if len(parts) >= MIN_ADDRESS_PARTS:
-                        # Rue + numéro
-                        debtor_street = f"{parts[0]}, {parts[1]}"
-                    if len(parts) >= MIN_ADDRESS_PARTS_POSTAL:
-                        # Code postal
-                        debtor_pcode = parts[2]
-                    if len(parts) >= MIN_ADDRESS_PARTS_CITY:
-                        # Ville
-                        debtor_city = parts[3]
+            # Débiteur : S2 clinique, institution tierce ou client direct
+            debtor_data = self._get_debtor_info(invoice)
 
             # ✅ Utiliser l'adresse de domiciliation (cohérence avec PDF)
             creditor_info = self._get_creditor_info(company)
@@ -484,13 +475,7 @@ class QRBillService:
             qr_bill = QRBill(
                 account=iban_to_use,
                 creditor=creditor_data,
-                debtor={
-                    "name": debtor_name,
-                    "street": debtor_street,
-                    "pcode": debtor_pcode,
-                    "city": debtor_city,
-                    "country": "CH",
-                },
+                debtor=debtor_data,
                 amount=str(invoice.total_amount),
                 currency="CHF",
                 reference_number=self._get_payment_reference(invoice),
