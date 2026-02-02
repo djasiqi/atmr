@@ -62,14 +62,15 @@ class InvoiceDescriptionBuilder:
         Returns:
             Description formatée
         """
-        prefix = "Annulation – " if is_cancelled else ""
+        if is_cancelled:
+            return "Annulation dernière minute"
         if is_material_delivery:
             # Livraison : toujours préfixer "Livraison" (avec description si fournie)
             if delivery_description and delivery_description.strip():
-                return f"{prefix}Livraison – {delivery_description} – {pickup_location} → {dropoff_location}"
-            return f"{prefix}Livraison – {pickup_location} → {dropoff_location}"
+                return f"Livraison – {delivery_description} – {pickup_location} → {dropoff_location}"
+            return f"Livraison – {pickup_location} → {dropoff_location}"
         if bill_to_client_id and patient_name:
             # Facturation tierce : inclure le nom du patient
-            return f"{prefix}Trajet pour {patient_name}: {pickup_location} → {dropoff_location}"
+            return f"Trajet pour {patient_name}: {pickup_location} → {dropoff_location}"
         # Facturation directe : description simple
-        return f"{prefix}Trajet {pickup_location} → {dropoff_location}"
+        return f"Trajet {pickup_location} → {dropoff_location}"

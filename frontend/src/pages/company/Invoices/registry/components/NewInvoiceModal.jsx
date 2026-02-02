@@ -2509,11 +2509,15 @@ const NewInvoiceModal = ({
                                                 const isCancelled = (booking.status || '').toUpperCase() === 'CANCELED';
                                                 const isDelivery = (booking.mission_type || '').toLowerCase() === 'material_delivery';
                                                 const deliveryDesc = (booking.delivery_description || '').trim();
-                                                let transportPrefix = '';
-                                                if (isCancelled) transportPrefix += 'Annulation – ';
-                                                if (isDelivery) transportPrefix += 'Livraison – ';
-                                                const deliveryPart = isDelivery && deliveryDesc ? deliveryDesc + ' – ' : '';
-                                                const transportLabel = (pickupAddress && dropoffAddress) ? transportPrefix + deliveryPart + pickupAddress + ' → ' + dropoffAddress : '';
+                                                let transportLabel = '';
+                                                if (isCancelled) {
+                                                  transportLabel = 'Annulation dernière minute';
+                                                } else if (isDelivery) {
+                                                  const deliveryPart = deliveryDesc ? deliveryDesc + ' – ' : '';
+                                                  transportLabel = (pickupAddress && dropoffAddress) ? 'Livraison – ' + deliveryPart + pickupAddress + ' → ' + dropoffAddress : '';
+                                                } else {
+                                                  transportLabel = (pickupAddress && dropoffAddress) ? pickupAddress + ' → ' + dropoffAddress : '';
+                                                }
                                                 // ✅ Règle UX stricte : ne JAMAIS afficher booking.amount dans le message de confirmation
                                                 // ✅ Avant réponse API : afficher "— (recalcul en cours)"
                                                 // ✅ Après réponse API : afficher confirmedNewAmount uniquement
@@ -2907,11 +2911,15 @@ const NewInvoiceModal = ({
                                 const isCancelledExcl = (booking.status || '').toUpperCase() === 'CANCELED';
                                 const isDeliveryExcl = (booking.mission_type || '').toLowerCase() === 'material_delivery';
                                 const deliveryDescExcl = (booking.delivery_description || '').trim();
-                                let transportPrefixExcl = '';
-                                if (isCancelledExcl) transportPrefixExcl += 'Annulation – ';
-                                if (isDeliveryExcl) transportPrefixExcl += 'Livraison – ';
-                                const deliveryPartExcl = isDeliveryExcl && deliveryDescExcl ? deliveryDescExcl + ' – ' : '';
-                                const transportLabelExcl = (pickupAddress && dropoffAddress) ? transportPrefixExcl + deliveryPartExcl + pickupAddress + ' → ' + dropoffAddress : '';
+                                let transportLabelExcl = '';
+                                if (isCancelledExcl) {
+                                  transportLabelExcl = 'Annulation dernière minute';
+                                } else if (isDeliveryExcl) {
+                                  const deliveryPartExcl = deliveryDescExcl ? deliveryDescExcl + ' – ' : '';
+                                  transportLabelExcl = (pickupAddress && dropoffAddress) ? 'Livraison – ' + deliveryPartExcl + pickupAddress + ' → ' + dropoffAddress : '';
+                                } else {
+                                  transportLabelExcl = (pickupAddress && dropoffAddress) ? pickupAddress + ' → ' + dropoffAddress : '';
+                                }
                                 
                                 return (
                                   <div key={booking.id} style={{

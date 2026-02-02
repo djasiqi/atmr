@@ -3,6 +3,7 @@ import re
 import tempfile
 from io import BytesIO
 from pathlib import Path
+from typing import Any
 
 from qrbill import QRBill
 from reportlab.graphics import renderPDF
@@ -132,16 +133,20 @@ class QRBillService:
             # "Rue, CP Ville" ou "Rue Numéro, CP, Ville"
             street = parts[0]
             pcode_city = parts[1].strip().split()
-            if len(pcode_city) >= 2:
+            if len(pcode_city) >= MIN_ADDRESS_PARTS:
                 return (street, pcode_city[0], " ".join(pcode_city[1:]))
-            return (street, parts[1], parts[2] if len(parts) > 2 else "Genève")
+            return (
+                street,
+                parts[1],
+                parts[2] if len(parts) >= MIN_ADDRESS_PARTS_POSTAL else "Genève",
+            )
         if len(parts) >= MIN_ADDRESS_PARTS:
             last_part = parts[-1].strip().split()
             if len(last_part) >= MIN_ADDRESS_PARTS:
                 return (parts[0], last_part[0], " ".join(last_part[1:]))
         return (address, "1200", "Genève")
 
-    def _get_debtor_info(self, invoice) -> dict:
+    def _get_debtor_info(self, invoice) -> dict[str, Any]:
         """Résout le débiteur (Payable par) pour le QR-bill."""
         client = invoice.client
 

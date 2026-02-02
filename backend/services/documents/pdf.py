@@ -305,6 +305,13 @@ def _normalize_address_for_comparison(address: str) -> str:
     return normalized.strip()
 
 
+def _is_booking_cancelled(booking: Any) -> bool:
+    """Vérifie si un booking est annulé (status CANCELED)."""
+    if not booking:
+        return False
+    return (str(getattr(booking, "status", "") or "").upper() == "CANCELED")
+
+
 def _short_label_for_transport(address: str) -> str:
     """Produit un libellé pour 'A' ou 'B' dans 'A ↔ B' / 'A → B'.
 
@@ -520,6 +527,8 @@ def _detect_and_group_round_trips(
             else date_retour
         )
 
+        is_cancelled = _is_booking_cancelled(parent_booking) or _is_booking_cancelled(return_booking)
+        transport_display = "Annulation dernière minute" if is_cancelled else f"{short_a} ↔ {short_b}"
         consolidated_explicit.append(
             {
                 "is_round_trip": True,
@@ -530,7 +539,7 @@ def _detect_and_group_round_trips(
                 "patient_name": parent_item.get("patient_name", "Patient"),
                 "pickup": pickup_aller,
                 "dropoff": dropoff_aller,
-                "transport_display": f"{short_a} ↔ {short_b}",
+                "transport_display": transport_display,
                 "aller_detail": f"{short_a} → {short_b}",
                 "retour_detail": f"{short_b} → {short_a}",
                 "aller_detail_short": f"{detail_a} → {detail_b}",
@@ -561,7 +570,10 @@ def _detect_and_group_round_trips(
             item["is_round_trip"] = False
             item["transport_type"] = "Aller"
             line = item.get("line")
-            if line and line.type == InvoiceLineType.MATERIAL_DELIVERY:
+            booking = item.get("booking")
+            if _is_booking_cancelled(booking):
+                item["transport_display"] = "Annulation dernière minute"
+            elif line and line.type == InvoiceLineType.MATERIAL_DELIVERY:
                 item["transport_display"] = (
                     line.description[:80] if line.description else "Livraison"
                 )
@@ -595,8 +607,10 @@ def _detect_and_group_round_trips(
                 item["is_round_trip"] = False
                 item["transport_type"] = "Aller"
                 line = item.get("line")
-                # ✅ Livraison matériel : utiliser la description complète
-                if line and line.type == InvoiceLineType.MATERIAL_DELIVERY:
+                booking = item.get("booking")
+                if _is_booking_cancelled(booking):
+                    item["transport_display"] = "Annulation dernière minute"
+                elif line and line.type == InvoiceLineType.MATERIAL_DELIVERY:
                     item["transport_display"] = (
                         line.description[:80] if line.description else "Livraison"
                     )
@@ -784,6 +798,13 @@ def _detect_and_group_round_trips(
             d1 = item1.get("date")
             d2 = item2.get("date")
             earliest = d1 if (d1 and d2 and d1 <= d2) else d2
+            b1 = item1.get("booking")
+            b2 = item2.get("booking")
+            cancelled_prefix = (
+                "Annuler – "
+                if (_is_booking_cancelled(b1) or _is_booking_cancelled(b2))
+                else ""
+            )
             consolidated = {
                 "is_round_trip": True,
                 "transport_type": "A/R",
@@ -793,7 +814,7 @@ def _detect_and_group_round_trips(
                 "patient_name": item1.get("patient_name", "Patient"),
                 "pickup": pickup_aller,
                 "dropoff": dropoff_aller,
-                "transport_display": f"{short_a} ↔ {short_b}",
+                "transport_display": f"{cancelled_prefix}{short_a} ↔ {short_b}",
                 "aller_detail": f"{short_a} → {short_b}",
                 "retour_detail": f"{short_b} → {short_a}",
                 "aller_detail_short": f"{detail_a} → {detail_b}",
@@ -813,7 +834,10 @@ def _detect_and_group_round_trips(
                 item["is_round_trip"] = False
                 item["transport_type"] = "Aller"
                 line = item.get("line")
-                if line and line.type == InvoiceLineType.MATERIAL_DELIVERY:
+                booking = item.get("booking")
+                if _is_booking_cancelled(booking):
+                    item["transport_display"] = "Annulation dernière minute"
+                elif line and line.type == InvoiceLineType.MATERIAL_DELIVERY:
                     item["transport_display"] = (
                         line.description[:80] if line.description else "Livraison"
                     )
