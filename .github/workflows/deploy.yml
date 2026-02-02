@@ -128,7 +128,7 @@ jobs:
       - name: Generate SBOM with Trivy
         uses: aquasecurity/trivy-action@master
         with:
-          version: v0.67.2
+          version: v0.69.0
           scan-type: "fs"
           scan-ref: "./backend"
           format: "cyclonedx"
@@ -207,13 +207,14 @@ jobs:
         uses: aquasecurity/trivy-action@master
         continue-on-error: true  # INTERNAL_ERROR intermittent sur certaines couches Docker
         with:
-          version: v0.67.2
+          version: v0.69.0
           image-ref: ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
           format: sarif
           output: trivy-results.sarif
           ignore-unfixed: true
           vuln-type: os,library
           severity: CRITICAL,HIGH
+          scanners: vuln  # Désactiver secret scan (évite INTERNAL_ERROR sur extraction couches)
 
       - name: Upload Trivy results to GitHub Security
         if: false
