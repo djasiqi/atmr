@@ -63,9 +63,11 @@ class InvoiceDescriptionBuilder:
             Description formatée
         """
         prefix = "Annulation – " if is_cancelled else ""
-        if is_material_delivery and delivery_description:
-            # Livraison : "Livraison medicament - Clinique -> Domicile"
-            return f"{prefix}Livraison – {delivery_description} – {pickup_location} → {dropoff_location}"
+        if is_material_delivery:
+            # Livraison : toujours préfixer "Livraison" (avec description si fournie)
+            if delivery_description and delivery_description.strip():
+                return f"{prefix}Livraison – {delivery_description} – {pickup_location} → {dropoff_location}"
+            return f"{prefix}Livraison – {pickup_location} → {dropoff_location}"
         if bill_to_client_id and patient_name:
             # Facturation tierce : inclure le nom du patient
             return f"{prefix}Trajet pour {patient_name}: {pickup_location} → {dropoff_location}"

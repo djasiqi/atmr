@@ -2506,6 +2506,14 @@ const NewInvoiceModal = ({
                                                   : '';
                                                 const pickupAddress = booking.pickup_address || '';
                                                 const dropoffAddress = booking.dropoff_address || '';
+                                                const isCancelled = (booking.status || '').toUpperCase() === 'CANCELED';
+                                                const isDelivery = (booking.mission_type || '').toLowerCase() === 'material_delivery';
+                                                const deliveryDesc = (booking.delivery_description || '').trim();
+                                                let transportPrefix = '';
+                                                if (isCancelled) transportPrefix += 'Annulation – ';
+                                                if (isDelivery) transportPrefix += 'Livraison – ';
+                                                const deliveryPart = isDelivery && deliveryDesc ? deliveryDesc + ' – ' : '';
+                                                const transportLabel = (pickupAddress && dropoffAddress) ? transportPrefix + deliveryPart + pickupAddress + ' → ' + dropoffAddress : '';
                                                 // ✅ Règle UX stricte : ne JAMAIS afficher booking.amount dans le message de confirmation
                                                 // ✅ Avant réponse API : afficher "— (recalcul en cours)"
                                                 // ✅ Après réponse API : afficher confirmedNewAmount uniquement
@@ -2551,9 +2559,9 @@ const NewInvoiceModal = ({
                                                               {dateStr}
                                                             </span>
                                                           )}
-                                                          {pickupAddress && dropoffAddress && (
+                                                          {transportLabel && (
                                                             <span style={{ color: '#4b5563', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
-                                                              {pickupAddress} → {dropoffAddress}
+                                                              {transportLabel}
                                                             </span>
                                                           )}
                                                           <span style={{ fontWeight: 600, color: '#111827', fontSize: '11px', whiteSpace: 'nowrap', flexShrink: 0 }}>
@@ -2893,9 +2901,17 @@ const NewInvoiceModal = ({
                                 // Nom du patient (customer_name ou client info)
                                 const patientName = booking.customer_name || booking.client_name || 'Patient inconnu';
                                 
-                                // Adresses
+                                // Adresses + préfixes Annulation / Livraison
                                 const pickupAddress = booking.pickup_address || booking.pickup_location || '';
                                 const dropoffAddress = booking.dropoff_address || booking.dropoff_location || '';
+                                const isCancelledExcl = (booking.status || '').toUpperCase() === 'CANCELED';
+                                const isDeliveryExcl = (booking.mission_type || '').toLowerCase() === 'material_delivery';
+                                const deliveryDescExcl = (booking.delivery_description || '').trim();
+                                let transportPrefixExcl = '';
+                                if (isCancelledExcl) transportPrefixExcl += 'Annulation – ';
+                                if (isDeliveryExcl) transportPrefixExcl += 'Livraison – ';
+                                const deliveryPartExcl = isDeliveryExcl && deliveryDescExcl ? deliveryDescExcl + ' – ' : '';
+                                const transportLabelExcl = (pickupAddress && dropoffAddress) ? transportPrefixExcl + deliveryPartExcl + pickupAddress + ' → ' + dropoffAddress : '';
                                 
                                 return (
                                   <div key={booking.id} style={{
@@ -2920,13 +2936,13 @@ const NewInvoiceModal = ({
                                           <span style={{ color: '#4b5563', fontSize: '11px', whiteSpace: 'nowrap', flexShrink: 0, maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                             {patientName}
                                           </span>
-                                          {pickupAddress && dropoffAddress && (
+                                          {transportLabelExcl && (
                                             <>
                                               <span style={{ color: '#92400e', fontSize: '11px', whiteSpace: 'nowrap', flexShrink: 0 }}>
                                                 •
                                               </span>
                                               <span style={{ color: '#4b5563', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
-                                                {pickupAddress} → {dropoffAddress}
+                                                {transportLabelExcl}
                                               </span>
                                             </>
                                           )}

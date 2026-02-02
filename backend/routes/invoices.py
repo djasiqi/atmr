@@ -1836,6 +1836,8 @@ class ClinicMonthlyTotals(Resource):
                         if booking.billing_source
                         else None,
                         "status": booking.status.value if booking.status else None,
+                        "mission_type": getattr(booking, "mission_type", None) or "patient_transport",
+                        "delivery_description": getattr(booking, "delivery_description", None) or None,
                         # ✅ Ajouter invoice_line_id et billing_review_status pour safety rules S2
                         "invoice_line_id": booking.invoice_line_id,
                         # ✅ Normaliser billing_review_status en lowercase pour cohérence frontend
@@ -3982,6 +3984,8 @@ class UnbilledReservations(Resource):
                     "billed_to_contact": r.billed_to_contact,
                     "customer_name": r.customer_name,
                     "status": r.status.value,
+                    "mission_type": getattr(r, "mission_type", None) or "patient_transport",
+                    "delivery_description": getattr(r, "delivery_description", None) or None,
                     "is_urgent": r.is_urgent or False,
                     "is_return": r.is_return or False,
                     "medical_facility": r.medical_facility,
