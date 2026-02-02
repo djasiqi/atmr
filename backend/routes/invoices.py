@@ -3330,22 +3330,7 @@ class RegenerateInvoicePdf(Resource):
             pdf_result = uc.execute(invoice=invoice)
 
             if pdf_result.ok and pdf_result.pdf_url:
-                # ✅ PROTECTION: Double vérification avant d'écraser invoice.pdf_url
-                if invoice.pdf_url and invoice.pdf_url != pdf_result.pdf_url:
-                    logger.warning(
-                        (
-                            "[PDF PROTECTION] Tentative d'écrasement PDF existant: "
-                            "invoice_id=%s, ancien=%s, nouveau=%s. Opération refusée."
-                        ),
-                        invoice.id,
-                        invoice.pdf_url,
-                        pdf_result.pdf_url,
-                    )
-                    return APIErrorHandler.handle_validation_error(
-                        "Un PDF existe déjà pour cette facture. Utilisez un flag explicite pour forcer la régénération.",
-                        logger_instance=logger,
-                    ), 400
-
+                # ✅ Régénération : remplacer l'URL par le nouveau PDF (c'est le but de l'endpoint)
                 invoice.pdf_url = pdf_result.pdf_url
                 db.session.commit()
                 return {"message": "PDF régénéré", "pdf_url": pdf_result.pdf_url}
