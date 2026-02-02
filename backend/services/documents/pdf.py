@@ -800,11 +800,8 @@ def _detect_and_group_round_trips(
             earliest = d1 if (d1 and d2 and d1 <= d2) else d2
             b1 = item1.get("booking")
             b2 = item2.get("booking")
-            cancelled_prefix = (
-                "Annuler – "
-                if (_is_booking_cancelled(b1) or _is_booking_cancelled(b2))
-                else ""
-            )
+            is_cancelled = _is_booking_cancelled(b1) or _is_booking_cancelled(b2)
+            transport_display = "Annulation dernière minute" if is_cancelled else f"{short_a} ↔ {short_b}"
             consolidated = {
                 "is_round_trip": True,
                 "transport_type": "A/R",
@@ -814,7 +811,7 @@ def _detect_and_group_round_trips(
                 "patient_name": item1.get("patient_name", "Patient"),
                 "pickup": pickup_aller,
                 "dropoff": dropoff_aller,
-                "transport_display": f"{cancelled_prefix}{short_a} ↔ {short_b}",
+                "transport_display": transport_display,
                 "aller_detail": f"{short_a} → {short_b}",
                 "retour_detail": f"{short_b} → {short_a}",
                 "aller_detail_short": f"{detail_a} → {detail_b}",
