@@ -555,6 +555,25 @@ class BookingRepository:
             company_id=company_id,
         ).first()
 
+    def find_children_by_parent_booking_id(
+        self, parent_booking_id: int
+    ) -> list[Booking]:
+        """Trouve tous les segments enfants (retours) d'un booking parent.
+
+        Utilisé pour l'annulation scope=reservation (aller + retour).
+
+        Args:
+            parent_booking_id: ID du booking parent (aller)
+
+        Returns:
+            Liste des bookings avec parent_booking_id = parent_booking_id
+        """
+        return (
+            Booking.query.filter_by(parent_booking_id=parent_booking_id)
+            .order_by(Booking.scheduled_time.asc())
+            .all()
+        )
+
     def find_models_by_company_with_driver_and_user(
         self, company_id: int, statuses: list[BookingStatus] | None = None
     ) -> list[Booking]:
@@ -739,34 +758,65 @@ class BookingRepository:
         client_id: int,
         period_year: int | None = None,
         period_month: int | None = None,
+        billed_to_type: str | None = None,
     ) -> list[Booking]:
-        """Trouve les bookings terminés non facturés pour un client et une entreprise.
+        """Trouve les bookings terminés ou annulations facturables non facturés pour un client.
+
+        Aligné sur l'éligibilité facturation : COMPLETED, RETURN_COMPLETED, ou
+        CANCELED + is_cancellation_billable + amount > 0 (si billed_to_type=patient).
+        Période sur scheduled_time. Politique : la règle « aller annulé ⇒ retour exclu »
+        s'applique uniquement pour billed_to_type=patient (facturation directe).
+        Pour clinic (S2), la même règle est gérée côté routes / génération facture.
 
         Args:
             company_id: ID de l'entreprise
             client_id: ID du client
             period_year: Année de la période (optionnel)
             period_month: Mois de la période (optionnel)
+            billed_to_type: "patient", "clinic", "insurance" (optionnel)
 
         Returns:
             Liste de Booking triés par scheduled_time ascendant
         """
-        # ✅ Pour les courses transférées :
-        # - L'entreprise propriétaire (company_id) peut facturer le client
-        # - L'entreprise exécutante (executing_company_id) peut facturer l'entreprise propriétaire
-        # Ici, on cherche les courses où l'entreprise est propriétaire (peut facturer le client)
-        query = Booking.query.filter(
-            Booking.company_id == company_id,  # Entreprise propriétaire
-            Booking.client_id == client_id,
-            Booking.status.in_(
-                [BookingStatus.COMPLETED, BookingStatus.RETURN_COMPLETED]
-            ),
-            Booking.invoice_line_id.is_(None),  # Pas encore facturé
-        )
-        # Note: Les courses transférées ont toujours company_id = entreprise propriétaire,
-        # donc elles sont incluses automatiquement dans cette requête
+        from sqlalchemy import or_
+        from sqlalchemy.orm import aliased
 
-        # Filtrer par période si fournie
+        target_statuses = [
+            BookingStatus.COMPLETED.value,
+            BookingStatus.RETURN_COMPLETED.value,
+        ]
+        status_filter = Booking.status.in_(target_statuses)
+        if billed_to_type == "patient":
+            canceled_eligible = (
+                (Booking.status == BookingStatus.CANCELED.value)
+                & (Booking.is_cancellation_billable == True)  # noqa: E712
+                & (Booking.amount > 0)
+            )
+            status_filter = or_(status_filter, canceled_eligible)
+
+        query = Booking.query.filter(
+            Booking.company_id == company_id,
+            Booking.client_id == client_id,
+            status_filter,
+            Booking.invoice_line_id.is_(None),
+        )
+
+        if billed_to_type and billed_to_type in ("patient", "clinic", "insurance"):
+            query = query.filter(Booking.billed_to_type == billed_to_type)
+
+        # Règle « aller annulé ⇒ retour exclu » uniquement pour facturation directe patient.
+        if billed_to_type == "patient":
+            parent_alias = aliased(Booking)
+            query = query.outerjoin(
+                parent_alias, parent_alias.id == Booking.parent_booking_id
+            ).filter(
+                or_(
+                    Booking.is_return == False,  # noqa: E712
+                    parent_alias.id.is_(None),
+                    parent_alias.status != BookingStatus.CANCELED.value,
+                )
+            )
+
         if period_year and period_month:
             PERIOD_MONTH_THRESHOLD = 12
             start_date = datetime(period_year, period_month, 1)
@@ -774,7 +824,6 @@ class BookingRepository:
                 end_date = datetime(period_year + 1, 1, 1)
             else:
                 end_date = datetime(period_year, period_month + 1, 1)
-
             query = query.filter(
                 Booking.scheduled_time >= start_date,
                 Booking.scheduled_time < end_date,
@@ -807,8 +856,22 @@ class BookingRepository:
         from datetime import datetime
 
         from sqlalchemy import or_
+        from sqlalchemy.orm import aliased
 
         from models import BookingStatus, Invoice, InvoiceLine, InvoiceStatus, db
+
+        target_statuses = [
+            BookingStatus.COMPLETED.value,
+            BookingStatus.RETURN_COMPLETED.value,
+        ]
+        status_filter = Booking.status.in_(target_statuses)
+        if billed_to_type == "patient":
+            canceled_eligible = (
+                (Booking.status == BookingStatus.CANCELED.value)
+                & (Booking.is_cancellation_billable == True)  # noqa: E712
+                & (Booking.amount > 0)
+            )
+            status_filter = or_(status_filter, canceled_eligible)
 
         query = (
             db.session.query(Booking.id)
@@ -817,9 +880,7 @@ class BookingRepository:
             .filter(
                 Booking.company_id == company_id,
                 Booking.client_id == client_id,
-                Booking.status.in_(
-                    [BookingStatus.COMPLETED, BookingStatus.RETURN_COMPLETED]
-                ),
+                status_filter,
                 or_(
                     Booking.invoice_line_id.is_(None),
                     Invoice.status == InvoiceStatus.CANCELLED,
@@ -827,7 +888,23 @@ class BookingRepository:
             )
         )
 
-        # Filtrer par période si fournie
+        if billed_to_type and billed_to_type in ("patient", "clinic", "insurance"):
+            query = query.filter(Booking.billed_to_type == billed_to_type)
+
+        # Même politique que find_models_* : règle parent uniquement pour patient.
+        if billed_to_type == "patient":
+            parent_alias = aliased(Booking)
+            query = query.outerjoin(
+                parent_alias, parent_alias.id == Booking.parent_booking_id
+            ).filter(
+                or_(
+                    Booking.is_return == False,  # noqa: E712
+                    parent_alias.id.is_(None),
+                    parent_alias.status != BookingStatus.CANCELED.value,
+                )
+            )
+
+        # Filtrer par période si fournie (scheduled_time pour inclure annulations)
         if period_year and period_month:
             PERIOD_MONTH_THRESHOLD = 12
             start_date = datetime(period_year, period_month, 1)
@@ -840,10 +917,6 @@ class BookingRepository:
                 Booking.scheduled_time >= start_date,
                 Booking.scheduled_time < end_date,
             )
-
-        # Filtrer par billed_to_type si fourni
-        if billed_to_type and billed_to_type in ["patient", "clinic", "insurance"]:
-            query = query.filter(Booking.billed_to_type == billed_to_type)
 
         return [row[0] for row in query.order_by(Booking.scheduled_time.asc()).all()]
 

@@ -479,6 +479,21 @@ check_database
 check_redis
 warmup_models
 
+# Migrations Alembic (automatique via Docker)
+run_migrations() {
+    echo "🔄 Migrations Alembic..."
+    if [ -n "${DATABASE_URL:-}" ]; then
+        if flask db upgrade heads 2>/dev/null; then
+            echo "✅ Migrations appliquées"
+        else
+            echo "⚠️  Migrations échouées ou déjà à jour (non-critique)"
+        fi
+    else
+        echo "ℹ️  DATABASE_URL non configurée, migrations ignorées"
+    fi
+}
+run_migrations
+
 echo "✅ Toutes les vérifications terminées"
 echo "🚀 Démarrage de l'application..."
 

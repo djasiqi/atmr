@@ -15,6 +15,7 @@ from typing import Any, cast
 
 from sqlalchemy import and_, exists, or_
 from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
+from sqlalchemy.orm import aliased
 
 from ext import db
 from shared.constants import ErrorCodes
@@ -27,7 +28,7 @@ from infrastructure.invoices.invoice_description_builder import (
 )
 from infrastructure.invoices.invoice_number_generator import InvoiceNumberGenerator
 from models import Booking, ClientStay, Invoice, InvoiceLineType, InvoiceStatus
-from models.enums import InvoiceBillingStrategy
+from models.enums import BookingStatus, InvoiceBillingStrategy
 from repositories.booking_repository import BookingRepository
 from repositories.client_repository import ClientRepository
 from repositories.company_billing_settings_repository import (
@@ -335,8 +336,8 @@ class GenerateClinicMonthlyInvoiceUseCase:
             # Scope strict: billed_to_type='clinic', clinic_company_id match, invoice_line_id null, status target_statuses
             # ✅ Scope strict: billed_to_type='clinic' suffit (exclut automatiquement les overrides patient)
             # Le critère réel = billed_to_type == 'clinic' (pas besoin de vérifier billing_source)
-            # Inclut COMPLETED, RETURN_COMPLETED et CANCELED avec amount > 0 UNIQUEMENT si client hospitalisé
-            # (annulation dernière minute facturée à la clinique ; sinon facturée au patient)
+            # Inclut COMPLETED, RETURN_COMPLETED et CANCELED facturables UNIQUEMENT si client hospitalisé
+            # (annulations billables à la clinique ; legacy / non billables → pas en facture)
             stay_overlaps_booking = exists().where(
                 ClientStay.client_id == Booking.client_id,
                 ClientStay.company_id == input_data.clinic_company_id,
@@ -347,9 +348,10 @@ class GenerateClinicMonthlyInvoiceUseCase:
                     ClientStay.end_date >= Booking.scheduled_time,
                 ),
             )
-            # ✅ Annulations : uniquement l'aller facturé (pas le retour)
+            # ✅ Annulations : uniquement billables + aller (pas le retour) ; amount > 0 = garde-fou anti-ligne zéro
             canceled_condition = (
                 (Booking.status == "CANCELED")
+                & (Booking.is_cancellation_billable == True)  # noqa: E712
                 & (Booking.amount > 0)
                 & stay_overlaps_booking
                 & (Booking.is_return == False)  # noqa: E712 — SQLAlchemy column comparison
@@ -377,6 +379,19 @@ class GenerateClinicMonthlyInvoiceUseCase:
                 query = query.filter(
                     ~Booking.client_id.in_(input_data.exclude_client_ids)
                 )
+
+            # ✅ Si l'aller est annulé, le retour n'est pas facturable : exclure les retours dont le parent (aller) est CANCELED
+            ParentBooking = aliased(Booking)
+            query = query.outerjoin(
+                ParentBooking, ParentBooking.id == Booking.parent_booking_id
+            )
+            query = query.filter(
+                or_(
+                    Booking.is_return == False,  # noqa: E712
+                    ParentBooking.id.is_(None),
+                    ParentBooking.status != BookingStatus.CANCELED.value,
+                )
+            )
 
             reservations = query.order_by(Booking.scheduled_time.asc()).all()
 

@@ -15,7 +15,7 @@ from flask_restx import (
 )
 from sqlalchemy import exists, func, or_, select
 from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import aliased, joinedload
 
 # ✅ DDD: Utilise use cases au lieu d'adapters
 from application.invoices import (
@@ -1315,6 +1315,17 @@ class EligibleClients(Resource):
         ]
         status_filter = Booking.status.in_(target_statuses)
 
+        # Facturation directe au client : inclure les annulations facturables (NO_SHOW, etc.)
+        if billed_to_type == "patient":
+            canceled_eligible_patient = (
+                (Booking.status == BookingStatus.CANCELED.value)
+                & (Booking.is_cancellation_billable == True)  # noqa: E712
+                & (Booking.amount > 0)
+            )
+            status_filter = or_(
+                Booking.status.in_(target_statuses), canceled_eligible_patient
+            )
+
         # S2 / facturation clinique : inclure aussi les annulations éligibles (aller uniquement, client hospitalisé)
         if clinic_company_id and billed_to_type != "patient":
             stay_overlaps = exists().where(
@@ -1327,8 +1338,10 @@ class EligibleClients(Resource):
                     ClientStay.end_date >= Booking.scheduled_time,
                 ),
             )
+            # Annulations : uniquement billables (legacy / non billables → pas en facture) ; amount > 0 = garde-fou
             canceled_eligible = (
                 (Booking.status == BookingStatus.CANCELED.value)
+                & (Booking.is_cancellation_billable == True)  # noqa: E712
                 & (Booking.amount > 0)
                 & stay_overlaps
                 & (Booking.is_return == False)  # noqa: E712 — SQLAlchemy column comparison
@@ -1362,6 +1375,18 @@ class EligibleClients(Resource):
         # (même règle pour transports et livraisons : non hospitalisé → patient, hospitalisé → clinique sauf override)
         if billed_to_type == "patient":
             unbilled_query = unbilled_query.filter(Booking.billed_to_type == "patient")
+            # Si l'aller est annulé, le retour n'est pas facturable : exclure les retours dont le parent est CANCELED
+            ParentBookingUnbilledPatient = aliased(Booking)
+            unbilled_query = unbilled_query.outerjoin(
+                ParentBookingUnbilledPatient,
+                ParentBookingUnbilledPatient.id == Booking.parent_booking_id,
+            ).filter(
+                or_(
+                    Booking.is_return == False,  # noqa: E712
+                    ParentBookingUnbilledPatient.id.is_(None),
+                    ParentBookingUnbilledPatient.status != BookingStatus.CANCELED.value,
+                )
+            )
 
         # S2 / facturation clinique : uniquement les clients avec ≥1 transport à facturer à la clinique
         # (exclut les patients qui n'ont que des transports "patient", ex. après annulation facture client)
@@ -1370,8 +1395,22 @@ class EligibleClients(Resource):
                 Booking.billed_to_type == "clinic",
                 Booking.billed_to_company_id == clinic_company_id,
             )
+            # Si l'aller est annulé, le retour n'est pas facturable : exclure les retours dont le parent est CANCELED
+            ParentBookingUnbilled = aliased(Booking)
+            unbilled_query = unbilled_query.outerjoin(
+                ParentBookingUnbilled,
+                ParentBookingUnbilled.id == Booking.parent_booking_id,
+            ).filter(
+                or_(
+                    Booking.is_return == False,  # noqa: E712
+                    ParentBookingUnbilled.id.is_(None),
+                    ParentBookingUnbilled.status != BookingStatus.CANCELED.value,
+                )
+            )
 
         # Filtrer par période si fournie
+        # ✅ Période basée sur scheduled_time (pas completed_at) pour inclure les annulations
+        # facturables (completed_at=null) dans la bonne période.
         if period_year and period_month:
             # Créer des dates timezone-naive pour la comparaison (scheduled_time est timezone-naive dans la DB)
             start_date = datetime(period_year, period_month, 1)
@@ -1677,11 +1716,12 @@ class ClinicMonthlyTotals(Resource):
                 except (ValueError, TypeError):
                     return 0.0
 
-            # ✅ Transports éligibles (billed_to_type='clinic') - inclut annulations facturables
-            # uniquement si client hospitalisé à la clinique au moment de la course
+            # ✅ Transports éligibles (billed_to_type='clinic') - inclut annulations billables uniquement
+            # si client hospitalisé à la clinique au moment de la course ; amount > 0 = garde-fou
             # ✅ Annulations : uniquement l'aller facturé (pas le retour)
             canceled_eligible = (
                 (Booking.status == BookingStatus.CANCELED.value)
+                & (Booking.is_cancellation_billable == True)  # noqa: E712
                 & (Booking.amount > 0)
                 & stay_overlaps_booking
                 & (Booking.is_return == False)  # noqa: E712 — SQLAlchemy column comparison
@@ -1697,6 +1737,18 @@ class ClinicMonthlyTotals(Resource):
                 Booking.invoice_line_id.is_(None),
                 Booking.scheduled_time >= start_date,
                 Booking.scheduled_time < end_date,
+            )
+            # Si l'aller est annulé, le retour n'est pas facturable : exclure les retours dont le parent est CANCELED
+            ParentBookingEligible = aliased(Booking)
+            eligible_query = eligible_query.outerjoin(
+                ParentBookingEligible,
+                ParentBookingEligible.id == Booking.parent_booking_id,
+            ).filter(
+                or_(
+                    Booking.is_return == False,  # noqa: E712
+                    ParentBookingEligible.id.is_(None),
+                    ParentBookingEligible.status != BookingStatus.CANCELED.value,
+                )
             )
 
             # Appliquer le filtre include_client_ids si fourni
@@ -1752,6 +1804,18 @@ class ClinicMonthlyTotals(Resource):
                     Booking.scheduled_time < end_date,
                 )
                 .distinct()
+            )
+            # Si l'aller est annulé, le retour n'est pas facturable : exclure les retours dont le parent est CANCELED
+            ParentBookingStmt = aliased(Booking)
+            stmt = stmt.outerjoin(
+                ParentBookingStmt,
+                ParentBookingStmt.id == Booking.parent_booking_id,
+            ).where(
+                or_(
+                    Booking.is_return == False,  # noqa: E712
+                    ParentBookingStmt.id.is_(None),
+                    ParentBookingStmt.status != BookingStatus.CANCELED.value,
+                )
             )
             if include_client_ids:
                 stmt = stmt.where(Booking.client_id.in_(include_client_ids))
@@ -3878,7 +3942,9 @@ class UnbilledReservations(Resource):
                 "on",
             )
 
-            # ✅ Utilisation du repository pour la requête avec filtres dynamiques
+            # ✅ Même éligibilité que GET /clients/eligible : COMPLETED, RETURN_COMPLETED,
+            # ou CANCELED + is_cancellation_billable + amount>0 ; période sur scheduled_time ;
+            # règle « aller annulé ⇒ retour exclu » pour billed_to_type=patient.
             from repositories.booking_repository import BookingRepository
 
             # 🔍 LOG : Debug pour voir ce qui est trouvé
@@ -3896,11 +3962,19 @@ class UnbilledReservations(Resource):
             )
 
             booking_repo = BookingRepository()
+            billed_to_type = (
+                billed_to_filter.strip().lower()
+                if billed_to_filter and billed_to_filter.strip()
+                else None
+            )
+            if billed_to_type and billed_to_type not in ("patient", "clinic", "insurance"):
+                billed_to_type = None
             reservations = booking_repo.find_models_unbilled_by_company_and_client(
                 company_id=company_id,
                 client_id=client_id,
                 period_year=period_year,
                 period_month=period_month,
+                billed_to_type=billed_to_type,
             )
 
             # ✅ S2: Inclure les transports DÉJÀ FACTURÉS pour cette clinique+période

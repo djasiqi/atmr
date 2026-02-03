@@ -128,7 +128,9 @@ class SendInvoiceByEmailUseCase:
                 logger.info(
                     "Génération du PDF pour la facture %s", invoice.invoice_number
                 )
-                pdf_url = self.pdf_service.generate_invoice_pdf(invoice)
+                pdf_url = self.pdf_service.generate_invoice_pdf(
+                    invoice, force_regenerate=input_data.force_regenerate_pdf
+                )
                 if pdf_url:
                     invoice.pdf_url = pdf_url
                     db.session.commit()

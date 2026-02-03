@@ -1470,16 +1470,28 @@ import type { BookingStatus } from "@/utils/bookingStatus";
 import { isCompletedStatus } from "@/utils/bookingStatus";
 export type { BookingStatus };
 
+/** scope=reservation : annule toute la réservation (aller + retour). Par défaut un seul segment. */
 export const updateTripStatus = async (
   bookingId: number,
   status: BookingStatus,
-  cancelReason?: "CANCEL" | "RELEASE" | string
+  cancelReason?: "CANCEL" | "RELEASE" | string,
+  scope?: "segment" | "reservation"
 ): Promise<void> => {
-  // ✅ P0-1: Normaliser le statut avant envoi
+  // ✅ P0-1: Normaliser le statut avant envoi (backend accepte CANCELED ou CANCELLED)
   const normalizedStatus = status.toUpperCase() as BookingStatus;
-  const payload: { status: BookingStatus; cancel_reason?: string } = { status: normalizedStatus };
-  if (cancelReason && normalizedStatus === "CANCELED") {
+  const payload: {
+    status: BookingStatus;
+    cancel_reason?: string;
+    reason_code?: string;
+    scope?: string;
+  } = { status: normalizedStatus };
+  const isCancel = ["CANCELED", "CANCELLED"].includes(normalizedStatus as string);
+  if (cancelReason && isCancel) {
     payload.cancel_reason = cancelReason;
+    payload.reason_code = cancelReason; // motif standardisé (NO_SHOW, COMPANY_ISSUE, etc.)
+  }
+  if (scope === "reservation") {
+    payload.scope = "reservation";
   }
   await api.put(`/driver/me/bookings/${bookingId}/status`, payload);
 };

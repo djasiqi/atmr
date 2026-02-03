@@ -13,7 +13,7 @@ from decimal import Decimal
 
 import pytest
 
-from models import Booking, Invoice, InvoiceLine, db
+from models import Booking, ClientStay, Invoice, InvoiceLine, db
 from models.enums import BookingStatus, InvoiceStatus
 from tests.integration.helpers import (
     assert_response_json,
@@ -501,6 +501,467 @@ class TestInvoicesIntegration:
         assert match["unbilled_count"] == 2
         # Backend renvoie une string "125.00" (HT) pour éviter imprécisions float
         assert match["unbilled_total_amount"] == "125.00"
+
+    def test_eligible_clients_patient_canceled_billable_and_parent_rule(
+        self, authenticated_client, test_company, db
+    ):
+        """Clients éligibles (billed_to_type=patient) : annulations facturables et règle A/R.
+
+        Cas A : CANCELED + is_cancellation_billable=True → client présent.
+        Cas B : CANCELED + is_cancellation_billable=False → client absent.
+        Cas C : retour CANCELED billable mais parent CANCELED → client absent (retour exclu).
+        """
+        if not test_company:
+            pytest.skip("test_company required")
+
+        import uuid
+
+        from ext import bcrypt
+        from models import Client, User
+        from models.enums import ClientType, UserRole
+
+        year, month = 2026, 2
+        start = datetime(year, month, 1)
+        mid = start + timedelta(days=15)
+        company_id = test_company.id
+        eligible_url = (
+            f"/api/v1/invoices/companies/{company_id}/clients/eligible"
+            f"?billed_to_type=patient&year={year}&month={month}"
+        )
+
+        def make_client(prefix):
+            u = User(
+                public_id=str(uuid.uuid4()),
+                username=f"{prefix}_{uuid.uuid4().hex[:8]}",
+                email=f"{prefix}_{uuid.uuid4().hex[:8]}@test.ch",
+                role=UserRole.CLIENT,
+                first_name=prefix,
+                last_name="EligibleTest",
+            )
+            u.password = bcrypt.generate_password_hash("password123").decode("utf-8")
+            db.session.add(u)
+            db.session.flush()
+            c = Client()
+            c.user = u
+            c.company_id = company_id
+            c.first_name = prefix
+            c.last_name = "EligibleTest"
+            c.email = f"{prefix}@test.ch"
+            c.client_type = ClientType.PRIVATE
+            db.session.add(c)
+            db.session.flush()
+            return c
+
+        # Cas A : canceled billable → client doit apparaître
+        client_a = make_client("CanceledBillable")
+        b_a = Booking()
+        b_a.user_id = client_a.user_id
+        b_a.company_id = company_id
+        b_a.client_id = client_a.id
+        b_a.customer_name = f"{client_a.first_name} {client_a.last_name}"
+        b_a.pickup_location = "A"
+        b_a.dropoff_location = "B"
+        b_a.scheduled_time = mid
+        b_a.status = BookingStatus.CANCELED
+        b_a.is_cancellation_billable = True
+        b_a.amount = Decimal("45.00")
+        b_a.vat_rate = Decimal("0")
+        b_a.invoice_line_id = None
+        b_a.billed_to_type = "patient"
+        b_a.is_return = False
+        db.session.add(b_a)
+        db.session.flush()
+
+        # Cas B : canceled non billable → client ne doit pas apparaître
+        client_b = make_client("CanceledNonBillable")
+        b_b = Booking()
+        b_b.user_id = client_b.user_id
+        b_b.company_id = company_id
+        b_b.client_id = client_b.id
+        b_b.customer_name = f"{client_b.first_name} {client_b.last_name}"
+        b_b.pickup_location = "A"
+        b_b.dropoff_location = "B"
+        b_b.scheduled_time = mid + timedelta(days=1)
+        b_b.status = BookingStatus.CANCELED
+        b_b.is_cancellation_billable = False
+        b_b.amount = Decimal("50.00")
+        b_b.vat_rate = Decimal("0")
+        b_b.invoice_line_id = None
+        b_b.billed_to_type = "patient"
+        b_b.is_return = False
+        db.session.add(b_b)
+        db.session.flush()
+
+        # Cas C : parent CANCELED, child (retour) CANCELED billable → client absent (retour exclu)
+        client_c = make_client("ReturnExcluded")
+        parent_c = Booking()
+        parent_c.user_id = client_c.user_id
+        parent_c.company_id = company_id
+        parent_c.client_id = client_c.id
+        parent_c.customer_name = f"{client_c.first_name} {client_c.last_name}"
+        parent_c.pickup_location = "A"
+        parent_c.dropoff_location = "B"
+        parent_c.scheduled_time = mid + timedelta(days=2)
+        parent_c.status = BookingStatus.CANCELED
+        parent_c.is_cancellation_billable = False
+        parent_c.amount = Decimal("50.00")
+        parent_c.vat_rate = Decimal("0")
+        parent_c.invoice_line_id = None
+        parent_c.billed_to_type = "patient"
+        parent_c.is_return = False
+        db.session.add(parent_c)
+        db.session.flush()
+        child_c = Booking()
+        child_c.user_id = client_c.user_id
+        child_c.company_id = company_id
+        child_c.client_id = client_c.id
+        child_c.customer_name = f"{client_c.first_name} {client_c.last_name}"
+        child_c.pickup_location = "B"
+        child_c.dropoff_location = "A"
+        child_c.scheduled_time = mid + timedelta(days=2, hours=1)
+        child_c.status = BookingStatus.CANCELED
+        child_c.is_cancellation_billable = True
+        child_c.amount = Decimal("55.00")
+        child_c.vat_rate = Decimal("0")
+        child_c.invoice_line_id = None
+        child_c.billed_to_type = "patient"
+        child_c.is_return = True
+        child_c.parent_booking_id = parent_c.id
+        db.session.add(child_c)
+        db.session.flush()
+
+        db.session.commit()
+
+        r = authenticated_client.get(eligible_url)
+        assert_response_status(r, 200)
+        data = assert_response_json(r)
+        clients = data.get("data", {}).get("clients", [])
+        client_ids = [c["id"] for c in clients]
+
+        assert client_a.id in client_ids, (
+            "Cas A : client avec CANCELED billable doit apparaître dans eligible (patient)"
+        )
+        assert client_b.id not in client_ids, (
+            "Cas B : client avec CANCELED non billable ne doit pas apparaître"
+        )
+        assert client_c.id not in client_ids, (
+            "Cas C : client avec uniquement retour (parent CANCELED) ne doit pas apparaître"
+        )
+
+    def test_unbilled_reservations_includes_canceled_billable_patient(
+        self, authenticated_client, test_company, db
+    ):
+        """Transports à facturer : la liste unbilled-reservations inclut CANCELED billable (patient).
+
+        Aligné sur /clients/eligible : un client avec uniquement une annulation facturable
+        doit voir cette course dans « Transports à facturer ».
+        """
+        if not test_company:
+            pytest.skip("test_company required")
+
+        import uuid
+
+        from ext import bcrypt
+        from models import Client, User
+        from models.enums import ClientType, UserRole
+
+        year, month = 2026, 2
+        start = datetime(year, month, 1)
+        mid = start + timedelta(days=15)
+        company_id = test_company.id
+
+        u = User(
+            public_id=str(uuid.uuid4()),
+            username=f"unbilled_cb_{uuid.uuid4().hex[:8]}",
+            email=f"unbilled_cb_{uuid.uuid4().hex[:8]}@test.ch",
+            role=UserRole.CLIENT,
+            first_name="Unbilled",
+            last_name="CanceledBillable",
+        )
+        u.password = bcrypt.generate_password_hash("password123").decode("utf-8")
+        db.session.add(u)
+        db.session.flush()
+        c = Client()
+        c.user = u
+        c.company_id = company_id
+        c.first_name = "Unbilled"
+        c.last_name = "CanceledBillable"
+        c.email = "unbilled_cb@test.ch"
+        c.client_type = ClientType.PRIVATE
+        db.session.add(c)
+        db.session.flush()
+
+        b = Booking()
+        b.user_id = c.user_id
+        b.company_id = company_id
+        b.client_id = c.id
+        b.customer_name = f"{c.first_name} {c.last_name}"
+        b.pickup_location = "A"
+        b.dropoff_location = "B"
+        b.scheduled_time = mid
+        b.status = BookingStatus.CANCELED
+        b.is_cancellation_billable = True
+        b.amount = Decimal("45.00")
+        b.vat_rate = Decimal("0")
+        b.invoice_line_id = None
+        b.billed_to_type = "patient"
+        b.is_return = False
+        db.session.add(b)
+        db.session.commit()
+
+        url = (
+            f"/api/v1/invoices/companies/{company_id}/clients/{c.id}/unbilled-reservations"
+            f"?billed_to_type=patient&year={year}&month={month}"
+        )
+        r = authenticated_client.get(url)
+        assert_response_status(r, 200)
+        data = assert_response_json(r)
+        reservations = data.get("reservations", [])
+        ids = [x["id"] for x in reservations]
+        assert b.id in ids, (
+            "La course CANCELED billable (patient) doit apparaître dans unbilled-reservations"
+        )
+        assert len(reservations) == 1
+        assert float(reservations[0].get("amount", 0)) == 45.0
+
+    def test_canceled_eligible_only_billable_in_invoice(
+        self, authenticated_client, test_company, test_client, db
+    ):
+        """Étape 5A : facturer uniquement les annulations billables.
+
+        - CANCELLED + COMPANY_ISSUE → non facturé (pas dans facture)
+        - CANCELLED + NO_SHOW → facturé
+        - CANCELLED + legacy (is_cancellation_billable=None) → non facturé
+        """
+        if not all([test_company, test_client]):
+            pytest.skip("Required fixtures missing")
+
+        now = datetime.now(UTC)
+        year, month = now.year, now.month
+        start = datetime(year, month, 1, tzinfo=UTC)
+        mid = start + timedelta(days=15)
+
+        # Client hospitalisé (stay actif sur la période)
+        stay = ClientStay()
+        stay.client_id = test_client.id
+        stay.company_id = test_company.id
+        stay.start_date = start
+        stay.end_date = None
+        stay.status = "active"
+        db.session.add(stay)
+        db.session.flush()
+
+        def add_canceled_booking(
+            reason_code: str | None,
+            is_cancellation_billable: bool | None,
+            amount_val: str = "50.00",
+        ):
+            b = Booking()
+            b.user_id = test_client.user_id
+            b.company_id = test_company.id
+            b.client_id = test_client.id
+            b.customer_name = f"{test_client.first_name} {test_client.last_name}"
+            b.pickup_location = "A"
+            b.dropoff_location = "B"
+            b.scheduled_time = mid
+            b.status = BookingStatus.CANCELED
+            b.amount = Decimal(amount_val)
+            b.vat_rate = Decimal("0")
+            b.invoice_line_id = None
+            b.billed_to_type = "clinic"
+            b.billed_to_company_id = test_company.id
+            b.is_return = False
+            b.cancellation_reason_code = reason_code
+            b.is_cancellation_billable = is_cancellation_billable
+            db.session.add(b)
+            db.session.flush()
+            return b
+
+        # 3 annulations : seule NO_SHOW doit être éligible
+        add_canceled_booking("COMPANY_ISSUE", False)  # non facturé
+        no_show_booking = add_canceled_booking("NO_SHOW", True)  # facturé
+        add_canceled_booking(None, None)  # legacy → non facturé
+        db.session.commit()
+
+        url = (
+            f"/api/v1/invoices/companies/{test_company.id}/clinic-monthly-totals"
+            f"?year={year}&month={month}&clinic_company_id={test_company.id}"
+        )
+        response = authenticated_client.get(url)
+        assert_response_status(response, 200)
+        data = assert_response_json(response)
+        assert "data" in data
+        d = data["data"]
+        assert "total_eligible" in d
+        # Un seul booking éligible : celui avec NO_SHOW (billable=True)
+        assert d["total_eligible"] == 1, (
+            "Seule l'annulation NO_SHOW (billable) doit être éligible à la facture"
+        )
+        assert float(d["total_amount_eligible"]) == float(no_show_booking.amount), (
+            "Montant éligible = montant du booking NO_SHOW"
+        )
+
+    def test_return_excluded_when_parent_aller_canceled(
+        self, authenticated_client, test_company, db
+    ):
+        """Règle « aller annulé ⇒ retour non facturable » : 3 cas Postgres.
+
+        Cas 1 : parent (aller) CANCELED, child (retour) COMPLETED → retour exclu.
+        Cas 2 : parent CANCELED, child CANCELED billable → retour exclu.
+        Cas 3 : parent COMPLETED, child CANCELED billable → retour inclus (parent pas annulé).
+        """
+        if not test_company:
+            pytest.skip("test_company required")
+
+        import uuid
+
+        from ext import bcrypt
+        from models import Client, User
+        from models.enums import ClientType, UserRole
+
+        now = datetime.now(UTC)
+        year, month = now.year, now.month
+        start = datetime(year, month, 1, tzinfo=UTC)
+        mid = start + timedelta(days=15)
+        clinic_company_id = test_company.id
+        company_id = test_company.id
+
+        # Client dédié pour isoler les données (éviter interférences avec autres tests)
+        u = User(
+            public_id=str(uuid.uuid4()),
+            username=f"aller_retour_{uuid.uuid4().hex[:8]}",
+            email=f"aller_retour_{uuid.uuid4().hex[:8]}@test.ch",
+            role=UserRole.CLIENT,
+            first_name="AllerRetour",
+            last_name="Test",
+        )
+        u.password = bcrypt.generate_password_hash("password123").decode("utf-8")
+        db.session.add(u)
+        db.session.flush()
+        client = Client()
+        client.user = u
+        client.company_id = company_id
+        client.first_name = "AllerRetour"
+        client.last_name = "Test"
+        client.email = "aller_retour@test.ch"
+        client.client_type = ClientType.PRIVATE
+        db.session.add(client)
+        db.session.flush()
+
+        stay = ClientStay()
+        stay.client_id = client.id
+        stay.company_id = clinic_company_id
+        stay.start_date = start
+        stay.end_date = None
+        stay.status = "active"
+        db.session.add(stay)
+        db.session.flush()
+
+        def make_aller(scheduled_at, status, is_cancellation_billable=None):
+            b = Booking()
+            b.user_id = client.user_id
+            b.company_id = company_id
+            b.client_id = client.id
+            b.customer_name = f"{client.first_name} {client.last_name}"
+            b.pickup_location = "A"
+            b.dropoff_location = "B"
+            b.scheduled_time = scheduled_at
+            b.status = status
+            b.amount = Decimal("50.00")
+            b.vat_rate = Decimal("0")
+            b.invoice_line_id = None
+            b.billed_to_type = "clinic"
+            b.billed_to_company_id = clinic_company_id
+            b.is_return = False
+            if status == BookingStatus.CANCELED:
+                b.is_cancellation_billable = is_cancellation_billable
+            else:
+                b.completed_at = scheduled_at
+            db.session.add(b)
+            db.session.flush()
+            return b
+
+        def make_retour(parent, scheduled_at, status, is_cancellation_billable=None):
+            b = Booking()
+            b.user_id = client.user_id
+            b.company_id = company_id
+            b.client_id = client.id
+            b.customer_name = f"{client.first_name} {client.last_name}"
+            b.pickup_location = "B"
+            b.dropoff_location = "A"
+            b.scheduled_time = scheduled_at
+            b.status = status
+            b.amount = Decimal("55.00")
+            b.vat_rate = Decimal("0")
+            b.invoice_line_id = None
+            b.billed_to_type = "clinic"
+            b.billed_to_company_id = clinic_company_id
+            b.is_return = True
+            b.parent_booking_id = parent.id
+            if status == BookingStatus.CANCELED:
+                b.is_cancellation_billable = is_cancellation_billable
+            else:
+                b.completed_at = scheduled_at
+            db.session.add(b)
+            db.session.flush()
+            return b
+
+        # Cas 1 : parent CANCELED, child (retour) COMPLETED → retour exclu des éligibles
+        aller1 = make_aller(mid, BookingStatus.CANCELED, False)
+        retour1 = make_retour(aller1, mid + timedelta(hours=1), BookingStatus.COMPLETED)
+        assert retour1.parent_booking_id == aller1.id
+        db.session.commit()
+
+        url = (
+            f"/api/v1/invoices/companies/{company_id}/clinic-monthly-totals"
+            f"?year={year}&month={month}&clinic_company_id={clinic_company_id}"
+        )
+        response = authenticated_client.get(url)
+        assert_response_status(response, 200)
+        data = assert_response_json(response)
+        d = data.get("data", data)
+        total_eligible = d.get("total_eligible", 0)
+        # Parent annulé non billable → 0 ; retour exclu car parent annulé → 0
+        assert total_eligible == 0, (
+            "Cas 1 : parent CANCELED + retour COMPLETED → retour doit être exclu (total_eligible=0)"
+        )
+
+        # Cas 2 : parent CANCELED, child CANCELED billable (NO_SHOW) → retour exclu
+        aller2 = make_aller(mid + timedelta(days=1), BookingStatus.CANCELED, False)
+        retour2 = make_retour(
+            aller2, mid + timedelta(days=1, hours=1), BookingStatus.CANCELED, True
+        )
+        assert retour2.parent_booking_id == aller2.id
+        db.session.commit()
+
+        response2 = authenticated_client.get(url)
+        assert_response_status(response2, 200)
+        data2 = assert_response_json(response2)
+        d2 = data2.get("data", data2)
+        total_eligible2 = d2.get("total_eligible", 0)
+        assert total_eligible2 == 0, (
+            "Cas 2 : parent CANCELED + retour CANCELED billable → retour doit être exclu (total_eligible=0)"
+        )
+
+        # Cas 3 : parent COMPLETED, child CANCELED billable → les deux éligibles (retour inclus)
+        aller3 = make_aller(mid + timedelta(days=2), BookingStatus.COMPLETED)
+        retour3 = make_retour(
+            aller3, mid + timedelta(days=2, hours=1), BookingStatus.CANCELED, True
+        )
+        db.session.commit()
+
+        response3 = authenticated_client.get(url)
+        assert_response_status(response3, 200)
+        data3 = assert_response_json(response3)
+        d3 = data3.get("data", data3)
+        total_eligible3 = d3.get("total_eligible", 0)
+        assert total_eligible3 == 2, (
+            "Cas 3 : parent COMPLETED + retour CANCELED billable → retour doit être inclus (total_eligible=2)"
+        )
+        total_amount = float(d3.get("total_amount_eligible", 0))
+        assert total_amount >= float(aller3.amount) + float(retour3.amount), (
+            "Montant éligible doit inclure aller + retour annulation billable"
+        )
 
     def test_unbilled_reservation_ids_endpoint(
         self, authenticated_client, test_company, test_client, db

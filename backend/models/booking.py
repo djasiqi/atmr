@@ -259,6 +259,14 @@ class Booking(db.Model):
         index=True,
     )
 
+    # ✅ Annulation standardisée (motif obligatoire, facturation déterministe)
+    cancelled_at = Column(DateTime(timezone=True), nullable=True)
+    cancelled_by_role = Column(String(20), nullable=True)  # company | driver | admin | system
+    cancellation_reason_code = Column(String(50), nullable=True)
+    cancellation_reason_text = Column(Text, nullable=True)
+    is_cancellation_billable = Column(Boolean, nullable=True)
+    cancellation_display_label = Column(String(120), nullable=True)
+
     # Relations
     client = relationship("Client", back_populates="bookings", passive_deletes=True)
     company = relationship(

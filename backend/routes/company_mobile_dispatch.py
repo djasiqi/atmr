@@ -3729,8 +3729,32 @@ class MobileCancelRide(Resource):
             raise AssertionError("Booking cannot be cancelled") from None
 
         payload = request.get_json(silent=True) or {}
-        reason_code = payload.get("reason_code", "OPERATOR_CANCELLED")
-        note = payload.get("note", "").strip()
+        # Phase 1 : reason_code absent → None (compute_cancellation_fields mappe → Annulation historique)
+        reason_code = payload.get("reason_code")
+        reason_text = (payload.get("reason_text") or payload.get("note") or "").strip() or None
+        note = (payload.get("note") or "").strip()
+
+        # ✅ Annulation standardisée : persister motif + facturation
+        # OPERATOR_CANCELLED (legacy mobile) → COMPANY_ISSUE via cancellation_rules
+        from datetime import UTC, datetime
+
+        from application.bookings.cancellation_rules import (
+            compute_cancellation_fields,
+            log_cancellation_persisted,
+        )
+
+        already_had_reason = bool(getattr(booking, "cancellation_reason_code", None))
+        cancel_fields = compute_cancellation_fields(
+            reason_code=reason_code,
+            reason_text=reason_text,
+            cancelled_by_role="company",
+            now=datetime.now(UTC),
+        )
+        for key, val in cancel_fields.items():
+            if hasattr(booking, key):
+                setattr(booking, key, val)
+        if not already_had_reason:
+            log_cancellation_persisted(booking, cancel_fields)
 
         # Annuler la course
         booking.status = BookingStatus.CANCELED
@@ -3763,15 +3787,18 @@ class MobileCancelRide(Resource):
             payload={
                 "booking_id": booking_id,
                 "reason_code": reason_code,
+                "cancellation_reason_code": cancel_fields.get("cancellation_reason_code"),
                 "source": "mobile_enterprise",
             },
-            reasoning=f"Annulation course mobile {booking_id} ({reason_code})",
+            reasoning=f"Annulation course mobile {booking_id} ({reason_code or 'legacy'})",
         )
 
         return {
             "ride_id": str(booking_id),
             "status": "cancelled",
             "message": "Course annulée avec succès",
+            "is_cancellation_billable": cancel_fields["is_cancellation_billable"],
+            "cancellation_display_label": cancel_fields["cancellation_display_label"],
         }, 200
 
 

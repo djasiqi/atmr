@@ -46,6 +46,8 @@ def _set_status(booking: _BookingLike, status_name: str) -> None:
 class _BookingRepo(Protocol):
     def find_model_by_id(self, booking_id: int) -> Any | None: ...
 
+    def find_children_by_parent_booking_id(self, parent_booking_id: int) -> list[Any]: ...
+
 
 class _AssignmentRepo(Protocol):
     def find_model_by_booking_id(self, booking_id: int) -> Any | None: ...
@@ -122,6 +124,9 @@ class UpdateDriverBookingStatusUseCase:
             # ✅ Normaliser le statut reçu (accepter MAJUSCULES ou minuscules)
             raw_status = None if not data else data.get("status")
             new_status_str = raw_status.lower() if raw_status else None
+            # Orthographe UK "cancelled" → traiter comme "canceled" (US, enum PG)
+            if new_status_str == "cancelled":
+                new_status_str = "canceled"
             valid_statuses = {
                 "en_route",
                 "in_progress",
@@ -140,6 +145,14 @@ class UpdateDriverBookingStatusUseCase:
                 status_code = 400
 
             if not response and data is not None and new_status_str is not None:
+                # Log payload reçu (diagnostic Docker / litiges)
+                logger.info(
+                    "[UpdateDriverBookingStatus] booking_id=%s status=%s cancel_reason=%s reason_code=%s",
+                    cmd.booking_id,
+                    raw_status,
+                    data.get("cancel_reason"),
+                    data.get("reason_code"),
+                )
                 # --- transitions ---
                 if new_status_str == "en_route":
                     status_val = _status_value(booking)
@@ -223,102 +236,234 @@ class UpdateDriverBookingStatusUseCase:
                         should_commit = True
 
                 elif new_status_str == "canceled":
-                    status_val = _status_value(booking)
-                    if status_val == BOOKING_STATUS_CANCELED:
-                        response = {"message": "Booking already canceled"}
-                    elif status_val in {
-                        BOOKING_STATUS_COMPLETED,
-                        BOOKING_STATUS_RETURN_COMPLETED,
-                    }:
-                        response = {
-                            "error": "Impossible d'annuler une course déjà terminée"
-                        }
-                        status_code = 400
-                    elif status_val == BOOKING_STATUS_IN_PROGRESS:
-                        response = {
-                            "error": (
-                                "Impossible d'annuler une course en cours : "
-                                "le client est déjà à bord"
+                    scope = (data.get("scope") or "").strip().lower()
+                    if scope == "reservation":
+                        # Annulation multi-segments (aller + retour)
+                        root = (
+                            self._booking_repo.find_model_by_id(
+                                booking.parent_booking_id
                             )
-                        }
-                        status_code = 400
-                    elif status_val not in {
-                        BOOKING_STATUS_ASSIGNED,
-                        BOOKING_STATUS_EN_ROUTE,
-                    }:
-                        response = {
-                            "error": (
-                                "Impossible d'annuler une course qui n'est "
-                                "pas assignée ou en route"
+                            if getattr(booking, "parent_booking_id", None)
+                            else booking
+                        )
+                        if root is None:
+                            response = {"error": "Parent booking not found"}
+                            status_code = 404
+                        else:
+                            segments = [
+                                root,
+                                *self._booking_repo.find_children_by_parent_booking_id(
+                                    root.id
+                                ),
+                            ]
+                            # Exclure les segments déjà finalisés
+                            final_statuses = {
+                                BOOKING_STATUS_COMPLETED,
+                                BOOKING_STATUS_RETURN_COMPLETED,
+                            }
+                            cancelable_statuses = {
+                                BOOKING_STATUS_PENDING,
+                                BOOKING_STATUS_ACCEPTED,
+                                BOOKING_STATUS_ASSIGNED,
+                                BOOKING_STATUS_EN_ROUTE,
+                            }
+                            updated_booking_ids: list[int] = []
+                            skipped_booking_ids: list[int] = []
+                            reason_code = data.get("reason_code") or data.get(
+                                "cancel_reason"
                             )
-                        }
-                        status_code = 400
-                    else:
-                        cancel_reason_str = str(
-                            data.get("cancel_reason", "CANCEL")
-                        ).upper()
-                        if cancel_reason_str == "RELEASE":
-                            _set_status(booking, "ACCEPTED")
-                            booking.driver_id = None
+                            reason_text = data.get("reason_text")
+                            from application.bookings.cancellation_rules import (
+                                compute_cancellation_fields,
+                                log_cancellation_persisted,
+                            )
 
-                            assignment = self._assignment_repo.find_model_by_booking_id(
-                                booking_id=cmd.booking_id
-                            )
-                            assignment_id_str: str | None = None
-                            if assignment is not None:
-                                assignment_id_str = str(assignment.id)
-                                self._db.delete(assignment)
+                            for seg in segments:
+                                seg_val = _status_value(seg)
+                                if seg_val in final_statuses:
+                                    skipped_booking_ids.append(seg.id)
+                                    continue
+                                if seg_val == BOOKING_STATUS_CANCELED:
+                                    skipped_booking_ids.append(seg.id)
+                                    continue
+                                if seg_val == BOOKING_STATUS_IN_PROGRESS:
+                                    skipped_booking_ids.append(seg.id)
+                                    continue
+                                if seg_val not in cancelable_statuses:
+                                    skipped_booking_ids.append(seg.id)
+                                    continue
+                                _set_status(seg, "CANCELED")
+                                existing_code = getattr(
+                                    seg, "cancellation_reason_code", None
+                                )
+                                if existing_code is None:
+                                    cancel_fields = compute_cancellation_fields(
+                                        reason_code=reason_code,
+                                        reason_text=reason_text,
+                                        cancelled_by_role="driver",
+                                        now=self._now_utc(),
+                                    )
+                                    for key, val in cancel_fields.items():
+                                        if hasattr(seg, key):
+                                            setattr(seg, key, val)
+                                    log_cancellation_persisted(seg, cancel_fields)
+                                updated_booking_ids.append(seg.id)
+                                logger.info(
+                                    "[UpdateDriverBookingStatus] scope=reservation booking_id=%s set to CANCELED",
+                                    seg.id,
+                                )
 
-                            if assignment_id_str is not None:
-                                # ✅ DDD: Publier événement au lieu d'appel direct
+                            self._db.commit()
+                            for bid in updated_booking_ids:
                                 try:
                                     from application.events.event_bus import (
                                         publish_event,
                                     )
                                     from domain.events.events import (
-                                        AssignmentCancelledEvent,
+                                        BookingUpdatedEvent,
                                     )
 
-                                    publish_event(
-                                        AssignmentCancelledEvent(
-                                            assignment_id=assignment_id_str,
-                                            booking_id=cmd.booking_id,
-                                            driver_id=cmd.driver_id,
-                                            company_id=booking.company_id,
+                                    seg_obj = self._booking_repo.find_model_by_id(bid)
+                                    if seg_obj is not None:
+                                        publish_event(
+                                            BookingUpdatedEvent(
+                                                booking_id=seg_obj.id,
+                                                driver_id=cmd.driver_id,
+                                                company_id=seg_obj.company_id,
+                                                actor_role="driver",
+                                                actor_id=cmd.driver_id,
+                                                source="driver_api",
+                                            )
                                         )
-                                    )
                                 except Exception as e:
-                                    # Fallback vers notification directe
-                                    # si événement échoue
-                                    msg = (
-                                        "[UpdateDriverBookingStatus] Event publish "
-                                        "failed, using direct notification: %s"
-                                    )
                                     logger.warning(
-                                        msg,
+                                        "[UpdateDriverBookingStatus] Event for booking %s failed: %s",
+                                        bid,
                                         e,
                                     )
-                                    self._emit_assignment_cancelled(
-                                        booking.company_id,
-                                        assignment_id_str,
-                                        cmd.booking_id,
-                                        cmd.driver_id,
+                            response = {
+                                "message": "Reservation canceled (all segments)",
+                                "updated_booking_ids": updated_booking_ids,
+                                "skipped_booking_ids": skipped_booking_ids,
+                            }
+                            status_code = 200
+                    else:
+                        status_val = _status_value(booking)
+                        if status_val == BOOKING_STATUS_CANCELED:
+                            response = {"message": "Booking already canceled"}
+                        elif status_val in {
+                            BOOKING_STATUS_COMPLETED,
+                            BOOKING_STATUS_RETURN_COMPLETED,
+                        }:
+                            response = {
+                                "error": "Impossible d'annuler une course déjà terminée"
+                            }
+                            status_code = 400
+                        elif status_val == BOOKING_STATUS_IN_PROGRESS:
+                            response = {
+                                "error": (
+                                    "Impossible d'annuler une course en cours : "
+                                    "le client est déjà à bord"
+                                )
+                            }
+                            status_code = 400
+                        elif status_val not in {
+                            BOOKING_STATUS_ASSIGNED,
+                            BOOKING_STATUS_EN_ROUTE,
+                        }:
+                            response = {
+                                "error": (
+                                    "Impossible d'annuler une course qui n'est "
+                                    "pas assignée ou en route"
+                                )
+                            }
+                            status_code = 400
+                        else:
+                            cancel_reason_str = str(
+                                data.get("cancel_reason", "CANCEL")
+                            ).upper()
+                            if cancel_reason_str == "RELEASE":
+                                _set_status(booking, "ACCEPTED")
+                                booking.driver_id = None
+
+                                assignment = self._assignment_repo.find_model_by_booking_id(
+                                    booking_id=cmd.booking_id
+                                )
+                                assignment_id_str: str | None = None
+                                if assignment is not None:
+                                    assignment_id_str = str(assignment.id)
+                                    self._db.delete(assignment)
+
+                                if assignment_id_str is not None:
+                                    # ✅ DDD: Publier événement au lieu d'appel direct
+                                    try:
+                                        from application.events.event_bus import (
+                                            publish_event,
+                                        )
+                                        from domain.events.events import (
+                                            AssignmentCancelledEvent,
+                                        )
+
+                                        publish_event(
+                                            AssignmentCancelledEvent(
+                                                assignment_id=assignment_id_str,
+                                                booking_id=cmd.booking_id,
+                                                driver_id=cmd.driver_id,
+                                                company_id=booking.company_id,
+                                            )
+                                        )
+                                    except Exception as e:
+                                        # Fallback vers notification directe
+                                        msg = (
+                                            "[UpdateDriverBookingStatus] Event publish "
+                                            "failed, using direct notification: %s"
+                                        )
+                                        logger.warning(msg, e)
+                                        self._emit_assignment_cancelled(
+                                            booking.company_id,
+                                            assignment_id_str,
+                                            cmd.booking_id,
+                                            cmd.driver_id,
+                                        )
+
+                                trigger = self._maybe_trigger_dispatch
+                                if trigger is not None:
+                                    from ext import db
+
+                                    with db.session.no_autoflush:
+                                        trigger(booking.company_id, "reassign")
+                            else:
+                                # CANCEL (pas RELEASE) : annulation réelle → statut CANCELED
+                                _set_status(booking, "CANCELED")
+                                logger.info(
+                                    "[UpdateDriverBookingStatus] booking_id=%s set to CANCELED (driver_id=%s)",
+                                    cmd.booking_id,
+                                    cmd.driver_id,
+                                )
+                                # Annulation standardisée : persister les 6 champs
+                                existing_code = getattr(
+                                    booking, "cancellation_reason_code", None
+                                )
+                                if existing_code is None:
+                                    reason_code = data.get("reason_code") or data.get(
+                                        "cancel_reason"
+                                    )
+                                    reason_text = data.get("reason_text")
+                                    from application.bookings.cancellation_rules import (
+                                        compute_cancellation_fields,
+                                        log_cancellation_persisted,
                                     )
 
-                            trigger = self._maybe_trigger_dispatch
-                            if trigger is not None:
-                                # Éviter un autoflush pendant le trigger : la suppression
-                                # de l'assignment est encore en attente ; un .get() ou
-                                # une lecture dans le trigger peut déclencher un flush
-                                # et provoquer ForeignKeyViolation si delay_events existe.
-                                # La FK delay_events.assignment_id en ON DELETE CASCADE
-                                # règle la cause ; no_autoflush évite le flush trop tôt.
-                                from ext import db
-
-                                with db.session.no_autoflush:
-                                    trigger(booking.company_id, "reassign")
-                        else:
-                            _set_status(booking, "CANCELED")
+                                    cancel_fields = compute_cancellation_fields(
+                                        reason_code=reason_code,
+                                        reason_text=reason_text,
+                                        cancelled_by_role="driver",
+                                        now=self._now_utc(),
+                                    )
+                                    for key, val in cancel_fields.items():
+                                        if hasattr(booking, key):
+                                            setattr(booking, key, val)
+                                    log_cancellation_persisted(booking, cancel_fields)
 
                         should_commit = True
 

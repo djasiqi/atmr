@@ -5288,6 +5288,11 @@ class SingleReservation(Resource):
             )
 
         # Règle métier selon le statut ET le timing
+        # Body optionnel pour annulation : {reason_code, reason_text} (si absent → OTHER)
+        body = request.get_json(silent=True) or {}
+        reason_code = body.get("reason_code")
+        reason_text = body.get("reason_text")
+
         try:
             from application.companies.reservations.delete_or_cancel_reservation import (
                 DeleteOrCancelCompanyReservationUseCase,
@@ -5298,6 +5303,8 @@ class SingleReservation(Resource):
                 booking,
                 now_utc=datetime.now(UTC),
                 hours_offset=float(HOURS_OFFSET),
+                reason_code=reason_code,
+                reason_text=reason_text,
             )
             if not uc_result.ok:
                 return APIErrorHandler.handle_permission_error(
@@ -5708,9 +5715,14 @@ class SingleReservation(Resource):
             # cancel
             db.session.commit()
             _maybe_trigger_dispatch(cid, "cancel")
-            return {
+            resp: dict[str, Any] = {
                 "message": uc_result.message or "La réservation a été annulée."
-            }, 200
+            }
+            if uc_result.is_cancellation_billable is not None:
+                resp["is_cancellation_billable"] = uc_result.is_cancellation_billable
+            if uc_result.cancellation_display_label:
+                resp["cancellation_display_label"] = uc_result.cancellation_display_label
+            return resp, 200
 
         except Exception as e:
             db.session.rollback()

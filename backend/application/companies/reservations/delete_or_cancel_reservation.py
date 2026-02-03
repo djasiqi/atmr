@@ -12,6 +12,12 @@ class _BookingLike(Protocol):
     status: Any
     scheduled_time: datetime | None
     driver_id: Any
+    cancelled_at: Any
+    cancelled_by_role: Any
+    cancellation_reason_code: Any
+    cancellation_reason_text: Any
+    is_cancellation_billable: Any
+    cancellation_display_label: Any
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,6 +30,8 @@ class DeleteOrCancelCompanyReservationResult:
     should_trigger_dispatch: bool = False
     trigger_reason: str | None = None
     should_delete_assignments: bool = False
+    is_cancellation_billable: bool | None = None
+    cancellation_display_label: str | None = None
 
 
 class DeleteOrCancelCompanyReservationUseCase:
@@ -36,6 +44,8 @@ class DeleteOrCancelCompanyReservationUseCase:
         *,
         now_utc: datetime | None = None,
         hours_offset: float = -24.0,
+        reason_code: str | None = None,
+        reason_text: str | None = None,
     ) -> DeleteOrCancelCompanyReservationResult:
         now = now_utc or datetime.now(UTC)
 
@@ -80,12 +90,34 @@ class DeleteOrCancelCompanyReservationUseCase:
                 booking.driver_id = None
             # Maintenant on peut changer le statut en toute sécurité
             set_status(booking, "status", "CANCELED")
+
+            # ✅ Annulation standardisée : persister motif + facturation
+            from application.bookings.cancellation_rules import (
+                compute_cancellation_fields,
+                log_cancellation_persisted,
+            )
+
+            already_had_reason = bool(getattr(booking, "cancellation_reason_code", None))
+            fields = compute_cancellation_fields(
+                reason_code=reason_code,
+                reason_text=reason_text,
+                cancelled_by_role="company",
+                now=now,
+            )
+            for key, val in fields.items():
+                if hasattr(booking, key):
+                    setattr(booking, key, val)
+            if not already_had_reason:
+                log_cancellation_persisted(booking, fields)
+
             return DeleteOrCancelCompanyReservationResult(
                 ok=True,
                 action="cancel",
                 message="La réservation a été annulée avec succès.",
                 should_trigger_dispatch=True,
                 trigger_reason="cancel",
+                is_cancellation_billable=fields["is_cancellation_billable"],
+                cancellation_display_label=fields["cancellation_display_label"],
             )
 
         # Règle 3: forbid

@@ -324,6 +324,21 @@ def _is_booking_cancelled(booking: Any) -> bool:
     return status_str.upper().strip() in {"CANCELED", "CANCELLED"}
 
 
+def _get_cancellation_transport_display(booking: Any) -> str:
+    """Libellé transport pour booking annulé (règle prioritaire S2).
+
+    Si booking.status == CANCELED, le PDF ne doit jamais afficher "pickup → dropoff".
+    Utilise cancellation_display_label si présent (annulation standardisée),
+    sinon fallback "Annulation (historique)" (backfill / legacy).
+    """
+    if not booking:
+        return "Annulation (historique)"
+    label = getattr(booking, "cancellation_display_label", None)
+    if label and str(label).strip():
+        return str(label).strip()
+    return "Annulation (historique)"
+
+
 def _short_label_for_transport(address: str) -> str:
     """Produit un libellé pour 'A' ou 'B' dans 'A ↔ B' / 'A → B'.
 
@@ -518,6 +533,12 @@ def _detect_and_group_round_trips(
         if not parent_booking or not return_booking:
             continue
 
+        # ✅ Annulés : ne pas regrouper (chaque ligne reste standalone avec son libellé)
+        if _is_booking_cancelled(parent_booking) or _is_booking_cancelled(return_booking):
+            used_by_explicit.discard(return_idx)
+            used_by_explicit.discard(parent_idx)  # parent_idx déjà trouvé au-dessus
+            continue
+
         pickup_aller = getattr(parent_booking, "pickup_location", "") or ""
         dropoff_aller = getattr(parent_booking, "dropoff_location", "") or ""
 
@@ -539,8 +560,7 @@ def _detect_and_group_round_trips(
             else date_retour
         )
 
-        is_cancelled = _is_booking_cancelled(parent_booking) or _is_booking_cancelled(return_booking)
-        transport_display = "Annulation dernière minute" if is_cancelled else f"{short_a} ↔ {short_b}"
+        transport_display = f"{short_a} ↔ {short_b}"
         consolidated_explicit.append(
             {
                 "is_round_trip": True,
@@ -576,16 +596,23 @@ def _detect_and_group_round_trips(
             continue
         patient_id = item.get("patient_id")
         date = item.get("date")
+        booking = item.get("booking")
+
+        # ✅ Annulés : ne pas regrouper, transport_display = libellé uniquement
+        if _is_booking_cancelled(booking):
+            item["is_round_trip"] = False
+            item["transport_type"] = "Aller"
+            item["transport_display"] = _get_cancellation_transport_display(booking)
+            item["earliest_scheduled"] = item.get("date")
+            standalone_items.append(item)
+            continue
 
         if not patient_id or not date:
             # Pas de regroupement possible, garder tel quel (ne pas perdre la ligne)
             item["is_round_trip"] = False
             item["transport_type"] = "Aller"
             line = item.get("line")
-            booking = item.get("booking")
-            if _is_booking_cancelled(booking):
-                item["transport_display"] = "Annulation dernière minute"
-            elif line and line.type == InvoiceLineType.MATERIAL_DELIVERY:
+            if line and line.type == InvoiceLineType.MATERIAL_DELIVERY:
                 item["transport_display"] = (
                     line.description[:80] if line.description else "Livraison"
                 )
@@ -621,7 +648,7 @@ def _detect_and_group_round_trips(
                 line = item.get("line")
                 booking = item.get("booking")
                 if _is_booking_cancelled(booking):
-                    item["transport_display"] = "Annulation dernière minute"
+                    item["transport_display"] = _get_cancellation_transport_display(booking)
                 elif line and line.type == InvoiceLineType.MATERIAL_DELIVERY:
                     item["transport_display"] = (
                         line.description[:80] if line.description else "Livraison"
@@ -813,7 +840,11 @@ def _detect_and_group_round_trips(
             b1 = item1.get("booking")
             b2 = item2.get("booking")
             is_cancelled = _is_booking_cancelled(b1) or _is_booking_cancelled(b2)
-            transport_display = "Annulation dernière minute" if is_cancelled else f"{short_a} ↔ {short_b}"
+            transport_display = (
+                _get_cancellation_transport_display(b1 or b2)
+                if is_cancelled
+                else f"{short_a} ↔ {short_b}"
+            )
             consolidated = {
                 "is_round_trip": True,
                 "transport_type": "A/R",
@@ -845,7 +876,7 @@ def _detect_and_group_round_trips(
                 line = item.get("line")
                 booking = item.get("booking")
                 if _is_booking_cancelled(booking):
-                    item["transport_display"] = "Annulation dernière minute"
+                    item["transport_display"] = _get_cancellation_transport_display(booking)
                 elif line and line.type == InvoiceLineType.MATERIAL_DELIVERY:
                     item["transport_display"] = (
                         line.description[:80] if line.description else "Livraison"

@@ -128,9 +128,16 @@ booking_status_model = driver_ns.model(
         "status": fields.String(
             required=True,
             description=(
-                "Nouveau statut (en_route, in_progress, completed, return_completed)"
+                "Nouveau statut (en_route, in_progress, completed, return_completed, canceled)"
             ),
-        )
+        ),
+        "cancel_reason": fields.String(description="CANCEL ou RELEASE (si status=canceled)"),
+        "reason_code": fields.String(
+            description="Motif facturation (NO_SHOW, COMPANY_ISSUE, LAST_MINUTE, etc.)"
+        ),
+        "scope": fields.String(
+            description="Si 'reservation', annule toute la réservation (aller + retour)"
+        ),
     },
 )
 

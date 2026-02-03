@@ -68,7 +68,7 @@ const ReservationSelector = ({
         const data = await invoiceService.fetchUnbilledReservations(companyId, clientId, {
           year: period.year,
           month: period.month,
-          billed_to_type: filter !== 'all' ? filter : undefined,
+          billed_to_type: filter !== 'all' ? filter : (billToType || undefined),
         });
 
         const list = Array.isArray(data?.reservations) ? data.reservations : [];
