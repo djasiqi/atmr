@@ -787,10 +787,13 @@ class BookingRepository:
         ]
         status_filter = Booking.status.in_(target_statuses)
         if billed_to_type == "patient":
+            # Annulations facturables : montant > 0 et justification (billing_override_reason).
+            # Compatible serveur sans migration is_cancellation_billable.
             canceled_eligible = (
                 (Booking.status == BookingStatus.CANCELED.value)
-                & (Booking.is_cancellation_billable == True)  # noqa: E712
                 & (Booking.amount > 0)
+                & Booking.billing_override_reason.isnot(None)
+                & (Booking.billing_override_reason != "")
             )
             status_filter = or_(status_filter, canceled_eligible)
 
@@ -868,8 +871,9 @@ class BookingRepository:
         if billed_to_type == "patient":
             canceled_eligible = (
                 (Booking.status == BookingStatus.CANCELED.value)
-                & (Booking.is_cancellation_billable == True)  # noqa: E712
                 & (Booking.amount > 0)
+                & Booking.billing_override_reason.isnot(None)
+                & (Booking.billing_override_reason != "")
             )
             status_filter = or_(status_filter, canceled_eligible)
 

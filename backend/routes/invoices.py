@@ -1315,12 +1315,13 @@ class EligibleClients(Resource):
         ]
         status_filter = Booking.status.in_(target_statuses)
 
-        # Facturation directe au client : inclure les annulations facturables (NO_SHOW, etc.)
+        # Facturation directe au client : annulations facturables (justification billing_override_reason)
         if billed_to_type == "patient":
             canceled_eligible_patient = (
                 (Booking.status == BookingStatus.CANCELED.value)
-                & (Booking.is_cancellation_billable == True)  # noqa: E712
                 & (Booking.amount > 0)
+                & Booking.billing_override_reason.isnot(None)
+                & (Booking.billing_override_reason != "")
             )
             status_filter = or_(
                 Booking.status.in_(target_statuses), canceled_eligible_patient
@@ -1338,11 +1339,12 @@ class EligibleClients(Resource):
                     ClientStay.end_date >= Booking.scheduled_time,
                 ),
             )
-            # Annulations : uniquement billables (legacy / non billables → pas en facture) ; amount > 0 = garde-fou
+            # Annulations : avec justification (billing_override_reason) ; amount > 0 = garde-fou
             canceled_eligible = (
                 (Booking.status == BookingStatus.CANCELED.value)
-                & (Booking.is_cancellation_billable == True)  # noqa: E712
                 & (Booking.amount > 0)
+                & Booking.billing_override_reason.isnot(None)
+                & (Booking.billing_override_reason != "")
                 & stay_overlaps
                 & (Booking.is_return == False)  # noqa: E712 — SQLAlchemy column comparison
             )
@@ -1716,13 +1718,12 @@ class ClinicMonthlyTotals(Resource):
                 except (ValueError, TypeError):
                     return 0.0
 
-            # ✅ Transports éligibles (billed_to_type='clinic') - inclut annulations billables uniquement
-            # si client hospitalisé à la clinique au moment de la course ; amount > 0 = garde-fou
-            # ✅ Annulations : uniquement l'aller facturé (pas le retour)
+            # ✅ Transports éligibles (billed_to_type='clinic') - annulations avec justification
             canceled_eligible = (
                 (Booking.status == BookingStatus.CANCELED.value)
-                & (Booking.is_cancellation_billable == True)  # noqa: E712
                 & (Booking.amount > 0)
+                & Booking.billing_override_reason.isnot(None)
+                & (Booking.billing_override_reason != "")
                 & stay_overlaps_booking
                 & (Booking.is_return == False)  # noqa: E712 — SQLAlchemy column comparison
             )

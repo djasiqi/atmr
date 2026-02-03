@@ -86,7 +86,7 @@ const ReservationSelector = ({
     };
 
     loadReservations();
-  }, [companyId, clientId, period, filter, autoSelectHospitalized]);
+  }, [companyId, clientId, period, filter, billToType, autoSelectHospitalized]);
 
   // Reset hasAutoSelected sur changement de clientId ou période (évite resets inutiles)
   useEffect(() => {
