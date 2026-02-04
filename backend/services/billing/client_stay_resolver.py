@@ -379,14 +379,14 @@ def get_clinic_rate_for_booking(
     Ce champ peut être conceptuellement ambigu :
     - client.preferential_rate = tarif patient (souvent 40 CHF)
     - Company.preferential_rate = tarif clinique (devrait être 40 CHF dans votre cas)
-    
+
     Si patient=45 et clinique=40, alors Company.preferential_rate doit valoir 40.
-    
-    🔮 AMÉLIORATION FUTURE :
-    Pour une séparation conceptuelle claire, envisager d'ajouter :
-    - clinic_rate dans ClinicBillingPartyMapping (tarif spécifique au contrat transporteur-clinique)
+
+    AMELIORATION FUTURE :
+    Pour une separation conceptuelle claire, envisager d'ajouter :
+    - clinic_rate dans ClinicBillingPartyMapping (tarif specifique au contrat transporteur-clinique)
     - ou clinic_rate dans CompanyBillingProfile (tarif par clinique)
-    
+
     Args:
         booking: Booking concerné (pour logging)
         clinic_company_id: ID de la clinique (Company) payeur
@@ -412,18 +412,15 @@ def get_clinic_rate_for_booking(
 
     if clinic.preferential_rate is None:
         logger.warning(
-            "[get_clinic_rate_for_booking] Tarif préférentiel non configuré pour clinique %s (booking %s). "
-            "Source actuelle: Company.preferential_rate. "
-            "Vérifier que ce champ contient bien le tarif clinique (ex: 40 CHF) et non le tarif patient.",
+            "[get_clinic_rate_for_booking] Tarif preferentiel non configure pour clinique %s (booking %s). Source actuelle: Company.preferential_rate. Verifier que ce champ contient bien le tarif clinique (ex: 40 CHF) et non le tarif patient.",
             clinic_company_id,
             booking.id if booking else None,
         )
         return None
 
-    # ✅ Log pour traçabilité (DEBUG temporaire)
+    # Log pour tracabilite (DEBUG temporaire)
     logger.debug(
-        "[get_clinic_rate_for_booking] Tarif clinique trouvé: clinic_company_id=%s, "
-        "clinic_name=%s, preferential_rate=%.2f CHF, source=Company.preferential_rate (booking %s)",
+        "[get_clinic_rate_for_booking] Tarif clinique trouve: clinic_company_id=%s, clinic_name=%s, preferential_rate=%.2f CHF, source=Company.preferential_rate (booking %s)",
         clinic_company_id,
         clinic.name,
         clinic.preferential_rate,

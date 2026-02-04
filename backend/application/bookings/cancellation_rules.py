@@ -5,7 +5,7 @@ Backend = source of truth. Utilisé par company web/mobile, driver, invoice, PDF
 Phase 1 : pas de validation stricte (LAST_MINUTE sélectionnable manuellement).
 Phase 2 : seuil configurable (ex. 2h) + validation/override.
 
-Référence – Choix proposés au chauffeur (mobile CancelJustificationModal) :
+Reference - Choix proposes au chauffeur (mobile CancelJustificationModal) :
 ┌──────────────────┬─────────────────────────────────────┬────────────┐
 │ Code (backend)   │ Libellé                             │ Facturable │
 ├──────────────────┼─────────────────────────────────────┼────────────┤
@@ -158,8 +158,7 @@ def log_cancellation_persisted(
     else:
         pickup_time_str = str(scheduled_time)
     logger.info(
-        "[cancellation] booking_id=%s company_id=%s cancelled_by_role=%s reason_code=%s "
-        "is_billable=%s label=%s pickup_time=%s",
+        "[cancellation] booking_id=%s company_id=%s cancelled_by_role=%s reason_code=%s is_billable=%s label=%s pickup_time=%s",
         booking_id,
         company_id,
         cancel_fields.get("cancelled_by_role"),
