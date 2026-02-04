@@ -1,15 +1,21 @@
 # services/partner_invoice_pdf_service.py
-"""Service pour générer les PDFs des factures partenaires."""
+"""Service pour générer les PDFs des factures partenaires.
+
+Ce module génère des factures partenaires avec le même design que les factures
+client/clinique : logo, mise en page professionnelle, QR-Bill intégré.
+"""
 
 import logging
 import tempfile
 from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
+from typing import Any
 
+from flask import current_app
 from qrbill import QRBill
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import (
     ParagraphStyle,
@@ -30,6 +36,7 @@ from models.booking_transfer import BookingTransfer
 from models.partner_invoice import PartnerInvoice
 from services.documents.pdf import (
     QR_BILL_SPACER_PT,
+    _load_logo_ratio_safe,
     _make_qr_bill_table,
     _svg_content_to_drawing,
 )
@@ -38,6 +45,7 @@ from services.documents.pdf import (
 MIN_ADDRESS_PARTS = 2
 MIN_ADDRESS_PARTS_POSTAL = 3
 MIN_ADDRESS_PARTS_CITY = 4
+MIN_IBAN_LENGTH = 21  # Longueur minimale pour formater un IBAN
 
 app_logger = logging.getLogger("partner_invoice_pdf_service")
 
@@ -160,6 +168,12 @@ def generate_partner_invoice_pdf_content(
 ) -> bytes:
     """Génère le contenu PDF d'une facture partenaire.
 
+    Utilise le même design que les factures client/clinique :
+    - Logo de l'entreprise en haut à gauche
+    - En-tête avec émetteur (gauche) et destinataire (droite)
+    - Tableau des transferts
+    - QR-Bill sur page séparée
+
     Args:
         partner_invoice: Facture partenaire
         transfers: Liste des transferts inclus dans la facture
@@ -171,33 +185,46 @@ def generate_partner_invoice_pdf_content(
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        topMargin=2 * cm,
-        bottomMargin=2 * cm,
-        leftMargin=2 * cm,
-        rightMargin=2 * cm,
+        topMargin=1.5 * cm,
+        bottomMargin=1.5 * cm,
+        leftMargin=1.5 * cm,
+        rightMargin=1.5 * cm,
     )
 
     styles = getSampleStyleSheet()
 
-    # Styles
+    # Styles cohérents avec les factures client/clinique
     normal_style = ParagraphStyle(
         "Normal",
         parent=styles["Normal"],
-        fontSize=10,
+        fontSize=9,
         textColor=colors.black,
         alignment=TA_LEFT,
-        spaceAfter=6,
+        spaceAfter=4,
         fontName="Helvetica",
+        leading=12,
     )
 
-    centered_style = ParagraphStyle(
-        "Centered",
+    right_style = ParagraphStyle(
+        "Right",
         parent=styles["Normal"],
-        fontSize=10,
+        fontSize=9,
         textColor=colors.black,
-        alignment=TA_CENTER,
-        spaceAfter=6,
+        alignment=TA_RIGHT,
+        spaceAfter=4,
         fontName="Helvetica",
+        leading=12,
+    )
+
+    title_style = ParagraphStyle(
+        "Title",
+        parent=styles["Heading1"],
+        fontSize=14,
+        textColor=colors.HexColor("#1a365d"),
+        alignment=TA_LEFT,
+        spaceAfter=10,
+        spaceBefore=15,
+        fontName="Helvetica-Bold",
     )
 
     story = []
@@ -210,45 +237,63 @@ def generate_partner_invoice_pdf_content(
     # L'entreprise émettrice est celle qui exécute les courses (celle qui facture)
     executing_company = transfers[0].executing_company
     # L'entreprise destinataire est celle qui doit payer (l'autre entreprise du partenariat)
-    # Si executing_company = owner_company, alors on facture partner_company
-    # Si executing_company = partner_company, alors on facture owner_company
     if executing_company.id == partnership.owner_company_id:
-        billed_company = partnership.partner_company  # On facture le partenaire
+        billed_company = partnership.partner_company
     else:
-        billed_company = partnership.owner_company  # On facture l'owner
+        billed_company = partnership.owner_company
 
     if not executing_company:
         raise ValueError("Entreprise exécutante non trouvée")
     if not billed_company:
         raise ValueError("Entreprise destinataire non trouvée")
 
-    # === EN-TÊTE AVEC LOGO ET INFORMATIONS ENTREPRISE ÉMETTRICE ===
-    company_name = executing_company.name or "Emmenez Moi"
-    company_address_raw = (
-        executing_company.address or "Route de Chevrens 145, 1247 Anières"
-    )
+    # === CHARGEMENT DU LOGO ===
+    logo_img = None
+    logo_width = 0.0
+
+    if hasattr(executing_company, "logo_url") and executing_company.logo_url:
+        try:
+            logo_url = executing_company.logo_url.strip()
+            if not logo_url.startswith(("http://", "https://")):
+                logo_url_clean = logo_url.lstrip("/")
+                if logo_url_clean.startswith("uploads/"):
+                    logo_url_clean = logo_url_clean[8:]
+                uploads_dir = Path(
+                    current_app.config.get("UPLOAD_FOLDER", "/app/uploads")
+                )
+                logo_path = uploads_dir / logo_url_clean
+                if logo_path and Path(logo_path).exists():
+                    max_width_pt = 595 * 0.22  # ~22% de la largeur A4
+                    logo_img, logo_width, _ = _load_logo_ratio_safe(
+                        logo_path, max_width_pt
+                    )
+        except Exception as e:
+            app_logger.warning("Impossible de charger le logo: %s", e)
+
+    # === EN-TÊTE : LOGO + ENTREPRISE (gauche) | DESTINATAIRE (droite) ===
+    company_name = executing_company.name or "Entreprise"
+    company_address_raw = executing_company.address or "Adresse non renseignée"
     company_address = _format_address_for_display(company_address_raw)
-    company_phone = executing_company.contact_phone or "0225120203"
+    company_phone = executing_company.contact_phone or ""
     company_email = (
         executing_company.billing_email
         or executing_company.contact_email
-        or "info@casa-famiglia.ch"
+        or ""
     )
-    company_uid = executing_company.uid_ide or "CHE-27348.653"
+    company_uid = executing_company.uid_ide or ""
 
-    # Coordonnées entreprise alignées à gauche
-    company_info_left = f"""
-    {company_name}<br/>
-    {company_address}<br/>
-    Email facturation : {company_email}<br/>
-    Téléphone : {company_phone}<br/>
-    IDE/UID : {company_uid}
-    """
+    # Construire le bloc émetteur
+    company_info_parts = [f"<b>{company_name}</b>", company_address]
+    if company_email:
+        company_info_parts.append(f"Email : {company_email}")
+    if company_phone:
+        company_info_parts.append(f"Tél : {company_phone}")
+    if company_uid:
+        company_info_parts.append(f"IDE : {company_uid}")
 
-    story.append(Paragraph(company_info_left, normal_style))
-    story.append(Spacer(1, 20))
+    company_info_html = "<br/>".join(company_info_parts)
 
-    # === INFORMATIONS ENTREPRISE DESTINATAIRE (DROITE) ===
+    # Construire le bloc destinataire
     billed_company_name = billed_company.name or "Entreprise"
     billed_company_address_raw = billed_company.address or "Adresse non renseignée"
     billed_company_address = _format_address_for_display(billed_company_address_raw)
@@ -256,41 +301,88 @@ def generate_partner_invoice_pdf_content(
     billed_company_email = (
         billed_company.billing_email or billed_company.contact_email or ""
     )
-    billed_company_uid = billed_company.uid_ide or ""
 
-    # Construire les informations de l'entreprise destinataire avec toutes les données
-    billed_company_info_parts = [billed_company_name, billed_company_address]
+    billed_info_parts = [
+        "<b>Facturé à :</b>",
+        f"<b>{billed_company_name}</b>",
+        billed_company_address,
+    ]
     if billed_company_email:
-        billed_company_info_parts.append(f"Email facturation : {billed_company_email}")
+        billed_info_parts.append(f"Email : {billed_company_email}")
     if billed_company_phone:
-        billed_company_info_parts.append(f"Téléphone : {billed_company_phone}")
-    if billed_company_uid:
-        billed_company_info_parts.append(f"IDE/UID : {billed_company_uid}")
+        billed_info_parts.append(f"Tél : {billed_company_phone}")
 
-    billed_to_info_right = f"""
-    <para align="right">
-    <b>Facturé à :</b><br/>
-    {"".join([f"{part}<br/>" for part in billed_company_info_parts])}
-    </para>
-    """
+    billed_info_html = "<br/>".join(billed_info_parts)
 
-    story.append(Paragraph(billed_to_info_right, normal_style))
-    story.append(Spacer(1, 20))
+    # Créer le contenu de la cellule gauche (logo + infos entreprise)
+    left_cell_content: list[Any] = []
+    if logo_img:
+        is_drawing = (
+            hasattr(logo_img, "width")
+            and hasattr(logo_img, "height")
+            and hasattr(logo_img, "scale")
+        )
+        if is_drawing:
+            logo_table = Table([[logo_img]], colWidths=[logo_width])
+            logo_table.setStyle(
+                TableStyle(
+                    [
+                        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                    ]
+                )
+            )
+            left_cell_content.append(logo_table)
+        else:
+            left_cell_content.append(logo_img)
+            left_cell_content.append(Spacer(1, 8))
 
-    # === INFORMATIONS FACTURE (GAUCHE) ===
-    invoice_info_left = f"""
-    <b>Numéro de facture :</b> {partner_invoice.invoice_number}<br/>
+    left_cell_content.append(Paragraph(company_info_html, normal_style))
+
+    # Cellule droite (destinataire)
+    right_cell_content = Paragraph(billed_info_html, right_style)
+
+    # Table d'en-tête à deux colonnes
+    header_table = Table(
+        [[left_cell_content, right_cell_content]],
+        colWidths=[9 * cm, 8 * cm],
+    )
+    header_table.setStyle(
+        TableStyle(
+            [
+                ("ALIGN", (0, 0), (0, 0), "LEFT"),
+                ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+    story.append(header_table)
+    story.append(Spacer(1, 25))
+
+    # === TITRE DE LA FACTURE ===
+    story.append(
+        Paragraph(
+            f"FACTURE PARTENAIRE N° {partner_invoice.invoice_number}",
+            title_style,
+        )
+    )
+
+    # === INFORMATIONS FACTURE ===
+    invoice_info = f"""
     <b>Date d'émission :</b> {partner_invoice.issued_at.strftime("%d.%m.%Y") if partner_invoice.issued_at else "N/A"}<br/>
     <b>Date d'échéance :</b> {partner_invoice.due_date.strftime("%d.%m.%Y") if partner_invoice.due_date else "N/A"}<br/>
-    <b>Période :</b> {partner_invoice.period_month:02d}.{partner_invoice.period_year}
+    <b>Période :</b> {partner_invoice.period_month:02d}/{partner_invoice.period_year}
     """
-
-    story.append(Paragraph(invoice_info_left, normal_style))
-    story.append(Spacer(1, 20))
+    story.append(Paragraph(invoice_info, normal_style))
+    story.append(Spacer(1, 15))
 
     # === TABLEAU DES TRANSFERTS ===
     # Fonction pour formater les adresses
-    def format_address_for_table(address, max_length=25):
+    def format_address_for_table(address, max_length=28):
         if not address or address == "Adresse inconnue":
             return "Adresse non renseignée"
 
@@ -317,18 +409,21 @@ def generate_partner_invoice_pdf_content(
                 current_line = word
         if current_line:
             lines.append(current_line)
-        return "\n".join(lines[:3])
+        return "\n".join(lines[:2])
 
     # Constante pour la longueur maximale du nom du client
-    MAX_CLIENT_NAME_LENGTH = 18
+    MAX_CLIENT_NAME_LENGTH = 20
 
-    table_data = [["Date", "Client", "Départ", "Arrivée", "Montant"]]
+    # Données du tableau (typage explicite pour éviter les erreurs pyright)
+    table_data: list[list[Any]] = [
+        ["Date", "Client", "Départ", "Arrivée", "Montant"]
+    ]
 
     for transfer in transfers:
         booking = transfer.booking
         if booking:
             date_str = (
-                booking.scheduled_time.strftime("%d/%m/%Y")
+                booking.scheduled_time.strftime("%d.%m.%Y")
                 if booking.scheduled_time
                 else ""
             )
@@ -346,15 +441,15 @@ def generate_partner_invoice_pdf_content(
                 )
                 # Tronquer si trop long
                 if len(client_name) > MAX_CLIENT_NAME_LENGTH:
-                    client_name = client_name[: MAX_CLIENT_NAME_LENGTH - 1] + "."
+                    client_name = client_name[: MAX_CLIENT_NAME_LENGTH - 1] + "…"
             else:
                 client_name = booking.customer_name or "Client"
 
             departure = format_address_for_table(
-                booking.pickup_location or "N/A", max_length=20
+                booking.pickup_location or "N/A", max_length=28
             )
             arrival = format_address_for_table(
-                booking.dropoff_location or "N/A", max_length=20
+                booking.dropoff_location or "N/A", max_length=28
             )
         else:
             date_str = ""
@@ -365,30 +460,42 @@ def generate_partner_invoice_pdf_content(
         amount = f"{transfer.partner_cost:.2f}" if transfer.partner_cost else "0.00"
         table_data.append([date_str, client_name, departure, arrival, amount])
 
+    # Colonnes ajustées pour une meilleure lisibilité
     services_table = Table(
-        table_data, colWidths=[2 * cm, 3 * cm, 4.5 * cm, 4.5 * cm, 2.5 * cm]
+        table_data, colWidths=[2.2 * cm, 3 * cm, 4.5 * cm, 4.5 * cm, 2.3 * cm]
     )
     services_table.setStyle(
         TableStyle(
             [
+                # En-tête avec fond coloré
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2c5282")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
                 ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 10),
-                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                ("ALIGN", (4, 0), (4, -1), "RIGHT"),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("FONTSIZE", (0, 0), (-1, 0), 9),
+                ("ALIGN", (0, 0), (-1, 0), "LEFT"),
+                ("ALIGN", (4, 0), (4, 0), "RIGHT"),
                 ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
                 ("TOPPADDING", (0, 0), (-1, 0), 8),
-                ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.black),
+                # Corps du tableau
                 ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
-                ("BOTTOMPADDING", (0, 1), (-1, -1), 8),
-                ("TOPPADDING", (0, 1), (-1, -1), 8),
-                ("LINEBELOW", (0, 1), (-1, -2), 0.25, colors.lightgrey),
+                ("FONTSIZE", (0, 1), (-1, -1), 8),
+                ("ALIGN", (0, 1), (-1, -1), "LEFT"),
+                ("ALIGN", (4, 1), (4, -1), "RIGHT"),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("BOTTOMPADDING", (0, 1), (-1, -1), 6),
+                ("TOPPADDING", (0, 1), (-1, -1), 6),
+                # Lignes alternées pour lisibilité
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f7fafc")]),
+                # Bordures
+                ("LINEBELOW", (0, 0), (-1, 0), 1, colors.HexColor("#2c5282")),
+                ("LINEBELOW", (0, -1), (-1, -1), 0.5, colors.HexColor("#cbd5e0")),
+                ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e0")),
             ]
         )
     )
 
     story.append(services_table)
-    story.append(Spacer(1, 15))
+    story.append(Spacer(1, 20))
 
     # === TOTAL ===
     subtotal_amount = float(partner_invoice.subtotal_amount)
@@ -402,48 +509,53 @@ def generate_partner_invoice_pdf_content(
 
     vat_is_applicable = vat_amount > 0
 
-    # Ligne de séparation
-    total_separator = Table([[""]], colWidths=[16 * cm])
-    total_separator.setStyle(
-        TableStyle([("LINEBELOW", (0, 0), (0, 0), 1, colors.black)])
-    )
-    story.append(total_separator)
-    story.append(Spacer(1, 8))
-
-    # Tableau du total (adapté pour 5 colonnes avec Client)
+    # Tableau du total aligné à droite avec design moderne
     if vat_is_applicable:
         total_data = [
-            ["", "", "", "", "Sous-total :", f"{subtotal_amount:.2f}"],
-            ["", "", "", "", "TVA :", f"{vat_amount:.2f}"],
-            ["", "", "", "", "TOTAL :", f"{total_amount:.2f}"],
+            ["Sous-total HT :", f"CHF {subtotal_amount:.2f}"],
+            ["TVA :", f"CHF {vat_amount:.2f}"],
+            ["TOTAL TTC :", f"CHF {total_amount:.2f}"],
         ]
     else:
-        total_data = [["", "", "", "", "TOTAL :", f"{total_amount:.2f}"]]
+        total_data = [
+            ["Nombre de transferts :", f"{len(transfers)}"],
+            ["TOTAL À PAYER :", f"CHF {total_amount:.2f}"],
+        ]
 
     total_table = Table(
-        total_data, colWidths=[2 * cm, 3 * cm, 4.5 * cm, 4.5 * cm, 2.5 * cm, 2.5 * cm]
+        total_data, colWidths=[4 * cm, 3 * cm]
     )
 
     style_rules = [
-        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-        ("ALIGN", (4, 0), (5, -1), "RIGHT"),
+        ("ALIGN", (0, 0), (0, -1), "RIGHT"),
+        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
         ("FONTSIZE", (0, 0), (-1, -1), 10),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
         ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("FONTNAME", (0, 0), (-1, -2), "Helvetica"),
+        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, -1), (-1, -1), 11),
+        ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#edf2f7")),
+        ("BOX", (0, -1), (-1, -1), 0.5, colors.HexColor("#2c5282")),
     ]
-    if vat_is_applicable:
-        style_rules.extend(
-            [
-                ("FONTNAME", (0, 0), (-1, -2), "Helvetica"),
-                ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
-            ]
-        )
-    else:
-        style_rules.append(("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"))
     total_table.setStyle(TableStyle(style_rules))
 
-    story.append(total_table)
-    story.append(Spacer(1, 30))
+    # Wrapper pour aligner le tableau à droite
+    total_wrapper = Table(
+        [[total_table]],
+        colWidths=[17 * cm],
+    )
+    total_wrapper.setStyle(
+        TableStyle(
+            [
+                ("ALIGN", (0, 0), (0, 0), "RIGHT"),
+                ("VALIGN", (0, 0), (0, 0), "TOP"),
+            ]
+        )
+    )
+
+    story.append(total_wrapper)
+    story.append(Spacer(1, 25))
 
     # === PIED DE PAGE ===
     payment_terms_days = 30
@@ -465,27 +577,47 @@ def generate_partner_invoice_pdf_content(
     elif hasattr(executing_company, "iban") and executing_company.iban:
         iban_value = executing_company.iban
 
-    if iban_value:
-        footer_message = (
-            f"En votre aimable règlement net sous {payment_terms_days} "
-            f"{jours_text} avec nos remerciements anticipés. "
-            f"En cas de retard de paiement, des frais de rappel d'un montant "
-            f"de CHF {overdue_fee:.2f} vous seront facturés, "
-            f"conformément à nos conditions générales. "
-            f"Paiement par virement bancaire : IBAN : {iban_value}"
-        )
-    else:
-        footer_message = (
-            f"En votre aimable règlement net sous {payment_terms_days} "
-            f"{jours_text} avec nos remerciements anticipés. "
-            f"En cas de retard de paiement, des frais de rappel d'un montant "
-            f"de CHF {overdue_fee:.2f} vous seront facturés, "
-            f"conformément à nos conditions générales. "
-            f"IBAN non configuré - Veuillez contacter l'entreprise pour les coordonnées bancaires."
-        )
+    # Style pour le footer
+    footer_style = ParagraphStyle(
+        "Footer",
+        parent=styles["Normal"],
+        fontSize=8,
+        textColor=colors.HexColor("#4a5568"),
+        alignment=TA_CENTER,
+        spaceAfter=4,
+        fontName="Helvetica",
+        leading=11,
+    )
 
-    story.append(Spacer(1, 20))
-    story.append(Paragraph(footer_message, centered_style))
+    # Message de paiement
+    footer_message = (
+        f"En votre aimable règlement net sous <b>{payment_terms_days} {jours_text}</b> "
+        f"avec nos remerciements anticipés.<br/>"
+        f"En cas de retard de paiement, des frais de rappel de CHF {overdue_fee:.2f} "
+        f"seront facturés conformément à nos conditions générales."
+    )
+
+    # Séparateur visuel
+    separator = Table([[""]], colWidths=[17 * cm])
+    separator.setStyle(
+        TableStyle([("LINEBELOW", (0, 0), (0, 0), 0.5, colors.HexColor("#cbd5e0"))])
+    )
+    story.append(separator)
+    story.append(Spacer(1, 15))
+
+    story.append(Paragraph(footer_message, footer_style))
+
+    # Coordonnées bancaires si disponibles
+    if iban_value:
+        # Formater l'IBAN pour une meilleure lisibilité
+        iban_formatted = iban_value
+        if len(iban_value) >= MIN_IBAN_LENGTH and " " not in iban_value:
+            iban_formatted = " ".join(
+                [iban_value[i : i + 4] for i in range(0, len(iban_value), 4)]
+            )
+        bank_info = f"<b>Coordonnées bancaires :</b> IBAN {iban_formatted}"
+        story.append(Spacer(1, 8))
+        story.append(Paragraph(bank_info, footer_style))
 
     # === QR-BILL SUISSE OFFICIEL SUR PAGE SÉPARÉE ===
     story.append(PageBreak())
