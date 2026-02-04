@@ -1,13 +1,18 @@
 # services/partner_invoice_pdf_service.py
 """Service pour générer les PDFs des factures partenaires.
 
-Ce module génère des factures partenaires avec le MÊME template que les factures
-client/clinique pour une cohérence visuelle totale.
+Ce module génère des factures partenaires avec EXACTEMENT le même template
+que les factures client/clinique :
+- Même structure de document (BaseDocTemplate + PageTemplates)
+- Même footer fixe (callback onPage)
+- Même page QR-Bill dédiée (NextPageTemplate + PageBreak + Spacer)
+- Même génération de référence (SCOR)
 
 Architecture:
-- Réutilise les constantes et helpers de pdf.py
-- Réutilise QRBillService pour la génération du QR-Bill
-- Seules les données métier diffèrent (partenaire vs client)
+- Réutilise _make_invoice_doc_with_qrbill_page() pour le document
+- Réutilise _make_legal_footer_page_callback() pour le footer fixe
+- Réutilise _make_qr_bill_table() pour le QR-Bill
+- Génère une référence SCOR comme les factures client
 """
 
 import logging
@@ -22,9 +27,9 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm, mm
 from reportlab.platypus import (
+    NextPageTemplate,
     PageBreak,
     Paragraph,
-    SimpleDocTemplate,
     Spacer,
     Table,
     TableStyle,
@@ -36,6 +41,8 @@ from models.partner_invoice import PartnerInvoice
 from services.documents.pdf import (
     QR_BILL_SPACER_PT,
     _load_logo_ratio_safe,
+    _make_invoice_doc_with_qrbill_page,
+    _make_legal_footer_page_callback,
     _make_qr_bill_table,
     _svg_content_to_drawing,
 )
@@ -105,17 +112,45 @@ def _parse_address_for_qrbill(address: str | None) -> tuple[str, str, str]:
     return (address, "1200", "Genève")
 
 
+def _generate_partner_scor_reference(partner_invoice: PartnerInvoice) -> str | None:
+    """Génère une référence SCOR (ISO 11649) pour une facture partenaire.
+
+    Format identique aux factures client/clinique pour cohérence.
+
+    Args:
+        partner_invoice: Facture partenaire
+
+    Returns:
+        Référence SCOR (RF...) ou None si erreur
+    """
+    try:
+        from services.billing import generate_scor_reference
+
+        # Utiliser le numéro de facture partenaire pour générer la référence SCOR
+        # Le numéro est déjà préfixé "PARTNER-" donc unique
+        return generate_scor_reference(
+            partner_invoice.invoice_number,
+            company_id=partner_invoice.executing_company_id,
+        )
+    except Exception as e:
+        app_logger.warning(
+            "Impossible de générer la référence SCOR pour facture partenaire %s: %s",
+            partner_invoice.invoice_number,
+            e,
+        )
+        return None
+
+
 def generate_partner_invoice_pdf_content(
     partner_invoice: PartnerInvoice, transfers: list[BookingTransfer]
 ) -> bytes:
     """Génère le contenu PDF d'une facture partenaire.
 
-    Utilise le MÊME template que les factures client/clinique:
-    - Mêmes marges (2 cm)
-    - Même structure d'en-tête (logo + entreprise | destinataire)
-    - Même style de tableau
-    - Même génération QR-Bill
-    - Seules les données métier changent
+    Utilise EXACTEMENT le même template que les factures client/clinique:
+    - BaseDocTemplate avec PageTemplates (First, Later, QRBill)
+    - Footer fixe via callback onPage (pas dans le flow)
+    - Page QR-Bill dédiée avec NextPageTemplate + PageBreak + Spacer
+    - Référence SCOR générée comme pour client/clinique
 
     Args:
         partner_invoice: Facture partenaire
@@ -125,17 +160,6 @@ def generate_partner_invoice_pdf_content(
         Contenu PDF en bytes
     """
     buffer = BytesIO()
-
-    # === DOCUMENT avec mêmes marges que pdf.py ===
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        topMargin=2 * cm,
-        bottomMargin=2 * cm,
-        leftMargin=2 * cm,
-        rightMargin=2 * cm,
-    )
-
     styles = getSampleStyleSheet()
 
     # === STYLES identiques à pdf.py ===
@@ -148,6 +172,16 @@ def generate_partner_invoice_pdf_content(
         spaceAfter=4,
         fontName="Helvetica",
         leading=11,
+    )
+
+    centered_style = ParagraphStyle(
+        "Centered",
+        parent=styles["Normal"],
+        fontSize=8,
+        textColor=colors.HexColor("#4a4a4a"),
+        alignment=TA_CENTER,
+        spaceAfter=4,
+        fontName="Helvetica",
     )
 
     # === DÉTERMINER LES ENTREPRISES ===
@@ -189,15 +223,70 @@ def generate_partner_invoice_pdf_content(
         except Exception as e:
             app_logger.warning("Impossible de charger le logo: %s", e)
 
+    # Récupérer billing_settings pour TVA et footer
+    billing_settings = CompanyBillingSettings.query.filter_by(
+        company_id=executing_company.id
+    ).first()
+
+    # === CONSTRUIRE LE FOOTER (identique à pdf.py) ===
+    payment_terms_days = 30
+    if partnership and partnership.payment_terms_days:
+        payment_terms_days = partnership.payment_terms_days
+    elif billing_settings and billing_settings.payment_terms_days:
+        payment_terms_days = int(billing_settings.payment_terms_days)
+
+    overdue_fee = 5.00
+    if billing_settings and billing_settings.overdue_fee:
+        overdue_fee = float(billing_settings.overdue_fee)
+
+    jours_text = "jours" if payment_terms_days > 1 else "jour"
+
+    # IBAN depuis billing_settings
+    iban_value = None
+    if billing_settings and billing_settings.iban:
+        iban_value = billing_settings.iban
+
+    footer_message = (
+        f"En votre aimable règlement net sous {payment_terms_days} {jours_text} "
+        f"avec nos remerciements anticipés.<br/>"
+        f"En cas de retard de paiement, des frais de rappel d'un montant de CHF {overdue_fee:.2f} "
+        f"vous seront facturés, conformément à nos conditions générales."
+    )
+
+    if iban_value:
+        # Formater IBAN pour lisibilité
+        iban_formatted = iban_value
+        if len(iban_value) >= MIN_IBAN_LENGTH and " " not in iban_value:
+            iban_formatted = " ".join(
+                [iban_value[i:i + 4] for i in range(0, len(iban_value), 4)]
+            )
+        footer_message += f"<br/>Paiement par virement bancaire : IBAN : {iban_formatted}"
+
+    # Créer le callback footer (IDENTIQUE à pdf.py)
+    footer_cb = _make_legal_footer_page_callback(
+        footer_message,
+        mention=None,  # Pas de mention spéciale pour les factures partenaires
+        centered_style=centered_style,
+    )
+
+    # Callback pour la première page (footer + debug envelope si activé)
+    def _on_first_page(canvas: Any, doc: Any) -> None:
+        footer_cb(canvas, doc)
+
+    # === CRÉER LE DOCUMENT avec PageTemplates (IDENTIQUE à pdf.py) ===
+    doc = _make_invoice_doc_with_qrbill_page(
+        buffer,
+        top_margin_cm=2,
+        bottom_margin_cm=2.5,  # Réserve espace pour pied de page légal
+        left_margin_cm=2,
+        right_margin_cm=2,
+        on_first_page=_on_first_page,
+    )
+
     story: list[Any] = []
 
     # === EN-TÊTE : ENTREPRISE (gauche) | DESTINATAIRE (droite) ===
     # Structure identique à pdf.py
-
-    # Récupérer billing_settings pour TVA
-    billing_settings = CompanyBillingSettings.query.filter_by(
-        company_id=executing_company.id
-    ).first()
 
     # Informations entreprise émettrice
     company_name = executing_company.name or "[Nom entreprise non configuré]"
@@ -453,56 +542,16 @@ def generate_partner_invoice_pdf_content(
         ])
     )
     story.append(total_table)
-    story.append(Spacer(1, 30))
 
-    # === PIED DE PAGE (identique à pdf.py) ===
-    payment_terms_days = 30
-    if partnership and partnership.payment_terms_days:
-        payment_terms_days = partnership.payment_terms_days
-    elif billing_settings and billing_settings.payment_terms_days:
-        payment_terms_days = int(billing_settings.payment_terms_days)
+    # NOTE: Le footer est géré par le callback onPage, pas dans le flow
+    # C'est IDENTIQUE à pdf.py - le footer est dessiné sur le canvas
 
-    overdue_fee = 5.00
-    if billing_settings and billing_settings.overdue_fee:
-        overdue_fee = float(billing_settings.overdue_fee)
-
-    jours_text = "jours" if payment_terms_days > 1 else "jour"
-
-    # IBAN depuis billing_settings
-    iban_value = None
-    if billing_settings and billing_settings.iban:
-        iban_value = billing_settings.iban
-
-    footer_style = ParagraphStyle(
-        "Footer",
-        parent=styles["Normal"],
-        fontSize=8,
-        textColor=colors.HexColor("#4a4a4a"),
-        alignment=TA_CENTER,
-        spaceAfter=4,
-        fontName="Helvetica",
-    )
-
-    footer_message = (
-        f"En votre aimable règlement net sous {payment_terms_days} {jours_text} "
-        f"avec nos remerciements anticipés.<br/>"
-        f"En cas de retard de paiement, des frais de rappel d'un montant de CHF {overdue_fee:.2f} "
-        f"vous seront facturés, conformément à nos conditions générales."
-    )
-
-    if iban_value:
-        # Formater IBAN pour lisibilité
-        iban_formatted = iban_value
-        if len(iban_value) >= MIN_IBAN_LENGTH and " " not in iban_value:
-            iban_formatted = " ".join(
-                [iban_value[i:i + 4] for i in range(0, len(iban_value), 4)]
-            )
-        footer_message += f"<br/>Paiement par virement bancaire : IBAN : {iban_formatted}"
-
-    story.append(Paragraph(footer_message, footer_style))
-
-    # === QR-BILL (utilise les mêmes helpers que pdf.py) ===
+    # === QR-BILL SUISSE OFFICIEL SUR PAGE SÉPARÉE (IDENTIQUE à pdf.py) ===
+    # Forcer une nouvelle page avec le template QRBill (marge bas réduite)
+    story.append(NextPageTemplate("QRBill"))
     story.append(PageBreak())
+
+    # Espacement pour pousser le QR-Bill en bas de sa page (IDENTIQUE à pdf.py)
     story.append(Spacer(1, QR_BILL_SPACER_PT))
 
     try:
@@ -511,6 +560,15 @@ def generate_partner_invoice_pdf_content(
                 Paragraph("QR-Bill non disponible - IBAN non configuré", normal_style)
             )
         else:
+            # Générer la référence SCOR (comme pour client/clinique)
+            scor_reference = _generate_partner_scor_reference(partner_invoice)
+
+            app_logger.info(
+                "Génération QR-Bill pour facture partenaire %s avec référence SCOR: %s",
+                partner_invoice.invoice_number,
+                scor_reference,
+            )
+
             # Générer le QR-Bill avec la bibliothèque qrbill
             import tempfile
 
@@ -550,7 +608,8 @@ def generate_partner_invoice_pdf_content(
                 },
                 amount=str(partner_invoice.total_amount),
                 currency="CHF",
-                reference_number=None,
+                # Référence SCOR (comme client/clinique)
+                reference_number=scor_reference,
                 additional_information=(
                     f"Facture {partner_invoice.invoice_number} - "
                     f"Période: {period_label}"
@@ -578,7 +637,7 @@ def generate_partner_invoice_pdf_content(
         app_logger.warning("Impossible de générer le QR-Bill: %s", e)
         story.append(Paragraph("QR-Bill non disponible", normal_style))
 
-    # Générer le PDF
+    # Générer le PDF (callbacks dans PageTemplates - IDENTIQUE à pdf.py)
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
