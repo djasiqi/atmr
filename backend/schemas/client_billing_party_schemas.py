@@ -16,6 +16,7 @@ class ClientBillingPartyLinkCreateSchema(Schema):
     contact_name = fields.Str(allow_none=True, validate=validate.Length(max=120))
     contact_email = fields.Str(allow_none=True, validate=validate.Length(max=255))
     contact_phone = fields.Str(allow_none=True, validate=validate.Length(max=50))
+    client_reference = fields.Str(allow_none=True, validate=validate.Length(max=80))
 
 
 class ClientBillingPartyLinkUpdateSchema(Schema):
@@ -26,3 +27,4 @@ class ClientBillingPartyLinkUpdateSchema(Schema):
     contact_name = fields.Str(allow_none=True, validate=validate.Length(max=120))
     contact_email = fields.Str(allow_none=True, validate=validate.Length(max=255))
     contact_phone = fields.Str(allow_none=True, validate=validate.Length(max=50))
+    client_reference = fields.Str(allow_none=True, validate=validate.Length(max=80))

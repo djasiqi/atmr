@@ -62,7 +62,8 @@ export function parseAddressWithEstablishment(label, item = {}) {
   let streetNumber = item.street_number || item.housenumber || '';
   let postcode = item.postcode || '';
   let city = item.city || item.locality || '';
-  let establishment = '';
+  // Nom du lieu (établissement) fourni par l'autocomplete : prioritaire pour "Établissement de résidence"
+  let establishment = (item.name || item.place_name || '').trim();
 
   // Si on n'a pas les composants, parser depuis le label
   if (!street && !postcode && !city && label) {

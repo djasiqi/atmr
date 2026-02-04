@@ -522,6 +522,23 @@
   border: 1px solid var(--border-primary);
 }
 
+.badgeCompact.cancellation {
+  background: var(--warning-bg);
+  color: var(--warning-dark);
+  border: 1px solid var(--warning-dark);
+}
+
+.cancellationBadge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--warning-bg);
+  color: var(--warning-dark);
+  border: 1px solid var(--warning-dark);
+}
+
 .adjustments {
   margin-top: var(--spacing-sm);
   padding-top: var(--spacing-sm);

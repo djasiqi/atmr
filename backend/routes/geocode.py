@@ -444,6 +444,7 @@ def normalize_photon(data: Dict[str, Any]) -> List[Dict[str, Any]]:
                     "lat": float(lat),
                     "lon": float(lng),
                     "housenumber": housenumber,
+                    "name": place_name,
                 }
             )
         except Exception:

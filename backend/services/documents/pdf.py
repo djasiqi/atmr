@@ -1029,13 +1029,25 @@ def _sanitize_billed_to_address(name: str, address: str) -> str:
     return s
 
 
-def _format_billed_to_three_lines(raw: str) -> str:
+# Détection du pays dans l'adresse : (pattern regex, code ISO 2, libellé affiché)
+_BILLED_TO_COUNTRY_PATTERNS = (
+    (r"suisse|switzerland", "CH", "Suisse"),
+    (r"france", "FR", "France"),
+    (r"deutschland|germany", "DE", "Allemagne"),
+    (r"italy|italia", "IT", "Italie"),
+)
+
+
+def _format_billed_to_three_lines(
+    raw: str, company_country: str | None = None
+) -> str:
     """Formate l'adresse « Facturé à » en exactement 2 lignes (rue+numéro, CP ville).
 
     Utilisé avec le nom (ligne 1) pour un bloc 3 lignes propre :
     - Ligne 1 : nom (billed_to_name)
     - Ligne 2 : rue + numéro
-    - Ligne 3 : CP Ville (+ ", Suisse" si présent dans raw).
+    - Ligne 3 : CP Ville. Le pays n'est ajouté que s'il est différent du domicile
+      de la compagnie (company_country).
 
     Retourne "ligne2<br/>ligne3" (sans espaces superflus, pas de répétition).
     """
@@ -1044,7 +1056,6 @@ def _format_billed_to_three_lines(raw: str) -> str:
     if not raw or not str(raw).strip():
         return "Adresse non renseignée"
     s = " ".join(str(raw).strip().split())
-    has_suisse = "suisse" in s.lower()
 
     postal_match = re.search(r"\b(\d{4})\b", s)
     if not postal_match:
@@ -1053,6 +1064,14 @@ def _format_billed_to_three_lines(raw: str) -> str:
     pos = postal_match.start()
     street = s[:pos].strip().rstrip(" ,")
     rest = s[pos + 4 :].strip()
+    # Détecter le pays dans la partie après le CP (pour décider si on l'affiche)
+    address_country_code = None
+    address_country_display = None
+    for pattern, code, display in _BILLED_TO_COUNTRY_PATTERNS:
+        if re.search(pattern, rest, re.IGNORECASE):
+            address_country_code = code
+            address_country_display = display
+            break
     # Enlever pays (Suisse, etc.) de la ville
     city = (
         re.sub(
@@ -1071,8 +1090,13 @@ def _format_billed_to_three_lines(raw: str) -> str:
         cp_city = postcode
     else:
         cp_city = f"{postcode} {city}"
-        if has_suisse:
-            cp_city = f"{cp_city}, Suisse"
+        # N'afficher le pays que s'il est différent du domicile de la compagnie
+        if address_country_code and address_country_display:
+            show_country = not company_country or (
+                address_country_code != (company_country or "").strip().upper()
+            )
+            if show_country:
+                cp_city = f"{cp_city}, {address_country_display}"
     return f"{street}<br/>{cp_city}"
 
 
@@ -1178,24 +1202,81 @@ def _name_with_uppercase_last_name(name: str) -> str:
 
 def _get_billed_to(invoice: "Invoice") -> tuple[str, str]:
     """Retourne (nom, adresse formatée) pour le bloc « Facturé à »."""
+    company_country = None
+    if getattr(invoice, "company", None) and getattr(invoice.company, "domicile_country", None):
+        company_country = (invoice.company.domicile_country or "CH").strip().upper()
+    if not company_country:
+        company_country = "CH"
     if getattr(invoice, "billing_party_id", None):
         from models import BillingParty as BillingPartyModel
+        from models.billing_party import ClientBillingParty
+        from models.enums import BillingPartyType
 
-        bp = BillingPartyModel.query.get(invoice.billing_party_id)
-        if bp:
-            name = _name_with_uppercase_last_name(bp.display_name or "Payeur")
-            raw = bp.billing_address or "Adresse non renseignée"
-            raw = _sanitize_billed_to_address(name, raw)
-            return (
-                name,
-                _format_billed_to_three_lines(raw or "Adresse non renseignée"),
+        # Si le client n'a plus de lien avec ce tiers payeur (lien supprimé), facturer au domicile du client
+        _client_id = getattr(invoice, "client_id", None)
+        _bp_id = getattr(invoice, "billing_party_id", None)
+        use_billing_party = True
+        _link = None
+        if _client_id is not None and _bp_id is not None:
+            _link = (
+                ClientBillingParty.query.filter_by(
+                    client_id=_client_id, billing_party_id=_bp_id
+                ).first()
             )
-        app_logger.warning(
-            "[PDF] billing_party_id=%s défini mais BillingParty introuvable (invoice_id=%s). Fallback.",
-            getattr(invoice, "billing_party_id", None),
-            getattr(invoice, "id", None),
-        )
-        return (_name_with_uppercase_last_name("Payeur"), "Adresse non renseignée")
+            if _link is None:
+                app_logger.info(
+                    "[PDF] Lien client↔tiers payeur supprimé (invoice_id=%s, client_id=%s, billing_party_id=%s). Facturé à = domicile du client.",
+                    getattr(invoice, "id", None),
+                    _client_id,
+                    _bp_id,
+                )
+                use_billing_party = False
+        if use_billing_party:
+            bp = BillingPartyModel.query.get(invoice.billing_party_id)
+            if bp:
+                raw = bp.billing_address or "Adresse non renseignée"
+                raw = _sanitize_billed_to_address(bp.display_name or "Payeur", raw)
+                addr = _format_billed_to_three_lines(
+                    raw or "Adresse non renseignée", company_country=company_country
+                )
+                if getattr(invoice, "client_id", None) and getattr(bp, "type", None) in (
+                    BillingPartyType.FAMILY,
+                    BillingPartyType.CURATORSHIP,
+                    BillingPartyType.OPAD,
+                    BillingPartyType.LAWYER,
+                    BillingPartyType.INSURANCE,
+                    BillingPartyType.OTHER,
+                ):
+                    client = getattr(invoice, "client", None)
+                    if client and getattr(client, "user", None):
+                        client_name = (
+                            f"{client.user.first_name or ''} {(client.user.last_name or '').upper()}".strip()
+                            or getattr(client.user, "username", None)
+                            or "Client"
+                        )
+                        client_name = _name_with_uppercase_last_name(client_name or "Client")
+                        bp_name = _name_with_uppercase_last_name(bp.display_name or "Payeur")
+                        name = f"{client_name}\nc/o {bp_name}"
+                    else:
+                        name = _name_with_uppercase_last_name(bp.display_name or "Payeur")
+                else:
+                    name = _name_with_uppercase_last_name(bp.display_name or "Payeur")
+                if (
+                    _client_id is not None
+                    and _bp_id is not None
+                    and (bp.display_name or "").upper().strip().find("SPC") >= 0
+                    and _link is not None
+                    and getattr(_link, "client_reference", None)
+                    and (_link.client_reference or "").strip()
+                ):
+                    addr = f"{addr}<br/><br/><br/>No. SPC : {(_link.client_reference or '').strip()}"
+                return (name, addr)
+            app_logger.warning(
+                "[PDF] billing_party_id=%s défini mais BillingParty introuvable (invoice_id=%s). Fallback.",
+                getattr(invoice, "billing_party_id", None),
+                getattr(invoice, "id", None),
+            )
+            return (_name_with_uppercase_last_name("Payeur"), "Adresse non renseignée")
     if invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id:
         from models import Client as ClientModel
 
@@ -1213,7 +1294,9 @@ def _get_billed_to(invoice: "Invoice") -> tuple[str, str]:
             raw = _sanitize_billed_to_address(name, raw)
             return (
                 name,
-                _format_billed_to_three_lines(raw or "Adresse non renseignée"),
+                _format_billed_to_three_lines(
+                    raw or "Adresse non renseignée", company_country=company_country
+                ),
             )
         app_logger.warning(
             "[PDF] bill_to_client_id=%s défini mais institution introuvable/invalide (invoice_id=%s). Fallback.",
@@ -1230,11 +1313,15 @@ def _get_billed_to(invoice: "Invoice") -> tuple[str, str]:
         getattr(invoice, "client_id", None),
     )
     client = invoice.client
-    name = (
+    client_name = (
         f"{client.user.first_name or ''} {(client.user.last_name or '').upper()}".strip()
         or client.user.username
         or "Client"
     )
+    client_name = _name_with_uppercase_last_name(client_name)
+    # Si établissement de résidence (EMS, fondation, etc.) : Nom client puis nom établissement
+    residence_facility = (getattr(client, "residence_facility", None) or "").strip()
+    name = f"{client_name}\n{residence_facility}" if residence_facility else client_name
     raw = "Adresse non renseignée"
     if hasattr(client, "domicile_address") and client.domicile_address:
         street = client.domicile_address
@@ -1254,10 +1341,12 @@ def _get_billed_to(invoice: "Invoice") -> tuple[str, str]:
         and client.user.address
     ):
         raw = client.user.address
-    raw = _sanitize_billed_to_address(name, raw)
+    raw = _sanitize_billed_to_address(client_name, raw)
     return (
-        _name_with_uppercase_last_name(name),
-        _format_billed_to_three_lines(raw or "Adresse non renseignée"),
+        name,
+        _format_billed_to_three_lines(
+            raw or "Adresse non renseignée", company_country=company_country
+        ),
     )
 
 
@@ -1329,14 +1418,16 @@ def _build_recipient_block_flowable(
     name, addr = _get_billed_to(invoice)
     lines: list[str] = []
     if name and str(name).strip():
-        lines.append(str(name).strip())
+        for name_line in str(name).strip().split("\n"):
+            if name_line.strip():
+                lines.append(name_line.strip())
     if addr:
         for part in (
             str(addr).replace("<br/>", "\n").replace("<br />", "\n").split("\n")
         ):
             p = part.strip()
-            if p:
-                lines.append(p)
+            # Conserver les lignes vides (ex. 2 sauts avant "No. SPC")
+            lines.append(p)
     # No data => no UI : ne rien afficher si aucune ligne utile
     if not lines:
         return (None, [])
@@ -1349,8 +1440,11 @@ def _build_recipient_block_flowable(
 
     visual_lines: list[str] = []
     for line in lines:
-        wrapped = _wrap_line_by_width(line, font_name, font_size, max_width_pt)
-        visual_lines.extend(wrapped)
+        if line == "":
+            visual_lines.append("")
+        else:
+            wrapped = _wrap_line_by_width(line, font_name, font_size, max_width_pt)
+            visual_lines.extend(wrapped)
 
     if len(visual_lines) > max_lines:
         visual_lines = visual_lines[:max_lines]

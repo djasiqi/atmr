@@ -33,6 +33,8 @@ const ReservationSelector = ({
   const [localInputValues, setLocalInputValues] = useState({});
   // ✅ Refs pour auto-focus sur les inputs "Montant HT" (un par réservation)
   const amountInputRefs = useRef({});
+  // ✅ Ne pas nettoyer localInputValues du champ en cours de saisie (évite de devoir recliquer pour continuer à taper)
+  const focusedAmountInputIdRef = useRef(null);
   useEffect(() => {
     if (!reservations.length) return;
     if (!Array.isArray(preselectedIds) || preselectedIds.length === 0) return;
@@ -343,44 +345,26 @@ const ReservationSelector = ({
     setSelectedIds([]);
   };
 
-  // ✅ Mettre à jour l'état local immédiatement (pas de re-render parent)
-  const handleAmountChange = (reservationId, value) => {
+  const normalizeAmount = useCallback((value) => {
+    if (!value || value === '' || value === null || value === undefined) {
+      return { normalized: null, formatted: null, isValid: true };
+    }
+    const normalized = String(value).replace(/,/g, '.').trim().replace(/\s/g, '');
+    const numeric = parseFloat(normalized);
+    if (Number.isNaN(numeric) || numeric < 0) {
+      return { normalized: null, formatted: null, isValid: false };
+    }
+    const rounded = Math.round(numeric * 100) / 100;
+    return { normalized: rounded, formatted: rounded.toFixed(2), isValid: true };
+  }, []);
+
+  // ✅ Mise à jour uniquement de l'état local pendant la saisie → saisie fluide (ex. "350")
+  // Le parent est mis à jour au blur ; le total TTC se met à jour à la sortie du champ.
+  const handleAmountChange = useCallback((reservationId, value) => {
     setLocalInputValues((prev) => ({
       ...prev,
       [reservationId]: value,
     }));
-  };
-
-  // ✅ Normaliser et valider la valeur saisie (format CH : virgule → point)
-  const normalizeAmount = useCallback((value) => {
-    if (!value || value === '' || value === null || value === undefined) {
-      return { normalized: null, formatted: null, isValid: true }; // Vide = valide (reset)
-    }
-    
-    // Normaliser : remplacer virgule par point, trim, supprimer espaces
-    let normalized = String(value)
-      .replace(/,/g, '.')
-      .trim()
-      .replace(/\s/g, '');
-    
-    // Parser en nombre
-    const numeric = parseFloat(normalized);
-    
-    // Validation
-    if (Number.isNaN(numeric)) {
-      return { normalized: null, formatted: null, isValid: false }; // Invalide
-    }
-    
-    if (numeric < 0) {
-      return { normalized: null, formatted: null, isValid: false }; // Montant négatif invalide
-    }
-    
-    // Arrondir au centime (0.01)
-    const rounded = Math.round(numeric * 100) / 100;
-    // Formater avec 2 décimales pour l'affichage
-    const formatted = rounded.toFixed(2);
-    
-    return { normalized: rounded, formatted, isValid: true };
   }, []);
 
   // ✅ Synchroniser avec le parent lors du blur (quand l'utilisateur quitte le champ)
@@ -422,13 +406,16 @@ const ReservationSelector = ({
   }, [onOverrideChange, normalizeAmount]);
 
   // ✅ Nettoyage déterministe : clear localInputValues quand la valeur parent correspond
+  // (sauf pour le champ actuellement focalisé, pour pouvoir taper "35" d'affilée sans recliquer)
   useEffect(() => {
     setLocalInputValues((prev) => {
       const next = { ...prev };
       let changed = false;
+      const focusedId = focusedAmountInputIdRef.current;
 
       Object.keys(next).forEach((idStr) => {
         const id = Number(idStr);
+        if (id === focusedId) return; // ne pas toucher au champ en cours de saisie
         const localValue = next[idStr];
         
         // Trouver la réservation correspondante
@@ -716,6 +703,14 @@ const ReservationSelector = ({
                   {needsReviewCheck && (
                     <span className={styles.reviewBadge}>⚠️ À vérifier</span>
                   )}
+                  {reservation.status === 'CANCELED' && (
+                    <span
+                      className={styles.cancellationBadge}
+                      title={reservation.cancellation_display_label || 'Réservation annulée (facturée)'}
+                    >
+                      Annulé
+                    </span>
+                  )}
                   {billedToPatient && (
                     <span className={styles.patientBadge}>👤 Facturé au patient</span>
                   )}
@@ -809,7 +804,11 @@ const ReservationSelector = ({
                                   }
                                   placeholder={isMinimal ? '0.00' : figures.amount.toFixed(2)}
                                   onChange={(e) => handleAmountChange(reservation.id, e.target.value)}
-                                  onBlur={(e) => handleAmountBlur(reservation.id, e.target.value, reservation.amount)}
+                                  onFocus={() => { focusedAmountInputIdRef.current = reservation.id; }}
+                                  onBlur={(e) => {
+                                    focusedAmountInputIdRef.current = null;
+                                    handleAmountBlur(reservation.id, e.target.value, reservation.amount);
+                                  }}
                                   onKeyDown={handleAmountKeyDown}
                                   onClick={(e) => e.stopPropagation()}
                                   disabled={isMinimal}
@@ -887,6 +886,14 @@ const ReservationSelector = ({
                   <div className={styles.badgesInline}>
                     {needsReviewCheck && (
                       <span className={`${styles.badgeCompact} ${styles.review}`}>À vérifier</span>
+                    )}
+                    {reservation.status === 'CANCELED' && (
+                      <span
+                        className={`${styles.badgeCompact} ${styles.cancellation}`}
+                        title={reservation.cancellation_display_label || 'Réservation annulée (facturée)'}
+                      >
+                        Annulé
+                      </span>
                     )}
                     {billedToPatient ? (
                       <span className={`${styles.badgeCompact} ${styles.patient}`}>Patient</span>
@@ -967,7 +974,11 @@ const ReservationSelector = ({
                             }
                             placeholder={isMinimal ? '0.00' : figures.amount.toFixed(2)}
                             onChange={(e) => handleAmountChange(reservation.id, e.target.value)}
-                            onBlur={(e) => handleAmountBlur(reservation.id, e.target.value, reservation.amount)}
+                            onFocus={() => { focusedAmountInputIdRef.current = reservation.id; }}
+                            onBlur={(e) => {
+                              focusedAmountInputIdRef.current = null;
+                              handleAmountBlur(reservation.id, e.target.value, reservation.amount);
+                            }}
                             onKeyDown={handleAmountKeyDown}
                             onClick={(e) => e.stopPropagation()}
                             disabled={isMinimal}

@@ -142,6 +142,10 @@ const NewInvoiceModal = ({
   const confirmButtonRef = useRef(null); // Référence pour le focus automatique sur le bouton "Confirmer"
   const overrideRequestVersions = useRef({}); // { bookingId: version } pour ignorer les réponses obsolètes
   const overrideInFlightRef = useRef(new Set()); // Sync guard: prevent double submit (state updates async)
+  // ✅ S2: Ajustement montant/note par transport avant génération facture clinique (comme côté client)
+  const [s2BookingOverrides, setS2BookingOverrides] = useState({}); // { bookingId: { amount?, note? } }
+  const [s2AdjustOpenBookingId, setS2AdjustOpenBookingId] = useState(null); // ID du transport dont le panneau d'ajustement est ouvert
+  const [s2AmountInputLocal, setS2AmountInputLocal] = useState({}); // { bookingId: string } valeur en cours de saisie
 
   // NOUVEAU: Gestion des sélections de réservations par client
   const [selectedReservations, setSelectedReservations] = useState({}); // { client_id: [reservation_objects] }
@@ -218,6 +222,9 @@ const NewInvoiceModal = ({
     setSelectedReservations({});
     setPreselectedReservations({});
     setShowDirectTransports(false);
+    setS2BookingOverrides({});
+    setS2AdjustOpenBookingId(null);
+    setS2AmountInputLocal({});
     setClientSearch('');
     const el1 = clientSearchInputRef.current;
     if (el1) el1.value = '';
@@ -1378,20 +1385,38 @@ const NewInvoiceModal = ({
     return selectedReservations[activeClientId] || [];
   }, [activeClientId, selectedReservations]);
   
-  // ✅ Calculer les totaux : utiliser directSummaryTTC si sélection complète avec IDs uniquement
+  // ✅ Calculer les totaux : utiliser directSummaryTTC si sélection complète sans overrides de montant
   const _directTotals = useMemo(() => {
-    // Si sélection complète et que directSelection contient uniquement des IDs (objets minimaux),
-    // utiliser directSummaryTTC (optimisation: pas besoin de charger les détails)
     const hasOnlyIds = directSelection.length > 0 && directSelection.every(
       (r) => isMinimalReservation(r)
     );
-    
+
     if (
       directSummary &&
       directSelection.length === directSummary.count &&
       hasOnlyIds
     ) {
-      // Sélection complète avec objets minimaux (IDs uniquement) : utiliser directSummaryTTC
+      // Vérifier si des overrides de montant existent pour cette sélection (ex: 45 → 35)
+      const ids = directSelection.map((r) => r?.id ?? r).filter(Boolean);
+      const hasAmountOverrides = ids.some(
+        (id) => overrides[String(id)]?.amount !== undefined && overrides[String(id)]?.amount !== null
+      );
+      if (hasAmountOverrides) {
+        // Réappliquer les overrides pour que le footer affiche le bon total TTC
+        const base = ids.reduce((sum, id) => {
+          const o = overrides[String(id)] ?? overrides[id];
+          const amount = o?.amount !== undefined && o?.amount !== null
+            ? Number(o.amount)
+            : directSummary.totalAmount / directSummary.count;
+          return sum + (Number.isFinite(amount) ? amount : 0);
+        }, 0);
+        const vat = vatConfig.applicable
+          ? Number(((base * (vatConfig.defaultRate || 0)) / 100).toFixed(2))
+          : 0;
+        const total = Number((base + vat).toFixed(2));
+        return { base, vat, total };
+      }
+      // Aucun override : utiliser directSummaryTTC
       return {
         base: directSummary.totalAmount,
         vat: vatConfig.applicable
@@ -1400,17 +1425,13 @@ const NewInvoiceModal = ({
         total: directSummaryTTC || 0,
       };
     }
-    
-    // Sinon, calculer depuis les réservations (sélection partielle ou objets complets)
+
     const computed = computeTotals(directSelection);
-    
-    // ✅ Guardrail : si computeTotals retourne null (tous minimaux non hydratés), retourner null
     if (computed === null) {
       return null;
     }
-    
     return computed;
-  }, [computeTotals, directSelection, directSummary, directSummaryTTC, vatConfig, isMinimalReservation]);
+  }, [computeTotals, directSelection, directSummary, directSummaryTTC, vatConfig, isMinimalReservation, overrides]);
   
   // ✅ Détecter sélection partielle: selectedCount < directSummary.count
   const isPartialSelection = useMemo(() => {
@@ -1594,10 +1615,19 @@ const NewInvoiceModal = ({
             payload.include_client_ids = includeClientIds;
           }
 
-          // Ajouter overrides si présents
-          const overridePayload = buildOverridesPayload(consolidatedSelection);
-          if (Object.keys(overridePayload).length > 0) {
-            payload.overrides = overridePayload;
+          // ✅ S2: Overrides montant/note par transport (ajustements avant génération)
+          const s2Overrides = {};
+          Object.values(patientBookings || {}).flat().forEach((b) => {
+            if (!b?.id) return;
+            const o = s2BookingOverrides[String(b.id)] || s2BookingOverrides[b.id];
+            if (!o) return;
+            const clean = {};
+            if (o.amount !== undefined && o.amount !== null && Number.isFinite(Number(o.amount))) clean.amount = Number(o.amount);
+            if (o.note != null && String(o.note).trim()) clean.note = String(o.note).trim();
+            if (Object.keys(clean).length > 0) s2Overrides[b.id] = clean;
+          });
+          if (Object.keys(s2Overrides).length > 0) {
+            payload.overrides = s2Overrides;
           }
 
           try {
@@ -2394,7 +2424,8 @@ const NewInvoiceModal = ({
                                   const isExpanded = expandedPatientId === client.id;
                                   const bookings = patientBookings[client.id] || [];
                                   const isLoading = patientBookingsLoading[client.id] || false;
-                                  
+                                  // ✅ S2: n'afficher que les transports pas encore facturés dans la liste
+                                  const bookingsToShow = bookings.filter((b) => !(b.invoiced === true || (b.invoice_line_id != null && b.invoice_line_id !== undefined)));
                                   // Compter les transports cliniques vs patients pour ce patient
                                   const patientBookingsCount = bookings.filter((b) => b.billed_to_type === 'patient').length;
                                   const totalBookingsCount = bookings.length;
@@ -2476,9 +2507,13 @@ const NewInvoiceModal = ({
                                             <div style={{ color: '#6b7280', fontSize: '12px', textAlign: 'center', padding: '12px' }}>
                                               Aucun trajet trouvé pour cette période.
                                             </div>
+                                          ) : bookingsToShow.length === 0 ? (
+                                            <div style={{ color: '#6b7280', fontSize: '12px', textAlign: 'center', padding: '12px' }}>
+                                              Tous les transports de ce patient sont déjà facturés.
+                                            </div>
                                           ) : (
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                              {bookings.map((booking) => {
+                                              {bookingsToShow.map((booking) => {
                                                 const isPatientBilling = booking.billed_to_type === 'patient';
                                                 const isOverrideInProgress = bookingOverridesInProgress.has(booking.id);
                                                 const isConfirming = bookingOverrideConfirm?.bookingId === booking.id;
@@ -2509,12 +2544,11 @@ const NewInvoiceModal = ({
                                                 const isCancelled = (booking.status || '').toUpperCase() === 'CANCELED';
                                                 const isDelivery = (booking.mission_type || '').toLowerCase() === 'material_delivery';
                                                 const deliveryDesc = (booking.delivery_description || '').trim();
+                                                const cancellationLabel = booking.cancellation_display_label || null;
                                                 let transportLabel = '';
-                                                if (isCancelled) {
-                                                  transportLabel = 'Annulation dernière minute';
-                                                } else if (isDelivery) {
+                                                if (isDelivery) {
                                                   const deliveryPart = deliveryDesc ? deliveryDesc + ' – ' : '';
-                                                  transportLabel = (pickupAddress && dropoffAddress) ? 'Livraison – ' + deliveryPart + pickupAddress + ' → ' + dropoffAddress : '';
+                                                  transportLabel = (pickupAddress && dropoffAddress) ? 'Livraison – ' + deliveryPart + pickupAddress + ' → ' + dropoffAddress : (pickupAddress && dropoffAddress) ? pickupAddress + ' → ' + dropoffAddress : '';
                                                 } else {
                                                   transportLabel = (pickupAddress && dropoffAddress) ? pickupAddress + ' → ' + dropoffAddress : '';
                                                 }
@@ -2539,11 +2573,15 @@ const NewInvoiceModal = ({
                                                     : null);
                                                 let amount;
                                                 if (!isConfirming) {
-                                                  const rawAmount = Number(booking.amount || 0);
+                                                  const overrideAmount = s2BookingOverrides[booking.id]?.amount ?? s2BookingOverrides[String(booking.id)]?.amount;
+                                                  const rawAmount = overrideAmount != null ? Number(overrideAmount) : Number(booking.amount || 0);
                                                   amount = Number.isFinite(rawAmount) && !Number.isNaN(rawAmount) ? rawAmount : 0;
                                                 } else {
                                                   amount = confirmDisplayAmount;
                                                 }
+                                                const showS2Adjust = s2AdjustOpenBookingId === booking.id;
+                                                const s2Override = s2BookingOverrides[booking.id] || s2BookingOverrides[String(booking.id)] || {};
+                                                const s2DisplayAmount = s2Override.amount != null ? Number(s2Override.amount) : (Number(booking.amount || 0) || 0);
                                                 
                                                 return (
                                                   <div key={booking.id} style={{
@@ -2555,41 +2593,63 @@ const NewInvoiceModal = ({
                                                     opacity: isInvoiced ? 0.9 : 1
                                                   }}>
                                                     {!isConfirming ? (
-                                                      // ✅ Affichage ultra compact (1 ligne: date + pickup→dropoff + montant, switch à droite)
-                                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
-                                                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-                                                          {dateStr && (
-                                                            <span style={{ fontWeight: 500, color: '#111827', fontSize: '11px', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                                                              {dateStr}
+                                                      <>
+                                                        {/* ✅ Affichage ultra compact (1 ligne: date + pickup→dropoff + montant + ✏️, switch à droite) */}
+                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                                                          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                                                            {dateStr && (
+                                                              <span style={{ fontWeight: 500, color: '#111827', fontSize: '11px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                                                {dateStr}
+                                                              </span>
+                                                            )}
+                                                            {transportLabel && (
+                                                              <span style={{ color: '#4b5563', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
+                                                                {transportLabel}
+                                                              </span>
+                                                            )}
+                                                            <span style={{ fontWeight: 600, color: '#111827', fontSize: '11px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                                              {formatCurrencyCHF(amount)}
                                                             </span>
-                                                          )}
-                                                          {transportLabel && (
-                                                            <span style={{ color: '#4b5563', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
-                                                              {transportLabel}
-                                                            </span>
-                                                          )}
-                                                          <span style={{ fontWeight: 600, color: '#111827', fontSize: '11px', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                                                            {formatCurrencyCHF(amount)}
-                                                          </span>
-                                                          {/* ✅ Safety: Label "Déjà facturé" si booking facturé */}
-                                                          {isInvoiced && (
-                                                            <span style={{ 
-                                                              fontSize: '10px', 
-                                                              color: '#dc2626', 
-                                                              fontWeight: 500,
-                                                              padding: '2px 6px',
-                                                              background: '#fee2e2',
-                                                              borderRadius: '3px',
-                                                              whiteSpace: 'nowrap',
-                                                              flexShrink: 0,
-                                                              marginLeft: '8px'
-                                                            }}>
-                                                              Déjà facturé
-                                                            </span>
-                                                          )}
-                                                        </div>
-                                                        {/* Switch aligné à droite */}
-                                                        <div 
+                                                            {/* ✅ S2: Ajuster le montant avant génération (comme côté client) */}
+                                                            {!isInvoiced && (
+                                                              <button
+                                                                type="button"
+                                                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setS2AdjustOpenBookingId((prev) => (prev === booking.id ? null : booking.id)); }}
+                                                                title="Ajuster le montant"
+                                                                aria-expanded={showS2Adjust}
+                                                                aria-controls={`s2-adjust-${booking.id}`}
+                                                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', fontSize: '14px', flexShrink: 0 }}
+                                                              >
+                                                                ✏️
+                                                              </button>
+                                                            )}
+                                                            {isCancelled && (
+                                                              <span
+                                                                style={{ fontSize: '10px', color: '#92400e', fontWeight: 500, padding: '2px 6px', background: '#fef3c7', border: '1px solid #d97706', borderRadius: '3px', whiteSpace: 'nowrap', flexShrink: 0, marginLeft: '4px' }}
+                                                                title={cancellationLabel || 'Réservation annulée (facturée)'}
+                                                              >
+                                                                Annulé
+                                                              </span>
+                                                            )}
+                                                            {/* ✅ Safety: Label "Déjà facturé" si booking facturé */}
+                                                            {isInvoiced && (
+                                                              <span style={{ 
+                                                                fontSize: '10px', 
+                                                                color: '#dc2626', 
+                                                                fontWeight: 500,
+                                                                padding: '2px 6px',
+                                                                background: '#fee2e2',
+                                                                borderRadius: '3px',
+                                                                whiteSpace: 'nowrap',
+                                                                flexShrink: 0,
+                                                                marginLeft: '8px'
+                                                              }}>
+                                                                Déjà facturé
+                                                              </span>
+                                                            )}
+                                                          </div>
+                                                          {/* Switch aligné à droite */}
+                                                          <div 
                                                           role="switch"
                                                           aria-checked={isPatientBilling}
                                                           aria-disabled={isOverrideInProgress || isNotModifiable}
@@ -2650,6 +2710,70 @@ const NewInvoiceModal = ({
                                                           }} />
                                                         </div>
                                                       </div>
+                                                      {showS2Adjust && (
+                                                        <div id={`s2-adjust-${booking.id}`} style={{ marginTop: '8px', padding: '10px', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '4px', fontSize: '12px' }}>
+                                                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                                            <span style={{ fontWeight: 500, minWidth: '80px' }}>Montant HT</span>
+                                                            <input
+                                                              type="number"
+                                                              step="0.05"
+                                                              min="0"
+                                                              value={s2AmountInputLocal[booking.id] !== undefined ? s2AmountInputLocal[booking.id] : (s2DisplayAmount > 0 ? String(s2DisplayAmount) : '')}
+                                                              placeholder={Number(booking.amount || 0) ? String(booking.amount) : '0'}
+                                                              onChange={(e) => setS2AmountInputLocal((prev) => ({ ...prev, [booking.id]: e.target.value }))}
+                                                              onBlur={(e) => {
+                                                                const v = e.target.value.trim();
+                                                                const num = v === '' ? null : parseFloat(v.replace(/,/g, '.'));
+                                                                if (num !== null && !Number.isNaN(num) && num >= 0) {
+                                                                  setS2BookingOverrides((prev) => ({ ...prev, [booking.id]: { ...(prev[booking.id] || prev[String(booking.id)] || {}), amount: num } }));
+                                                                  setS2AmountInputLocal((prev) => ({ ...prev, [booking.id]: undefined }));
+                                                                } else if (v !== '') {
+                                                                  setS2BookingOverrides((prev) => ({ ...prev, [booking.id]: { ...(prev[booking.id] || prev[String(booking.id)] || {}), amount: Number(booking.amount || 0) } }));
+                                                                  setS2AmountInputLocal((prev) => ({ ...prev, [booking.id]: undefined }));
+                                                                }
+                                                              }}
+                                                              style={{ width: '100px', padding: '4px 8px' }}
+                                                            />
+                                                            <span>CHF</span>
+                                                          </div>
+                                                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                                            <span style={{ fontWeight: 500, minWidth: '80px' }}>Note (optionnelle)</span>
+                                                            <input
+                                                              type="text"
+                                                              value={s2Override.note ?? ''}
+                                                              onChange={(e) => setS2BookingOverrides((prev) => ({ ...prev, [booking.id]: { ...(prev[booking.id] || prev[String(booking.id)] || {}), note: e.target.value.trim() || undefined } }))}
+                                                              placeholder="Ex. Ajustement temps d'attente"
+                                                              style={{ flex: 1, padding: '4px 8px' }}
+                                                            />
+                                                          </div>
+                                                          <div style={{ marginBottom: '8px', fontSize: '11px', color: '#6b7280' }}>
+                                                            HT <strong>{formatCurrencyCHF(s2DisplayAmount)}</strong>
+                                                          </div>
+                                                          <div style={{ display: 'flex', gap: '8px' }}>
+                                                            <button
+                                                              type="button"
+                                                              onClick={() => {
+                                                                setS2BookingOverrides((prev) => { const next = { ...prev }; delete next[booking.id]; delete next[String(booking.id)]; return next; });
+                                                                setS2AmountInputLocal((prev) => { const next = { ...prev }; delete next[booking.id]; return next; });
+                                                                setS2AdjustOpenBookingId(null);
+                                                              }}
+                                                              className="btn btn-secondary"
+                                                              style={{ fontSize: '11px', padding: '4px 8px' }}
+                                                            >
+                                                              Réinitialiser
+                                                            </button>
+                                                            <button
+                                                              type="button"
+                                                              onClick={() => setS2AdjustOpenBookingId(null)}
+                                                              className="btn btn-link"
+                                                              style={{ fontSize: '11px', padding: '4px 8px' }}
+                                                            >
+                                                              Fermer
+                                                            </button>
+                                                          </div>
+                                                        </div>
+                                                      )}
+                                                    </>
                                                     ) : (
                                                       // ✅ Confirmation inline
                                                       <div 
@@ -2911,12 +3035,11 @@ const NewInvoiceModal = ({
                                 const isCancelledExcl = (booking.status || '').toUpperCase() === 'CANCELED';
                                 const isDeliveryExcl = (booking.mission_type || '').toLowerCase() === 'material_delivery';
                                 const deliveryDescExcl = (booking.delivery_description || '').trim();
+                                const cancellationLabelExcl = booking.cancellation_display_label || null;
                                 let transportLabelExcl = '';
-                                if (isCancelledExcl) {
-                                  transportLabelExcl = 'Annulation dernière minute';
-                                } else if (isDeliveryExcl) {
+                                if (isDeliveryExcl) {
                                   const deliveryPartExcl = deliveryDescExcl ? deliveryDescExcl + ' – ' : '';
-                                  transportLabelExcl = (pickupAddress && dropoffAddress) ? 'Livraison – ' + deliveryPartExcl + pickupAddress + ' → ' + dropoffAddress : '';
+                                  transportLabelExcl = (pickupAddress && dropoffAddress) ? 'Livraison – ' + deliveryPartExcl + pickupAddress + ' → ' + dropoffAddress : (pickupAddress && dropoffAddress) ? pickupAddress + ' → ' + dropoffAddress : '';
                                 } else {
                                   transportLabelExcl = (pickupAddress && dropoffAddress) ? pickupAddress + ' → ' + dropoffAddress : '';
                                 }
@@ -2957,6 +3080,14 @@ const NewInvoiceModal = ({
                                           <span style={{ fontWeight: 600, color: '#111827', fontSize: '11px', whiteSpace: 'nowrap', flexShrink: 0 }}>
                                             {formatCurrencyCHF(amount)}
                                           </span>
+                                          {isCancelledExcl && (
+                                            <span
+                                              style={{ fontSize: '10px', color: '#92400e', fontWeight: 500, padding: '2px 6px', background: '#fef3c7', border: '1px solid #d97706', borderRadius: '3px', whiteSpace: 'nowrap', flexShrink: 0, marginLeft: '4px' }}
+                                              title={cancellationLabelExcl || 'Réservation annulée (facturée)'}
+                                            >
+                                              Annulé
+                                            </span>
+                                          )}
                                           {/* Badge "Override patient" */}
                                           <span style={{ 
                                             fontSize: '10px', 
@@ -3398,7 +3529,7 @@ const NewInvoiceModal = ({
                         )
                       ) : (
                         <span className={styles.stickyFooterTotal}>
-                          1 facture client • {directSummary.count} transport{directSummary.count > 1 ? 's' : ''} • Total TTC <strong>{formatCurrency(directSummaryTTC)}</strong>
+                          1 facture client • {directSummary.count} transport{directSummary.count > 1 ? 's' : ''} • Total TTC <strong>{formatCurrency(_directTotals?.total ?? directSummaryTTC ?? 0)}</strong>
                         </span>
                       )
                     ) : directSummary && directSummary.count === 0 ? (

@@ -197,22 +197,24 @@ def resolve_default_billing_party_for_client(
     client_id: int,
     company_id: int,
 ) -> BillingParty | None:
-    """Résout le payeur par défaut d'un client (curatelle, parents, etc.).
+    """Résout le tiers payeur d'un client pour la facturation.
 
-    Utilise la table `ClientBillingParty` avec `is_default=True` pour trouver
-    le payeur par défaut configuré pour ce client.
+    Si le client a au moins un tiers payeur (ClientBillingParty), on le prend
+    automatiquement : plus besoin de le marquer « par défaut ». En cas de
+    plusieurs liens, on préfère celui marqué is_default=True, sinon le premier.
 
     Args:
         client_id: ID du client
         company_id: ID de l'entreprise (transporteur)
 
     Returns:
-        BillingParty par défaut si trouvé, None sinon (facturation directe au patient)
+        BillingParty du tiers payeur si trouvé, None sinon (facturation directe au patient)
     """
     link = (
-        ClientBillingParty.query.filter_by(client_id=client_id, is_default=True)
+        ClientBillingParty.query.filter_by(client_id=client_id)
         .join(BillingParty)
         .filter(BillingParty.company_id == company_id, BillingParty.is_active.is_(True))
+        .order_by(ClientBillingParty.is_default.desc(), ClientBillingParty.id.asc())
         .first()
     )
     if link and link.billing_party:

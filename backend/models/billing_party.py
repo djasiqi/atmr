@@ -135,6 +135,9 @@ class ClientBillingParty(db.Model):
     contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     contact_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
+    # Référence client chez le payeur (ex: numéro SPC quand le tiers payeur est SPC).
+    client_reference: Mapped[str | None] = mapped_column(String(80), nullable=True)
+
     # Un seul payeur par défaut par client (enforce via logique applicative, puis contrainte DB possible plus tard).
     is_default: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
@@ -157,7 +160,7 @@ class ClientBillingParty(db.Model):
         ),
     )
 
-    @validates("contact_name", "contact_email", "contact_phone", "role")
+    @validates("contact_name", "contact_email", "contact_phone", "role", "client_reference")
     def _normalize_link_fields(self, _key: str, value: str | None) -> str | None:
         if value is None:
             return None
@@ -174,5 +177,6 @@ class ClientBillingParty(db.Model):
             "contact_name": self.contact_name,
             "contact_email": self.contact_email,
             "contact_phone": self.contact_phone,
+            "client_reference": self.client_reference,
             "billing_party": self.billing_party.to_dict() if self.billing_party else None,
         }

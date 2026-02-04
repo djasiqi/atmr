@@ -17,19 +17,21 @@
  * 
  * IMPORTANT : Chaque facture est toujours pour UN client, mais peut être adressée à différents tiers payeurs selon le contexte.
  */
-import React, { useState, useEffect, useCallback, useLayoutEffect, useRef } from 'react';
-import { fetchBillingParties, createBillingParty } from '../../../../services/settingsService';
+import React, { useState, useEffect, useCallback, useLayoutEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import { fetchBillingParties, createBillingParty, updateBillingParty } from '../../../../services/settingsService';
 import { fetchClientBillingParties, linkClientBillingParty, unlinkClientBillingParty, updateClientBillingPartyLink } from '../../../../services/companyService';
 import AddressAutocomplete from '../../../../components/common/AddressAutocomplete';
 import styles from './ClientBillingPartiesSection.module.css';
 
-const ClientBillingPartiesSection = ({
+const ClientBillingPartiesSection = forwardRef(({
   clientId,
   readOnly = false,
   showTitle = true,
   autoShowForm = false,
+  /** Si true, les boutons Annuler / Mettre à jour le mapping sont cachés ; la sauvegarde se fait via le bouton Enregistrer du formulaire parent */
+  integratedSave = false,
   onScrollBottomGapChange,
-}) => {
+}, ref) => {
   const [billingParties, setBillingParties] = useState([]);
   const [clientLinks, setClientLinks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -44,6 +46,7 @@ const ClientBillingPartiesSection = ({
     contact_name: '',
     contact_email: '',
     contact_phone: '',
+    client_reference: '',
   });
   const [newPartyData, setNewPartyData] = useState({
     display_name: '',
@@ -55,6 +58,15 @@ const ClientBillingPartiesSection = ({
   const [_billingAddressCoords, setBillingAddressCoords] = useState({ lat: null, lon: null });
   const actionsRef = useRef(null);
   const [bottomSpacerHeight, setBottomSpacerHeight] = useState(32);
+  // Édition rapide des coordonnées du tiers payeur (adresse, email, tél)
+  const [showEditPartyForm, setShowEditPartyForm] = useState(false);
+  const [editPartyData, setEditPartyData] = useState({
+    display_name: '',
+    billing_address: '',
+    contact_email: '',
+    contact_phone: '',
+  });
+  const [updatingParty, setUpdatingParty] = useState(false);
 
   const loadBillingParties = useCallback(async () => {
     try {
@@ -97,6 +109,7 @@ const ClientBillingPartiesSection = ({
         contact_name: '',
         contact_email: '',
         contact_phone: '',
+        client_reference: '',
       });
     }
   }, [autoShowForm, readOnly]);
@@ -155,6 +168,7 @@ const ClientBillingPartiesSection = ({
         contact_name: formData.contact_name,
         contact_email: formData.contact_email,
         contact_phone: formData.contact_phone,
+        client_reference: (formData.client_reference || '').trim() || null,
       };
       
       // Lier automatiquement le nouveau tiers payeur au client
@@ -170,6 +184,7 @@ const ClientBillingPartiesSection = ({
           contact_name: '',
           contact_email: '',
           contact_phone: '',
+          client_reference: '',
         });
         setCreateMode(false);
         setNewPartyData({
@@ -194,6 +209,7 @@ const ClientBillingPartiesSection = ({
           contact_name: formData.contact_name,
           contact_email: formData.contact_email,
           contact_phone: formData.contact_phone,
+          client_reference: formData.client_reference,
         });
         setCreateMode(false);
         setError('Tiers payeur créé mais erreur lors de la liaison. Vous pouvez le lier manuellement.');
@@ -203,36 +219,52 @@ const ClientBillingPartiesSection = ({
     }
   };
 
+  const saveBillingPartyLink = useCallback(async () => {
+    if (!formData.billing_party_id) return; // Rien à enregistrer
+    const linkPayload = {
+      billing_party_id: formData.billing_party_id,
+      is_default: formData.is_default,
+      role: formData.role || null,
+      contact_name: formData.contact_name || null,
+      contact_email: formData.contact_email || null,
+      contact_phone: formData.contact_phone || null,
+      client_reference: (formData.client_reference || '').trim() || null,
+    };
+    const currentLink = clientLinks.find(
+      (link) => String(link.billing_party_id) === String(formData.billing_party_id)
+    );
+    if (currentLink?.id) {
+      await updateClientBillingPartyLink(currentLink.id, linkPayload);
+    } else {
+      await linkClientBillingParty(clientId, linkPayload);
+    }
+    await loadClientLinks();
+  }, [clientId, clientLinks, formData, loadClientLinks]);
+
+  useImperativeHandle(ref, () => ({
+    /** Enregistre le lien tiers payeur (création ou mise à jour). Ne fait rien si aucun tiers payeur sélectionné. Rejette en cas d'erreur. */
+    saveBillingPartyLink,
+  }), [saveBillingPartyLink]);
+
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
     try {
       setError(null);
-      if (hasExistingLink) {
-        await updateClientBillingPartyLink(selectedLink.id, {
-          is_default: formData.is_default,
-          role: formData.role,
-          contact_name: formData.contact_name,
-          contact_email: formData.contact_email,
-          contact_phone: formData.contact_phone,
+      if (!formData.billing_party_id) return;
+      await saveBillingPartyLink();
+      if (!integratedSave) {
+        if (!autoShowForm) setShowForm(false);
+        setFormData({
+          billing_party_id: '',
+          is_default: false,
+          role: '',
+          contact_name: '',
+          contact_email: '',
+          contact_phone: '',
+          client_reference: '',
         });
-        await loadClientLinks();
-      } else {
-        await linkClientBillingParty(clientId, formData);
-        await loadClientLinks();
+        setCreateMode(false);
       }
-      // Si autoShowForm est activé, garder le formulaire ouvert pour permettre l'ajout d'un autre
-      if (!autoShowForm) {
-        setShowForm(false);
-      }
-      setFormData({
-        billing_party_id: '',
-        is_default: false,
-        role: '',
-        contact_name: '',
-        contact_email: '',
-        contact_phone: '',
-      });
-      setCreateMode(false);
     } catch (err) {
       if (err.response?.status === 404) {
         setError(
@@ -241,6 +273,48 @@ const ClientBillingPartiesSection = ({
       } else {
         setError(err.response?.data?.error || 'Erreur lors de la sauvegarde');
       }
+      throw err; // Pour que l'appelant (ex: formulaire parent) soit informé
+    }
+  };
+
+  const handleOpenEditParty = () => {
+    if (!selectedParty) return;
+    setEditPartyData({
+      display_name: selectedParty.display_name || '',
+      billing_address: selectedParty.billing_address || '',
+      contact_email: selectedParty.contact_email || '',
+      contact_phone: selectedParty.contact_phone || '',
+    });
+    setShowEditPartyForm(true);
+    setError(null);
+  };
+
+  const handleSaveEditParty = async (e) => {
+    if (e) e.preventDefault();
+    if (!selectedParty || updatingParty) return;
+    if (
+      selectedParty.type !== 'patient' &&
+      !(editPartyData.billing_address || '').trim()
+    ) {
+      setError('L\'adresse est requise pour ce type de tiers payeur.');
+      return;
+    }
+    try {
+      setUpdatingParty(true);
+      setError(null);
+      await updateBillingParty(selectedParty.id, {
+        display_name: editPartyData.display_name.trim() || undefined,
+        billing_address: editPartyData.billing_address.trim() || undefined,
+        contact_email: editPartyData.contact_email.trim() || undefined,
+        contact_phone: editPartyData.contact_phone.trim() || undefined,
+      });
+      await loadBillingParties();
+      await loadClientLinks();
+      setShowEditPartyForm(false);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Erreur lors de la mise à jour des coordonnées');
+    } finally {
+      setUpdatingParty(false);
     }
   };
 
@@ -304,6 +378,7 @@ const ClientBillingPartiesSection = ({
                   contact_name: '',
                   contact_email: '',
                   contact_phone: '',
+                  client_reference: '',
                 });
               }}
               className={styles.addButton}
@@ -345,6 +420,7 @@ const ClientBillingPartiesSection = ({
                         contact_name: existingLink.contact_name || '',
                         contact_email: existingLink.contact_email || '',
                         contact_phone: existingLink.contact_phone || '',
+                        client_reference: existingLink.client_reference || '',
                       });
                       return;
                     }
@@ -355,6 +431,7 @@ const ClientBillingPartiesSection = ({
                       contact_name: '',
                       contact_email: '',
                       contact_phone: '',
+                      client_reference: '',
                     });
                   }}
                   required
@@ -400,33 +477,149 @@ const ClientBillingPartiesSection = ({
                   <div className={styles.mappingRow}>
                     <span className={styles.mappingLabel}>Coordonnées OPAD</span>
                     <div className={styles.mappingValue}>
-                      {selectedParty.billing_address ? (
-                        <div className={styles.mappingValueMultiline}>
-                          {selectedParty.billing_address}
-                        </div>
+                      {!showEditPartyForm ? (
+                        <>
+                          {selectedParty.billing_address ? (
+                            <div className={styles.mappingValueMultiline}>
+                              {selectedParty.billing_address}
+                            </div>
+                          ) : (
+                            <div className={styles.mappingValueMuted}>Adresse non renseignée</div>
+                          )}
+                          {selectedParty.contact_email && (
+                            <div className={styles.mappingValue}>
+                              ✉️{' '}
+                              <a href={`mailto:${selectedParty.contact_email}`}>
+                                {selectedParty.contact_email}
+                              </a>
+                            </div>
+                          )}
+                          {selectedParty.contact_phone && (
+                            <div className={styles.mappingValue}>
+                              📞{' '}
+                              <a href={`tel:${selectedParty.contact_phone}`}>
+                                {selectedParty.contact_phone}
+                              </a>
+                            </div>
+                          )}
+                          {hasExistingLink && (
+                            <button
+                              type="button"
+                              onClick={handleOpenEditParty}
+                              className={styles.editCoordsButton}
+                              title="Mettre à jour l'adresse, le code postal, l'email ou le téléphone"
+                            >
+                              ✏️ Éditer les coordonnées
+                            </button>
+                          )}
+                        </>
                       ) : (
-                        <div className={styles.mappingValueMuted}>Adresse non renseignée</div>
-                      )}
-                      {selectedParty.contact_email && (
-                        <div className={styles.mappingValue}>
-                          ✉️{' '}
-                          <a href={`mailto:${selectedParty.contact_email}`}>
-                            {selectedParty.contact_email}
-                          </a>
-                        </div>
-                      )}
-                      {selectedParty.contact_phone && (
-                        <div className={styles.mappingValue}>
-                          📞{' '}
-                          <a href={`tel:${selectedParty.contact_phone}`}>
-                            {selectedParty.contact_phone}
-                          </a>
+                        <div className={styles.editPartyForm}>
+                          <div className={styles.formGroup}>
+                            <label htmlFor="edit_party_display_name" className={styles.label}>
+                              Nom du tiers payeur
+                            </label>
+                            <input
+                              id="edit_party_display_name"
+                              type="text"
+                              value={editPartyData.display_name}
+                              onChange={(e) =>
+                                setEditPartyData({ ...editPartyData, display_name: e.target.value })
+                              }
+                              className={styles.input}
+                              required
+                            />
+                          </div>
+                          <div className={styles.formGroup}>
+                            <label htmlFor="edit_party_billing_address" className={styles.label}>
+                              Adresse complète (rue, code postal, ville) *
+                            </label>
+                            <AddressAutocomplete
+                              name="edit_party_billing_address"
+                              value={editPartyData.billing_address}
+                              onChange={(e) =>
+                                setEditPartyData({
+                                  ...editPartyData,
+                                  billing_address: e.target.value,
+                                })
+                              }
+                              onSelect={(item) =>
+                                setEditPartyData({
+                                  ...editPartyData,
+                                  billing_address: item.label || '',
+                                })
+                              }
+                              placeholder="Ex: Avenue Ernest-Pictet 9, 1203 Genève"
+                            />
+                            <small className={styles.hint}>
+                              Indiquez la rue, le code postal (4 chiffres) et la ville pour que la facture affiche l'adresse correcte.
+                            </small>
+                          </div>
+                          <div className={styles.formGroup}>
+                            <label htmlFor="edit_party_contact_email" className={styles.label}>
+                              Email
+                            </label>
+                            <input
+                              id="edit_party_contact_email"
+                              type="email"
+                              value={editPartyData.contact_email}
+                              onChange={(e) =>
+                                setEditPartyData({
+                                  ...editPartyData,
+                                  contact_email: e.target.value,
+                                })
+                              }
+                              className={styles.input}
+                              placeholder="exemple@email.ch"
+                            />
+                          </div>
+                          <div className={styles.formGroup}>
+                            <label htmlFor="edit_party_contact_phone" className={styles.label}>
+                              Téléphone
+                            </label>
+                            <input
+                              id="edit_party_contact_phone"
+                              type="tel"
+                              value={editPartyData.contact_phone}
+                              onChange={(e) =>
+                                setEditPartyData({
+                                  ...editPartyData,
+                                  contact_phone: e.target.value,
+                                })
+                              }
+                              className={styles.input}
+                              placeholder="+41 22 123 45 67"
+                            />
+                          </div>
+                          <div className={styles.formActions}>
+                            <button
+                              type="button"
+                              onClick={() => setShowEditPartyForm(false)}
+                              className={styles.cancelButton}
+                            >
+                              Annuler
+                            </button>
+                            <button
+                              type="button"
+                              className={styles.saveButton}
+                              disabled={updatingParty}
+                              onClick={() => handleSaveEditParty()}
+                            >
+                              {updatingParty ? 'Enregistrement...' : 'Enregistrer'}
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
                   </div>
                   {hasExistingLink ? (
                     <>
+                      {selectedParty && (selectedParty.display_name || '').toUpperCase().includes('SPC') && formData.client_reference && (
+                        <div className={styles.mappingRow}>
+                          <span className={styles.mappingLabel}>No. SPC client</span>
+                          <span className={styles.mappingValue}>{formData.client_reference}</span>
+                        </div>
+                      )}
                       {formData.role && (
                         <div className={styles.mappingRow}>
                           <span className={styles.mappingLabel}>Rôle</span>
@@ -469,7 +662,9 @@ const ClientBillingPartiesSection = ({
                     </>
                   ) : (
                     <div className={styles.mappingEmpty}>
-                      Aucun mapping pour ce client. Enregistrer pour créer le lien.
+                      {integratedSave
+                        ? 'Utilisez le bouton « Enregistrer » en bas du formulaire pour enregistrer le tiers payeur (et le numéro SPC si applicable).'
+                        : 'Aucun mapping pour ce client. Enregistrer pour créer le lien.'}
                     </div>
                   )}
                 </div>
@@ -488,6 +683,27 @@ const ClientBillingPartiesSection = ({
               placeholder="Ex: curateur principal, payeur secondaire..."
             />
           </div>
+
+          {selectedParty && (selectedParty.display_name || '').toUpperCase().includes('SPC') && (
+            <div className={styles.formGroup}>
+              <label htmlFor="client_reference_spc" className={styles.label}>
+                Numéro SPC du client
+              </label>
+              <input
+                type="text"
+                id="client_reference_spc"
+                value={formData.client_reference}
+                onChange={(e) =>
+                  setFormData({ ...formData, client_reference: e.target.value })
+                }
+                className={styles.input}
+                placeholder="Ex: 12345678 (affiché sur la facture envoyée à la SPC)"
+              />
+              <small className={styles.hint}>
+                Indiqué sur la facture lorsque le tiers payeur est la SPC.
+              </small>
+            </div>
+          )}
 
           {showCuratorFields && (
             <>
@@ -555,29 +771,33 @@ const ClientBillingPartiesSection = ({
 
               {error && <div className={styles.error}>{error}</div>}
 
-              <div ref={actionsRef} className={styles.formActions}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowForm(false);
-                    setFormData({
-                      billing_party_id: '',
-                      is_default: false,
-                      role: '',
-                      contact_name: '',
-                      contact_email: '',
-                      contact_phone: '',
-                    });
-                    setCreateMode(false);
-                  }}
-                  className={styles.cancelButton}
-                >
-                  Annuler
-                </button>
-                <button type="button" onClick={handleSubmit} className={styles.saveButton}>
-                  {hasExistingLink ? 'Mettre à jour le mapping' : 'Lier le tiers payeur'}
-                </button>
-              </div>
+              {!integratedSave && (
+                <div ref={actionsRef} className={styles.formActions}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowForm(false);
+                      setFormData({
+                        billing_party_id: '',
+                        is_default: false,
+                        role: '',
+                        contact_name: '',
+                        contact_email: '',
+                        contact_phone: '',
+                        client_reference: '',
+                      });
+                      setCreateMode(false);
+                    }}
+                    className={styles.cancelButton}
+                  >
+                    Annuler
+                  </button>
+                  <button type="button" onClick={handleSubmit} className={styles.saveButton}>
+                    {hasExistingLink ? 'Mettre à jour le mapping' : 'Lier le tiers payeur'}
+                  </button>
+                </div>
+              )}
+              {integratedSave && <div ref={actionsRef} />}
             </div>
           ) : (
             <div>
@@ -634,8 +854,11 @@ const ClientBillingPartiesSection = ({
                       lon: item.lon ?? null,
                     });
                   }}
-                  placeholder="Ex: Avenue de la Gare 5, 1003, Lausanne"
+                  placeholder="Ex: Avenue Ernest-Pictet 9, 1203 Genève"
                 />
+                <small className={styles.hint}>
+                  Toujours indiquer : rue + numéro + code postal (4 chiffres) + ville. Ajoutez le pays uniquement si l'adresse est hors de la Suisse.
+                </small>
               </div>
 
               <div className={styles.formGroup}>
@@ -781,6 +1004,7 @@ const ClientBillingPartiesSection = ({
                         contact_name: '',
                         contact_email: '',
                         contact_phone: '',
+                        client_reference: '',
                       });
                     }}
                     className={styles.addButton}
@@ -796,7 +1020,9 @@ const ClientBillingPartiesSection = ({
                       <div className={styles.linkInfo}>
                         <strong>{link.billing_party?.display_name || 'Tiers payeur'}</strong>
                         <div className={styles.linkDetails}>
-                          Type: {link.billing_party?.type || 'N/A'}
+                          {link.client_reference
+                            ? `No. SPC ${link.client_reference} / Type: ${link.billing_party?.type || 'N/A'}`
+                            : `Type: ${link.billing_party?.type || 'N/A'}`}
                           {link.role && ` • Rôle: ${link.role}`}
                           {link.is_default && (
                             <span className={styles.defaultBadge}>⭐ Par défaut</span>
@@ -869,6 +1095,8 @@ const ClientBillingPartiesSection = ({
     return <div className={styles.section}>{content}</div>;
   }
   return content;
-};
+});
+
+ClientBillingPartiesSection.displayName = 'ClientBillingPartiesSection';
 
 export default ClientBillingPartiesSection;

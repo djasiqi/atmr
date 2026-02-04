@@ -4,6 +4,20 @@ Backend = source of truth. Utilisé par company web/mobile, driver, invoice, PDF
 
 Phase 1 : pas de validation stricte (LAST_MINUTE sélectionnable manuellement).
 Phase 2 : seuil configurable (ex. 2h) + validation/override.
+
+Référence – Choix proposés au chauffeur (mobile CancelJustificationModal) :
+┌──────────────────┬─────────────────────────────────────┬────────────┐
+│ Code (backend)   │ Libellé                             │ Facturable │
+├──────────────────┼─────────────────────────────────────┼────────────┤
+│ LAST_MINUTE      │ Annulation dernière minute          │ Oui        │
+│ NO_SHOW          │ Client ne s'est pas présenté        │ Oui        │
+│ CLIENT_REQUEST   │ Client a demandé l'annulation       │ Oui        │
+├──────────────────┼─────────────────────────────────────┼────────────┤
+│ COMPANY_ISSUE    │ Problème entreprise                 │ Non        │
+│ MAJOR_DELAY      │ Retard important (mobile: DELAY)    │ Non        │
+│ VEHICLE_ISSUE    │ Problème véhicule                   │ Non        │
+│ OTHER            │ Autre raison                        │ Non        │
+└──────────────────┴─────────────────────────────────────┴────────────┘
 """
 
 from __future__ import annotations
@@ -14,7 +28,7 @@ from typing import Any, Mapping
 
 logger = logging.getLogger("cancellation")
 
-# Libellés affichés dans facture/PDF
+# Libellés affichés dans facture/PDF (alignés avec le modal chauffeur)
 CANCELLATION_REASON_LABELS: dict[str, str] = {
     "LAST_MINUTE": "Annulation dernière minute",
     "NO_SHOW": "Client ne s'est pas présenté",
@@ -26,6 +40,7 @@ CANCELLATION_REASON_LABELS: dict[str, str] = {
 }
 
 # Motifs facturables (annulation facturée à la clinique/client)
+# = choix chauffeur où isClientFault / "Facturation prévue" dans l'app
 BILLABLE_REASONS: frozenset[str] = frozenset(
     {"LAST_MINUTE", "NO_SHOW", "CLIENT_REQUEST"}
 )

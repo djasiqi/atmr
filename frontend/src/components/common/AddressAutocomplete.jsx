@@ -153,6 +153,7 @@ export default function AddressAutocomplete({
         lat,
         lon,
         raw: f,
+        name: placeName || null,
       };
     });
   }
@@ -452,46 +453,34 @@ export default function AddressAutocomplete({
             addressComponents.find((c) => c.types?.includes('postal_code'))?.long_name ||
             it.postcode;
 
-          // Construire l'adresse complète (rue + numéro)
-          const streetAddress = [streetNumber, route].filter(Boolean).join(' ') || route || '';
-          
-          // ✅ PRÉSERVER l'adresse originale sélectionnée par l'utilisateur
-          // Ne remplacer que si l'adresse enrichie est clairement meilleure (a un numéro manquant dans l'original)
-          const originalLabel = fullAddress || it.label || '';
-          const originalHasNumber = /\d+/.test(originalLabel);
-          const enrichedHasNumber = streetNumber && streetNumber.trim() !== '';
-          
-          // Construire le label : nom du lieu (si présent) + adresse complète avec numéro
-          const placeName = it.main_text || (it.types?.some(t => 
+          // Construire la rue au format suisse : "Rue Numéro" (pas "Numéro Rue")
+          const streetAddress = [route, streetNumber].filter(Boolean).join(' ') || route || '';
+
+          // Format requis : Rue Numéro, Code postal, Ville (pays ajouté côté facture si hors domicile entreprise)
+          const addressParts = [streetAddress];
+          if (postcode) addressParts.push(postcode);
+          if (city) addressParts.push(city);
+          const enrichedAddressStr = addressParts.filter(Boolean).join(', ');
+
+          const isPoi = it.types?.some((t) =>
             ['establishment', 'point_of_interest'].includes(t)
-          ) ? it.label : null);
-          
-          // Déterminer quel label utiliser :
-          // - Préférer l'original si l'enrichi n'apporte pas de numéro manquant
-          // - Utiliser l'enrichi seulement si l'original n'a pas de numéro ET l'enrichi en a un
-          let finalLabel = originalLabel;
-          
-          // Si l'original n'a pas de numéro mais l'enrichi en a un, construire un nouveau label
-          if (!originalHasNumber && enrichedHasNumber && streetAddress) {
-            if (placeName && streetAddress) {
-              // Pour les établissements avec nom, inclure le nom + adresse avec numéro
-              const addressParts = [streetAddress];
-              if (postcode) addressParts.push(postcode);
-              if (city) addressParts.push(city);
-              const addressStr = addressParts.join(', ');
-              finalLabel = `${placeName}, ${addressStr}`;
-            } else if (streetAddress) {
-              // Adresse avec numéro mais sans nom d'établissement
-              const addressParts = [streetAddress];
-              if (postcode) addressParts.push(postcode);
-              if (city) addressParts.push(city);
-              finalLabel = addressParts.join(', ');
+          );
+          const placeName = isPoi ? (it.main_text || it.label) : null;
+          const placeNameIsDistinct = placeName && placeName.trim() !== streetAddress.trim();
+
+          // Toujours utiliser l'adresse enrichie (avec code postal). Ne préfixer par le nom du lieu
+          // que pour les POI (ex. HUG) quand il est distinct de la rue, pour éviter les doublons.
+          let finalLabel = fullAddress || it.label || '';
+          if (enrichedAddressStr) {
+            if (placeNameIsDistinct && isPoi) {
+              finalLabel = `${placeName}, ${enrichedAddressStr}`;
+            } else {
+              finalLabel = enrichedAddressStr;
             }
           }
-          // Sinon, garder l'adresse originale (celle sélectionnée par l'utilisateur)
 
           // Enrichir l'item avec les coordonnées GPS et les composants d'adresse
-          // ✅ IMPORTANT : Préserver l'adresse originale dans le label pour ne pas la modifier
+          // ✅ Nom du lieu (ex. Fondation Butini) pour remplir "Établissement de résidence"
           const enrichedItem = {
             ...it,
             lat: details.lat,
@@ -501,8 +490,8 @@ export default function AddressAutocomplete({
             street_number: streetNumber || it.street_number || '',
             city: city || it.city || '',
             postcode: postcode || it.postcode || '',
-            // ✅ Préserver l'adresse originale sélectionnée par l'utilisateur
             label: finalLabel,
+            name: details.name || it.name || null,
           };
 
           // ✅ Appeler onSelect avec l'item enrichi (qui préserve l'adresse originale)

@@ -4,9 +4,9 @@ from typing import Any, cast
 from urllib.parse import urlencode
 
 from flask import request
-from flask_jwt_extended import jwt_required  # pyright: ignore[reportMissingImports]
-from flask_mail import Message  # pyright: ignore[reportMissingImports]
-from flask_restx import (  # pyright: ignore[reportMissingImports]
+from flask_jwt_extended import jwt_required
+from flask_mail import Message
+from flask_restx import (
     Namespace,
     Resource,
     fields,
@@ -156,9 +156,7 @@ class ManageClientProfile(Resource):
             data = request.get_json() or {}
 
             # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-            from marshmallow import (  # pyright: ignore[reportMissingImports]
-                ValidationError,
-            )
+            from marshmallow import ValidationError
 
             from schemas.client_schemas import ClientUpdateSchema
             from schemas.validation_utils import (
@@ -192,7 +190,7 @@ class ManageClientProfile(Resource):
             # Utiliser le use case pour les champs Client
             if client_data:
                 uc = UpdateCompanyClientUseCase()
-                result = uc.execute(client=client, data=client_data)
+                result = uc.execute(client=cast(Any, client), data=client_data)
                 if not result.ok:
                     return result.error or {
                         "error": "Failed to update client"
@@ -315,9 +313,7 @@ class ClientBookings(Resource):
             data = request.get_json() or {}
 
             # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-            from marshmallow import (  # pyright: ignore[reportMissingImports]
-                ValidationError,
-            )
+            from marshmallow import ValidationError
 
             from schemas.booking_schemas import BookingCreateSchema
             from schemas.validation_utils import (
@@ -558,6 +554,7 @@ def _serialize_client_billing_party_link(
         "contact_name": link.contact_name,
         "contact_email": link.contact_email,
         "contact_phone": link.contact_phone,
+        "client_reference": link.client_reference,
         "billing_party": link.billing_party.to_dict() if link.billing_party else None,
     }
 
@@ -641,7 +638,7 @@ class ClientStays(Resource):
     @role_required(UserRole.company, UserRole.admin)
     def post(self, client_id: int):  # noqa: PLR0911
         """Créer un séjour."""
-        from marshmallow import ValidationError  # pyright: ignore[reportMissingImports]
+        from marshmallow import ValidationError
 
         from routes.companies import get_company_from_token
         from schemas.client_stay_schemas import ClientStayCreateSchema
@@ -737,7 +734,7 @@ class ClientStayById(Resource):
     @role_required(UserRole.company, UserRole.admin)
     def patch(self, stay_id: int):  # noqa: PLR0911
         """Modifier un séjour."""
-        from marshmallow import ValidationError  # pyright: ignore[reportMissingImports]
+        from marshmallow import ValidationError
 
         from routes.companies import get_company_from_token
         from schemas.client_stay_schemas import ClientStayUpdateSchema
@@ -884,7 +881,7 @@ class ClientStayClose(Resource):
     @role_required(UserRole.company, UserRole.admin)
     def post(self, stay_id: int):  # noqa: PLR0911
         """Clôturer un séjour."""
-        from marshmallow import ValidationError  # pyright: ignore[reportMissingImports]
+        from marshmallow import ValidationError
 
         from routes.companies import get_company_from_token
         from schemas.client_stay_schemas import ClientStayCloseSchema
@@ -977,7 +974,7 @@ class ClientBillingParties(Resource):
     @role_required(UserRole.company, UserRole.admin)
     def post(self, client_id: str):
         """Créer (ou mettre à jour) un lien client ↔ tiers payeur."""
-        from marshmallow import ValidationError  # pyright: ignore[reportMissingImports]
+        from marshmallow import ValidationError
 
         from routes.companies import get_company_from_token
         from schemas.client_billing_party_schemas import (
@@ -1040,16 +1037,16 @@ class ClientBillingParties(Resource):
         contact_name = (validated.get("contact_name") or "").strip() or None
         contact_email = (validated.get("contact_email") or "").strip() or None
         contact_phone = (validated.get("contact_phone") or "").strip() or None
+        client_reference = (validated.get("client_reference") or "").strip() or None
 
         link = ClientBillingParty.query.filter_by(
             client_id=client.id, billing_party_id=billing_party.id
         ).first()
         created = False
         if not link:
-            link = ClientBillingParty(
-                client_id=client.id,
-                billing_party_id=billing_party.id,
-            )
+            link = ClientBillingParty()
+            link.client_id = client.id
+            link.billing_party_id = billing_party.id
             created = True
             db.session.add(link)
             db.session.flush()
@@ -1059,6 +1056,7 @@ class ClientBillingParties(Resource):
         link.contact_name = contact_name
         link.contact_email = contact_email
         link.contact_phone = contact_phone
+        link.client_reference = client_reference
 
         if is_default:
             ClientBillingParty.query.filter(
@@ -1086,7 +1084,7 @@ class ClientBillingPartyLink(Resource):
     @role_required(UserRole.company, UserRole.admin)
     def patch(self, link_id: int):  # noqa: PLR0911
         """Mettre à jour un lien client ↔ tiers payeur."""
-        from marshmallow import ValidationError  # pyright: ignore[reportMissingImports]
+        from marshmallow import ValidationError
 
         from routes.companies import get_company_from_token
         from schemas.client_billing_party_schemas import (
@@ -1134,6 +1132,10 @@ class ClientBillingPartyLink(Resource):
         if "contact_phone" in validated:
             link.contact_phone = (
                 (validated.get("contact_phone") or "").strip() or None
+            )
+        if "client_reference" in validated:
+            link.client_reference = (
+                (validated.get("client_reference") or "").strip() or None
             )
 
         if "is_default" in validated:
@@ -1362,7 +1364,7 @@ class CancelBooking(Resource):
             )
 
             uc = CancelBookingUseCase()
-            input_data = CancelBookingInput(booking=booking)
+            input_data = CancelBookingInput(booking=cast(Any, booking))
             uc_result = uc.execute(input_data)
             if not uc_result.success:
                 return uc_result.error or {
@@ -1848,29 +1850,32 @@ class CreateCompanyForInstitutionClient(Resource):
                 else ""
             )
 
-            new_company = Company(
-                name=client.institution_name or f"Clinique #{client.id}",
-                user_id=company_user.id,
-                address=full_address,
-                domicile_address_line1=domicile_address or None,
-                domicile_zip=domicile_zip or None,
-                domicile_city=domicile_city or None,
-                latitude=(
-                    float(domicile_lat) if domicile_lat is not None else None
-                ),
-                longitude=(
-                    float(domicile_lon) if domicile_lon is not None else None
-                ),
-                contact_email=client.contact_email or company_user.email or "",
-                contact_phone=client.contact_phone or company_user.phone or "",
-                service_area="",
-                max_daily_bookings=50,
-                is_approved=False,
-                preferential_rate=(
-                    client.preferential_rate
-                    if getattr(client, "preferential_rate", None) is not None
-                    else None
-                ),
+            new_company = Company()
+            new_company.name = client.institution_name or f"Clinique #{client.id}"
+            new_company.user_id = company_user.id
+            new_company.address = full_address
+            new_company.domicile_address_line1 = domicile_address or None
+            new_company.domicile_zip = domicile_zip or None
+            new_company.domicile_city = domicile_city or None
+            new_company.latitude = (
+                float(domicile_lat) if domicile_lat is not None else None
+            )
+            new_company.longitude = (
+                float(domicile_lon) if domicile_lon is not None else None
+            )
+            new_company.contact_email = (
+                client.contact_email or company_user.email or ""
+            )
+            new_company.contact_phone = (
+                client.contact_phone or company_user.phone or ""
+            )
+            new_company.service_area = ""
+            new_company.max_daily_bookings = 50
+            new_company.is_approved = False
+            new_company.preferential_rate = (
+                client.preferential_rate
+                if getattr(client, "preferential_rate", None) is not None
+                else None
             )
 
             db.session.add(new_company)
@@ -1890,26 +1895,26 @@ class CreateCompanyForInstitutionClient(Resource):
 
             from models import BillingParty, BillingPartyType, ClinicBillingPartyMapping
 
-            billing_party = BillingParty(
-                company_id=current_company.id,
-                type=BillingPartyType.CLINIC,
-                display_name=new_company.name,
-                billing_address=billing_address or "Adresse non renseignée",
-                contact_email=new_company.contact_email,
-                contact_phone=new_company.contact_phone,
-                external_ref=f"clinic_company:{new_company.id}",
-                is_active=True,
+            billing_party = BillingParty()
+            billing_party.company_id = current_company.id
+            billing_party.type = BillingPartyType.CLINIC
+            billing_party.display_name = new_company.name
+            billing_party.billing_address = (
+                billing_address or "Adresse non renseignée"
             )
+            billing_party.contact_email = new_company.contact_email
+            billing_party.contact_phone = new_company.contact_phone
+            billing_party.external_ref = f"clinic_company:{new_company.id}"
+            billing_party.is_active = True
             db.session.add(billing_party)
             db.session.flush()
 
             # Créer le mapping
-            mapping = ClinicBillingPartyMapping(
-                company_id=current_company.id,
-                clinic_company_id=new_company.id,
-                billing_party_id=billing_party.id,
-                is_active=True,
-            )
+            mapping = ClinicBillingPartyMapping()
+            mapping.company_id = current_company.id
+            mapping.clinic_company_id = new_company.id
+            mapping.billing_party_id = billing_party.id
+            mapping.is_active = True
             db.session.add(mapping)
 
             db.session.commit()

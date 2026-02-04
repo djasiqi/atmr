@@ -786,14 +786,18 @@ class BookingRepository:
             BookingStatus.RETURN_COMPLETED.value,
         ]
         status_filter = Booking.status.in_(target_statuses)
-        if billed_to_type == "patient":
-            # Annulations facturables : montant > 0 et justification (billing_override_reason).
-            # Compatible serveur sans migration is_cancellation_billable.
+        # Annulations facturables : patient ou clinique (S2)
+        if billed_to_type in ("patient", "clinic"):
             canceled_eligible = (
                 (Booking.status == BookingStatus.CANCELED.value)
                 & (Booking.amount > 0)
-                & Booking.billing_override_reason.isnot(None)
-                & (Booking.billing_override_reason != "")
+                & (
+                    (Booking.is_cancellation_billable == True)  # noqa: E712
+                    | (
+                        Booking.billing_override_reason.isnot(None)
+                        & (Booking.billing_override_reason != "")
+                    )
+                )
             )
             status_filter = or_(status_filter, canceled_eligible)
 
@@ -868,12 +872,17 @@ class BookingRepository:
             BookingStatus.RETURN_COMPLETED.value,
         ]
         status_filter = Booking.status.in_(target_statuses)
-        if billed_to_type == "patient":
+        if billed_to_type in ("patient", "clinic"):
             canceled_eligible = (
                 (Booking.status == BookingStatus.CANCELED.value)
                 & (Booking.amount > 0)
-                & Booking.billing_override_reason.isnot(None)
-                & (Booking.billing_override_reason != "")
+                & (
+                    (Booking.is_cancellation_billable == True)  # noqa: E712
+                    | (
+                        Booking.billing_override_reason.isnot(None)
+                        & (Booking.billing_override_reason != "")
+                    )
+                )
             )
             status_filter = or_(status_filter, canceled_eligible)
 

@@ -17,17 +17,26 @@ type CancelOption = {
     isClientFault: boolean; // true = faute client → facturation, false = faute entreprise → pas facturation
 };
 
+// Aligné sur backend application/bookings/cancellation_rules.py :
+// Facturables (BILLABLE_REASONS) : LAST_MINUTE, NO_SHOW, CLIENT_REQUEST
+// Non facturables : COMPANY_ISSUE, MAJOR_DELAY, VEHICLE_ISSUE, OTHER
 const CANCEL_OPTIONS: CancelOption[] = [
     {
-        id: "CLIENT_REQUEST",
-        label: "Client a demandé l'annulation",
-        description: "Le client a demandé d'annuler la course",
+        id: "LAST_MINUTE",
+        label: "Annulation dernière minute",
+        description: "Annulation à la dernière minute (côté client ou organisation)",
         isClientFault: true,
     },
     {
         id: "CLIENT_NO_SHOW",
         label: "Client ne s'est pas présenté",
         description: "Le client n'était pas au lieu de rendez-vous",
+        isClientFault: true,
+    },
+    {
+        id: "CLIENT_REQUEST",
+        label: "Client a demandé l'annulation",
+        description: "Le client a demandé d'annuler la course",
         isClientFault: true,
     },
     {

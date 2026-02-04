@@ -298,9 +298,29 @@ class InvoiceTemplateBuilder:
         """Résout le destinataire de facture (bloc 'Facturé à')."""
         # 1) BillingParty (nouveau modèle unifié)
         try:
+            from models.billing_party import ClientBillingParty
+            from models.enums import BillingPartyType
+
+            # Si le client n'a plus de lien avec ce tiers payeur (lien supprimé), facturer au domicile du client
+            client_id = getattr(invoice, "client_id", None)
+            bp_id = getattr(invoice, "billing_party_id", None)
+            if client_id is not None and bp_id is not None:
+                link = (
+                    ClientBillingParty.query.filter_by(
+                        client_id=client_id, billing_party_id=bp_id
+                    ).first()
+                )
+                if link is None:
+                    logger.info(
+                        "[InvoiceTemplateBuilder] Lien client↔tiers payeur supprimé (invoice_id=%s). Facturé à = domicile du client.",
+                        getattr(invoice, "id", None),
+                    )
+                    # Ne pas utiliser le tiers payeur : on passe au fallback client plus bas
+                    raise ValueError("use_client_fallback")
+
             bp = getattr(invoice, "billing_party", None)
             if bp is not None:
-                name = (getattr(bp, "display_name", None) or "Payeur").strip()
+                bp_name = (getattr(bp, "display_name", None) or "Payeur").strip()
                 addr = (getattr(bp, "billing_address", None) or "").strip()
                 if addr:
                     addr_html = (
@@ -323,11 +343,45 @@ class InvoiceTemplateBuilder:
                 if ext:
                     contact_lines.append(f"Référence : {ext}")
                 if contact_lines:
-                    return (
-                        name,
-                        f"{addr_html}<br/>{'<br/>'.join(contact_lines)}",
-                    )
-                return name, addr_html
+                    addr_html = f"{addr_html}<br/>{'<br/>'.join(contact_lines)}"
+                # Tiers payeur : plusieurs lignes = client, puis c/o tiers payeur, puis adresse
+                name = bp_name
+                if getattr(invoice, "client_id", None) and getattr(bp, "type", None) in (
+                    BillingPartyType.FAMILY,
+                    BillingPartyType.CURATORSHIP,
+                    BillingPartyType.OPAD,
+                    BillingPartyType.LAWYER,
+                    BillingPartyType.INSURANCE,
+                    BillingPartyType.OTHER,
+                ):
+                    client = getattr(invoice, "client", None)
+                    if client is not None:
+                        client_name = self._format_client_name(client)
+                        if client_name.strip():
+                            name = f"{client_name}<br/>c/o {bp_name}"
+                # Si le tiers payeur est SPC : ajouter le numéro SPC après l'adresse (2 sauts de ligne)
+                if (bp_name or "").upper().find("SPC") >= 0:
+                    from models.billing_party import ClientBillingParty
+
+                    client_id = getattr(invoice, "client_id", None)
+                    bp_id = getattr(bp, "id", None) or getattr(invoice, "billing_party_id", None)
+                    if client_id is not None and bp_id is not None:
+                        link = (
+                            ClientBillingParty.query.filter_by(
+                                client_id=client_id, billing_party_id=bp_id
+                            )
+                            .first()
+                        )
+                        if (
+                            link
+                            and getattr(link, "client_reference", None)
+                            and (link.client_reference or "").strip()
+                        ):
+                            # 2 lignes vides puis numéro SPC (3 <br/> = 2 lignes vides)
+                            addr_html = (
+                                f"{addr_html}<br/><br/><br/>No. SPC : {(link.client_reference or '').strip()}"
+                            )
+                return (name, addr_html)
         except Exception:
             pass
 
@@ -363,7 +417,7 @@ class InvoiceTemplateBuilder:
                     bill_to
                 )
 
-        # 3) Fallback: client bénéficiaire
+        # 3) Fallback: client bénéficiaire (domicile + éventuellement établissement de résidence)
         client = getattr(invoice, "client", None)
         if client is None:
             return "Client", "Adresse non renseignée"
@@ -373,7 +427,11 @@ class InvoiceTemplateBuilder:
                 getattr(invoice, "id", None),
                 getattr(invoice, "client_id", None),
             )
-        return self._format_client_name(client), self._format_client_address(client)
+        name = self._format_client_name(client)
+        residence_facility = (getattr(client, "residence_facility", None) or "").strip()
+        if residence_facility:
+            name = f"{name}<br/>{residence_facility}"
+        return name, self._format_client_address(client)
 
     def _extract_invoice_lines(self, invoice) -> list[dict[str, Any]]:
         """Extrait les lignes de facture.

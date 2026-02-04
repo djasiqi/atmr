@@ -241,53 +241,79 @@ class GenerateInvoiceUseCase:
                     # (sera fait plus tard dans le code après récupération des reservations)
                 else:
                     billing_party_id = bp.id
+            else:
+                # Facturation directe au client : si le client a un tiers payeur par défaut, l'utiliser
+                # (PDF affichera "Client c/o Tiers payeur" + adresse du tiers)
+                from services.billing.client_stay_resolver import (
+                    resolve_default_billing_party_for_client,
+                )
+
+                bp = resolve_default_billing_party_for_client(
+                    client_id=input_data.client_id,
+                    company_id=input_data.company_id,
+                )
+                if bp is not None:
+                    billing_party_id = bp.id
 
             # 4. Récupérer les réservations
-            target_statuses = ["COMPLETED", "RETURN_COMPLETED"]
+            target_statuses = ["COMPLETED", "RETURN_COMPLETED", "CANCELED"]
             if input_data.reservation_ids:
-                # Mode sélection manuelle
+                # Mode sélection manuelle : accepter aussi les annulations facturables
                 booking_dtos = self.booking_repo.find_by_ids(input_data.reservation_ids)
+                # Charger les modèles Booking pour les annulations (vérifier is_cancellation_billable / billing_override_reason)
+                bookings_by_id = {
+                    b.id: b
+                    for b in Booking.query.filter(
+                        Booking.id.in_(input_data.reservation_ids)
+                    ).all()
+                }
                 filtered_booking_dtos = []
                 for dto in booking_dtos:
-                    # Vérifier les conditions de base
-                    if (
-                        dto.client_id == input_data.client_id
-                        and dto.status.value in target_statuses
-                        and getattr(dto, "invoice_line_id", None) is None
-                    ):
-                        # Pour SUBCONTRACT : l'entreprise propriétaire peut facturer
-                        # Pour ASSIGN_TO_PARTNER : l'entreprise exécutante peut facturer
-                        is_owner = dto.company_id == input_data.company_id
-                        is_executor = (
-                            getattr(dto, "executing_company_id", None)
-                            == input_data.company_id
+                    if dto.client_id != input_data.client_id:
+                        continue
+                    if getattr(dto, "invoice_line_id", None) is not None:
+                        continue
+                    # Annulation : n'accepter que si facturable (montant > 0 et motif)
+                    if dto.status.value == "CANCELED":
+                        booking = bookings_by_id.get(dto.id)
+                        if not booking or not (getattr(dto, "amount", 0) or 0) > 0:
+                            continue
+                        is_billable = (
+                            getattr(booking, "is_cancellation_billable", False) is True
+                            or (
+                                getattr(booking, "billing_override_reason", None)
+                                and str(getattr(booking, "billing_override_reason", "") or "").strip()
+                            )
                         )
-
+                        if not is_billable:
+                            continue
+                        is_owner = dto.company_id == input_data.company_id
                         if is_owner:
-                            # Entreprise propriétaire : peut facturer pour
-                            # SUBCONTRACT ou si pas de transfert
-                            # Pour SUBCONTRACT, l'entreprise propriétaire facture
-                            # toujours le client même si la course a été exécutée
-                            # par une autre entreprise
                             filtered_booking_dtos.append(dto)
-                        elif is_executor:
-                            # Entreprise exécutante : peut facturer uniquement
-                            # pour ASSIGN_TO_PARTNER
-                            # Vérifier qu'il y a un transfert ASSIGN_TO_PARTNER validé
-                            from models.booking_transfer import BookingTransfer
-                            from models.enums import TransferModel, TransferStatus
+                        continue
+                    # COMPLETED / RETURN_COMPLETED
+                    if dto.status.value not in ("COMPLETED", "RETURN_COMPLETED"):
+                        continue
+                    is_owner = dto.company_id == input_data.company_id
+                    is_executor = (
+                        getattr(dto, "executing_company_id", None)
+                        == input_data.company_id
+                    )
+                    if is_owner:
+                        filtered_booking_dtos.append(dto)
+                    elif is_executor:
+                        from models.booking_transfer import BookingTransfer
+                        from models.enums import TransferModel, TransferStatus
 
-                            transfer = BookingTransfer.query.filter_by(
-                                booking_id=int(
-                                    dto.id
-                                ),  # ✅ Conversion explicite pour sécurité
-                                executing_company_id=input_data.company_id,
-                                transfer_model=TransferModel.ASSIGN_TO_PARTNER,
-                                is_validated=True,
-                                status=TransferStatus.COMPLETED,
-                            ).first()
-                            if transfer:
-                                filtered_booking_dtos.append(dto)
+                        transfer = BookingTransfer.query.filter_by(
+                            booking_id=int(dto.id),
+                            executing_company_id=input_data.company_id,
+                            transfer_model=TransferModel.ASSIGN_TO_PARTNER,
+                            is_validated=True,
+                            status=TransferStatus.COMPLETED,
+                        ).first()
+                        if transfer:
+                            filtered_booking_dtos.append(dto)
 
                 booking_ids = [dto.id for dto in filtered_booking_dtos]
                 reservations = (

@@ -83,6 +83,7 @@ const ClientEditForm = ({
   });
   const [billingPartiesScrollBottom, setBillingPartiesScrollBottom] = useState(16);
   const billingPartiesScrollRef = useRef(null);
+  const billingPartiesSectionRef = useRef(null);
   const [showAdvancedBilling, setShowAdvancedBilling] = useState(
     !!(
       ((client.default_billing?.billed_to_type && client.default_billing.billed_to_type !== 'patient') ||
@@ -266,6 +267,19 @@ const ClientEditForm = ({
         payload.phone = normalizedPhone;
         if (formData.gender?.trim()) payload.gender = formData.gender;
         if (formData.birth_date?.trim()) payload.birth_date = formData.birth_date;
+      }
+
+      // Enregistrer d'abord le lien tiers payeur (et numéro SPC) si un tiers payeur est sélectionné,
+      // avant onSave, pour que la sauvegarde soit faite avant le passage en mode lecture.
+      if (billingPartiesSectionRef.current?.saveBillingPartyLink) {
+        try {
+          await billingPartiesSectionRef.current.saveBillingPartyLink();
+        } catch (linkErr) {
+          setError(
+            linkErr.response?.data?.error || linkErr.message || 'Erreur lors de l\'enregistrement du tiers payeur'
+          );
+          return;
+        }
       }
 
       await onSave(payload);
@@ -944,10 +958,12 @@ const ClientEditForm = ({
                   scrollPaddingBottom: `${billingPartiesScrollBottom}px`,
                 }}
               >
-                <ClientBillingPartiesSection 
-                  clientId={client.id} 
+                <ClientBillingPartiesSection
+                  ref={billingPartiesSectionRef}
+                  clientId={client.id}
                   showTitle={false}
                   autoShowForm={true}
+                  integratedSave={true}
                   onScrollBottomGapChange={setBillingPartiesScrollBottom}
                 />
               </div>
