@@ -458,27 +458,30 @@ class PartnerInvoiceService:
         return pdf_url
 
     def regenerate_pdf(self, partner_invoice_id: int) -> str:
-        """Régénère le PDF d'une facture partenaire.
+        """Régénère le PDF d'une facture partenaire avec les données les plus récentes.
+
+        Cette méthode recharge TOUTES les données depuis la base de données
+        (adresses, courses, montants, format) pour générer un PDF à jour.
 
         Args:
             partner_invoice_id: ID de la facture partenaire
 
         Returns:
-            URL du PDF généré
+            URL du nouveau PDF généré
 
         Raises:
             ValueError: Si la facture partenaire n'existe pas
             Exception: Si la génération PDF échoue
         """
+        # Forcer le rechargement depuis la DB pour avoir les données à jour
+        db.session.expire_all()
+
         partner_invoice = PartnerInvoice.query.get(partner_invoice_id)
         if not partner_invoice:
             raise ValueError(f"Facture partenaire {partner_invoice_id} introuvable")
 
-        # Retourner le PDF existant s'il existe
-        if partner_invoice.pdf_url:
-            return partner_invoice.pdf_url
-
-        # Récupérer les transferts associés à cette facture
+        # Récupérer les transferts associés à cette facture avec eager loading
+        # pour avoir les données les plus récentes (booking, client, adresses)
         transfers = (
             db.session.query(BookingTransfer)
             .join(
@@ -491,23 +494,55 @@ class PartnerInvoiceService:
             .all()
         )
 
-        # Essayer de générer le PDF (même méthode que lors de la création)
-        # Note: La génération PDF pour les factures partenaires n'est pas encore complètement implémentée
+        if not transfers:
+            raise ValueError(
+                f"Aucun transfert associé à la facture partenaire {partner_invoice_id}"
+            )
+
+        # Forcer le rechargement des relations pour chaque transfert
+        for transfer in transfers:
+            db.session.refresh(transfer)
+            if transfer.booking:
+                db.session.refresh(transfer.booking)
+                if transfer.booking.client:
+                    db.session.refresh(transfer.booking.client)
+            if transfer.executing_company:
+                db.session.refresh(transfer.executing_company)
+
+        # Recharger le partenariat pour avoir les adresses à jour
+        if partner_invoice.partnership:
+            db.session.refresh(partner_invoice.partnership)
+            if partner_invoice.partnership.owner_company:
+                db.session.refresh(partner_invoice.partnership.owner_company)
+            if partner_invoice.partnership.partner_company:
+                db.session.refresh(partner_invoice.partnership.partner_company)
+
+        logger.info(
+            "Régénération PDF facture partenaire %s avec %d transferts (données rechargées)",
+            partner_invoice.invoice_number,
+            len(transfers),
+        )
+
+        # Générer le nouveau PDF
         try:
             pdf_url = self._generate_invoice_pdf(partner_invoice, transfers)
             partner_invoice.pdf_url = pdf_url
             db.session.commit()
+
+            logger.info(
+                "PDF régénéré avec succès pour facture partenaire %s: %s",
+                partner_invoice.invoice_number,
+                pdf_url,
+            )
             return pdf_url
         except Exception as e:
             logger.exception(
-                "Erreur lors de la régénération PDF pour facture partenaire %s",
+                "Erreur lors de la régénération PDF pour facture partenaire %s: %s",
                 partner_invoice_id,
+                str(e),
             )
-            # La génération PDF pour les factures partenaires n'est pas encore implémentée
-            # car PDFService.generate_invoice_pdf attend un Invoice, pas un PartnerInvoice
             raise ValueError(
-                "La génération PDF pour les factures partenaires n'est pas encore disponible. "
-                + "Le PDF sera généré lors de la création de la facture."
+                f"Erreur lors de la régénération du PDF: {e}"
             ) from e
 
     def mark_as_sent(self, partner_invoice_id: int, company_id: int) -> PartnerInvoice:
