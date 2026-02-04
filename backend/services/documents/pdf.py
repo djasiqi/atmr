@@ -1984,7 +1984,13 @@ class PDFService:
         )
 
         try:
-            # Charger la facture avec toutes les relations
+            # ✅ IMPORTANT: Forcer le rechargement depuis la DB pour avoir les données à jour
+            # (adresses, courses, montants, format) - critique pour régénération PDF
+            from ext import db
+
+            db.session.expire_all()
+
+            # Charger la facture avec toutes les relations (données fraîches)
             invoice = (
                 Invoice.query.options(
                     joinedload(Invoice.company),
@@ -1999,6 +2005,24 @@ class PDFService:
             if not invoice:
                 msg = "Facture non trouvée"
                 raise ValueError(msg)
+
+            # ✅ Forcer le rechargement des relations profondes pour avoir les données à jour
+            # (adresses client, adresses entreprise, billing party, etc.)
+            if invoice.client:
+                db.session.refresh(invoice.client)
+                if invoice.client.user:
+                    db.session.refresh(invoice.client.user)
+            if invoice.company:
+                db.session.refresh(invoice.company)
+            if hasattr(invoice, "billing_party") and invoice.billing_party:
+                db.session.refresh(invoice.billing_party)
+            if hasattr(invoice, "billed_to_company") and invoice.billed_to_company:
+                db.session.refresh(invoice.billed_to_company)
+
+            app_logger.info(
+                "[PDF] Facture %s: données rechargées depuis la DB (client, company, billing_party)",
+                invoice.id,
+            )
 
             # ✅ Monitoring performance : mesurer le temps de génération
             start_time = perf_counter()
