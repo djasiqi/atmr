@@ -405,9 +405,15 @@ jobs:
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
           script: |
+            set -e
             echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT_B64 }}" | base64 -d > /srv/atmr/firebase-service-account.json
+            if ! python3 -c "import json; json.load(open('/srv/atmr/firebase-service-account.json'))" 2>/dev/null; then
+              echo "❌ Firebase service account JSON is invalid"
+              rm -f /srv/atmr/firebase-service-account.json
+              exit 1
+            fi
             chmod 600 /srv/atmr/firebase-service-account.json
-            echo "✅ Firebase service account deployed"
+            echo "✅ Firebase service account deployed ($(wc -c < /srv/atmr/firebase-service-account.json) bytes)"
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@master
